@@ -166,6 +166,9 @@ pub enum SystemOperation {
     },
     /// Publishes a new application module.
     PublishModule { module_id: ModuleId },
+    /// Publishes a new committee as a blob. This can be assigned to an epoch using
+    /// [`AdminOperation::CreateCommittee`] in a later block.
+    PublishCommitteeBlob { blob_hash: CryptoHash },
     /// Publishes a new data blob.
     PublishDataBlob { blob_hash: CryptoHash },
     /// Reads a blob and discards the result.
@@ -197,7 +200,7 @@ pub enum AdminOperation {
     /// Registers a new committee. This will notify the subscribers of the admin chain so that they
     /// can migrate to the new epoch by accepting the resulting `CreateCommittee` as an incoming
     /// message in a block.
-    CreateCommittee { epoch: Epoch, committee: Committee },
+    CreateCommittee { epoch: Epoch, blob_hash: CryptoHash },
     /// Removes a committee. Once the resulting `RemoveCommittee` message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
@@ -527,17 +530,21 @@ where
                     SystemExecutionError::AdminOperationOnNonAdminChain
                 );
                 match admin_operation {
-                    AdminOperation::CreateCommittee { epoch, committee } => {
+                    AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         ensure!(
                             epoch == self.epoch.get().expect("chain is active").try_add_one()?,
                             SystemExecutionError::InvalidCommitteeCreation
                         );
-                        self.committees.get_mut().insert(epoch, committee.clone());
+                        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+                        let committee =
+                            bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
+                        self.blob_used(Some(txn_tracker), blob_id).await?;
+                        self.committees.get_mut().insert(epoch, committee);
                         self.epoch.set(Some(epoch));
                         txn_tracker.add_event(
                             StreamId::system(EPOCH_STREAM_NAME),
                             bcs::to_bytes(&epoch)?,
-                            bcs::to_bytes(&committee)?,
+                            bcs::to_bytes(&blob_hash)?,
                         );
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
@@ -637,6 +644,9 @@ where
             PublishDataBlob { blob_hash } => {
                 self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
             }
+            PublishCommitteeBlob { blob_hash } => {
+                self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
+            }
             ReadBlob { blob_id } => {
                 self.read_blob_content(blob_id).await?;
                 self.blob_used(Some(txn_tracker), blob_id).await?;
@@ -665,8 +675,10 @@ where
                     }
                     Some(_) => return Err(SystemExecutionError::OracleResponseMismatch),
                 };
-                let committee = bcs::from_bytes(&bytes)?;
+                let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
+                let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
+                self.blob_used(Some(txn_tracker), blob_id).await?;
                 self.committees.get_mut().insert(epoch, committee);
                 self.epoch.set(Some(epoch));
             }

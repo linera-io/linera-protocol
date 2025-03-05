@@ -46,8 +46,8 @@ AdminOperation:
         STRUCT:
           - epoch:
               TYPENAME: Epoch
-          - committee:
-              TYPENAME: Committee
+          - blob_hash:
+              TYPENAME: CryptoHash
     1:
       RemoveCommittee:
         STRUCT:
@@ -97,6 +97,8 @@ BlobType:
       ServiceBytecode: UNIT
     3:
       ApplicationDescription: UNIT
+    4:
+      Committee: UNIT
 Block:
   STRUCT:
     - header:
@@ -1131,16 +1133,21 @@ SystemOperation:
           - module_id:
               TYPENAME: ModuleId
     9:
-      PublishDataBlob:
+      PublishCommitteeBlob:
         STRUCT:
           - blob_hash:
               TYPENAME: CryptoHash
     10:
+      PublishDataBlob:
+        STRUCT:
+          - blob_hash:
+              TYPENAME: CryptoHash
+    11:
       ReadBlob:
         STRUCT:
           - blob_id:
               TYPENAME: BlobId
-    11:
+    12:
       CreateApplication:
         STRUCT:
           - module_id:
@@ -1150,15 +1157,15 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    12:
+    13:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
-    13:
+    14:
       ProcessNewEpoch:
         NEWTYPE:
           TYPENAME: Epoch
-    14:
+    15:
       ProcessRemovedEpoch:
         NEWTYPE:
           TYPENAME: Epoch

@@ -290,7 +290,7 @@ impl ResourceControlPolicy {
                     ExecutionError::BytecodeTooLarge
                 );
             }
-            BlobType::Data | BlobType::ApplicationDescription => {}
+            BlobType::Data | BlobType::ApplicationDescription | BlobType::Committee => {}
         }
         Ok(())
     }

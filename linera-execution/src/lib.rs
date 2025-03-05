@@ -1174,6 +1174,9 @@ impl Operation {
             Operation::System(SystemOperation::PublishDataBlob { blob_hash }) => {
                 vec![BlobId::new(*blob_hash, BlobType::Data)]
             }
+            Operation::System(SystemOperation::PublishCommitteeBlob { blob_hash }) => {
+                vec![BlobId::new(*blob_hash, BlobType::Committee)]
+            }
             Operation::System(SystemOperation::PublishModule { module_id }) => vec![
                 BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
                 BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),

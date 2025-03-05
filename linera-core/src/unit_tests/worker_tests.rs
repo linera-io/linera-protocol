@@ -8,7 +8,7 @@
 mod wasm;
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     iter,
     num::NonZeroUsize,
     sync::{Arc, Mutex},
@@ -2327,9 +2327,10 @@ async fn run_test_chain_creation_with_committee_creation<B>(
 where
     B: StorageBuilder,
 {
+    let storage = storage_builder.build().await?;
     let key_pair = AccountSecretKey::generate();
     let (committee, worker) = init_worker_with_chain(
-        storage_builder.build().await?,
+        storage.clone(),
         ChainDescription::Root(0),
         key_pair.public().into(),
         Amount::from_tokens(2),
@@ -2411,6 +2412,16 @@ where
         (Epoch::ZERO, committee.clone()),
         (Epoch::from(1), committee.clone()),
     ]);
+    let event_id = EventId {
+        chain_id: admin_id,
+        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+        key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+    };
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
+    // just write it directly to storage here for simplicity.
+    storage.write_blob(&committee_blob).await?;
+    let blob_hash = committee_blob.id().hash;
     let certificate1 = make_certificate(
         &committee,
         &worker,
@@ -2422,9 +2433,9 @@ where
                 ],
                 events: vec![
                     vec![Event {
-                        value: bcs::to_bytes(&committee).unwrap(),
-                        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                        key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                        stream_id: event_id.stream_id.clone(),
+                        key: event_id.key.clone(),
+                        value: bcs::to_bytes(&blob_hash).unwrap(),
                     }],
                     Vec::new(),
                 ],
@@ -2433,17 +2444,18 @@ where
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair.public().into()),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new(); 2],
+                oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
             }
             .with(
                 make_child_block(&certificate0.clone().into_value())
                     .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committee: committee.clone(),
+                        blob_hash,
                     }))
                     .with_simple_transfer(user_id, Amount::from_tokens(2)),
             ),
@@ -2507,6 +2519,7 @@ where
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair.public().into()),
                     balance: Amount::from_tokens(2),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), user_description, admin_id)
                 }
                 .into_hash()
@@ -2514,14 +2527,17 @@ where
                 oracle_responses: vec![
                     vec![],
                     vec![],
-                    vec![OracleResponse::Event(
-                        EventId {
-                            chain_id: admin_id,
-                            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                            key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
-                        },
-                        bcs::to_bytes(&committee).unwrap(),
-                    )],
+                    vec![
+                        OracleResponse::Event(
+                            EventId {
+                                chain_id: admin_id,
+                                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                                key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                            },
+                            bcs::to_bytes(&blob_hash).unwrap(),
+                        ),
+                        OracleResponse::Blob(committee_blob.id()),
+                    ],
                 ],
             }
             .with(
@@ -2604,8 +2620,9 @@ where
 {
     let owner0 = AccountSecretKey::generate().public().into();
     let owner1 = AccountSecretKey::generate().public().into();
+    let storage = storage_builder.build().await?;
     let (committee, worker) = init_worker_with_chains(
-        storage_builder.build().await?,
+        storage.clone(),
         vec![
             (ChainDescription::Root(0), owner0, Amount::ZERO),
             (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
@@ -2648,6 +2665,9 @@ where
         (Epoch::ZERO, committee.clone()),
         (Epoch::from(1), committee.clone()),
     ]);
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    let blob_hash = committee_blob.id().hash;
+    storage.write_blob(&committee_blob).await?;
     let certificate1 = make_certificate(
         &committee,
         &worker,
@@ -2655,25 +2675,26 @@ where
             BlockExecutionOutcome {
                 messages: vec![vec![]],
                 events: vec![vec![Event {
-                    value: bcs::to_bytes(&committee).unwrap(),
                     stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                     key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                    value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                 }]],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(owner0),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new()],
+                oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())]],
             }
             .with(
                 make_first_block(admin_id).with_operation(SystemOperation::Admin(
                     AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committee: committee.clone(),
+                        blob_hash,
                     },
                 )),
             ),
@@ -2736,8 +2757,9 @@ where
 {
     let owner0 = AccountSecretKey::generate().public().into();
     let owner1 = AccountSecretKey::generate().public().into();
+    let storage = storage_builder.build().await?;
     let (committee, worker) = init_worker_with_chains(
-        storage_builder.build().await?,
+        storage.clone(),
         vec![
             (ChainDescription::Root(0), owner0, Amount::ZERO),
             (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
@@ -2777,6 +2799,9 @@ where
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    let blob_hash = committee_blob.id().hash;
+    storage.write_blob(&committee_blob).await?;
     let certificate1 = make_certificate(
         &committee,
         &worker,
@@ -2785,9 +2810,9 @@ where
                 messages: vec![vec![]; 2],
                 events: vec![
                     vec![Event {
-                        value: bcs::to_bytes(&committee).unwrap(),
                         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                         key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                        value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                     }],
                     vec![Event {
                         value: Vec::new(),
@@ -2799,17 +2824,18 @@ where
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(owner0),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new(); 2],
+                oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
             }
             .with(
                 make_first_block(admin_id)
                     .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committee: committee.clone(),
+                        blob_hash,
                     }))
                     .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
                         epoch: Epoch::ZERO,
@@ -2862,6 +2888,7 @@ where
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(owner0),
                     balance: Amount::ONE,
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()

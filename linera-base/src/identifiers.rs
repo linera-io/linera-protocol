@@ -166,6 +166,8 @@ pub enum BlobType {
     ServiceBytecode,
     /// A blob containing an application description.
     ApplicationDescription,
+    /// A blob containing a committee of validators.
+    Committee,
 }
 
 impl Display for BlobType {
