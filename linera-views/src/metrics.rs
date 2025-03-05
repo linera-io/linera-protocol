@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 
 // Re-export for macros.
 #[doc(hidden)]
-pub use linera_base::prometheus_util::{self, bucket_latencies};
+pub use linera_base::prometheus_util::{self, exponential_bucket_latencies};
 use prometheus::IntCounterVec;
 
 /// Increments the metrics counter with the given name, with the struct and base key as labels.
@@ -22,7 +22,7 @@ pub static LOAD_VIEW_LATENCY: LazyLock<prometheus::HistogramVec> = LazyLock::new
         "load_view_latency",
         "Load view latency",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(10.0),
     )
 });
 

@@ -21,6 +21,7 @@ use crate::{
     crypto::{BcsHashable, CryptoError, CryptoHash},
     data_types::BlockHeight,
     doc_scalar, hex_debug,
+    vm::VmRuntime,
 };
 
 /// The owner of a chain. This is currently the hash of the owner's public key used to
@@ -352,6 +353,8 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     pub contract_blob_hash: CryptoHash,
     /// The hash of the blob containing the service bytecode.
     pub service_blob_hash: CryptoHash,
+    /// The virtual machine being used.
+    pub vm_runtime: VmRuntime,
     #[witty(skip)]
     #[debug(skip)]
     _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
@@ -570,10 +573,12 @@ impl<Abi, Parameters, InstantiationArgument> PartialEq
         let BytecodeId {
             contract_blob_hash,
             service_blob_hash,
+            vm_runtime,
             _phantom,
         } = other;
         self.contract_blob_hash == *contract_blob_hash
             && self.service_blob_hash == *service_blob_hash
+            && self.vm_runtime == *vm_runtime
     }
 }
 
@@ -597,10 +602,15 @@ impl<Abi, Parameters, InstantiationArgument> Ord
         let BytecodeId {
             contract_blob_hash,
             service_blob_hash,
+            vm_runtime,
             _phantom,
         } = other;
-        (self.contract_blob_hash, self.service_blob_hash)
-            .cmp(&(*contract_blob_hash, *service_blob_hash))
+        (
+            self.contract_blob_hash,
+            self.service_blob_hash,
+            self.vm_runtime,
+        )
+            .cmp(&(*contract_blob_hash, *service_blob_hash, *vm_runtime))
     }
 }
 
@@ -611,10 +621,12 @@ impl<Abi, Parameters, InstantiationArgument> Hash
         let BytecodeId {
             contract_blob_hash: contract_blob_id,
             service_blob_hash: service_blob_id,
+            vm_runtime: vm_runtime_id,
             _phantom,
         } = self;
         contract_blob_id.hash(state);
         service_blob_id.hash(state);
+        vm_runtime_id.hash(state);
     }
 }
 
@@ -623,6 +635,7 @@ impl<Abi, Parameters, InstantiationArgument> Hash
 struct SerializableBytecodeId {
     contract_blob_hash: CryptoHash,
     service_blob_hash: CryptoHash,
+    vm_runtime: VmRuntime,
 }
 
 impl<Abi, Parameters, InstantiationArgument> Serialize
@@ -635,6 +648,7 @@ impl<Abi, Parameters, InstantiationArgument> Serialize
         let serializable_bytecode_id = SerializableBytecodeId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
+            vm_runtime: self.vm_runtime,
         };
         if serializer.is_human_readable() {
             let bytes =
@@ -661,6 +675,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
             Ok(BytecodeId {
                 contract_blob_hash: serializable_bytecode_id.contract_blob_hash,
                 service_blob_hash: serializable_bytecode_id.service_blob_hash,
+                vm_runtime: serializable_bytecode_id.vm_runtime,
                 _phantom: PhantomData,
             })
         } else {
@@ -668,6 +683,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
             Ok(BytecodeId {
                 contract_blob_hash: serializable_bytecode_id.contract_blob_hash,
                 service_blob_hash: serializable_bytecode_id.service_blob_hash,
+                vm_runtime: serializable_bytecode_id.vm_runtime,
                 _phantom: PhantomData,
             })
         }
@@ -675,11 +691,16 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
 }
 
 impl BytecodeId {
-    /// Creates a bytecode ID from contract/service hashes.
-    pub fn new(contract_blob_hash: CryptoHash, service_blob_hash: CryptoHash) -> Self {
+    /// Creates a bytecode ID from contract/service hashes and the VM runtime to use.
+    pub fn new(
+        contract_blob_hash: CryptoHash,
+        service_blob_hash: CryptoHash,
+        vm_runtime: VmRuntime,
+    ) -> Self {
         BytecodeId {
             contract_blob_hash,
             service_blob_hash,
+            vm_runtime,
             _phantom: PhantomData,
         }
     }
@@ -691,6 +712,7 @@ impl BytecodeId {
         BytecodeId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
+            vm_runtime: self.vm_runtime,
             _phantom: PhantomData,
         }
     }
@@ -702,6 +724,7 @@ impl<Abi, Parameters, InstantiationArgument> BytecodeId<Abi, Parameters, Instant
         BytecodeId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
+            vm_runtime: self.vm_runtime,
             _phantom: PhantomData,
         }
     }
@@ -711,6 +734,7 @@ impl<Abi, Parameters, InstantiationArgument> BytecodeId<Abi, Parameters, Instant
         BytecodeId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
+            vm_runtime: self.vm_runtime,
             _phantom: PhantomData,
         }
     }

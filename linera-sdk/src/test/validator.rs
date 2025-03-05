@@ -11,7 +11,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
-    crypto::{AccountSecretKey, ValidatorSecretKey},
+    crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -43,7 +43,8 @@ use crate::ContractAbi;
 /// # });
 /// ```
 pub struct TestValidator {
-    key_pair: ValidatorSecretKey,
+    validator_secret: ValidatorSecretKey,
+    account_secret: AccountSecretKey,
     committee: Committee,
     storage: DbStorage<MemoryStore, TestClock>,
     worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
@@ -54,7 +55,8 @@ pub struct TestValidator {
 impl Clone for TestValidator {
     fn clone(&self) -> Self {
         TestValidator {
-            key_pair: self.key_pair.copy(),
+            validator_secret: self.validator_secret.copy(),
+            account_secret: self.account_secret.copy(),
             committee: self.committee.clone(),
             storage: self.storage.clone(),
             worker: self.worker.clone(),
@@ -67,8 +69,12 @@ impl Clone for TestValidator {
 impl TestValidator {
     /// Creates a new [`TestValidator`].
     pub async fn new() -> Self {
-        let key_pair = ValidatorSecretKey::generate();
-        let committee = Committee::make_simple(vec![key_pair.public()]);
+        let validator_keypair = ValidatorKeypair::generate();
+        let account_secret = AccountSecretKey::generate();
+        let committee = Committee::make_simple(vec![(
+            validator_keypair.public_key,
+            account_secret.public(),
+        )]);
         let wasm_runtime = Some(WasmRuntime::default());
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()
@@ -76,13 +82,14 @@ impl TestValidator {
         let clock = storage.clock().clone();
         let worker = WorkerState::new(
             "Single validator node".to_string(),
-            Some(key_pair.copy()),
+            Some((validator_keypair.secret_key.copy(), account_secret.copy())),
             storage.clone(),
-            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            NonZeroUsize::new(40).expect("Chain worker limit should not be zero"),
         );
 
         let validator = TestValidator {
-            key_pair,
+            validator_secret: validator_keypair.secret_key,
+            account_secret,
             committee,
             storage,
             worker,
@@ -155,8 +162,8 @@ impl TestValidator {
     }
 
     /// Returns the keys this test validator uses for signing certificates.
-    pub fn key_pair(&self) -> &AccountSecretKey {
-        &self.key_pair
+    pub fn key_pair(&self) -> &ValidatorSecretKey {
+        &self.validator_secret
     }
 
     /// Returns the committee that this test validator is part of.

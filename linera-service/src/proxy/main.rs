@@ -22,7 +22,7 @@ use linera_rpc::{
     simple::{MessageHandler, TransportProtocol},
     RpcMessage,
 };
-use linera_sdk::base::Blob;
+use linera_sdk::linera_base_types::Blob;
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::util;

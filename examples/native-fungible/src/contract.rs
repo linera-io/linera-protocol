@@ -5,7 +5,7 @@
 
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
-    base::{Account, AccountOwner, ChainId, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi},
     Contract, ContractRuntime,
 };
 use native_fungible::{Message, TICKER_SYMBOL};

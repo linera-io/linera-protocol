@@ -3,7 +3,7 @@
 
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     env,
     marker::PhantomData,
     mem,
@@ -17,16 +17,21 @@ use anyhow::{bail, ensure, Context, Result};
 use async_graphql::InputType;
 use async_tungstenite::tungstenite::{client::IntoClientRequest as _, http::HeaderValue};
 use futures::{SinkExt as _, Stream, StreamExt as _, TryStreamExt as _};
+use heck::ToKebabCase;
 use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::CryptoHash,
     data_types::{Amount, Bytecode},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    vm::VmRuntime,
 };
-use linera_client::wallet::Wallet;
+use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
 use linera_core::worker::Notification;
-use linera_execution::{system::SystemChannel, ResourceControlPolicy};
+use linera_execution::{
+    committee::{Committee, Epoch},
+    system::SystemChannel,
+};
 use linera_faucet::ClaimOutcome;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
@@ -232,29 +237,8 @@ impl ClientWrapper {
         &self,
         num_other_initial_chains: u32,
         initial_funding: Amount,
-        policy: ResourceControlPolicy,
+        policy_config: ResourceControlPolicyConfig,
     ) -> Result<()> {
-        let ResourceControlPolicy {
-            block,
-            fuel_unit,
-            read_operation,
-            write_operation,
-            byte_read,
-            byte_written,
-            byte_stored,
-            operation,
-            operation_byte,
-            message,
-            message_byte,
-            maximum_fuel_per_block,
-            maximum_executed_block_size,
-            maximum_blob_size,
-            maximum_published_blobs,
-            maximum_bytecode_size,
-            maximum_block_proposal_size,
-            maximum_bytes_read_per_block,
-            maximum_bytes_written_per_block,
-        } = policy;
         let mut command = self.command().await?;
         command
             .args([
@@ -264,46 +248,11 @@ impl ClientWrapper {
             .args(["--initial-funding", &initial_funding.to_string()])
             .args(["--committee", "committee.json"])
             .args(["--genesis", "genesis.json"])
-            .args(["--block-price", &block.to_string()])
-            .args(["--fuel-unit-price", &fuel_unit.to_string()])
-            .args(["--read-operation-price", &read_operation.to_string()])
-            .args(["--byte-read-price", &byte_read.to_string()])
-            .args(["--byte-written-price", &byte_written.to_string()])
-            .args(["--byte-stored-price", &byte_stored.to_string()])
-            .args(["--message-byte-price", &message_byte.to_string()])
-            .args(["--write-operation-price", &write_operation.to_string()])
-            .args(["--operation-price", &operation.to_string()])
-            .args(["--operation-byte-price", &operation_byte.to_string()])
-            .args(["--message-price", &message.to_string()])
             .args([
-                "--maximum-fuel-per-block",
-                &maximum_fuel_per_block.to_string(),
-            ])
-            .args([
-                "--maximum-executed-block-size",
-                &maximum_executed_block_size.to_string(),
-            ])
-            .args(["--maximum-blob-size", &maximum_blob_size.to_string()])
-            .args([
-                "--maximum-published-blobs",
-                &maximum_published_blobs.to_string(),
-            ])
-            .args([
-                "--maximum-bytecode-size",
-                &maximum_bytecode_size.to_string(),
-            ])
-            .args([
-                "--maximum-block-proposal-size",
-                &maximum_block_proposal_size.to_string(),
-            ])
-            .args([
-                "--maximum-bytes-read-per-block",
-                &maximum_bytes_read_per_block.to_string(),
-            ])
-            .args([
-                "--maximum-bytes-written-per-block",
-                &maximum_bytes_written_per_block.to_string(),
+                "--policy-config",
+                &policy_config.to_string().to_kebab_case(),
             ]);
+
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
         }
@@ -316,7 +265,7 @@ impl ClientWrapper {
         &self,
         chain_ids: &[ChainId],
         faucet: FaucetOption<'_>,
-    ) -> Result<Option<ClaimOutcome>> {
+    ) -> Result<Option<(ClaimOutcome, Owner)>> {
         let mut command = self.command().await?;
         command.args(["wallet", "init"]);
         match faucet {
@@ -350,10 +299,46 @@ impl ClientWrapper {
                     .parse()
                     .context("invalid certificate hash")?,
             };
-            Ok(Some(outcome))
+            let owner = lines
+                .next()
+                .context("missing chain owner")?
+                .parse()
+                .context("invalid chain owner")?;
+            Ok(Some((outcome, owner)))
         } else {
             Ok(None)
         }
+    }
+
+    /// Runs `linera wallet request-chain`.
+    pub async fn request_chain(
+        &self,
+        faucet: &Faucet,
+        set_default: bool,
+    ) -> Result<(ClaimOutcome, Owner)> {
+        let mut command = self.command().await?;
+        command.args(["wallet", "request-chain", "--faucet", faucet.url()]);
+        if set_default {
+            command.arg("--set-default");
+        }
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        let mut lines = stdout.split_whitespace();
+        let chain_id_str = lines.next().context("missing chain ID")?;
+        let message_id_str = lines.next().context("missing message ID")?;
+        let certificate_hash_str = lines.next().context("missing certificate hash")?;
+        let outcome = ClaimOutcome {
+            chain_id: chain_id_str.parse().context("invalid chain ID")?,
+            message_id: message_id_str.parse().context("invalid message ID")?,
+            certificate_hash: certificate_hash_str
+                .parse()
+                .context("invalid certificate hash")?,
+        };
+        let owner = lines
+            .next()
+            .context("missing chain owner")?
+            .parse()
+            .context("invalid chain owner")?;
+        Ok((outcome, owner))
     }
 
     /// Runs `linera wallet publish-and-create`.
@@ -688,7 +673,7 @@ impl ClientWrapper {
         from: ChainId,
         owner: Option<Owner>,
         initial_balance: Amount,
-    ) -> Result<(MessageId, ChainId)> {
+    ) -> Result<(MessageId, ChainId, Owner)> {
         let mut command = self.command().await?;
         command
             .arg("open-chain")
@@ -703,8 +688,11 @@ impl ClientWrapper {
         let mut split = stdout.split('\n');
         let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
-
-        Ok((message_id, chain_id))
+        let new_owner = Owner::from_str(split.next().context("no owner in output")?)?;
+        if let Some(owner) = owner {
+            assert_eq!(owner, new_owner);
+        }
+        Ok((message_id, chain_id, new_owner))
     }
 
     /// Runs `linera open-chain` then `linera assign`.
@@ -718,7 +706,7 @@ impl ClientWrapper {
             .default_chain()
             .context("no default chain found")?;
         let owner = client.keygen().await?;
-        let (message_id, new_chain) = self
+        let (message_id, new_chain, _) = self
             .open_chain(our_chain, Some(owner), initial_balance)
             .await?;
         assert_eq!(new_chain, client.assign(owner, message_id).await?);
@@ -778,6 +766,16 @@ impl ClientWrapper {
                 .arg("--owners")
                 .args(owners.iter().map(Owner::to_string));
         }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
+    /// Runs `linera wallet follow-chain CHAIN_ID`.
+    pub async fn follow_chain(&self, chain_id: ChainId) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .args(["wallet", "follow-chain"])
+            .arg(chain_id.to_string());
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
@@ -862,12 +860,18 @@ impl ClientWrapper {
             .is_some_and(|wallet| wallet.get(chain).is_some())
     }
 
-    pub async fn set_validator(&self, public_key: &str, port: usize, votes: usize) -> Result<()> {
+    pub async fn set_validator(
+        &self,
+        validator_key: &(String, String),
+        port: usize,
+        votes: usize,
+    ) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
         self.command()
             .await?
             .arg("set-validator")
-            .args(["--public-key", public_key])
+            .args(["--public-key", &validator_key.0])
+            .args(["--account-key", &validator_key.1])
             .args(["--address", &address])
             .args(["--votes", &votes.to_string()])
             .spawn_and_wait_for_stdout()
@@ -875,11 +879,11 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn remove_validator(&self, public_key: &str) -> Result<()> {
+    pub async fn remove_validator(&self, validator_key: &str) -> Result<()> {
         self.command()
             .await?
             .arg("remove-validator")
-            .args(["--public-key", public_key])
+            .args(["--public-key", validator_key])
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
@@ -1147,14 +1151,16 @@ impl NodeService {
         chain_id: &ChainId,
         contract: PathBuf,
         service: PathBuf,
+        vm_runtime: VmRuntime,
     ) -> Result<BytecodeId<Abi, Parameters, InstantiationArgument>> {
         let contract_code = Bytecode::load_from_file(&contract).await?;
         let service_code = Bytecode::load_from_file(&service).await?;
         let query = format!(
-            "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}) }}",
+            "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}, vmRuntime: {}) }}",
             chain_id.to_value(),
             contract_code.to_value(),
             service_code.to_value(),
+            vm_runtime.to_value(),
         );
         let data = self.query_node(query).await?;
         let bytecode_str = data["publishBytecode"]
@@ -1164,6 +1170,17 @@ impl NodeService {
             .parse()
             .context("could not parse bytecode ID")?;
         Ok(bytecode_id.with_abi())
+    }
+
+    pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
+        let query = format!(
+            "query {{ chain(chainId:\"{chain_id}\") {{
+                executionState {{ system {{ committees }} }}
+            }} }}"
+        );
+        let mut response = self.query_node(query).await?;
+        let committees = response["chain"]["executionState"]["system"]["committees"].take();
+        Ok(serde_json::from_value(committees)?)
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {

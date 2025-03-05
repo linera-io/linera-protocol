@@ -49,6 +49,8 @@ util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 pub struct ValidatorConfig {
     /// The public key of the validator.
     pub public_key: ValidatorPublicKey,
+    /// The account key of the validator.
+    pub account_key: AccountPublicKey,
     /// The network configuration for the validator.
     pub network: ValidatorPublicNetworkConfig,
 }
@@ -57,7 +59,8 @@ pub struct ValidatorConfig {
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
-    pub key: ValidatorSecretKey,
+    pub validator_secret: ValidatorSecretKey,
+    pub account_secret: AccountSecretKey,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
 
@@ -83,6 +86,7 @@ impl CommitteeConfig {
                     ValidatorState {
                         network_address: v.network.to_string(),
                         votes: 100,
+                        account_public_key: v.account_key,
                     },
                 )
             })
@@ -134,7 +138,7 @@ impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
         self.wallet
             .mutate(|w| w.refresh_prng_seed(&mut self.prng))
             .await?;
-        tracing::debug!("Persisted user chains");
+        tracing::trace!("Persisted user chains");
         Ok(())
     }
 

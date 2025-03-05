@@ -15,6 +15,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
@@ -66,8 +67,9 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
     let service = Bytecode::new(b"service".into());
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
+    let vm_runtime = VmRuntime::Wasm;
 
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
     (
         UserApplicationDescription {
             bytecode_id,
@@ -95,7 +97,10 @@ fn make_admin_message_id(height: BlockHeight) -> MessageId {
 }
 
 fn make_open_chain_config() -> OpenChainConfig {
-    let committee = Committee::make_simple(vec![ValidatorPublicKey::test_key(1)]);
+    let committee = Committee::make_simple(vec![(
+        ValidatorPublicKey::test_key(1),
+        AccountPublicKey::test_key(1),
+    )]);
     OpenChainConfig {
         ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
         admin_id: admin_id(),
@@ -114,7 +119,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 687;
+    let maximum_executed_block_size = 722;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -126,6 +131,7 @@ async fn test_block_size_limit() {
                 ValidatorState {
                     network_address: ValidatorPublicKey::test_key(1).to_string(),
                     votes: 1,
+                    account_public_key: AccountPublicKey::test_key(1),
                 },
             )]),
             ResourceControlPolicy {

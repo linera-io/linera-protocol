@@ -29,16 +29,41 @@ to the GGUF format where it can be used for inference.
 
 ## Usage
 
-We're assuming that a local wallet is set up and connected to a running test network
-(local or otherwise).
+Before getting started, make sure that the binary tools `linera*` corresponding to
+your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
+that the BASH function `linera_spawn` is defined.
 
-If you use `linera net up`, the value of the default chain ID is:
+From the root of Linera repository, this can be achieved as follows:
+
 ```bash
-CHAIN=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
+export PATH="$PWD/target/debug:$PATH"
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-See the file `linera-protocol/examples/fungible/README.md` or the [online developer
-manual](https://linera.dev) for instructions.
+Next, start the local Linera network and run a faucet:
+
+```bash
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
+```
+
+Create the user wallet and add chains to it:
+
+```bash
+export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
+
+linera wallet init --faucet $FAUCET_URL
+
+INFO=($(linera wallet request-chain --faucet $FAUCET_URL))
+CHAIN="${INFO[0]}"
+OWNER="${INFO[3]}"
+```
 
 ### Using the LLM Application
 

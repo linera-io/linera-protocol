@@ -22,7 +22,9 @@ use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
+    linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
+    },
     prometheus::HistogramVec,
 };
 
@@ -45,7 +47,7 @@ static KEY_VALUE_STORE_VIEW_HASH_LATENCY: LazyLock<HistogramVec> = LazyLock::new
         "key_value_store_view_hash_latency",
         "KeyValueStoreView hash latency",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 
@@ -56,7 +58,7 @@ static KEY_VALUE_STORE_VIEW_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(
         "key_value_store_view_get_latency",
         "KeyValueStoreView get latency",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 
@@ -67,7 +69,7 @@ static KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY: LazyLock<HistogramVec> = LazyLock
         "key_value_store_view_multi_get_latency",
         "KeyValueStoreView multi get latency",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 
@@ -78,7 +80,7 @@ static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY: LazyLock<HistogramVec> = LazyL
         "key_value_store_view_contains_key_latency",
         "KeyValueStoreView contains key latency",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 
@@ -89,7 +91,7 @@ static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: LazyLock<HistogramVec> = Lazy
         "key_value_store_view_contains_keys_latency",
         "KeyValueStoreView contains keys latency",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 
@@ -101,7 +103,7 @@ static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: LazyLock<HistogramVec> 
             "key_value_store_view_find_keys_by_prefix_latency",
             "KeyValueStoreView find keys by prefix latency",
             &[],
-            bucket_latencies(5.0),
+            exponential_bucket_latencies(5.0),
         )
     });
 
@@ -113,7 +115,7 @@ static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY: LazyLock<Histogra
             "key_value_store_view_find_key_values_by_prefix_latency",
             "KeyValueStoreView find key values by prefix latency",
             &[],
-            bucket_latencies(5.0),
+            exponential_bucket_latencies(5.0),
         )
     });
 
@@ -124,7 +126,7 @@ static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> = LazyLo
         "key_value_store_view_write_batch_latency",
         "KeyValueStoreView write batch latency",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 

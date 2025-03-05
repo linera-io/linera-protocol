@@ -30,46 +30,52 @@ TODO the following documentation involves `sleep`ing to avoid some race conditio
 
 ## Usage
 
-Set up the path and the helper function.
+Set up the path and the helper function. From the root of Linera repository, this can be
+achieved as follows:
 
 ```bash
-PATH=$PWD/target/debug:$PATH
+export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-Then, using the helper function defined by `linera net helper`, set up a local network
-with two wallets and define variables holding their wallet paths (`$LINERA_WALLET_0`,
-`$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`).
+Start the local Linera network and run a faucet:
 
 ```bash
-linera_spawn_and_read_wallet_variables \
-    linera net up \
-        --extra-wallets 1
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
+
+Create the user wallets and add chains to them:
+
+```bash
+export LINERA_WALLET_0="$LINERA_TMP_DIR/wallet_0.json"
+export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
+export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
+export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
+
+linera --with-wallet 1 wallet init --faucet $FAUCET_URL
+linera --with-wallet 2 wallet init --faucet $FAUCET_URL
+
+INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
+INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
+CHAIN_1="${INFO_1[0]}"
+CHAIN_2="${INFO_2[0]}"
+OWNER_1="${INFO_1[3]}"
+OWNER_2="${INFO_2[3]}"
+```
+
+Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1"
+--storage "$LINERA_STORAGE_1"`.
 
 Compile the `social` example and create an application with it:
 
 ```bash
 APP_ID=$(linera --with-wallet 0 project publish-and-create examples/social)
-```
-
-This will output the new application ID, e.g.:
-
-```rust
-20dc1ed01670501414eb59defe71f9a7b817fe2da18fcdd5e704bbac32f5bd97a020afcb645167bcaacd1d8cee9083605f42a95de24e056f3a958c7ca91f9f728ac320aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8020000000000000000000000
-```
-
-With the `wallet show` command you can find the ID of the application creator's chain:
-
-```bash
-linera --with-wallet 0 wallet show
-
-CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
-CHAIN_2=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
-```
-
-```rust
-aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
 ```
 
 Now start a node service for each wallet, using two different ports:

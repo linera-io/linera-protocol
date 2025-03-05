@@ -17,11 +17,14 @@ pub fn make_genesis_config(builder: &TestBuilder<MemoryStorageBuilder>) -> Genes
         host: "localhost".to_string(),
         port: 8080,
     };
-    let validator_names = builder.initial_committee.validators().keys();
-    let validators = validator_names
-        .map(|public_key| ValidatorConfig {
+    let validators = builder
+        .initial_committee
+        .validators()
+        .iter()
+        .map(|(public_key, state)| ValidatorConfig {
             public_key: *public_key,
             network: network.clone(),
+            account_key: state.account_public_key,
         })
         .collect();
     let mut genesis_config = GenesisConfig::new(

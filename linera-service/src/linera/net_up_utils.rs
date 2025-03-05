@@ -7,11 +7,13 @@ use colored::Colorize as _;
 use linera_base::{
     data_types::Amount, identifiers::ChainId, listen_for_shutdown_signals, time::Duration,
 };
-use linera_client::storage::{StorageConfig, StorageConfigNamespace};
-use linera_execution::ResourceControlPolicy;
+use linera_client::{
+    client_options::ResourceControlPolicyConfig,
+    storage::{StorageConfig, StorageConfigNamespace},
+};
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-    ClientWrapper, FaucetOption, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
+    ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
 };
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -102,7 +104,6 @@ impl StorageConfigProvider {
 #[expect(clippy::too_many_arguments)]
 #[cfg(feature = "kubernetes")]
 pub async fn handle_net_up_kubernetes(
-    extra_wallets: Option<usize>,
     num_other_initial_chains: u32,
     initial_amount: u128,
     num_initial_validators: usize,
@@ -111,7 +112,7 @@ pub async fn handle_net_up_kubernetes(
     binaries: &Option<Option<PathBuf>>,
     no_build: bool,
     docker_image_name: String,
-    policy: ResourceControlPolicy,
+    policy_config: ResourceControlPolicyConfig,
     with_faucet: bool,
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
@@ -143,12 +144,10 @@ pub async fn handle_net_up_kubernetes(
         binaries: binaries.clone().into(),
         no_build,
         docker_image_name,
-        policy,
+        policy_config,
     };
     let (mut net, client) = config.instantiate().await?;
-    let faucet_service = create_wallets_and_faucets(
-        extra_wallets,
-        &mut net,
+    let faucet_service = print_messages_and_create_faucet(
         client,
         with_faucet,
         faucet_chain,
@@ -162,13 +161,12 @@ pub async fn handle_net_up_kubernetes(
 
 #[expect(clippy::too_many_arguments)]
 pub async fn handle_net_up_service(
-    extra_wallets: Option<usize>,
     num_other_initial_chains: u32,
     initial_amount: u128,
     num_initial_validators: usize,
     num_shards: usize,
     testing_prng_seed: Option<u64>,
-    policy: ResourceControlPolicy,
+    policy_config: ResourceControlPolicyConfig,
     path: &Option<String>,
     storage: &Option<String>,
     external_protocol: String,
@@ -209,14 +207,12 @@ pub async fn handle_net_up_service(
         initial_amount: Amount::from_tokens(initial_amount),
         num_initial_validators,
         num_shards,
-        policy,
+        policy_config,
         storage_config_builder,
         path_provider,
     };
     let (mut net, client) = config.instantiate().await?;
-    let faucet_service = create_wallets_and_faucets(
-        extra_wallets,
-        &mut net,
+    let faucet_service = print_messages_and_create_faucet(
         client,
         with_faucet,
         faucet_chain,
@@ -247,9 +243,7 @@ async fn wait_for_shutdown(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn create_wallets_and_faucets(
-    extra_wallets: Option<usize>,
-    net: &mut impl LineraNet,
+async fn print_messages_and_create_faucet(
     client: ClientWrapper,
     with_faucet: bool,
     faucet_chain: Option<u32>,
@@ -257,79 +251,28 @@ async fn create_wallets_and_faucets(
     faucet_amount: Amount,
     num_other_initial_chains: u32,
 ) -> Result<Option<FaucetService>, anyhow::Error> {
-    let default_chain = client
-        .default_chain()
-        .expect("Initialized clients should always have a default chain");
-
     // Make time to (hopefully) display the message after the tracing logs.
     linera_base::time::timer::sleep(Duration::from_secs(1)).await;
 
     // Create the wallet for the initial "root" chains.
     info!("Local test network successfully started.");
-    let suffix = if let Some(extra_wallets) = extra_wallets {
-        eprintln!(
-            "To use the initial wallet and the extra wallets of this test \
-        network, you may set the environment variables LINERA_WALLET_$N \
-        and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as printed on \
-        the standard output, then use the option `--with-wallet $N` (or \
-        `-w $N` for short) to select a wallet in the linera tool.\n"
-        );
-        "_0"
-    } else {
-        eprintln!(
-            "To use the initial wallet of this test network, you may set \
-        the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n"
-        );
-        ""
-    };
+
+    eprintln!(
+        "To use the initial wallet of this test network, you may set \
+         the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n"
+    );
     println!(
         "{}",
         format!(
-            "export LINERA_WALLET{suffix}=\"{}\"",
+            "export LINERA_WALLET=\"{}\"",
             client.wallet_path().display()
         )
         .bold()
     );
     println!(
         "{}",
-        format!(
-            "export LINERA_STORAGE{suffix}=\"{}\"\n",
-            client.storage_path()
-        )
-        .bold()
+        format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
     );
-
-    // Create the extra wallets.
-    if let Some(extra_wallets) = extra_wallets {
-        for wallet in 1..=extra_wallets {
-            let extra_wallet = net.make_client().await;
-            extra_wallet.wallet_init(&[], FaucetOption::None).await?;
-            let unassigned_owner = extra_wallet.keygen().await?;
-            let new_chain_msg_id = client
-                .open_chain(default_chain, Some(unassigned_owner), Amount::ZERO)
-                .await?
-                .0;
-            extra_wallet
-                .assign(unassigned_owner, new_chain_msg_id)
-                .await?;
-            println!(
-                "{}",
-                format!(
-                    "export LINERA_WALLET_{wallet}=\"{}\"",
-                    extra_wallet.wallet_path().display(),
-                )
-                .bold()
-            );
-            println!(
-                "{}",
-                format!(
-                    "export LINERA_STORAGE_{wallet}=\"{}\"\n",
-                    extra_wallet.storage_path(),
-                )
-                .bold()
-            );
-        }
-    }
 
     // Run the faucet,
     let faucet_service = if with_faucet {

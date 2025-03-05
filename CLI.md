@@ -39,6 +39,8 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet show`↴](#linera-wallet-show)
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
 * [`linera wallet init`↴](#linera-wallet-init)
+* [`linera wallet request-chain`↴](#linera-wallet-request-chain)
+* [`linera wallet follow-chain`↴](#linera-wallet-follow-chain)
 * [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
 * [`linera wallet forget-chain`↴](#linera-wallet-forget-chain)
 * [`linera project`↴](#linera-project)
@@ -105,7 +107,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
-* `-w`, `--with-wallet <WITH_WALLET>` — Given an integer value `N`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{N}` and `LINERA_STORAGE_{N}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
+* `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
 * `--send-timeout-ms <SEND_TIMEOUT>` — Timeout for sending queries (milliseconds)
 
   Default value: `4000`
@@ -402,11 +404,12 @@ Synchronizes a validator with the local state of chains
 
 Add or modify a validator (admin only)
 
-**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --address <ADDRESS>`
+**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
 
 ###### **Options:**
 
 * `--public-key <PUBLIC_KEY>` — The public key of the validator
+* `--account-key <ACCOUNT_KEY>` — The public key of the account controlled by the validator
 * `--address <ADDRESS>` — Network address
 * `--votes <VOTES>` — Voting power
 
@@ -486,47 +489,31 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Default value: `0`
 * `--start-timestamp <START_TIMESTAMP>` — The start timestamp: no blocks can be created before this time
-* `--block-price <BLOCK_PRICE>` — Set the base price for creating a block
+* `--policy-config <POLICY_CONFIG>` — Configure the resource control policy (notably fees) according to pre-defined settings
 
-  Default value: `0`
-* `--fuel-unit-price <FUEL_UNIT_PRICE>` — Set the price per unit of fuel
+  Default value: `no-fees`
 
-  Default value: `0`
-* `--read-operation-price <READ_OPERATION_PRICE>` — Set the price per read operation
+  Possible values: `no-fees`, `testnet`
 
-  Default value: `0`
-* `--write-operation-price <WRITE_OPERATION_PRICE>` — Set the price per write operation
-
-  Default value: `0`
-* `--byte-read-price <BYTE_READ_PRICE>` — Set the price per byte read
-
-  Default value: `0`
-* `--byte-written-price <BYTE_WRITTEN_PRICE>` — Set the price per byte written
-
-  Default value: `0`
-* `--byte-stored-price <BYTE_STORED_PRICE>` — Set the price per byte stored
-
-  Default value: `0`
-* `--operation-price <OPERATION_PRICE>` — Set the base price of sending an operation from a block..
-
-  Default value: `0`
-* `--operation-byte-price <OPERATION_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user operation
-
-  Default value: `0`
-* `--message-price <MESSAGE_PRICE>` — Set the base price of sending a message from a block..
-
-  Default value: `0`
-* `--message-byte-price <MESSAGE_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user message
-
-  Default value: `0`
-* `--maximum-fuel-per-block <MAXIMUM_FUEL_PER_BLOCK>` — Set the maximum amount of fuel per block
-* `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block
-* `--maximum-bytecode-size <MAXIMUM_BYTECODE_SIZE>` — Set the maximum size of decompressed contract or service bytecode, in bytes
-* `--maximum-blob-size <MAXIMUM_BLOB_SIZE>` — Set the maximum size of data blobs, compressed bytecode and other binary blobs, in bytes
-* `--maximum-published-blobs <MAXIMUM_PUBLISHED_BLOBS>` — Set the maximum number of published blobs per block
-* `--maximum-block-proposal-size <MAXIMUM_BLOCK_PROPOSAL_SIZE>` — Set the maximum size of a block proposal, in bytes
-* `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
-* `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
+* `--block-price <BLOCK_PRICE>` — Set the base price for creating a block. (This will overwrite value from `--policy-config`)
+* `--fuel-unit-price <FUEL_UNIT_PRICE>` — Set the price per unit of fuel. (This will overwrite value from `--policy-config`)
+* `--read-operation-price <READ_OPERATION_PRICE>` — Set the price per read operation. (This will overwrite value from `--policy-config`)
+* `--write-operation-price <WRITE_OPERATION_PRICE>` — Set the price per write operation. (This will overwrite value from `--policy-config`)
+* `--byte-read-price <BYTE_READ_PRICE>` — Set the price per byte read. (This will overwrite value from `--policy-config`)
+* `--byte-written-price <BYTE_WRITTEN_PRICE>` — Set the price per byte written. (This will overwrite value from `--policy-config`)
+* `--byte-stored-price <BYTE_STORED_PRICE>` — Set the price per byte stored. (This will overwrite value from `--policy-config`)
+* `--operation-price <OPERATION_PRICE>` — Set the base price of sending an operation from a block.. (This will overwrite value from `--policy-config`)
+* `--operation-byte-price <OPERATION_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user operation. (This will overwrite value from `--policy-config`)
+* `--message-price <MESSAGE_PRICE>` — Set the base price of sending a message from a block.. (This will overwrite value from `--policy-config`)
+* `--message-byte-price <MESSAGE_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user message. (This will overwrite value from `--policy-config`)
+* `--maximum-fuel-per-block <MAXIMUM_FUEL_PER_BLOCK>` — Set the maximum amount of fuel per block. (This will overwrite value from `--policy-config`)
+* `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block. (This will overwrite value from `--policy-config`)
+* `--maximum-bytecode-size <MAXIMUM_BYTECODE_SIZE>` — Set the maximum size of decompressed contract or service bytecode, in bytes. (This will overwrite value from `--policy-config`)
+* `--maximum-blob-size <MAXIMUM_BLOB_SIZE>` — Set the maximum size of data blobs, compressed bytecode and other binary blobs, in bytes. (This will overwrite value from `--policy-config`)
+* `--maximum-published-blobs <MAXIMUM_PUBLISHED_BLOBS>` — Set the maximum number of published blobs per block. (This will overwrite value from `--policy-config`)
+* `--maximum-block-proposal-size <MAXIMUM_BLOCK_PROPOSAL_SIZE>` — Set the maximum size of a block proposal, in bytes. (This will overwrite value from `--policy-config`)
+* `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block. (This will overwrite value from `--policy-config`)
+* `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block. (This will overwrite value from `--policy-config`)
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--network-name <NETWORK_NAME>` — A unique name to identify this network
 
@@ -600,13 +587,19 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 
 Publish bytecode
 
-**Usage:** `linera publish-bytecode <CONTRACT> <SERVICE> [PUBLISHER]`
+**Usage:** `linera publish-bytecode [OPTIONS] <CONTRACT> <SERVICE> [PUBLISHER]`
 
 ###### **Arguments:**
 
 * `<CONTRACT>` — Path to the Wasm file for the application "contract" bytecode
 * `<SERVICE>` — Path to the Wasm file for the application "service" bytecode
 * `<PUBLISHER>` — An optional chain ID to publish the bytecode. The default chain of the wallet is used otherwise
+
+###### **Options:**
+
+* `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
+
+  Default value: `wasm`
 
 
 
@@ -671,6 +664,9 @@ Create an application, and publish the required bytecode
 
 ###### **Options:**
 
+* `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
+
+  Default value: `wasm`
 * `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
@@ -725,7 +721,9 @@ Show the contents of the wallet
 * `show` — Show the contents of the wallet
 * `set-default` — Change the wallet default chain
 * `init` — Initialize a wallet from the genesis configuration
-* `forget-keys` — Forgets the specified chain's keys
+* `request-chain` — Request a new chain from a faucet and add it to the wallet
+* `follow-chain` — Add a new followed chain (i.e. a chain without keypair) to the wallet
+* `forget-keys` — Forgets the specified chain's keys. The chain will still be followed by the wallet
 * `forget-chain` — Forgets the specified chain, including the associated key pair
 
 
@@ -775,9 +773,34 @@ Initialize a wallet from the genesis configuration
 
 
 
+## `linera wallet request-chain`
+
+Request a new chain from a faucet and add it to the wallet
+
+**Usage:** `linera wallet request-chain [OPTIONS] --faucet <FAUCET>`
+
+###### **Options:**
+
+* `--faucet <FAUCET>` — The address of a faucet
+* `--set-default` — Whether this chain should become the default chain
+
+
+
+## `linera wallet follow-chain`
+
+Add a new followed chain (i.e. a chain without keypair) to the wallet
+
+**Usage:** `linera wallet follow-chain <CHAIN_ID>`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain ID
+
+
+
 ## `linera wallet forget-keys`
 
-Forgets the specified chain's keys
+Forgets the specified chain's keys. The chain will still be followed by the wallet
 
 **Usage:** `linera wallet forget-keys <CHAIN_ID>`
 
@@ -859,6 +882,9 @@ Build and publish a Linera project
 
 ###### **Options:**
 
+* `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
+
+  Default value: `wasm`
 * `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
@@ -888,8 +914,7 @@ Start a Local Linera Network
 
 ###### **Options:**
 
-* `--extra-wallets <EXTRA_WALLETS>` — The number of extra wallets and user chains to initialize. Default is 0
-* `--other-initial-chains <OTHER_INITIAL_CHAINS>` — The number of initial "root" chains created in the genesis config on top of the default "admin" chain. All initial chains belong to the first "admin" wallet
+* `--other-initial-chains <OTHER_INITIAL_CHAINS>` — The number of initial "root" chains created in the genesis config on top of the default "admin" chain. All initial chains belong to the first "admin" wallet. It is recommended to use at least one other initial chain for the faucet
 
   Default value: `2`
 * `--initial-amount <INITIAL_AMOUNT>` — The initial amount of native tokens credited in the initial "root" chains, including the default "admin" chain
@@ -903,9 +928,9 @@ Start a Local Linera Network
   Default value: `1`
 * `--policy-config <POLICY_CONFIG>` — Configure the resource control policy (notably fees) according to pre-defined settings
 
-  Default value: `default`
+  Default value: `no-fees`
 
-  Possible values: `default`, `only-fuel`, `fuel-and-block`, `all-categories`, `devnet`
+  Possible values: `no-fees`, `testnet`
 
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created

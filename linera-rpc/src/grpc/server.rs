@@ -11,7 +11,7 @@ use std::{
 };
 
 use futures::{
-    channel::{mpsc, mpsc::Receiver},
+    channel::mpsc::{self, Receiver},
     future::BoxFuture,
     FutureExt as _, StreamExt,
 };
@@ -31,7 +31,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
-        bucket_interval, register_histogram_vec, register_int_counter_vec,
+        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     },
     prometheus::{HistogramVec, IntCounterVec},
 };
@@ -63,7 +63,7 @@ static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "server_request_latency",
         "Server request latency",
         &[],
-        bucket_interval(0.1, 50.0),
+        linear_bucket_interval(1.0, 25.0, 200.0),
     )
 });
 
@@ -95,7 +95,25 @@ static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLoc
         "server_request_latency_per_request_type",
         "Server request latency per request type",
         &["method_name"],
-        bucket_interval(0.1, 50.0),
+        linear_bucket_interval(1.0, 25.0, 200.0),
+    )
+});
+
+#[cfg(with_metrics)]
+static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "cross_chain_message_channel_full",
+        "Cross-chain message channel full",
+        &[],
+    )
+});
+
+#[cfg(with_metrics)]
+static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "notification_channel_full",
+        "Notification channel full",
+        &[],
     )
 });
 
@@ -318,6 +336,12 @@ where
 
             if let Err(error) = cross_chain_sender.try_send((request, shard_id)) {
                 error!(%error, "dropping cross-chain request");
+                #[cfg(with_metrics)]
+                if error.is_full() {
+                    CROSS_CHAIN_MESSAGE_CHANNEL_FULL
+                        .with_label_values(&[])
+                        .inc();
+                }
                 break;
             }
         }
@@ -326,6 +350,10 @@ where
             trace!("Scheduling notification query");
             if let Err(error) = notification_sender.try_send(notification) {
                 error!(%error, "dropping notification");
+                #[cfg(with_metrics)]
+                if error.is_full() {
+                    NOTIFICATION_CHANNEL_FULL.with_label_values(&[]).inc();
+                }
                 break;
             }
         }

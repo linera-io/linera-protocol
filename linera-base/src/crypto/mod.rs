@@ -8,29 +8,162 @@ mod ed25519;
 mod hash;
 #[allow(dead_code)]
 mod secp256k1;
-use std::{io, num::ParseIntError};
+use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
 use alloy_primitives::FixedBytes;
-use ed25519_dalek::{self as dalek};
+use custom_debug_derive::Debug;
 pub use hash::*;
+use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::identifiers::Owner;
+
 /// The public key of a validator.
-pub type ValidatorPublicKey = ed25519::Ed25519PublicKey;
+pub type ValidatorPublicKey = secp256k1::Secp256k1PublicKey;
 /// The private key of a validator.
-pub type ValidatorSecretKey = ed25519::Ed25519SecretKey;
+pub type ValidatorSecretKey = secp256k1::Secp256k1SecretKey;
 /// The signature of a validator.
-pub type ValidatorSignature = ed25519::Ed25519Signature;
+pub type ValidatorSignature = secp256k1::Secp256k1Signature;
+/// The key pair of a validator.
+pub type ValidatorKeypair = secp256k1::Secp256k1KeyPair;
 
 /// The public key of a chain owner.
 /// The corresponding private key is allowed to propose blocks
 /// on the chain and transfer account's tokens.
-pub type AccountPublicKey = ed25519::Ed25519PublicKey;
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    WitType,
+    WitLoad,
+    WitStore,
+)]
+pub struct AccountPublicKey(ed25519::Ed25519PublicKey);
+
 /// The private key of a chain owner.
-pub type AccountSecretKey = ed25519::Ed25519SecretKey;
+#[derive(Serialize, Deserialize)]
+pub struct AccountSecretKey(ed25519::Ed25519SecretKey);
+
 /// The signature of a chain owner.
-pub type AccountSignature = ed25519::Ed25519Signature;
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+pub struct AccountSignature(ed25519::Ed25519Signature);
+
+impl AccountSecretKey {
+    #[cfg(all(with_getrandom, with_testing))]
+    /// Generates a new `AccountSecretKey`.
+    pub fn generate() -> Self {
+        Self(ed25519::Ed25519SecretKey::generate())
+    }
+
+    #[cfg(with_getrandom)]
+    /// Returns a new `AccountSecretKey` generated from the given `seed`.
+    pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
+        let secret_key = ed25519::Ed25519SecretKey::generate_from(rng);
+        AccountSecretKey(secret_key)
+    }
+
+    /// Returns the public key corresponding to this secret key.
+    pub fn public(&self) -> AccountPublicKey {
+        AccountPublicKey(self.0.public())
+    }
+
+    /// Copies the secret key.
+    pub fn copy(&self) -> Self {
+        AccountSecretKey(self.0.copy())
+    }
+}
+
+impl AccountPublicKey {
+    #[cfg(with_testing)]
+    /// Constructs a test key from a seed.
+    pub fn test_key(seed: u8) -> Self {
+        Self(ed25519::Ed25519PublicKey::test_key(seed))
+    }
+
+    /// Returns the byte representation of the public key.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.as_bytes()
+    }
+
+    /// Parses the byte representation of the public key.
+    ///
+    /// Returns error if the byte slice has incorrect length.
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, CryptoError> {
+        Ok(Self(ed25519::Ed25519PublicKey::from_slice(bytes)?))
+    }
+}
+
+impl AccountSignature {
+    /// Creates a signature for the `value` using provided `secret`.
+    pub fn new<'de, T>(value: &T, secret: &AccountSecretKey) -> Self
+    where
+        T: BcsSignable<'de>,
+    {
+        let signature = ed25519::Ed25519Signature::new(value, &secret.0);
+        AccountSignature(signature)
+    }
+
+    /// Verifies the signature for the `value` using the provided `public_key`.
+    pub fn verify<'de, T>(&self, value: &T, author: AccountPublicKey) -> Result<(), CryptoError>
+    where
+        T: BcsSignable<'de> + std::fmt::Debug,
+    {
+        self.0.check(value, author.0)
+    }
+
+    /// Returns byte representation of the signatures.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0 .0.to_vec()
+    }
+
+    /// Parses the byte representation of the signature.
+    pub fn from_slice(_bytes: &[u8]) -> Result<Self, CryptoError> {
+        Ok(Self(ed25519::Ed25519Signature::from_slice(_bytes)?))
+    }
+}
+
+impl FromStr for AccountPublicKey {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = hex::decode(s)?;
+        Ok(AccountPublicKey((value.as_slice()).try_into()?))
+    }
+}
+
+impl Display for AccountPublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<AccountPublicKey> for Owner {
+    fn from(public_key: AccountPublicKey) -> Self {
+        public_key.0.into()
+    }
+}
+
+impl From<&AccountPublicKey> for Owner {
+    fn from(public_key: &AccountPublicKey) -> Self {
+        public_key.0.into()
+    }
+}
+
+impl TryFrom<&[u8]> for AccountSignature {
+    type Error = CryptoError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        AccountSignature::from_slice(bytes)
+    }
+}
 
 /// Error type for cryptographic errors.
 #[derive(Error, Debug)]
@@ -38,8 +171,8 @@ pub type AccountSignature = ed25519::Ed25519Signature;
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
-    #[error("Signature for object {type_name} is missing")]
-    MissingSignature { type_name: String },
+    #[error("Signature from validator is missing")]
+    MissingValidatorSignature,
     #[error(transparent)]
     NonHexDigits(#[from] hex::FromHexError),
     #[error(
@@ -48,14 +181,27 @@ pub enum CryptoError {
     )]
     IncorrectHashSize(usize),
     #[error(
-        "Byte slice has length {0} but a `PublicKey` requires exactly {expected} bytes",
-        expected = dalek::PUBLIC_KEY_LENGTH,
+        "Byte slice has length {len} but a {scheme} `PublicKey` requires exactly {expected} bytes"
     )]
-    IncorrectPublicKeySize(usize),
+    IncorrectPublicKeySize {
+        scheme: &'static str,
+        len: usize,
+        expected: usize,
+    },
+    #[error(
+        "byte slice has length {len} but a {scheme} `Signature` requires exactly {expected} bytes"
+    )]
+    IncorrectSignatureBytes {
+        scheme: &'static str,
+        len: usize,
+        expected: usize,
+    },
     #[error("Could not parse integer: {0}")]
     ParseIntError(#[from] ParseIntError),
     #[error("secp256k1 error: {0}")]
-    Secp256k1Error(::secp256k1::Error),
+    Secp256k1Error(k256::ecdsa::Error),
+    #[error("could not parse public key: {0}: point at infinity")]
+    Secp256k1PointAtInfinity(String),
 }
 
 #[cfg(with_getrandom)]

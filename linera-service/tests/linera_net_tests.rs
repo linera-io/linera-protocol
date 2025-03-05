@@ -30,11 +30,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    vm::VmRuntime,
 };
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
-    base::{BlobContent, BlockHeight, Owner},
+    linera_base_types::{BlobContent, BlockHeight, Owner},
     DataBlobHash,
 };
 #[cfg(any(
@@ -1380,6 +1381,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_admin) = config.instantiate().await?;
 
     let client_a = net.make_client().await;
@@ -1498,6 +1500,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             &chain_admin,
             contract_matching,
             service_matching,
+            vm_runtime,
         )
         .await?;
     let application_id_matching = node_service_admin
@@ -1635,6 +1638,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_amm) = config.instantiate().await?;
 
     let client0 = net.make_client().await;
@@ -1685,7 +1689,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             fungible::FungibleTokenAbi,
             fungible::Parameters,
             fungible::InitialState
-        >(&chain_amm, contract_fungible, service_fungible).await?;
+        >(&chain_amm, contract_fungible, service_fungible, vm_runtime).await?;
 
     let params0 = fungible::Parameters::new("ZERO");
     let token0 = node_service_amm
@@ -1824,7 +1828,12 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     // Create AMM application on Admin chain
     let bytecode_id = node_service_amm
-        .publish_bytecode::<AmmAbi, Parameters, ()>(&chain_amm, contract_amm, service_amm)
+        .publish_bytecode::<AmmAbi, Parameters, ()>(
+            &chain_amm,
+            contract_amm,
+            service_amm,
+            vm_runtime,
+        )
         .await?;
     let application_id_amm = node_service_amm
         .create_application(
@@ -2500,7 +2509,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     let owner2 = client2.keygen().await?;
 
     // Open chain on behalf of Client 2.
-    let (message_id, chain2) = client1
+    let (message_id, chain2, _) = client1
         .open_chain(chain1, Some(owner2), Amount::ZERO)
         .await?;
 
@@ -2654,11 +2663,11 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let owner2 = client2.keygen().await?;
 
     // Open a great-grandchild chain on behalf of client 2.
-    let (_, grandparent) = client1
+    let (_, grandparent, _) = client1
         .open_chain(chain1, None, Amount::from_tokens(2))
         .await?;
-    let (_, parent) = client1.open_chain(grandparent, None, Amount::ONE).await?;
-    let (message_id, chain2) = client1
+    let (_, parent, _) = client1.open_chain(grandparent, None, Amount::ONE).await?;
+    let (message_id, chain2, _) = client1
         .open_chain(parent, Some(owner2), Amount::ZERO)
         .await?;
     client2.assign(owner2, message_id).await?;
@@ -2746,11 +2755,24 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 
     // Use the faucet directly to initialize client 3.
     let client3 = net.make_client().await;
-    let outcome = client3
-        .wallet_init(&[], FaucetOption::NewChain(&faucet))
-        .await?;
-    let chain3 = outcome.unwrap().chain_id;
-    assert_eq!(chain3, client3.load_wallet()?.default_chain().unwrap());
+    client3.wallet_init(&[], FaucetOption::None).await?;
+    let (outcome, _) = client3.request_chain(&faucet, false).await?;
+    assert_eq!(
+        outcome.chain_id,
+        client3.load_wallet()?.default_chain().unwrap()
+    );
+
+    let (outcome, _) = client3.request_chain(&faucet, false).await?;
+    assert!(outcome.chain_id != client3.load_wallet()?.default_chain().unwrap());
+    client3.forget_chain(outcome.chain_id).await?;
+    client3.follow_chain(outcome.chain_id).await?;
+
+    let (outcome, _) = client3.request_chain(&faucet, true).await?;
+    assert_eq!(
+        outcome.chain_id,
+        client3.load_wallet()?.default_chain().unwrap()
+    );
+    let chain3 = outcome.chain_id;
 
     faucet_service.ensure_is_running()?;
     faucet_service.terminate().await?;
@@ -2758,8 +2780,8 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     // Chain 1 should have transferred four tokens, two to each child.
     client1.sync(chain1).await?;
     let faucet_balance = client1.query_balance(Account::chain(chain1)).await?;
-    assert!(faucet_balance <= balance1 - Amount::from_tokens(4));
-    assert!(faucet_balance > balance1 - Amount::from_tokens(5));
+    assert!(faucet_balance <= balance1 - Amount::from_tokens(8));
+    assert!(faucet_balance > balance1 - Amount::from_tokens(9));
 
     // Assign chain2 to client2_key.
     assert_eq!(chain2, client2.assign(owner2, message_id).await?);
@@ -2806,7 +2828,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Use the faucet directly to initialize many chains
     for _ in 0..chain_count {
-        let (_, new_chain_id) = faucet_client
+        let (_, new_chain_id, _) = faucet_client
             .open_chain(faucet_chain, None, Amount::ONE)
             .await?;
         faucet_client.forget_chain(new_chain_id).await?;
@@ -2818,11 +2840,12 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Create a new wallet using the faucet
     let client = net.make_client().await;
-    let outcome = client
+    let (outcome, _) = client
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
-        .await?;
+        .await?
+        .unwrap();
 
-    let chain = outcome.unwrap().chain_id;
+    let chain = outcome.chain_id;
     assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());
 
     let initial_balance = client.query_balance(Account::chain(chain)).await?;

@@ -1,0 +1,30 @@
+package linera:app;
+
+interface service-runtime-api {
+    schedule-operation: func(operation: list<u8>);
+    try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
+    fetch-url: func(url: string) -> list<u8>;
+
+    record application-id {
+        application-description-hash: crypto-hash,
+        bytecode-id: bytecode-id,
+    }
+
+    record bytecode-id {
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
+    }
+
+    record crypto-hash {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
+    }
+
+    enum vm-runtime {
+        wasm,
+        evm,
+    }
+}

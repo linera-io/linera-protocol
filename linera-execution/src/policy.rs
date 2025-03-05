@@ -114,6 +114,15 @@ impl fmt::Display for ResourceControlPolicy {
 
 impl Default for ResourceControlPolicy {
     fn default() -> Self {
+        Self::no_fees()
+    }
+}
+
+impl ResourceControlPolicy {
+    /// Creates a policy with no cost for anything.
+    ///
+    /// This can be used in tests or benchmarks.
+    pub fn no_fees() -> Self {
         Self {
             block: Amount::default(),
             fuel_unit: Amount::default(),
@@ -136,9 +145,71 @@ impl Default for ResourceControlPolicy {
             maximum_bytes_written_per_block: u64::MAX,
         }
     }
-}
 
-impl ResourceControlPolicy {
+    /// Creates a policy with no cost for anything except fuel.
+    ///
+    /// This can be used in tests that need whole numbers in their chain balance.
+    #[cfg(with_testing)]
+    pub fn only_fuel() -> Self {
+        Self {
+            fuel_unit: Amount::from_micros(1),
+            ..Self::no_fees()
+        }
+    }
+
+    /// Creates a policy with no cost for anything except fuel, and 0.001 per block.
+    ///
+    /// This can be used in tests, and that keep track of how many blocks were created.
+    #[cfg(with_testing)]
+    pub fn fuel_and_block() -> Self {
+        Self {
+            block: Amount::from_millis(1),
+            fuel_unit: Amount::from_micros(1),
+            ..Self::no_fees()
+        }
+    }
+
+    /// Creates a policy where all categories have a small non-zero cost.
+    #[cfg(with_testing)]
+    pub fn all_categories() -> Self {
+        Self {
+            block: Amount::from_millis(1),
+            fuel_unit: Amount::from_nanos(1),
+            byte_read: Amount::from_attos(100),
+            byte_written: Amount::from_attos(1_000),
+            operation: Amount::from_attos(10),
+            operation_byte: Amount::from_attos(1),
+            message: Amount::from_attos(10),
+            message_byte: Amount::from_attos(1),
+            ..Self::no_fees()
+        }
+    }
+
+    /// Creates a policy that matches the Testnet.
+    pub fn testnet() -> Self {
+        Self {
+            block: Amount::from_millis(1),
+            fuel_unit: Amount::from_nanos(10),
+            byte_read: Amount::from_nanos(10),
+            byte_written: Amount::from_nanos(100),
+            read_operation: Amount::from_micros(10),
+            write_operation: Amount::from_micros(20),
+            byte_stored: Amount::from_nanos(10),
+            message_byte: Amount::from_nanos(100),
+            operation_byte: Amount::from_nanos(10),
+            operation: Amount::from_micros(10),
+            message: Amount::from_micros(10),
+            maximum_fuel_per_block: 100_000_000,
+            maximum_executed_block_size: 1_000_000,
+            maximum_blob_size: 1_000_000,
+            maximum_published_blobs: 10,
+            maximum_bytecode_size: 10_000_000,
+            maximum_block_proposal_size: 13_000_000,
+            maximum_bytes_read_per_block: 100_000_000,
+            maximum_bytes_written_per_block: 10_000_000,
+        }
+    }
+
     pub fn block_price(&self) -> Amount {
         self.block
     }
@@ -215,70 +286,5 @@ impl ResourceControlPolicy {
             BlobType::Data | BlobType::ApplicationDescription => {}
         }
         Ok(())
-    }
-}
-
-impl ResourceControlPolicy {
-    /// Creates a policy with no cost for anything except fuel.
-    ///
-    /// This can be used in tests that need whole numbers in their chain balance and don't expect
-    /// to execute any Wasm code.
-    pub fn only_fuel() -> Self {
-        Self {
-            fuel_unit: Amount::from_micros(1),
-            ..Self::default()
-        }
-    }
-
-    /// Creates a policy with no cost for anything except fuel, and 0.001 per block.
-    ///
-    /// This can be used in tests that don't expect to execute any Wasm code, and that keep track of
-    /// how many blocks were created.
-    pub fn fuel_and_block() -> Self {
-        Self {
-            block: Amount::from_millis(1),
-            fuel_unit: Amount::from_micros(1),
-            ..Self::default()
-        }
-    }
-
-    /// Creates a policy where all categories have a small non-zero cost.
-    pub fn all_categories() -> Self {
-        Self {
-            block: Amount::from_millis(1),
-            fuel_unit: Amount::from_nanos(1),
-            byte_read: Amount::from_attos(100),
-            byte_written: Amount::from_attos(1_000),
-            operation: Amount::from_attos(10),
-            operation_byte: Amount::from_attos(1),
-            message: Amount::from_attos(10),
-            message_byte: Amount::from_attos(1),
-            ..Self::default()
-        }
-    }
-
-    /// Creates a policy that matches the Devnet.
-    pub fn devnet() -> Self {
-        Self {
-            block: Amount::from_millis(1),
-            fuel_unit: Amount::from_nanos(10),
-            byte_read: Amount::from_nanos(10),
-            byte_written: Amount::from_nanos(100),
-            read_operation: Amount::from_micros(10),
-            write_operation: Amount::from_micros(20),
-            byte_stored: Amount::from_nanos(10),
-            message_byte: Amount::from_nanos(100),
-            operation_byte: Amount::from_nanos(10),
-            operation: Amount::from_micros(10),
-            message: Amount::from_micros(10),
-            maximum_fuel_per_block: 100_000_000,
-            maximum_executed_block_size: 1_000_000,
-            maximum_blob_size: 1_000_000,
-            maximum_published_blobs: 10,
-            maximum_bytecode_size: 10_000_000,
-            maximum_block_proposal_size: 13_000_000,
-            maximum_bytes_read_per_block: 100_000_000,
-            maximum_bytes_written_per_block: 10_000_000,
-        }
     }
 }

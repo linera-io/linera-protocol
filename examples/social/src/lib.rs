@@ -5,8 +5,8 @@
 
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{ChainId, ContractAbi, ServiceAbi, Timestamp},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{ChainId, ContractAbi, ServiceAbi, Timestamp},
     views::{CustomSerialize, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,7 @@ pub struct Post {
     pub image_url: Option<String>,
     /// The total number of likes
     pub likes: u32,
-    /// Comments with there ChainId
+    /// Comments with their ChainId
     pub comments: Vec<Comment>,
 }
 
@@ -132,7 +132,7 @@ impl CustomSerialize for Key {
 #[cfg(test)]
 mod tests {
     use linera_sdk::{
-        base::{ChainId, Timestamp},
+        linera_base_types::{ChainId, Timestamp},
         views::CustomSerialize,
     };
 

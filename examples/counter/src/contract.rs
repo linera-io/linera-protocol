@@ -7,7 +7,7 @@ mod state;
 
 use counter::CounterAbi;
 use linera_sdk::{
-    base::WithContractAbi,
+    linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };

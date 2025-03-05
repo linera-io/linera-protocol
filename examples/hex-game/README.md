@@ -25,27 +25,47 @@ does not have to wait for any other chain owner to accept any message.
 Make sure you have the `linera` binary in your `PATH`, and that it is compatible with your
 `linera-sdk` version.
 
-For scripting purposes, we also assume that the BASH function
-`linera_spawn_and_read_wallet_variables` is defined. From the root of Linera repository, this can
-be achieved as follows:
+For scripting purposes, we also assume that the BASH function `linera_spawn` is defined.
+From the root of Linera repository, this can be achieved as follows:
 
 ```bash
 export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-To start the local Linera network and create two wallets:
+Start the local Linera network and run a faucet:
 
 ```bash
-linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37 --extra-wallets 1
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
-We use the test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
-explanation.
+Create the user wallets and add chains to them:
 
 ```bash
-CHAIN_1=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
+export LINERA_WALLET_0="$LINERA_TMP_DIR/wallet_0.json"
+export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
+export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
+export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
+
+linera --with-wallet 1 wallet init --faucet $FAUCET_URL
+linera --with-wallet 2 wallet init --faucet $FAUCET_URL
+
+INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
+INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
+CHAIN_1="${INFO_1[0]}"
+CHAIN_2="${INFO_2[0]}"
+OWNER_1="${INFO_1[3]}"
+OWNER_2="${INFO_2[3]}"
 ```
+
+Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wallet
+"$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1"`.
 
 ### Creating the Game Chain
 
@@ -53,7 +73,7 @@ We open a new chain owned by both `$OWNER_1` and `$OWNER_2`, create the applicat
 start the node service.
 
 ```bash
-APP_ID=$(linera -w0 --wait-for-outgoing-messages \
+APP_ID=$(linera -w1 --wait-for-outgoing-messages \
   project publish-and-create examples/hex-game hex_game $CHAIN_1 \
     --json-argument "{
         \"startTime\": 600000000,
@@ -61,10 +81,10 @@ APP_ID=$(linera -w0 --wait-for-outgoing-messages \
         \"blockDelay\": 100000000
     }")
 
-OWNER_1=$(linera -w0 keygen)
-OWNER_2=$(linera -w1 keygen)
+OWNER_1=$(linera -w1 keygen)
+OWNER_2=$(linera -w2 keygen)
 
-linera -w0 service --port 8080 &
+linera -w1 service --port 8080 &
 sleep 1
 ```
 
@@ -120,11 +140,11 @@ kill %% && sleep 1    # Kill the service so we can use CLI commands for wallet 0
 HEX_CHAIN=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].chainId')
 MESSAGE_ID=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].messageId')
 
-linera -w0 assign --owner $OWNER_1 --message-id $MESSAGE_ID
-linera -w1 assign --owner $OWNER_2 --message-id $MESSAGE_ID
+linera -w1 assign --owner $OWNER_1 --message-id $MESSAGE_ID
+linera -w2 assign --owner $OWNER_2 --message-id $MESSAGE_ID
 
-linera -w0 service --port 8080 &
-linera -w1 service --port 8081 &
+linera -w1 service --port 8080 &
+linera -w2 service --port 8081 &
 sleep 1
 ```
 

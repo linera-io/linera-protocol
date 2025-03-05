@@ -33,7 +33,7 @@ summarized below.
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
-that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
+that the BASH function `linera_spawn` is defined.
 
 From the root of Linera repository, this can be achieved as follows:
 
@@ -42,20 +42,33 @@ export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-You may also use `cargo install linera-service` and append the output of
-`linera net helper` to your `~/.bash_profile`.
-
-Now, we are ready to set up a local network with an initial wallet owning several initial
-chains. In a new BASH shell, enter:
+Next, start the local Linera network and run a faucet:
 
 ```bash
-linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
-A new test network is now running and the environment variables `LINERA_WALLET` and
-`LINERA_STORAGE` are now defined for the duration of the shell session. We used the
-test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
-presentation.
+Create the user wallet and add chains to it:
+
+```bash
+export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
+
+linera wallet init --faucet $FAUCET_URL
+
+INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
+CHAIN_1="${INFO_1[0]}"
+OWNER_1="${INFO_1[3]}"
+INFO_2=($(linera wallet request-chain --faucet $FAUCET_URL))
+CHAIN_2="${INFO_2[0]}"
+OWNER_2="${INFO_2[3]}"
+```
 
 Now, compile the `fungible` application WebAssembly binaries, and publish them as an application
 bytecode:
@@ -86,16 +99,6 @@ linera wallet show
 A table will be shown with the chains registered in the wallet and their meta-data. The default
 chain should be highlighted in green. Each chain has an `Owner` field, and that is what is used
 for the account.
-
-Let's define some variables corresponding to these values. (Note that owner addresses
-would not be predictable without `--testing-prng-seed` above.)
-
-```bash
-CHAIN_1=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8  # default chain for the wallet
-OWNER_1=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1  # owner of chain 1
-CHAIN_2=63620ea465af9e9e0e8e4dd8d21593cc3a719feac5f096df8440f90738f4dbd8  # another chain in the wallet
-OWNER_2=598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3  # owner of chain 2
-```
 
 The example below creates a token application on the default chain CHAIN_1 and gives the owner 100 tokens:
 

@@ -58,7 +58,7 @@ jobs:
       run: |
         cargo build --features storage-service
         mkdir /tmp/local-linera-net
-        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config devnet --path /tmp/local-linera-net --validators 4 --shards 4 &
+        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config testnet --path /tmp/local-linera-net --validators 4 --shards 4 &
     - name: Create two epochs and run the faucet
       run: |
         cargo build --bin linera
@@ -79,6 +79,17 @@ jobs:
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
+
+  metrics-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Run metrics tests
+      run: |
+        cargo test --locked -p linera-base --features metrics
 
   wasm-application-test:
     runs-on: ubuntu-latest
@@ -252,6 +263,15 @@ jobs:
         cd linera-views
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
 
+  check-wit-files:
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Check WIT files
+      run: |
+        cargo run --bin wit-generator -- -c
+
   lint-unexpected-chain-load-operations:
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -289,7 +309,7 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install cargo-machete
       run: |
-        cargo install cargo-machete --locked
+        cargo install cargo-machete@0.7.0 --locked
     - name: Check for unused dependencies
       run: |
         cargo machete

@@ -4,14 +4,14 @@
 /* ABI of the Fungible Token Example Application */
 
 pub use linera_sdk::abis::fungible::*;
-use linera_sdk::base::{AccountOwner, Amount};
+use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     async_graphql::InputType,
     futures::{stream, StreamExt},
     linera_sdk::{
-        base::{ApplicationId, BytecodeId},
+        linera_base_types::{ApplicationId, BytecodeId},
         test::{ActiveChain, QueryOutcome, TestValidator},
     },
 };

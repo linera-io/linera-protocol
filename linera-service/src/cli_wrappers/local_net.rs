@@ -19,9 +19,11 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_client::storage::{StorageConfig, StorageConfigNamespace};
+use linera_client::{
+    client_options::ResourceControlPolicyConfig,
+    storage::{StorageConfig, StorageConfigNamespace},
+};
 use linera_core::node::ValidatorNodeProvider;
-use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "scylladb", with_testing))]
@@ -161,7 +163,7 @@ pub struct LocalNetConfig {
     pub initial_amount: Amount,
     pub num_initial_validators: usize,
     pub num_shards: usize,
-    pub policy: ResourceControlPolicy,
+    pub policy_config: ResourceControlPolicyConfig,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
 }
@@ -173,7 +175,7 @@ pub struct LocalNet {
     next_client_id: usize,
     num_initial_validators: usize,
     num_shards: usize,
-    validator_names: BTreeMap<usize, String>,
+    validator_keys: BTreeMap<usize, (String, String)>,
     running_validators: BTreeMap<usize, Validator>,
     namespace: String,
     validators_with_initialized_storage: HashSet<usize>,
@@ -258,7 +260,7 @@ impl LocalNetConfig {
             network,
             num_other_initial_chains: 2,
             initial_amount: Amount::from_tokens(1_000_000),
-            policy: ResourceControlPolicy::devnet(),
+            policy_config: ResourceControlPolicyConfig::Testnet,
             testing_prng_seed: Some(37),
             namespace: linera_views::random::generate_test_namespace(),
             num_initial_validators: 4,
@@ -294,7 +296,7 @@ impl LineraNetConfig for LocalNetConfig {
             .create_genesis_config(
                 self.num_other_initial_chains,
                 self.initial_amount,
-                self.policy,
+                self.policy_config,
             )
             .await
             .unwrap();
@@ -352,7 +354,7 @@ impl LocalNet {
             next_client_id: 0,
             num_initial_validators,
             num_shards,
-            validator_names: BTreeMap::new(),
+            validator_keys: BTreeMap::new(),
             running_validators: BTreeMap::new(),
             namespace,
             validators_with_initialized_storage: HashSet::new(),
@@ -458,10 +460,16 @@ impl LocalNet {
             .args(["--committee", "committee.json"])
             .spawn_and_wait_for_stdout()
             .await?;
-        self.validator_names = output
+        self.validator_keys = output
             .split_whitespace()
             .map(str::to_string)
+            .map(|keys| keys.split(',').map(str::to_string).collect::<Vec<_>>())
             .enumerate()
+            .map(|(i, keys)| {
+                let validator_key = keys[0].to_string();
+                let account_key = keys[1].to_string();
+                (i, (validator_key, account_key))
+            })
             .collect();
         Ok(())
     }
@@ -659,8 +667,9 @@ impl LocalNet {
 
 #[cfg(with_testing)]
 impl LocalNet {
-    pub fn validator_name(&self, validator: usize) -> Option<&String> {
-        self.validator_names.get(&validator)
+    /// Returns the validating key and an account key of the validator.
+    pub fn validator_keys(&self, validator: usize) -> Option<&(String, String)> {
+        self.validator_keys.get(&validator)
     }
 
     pub async fn generate_validator_config(&mut self, validator: usize) -> Result<()> {
@@ -672,8 +681,13 @@ impl LocalNet {
             .arg(&self.configuration_string(validator)?)
             .spawn_and_wait_for_stdout()
             .await?;
-        self.validator_names
-            .insert(validator, stdout.trim().to_string());
+        let keys = stdout
+            .trim()
+            .split(',')
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        self.validator_keys
+            .insert(validator, (keys[0].clone(), keys[1].clone()));
         Ok(())
     }
 

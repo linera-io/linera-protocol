@@ -47,7 +47,7 @@ enum Args {
         seed: u64,
 
         #[arg(long = "uniform")]
-        /// If set, each chain receives the exact same amount of transfers.
+        /// If set, each chain receives the exact same number of transfers.
         uniform: bool,
     },
 }

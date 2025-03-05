@@ -32,6 +32,14 @@ pub fn parse_chain_set(s: &str) -> Result<HashSet<ChainId>, CryptoError> {
     }
 }
 
+pub fn parse_ascii_alphanumeric_string(s: &str) -> Result<String, &'static str> {
+    if s.chars().all(|x| x.is_ascii_alphanumeric()) {
+        Ok(s.to_string())
+    } else {
+        Err("Expecting ASCII alphanumeric characters")
+    }
+}
+
 /// Returns after the specified time or if we receive a notification that a new round has started.
 pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: RoundTimeout) {
     let mut stream = stream.filter(|notification| match &notification.reason {

@@ -16,6 +16,7 @@ use linera_base::{
     identifiers::{
         AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
     },
+    vm::VmRuntime,
 };
 use linera_views::{
     context::Context,
@@ -51,9 +52,14 @@ pub fn create_dummy_user_application_description(
         compressed_bytes: service_bytes,
     });
 
+    let vm_runtime = VmRuntime::Wasm;
     (
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(contract_blob.id().hash, service_blob.id().hash),
+            bytecode_id: BytecodeId::new(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                vm_runtime,
+            ),
             creator_chain_id: chain_id,
             block_height: 0.into(),
             application_index: index,

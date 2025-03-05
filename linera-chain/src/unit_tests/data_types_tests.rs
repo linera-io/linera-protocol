@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::data_types::Amount;
+use linera_base::{crypto::ValidatorKeypair, data_types::Amount};
 
 use super::*;
 use crate::{
@@ -12,9 +12,8 @@ use crate::{
 
 #[test]
 fn test_signed_values() {
-    let key1 = ValidatorSecretKey::generate();
-    let key2 = ValidatorSecretKey::generate();
-    let validator_1 = key1.public();
+    let validator1_key_pair = ValidatorKeypair::generate();
+    let validator2_key_pair = ValidatorKeypair::generate();
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
@@ -28,18 +27,30 @@ fn test_signed_values() {
     .with(block);
     let confirmed_value = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
 
-    let confirmed_vote = LiteVote::new(LiteValue::new(&confirmed_value), Round::Fast, &key1);
+    let confirmed_vote = LiteVote::new(
+        LiteValue::new(&confirmed_value),
+        Round::Fast,
+        &validator1_key_pair.secret_key,
+    );
     assert!(confirmed_vote.check().is_ok());
 
     let validated_value = Hashed::new(ValidatedBlock::new(executed_block));
-    let validated_vote = LiteVote::new(LiteValue::new(&validated_value), Round::Fast, &key1);
+    let validated_vote = LiteVote::new(
+        LiteValue::new(&validated_value),
+        Round::Fast,
+        &validator1_key_pair.secret_key,
+    );
     assert_ne!(
         confirmed_vote.value, validated_vote.value,
         "Confirmed and validated votes should be different, even if for the same executed block"
     );
 
-    let mut v = LiteVote::new(LiteValue::new(&confirmed_value), Round::Fast, &key2);
-    v.public_key = validator_1;
+    let mut v = LiteVote::new(
+        LiteValue::new(&confirmed_value),
+        Round::Fast,
+        &validator2_key_pair.secret_key,
+    );
+    v.public_key = validator1_key_pair.public_key;
     assert!(v.check().is_err());
 
     assert!(validated_vote.check().is_ok());
@@ -83,11 +94,16 @@ fn test_hashes() {
 
 #[test]
 fn test_certificates() {
-    let key1 = ValidatorSecretKey::generate();
-    let key2 = ValidatorSecretKey::generate();
-    let key3 = ValidatorSecretKey::generate();
+    let validator1_key_pair = ValidatorKeypair::generate();
+    let account1_secret = AccountSecretKey::generate();
+    let validator2_key_pair = ValidatorKeypair::generate();
+    let account2_secret = AccountSecretKey::generate();
+    let validator3_key_pair = ValidatorKeypair::generate();
 
-    let committee = Committee::make_simple(vec![key1.public(), key2.public()]);
+    let committee = Committee::make_simple(vec![
+        (validator1_key_pair.public_key, account1_secret.public()),
+        (validator2_key_pair.public_key, account2_secret.public()),
+    ]);
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);
@@ -101,9 +117,21 @@ fn test_certificates() {
     .with(block);
     let value = Hashed::new(ConfirmedBlock::new(executed_block));
 
-    let v1 = LiteVote::new(LiteValue::new(&value), Round::Fast, &key1);
-    let v2 = LiteVote::new(LiteValue::new(&value), Round::Fast, &key2);
-    let v3 = LiteVote::new(LiteValue::new(&value), Round::Fast, &key3);
+    let v1 = LiteVote::new(
+        LiteValue::new(&value),
+        Round::Fast,
+        &validator1_key_pair.secret_key,
+    );
+    let v2 = LiteVote::new(
+        LiteValue::new(&value),
+        Round::Fast,
+        &validator2_key_pair.secret_key,
+    );
+    let v3 = LiteVote::new(
+        LiteValue::new(&value),
+        Round::Fast,
+        &validator3_key_pair.secret_key,
+    );
 
     let mut builder = SignatureAggregator::new(value.clone(), Round::Fast, &committee);
     assert!(builder

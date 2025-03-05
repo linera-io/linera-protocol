@@ -163,9 +163,10 @@ impl CommandExt for tokio::process::Command {
             .with_context(|| self.description())?;
         ensure!(
             output.status.success(),
-            "{}: got non-zero error code {}",
+            "{}: got non-zero error code {}. Stderr: \n{:?}\n",
             self.description(),
-            output.status
+            output.status,
+            String::from_utf8(output.stderr),
         );
         String::from_utf8(output.stdout).with_context(|| self.description())
     }

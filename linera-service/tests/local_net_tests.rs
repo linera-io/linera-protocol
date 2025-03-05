@@ -20,8 +20,9 @@ use linera_base::{
     identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
+use linera_execution::committee::Epoch;
 use linera_faucet::ClaimOutcome;
-use linera_sdk::base::AccountSecretKey;
+use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
@@ -115,7 +116,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Add 5th validator
     client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
     client.finalize_committee().await?;
 
@@ -128,7 +129,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Add 6th validator
     client
-        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
     client.finalize_committee().await?;
     if matches!(network, Network::Grpc) {
@@ -137,7 +138,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Remove 5th validator
     client
-        .remove_validator(net.validator_name(4).unwrap())
+        .remove_validator(&net.validator_keys(4).unwrap().0)
         .await?;
     client.finalize_committee().await?;
     net.remove_validator(4)?;
@@ -148,17 +149,23 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(Some(chain_1)).await?;
     if let Some(service) = &node_service_2 {
         service.process_inbox(&chain_2).await?;
+        let committees = service.query_committees(&chain_2).await?;
+        let epochs = committees.into_keys().collect::<Vec<_>>();
+        assert_eq!(&epochs, &[Epoch(3)]);
     } else {
         client_2.process_inbox(chain_2).await?;
     }
 
     // Remove the first 4 validators, so only the last one remains.
     for i in 0..4 {
-        let name = net.validator_name(i).unwrap();
-        client.remove_validator(name).await?;
+        let validator_key = net.validator_keys(i).unwrap();
+        client.remove_validator(&validator_key.0).await?;
         client.finalize_committee().await?;
         if let Some(service) = &node_service_2 {
             service.process_inbox(&chain_2).await?;
+            let committees = service.query_committees(&chain_2).await?;
+            let epochs = committees.into_keys().collect::<Vec<_>>();
+            assert_eq!(&epochs, &[Epoch(4 + i as u32)]);
         } else {
             client_2.process_inbox(chain_2).await?;
         }
@@ -174,8 +181,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         )
         .await?;
 
-    if let Some(mut node_service_2) = node_service_2 {
-        node_service_2.process_inbox(&chain_2).await?;
+    if let Some(mut service) = node_service_2 {
+        service.process_inbox(&chain_2).await?;
         let query = format!(
             "query {{ chain(chainId:\"{chain_2}\") {{
                 executionState {{ system {{ balances {{
@@ -183,21 +190,14 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
                 }} }} }}
             }} }}"
         );
-        let response = node_service_2.query_node(query.clone()).await?;
+        let response = service.query_node(query).await?;
         let balances = &response["chain"]["executionState"]["system"]["balances"];
         assert_eq!(balances["entry"]["value"].as_str(), Some("5."));
+        let committees = service.query_committees(&chain_2).await?;
+        let epochs = committees.into_keys().collect::<Vec<_>>();
+        assert_eq!(&epochs, &[Epoch(7)]);
 
-        let query = format!(
-            "query {{ chain(chainId:\"{chain_2}\") {{
-                executionState {{ system {{ committees }} }}
-            }} }}"
-        );
-        let response = node_service_2.query_node(query.clone()).await?;
-        let committees = &response["chain"]["executionState"]["system"]["committees"];
-        let epochs = committees.as_object().unwrap().keys().collect::<Vec<_>>();
-        assert_eq!(&epochs, &["7"]);
-
-        node_service_2.ensure_is_running()?;
+        service.ensure_is_running()?;
     } else {
         client_2.sync(chain_2).await?;
         client_2.process_inbox(chain_2).await?;
@@ -268,7 +268,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 
     // Add 5th validator to the network
     client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
 
     client.query_validators(None).await?;
@@ -360,7 +360,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Add 5th validator to the network
     client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
     client.finalize_committee().await?;
 
@@ -398,7 +398,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Add 6th validator to the network
     client
-        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
 
     client.query_validators(None).await?;
@@ -745,9 +745,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     assert_eq!(client.load_wallet()?.num_chains(), 3);
     // Launch local benchmark using some additional chains.
     client.benchmark(4, 10, None).await?;
-    // Number of chains should not change, as the chains created for the benchmark are not loaded
-    // in the wallet.
-    assert_eq!(client.load_wallet()?.num_chains(), 3);
+    assert_eq!(client.load_wallet()?.num_chains(), 7);
 
     // Now we run the benchmark again, with the fungible token application instead of the
     // native token.
@@ -799,7 +797,7 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
 
     // Create some blocks
     let sender_chain = client.default_chain().expect("Client has no default chain");
-    let (_, receiver_chain) = client
+    let (_, receiver_chain, _) = client
         .open_chain(sender_chain, None, Amount::from_tokens(1_000))
         .await?;
 

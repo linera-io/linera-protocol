@@ -10,6 +10,8 @@
 * Rust
     - `brew install rustup-init`
     - `rustup target add wasm32-unknown-unknown`
+* Clang/LLVM
+    - `brew install llvm@18` then make sure to update your `PATH` as instructed.
 * Protoc
     - `brew install protobuf`
 

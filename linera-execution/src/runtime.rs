@@ -1496,6 +1496,22 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(app_id)
     }
 
+    fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError> {
+        let mut this = self.inner();
+        let round =
+            if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Round(round) => round,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                this.round
+            };
+        this.transaction_tracker
+            .add_oracle_response(OracleResponse::Round(round));
+        Ok(round)
+    }
+
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let id = this.application_id()?;
@@ -1517,22 +1533,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             })?
             .recv_response()?;
         Ok(())
-    }
-
-    fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError> {
-        let mut this = self.inner();
-        let round =
-            if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
-                match response {
-                    OracleResponse::Round(round) => round,
-                    _ => return Err(ExecutionError::OracleResponseMismatch),
-                }
-            } else {
-                this.round
-            };
-        this.transaction_tracker
-            .add_oracle_response(OracleResponse::Round(round));
-        Ok(round)
     }
 }
 

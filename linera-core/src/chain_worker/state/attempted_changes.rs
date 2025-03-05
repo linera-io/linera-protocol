@@ -96,7 +96,7 @@ where
             ));
         }
         let old_round = self.state.chain.manager.current_round();
-        let timeout_chainid = certificate.inner().chain_id;
+        let timeout_chain_id = certificate.inner().chain_id;
         let timeout_height = certificate.inner().height;
         self.state
             .chain
@@ -105,7 +105,7 @@ where
         let round = self.state.chain.manager.current_round();
         if round > old_round {
             actions.notifications.push(Notification {
-                chain_id: timeout_chainid,
+                chain_id: timeout_chain_id,
                 reason: Reason::NewRound {
                     height: timeout_height,
                     round,
@@ -355,7 +355,7 @@ where
                 .events
                 .iter()
                 .flatten()
-                .map(|event| (event.id(chain_id), &event.value[..]));
+                .map(|event| (event.id(chain_id), event.value.clone()));
             self.state.storage.write_events(events).await?;
         }
 

@@ -8,54 +8,44 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash},
+    crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, ChainId},
+    identifiers::{Account, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
-    data_types::ClientOutcome,
+    data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
-    node::CrossChainMessageDelivery,
+    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
+    remote_node::RemoteNode,
     JoinSetExt,
 };
+use linera_execution::{Message, SystemMessage};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
-    linera_base::{
-        crypto::AccountPublicKey,
-        data_types::Amount,
-        hashed::Hashed,
-        identifiers::{AccountOwner, ApplicationId, Owner},
-        listen_for_shutdown_signals,
-    },
-    linera_chain::{
-        data_types::{BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote},
-        types::{CertificateValue, ConfirmedBlock, GenericCertificate},
-    },
-    linera_core::{client::ChainClientError, data_types::ChainInfoQuery, node::ValidatorNode},
+    crate::benchmark::Benchmark,
+    linera_base::{data_types::Amount, identifiers::ApplicationId},
     linera_execution::{
-        committee::Epoch,
-        system::{OpenChainConfig, Recipient, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
+        committee::{Committee, Epoch},
+        system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
         Operation,
     },
-    linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
     tokio::task,
-    tokio_util::sync::CancellationToken,
-    tracing::{error, trace, warn},
 };
 #[cfg(feature = "fs")]
 use {
     linera_base::{
         data_types::{BlobContent, Bytecode},
         identifiers::BytecodeId,
+        vm::VmRuntime,
     },
     linera_core::client::create_bytecode_blobs,
     std::{fs, path::PathBuf},
@@ -119,7 +109,7 @@ where
     }
 
     async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
-        self.update_and_save_wallet(client).await
+        self.update_wallet_from_client(client).await
     }
 }
 
@@ -251,23 +241,22 @@ where
     }
 
     fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .ok_or_else(|| error::Inner::NonexistentChain(chain_id))?;
-        let known_key_pairs = chain
-            .key_pair
-            .as_ref()
-            .map(|kp| kp.copy())
-            .into_iter()
-            .collect();
+        // We only create clients for chains we have in the wallet, or for the admin chain.
+        let chain = match self.wallet.get(chain_id) {
+            Some(chain) => chain.clone(),
+            None if chain_id == self.wallet.genesis_admin_chain() => {
+                UserChain::make_other(self.wallet.genesis_admin_chain(), Timestamp::from(0))
+            }
+            None => return Err(error::Inner::NonexistentChain(chain_id).into()),
+        };
+        let known_key_pairs = chain.key_pair.into_iter().collect();
         Ok(self.make_chain_client_internal(
             chain_id,
             known_key_pairs,
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            chain.pending_proposal.clone(),
+            chain.pending_proposal,
         ))
     }
 
@@ -316,20 +305,11 @@ where
             .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    async fn update_wallet_from_client(
+    pub async fn update_wallet_from_client(
         &mut self,
         client: &ChainClient<NodeProvider, S>,
     ) -> Result<(), Error> {
         self.wallet.as_mut().update_from_state(client).await;
-        self.save_wallet().await?;
-        Ok(())
-    }
-
-    pub async fn update_and_save_wallet(
-        &mut self,
-        client: &ChainClient<NodeProvider, S>,
-    ) -> Result<(), Error> {
-        self.update_wallet_from_client(client).await?;
         self.save_wallet().await
     }
 
@@ -411,6 +391,86 @@ where
         }
     }
 
+    pub async fn assign_new_chain_to_key(
+        &mut self,
+        chain_id: ChainId,
+        message_id: MessageId,
+        owner: Owner,
+        validators: Option<Vec<(ValidatorPublicKey, String)>>,
+    ) -> Result<(), Error>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+    {
+        let node_provider = self.make_node_provider();
+        let client = self.client.clone_with(
+            node_provider.clone(),
+            "Temporary client for fetching the parent chain",
+            vec![message_id.chain_id, chain_id],
+            false,
+        );
+
+        // Take the latest committee we know of.
+        let admin_chain_id = self.wallet.genesis_admin_chain();
+        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
+        let nodes: Vec<_> = if let Some(validators) = validators {
+            node_provider
+                .make_nodes_from_list(validators)?
+                .map(|(public_key, node)| RemoteNode { public_key, node })
+                .collect()
+        } else {
+            let info = client.local_node().handle_chain_info_query(query).await?;
+            let committee = info
+                .latest_committee()
+                .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
+            node_provider
+                .make_nodes(committee)?
+                .map(|(public_key, node)| RemoteNode { public_key, node })
+                .collect()
+        };
+
+        // Download the parent chain.
+        let target_height = message_id.height.try_add_one()?;
+        client
+            .download_certificates(&nodes, message_id.chain_id, target_height)
+            .await
+            .context("downloading parent chain")?;
+
+        // The initial timestamp for the new chain is taken from the block with the message.
+        let certificate = client
+            .local_node()
+            .certificate_for(&message_id)
+            .await
+            .context("looking for `OpenChain` message")?;
+        let executed_block = certificate.block();
+        let message = executed_block
+            .message_by_id(&message_id)
+            .map(|msg| &msg.message);
+        let Some(Message::System(SystemMessage::OpenChain(config))) = message else {
+            tracing::error!(
+                "The message with the ID returned by the faucet is not OpenChain. \
+                Please make sure you are connecting to a genuine faucet."
+            );
+            return Err(error::Inner::InvalidOpenMessage(message.cloned()).into());
+        };
+
+        if !config.ownership.verify_owner(&owner) {
+            tracing::error!(
+                "The chain with the ID returned by the faucet is not owned by you. \
+                Please make sure you are connecting to a genuine faucet."
+            );
+            return Err(error::Inner::ChainOwnership.into());
+        }
+
+        self.wallet_mut()
+            .mutate(|w| {
+                w.assign_new_chain_to_owner(owner, chain_id, executed_block.header.timestamp)
+            })
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)))?
+            .context("assigning new chain")?;
+        Ok(())
+    }
+
     /// Applies the given function to the chain client.
     ///
     /// Updates the wallet regardless of the outcome. As long as the function returns a round
@@ -428,7 +488,7 @@ where
         client.prepare_chain().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
-        self.update_and_save_wallet(client).await?;
+        self.update_wallet_from_client(client).await?;
         if let ClientOutcome::Committed(t) = result? {
             return Ok(t);
         }
@@ -441,7 +501,7 @@ where
             // Try applying f. Return if committed.
             client.prepare_chain().await?;
             let result = f(client).await;
-            self.update_and_save_wallet(client).await?;
+            self.update_wallet_from_client(client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -493,6 +553,7 @@ where
         chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
+        vm_runtime: VmRuntime,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract)
@@ -504,7 +565,7 @@ where
 
         info!("Publishing bytecode");
         let (contract_blob, service_blob, bytecode_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode).await;
+            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
         let (bytecode_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let contract_blob = contract_blob.clone();
@@ -583,135 +644,72 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
-    #[allow(clippy::too_many_arguments)]
-    pub async fn run_benchmark(
+    pub async fn prepare_for_benchmark(
         &mut self,
-        bps: Option<usize>,
-        blocks_infos_iter: impl Iterator<Item = &(ChainId, Vec<Operation>, AccountSecretKey)>,
-        clients: Vec<linera_rpc::Client>,
+        num_chains: usize,
         transactions_per_block: usize,
-        epoch: Epoch,
-        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
-    ) -> Result<(), Error> {
-        let shutdown_notifier = CancellationToken::new();
-        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+        tokens_per_chain: Amount,
+        fungible_application_id: Option<ApplicationId>,
+    ) -> Result<
+        (
+            HashMap<ChainId, ChainClient<NodeProvider, S>>,
+            Epoch,
+            Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
+            Committee,
+        ),
+        Error,
+    > {
+        let start = Instant::now();
+        // Below all block proposals are supposed to succeed without retries, we
+        // must make sure that all incoming payments have been accepted on-chain
+        // and that no validator is missing user certificates.
+        self.process_inboxes_and_force_validator_updates().await;
+        info!(
+            "Processed inboxes and forced validator updates in {} ms",
+            start.elapsed().as_millis()
+        );
 
-        let mut num_sent_proposals = 0;
-        let mut start = Instant::now();
-        for (chain_id, operations, key_pair) in blocks_infos_iter {
-            if shutdown_notifier.is_cancelled() {
-                info!("Shutdown signal received, stopping benchmark");
-                break;
-            }
-            let chain_client = &chain_clients[chain_id];
-            let block = ProposedBlock {
-                epoch,
-                chain_id: *chain_id,
-                incoming_bundles: Vec::new(),
-                operations: operations.clone(),
-                previous_block_hash: chain_client.block_hash(),
-                height: chain_client.next_block_height(),
-                authenticated_signer: Some(Owner::from(key_pair.public())),
-                timestamp: chain_client.timestamp().max(Timestamp::now()),
-            };
-            let executed_block = self.stage_block_execution(block.clone(), None).await?;
-            let value = Hashed::new(ConfirmedBlock::new(executed_block));
-            let proposal =
-                BlockProposal::new_initial(linera_base::data_types::Round::Fast, block, key_pair);
+        let start = Instant::now();
+        let (key_pairs, chain_clients) = self
+            .make_benchmark_chains(num_chains, tokens_per_chain)
+            .await?;
+        info!(
+            "Got {} chains in {} ms",
+            key_pairs.len(),
+            start.elapsed().as_millis()
+        );
 
-            let mut join_set = task::JoinSet::new();
-            for client in &clients {
-                let client = client.clone();
-                let proposal = proposal.clone();
-                join_set.spawn(async move { client.handle_block_proposal(proposal).await });
-            }
-            let votes = join_set
-                .join_all()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .filter_map(|response| {
-                    let vote = response.info.manager.pending?;
-                    vote.clone().with_value(value.clone())
-                })
-                .collect::<Vec<_>>();
-
-            let certificates = self.make_benchmark_certificates_from_votes(votes);
-            assert_eq!(
-                certificates.len(),
-                1,
-                "Unable to build all the expected certificates from received votes"
-            );
-
-            let certificate = &certificates[0];
-            let mut join_set = task::JoinSet::new();
-            for client in &clients {
-                let client = client.clone();
-                let certificate = certificate.clone();
-                join_set.spawn(async move {
-                    client
-                        .handle_confirmed_certificate(
-                            certificate,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await
-                });
-            }
-
-            join_set
-                .join_all()
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
-
-            // Replay the certificate locally.
-            // No required certificates from other chains: This is only used with benchmark.
-            chain_client
-                .process_certificate(certificate.clone())
-                .await?;
-
-            num_sent_proposals += 1;
-            if let Some(bps) = bps {
-                if num_sent_proposals == bps {
-                    let elapsed = start.elapsed();
-                    if elapsed > Duration::from_secs(1) {
-                        warn!(
-                            "Failed to achieve {} BPS/{} TPS, took {} ms",
-                            bps,
-                            bps * transactions_per_block,
-                            elapsed.as_millis()
-                        );
-                    } else {
-                        tokio::time::sleep(Duration::from_secs(1) - elapsed).await;
-                        info!(
-                            "Achieved {} BPS/{} TPS in {} ms",
-                            bps,
-                            bps * transactions_per_block,
-                            elapsed.as_millis()
-                        );
-                    }
-                    start = Instant::now();
-                    num_sent_proposals = 0;
-                }
-            }
-        }
-
-        if bps.is_none() {
-            let elapsed = start.elapsed();
-            let bps = num_sent_proposals as f64 / elapsed.as_secs_f64();
+        if let Some(id) = fungible_application_id {
+            let start = Instant::now();
+            self.supply_fungible_tokens(&key_pairs, id).await?;
             info!(
-                "Achieved {} BPS/{} TPS",
-                bps,
-                bps * transactions_per_block as f64
+                "Supplied fungible tokens in {} ms",
+                start.elapsed().as_millis()
             );
         }
 
-        self.close_benchmark_chains(chain_clients).await?;
-        Ok(())
+        let default_chain_id = self
+            .wallet
+            .default_chain()
+            .expect("should have default chain");
+        let default_chain_client = self.make_chain_client(default_chain_id)?;
+        let (epoch, mut committees) = default_chain_client
+            .epoch_and_committees(default_chain_id)
+            .await?;
+        let epoch = epoch.expect("default chain should have an epoch");
+        let committee = committees
+            .remove(&epoch)
+            .expect("current epoch should have a committee");
+        let blocks_infos = Benchmark::<S>::make_benchmark_block_info(
+            key_pairs,
+            transactions_per_block,
+            fungible_application_id,
+        );
+
+        Ok((chain_clients, epoch, blocks_infos, committee))
     }
 
-    pub async fn process_inboxes_and_force_validator_updates(&mut self) {
+    async fn process_inboxes_and_force_validator_updates(&mut self) {
         let chain_clients = self
             .wallet
             .owned_chain_ids()
@@ -752,9 +750,9 @@ where
         Ok(certificates)
     }
 
-    /// Creates chains, and returns a map of exactly `num_chains` chain IDs
+    /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
     /// with key pairs, as well as a map of the chain clients.
-    pub async fn make_benchmark_chains(
+    async fn make_benchmark_chains(
         &mut self,
         num_chains: usize,
         balance: Amount,
@@ -765,7 +763,38 @@ where
         ),
         Error,
     > {
+        let mut benchmark_chains = HashMap::new();
+        let mut chain_clients = HashMap::new();
         let start = Instant::now();
+        for chain_id in self.wallet.owned_chain_ids() {
+            if benchmark_chains.len() == num_chains {
+                break;
+            }
+            // This should never panic, because `owned_chain_ids` only returns the owned chains that
+            // we have a key pair for.
+            let key_pair = self
+                .wallet
+                .get(chain_id)
+                .and_then(|chain| chain.key_pair.as_ref().map(|kp| kp.copy()))
+                .unwrap();
+            let chain_client = self.make_chain_client(chain_id)?;
+            let ownership = chain_client.chain_info().await?.manager.ownership;
+            if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
+                continue;
+            }
+            benchmark_chains.insert(chain_client.chain_id(), key_pair);
+            chain_client.process_inbox().await?;
+            chain_clients.insert(chain_id, chain_client);
+        }
+        info!(
+            "Got {} chains from the wallet in {} ms",
+            benchmark_chains.len(),
+            start.elapsed().as_millis()
+        );
+
+        let chains_from_wallet = benchmark_chains.len();
+        let num_chains_to_create = num_chains - chains_from_wallet;
+
         let default_chain_id = self
             .wallet
             .default_chain()
@@ -773,17 +802,15 @@ where
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
         let mut key_pairs = Vec::new();
-        for _ in (0..num_chains).step_by(operations_per_block) {
+        for _ in (0..num_chains_to_create).step_by(operations_per_block) {
             key_pairs.push(self.wallet.generate_key_pair());
         }
         let mut key_pairs_iter = key_pairs.into_iter();
         let admin_id = self.wallet.genesis_admin_chain();
         let default_chain_client = self.make_chain_client(default_chain_id)?;
 
-        let mut chain_clients = HashMap::new();
-        let mut benchmark_chains = HashMap::new();
-        for i in (0..num_chains).step_by(operations_per_block) {
-            let num_new_chains = operations_per_block.min(num_chains - i);
+        for i in (0..num_chains_to_create).step_by(operations_per_block) {
+            let num_new_chains = operations_per_block.min(num_chains_to_create - i);
             let key_pair = key_pairs_iter.next().unwrap();
 
             let certificate = Self::execute_open_chains_operations(
@@ -818,11 +845,13 @@ where
             }
         }
 
-        info!(
-            "Created {} chains in {} ms",
-            num_chains,
-            start.elapsed().as_millis()
-        );
+        if num_chains_to_create > 0 {
+            info!(
+                "Created {} chains in {} ms",
+                num_chains_to_create,
+                start.elapsed().as_millis()
+            );
+        }
 
         info!("Updating wallet from client");
         self.update_wallet_from_client(&default_chain_client)
@@ -832,45 +861,10 @@ where
             .retry_pending_outgoing_messages()
             .await
             .context("outgoing messages to create the new chains should be delivered")?;
-        info!("Processing inbox");
+        info!("Processing default chain inbox");
         default_chain_client.process_inbox().await?;
 
         Ok((benchmark_chains, chain_clients))
-    }
-
-    /// Closes the chains that were created for the benchmark.
-    pub async fn close_benchmark_chains(
-        &mut self,
-        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
-    ) -> Result<(), Error> {
-        let num_chains = chain_clients.len();
-
-        let mut join_set = task::JoinSet::new();
-        for chain_client in chain_clients.values() {
-            let chain_client = chain_client.clone();
-            join_set.spawn(async move {
-                chain_client
-                    .execute_operation(Operation::System(SystemOperation::CloseChain))
-                    .await?
-                    .expect("Close chain operation should not fail!");
-                Ok::<_, ChainClientError>(())
-            });
-        }
-
-        let start = Instant::now();
-        join_set
-            .join_all()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-
-        info!(
-            "Closed {} chains in {} ms",
-            num_chains,
-            start.elapsed().as_millis()
-        );
-
-        Ok(())
     }
 
     async fn execute_open_chains_operations(
@@ -902,7 +896,7 @@ where
     }
 
     /// Supplies fungible tokens to the chains.
-    pub async fn supply_fungible_tokens(
+    async fn supply_fungible_tokens(
         &mut self,
         key_pairs: &HashMap<ChainId, AccountSecretKey>,
         application_id: ApplicationId,
@@ -923,7 +917,7 @@ where
         let operations: Vec<_> = key_pairs
             .iter()
             .map(|(chain_id, key_pair)| {
-                Self::fungible_transfer(
+                Benchmark::<S>::fungible_transfer(
                     application_id,
                     *chain_id,
                     default_key,
@@ -943,144 +937,5 @@ where
         self.update_wallet_from_client(&chain_client).await?;
 
         Ok(())
-    }
-
-    /// Generates information related to one block per chain, up to `num_chains` blocks.
-    pub fn make_benchmark_block_info(
-        &mut self,
-        key_pairs: HashMap<ChainId, AccountSecretKey>,
-        transactions_per_block: usize,
-        fungible_application_id: Option<ApplicationId>,
-    ) -> Vec<(ChainId, Vec<Operation>, AccountSecretKey)> {
-        let mut blocks_infos = Vec::new();
-        let mut previous_chain_id = *key_pairs
-            .iter()
-            .last()
-            .expect("There should be a last element")
-            .0;
-        let amount = Amount::from(1);
-        for (chain_id, key_pair) in key_pairs {
-            let public_key = key_pair.public();
-            let operation = match fungible_application_id {
-                Some(application_id) => Self::fungible_transfer(
-                    application_id,
-                    previous_chain_id,
-                    public_key,
-                    public_key,
-                    amount,
-                ),
-                None => Operation::System(SystemOperation::Transfer {
-                    owner: None,
-                    recipient: Recipient::chain(previous_chain_id),
-                    amount,
-                }),
-            };
-            let operations = iter::repeat(operation)
-                .take(transactions_per_block)
-                .collect();
-            blocks_infos.push((chain_id, operations, key_pair));
-            previous_chain_id = chain_id;
-        }
-        blocks_infos
-    }
-
-    /// Tries to aggregate votes into certificates.
-    pub fn make_benchmark_certificates_from_votes<T>(
-        &self,
-        votes: Vec<Vote<T>>,
-    ) -> Vec<GenericCertificate<T>>
-    where
-        T: std::fmt::Debug + CertificateValue,
-    {
-        let committee = self.wallet.genesis_config().create_committee();
-        let mut aggregators = HashMap::new();
-        let mut certificates = Vec::new();
-        let mut done_senders = HashSet::new();
-        for vote in votes {
-            // We aggregate votes indexed by sender.
-            let chain_id = vote.value().inner().chain_id();
-            if done_senders.contains(&chain_id) {
-                continue;
-            }
-            trace!(
-                "Processing vote on {:?}'s block by {:?}",
-                chain_id,
-                vote.public_key,
-            );
-            let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
-                SignatureAggregator::new(
-                    vote.value,
-                    linera_base::data_types::Round::Fast,
-                    &committee,
-                )
-            });
-            match aggregator.append(vote.public_key, vote.signature) {
-                Ok(Some(certificate)) => {
-                    trace!("Found certificate: {:?}", certificate);
-                    certificates.push(certificate);
-                    done_senders.insert(chain_id);
-                }
-                Ok(None) => {
-                    trace!("Added one vote");
-                }
-                Err(error) => {
-                    error!("Failed to aggregate vote: {}", error);
-                }
-            }
-        }
-        certificates
-    }
-
-    pub async fn update_wallet_from_certificate(&mut self, certificate: ConfirmedBlockCertificate) {
-        let node = self.client.local_node().clone();
-        // Replay the certificate locally.
-        // No required certificates from other chains: This is only used with benchmark.
-        node.handle_certificate(certificate, &()).await.unwrap();
-        // Last update the wallet.
-        for chain in self.wallet.as_mut().chains_mut() {
-            let query = ChainInfoQuery::new(chain.chain_id);
-            let info = node.handle_chain_info_query(query).await.unwrap().info;
-            // We don't have private keys but that's ok.
-            chain.block_hash = info.block_hash;
-            chain.next_block_height = info.next_block_height;
-        }
-    }
-
-    /// Creates a fungible token transfer operation.
-    fn fungible_transfer(
-        application_id: ApplicationId,
-        chain_id: ChainId,
-        sender: AccountPublicKey,
-        receiver: AccountPublicKey,
-        amount: Amount,
-    ) -> Operation {
-        let target_account = fungible::Account {
-            chain_id,
-            owner: AccountOwner::User(Owner::from(receiver)),
-        };
-        let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-            owner: AccountOwner::User(Owner::from(sender)),
-            amount,
-            target_account,
-        })
-        .expect("should serialize fungible token operation");
-        Operation::User {
-            application_id,
-            bytes,
-        }
-    }
-
-    /// Stages the execution of a block proposal.
-    pub async fn stage_block_execution(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-    ) -> Result<ExecutedBlock, Error> {
-        Ok(self
-            .client
-            .local_node()
-            .stage_block_execution(block, round)
-            .await?
-            .0)
     }
 }

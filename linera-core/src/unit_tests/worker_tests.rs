@@ -17,7 +17,7 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorSecretKey},
+    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorKeypair},
     data_types::*,
     hashed::Hashed,
     identifiers::{
@@ -89,11 +89,15 @@ fn init_worker<S>(
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    let key_pair = ValidatorSecretKey::generate();
-    let committee = Committee::make_simple(vec![key_pair.public()]);
+    let validator_keypair = ValidatorKeypair::generate();
+    let account_secret = AccountSecretKey::generate();
+    let committee = Committee::make_simple(vec![(
+        validator_keypair.public_key,
+        account_secret.public(),
+    )]);
     let worker = WorkerState::new(
         "Single validator node".to_string(),
-        Some(key_pair),
+        Some((validator_keypair.secret_key, account_secret)),
         storage,
         NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
     )
@@ -3756,9 +3760,9 @@ where
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let manager = response.info.manager;
-    let validator_key = worker.public_key();
+    let account_key = worker.account_key();
     assert_eq!(manager.current_round, Round::Validator(0));
-    assert_eq!(manager.leader, Some(Owner::from(validator_key)));
+    assert_eq!(manager.leader, Some(Owner::from(account_key)));
     Ok(())
 }
 

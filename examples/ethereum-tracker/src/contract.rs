@@ -8,7 +8,7 @@ mod state;
 use alloy::primitives::U256;
 use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
 use linera_sdk::{
-    base::WithContractAbi,
+    linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };

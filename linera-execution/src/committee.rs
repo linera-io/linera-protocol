@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use async_graphql::InputObject;
 use linera_base::{
-    crypto::{CryptoError, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
@@ -91,12 +91,14 @@ impl<'de> Deserialize<'de> for ValidatorName {
 }
 
 /// Public state of a validator.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorState {
     /// The network address (in a string format understood by the networking layer).
     pub network_address: String,
     /// The voting power.
     pub votes: u64,
+    /// The public key of the account associated with the validator.
+    pub account_public_key: AccountPublicKey,
 }
 
 /// A set of validators (identified by their public keys) and their voting rights.
@@ -311,15 +313,16 @@ impl Committee {
     }
 
     #[cfg(with_testing)]
-    pub fn make_simple(keys: Vec<ValidatorPublicKey>) -> Self {
+    pub fn make_simple(keys: Vec<(ValidatorPublicKey, AccountPublicKey)>) -> Self {
         let map = keys
             .into_iter()
-            .map(|k| {
+            .map(|(validator_key, account_key)| {
                 (
-                    k,
+                    validator_key,
                     ValidatorState {
-                        network_address: k.to_string(),
+                        network_address: validator_key.to_string(),
                         votes: 1,
+                        account_public_key: account_key,
                     },
                 )
             })
@@ -338,6 +341,12 @@ impl Committee {
         self.validators
             .iter()
             .map(|(name, validator)| (*name, validator.votes))
+    }
+
+    pub fn account_keys_and_weights(&self) -> impl Iterator<Item = (AccountPublicKey, u64)> + '_ {
+        self.validators
+            .values()
+            .map(|validator| (validator.account_public_key, validator.votes))
     }
 
     pub fn network_address(&self, author: &ValidatorPublicKey) -> Option<&str> {

@@ -20,7 +20,7 @@ use candle_transformers::{
     generation::LogitsProcessor,
     models::{llama2_c, llama2_c::Llama, llama2_c_weights, quantized_llama::ModelWeights},
 };
-use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime};
+use linera_sdk::{linera_base_types::WithServiceAbi, Service, ServiceRuntime};
 use log::{debug, info};
 use sha3::{Digest as _, Sha3_256};
 use tokenizers::Tokenizer;

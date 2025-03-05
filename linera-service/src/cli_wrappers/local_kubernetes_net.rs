@@ -12,7 +12,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_execution::ResourceControlPolicy;
+use linera_client::client_options::ResourceControlPolicyConfig;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 #[cfg(with_testing)]
@@ -48,7 +48,7 @@ pub struct LocalKubernetesNetConfig {
     pub binaries: BuildArg,
     pub no_build: bool,
     pub docker_image_name: String,
-    pub policy: ResourceControlPolicy,
+    pub policy_config: ResourceControlPolicyConfig,
 }
 
 /// A wrapper of [`LocalKubernetesNetConfig`] to create a shared local Kubernetes network
@@ -102,7 +102,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             binaries,
             no_build: false,
             docker_image_name: String::from("linera:latest"),
-            policy: ResourceControlPolicy::devnet(),
+            policy_config: ResourceControlPolicyConfig::Testnet,
         })
     }
 }
@@ -142,7 +142,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             .create_genesis_config(
                 self.num_other_initial_chains,
                 self.initial_amount,
-                self.policy,
+                self.policy_config,
             )
             .await
             .unwrap();

@@ -13,10 +13,14 @@ use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
+    data_types::{
+        Amount, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
+        UserApplicationDescription,
+    },
     hashed::Hashed,
-    identifiers::{BlobId, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
+    identifiers::{BlobId, BlobType, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
@@ -28,14 +32,16 @@ use linera_execution::{
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
 };
+#[cfg(with_revm)]
+use linera_execution::{
+    revm::{EvmContractModule, EvmServiceModule},
+    EvmRuntime,
+};
+#[cfg(with_wasm_runtime)]
+use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{
     context::Context,
     views::{CryptoHashView, RootView, ViewError},
-};
-#[cfg(with_wasm_runtime)]
-use {
-    linera_base::{data_types::CompressedBytecode, identifiers::BlobType},
-    linera_execution::{WasmContractModule, WasmServiceModule},
 };
 
 #[cfg(with_testing)]
@@ -168,7 +174,7 @@ pub trait Storage: Sized {
     /// Writes a vector of events.
     async fn write_events(
         &self,
-        events: impl IntoIterator<Item = (EventId, &[u8])> + Send,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
@@ -222,7 +228,7 @@ pub trait Storage: Sized {
             ChainOwnership::single(owner),
             BlockHeight(0),
             self.clock().current_time(),
-            committee.keys_and_weights(),
+            committee.account_keys_and_weights(),
         )?;
         let system_state = &mut chain.execution_state.system;
         system_state.description.set(Some(description));
@@ -262,14 +268,10 @@ pub trait Storage: Sized {
 
     /// Creates a [`UserContractCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(with_wasm_runtime)]
     async fn load_contract(
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        let Some(wasm_runtime) = self.wasm_runtime() else {
-            panic!("A Wasm runtime is required to load user applications.");
-        };
         let contract_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.contract_blob_hash,
             BlobType::ContractBytecode,
@@ -278,6 +280,7 @@ pub trait Storage: Sized {
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
+        #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let contract_bytecode =
             linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
                 move |_| async move { compressed_contract_bytecode.decompress() },
@@ -285,34 +288,50 @@ pub trait Storage: Sized {
             .await
             .join()
             .await?;
-        Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
-            .await?
-            .into())
-    }
-
-    #[cfg(not(with_wasm_runtime))]
-    #[allow(clippy::diverging_sub_expression)]
-    async fn load_contract(
-        &self,
-        _application_description: &UserApplicationDescription,
-    ) -> Result<UserContractCode, ExecutionError> {
-        panic!(
-            "A Wasm runtime is required to load user applications. \
-            Please enable the `wasmer` or the `wasmtime` feature flags \
-            when compiling `linera-storage`."
-        );
+        match application_description.bytecode_id.vm_runtime {
+            VmRuntime::Wasm => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasm_runtime)] {
+                        let Some(wasm_runtime) = self.wasm_runtime() else {
+                            panic!("A Wasm runtime is required to load user applications.");
+                        };
+                        Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "A Wasm runtime is required to load user applications. \
+                             Please enable the `wasmer` or the `wasmtime` feature flags \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+            VmRuntime::Evm => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_revm)] {
+                        let evm_runtime = EvmRuntime::Revm;
+                        Ok(EvmContractModule::new(contract_bytecode, evm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "An Evm runtime is required to load user applications. \
+                             Please enable the `revm` feature flag \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// Creates a [`linera-sdk::UserContract`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(with_wasm_runtime)]
     async fn load_service(
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        let Some(wasm_runtime) = self.wasm_runtime() else {
-            panic!("A Wasm runtime is required to load user applications.");
-        };
         let service_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.service_blob_hash,
             BlobType::ServiceBytecode,
@@ -321,28 +340,49 @@ pub trait Storage: Sized {
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
         };
+        #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
             move |_| async move { compressed_service_bytecode.decompress() },
         )
         .await
         .join()
         .await?;
-        Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
-            .await?
-            .into())
-    }
-
-    #[cfg(not(with_wasm_runtime))]
-    #[allow(clippy::diverging_sub_expression)]
-    async fn load_service(
-        &self,
-        _application_description: &UserApplicationDescription,
-    ) -> Result<UserServiceCode, ExecutionError> {
-        panic!(
-            "A Wasm runtime is required to load user applications. \
-            Please enable the `wasmer` or the `wasmtime` feature flags \
-            when compiling `linera-storage`."
-        );
+        match application_description.bytecode_id.vm_runtime {
+            VmRuntime::Wasm => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasm_runtime)] {
+                        let Some(wasm_runtime) = self.wasm_runtime() else {
+                            panic!("A Wasm runtime is required to load user applications.");
+                        };
+                        Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "A Wasm runtime is required to load user applications. \
+                             Please enable the `wasmer` or the `wasmtime` feature flags \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+            VmRuntime::Evm => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_revm)] {
+                        let evm_runtime = EvmRuntime::Revm;
+                        Ok(EvmServiceModule::new(service_bytecode, evm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "An Evm runtime is required to load user applications. \
+                             Please enable the `revm` feature flag \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -409,6 +449,10 @@ where
         self.storage.read_blob(blob_id).await
     }
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+        self.storage.read_event(event_id).await
+    }
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
     }
@@ -420,6 +464,14 @@ where
     ) -> Result<(), ViewError> {
         let blobs = Vec::from_iter(blobs);
         self.storage.write_blobs(&blobs).await
+    }
+
+    #[cfg(with_testing)]
+    async fn add_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
+    ) -> Result<(), ViewError> {
+        self.storage.write_events(events).await
     }
 }
 

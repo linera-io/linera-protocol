@@ -43,7 +43,8 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
-        Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
+        Destination, EventId, GenericApplicationId, MessageId, Owner, StreamName,
+        UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -60,8 +61,8 @@ use crate::runtime::ContractSyncRuntime;
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
 pub use crate::wasm::{
-    ContractEntrypoints, ContractSystemApi, ServiceEntrypoints, ServiceSystemApi, SystemApiData,
-    ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
+    BaseRuntimeApi, ContractEntrypoints, ContractRuntimeApi, RuntimeApiData, ServiceEntrypoints,
+    ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
@@ -388,12 +389,20 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
+    ) -> Result<(), ViewError>;
+
+    #[cfg(with_testing)]
+    async fn add_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError>;
 }
 
@@ -745,11 +754,11 @@ pub trait ContractRuntime: BaseRuntime {
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<UserApplicationId, ExecutionError>;
 
-    /// Writes a batch of changes.
-    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
-
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
+
+    /// Writes a batch of changes.
+    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 }
 
 /// An operation to be executed in a block.
@@ -1048,6 +1057,7 @@ pub struct TestExecutionRuntimeContext {
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, Blob>>,
+    events: Arc<DashMap<EventId, Vec<u8>>>,
 }
 
 #[cfg(with_testing)]
@@ -1059,6 +1069,7 @@ impl TestExecutionRuntimeContext {
             user_contracts: Arc::default(),
             user_services: Arc::default(),
             blobs: Arc::default(),
+            events: Arc::default(),
         }
     }
 }
@@ -1119,6 +1130,14 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+        Ok(self
+            .events
+            .get(&event_id)
+            .ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))?
+            .clone())
+    }
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
     }
@@ -1130,6 +1149,18 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     ) -> Result<(), ViewError> {
         for blob in blobs {
             self.blobs.insert(blob.id(), blob);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(with_testing)]
+    async fn add_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
+    ) -> Result<(), ViewError> {
+        for (event_id, bytes) in events {
+            self.events.insert(event_id, bytes);
         }
 
         Ok(())
@@ -1340,19 +1371,6 @@ pub trait WithWasmDefault {
 }
 
 impl WasmRuntime {
-    #[cfg(with_wasm_runtime)]
-    pub fn default_with_sanitizer() -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(with_wasmer)] {
-                WasmRuntime::WasmerWithSanitizer
-            } else if #[cfg(with_wasmtime)] {
-                WasmRuntime::WasmtimeWithSanitizer
-            } else {
-                compile_error!("BUG: Wasm runtime unhandled in `WasmRuntime::default_with_sanitizer`")
-            }
-        }
-    }
-
     pub fn needs_sanitizer(self) -> bool {
         match self {
             #[cfg(with_wasmer)]
