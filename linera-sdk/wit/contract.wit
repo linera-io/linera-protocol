@@ -1,8 +1,8 @@
 package linera:app;
 
 world contract {
-    import base-runtime-api;
     import contract-runtime-api;
+    import base-runtime-api;
 
     export contract-entrypoints;
 }

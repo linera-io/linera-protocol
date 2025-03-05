@@ -5,19 +5,18 @@ interface base-runtime-api {
     get-block-height: func() -> block-height;
     get-application-id: func() -> application-id;
     get-application-creator-chain-id: func() -> chain-id;
-    get-chain-ownership: func() -> chain-ownership;
     application-parameters: func() -> list<u8>;
+    get-chain-ownership: func() -> chain-ownership;
+    read-system-timestamp: func() -> timestamp;
     read-chain-balance: func() -> amount;
     read-owner-balance: func(owner: account-owner) -> amount;
-    read-system-timestamp: func() -> timestamp;
     read-owner-balances: func() -> list<tuple<account-owner, amount>>;
     read-balance-owners: func() -> list<account-owner>;
     perform-http-request: func(request: http-request) -> http-response;
+    assert-before: func(timestamp: timestamp);
     read-data-blob: func(hash: crypto-hash) -> list<u8>;
     assert-data-blob-exists: func(hash: crypto-hash);
-    assert-before: func(timestamp: timestamp);
     log: func(message: string, level: log-level);
-
     contains-key-new: func(key: list<u8>) -> u32;
     contains-key-wait: func(promise-id: u32) -> bool;
     contains-keys-new: func(keys: list<list<u8>>) -> u32;
@@ -31,38 +30,22 @@ interface base-runtime-api {
     find-key-values-new: func(key-prefix: list<u8>) -> u32;
     find-key-values-wait: func(promise-id: u32) -> list<tuple<list<u8>, list<u8>>>;
 
-    record block-height {
-        inner0: u64,
-    }
-
-    record crypto-hash {
-        part1: u64,
-        part2: u64,
-        part3: u64,
-        part4: u64,
-    }
-
-    record owner {
-        inner0: crypto-hash,
-    }
-
-    record chain-id {
-        inner0: crypto-hash,
+    variant account-owner {
+        user(owner),
+        application(application-id),
     }
 
     record amount {
         inner0: u128,
     }
 
-    variant account-owner {
-        user(owner),
-        application(application-id),
+    record application-id {
+        bytecode-id: bytecode-id,
+        creation: message-id,
     }
 
-    record message-id {
-        chain-id: chain-id,
-        height: block-height,
-        index: u32,
+    record block-height {
+        inner0: u64,
     }
 
     record bytecode-id {
@@ -71,24 +54,8 @@ interface base-runtime-api {
         vm-runtime: vm-runtime,
     }
 
-    record application-id {
-        bytecode-id: bytecode-id,
-        creation: message-id,
-    }
-
-    record timestamp {
-        inner0: u64,
-    }
-
-    record time-delta {
-        inner0: u64,
-    }
-
-    record timeout-config {
-        fast-round-duration: option<time-delta>,
-        base-timeout: time-delta,
-        timeout-increment: time-delta,
-        fallback-duration: time-delta,
+    record chain-id {
+        inner0: crypto-hash,
     }
 
     record chain-ownership {
@@ -97,6 +64,13 @@ interface base-runtime-api {
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
+    }
+
+    record crypto-hash {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
     }
 
     record http-header {
@@ -135,6 +109,31 @@ interface base-runtime-api {
         info,
         debug,
         trace,
+    }
+
+    record message-id {
+        chain-id: chain-id,
+        height: block-height,
+        index: u32,
+    }
+
+    record owner {
+        inner0: crypto-hash,
+    }
+
+    record time-delta {
+        inner0: u64,
+    }
+
+    record timeout-config {
+        fast-round-duration: option<time-delta>,
+        base-timeout: time-delta,
+        timeout-increment: time-delta,
+        fallback-duration: time-delta,
+    }
+
+    record timestamp {
+        inner0: u64,
     }
 
     type u128 = tuple<u64, u64>;

@@ -4,9 +4,24 @@ interface service-runtime-api {
     schedule-operation: func(operation: list<u8>);
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
     fetch-url: func(url: string) -> list<u8>;
-    
+
+    record application-id {
+        bytecode-id: bytecode-id,
+        creation: message-id,
+    }
+
     record block-height {
         inner0: u64,
+    }
+
+    record bytecode-id {
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
+    }
+
+    record chain-id {
+        inner0: crypto-hash,
     }
 
     record crypto-hash {
@@ -16,25 +31,10 @@ interface service-runtime-api {
         part4: u64,
     }
 
-    record chain-id {
-        inner0: crypto-hash,
-    }
-
     record message-id {
         chain-id: chain-id,
         height: block-height,
         index: u32,
-    }
-
-    record bytecode-id {
-        contract-blob-hash: crypto-hash,
-        service-blob-hash: crypto-hash,
-        vm-runtime: vm-runtime,
-    }
-
-    record application-id {
-        bytecode-id: bytecode-id,
-        creation: message-id,
     }
 
     enum vm-runtime {

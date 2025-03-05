@@ -252,6 +252,15 @@ jobs:
         cd linera-views
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
 
+  check-wit-files:
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Check WIT files
+      run: |
+        cargo run --bin wit-generator -- -c
+
   lint-unexpected-chain-load-operations:
     runs-on: ubuntu-latest
     timeout-minutes: 2
