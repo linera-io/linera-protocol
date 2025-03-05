@@ -3,7 +3,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     env,
     marker::PhantomData,
     mem,
@@ -1099,36 +1099,11 @@ impl NodeService {
         application_id: &ApplicationId<A>,
     ) -> Result<ApplicationWrapper<A>> {
         let application_id = application_id.forget_abi().to_string();
-        let values = self.try_get_applications_uri(chain_id).await?;
-        let Some(link) = values.get(&application_id) else {
-            bail!("Could not find application URI: {application_id}");
-        };
-        Ok(ApplicationWrapper::from(link.to_string()))
-    }
-
-    pub async fn try_get_applications_uri(
-        &self,
-        chain_id: &ChainId,
-    ) -> Result<HashMap<String, String>> {
-        // uh oh
-        let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
-        let data = self.query_node(query).await?;
-        data["applications"]
-            .as_array()
-            .context("missing applications in response")?
-            .iter()
-            .map(|a| {
-                let id = a["id"]
-                    .as_str()
-                    .context("missing id field in response")?
-                    .to_string();
-                let link = a["link"]
-                    .as_str()
-                    .context("missing link field in response")?
-                    .to_string();
-                Ok((id, link))
-            })
-            .collect()
+        let link = format!(
+            "http://localhost:{}/chains/{chain_id}/applications/{application_id}",
+            self.port
+        );
+        Ok(ApplicationWrapper::from(link))
     }
 
     pub async fn publish_data_blob(
