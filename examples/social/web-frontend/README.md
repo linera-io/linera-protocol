@@ -3,7 +3,7 @@
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 The application (contract/service) must be deployed on the network, and a Node Service must be running
-on port 8000. Also make sure you have performed the operations mentoined in this [README](../README.md)
+on port 8000. Also make sure you have performed the operations mentioned in this [README](../README.md)
 
 ### Note
 
