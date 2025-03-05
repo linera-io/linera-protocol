@@ -15,7 +15,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
-    data_types::{Amount, ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, BlobContent, Timestamp},
     identifiers::{ApplicationId, ChainDescription, ChainId, MessageId, ModuleId, Owner},
     ownership::ChainOwnership,
 };
@@ -201,10 +201,19 @@ impl TestValidator {
 
         let admin_chain = self.get_chain(&ChainId::root(0));
 
+        let committee_blob = Blob::new(BlobContent::new_committee(
+            bcs::to_bytes(&committee).unwrap(),
+        ));
+        let blob_hash = committee_blob.id().hash;
+        self.storage
+            .write_blob(&committee_blob)
+            .await
+            .expect("Should write committee blob");
+
         let certificate = admin_chain
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::Admin(
-                    AdminOperation::CreateCommittee { epoch, committee },
+                    AdminOperation::CreateCommittee { epoch, blob_hash },
                 ));
             })
             .await;

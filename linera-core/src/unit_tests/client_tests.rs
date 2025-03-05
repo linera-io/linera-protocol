@@ -1105,7 +1105,7 @@ where
     // Create a new committee.
     let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.next_block_height(), BlockHeight::from(3));
+    assert_eq!(admin.next_block_height(), BlockHeight::from(5));
     assert!(admin.pending_proposal().is_none());
     assert!(admin.key_pair().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
