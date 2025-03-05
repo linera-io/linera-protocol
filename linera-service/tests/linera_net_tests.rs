@@ -486,8 +486,6 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use std::{fs::File, io::Write};
-
     use alloy::primitives::U256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_execution::test_utils::solidity::get_example_counter;
@@ -510,16 +508,20 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         initial_value: original_counter_value,
     };
     let instantiation_argument = instantiation_argument.abi_encode().into();
+
     let increment = U256::from(5);
 
     let chain = client.load_wallet()?.default_chain().unwrap();
     let module = get_example_counter()?;
+
     let dir = tempfile::tempdir()?;
     let path = dir.path();
     let app_file = "app.json";
     let app_path = path.join(app_file);
-    let mut test_code_file = File::create(&app_path)?;
-    writeln!(test_code_file, "{}", hex::encode(&module))?;
+    {
+        std::fs::write(app_path.clone(), &module)?;
+    }
+
     let contract = app_path.to_path_buf();
     let service = app_path.to_path_buf();
     let vm_runtime = VmRuntime::Evm;
@@ -537,23 +539,47 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
             None,
         )
         .await?;
+
     let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
 
-    let counter_value: U256 = application.query_json("value").await?;
+    let query1 = get_valueCall {};
+    let query2 = query1.abi_encode();
+    let query3 = hex::encode(&query2);
+    let query4 = format!("query {{ v{} }}", query3);
+
+    let result : Value = application.raw_query(query4).await?;
+    let result : String = result.to_string();
+    let result = hex::decode(&result[1..result.len()-1])?;
+
+    let counter_value = U256::from_be_slice(&result);
     assert_eq!(counter_value, original_counter_value);
 
-    let mutation = format!("increment(value: {increment})");
-    application.mutate(mutation).await?;
+    let mutation1 = incrementCall {input: increment };
+    let mutation2 = mutation1.abi_encode();
+    let mutation3 = hex::encode(&mutation2);
+    let mutation4 = format!("mutation {{ v{} }}", mutation3);
 
-    let counter_value: U256 = application.query_json("value").await?;
+    application.raw_query(mutation4).await?;
+
+
+
+
+    let query1 = get_valueCall {};
+    let query2 = query1.abi_encode();
+    let query3 = hex::encode(&query2);
+    let query4 = format!("query {{ v{} }}", query3);
+
+    let result : Value = application.raw_query(query4).await?;
+    let result : String = result.to_string();
+    let result = hex::decode(&result[1..result.len()-1])?;
+
+    let counter_value = U256::from_be_slice(&result);
     assert_eq!(counter_value, original_counter_value + increment);
-
-    node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
