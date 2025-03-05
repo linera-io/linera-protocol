@@ -3,7 +3,7 @@
 
 //! Unit tests for `linera-base` types.
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use linera_witty::{Layout, WitLoad, WitStore};
 use serde::{de::DeserializeOwned, Serialize};
@@ -55,6 +55,21 @@ where
     T: Debug + Eq + DeserializeOwned + Serialize,
 {
     let graphql_value = async_graphql::to_value(&input)?;
+
+    let deserialized_value = T::deserialize(graphql_value)?;
+
+    assert_eq!(input, deserialized_value);
+
+    Ok(())
+}
+
+/// Test alternative GraphQL deserialization of types from strings.
+#[test_case(account_test_case(); "of_account")]
+fn test_graphql_alternative_deserialization<T>(input: T) -> anyhow::Result<()>
+where
+    T: Debug + Eq + Display + DeserializeOwned,
+{
+    let graphql_value = async_graphql::Value::String(input.to_string());
 
     let deserialized_value = T::deserialize(graphql_value)?;
 
