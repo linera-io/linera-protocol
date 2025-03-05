@@ -467,7 +467,7 @@ impl Runnable for Job {
                                 num_ok_validators += 1;
                             } else {
                                 error!("Signature for public key {name} is NOT OK.");
-                                faulty_validators.push((name, address, format!("{:?}", response)));
+                                faulty_validators.push((name, address, format!("{:#?}", response)));
                             }
                         }
                         Err(e) => {
