@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! An ABI for applications that implement a fungible token.
-use linera_base::{
-    abi::{ContractAbi, ServiceAbi},
-};
+use linera_base::abi::{ContractAbi, ServiceAbi};
 
 /// An ABI for applications that implement a fungible token.
 pub struct EvmAbi;

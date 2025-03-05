@@ -608,16 +608,15 @@ where
         let argument: serde_json::Value = serde_json::from_slice(&argument)?;
         let argument = argument["query"].to_string();
         if let Some(residual) = argument.strip_prefix("\"mutation { v") {
-            let operation = &residual[0..residual.len()-3];
-            let operation = hex::decode(&operation).unwrap();
+            let operation = &residual[0..residual.len() - 3];
+            let operation = hex::decode(operation).unwrap();
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.schedule_operation(operation)?;
             let answer = serde_json::json!({"data": ""});
             let answer = serde_json::to_vec(&answer).unwrap();
             return Ok(answer);
         }
-
-        let argument = argument[10..argument.len()-3].to_string();
+        let argument = argument[10..argument.len() - 3].to_string();
         let argument = hex::decode(&argument).unwrap();
         let tx_data = Bytes::copy_from_slice(&argument);
         let address = self.db.contract_address;
@@ -642,7 +641,7 @@ where
         };
         let answer = output.as_ref().to_vec();
         let answer = hex::encode(&answer);
-        let answer : serde_json::Value = serde_json::json!({"data": answer});
+        let answer: serde_json::Value = serde_json::json!({"data": answer});
         let answer = serde_json::to_vec(&answer).unwrap();
         Ok(answer)
     }

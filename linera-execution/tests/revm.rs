@@ -38,7 +38,8 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     let initial_value = U256::from(10000);
     let mut value = initial_value;
     let args = ConstructorArgs { initial_value };
-    let instantiation_argument: Vec<u8> = args.abi_encode();
+    let instantiation_argument = args.abi_encode();
+    let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
 
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -110,7 +111,6 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         tracker: ResourceTracker::default(),
         account: None,
     };
-
     for increment in &increments {
         let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
         value += increment;
@@ -130,16 +130,26 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         .await?;
 
         let query = get_valueCall {};
-        let bytes = query.abi_encode();
+        let query = query.abi_encode();
+        let query = hex::encode(&query);
+        let query = format!("query {{ v{} }}", query);
+        let query = serde_json::json!({"query": query});
+        let query = serde_json::to_string(&query)?;
+        let query = query.into_bytes();
+
         let query = Query::User {
             application_id: app_id,
-            bytes,
+            bytes: query,
         };
 
         let result = view.query_application(query_context, query, None).await?;
+
         let QueryResponse::User(result) = result.response else {
             anyhow::bail!("Wrong QueryResponse result");
         };
+        let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
+        let result = result["data"].to_string();
+        let result = hex::decode(&result[1..result.len() - 1])?;
         let result = U256::from_be_slice(&result);
         assert_eq!(result, value);
     }

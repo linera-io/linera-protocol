@@ -507,7 +507,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let instantiation_argument = ConstructorArgs {
         initial_value: original_counter_value,
     };
-    let instantiation_argument = instantiation_argument.abi_encode().into();
+    let instantiation_argument = instantiation_argument.abi_encode();
 
     let increment = U256::from(5);
 
@@ -547,36 +547,33 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         .make_application(&chain, &application_id)
         .await?;
 
-    let query1 = get_valueCall {};
-    let query2 = query1.abi_encode();
-    let query3 = hex::encode(&query2);
-    let query4 = format!("query {{ v{} }}", query3);
+    let query = get_valueCall {};
+    let query = query.abi_encode();
+    let query = hex::encode(&query);
+    let query = format!("query {{ v{} }}", query);
 
-    let result : Value = application.raw_query(query4).await?;
-    let result : String = result.to_string();
-    let result = hex::decode(&result[1..result.len()-1])?;
+    let result = application.raw_query(query).await?;
+    let result = result.to_string();
+    let result = hex::decode(&result[1..result.len() - 1])?;
 
     let counter_value = U256::from_be_slice(&result);
     assert_eq!(counter_value, original_counter_value);
 
-    let mutation1 = incrementCall {input: increment };
-    let mutation2 = mutation1.abi_encode();
-    let mutation3 = hex::encode(&mutation2);
-    let mutation4 = format!("mutation {{ v{} }}", mutation3);
+    let mutation = incrementCall { input: increment };
+    let mutation = mutation.abi_encode();
+    let mutation = hex::encode(&mutation);
+    let mutation = format!("mutation {{ v{} }}", mutation);
 
-    application.raw_query(mutation4).await?;
+    application.raw_query(mutation).await?;
 
+    let query = get_valueCall {};
+    let query = query.abi_encode();
+    let query = hex::encode(&query);
+    let query = format!("query {{ v{} }}", query);
 
-
-
-    let query1 = get_valueCall {};
-    let query2 = query1.abi_encode();
-    let query3 = hex::encode(&query2);
-    let query4 = format!("query {{ v{} }}", query3);
-
-    let result : Value = application.raw_query(query4).await?;
-    let result : String = result.to_string();
-    let result = hex::decode(&result[1..result.len()-1])?;
+    let result = application.raw_query(query).await?;
+    let result = result.to_string();
+    let result = hex::decode(&result[1..result.len() - 1])?;
 
     let counter_value = U256::from_be_slice(&result);
     assert_eq!(counter_value, original_counter_value + increment);

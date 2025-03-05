@@ -212,6 +212,7 @@ jobs:
     - name: Run REVM test
       run: |
         cargo test -p linera-execution test_fuel_for_counter_revm_application --features revm
+        cargo test test_evm_end_to_end_counter --features revm,storage-service
 
   storage-service-tests:
     runs-on: ubuntu-latest-16-cores

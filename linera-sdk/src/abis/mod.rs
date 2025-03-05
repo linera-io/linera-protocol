@@ -3,6 +3,6 @@
 
 //! Common ABIs that may have multiple implementations.
 
-pub mod fungible;
 #[cfg(with_revm)]
 pub mod evm;
+pub mod fungible;
