@@ -10,7 +10,10 @@ use std::iter;
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, Timestamp},
+    linera_base_types::{
+        AccountOwner, AccountSecretKey, Amount, ApplicationId, Ed25519SecretKey,
+        Secp256k1SecretKey, Timestamp,
+    },
     test::TestValidator,
 };
 
@@ -32,8 +35,10 @@ async fn collect_pledges() {
     >()
     .await;
 
-    let fungible_publisher_chain = validator.new_chain().await;
-    let mut campaign_chain = validator.new_chain().await;
+    let fungible_chain_owner: AccountSecretKey = Ed25519SecretKey::generate().into();
+    let fungible_publisher_chain = validator.new_chain_with_keypair(fungible_chain_owner).await;
+    let campaign_chain_owner: AccountSecretKey = Secp256k1SecretKey::generate().into();
+    let mut campaign_chain = validator.new_chain_with_keypair(campaign_chain_owner).await;
     let campaign_account = AccountOwner::from(campaign_chain.public_key());
 
     let fungible_bytecode_id = fungible_publisher_chain

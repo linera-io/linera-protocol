@@ -174,9 +174,8 @@ impl TestValidator {
     }
 
     /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
-    /// it.
-    pub async fn new_chain(&self) -> ActiveChain {
-        let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
+    /// it with the given key pair.
+    pub async fn new_chain_with_keypair(&self, key_pair: AccountSecretKey) -> ActiveChain {
         let description = self
             .request_new_chain_from_admin_chain(key_pair.public().into())
             .await;
@@ -187,6 +186,13 @@ impl TestValidator {
         self.chains.insert(description.into(), chain.clone());
 
         chain
+    }
+
+    /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
+    /// it.
+    pub async fn new_chain(&self) -> ActiveChain {
+        let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
+        self.new_chain_with_keypair(key_pair).await
     }
 
     /// Adds a block to the admin chain to create a new chain.
