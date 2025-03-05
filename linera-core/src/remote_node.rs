@@ -323,7 +323,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             .into_iter()
             .zip(0..)
             .map(|(remote_node, i)| async move {
-                tokio::time::sleep(timeout * i * i).await;
+                linera_base::time::timer::sleep(timeout * i * i).await;
                 remote_node.try_download_blob(blob_id).await
             })
             .collect::<FuturesUnordered<_>>();
