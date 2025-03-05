@@ -6,6 +6,7 @@
 use std::fmt::Debug;
 
 use linera_witty::{Layout, WitLoad, WitStore};
+use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
 use crate::{
@@ -45,6 +46,21 @@ where
     linera_witty::test::test_memory_roundtrip(&input).expect("Memory WIT roundtrip test failed");
     linera_witty::test::test_flattening_roundtrip(&input)
         .expect("Flattening WIT roundtrip test failed");
+}
+
+/// Test GraphQL serialization roundtrip.
+#[test_case(account_test_case(); "of_account")]
+fn test_graphql_serialization_roundtrip<T>(input: T) -> anyhow::Result<()>
+where
+    T: Debug + Eq + DeserializeOwned + Serialize,
+{
+    let graphql_value = async_graphql::to_value(&input)?;
+
+    let deserialized_value = T::deserialize(graphql_value)?;
+
+    assert_eq!(input, deserialized_value);
+
+    Ok(())
 }
 
 /// Creates a dummy [`Resources`] instance to use for the WIT roundtrip test.
