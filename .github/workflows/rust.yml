@@ -330,7 +330,7 @@ jobs:
 
   lint-cargo-sort:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
 
     steps:
     - uses: actions/checkout@v3
