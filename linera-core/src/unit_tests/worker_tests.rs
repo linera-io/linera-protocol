@@ -333,6 +333,10 @@ where
     let tx_count = block.operations.len() + block.incoming_bundles.len();
     let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
     let events = iter::repeat_with(Vec::new).take(tx_count).collect();
+    let operation_results = iter::repeat_with(Vec::new)
+        .map(Into::into)
+        .take(block.operations.len())
+        .collect();
     let state_hash = system_state.into_hash().await;
     let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
@@ -340,6 +344,7 @@ where
             events,
             state_hash,
             oracle_responses,
+            operation_results,
         }
         .with(block),
     ));
@@ -815,6 +820,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new(); 2],
+                operation_results: vec![Default::default(); 2],
             }
             .with(
                 make_first_block(ChainId::root(1))
@@ -843,6 +849,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
+                operation_results: vec![Vec::new().into()],
             }
             .with(
                 make_child_block(&certificate0.clone().into_value())
@@ -1079,6 +1086,7 @@ where
                     .into_hash()
                     .await,
                     oracle_responses: vec![Vec::new(); 2],
+                    operation_results: vec![Vec::new().into()],
                 }
                 .with(block_proposal.content.block),
             )),
@@ -1367,6 +1375,7 @@ where
             events: vec![Vec::new()],
             state_hash: state.into_hash().await,
             oracle_responses: vec![Vec::new()],
+            operation_results: vec![],
         }
         .with(make_first_block(chain_id).with_incoming_bundle(open_chain_message)),
     ));
@@ -2408,6 +2417,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
+                operation_results: vec![Vec::new().into()],
             }
             .with(
                 make_first_block(admin_id)
@@ -2474,6 +2484,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new(); 2],
+                operation_results: vec![Vec::new().into(); 2],
             }
             .with(
                 make_child_block(&certificate0.clone().into_value())
@@ -2583,6 +2594,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new(); 3],
+                operation_results: vec![],
             }
             .with(
                 make_first_block(user_id)
@@ -2728,6 +2740,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
+                operation_results: vec![Vec::new().into()],
             }
             .with(
                 make_first_block(user_id)
@@ -2761,6 +2774,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
+                operation_results: vec![Vec::new().into()],
             }
             .with(
                 make_first_block(admin_id).with_operation(SystemOperation::Admin(
@@ -2859,6 +2873,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
+                operation_results: vec![Vec::new().into()],
             }
             .with(
                 make_first_block(user_id)
@@ -2892,6 +2907,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new(); 2],
+                operation_results: vec![Vec::new().into(); 2],
             }
             .with(
                 make_first_block(admin_id)
@@ -2954,6 +2970,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
+                operation_results: vec![],
             }
             .with(
                 make_child_block(&certificate1.into_value())
@@ -3982,6 +3999,7 @@ where
             events: vec![],
             state_hash: state.crypto_hash_mut().await?,
             oracle_responses: vec![],
+            operation_results: vec![],
         }
         .with(block),
     ));

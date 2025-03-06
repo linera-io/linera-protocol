@@ -31,6 +31,8 @@ pub struct TransactionTracker {
     subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
     unsubscribe: Vec<(ChannelFullName, ChainId)>,
+    /// Operation outcome.
+    operation_result: Option<Vec<u8>>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -47,6 +49,8 @@ pub struct TransactionOutcome {
     pub subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
     pub unsubscribe: Vec<(ChannelFullName, ChainId)>,
+    /// Operation outcome.
+    pub operation_result: Vec<u8>,
 }
 
 impl TransactionTracker {
@@ -118,6 +122,10 @@ impl TransactionTracker {
         self.oracle_responses.push(oracle_response);
     }
 
+    pub fn add_operation_result(&mut self, outcome: Option<Vec<u8>>) {
+        self.operation_result = outcome
+    }
+
     /// Adds the oracle response to the record.
     /// If replaying, it also checks that it matches the next replayed one and returns `true`.
     pub fn replay_oracle_response(
@@ -158,6 +166,7 @@ impl TransactionTracker {
             events,
             subscribe,
             unsubscribe,
+            operation_result,
         } = self;
         if let Some(mut responses) = replaying_oracle_responses {
             ensure!(
@@ -172,6 +181,7 @@ impl TransactionTracker {
             events,
             subscribe,
             unsubscribe,
+            operation_result: operation_result.unwrap_or_default(),
         })
     }
 

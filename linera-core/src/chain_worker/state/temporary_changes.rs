@@ -169,6 +169,10 @@ where
             .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
             .await?;
         let outcome = if let Some(outcome) = outcome {
+            ensure!(
+                block.operations.len() == outcome.operation_results.len(),
+                WorkerError::InvalidBlockProposal(format!("{:?}", content))
+            );
             outcome.clone()
         } else {
             Box::pin(chain.execute_block(block, local_time, round.multi_leader(), None)).await?

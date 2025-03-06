@@ -189,7 +189,7 @@ where
             join_set.spawn_blocking(move || {
                 handle.block_on(
                     async move {
-                        Self::run_benchmark_internal(
+                        Box::pin(Self::run_benchmark_internal(
                             bps_share,
                             operations,
                             key_pair,
@@ -199,7 +199,7 @@ where
                             sender,
                             committee,
                             local_node,
-                        )
+                        ))
                         .await?;
 
                         Ok(())

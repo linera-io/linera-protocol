@@ -18,6 +18,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
+    hex_debug,
     identifiers::{Account, BlobId, ChainId, ChannelFullName, Destination, MessageId, Owner},
 };
 use linera_execution::{
@@ -364,6 +365,24 @@ impl OutgoingMessage {
     }
 }
 
+/// The outcome of a single operation.
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct OperationResult(
+    #[debug(with = "hex_debug")]
+    #[serde(with = "serde_bytes")]
+    Vec<u8>,
+);
+
+impl From<Vec<u8>> for OperationResult {
+    fn from(operation_outcome: Vec<u8>) -> Self {
+        OperationResult(operation_outcome)
+    }
+}
+
+impl<'de> BcsHashable<'de> for OperationResult {}
+
+doc_scalar!(OperationResult, "The outcome of a single operation.");
+
 /// A [`ProposedBlock`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
 pub struct ExecutedBlock {
@@ -383,6 +402,8 @@ pub struct BlockExecutionOutcome {
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
     pub events: Vec<Vec<Event>>,
+    /// The outcome for each operation.
+    pub operation_results: Vec<OperationResult>,
 }
 
 /// The hash and chain ID of a `CertificateValue`.

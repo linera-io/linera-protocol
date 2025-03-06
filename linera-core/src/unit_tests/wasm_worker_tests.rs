@@ -150,6 +150,7 @@ where
             events: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![vec![]],
+            operation_results: vec![Default::default()],
         }
         .with(publish_block),
     ));
@@ -242,6 +243,7 @@ where
                 OracleResponse::Blob(contract_blob_id),
                 OracleResponse::Blob(service_blob_id),
             ]],
+            operation_results: vec![Vec::new().into()],
         }
         .with(create_block),
     ));
@@ -296,6 +298,7 @@ where
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new()],
+            operation_results: vec![Default::default()],
         }
         .with(run_block),
     ));
