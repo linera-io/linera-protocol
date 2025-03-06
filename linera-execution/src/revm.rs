@@ -444,8 +444,6 @@ enum Choice {
     Call,
 }
 
-// The OperationContext / MessageContext / FinalizeContext are not used
-// in the wasmer / wasmtime. Should we used it? It seems
 impl<Runtime> UserContract for RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,

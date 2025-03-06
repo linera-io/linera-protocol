@@ -423,13 +423,12 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     client.change_ownership(chain, vec![], vec![owner1]).await?;
 
     let (contract, service) = client.build_example("ethereum-tracker").await?;
-    let vm_runtime = VmRuntime::Wasm;
 
     let application_id = client
         .publish_and_create::<EthereumTrackerAbi, (), InstantiationArgument>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Wasm,
             &(),
             &argument,
             &[],
@@ -524,7 +523,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     let contract = app_path.to_path_buf();
     let service = app_path.to_path_buf();
-    let vm_runtime = VmRuntime::Evm;
     type Parameter = ();
     type InstantiationArgument = Vec<u8>;
 
@@ -532,7 +530,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         .publish_and_create::<EvmAbi, Parameter, InstantiationArgument>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Evm,
             &(),
             &instantiation_argument,
             &[],
@@ -602,13 +600,12 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 
     let chain = client.load_wallet()?.default_chain().unwrap();
     let (contract, service) = client.build_example("counter").await?;
-    let vm_runtime = VmRuntime::Wasm;
 
     let application_id = client
         .publish_and_create::<CounterAbi, (), u64>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Wasm,
             &(),
             &original_counter_value,
             &[],
@@ -833,7 +830,6 @@ async fn test_wasm_end_to_end_fungible(
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let (contract, service) = client1.build_example(example_name).await?;
-    let vm_runtime = VmRuntime::Wasm;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
@@ -844,7 +840,7 @@ async fn test_wasm_end_to_end_fungible(
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Wasm,
             &params,
             &state,
             &[],
@@ -1007,7 +1003,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let (contract, service) = client1.build_example(example_name).await?;
-    let vm_runtime = VmRuntime::Wasm;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
@@ -1018,7 +1013,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Wasm,
             &params,
             &state,
             &[],
@@ -1112,12 +1107,11 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("non-fungible").await?;
-    let vm_runtime = VmRuntime::Wasm;
     let application_id = client1
         .publish_and_create::<NonFungibleTokenAbi, (), ()>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Wasm,
             &(),
             &(),
             &[],
@@ -1408,13 +1402,12 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 
     // Setting up the application fungible
     let (contract_fungible, service_fungible) = client1.build_example("fungible").await?;
-    let vm_runtime = VmRuntime::Wasm;
     let params = Parameters::new("FUN");
     let application_id_fungible = client1
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract_fungible,
             service_fungible,
-            vm_runtime,
+            VmRuntime::Wasm,
             &params,
             &state_fungible,
             &[],
@@ -1431,12 +1424,11 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         target,
     };
     let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await?;
-    let vm_runtime = VmRuntime::Wasm;
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi, ApplicationId<FungibleTokenAbi>, InstantiationArgument>(
             contract_crowd,
             service_crowd,
-            vm_runtime,
+            VmRuntime::Wasm,
             // TODO(#723): This hack will disappear soon.
             &application_id_fungible,
             &state_crowd,
@@ -1528,7 +1520,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_admin) = config.instantiate().await?;
 
     let client_a = net.make_client().await;
@@ -1567,7 +1558,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
             contract_fungible_a,
             service_fungible_a,
-            vm_runtime,
+            VmRuntime::Wasm,
             &params0,
             &state_fungible0,
             &[],
@@ -1579,7 +1570,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
             contract_fungible_b,
             service_fungible_b,
-            vm_runtime,
+            VmRuntime::Wasm,
             &params1,
             &state_fungible1,
             &[],
@@ -1670,7 +1661,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             &chain_admin,
             contract_matching,
             service_matching,
-            vm_runtime,
+            VmRuntime::Wasm,
         )
         .await?;
     let application_id_matching = node_service_admin
@@ -1823,7 +1814,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_amm) = config.instantiate().await?;
 
     let client0 = net.make_client().await;
@@ -1874,7 +1864,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             &chain_amm,
             contract_fungible,
             service_fungible,
-            vm_runtime,
+            VmRuntime::Wasm,
         )
         .await?;
 
@@ -2015,7 +2005,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     // Create AMM application on Admin chain
     let module_id = node_service_amm
-        .publish_module::<AmmAbi, Parameters, ()>(&chain_amm, contract_amm, service_amm, vm_runtime)
+        .publish_module::<AmmAbi, Parameters, ()>(&chain_amm, contract_amm, service_amm, VmRuntime::Wasm)
         .await?;
     let application_id_amm = node_service_amm
         .create_application(
@@ -2586,13 +2576,12 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
     let state = fungible::InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;
-    let vm_runtime = VmRuntime::Wasm;
     let params = fungible::Parameters::new("FUN");
     let application_id = client
         .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Wasm,
             &params,
             &state,
             &[],

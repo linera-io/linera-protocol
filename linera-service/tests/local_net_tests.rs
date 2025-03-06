@@ -758,13 +758,12 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;
-    let vm_runtime = VmRuntime::Wasm;
     let params = Parameters::new("FUN");
     let application_id = client
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract,
             service,
-            vm_runtime,
+            VmRuntime::Wasm,
             &params,
             &state,
             &[],

@@ -1,10 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! An ABI for applications that implement a fungible token.
+//! An ABI for applications that implement an EVM runtime.
 use linera_base::abi::{ContractAbi, ServiceAbi};
 
-/// An ABI for applications that implement a fungible token.
+/// An ABI for applications that implement an EVM runtime.
 pub struct EvmAbi;
 
 impl ContractAbi for EvmAbi {
