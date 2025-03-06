@@ -2871,9 +2871,15 @@ dependencies = [
 name = "how-to-perform-http-requests"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "async-graphql",
+ "axum",
+ "futures",
  "linera-sdk",
+ "serde",
+ "test-log",
+ "tokio",
 ]
 
 [[package]]

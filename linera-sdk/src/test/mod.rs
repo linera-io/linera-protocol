@@ -20,7 +20,10 @@ mod validator;
 
 #[cfg(with_integration_testing)]
 pub use {
-    linera_chain::data_types::{Medium, MessageAction},
+    linera_chain::{
+        data_types::{Medium, MessageAction},
+        test::HttpServer,
+    },
     linera_execution::{system::Recipient, QueryOutcome},
 };
 

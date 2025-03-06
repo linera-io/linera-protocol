@@ -7,10 +7,19 @@ edition = "2021"
 [dependencies]
 async-graphql.workspace = true
 linera-sdk.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true
 linera-sdk = { workspace = true, features = ["test"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+anyhow.workspace = true
+axum.workspace = true
+futures.workspace = true
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+test-log.workspace = true
+tokio.workspace = true
 
 [[bin]]
 name = "how_to_perform_http_requests_contract"
