@@ -22,8 +22,10 @@ use linera_base::{
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
-    WasmRuntime,
+    system::{
+        AdminOperation, OpenChainConfig, SystemChannel, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX,
+    },
+    ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::memory::MemoryStore;
@@ -177,6 +179,45 @@ impl TestValidator {
     /// The committee contains only this validator.
     pub async fn committee(&self) -> MappedMutexGuard<'_, (Epoch, Committee), Committee> {
         MutexGuard::map(self.committee.lock().await, |(_epoch, committee)| committee)
+    }
+
+    /// Updates the admin chain, creating a new epoch with an updated
+    /// [`ResourceControlPolicy`].
+    pub async fn change_resource_control_policy(
+        &self,
+        adjustment: impl FnOnce(&mut ResourceControlPolicy),
+    ) {
+        let (epoch, committee) = {
+            let (ref mut epoch, ref mut committee) = &mut *self.committee.lock().await;
+
+            epoch
+                .try_add_assign_one()
+                .expect("Reached the limit of epochs");
+
+            adjustment(committee.policy_mut());
+
+            (*epoch, committee.clone())
+        };
+
+        let admin_chain = self.get_chain(&ChainId::root(0));
+
+        let certificate = admin_chain
+            .add_block(|block| {
+                block.with_system_operation(SystemOperation::Admin(
+                    AdminOperation::CreateCommittee { epoch, committee },
+                ));
+            })
+            .await;
+
+        for entry in self.chains.iter() {
+            let chain = entry.value();
+
+            chain
+                .add_block(|block| {
+                    block.with_system_messages_from(&certificate, SystemChannel::Admin);
+                })
+                .await;
+        }
     }
 
     /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
