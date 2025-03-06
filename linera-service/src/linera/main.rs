@@ -15,7 +15,7 @@ use chrono::Utc;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    crypto::{CryptoHash, CryptoRng, Ed25519SecretKey},
+    crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
@@ -1505,8 +1505,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             for i in 0..=*num_other_initial_chains {
                 let description = ChainDescription::Root(i);
                 // Create keys.
-                let key_pair = Ed25519SecretKey::generate_from(&mut rng);
-                let chain = UserChain::make_initial(key_pair.into(), description, timestamp);
+                let key_pair = AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(&mut rng));
+                let chain = UserChain::make_initial(key_pair, description, timestamp);
                 // Public "genesis" state.
                 let key = chain.key_pair.as_ref().unwrap().public();
                 genesis_config.chains.push((key, *initial_funding));

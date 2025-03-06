@@ -35,9 +35,9 @@ async fn collect_pledges() {
     >()
     .await;
 
-    let fungible_chain_owner: AccountSecretKey = Ed25519SecretKey::generate().into();
+    let fungible_chain_owner = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
     let fungible_publisher_chain = validator.new_chain_with_keypair(fungible_chain_owner).await;
-    let campaign_chain_owner: AccountSecretKey = Secp256k1SecretKey::generate().into();
+    let campaign_chain_owner = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate());
     let mut campaign_chain = validator.new_chain_with_keypair(campaign_chain_owner).await;
     let campaign_account = AccountOwner::from(campaign_chain.public_key());
 

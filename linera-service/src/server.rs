@@ -291,7 +291,7 @@ fn make_server_config<R: CryptoRng>(
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
     let validator_keypair = ValidatorKeypair::generate_from(rng);
-    let account_secret = AccountSecretKey::from(Ed25519SecretKey::generate_from(rng));
+    let account_secret = AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(rng));
     let public_key = validator_keypair.public_key;
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,

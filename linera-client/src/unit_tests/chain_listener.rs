@@ -136,7 +136,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             Duration::from_secs(1),
         )),
     };
-    let key_pair = AccountSecretKey::from(Secp256k1SecretKey::generate_from(&mut rng));
+    let key_pair = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate_from(&mut rng));
     let owner = key_pair.public().into();
     context
         .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())

@@ -96,9 +96,9 @@ fn test_hashes() {
 #[test]
 fn test_certificates() {
     let validator1_key_pair = ValidatorKeypair::generate();
-    let account1_secret: AccountSecretKey = Ed25519SecretKey::generate().into();
+    let account1_secret = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
     let validator2_key_pair = ValidatorKeypair::generate();
-    let account2_secret: AccountSecretKey = Secp256k1SecretKey::generate().into();
+    let account2_secret = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate());
     let validator3_key_pair = ValidatorKeypair::generate();
 
     let committee = Committee::make_simple(vec![

@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use linera_base::{
-    crypto::Ed25519SecretKey,
+    crypto::{AccountSecretKey, Ed25519SecretKey},
     data_types::{Amount, Blob, BlockHeight},
     identifiers::{ChainDescription, ChainId},
 };
@@ -49,10 +49,10 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     }
     let mut wallet =
         WalletState::create_from_file(&wallet_path, Wallet::new(genesis_config, Some(37)))?;
-    let key_pair = Ed25519SecretKey::generate_from(&mut rng);
+    let key_pair = AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(&mut rng));
     wallet
         .add_chains(Some(UserChain::make_initial(
-            key_pair.into(),
+            key_pair,
             ChainDescription::Root(0),
             clock.current_time(),
         )))

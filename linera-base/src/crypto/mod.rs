@@ -115,6 +115,12 @@ impl AccountSecretKey {
             }
         }
     }
+
+    #[cfg(all(with_testing, with_getrandom))]
+    /// Generates a new key pair using the operating system's RNG.
+    pub fn generate() -> Self {
+        AccountSecretKey::Ed25519(Ed25519SecretKey::generate())
+    }
 }
 
 impl AccountPublicKey {
@@ -224,42 +230,6 @@ impl TryFrom<&[u8]> for AccountSignature {
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         AccountSignature::from_slice(bytes)
-    }
-}
-
-impl From<ed25519::Ed25519PublicKey> for AccountPublicKey {
-    fn from(public_key: ed25519::Ed25519PublicKey) -> Self {
-        AccountPublicKey::Ed25519(public_key)
-    }
-}
-
-impl From<secp256k1::Secp256k1PublicKey> for AccountPublicKey {
-    fn from(public_key: secp256k1::Secp256k1PublicKey) -> Self {
-        AccountPublicKey::Secp256k1(public_key)
-    }
-}
-
-impl From<ed25519::Ed25519Signature> for AccountSignature {
-    fn from(signature: ed25519::Ed25519Signature) -> Self {
-        AccountSignature::Ed25519(signature)
-    }
-}
-
-impl From<secp256k1::Secp256k1Signature> for AccountSignature {
-    fn from(signature: secp256k1::Secp256k1Signature) -> Self {
-        AccountSignature::Secp256k1(signature)
-    }
-}
-
-impl From<secp256k1::Secp256k1SecretKey> for AccountSecretKey {
-    fn from(secret_key: secp256k1::Secp256k1SecretKey) -> Self {
-        AccountSecretKey::Secp256k1(secret_key)
-    }
-}
-
-impl From<ed25519::Ed25519SecretKey> for AccountSecretKey {
-    fn from(secret_key: ed25519::Ed25519SecretKey) -> Self {
-        AccountSecretKey::Ed25519(secret_key)
     }
 }
 

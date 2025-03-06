@@ -182,7 +182,7 @@ impl<W: Deref<Target = Wallet>> WalletState<W> {
     }
 
     pub fn generate_key_pair(&mut self) -> AccountSecretKey {
-        AccountSecretKey::from(Ed25519SecretKey::generate_from(&mut self.prng))
+        AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(&mut self.prng))
     }
 }
 

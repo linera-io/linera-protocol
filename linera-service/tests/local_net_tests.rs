@@ -174,7 +174,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     }
 
     let recipient = AccountOwner::User(Owner::from(
-        AccountSecretKey::from(Secp256k1SecretKey::generate()).public(),
+        AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public(),
     ));
     client
         .transfer_with_accounts(
