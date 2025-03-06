@@ -31,7 +31,7 @@ pub struct TransactionTracker {
     subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
     unsubscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Operation outcome.
+    /// Operation result.
     operation_result: Option<Vec<u8>>,
 }
 
@@ -49,7 +49,7 @@ pub struct TransactionOutcome {
     pub subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
     pub unsubscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Operation outcome.
+    /// Operation result.
     pub operation_result: Vec<u8>,
 }
 
@@ -122,8 +122,8 @@ impl TransactionTracker {
         self.oracle_responses.push(oracle_response);
     }
 
-    pub fn add_operation_result(&mut self, outcome: Option<Vec<u8>>) {
-        self.operation_result = outcome
+    pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
+        self.operation_result = result
     }
 
     /// Adds the oracle response to the record.

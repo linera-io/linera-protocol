@@ -852,7 +852,7 @@ An operation to be executed in a block
 scalar Operation
 
 """
-The outcome of a single operation.
+The execution result of a single operation.
 """
 scalar OperationResult
 

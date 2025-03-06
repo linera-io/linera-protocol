@@ -1082,14 +1082,14 @@ impl ContractSyncRuntime {
         chain_id: ChainId,
         action: UserAction,
     ) -> Result<(Option<Vec<u8>>, ResourceController, TransactionTracker), ExecutionError> {
-        let action_outcome = self
+        let result = self
             .deref_mut()
             .run_action(application_id, chain_id, action)?;
         let runtime = self
             .into_inner()
             .expect("Runtime clones should have been freed by now");
         Ok((
-            action_outcome,
+            result,
             runtime.resource_controller,
             runtime.transaction_tracker,
         ))
@@ -1130,9 +1130,9 @@ impl ContractSyncRuntimeHandle {
             }
         };
 
-        let action_outcome = self.execute(application_id, signer, closure)?;
+        let result = self.execute(application_id, signer, closure)?;
         self.finalize(finalize_context)?;
-        Ok(action_outcome)
+        Ok(result)
     }
 
     /// Notifies all loaded applications that execution is finalizing.
@@ -1177,7 +1177,7 @@ impl ContractSyncRuntimeHandle {
             application
         };
 
-        let action_outcome = closure(
+        let result = closure(
             &mut contract
                 .instance
                 .try_lock()
@@ -1194,7 +1194,7 @@ impl ContractSyncRuntimeHandle {
 
         runtime.handle_outcome(application_status.outcome, signer, application_id)?;
 
-        Ok(action_outcome)
+        Ok(result)
     }
 }
 

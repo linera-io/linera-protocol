@@ -365,7 +365,7 @@ impl OutgoingMessage {
     }
 }
 
-/// The outcome of a single operation.
+/// The execution result of a single operation.
 #[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct OperationResult(
     #[debug(with = "hex_debug")]
@@ -381,7 +381,7 @@ impl From<Vec<u8>> for OperationResult {
 
 impl<'de> BcsHashable<'de> for OperationResult {}
 
-doc_scalar!(OperationResult, "The outcome of a single operation.");
+doc_scalar!(OperationResult, "The execution result of a single operation.");
 
 /// A [`ProposedBlock`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
@@ -402,7 +402,7 @@ pub struct BlockExecutionOutcome {
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
     pub events: Vec<Vec<Event>>,
-    /// The outcome for each operation.
+    /// The execution result for each operation.
     pub operation_results: Vec<OperationResult>,
 }
 
