@@ -1040,7 +1040,6 @@ where
     // Client2 does not know about the money yet.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
-    // TODO(#1649): Make this code nicer.
     let obtained_error = client2
         .transfer_to_account_unsafe_unconfirmed(
             None,
@@ -1227,10 +1226,9 @@ where
         .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
-    // TODO(#1649): Make this code nicer.
     let obtained_error = sender.burn(None, Amount::from_tokens(4)).await;
     assert_insufficient_funding_during_operation(&obtained_error, 0);
-    // TODO(#1649): Make this code nicer.
+
     let obtained_error = sender.burn(None, Amount::from_tokens(3)).await;
     assert_insufficient_funding_fees(&obtained_error);
     Ok(())
