@@ -17,7 +17,10 @@ benchmark = ["linera-base/test", "linera-indexer/benchmark"]
 rocksdb = ["linera-indexer/rocksdb", "linera-indexer-plugins/rocksdb"]
 dynamodb = ["linera-indexer/dynamodb", "linera-indexer-plugins/dynamodb"]
 scylladb = ["linera-indexer/scylladb", "linera-indexer-plugins/scylladb"]
-storage-service = ["linera-indexer/storage-service", "linera-service/storage-service"]
+storage-service = [
+    "linera-indexer/storage-service",
+    "linera-service/storage-service",
+]
 wasmer = ["linera-indexer-plugins/wasmer"]
 wasmtime = ["linera-indexer-plugins/wasmtime"]
 test = ["linera-service/test"]

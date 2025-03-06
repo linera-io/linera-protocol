@@ -43,7 +43,10 @@ features = ["singlepass"]
 [dev-dependencies]
 assert_matches.workspace = true
 insta.workspace = true
-linera-witty = { path = ".", default-features = false, features = ["macros", "test"] }
+linera-witty = { path = ".", default-features = false, features = [
+    "macros",
+    "test",
+] }
 test-case.workspace = true
 tracing.workspace = true
 
