@@ -190,7 +190,7 @@ impl TestValidator {
     }
 
     /// Add a exists [`ActiveChain`]
-    pub async fn add_chain(&self, chain: ActiveChain) {
+    pub fn add_chain(&self, chain: ActiveChain) {
         self.chains.insert(chain.id(), chain.clone());
     }
 
