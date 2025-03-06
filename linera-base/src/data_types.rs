@@ -34,7 +34,7 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId, 
+        ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
         ModuleId, StreamId, UserApplicationId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
