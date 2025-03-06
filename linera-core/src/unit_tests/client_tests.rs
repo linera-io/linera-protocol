@@ -1047,7 +1047,7 @@ where
             Account::chain(client3.chain_id),
         )
         .await;
-    assert_insufficient_funding(&obtained_error, ChainExecutionContext::Operation(0));
+    assert_insufficient_funding(obtained_error, ChainExecutionContext::Operation(0));
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
         .process_pending_block()
@@ -1227,10 +1227,10 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
     let obtained_error = sender.burn(None, Amount::from_tokens(4)).await;
-    assert_insufficient_funding_during_operation(&obtained_error, 0);
+    assert_insufficient_funding_during_operation(obtained_error, 0);
 
     let obtained_error = sender.burn(None, Amount::from_tokens(3)).await;
-    assert_insufficient_funding_fees(&obtained_error);
+    assert_insufficient_funding_fees(obtained_error);
     Ok(())
 }
 

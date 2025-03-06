@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use assert_matches::assert_matches;
 use linera_chain::{ChainError, ChainExecutionContext};
 use linera_execution::{ExecutionError, SystemExecutionError};
 
@@ -8,83 +9,80 @@ use crate::{client::ChainClientError, local_node::LocalNodeError, worker::Worker
 
 /// Asserts that an error is due to insufficient funding during an operation.
 pub fn assert_insufficient_funding_during_operation<T>(
-    obtained_error: &Result<T, ChainClientError>,
+    obtained_error: Result<T, ChainClientError>,
     operation_index: u32,
 ) {
-    let error = match obtained_error.as_ref().err().unwrap() {
-        ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
-            WorkerError::ChainError(error),
-        )) => error,
-        _ => panic!("Expected a ChainClientError::LocalNodeError with a WorkerError::ChainError"),
+    let ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
+        error,
+    ))) = obtained_error.err().unwrap()
+    else {
+        panic!("Expected a ChainClientError::LocalNodeError with a WorkerError::ChainError");
     };
 
-    let (execution_error, context) = match &**error {
-        ChainError::ExecutionError(execution_error, context) => (execution_error, context),
-        _ => panic!("Expected a ChainError::ExecutionError"),
+    let ChainError::ExecutionError(execution_error, context) = *error else {
+        panic!("Expected a ChainError::ExecutionError, found: {error:#?}");
     };
 
-    if let ChainExecutionContext::Operation(index) = context {
-        assert_eq!(index, &operation_index, "Operation index mismatch");
-    } else {
-        panic!("Expected ChainExecutionContext::Operation");
-    }
+    let ChainExecutionContext::Operation(index) = context else {
+        panic!("Expected ChainExecutionContext::Operation, found: {context:#?}");
+    };
 
-    match &**execution_error {
-        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }) => {}
-        _ => panic!("Expected ExecutionError::SystemError::InsufficientFunding"),
-    }
+    assert_eq!(index, operation_index, "Operation index mismatch");
+
+    assert_matches!(
+        *execution_error,
+        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+        "Expected ExecutionError::SystemError::InsufficientFunding, found: {execution_error:#?}"
+    );
 }
 
 /// Asserts that an error is due to insufficient funding for fees.
-pub fn assert_insufficient_funding_fees<T>(obtained_error: &Result<T, ChainClientError>) {
-    let error = match obtained_error.as_ref().err().unwrap() {
-        ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
-            WorkerError::ChainError(error),
-        )) => error,
-        _ => panic!("Expected a ChainClientError::LocalNodeError with a WorkerError::ChainError"),
+pub fn assert_insufficient_funding_fees<T>(obtained_error: Result<T, ChainClientError>) {
+    let ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
+        error,
+    ))) = obtained_error.err().unwrap()
+    else {
+        panic!("Expected a ChainClientError::LocalNodeError with a WorkerError::ChainError");
     };
 
-    let (execution_error, context) = match &**error {
-        ChainError::ExecutionError(execution_error, context) => (execution_error, context),
-        _ => panic!("Expected a ChainError::ExecutionError"),
+    let ChainError::ExecutionError(execution_error, context) = *error else {
+        panic!("Expected a ChainError::ExecutionError, found: {error:#?}");
     };
 
     if !matches!(context, ChainExecutionContext::Block) {
-        panic!("Expected ChainExecutionContext::Block, found {:?}", context);
+        panic!("Expected ChainExecutionContext::Block, found: {context:#?}");
     }
 
-    match &**execution_error {
-        ExecutionError::SystemError(SystemExecutionError::InsufficientFundingForFees { .. }) => {}
-        _ => panic!("Expected ExecutionError::SystemError::InsufficientFundingForFees"),
-    }
+    assert_matches!(
+        *execution_error,
+        ExecutionError::SystemError(SystemExecutionError::InsufficientFundingForFees { .. }),
+        "Expected ExecutionError::SystemError::InsufficientFundingForFees, found: {execution_error:#?}"
+    );
 }
 
 /// Asserts that an error is due to insufficient funding with a generic execution context.
 pub fn assert_insufficient_funding<T>(
-    obtained_error: &Result<T, ChainClientError>,
+    obtained_error: Result<T, ChainClientError>,
     expected_context: ChainExecutionContext,
 ) {
-    let error = match obtained_error.as_ref().err().unwrap() {
-        ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
-            WorkerError::ChainError(error),
-        )) => error,
-        _ => panic!("Expected a ChainClientError::LocalNodeError with a WorkerError::ChainError"),
+    let ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
+        error,
+    ))) = obtained_error.err().unwrap()
+    else {
+        panic!("Expected a ChainClientError::LocalNodeError with a WorkerError::ChainError");
     };
 
-    let (execution_error, context) = match &**error {
-        ChainError::ExecutionError(execution_error, context) => (execution_error, context),
-        _ => panic!("Expected a ChainError::ExecutionError"),
+    let ChainError::ExecutionError(execution_error, context) = *error else {
+        panic!("Expected a ChainError::ExecutionError, found: {error:#?}");
     };
 
-    if std::mem::discriminant(context) != std::mem::discriminant(&expected_context) {
-        panic!(
-            "Expected execution context {:?}, but found {:?}",
-            expected_context, context
-        );
+    if std::mem::discriminant(&context) != std::mem::discriminant(&expected_context) {
+        panic!("Expected execution context {expected_context:?}, but found {context:?}");
     }
 
-    match &**execution_error {
-        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }) => {}
-        _ => panic!("Expected ExecutionError::SystemError::InsufficientFunding"),
-    }
+    assert_matches!(
+        *execution_error,
+        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+        "Expected ExecutionError::SystemError::InsufficientFunding, found: {execution_error:#?}"
+    );
 }
