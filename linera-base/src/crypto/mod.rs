@@ -195,30 +195,26 @@ impl AccountSignature {
     where
         T: BcsSignable<'de> + std::fmt::Debug,
     {
-        match self {
-            AccountSignature::Ed25519(signature) => {
-                let public_key = match author {
-                    AccountPublicKey::Ed25519(public_key) => public_key,
-                    _ => {
-                        return Err(CryptoError::InvalidSignature {
-                            error: "invalid public key type".to_string(),
-                            type_name: std::any::type_name::<T>().to_string(),
-                        })
-                    }
-                };
+        match (self, author) {
+            (AccountSignature::Ed25519(signature), AccountPublicKey::Ed25519(public_key)) => {
                 signature.check(value, public_key)
             }
-            AccountSignature::Secp256k1(signature) => {
-                let public_key = match author {
-                    AccountPublicKey::Secp256k1(public_key) => public_key,
-                    _ => {
-                        return Err(CryptoError::InvalidSignature {
-                            error: "invalid public key type".to_string(),
-                            type_name: std::any::type_name::<T>().to_string(),
-                        })
-                    }
-                };
+            (AccountSignature::Secp256k1(signature), AccountPublicKey::Secp256k1(public_key)) => {
                 signature.check(value, &public_key)
+            }
+            (AccountSignature::Ed25519(_), _) => {
+                let type_name = std::any::type_name::<T>();
+                Err(CryptoError::InvalidSignature {
+                    error: "invalid signature scheme. Expected Ed25519 signature.".to_string(),
+                    type_name: type_name.to_string(),
+                })
+            }
+            (AccountSignature::Secp256k1(_), _) => {
+                let type_name = std::any::type_name::<T>();
+                Err(CryptoError::InvalidSignature {
+                    error: "invalid signature scheme. Expected secp256k1 signature.".to_string(),
+                    type_name: type_name.to_string(),
+                })
             }
         }
     }
