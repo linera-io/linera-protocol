@@ -9,9 +9,9 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{BlockHeight, Event, OracleResponse, Timestamp},
     hashed::Hashed,
-    identifiers::{BlobId, BlobType, ChainId, MessageId, Owner},
+    identifiers::{BlobId, ChainId, MessageId, Owner},
 };
-use linera_execution::{committee::Epoch, BlobState, Operation, SystemOperation};
+use linera_execution::{committee::Epoch, BlobState, Operation};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
@@ -502,20 +502,11 @@ impl Block {
 
     /// Returns all the published blob IDs in this block's operations.
     fn published_blob_ids(&self) -> BTreeSet<BlobId> {
-        let mut blob_ids = BTreeSet::new();
-        for operation in &self.body.operations {
-            if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
-                blob_ids.insert(BlobId::new(*blob_hash, BlobType::Data));
-            }
-            if let Operation::System(SystemOperation::PublishModule { module_id }) = operation {
-                blob_ids.extend([
-                    BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
-                    BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
-                ]);
-            }
-        }
-
-        blob_ids
+        self.body
+            .operations
+            .iter()
+            .flat_map(Operation::published_blob_ids)
+            .collect()
     }
 
     /// Returns set of blob IDs that were a result of an oracle call.
