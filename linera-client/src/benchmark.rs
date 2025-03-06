@@ -103,7 +103,6 @@ where
         blocks_infos: Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
         committee: Committee,
         local_node: LocalNodeClient<S>,
-        close_chains: bool,
         health_check_endpoints: Option<String>,
     ) -> Result<(), BenchmarkError> {
         let shutdown_notifier = CancellationToken::new();
@@ -200,7 +199,6 @@ where
                             sender,
                             committee,
                             local_node,
-                            close_chains,
                         )
                         .await?;
 
@@ -487,7 +485,6 @@ where
         sender: crossbeam_channel::Sender<()>,
         committee: Committee,
         local_node: LocalNodeClient<S>,
-        close_chains: bool,
     ) -> Result<(), BenchmarkError> {
         let chain_id = chain_client.chain_id();
         info!(
@@ -549,16 +546,13 @@ where
             }
         }
 
-        if close_chains {
-            Self::close_benchmark_chain(chain_client).await?;
-        }
         info!("Exiting task...");
         Ok(())
     }
 
     /// Closes the chain that was created for the benchmark.
-    async fn close_benchmark_chain(
-        chain_client: ChainClient<NodeProvider, S>,
+    pub async fn close_benchmark_chain(
+        chain_client: &ChainClient<NodeProvider, S>,
     ) -> Result<(), BenchmarkError> {
         let start = Instant::now();
         chain_client
