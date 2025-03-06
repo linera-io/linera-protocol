@@ -37,7 +37,7 @@ async fn collect_pledges() {
     let campaign_account = AccountOwner::from(campaign_chain.public_key());
 
     let fungible_module_id = fungible_publisher_chain
-        .publish_bytecodes_in("../fungible")
+        .publish_bytecode_files_in("../fungible")
         .await;
 
     let (token_id, backers) = fungible::create_with_accounts(
@@ -141,7 +141,7 @@ async fn cancel_successful_campaign() {
     let campaign_account = AccountOwner::from(campaign_chain.public_key());
 
     let fungible_module_id = fungible_publisher_chain
-        .publish_bytecodes_in("../fungible")
+        .publish_bytecode_files_in("../fungible")
         .await;
 
     let (token_id, backers) = fungible::create_with_accounts(

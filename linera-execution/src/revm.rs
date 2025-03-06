@@ -153,7 +153,7 @@ impl UserContractModule for EvmContractModule {
 }
 
 impl EvmContractModule {
-    /// Creates a new [`EvmContractModule`] using Revm with the provided bytecodes.
+    /// Creates a new [`EvmContractModule`] using Revm with the provided bytecode files.
     pub async fn from_revm(contract_bytecode: Bytecode) -> Result<Self, EvmExecutionError> {
         let module = contract_bytecode.bytes;
         Ok(EvmContractModule::Revm { module })
@@ -216,7 +216,7 @@ impl UserServiceModule for EvmServiceModule {
 }
 
 impl EvmServiceModule {
-    /// Creates a new [`EvmServiceModule`] using Revm with the provided bytecodes.
+    /// Creates a new [`EvmServiceModule`] using Revm with the provided bytecode files.
     pub async fn from_revm(contract_bytecode: Bytecode) -> Result<Self, EvmExecutionError> {
         let module = contract_bytecode.bytes;
         Ok(EvmServiceModule::Revm { module })

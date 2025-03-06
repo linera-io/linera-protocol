@@ -297,28 +297,28 @@ impl ActiveChain {
     /// Publishes the module in the crate calling this method to this microchain.
     ///
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
-    /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
+    /// them for WebAssembly and uses the generated binaries as the contract and service bytecode files
     /// to be published on this chain. Returns the module ID to reference the published module.
     pub async fn publish_current_module<Abi, Parameters, InstantiationArgument>(
         &self,
     ) -> ModuleId<Abi, Parameters, InstantiationArgument> {
-        self.publish_bytecodes_in(".").await
+        self.publish_bytecode_files_in(".").await
     }
 
-    /// Publishes the bytecodes in the crate at `repository_path`.
+    /// Publishes the bytecode files in the crate at `repository_path`.
     ///
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
-    /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
+    /// them for WebAssembly and uses the generated binaries as the contract and service bytecode files
     /// to be published on this chain. Returns the module ID to reference the published module.
-    pub async fn publish_bytecodes_in<Abi, Parameters, InstantiationArgument>(
+    pub async fn publish_bytecode_files_in<Abi, Parameters, InstantiationArgument>(
         &self,
         repository_path: impl AsRef<Path>,
     ) -> ModuleId<Abi, Parameters, InstantiationArgument> {
         let repository_path = fs::canonicalize(repository_path)
             .await
             .expect("Failed to obtain absolute application repository path");
-        Self::build_bytecodes_in(&repository_path).await;
-        let (contract, service) = self.find_bytecodes_in(&repository_path).await;
+        Self::build_bytecode_files_in(&repository_path).await;
+        let (contract, service) = self.find_bytecode_files_in(&repository_path).await;
         let contract_blob = Blob::new_contract_bytecode(contract);
         let service_blob = Blob::new_service_bytecode(service);
         let contract_blob_hash = contract_blob.id().hash;
@@ -344,7 +344,7 @@ impl ActiveChain {
     }
 
     /// Compiles the crate in the `repository` path.
-    async fn build_bytecodes_in(repository: &Path) {
+    async fn build_bytecode_files_in(repository: &Path) {
         let output = std::process::Command::new("cargo")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .current_dir(repository)
@@ -361,11 +361,11 @@ impl ActiveChain {
     }
 
     /// Searches the Cargo manifest of the crate calling this method for binaries to use as the
-    /// contract and service bytecodes.
+    /// contract and service bytecode files.
     ///
     /// Returns a tuple with the loaded contract and service [`CompressedBytecode`]s,
     /// ready to be published.
-    async fn find_bytecodes_in(
+    async fn find_bytecode_files_in(
         &self,
         repository: &Path,
     ) -> (CompressedBytecode, CompressedBytecode) {
@@ -409,7 +409,7 @@ impl ActiveChain {
 
         tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
             .await
-            .expect("Failed to compress bytecodes")
+            .expect("Failed to compress bytecode files")
     }
 
     /// Searches for the directory where the built WebAssembly binaries should be.

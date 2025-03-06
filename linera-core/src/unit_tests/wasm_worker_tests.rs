@@ -113,7 +113,7 @@ where
     )
     .await;
 
-    // Load the bytecodes for a module.
+    // Load the bytecode files for a module.
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;

@@ -318,7 +318,7 @@ where
     let module_id2 =
         module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
 
-    // Creator receives the bytecodes then creates the app.
+    // Creator receives the bytecode files then creates the app.
     creator.synchronize_from_validators().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator

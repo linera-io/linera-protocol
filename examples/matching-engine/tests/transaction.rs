@@ -77,10 +77,10 @@ async fn single_transaction() {
     let admin_account = AccountOwner::from(matching_chain.public_key());
 
     let fungible_module_id_a = user_chain_a
-        .publish_bytecodes_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
+        .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
     let fungible_module_id_b = user_chain_b
-        .publish_bytecodes_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
+        .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
 
     let initial_state_a =

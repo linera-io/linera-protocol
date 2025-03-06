@@ -57,7 +57,7 @@ pub struct WasmerServiceInstance<Runtime> {
 }
 
 impl WasmContractModule {
-    /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecodes.
+    /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecode files.
     pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
@@ -92,7 +92,7 @@ where
 }
 
 impl WasmServiceModule {
-    /// Creates a new [`WasmServiceModule`] using Wasmer with the provided bytecodes.
+    /// Creates a new [`WasmServiceModule`] using Wasmer with the provided bytecode files.
     pub async fn from_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache

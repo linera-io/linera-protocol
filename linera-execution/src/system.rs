@@ -90,7 +90,7 @@ pub struct SystemExecutionStateView<C> {
     pub balances: HashedMapView<C, AccountOwner, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
-    /// Track the locations of known bytecodes as well as the descriptions of known applications.
+    /// Track the locations of known bytecode files as well as the descriptions of known applications.
     pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
     pub closed: HashedRegisterView<C, bool>,
