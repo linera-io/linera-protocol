@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[cfg(test)]
 use assert_matches::assert_matches;
 use linera_chain::{ChainError, ChainExecutionContext};
