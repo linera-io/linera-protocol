@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use how_to_perform_http_requests::Abi;
+use how_to_perform_http_requests::{Abi, Operation};
 use linera_sdk::{linera_base_types::WithContractAbi, Contract as _, ContractRuntime};
 
 pub struct Contract {
@@ -30,11 +30,33 @@ impl linera_sdk::Contract for Contract {
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {}
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+        match operation {
+            Operation::HandleHttpResponse(response_body) => {
+                self.handle_http_response(response_body)
+            }
+        }
+    }
 
     async fn execute_message(&mut self, (): Self::Message) {
         panic!("This application doesn't support any cross-chain messages");
     }
 
     async fn store(self) {}
+}
+
+impl Contract {
+    /// Handles an HTTP response, ensuring it is valid.
+    ///
+    /// Because the `response_body` can come from outside the contract in an
+    /// [`Operation::HandleHttpResponse`], it could be forged. Therefore, the contract should
+    /// assume that the `response_body` is untrusted, and should perform validation and
+    /// verification steps to ensure that the `response_body` is real and can be trusted.
+    ///
+    /// Usually this is done by verifying that the response is signed by the trusted HTTP server.
+    /// In this example, the verification is simulated by checking that the `response_body` is
+    /// exactly an expected value.
+    fn handle_http_response(&self, response_body: Vec<u8>) {
+        assert_eq!(response_body, b"Hello, world!");
+    }
 }
