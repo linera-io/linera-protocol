@@ -39,27 +39,6 @@ pub enum SignatureScheme {
     Secp256k1,
 }
 
-impl SignatureScheme {
-    /// Returns the flag of the signature scheme.
-    pub fn flag(&self) -> u8 {
-        match self {
-            SignatureScheme::Ed25519 => 0x00,
-            SignatureScheme::Secp256k1 => 0x01,
-        }
-    }
-
-    /// Returns the signature scheme of the public key based on the flag.
-    ///
-    /// Returns error if the flag is not recognized.
-    pub fn from_flag_byte(flag: u8) -> Result<Self, CryptoError> {
-        match flag {
-            0x00 => Ok(SignatureScheme::Ed25519),
-            0x01 => Ok(SignatureScheme::Secp256k1),
-            _ => Err(CryptoError::InvalidSchemeFlag(flag)),
-        }
-    }
-}
-
 /// The public key of a chain owner.
 /// The corresponding private key is allowed to propose blocks
 /// on the chain and transfer account's tokens.
@@ -149,37 +128,14 @@ impl AccountPublicKey {
 
     /// Returns the byte representation of the public key.
     pub fn as_bytes(&self) -> Vec<u8> {
-        let mut bytes: Vec<u8> = Vec::new();
-        bytes.push(self.scheme().flag());
-
-        match self {
-            AccountPublicKey::Ed25519(public_key) => {
-                bytes.extend_from_slice(&public_key.as_bytes())
-            }
-            AccountPublicKey::Secp256k1(public_key) => {
-                bytes.extend_from_slice(&public_key.as_bytes())
-            }
-        }
-
-        bytes
+        bcs::to_bytes(&self).expect("serialization to bytes should not fail")
     }
 
     /// Parses the byte representation of the public key.
     ///
     /// Returns error if the byte slice has incorrect length or the flag is not recognized.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, CryptoError> {
-        let flag = bytes[0];
-        let scheme = SignatureScheme::from_flag_byte(flag)?;
-        match scheme {
-            SignatureScheme::Ed25519 => {
-                let pk = Ed25519PublicKey::from_slice(&bytes[1..])?;
-                Ok(AccountPublicKey::Ed25519(pk))
-            }
-            SignatureScheme::Secp256k1 => {
-                let pk = secp256k1::Secp256k1PublicKey::from_bytes(&bytes[1..])?;
-                Ok(AccountPublicKey::Secp256k1(pk))
-            }
-        }
+        bcs::from_bytes(bytes).map_err(CryptoError::PublicKeyParseError)
     }
 
     /// A fake public key used for testing.
@@ -221,36 +177,12 @@ impl AccountSignature {
 
     /// Returns byte representation of the signatures.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes: Vec<u8> = Vec::new();
-
-        match self {
-            AccountSignature::Ed25519(signature) => {
-                bytes.push(SignatureScheme::Ed25519.flag());
-                bytes.extend_from_slice(&signature.as_bytes());
-            }
-            AccountSignature::Secp256k1(signature) => {
-                bytes.push(SignatureScheme::Secp256k1.flag());
-                bytes.extend_from_slice(&signature.as_bytes());
-            }
-        }
-
-        bytes
+        bcs::to_bytes(&self).expect("serialization to bytes should not fail")
     }
 
     /// Parses the byte representation of the signature.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, CryptoError> {
-        let flag = bytes[0];
-        let scheme = SignatureScheme::from_flag_byte(flag)?;
-        match scheme {
-            SignatureScheme::Ed25519 => {
-                let signature = Ed25519Signature::from_slice(&bytes[1..])?;
-                Ok(AccountSignature::Ed25519(signature))
-            }
-            SignatureScheme::Secp256k1 => {
-                let signature = secp256k1::Secp256k1Signature::from_slice(&bytes[1..])?;
-                Ok(AccountSignature::Secp256k1(signature))
-            }
-        }
+        bcs::from_bytes(bytes).map_err(CryptoError::SignatureParseError)
     }
 }
 
@@ -362,14 +294,16 @@ pub enum CryptoError {
         len: usize,
         expected: usize,
     },
-    #[error("unrecognized signature scheme flag: {0}")]
-    InvalidSchemeFlag(u8),
     #[error("Could not parse integer: {0}")]
     ParseIntError(#[from] ParseIntError),
     #[error("secp256k1 error: {0}")]
     Secp256k1Error(k256::ecdsa::Error),
     #[error("could not parse public key: {0}: point at infinity")]
     Secp256k1PointAtInfinity(String),
+    #[error("could not parse public key: {0}")]
+    PublicKeyParseError(bcs::Error),
+    #[error("could not parse signature: {0}")]
+    SignatureParseError(bcs::Error),
 }
 
 #[cfg(with_getrandom)]
@@ -580,15 +514,6 @@ mod tests {
         roundtrip_test(AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
-    }
-
-    #[test]
-    fn fail_invalid_flag_byte() {
-        // 0x02 is not a valid flag for any scheme.
-        let invalid_scheme_flag: u8 = 0x02;
-        let bytes = vec![invalid_scheme_flag, 0x01, 0x02, 0x03, 0x04];
-        let result: Result<AccountPublicKey, CryptoError> = AccountPublicKey::from_slice(&bytes);
-        assert!(result.is_err());
     }
 
     #[test]
