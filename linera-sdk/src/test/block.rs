@@ -19,6 +19,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_execution::{
+    committee::Epoch,
     system::{Recipient, SystemChannel, SystemOperation},
     Operation,
 };
@@ -48,6 +49,7 @@ impl BlockBuilder {
     pub(crate) fn new(
         chain_id: ChainId,
         owner: Owner,
+        epoch: Epoch,
         previous_block: Option<&ConfirmedBlockCertificate>,
         validator: TestValidator,
     ) -> Self {
@@ -64,7 +66,7 @@ impl BlockBuilder {
 
         BlockBuilder {
             block: ProposedBlock {
-                epoch: 0.into(),
+                epoch,
                 chain_id,
                 incoming_bundles: vec![],
                 operations: vec![],

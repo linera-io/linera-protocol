@@ -259,6 +259,7 @@ impl ActiveChain {
         let mut block = BlockBuilder::new(
             self.description.into(),
             self.key_pair.public().into(),
+            self.epoch().await,
             tip.as_ref(),
             self.validator.clone(),
         );
