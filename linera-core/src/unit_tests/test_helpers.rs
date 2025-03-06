@@ -1,10 +1,9 @@
 #[cfg(test)]
 use assert_matches::assert_matches;
+use linera_chain::{ChainError, ChainExecutionContext};
 use linera_execution::{ExecutionError, SystemExecutionError};
-use linera_chain::{ChainExecutionContext, ChainError};
-use crate::client::ChainClientError;
-use crate::local_node::LocalNodeError;
-use crate::worker::WorkerError;
+
+use crate::{client::ChainClientError, local_node::LocalNodeError, worker::WorkerError};
 
 /// Helper function to assert that an error is due to insufficient funding during an operation.
 #[cfg(test)]

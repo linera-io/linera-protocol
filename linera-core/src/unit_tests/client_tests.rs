@@ -2,9 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
-mod test_helpers;
 
 use assert_matches::assert_matches;
 use futures::StreamExt;
@@ -31,9 +31,8 @@ use linera_views::memory::MemoryStore;
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
-    assert_insufficient_funding_during_operation,
+    assert_insufficient_funding, assert_insufficient_funding_during_operation,
     assert_insufficient_funding_fees,
-    assert_insufficient_funding,
 };
 
 #[cfg(feature = "dynamodb")]
@@ -1043,12 +1042,12 @@ where
     // Sending money from client2 fails, as a consequence.
     // TODO(#1649): Make this code nicer.
     let obtained_error = client2
-    .transfer_to_account_unsafe_unconfirmed(
-        None,
-        Amount::from_tokens(2),
-        Account::chain(client3.chain_id),
-    )
-    .await;
+        .transfer_to_account_unsafe_unconfirmed(
+            None,
+            Amount::from_tokens(2),
+            Account::chain(client3.chain_id),
+        )
+        .await;
     assert_insufficient_funding(&obtained_error, ChainExecutionContext::Operation(0));
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
@@ -1225,12 +1224,12 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());  
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
     // TODO(#1649): Make this code nicer.
     let obtained_error = sender.burn(None, Amount::from_tokens(4)).await;
-    assert_insufficient_funding_during_operation(&obtained_error, 0);    
+    assert_insufficient_funding_during_operation(&obtained_error, 0);
     // TODO(#1649): Make this code nicer.
     let obtained_error = sender.burn(None, Amount::from_tokens(3)).await;
     assert_insufficient_funding_fees(&obtained_error);
