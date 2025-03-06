@@ -2205,12 +2205,19 @@ where
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
     pub async fn query_application(&self, query: Query) -> Result<QueryOutcome, ChainClientError> {
-        let outcome = self
-            .client
-            .local_node
-            .query_application(self.chain_id, query)
-            .await?;
-        Ok(outcome)
+        loop {
+            let result = self
+                .client
+                .local_node
+                .query_application(self.chain_id, query.clone())
+                .await;
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                self.receive_certificates_for_blobs(blob_ids.clone())
+                    .await?;
+                continue; // We found the missing blob: retry.
+            }
+            return Ok(result?);
+        }
     }
 
     /// Queries a system application.

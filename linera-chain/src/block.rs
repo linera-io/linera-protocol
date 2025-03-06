@@ -504,6 +504,7 @@ impl Block {
     pub fn required_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
+        blob_ids.extend(self.created_blob_ids());
         blob_ids
     }
 
