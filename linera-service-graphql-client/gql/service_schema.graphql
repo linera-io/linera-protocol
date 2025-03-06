@@ -107,6 +107,10 @@ type BlockBody {
 	The list of blobs produced by each transaction.
 	"""
 	blobs: [[Blob!]!]!
+	"""
+	The execution result for each operation.
+	"""
+	operationResults: [OperationResult!]!
 }
 
 """
@@ -170,6 +174,10 @@ type BlockHeader {
 	Cryptographic hash of all the created blobs in the block.
 	"""
 	blobsHash: CryptoHash!
+	"""
+	A cryptographic hash of the execution results of all operations in a block.
+	"""
+	operationResultsHash: CryptoHash!
 }
 
 """
@@ -845,6 +853,11 @@ scalar Notification
 An operation to be executed in a block
 """
 scalar Operation
+
+"""
+The execution result of a single operation.
+"""
+scalar OperationResult
 
 """
 A record of a single oracle response.

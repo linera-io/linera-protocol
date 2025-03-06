@@ -129,6 +129,9 @@ BlockBody:
         SEQ:
           SEQ:
             TYPENAME: BlobContent
+    - operation_results:
+        SEQ:
+          TYPENAME: OperationResult
 BlockExecutionOutcome:
   STRUCT:
     - messages:
@@ -149,6 +152,9 @@ BlockExecutionOutcome:
         SEQ:
           SEQ:
             TYPENAME: BlobContent
+    - operation_results:
+        SEQ:
+          TYPENAME: OperationResult
 BlockHeader:
   STRUCT:
     - chain_id:
@@ -722,6 +728,8 @@ Operation:
           - application_id:
               TYPENAME: ApplicationId
           - bytes: BYTES
+OperationResult:
+  NEWTYPESTRUCT: BYTES
 OracleResponse:
   ENUM:
     0:

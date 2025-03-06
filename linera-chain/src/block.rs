@@ -21,7 +21,7 @@ use thiserror::Error;
 use crate::{
     data_types::{
         BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
-        OutgoingMessageExt, ProposedBlock,
+        OperationResult, OutgoingMessageExt, ProposedBlock,
     },
     types::CertificateValue,
     ChainError,
@@ -289,6 +289,7 @@ impl<'de> Deserialize<'de> for Block {
         let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
         let blobs_hash = hashing::hash_vec_vec(&inner.body.blobs);
+        let operation_results_hash = hashing::hash_vec(&inner.body.operation_results);
 
         let header = BlockHeader {
             chain_id: inner.header.chain_id,
@@ -304,6 +305,7 @@ impl<'de> Deserialize<'de> for Block {
             oracle_responses_hash,
             events_hash,
             blobs_hash,
+            operation_results_hash,
         };
 
         Ok(Self {
@@ -351,6 +353,8 @@ pub struct BlockHeader {
     pub events_hash: CryptoHash,
     /// Cryptographic hash of all the created blobs in the block.
     pub blobs_hash: CryptoHash,
+    /// A cryptographic hash of the execution results of all operations in a block.
+    pub operation_results_hash: CryptoHash,
 }
 
 /// The body of a block containing all the data included in the block.
@@ -369,6 +373,8 @@ pub struct BlockBody {
     pub events: Vec<Vec<Event>>,
     /// The list of blobs produced by each transaction.
     pub blobs: Vec<Vec<Blob>>,
+    /// The execution result for each operation.
+    pub operation_results: Vec<OperationResult>,
 }
 
 impl Block {
@@ -379,6 +385,7 @@ impl Block {
         let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&outcome.events);
         let blobs_hash = hashing::hash_vec_vec(&outcome.blobs);
+        let operation_results_hash = hashing::hash_vec(&outcome.operation_results);
 
         let header = BlockHeader {
             chain_id: block.chain_id,
@@ -394,6 +401,7 @@ impl Block {
             oracle_responses_hash,
             events_hash,
             blobs_hash,
+            operation_results_hash,
         };
 
         let body = BlockBody {
@@ -403,6 +411,7 @@ impl Block {
             oracle_responses: outcome.oracle_responses,
             events: outcome.events,
             blobs: outcome.blobs,
+            operation_results: outcome.operation_results,
         };
 
         Self { header, body }
@@ -582,6 +591,7 @@ impl From<Block> for ExecutedBlock {
                     oracle_responses_hash: _,
                     events_hash: _,
                     blobs_hash: _,
+                    operation_results_hash: _,
                 },
             body:
                 BlockBody {
@@ -591,6 +601,7 @@ impl From<Block> for ExecutedBlock {
                     oracle_responses,
                     events,
                     blobs,
+                    operation_results,
                 },
         } = block;
 
@@ -611,6 +622,7 @@ impl From<Block> for ExecutedBlock {
             oracle_responses,
             events,
             blobs,
+            operation_results,
         };
 
         ExecutedBlock { block, outcome }

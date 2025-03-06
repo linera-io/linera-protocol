@@ -518,11 +518,12 @@ where
         } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling lite certificate");
         let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
-        match self
-            .state
-            .clone()
-            .handle_lite_certificate(certificate, sender)
-            .await
+        match Box::pin(
+            self.state
+                .clone()
+                .handle_lite_certificate(certificate, sender),
+        )
+        .await
         {
             Ok((info, actions)) => {
                 Self::log_request_success_and_latency(start, "handle_lite_certificate");
