@@ -799,7 +799,7 @@ type MutationRoot {
 	the admin chain so that they can migrate to the new epoch (by accepting the
 	notification as an "incoming message" in a next block).
 	"""
-	createCommittee(chainId: ChainId!, epoch: Epoch!, committee: Committee!): CryptoHash!
+	createCommittee(chainId: ChainId!, committee: Committee!): CryptoHash!
 	"""
 	Subscribes to a system channel.
 	"""
