@@ -16,7 +16,7 @@ use cargo_toml::Manifest;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Blob, BlockHeight, Bytecode, CompressedBytecode},
-    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, MessageId, ModuleId},
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
@@ -294,43 +294,43 @@ impl ActiveChain {
         .await;
     }
 
-    /// Publishes the bytecodes in the crate calling this method to this microchain.
+    /// Publishes the module in the crate calling this method to this microchain.
     ///
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
-    /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
-    /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_current_bytecode<Abi, Parameters, InstantiationArgument>(
+    /// them for WebAssembly and uses the generated binaries as the contract and service bytecode files
+    /// to be published on this chain. Returns the module ID to reference the published module.
+    pub async fn publish_current_module<Abi, Parameters, InstantiationArgument>(
         &self,
-    ) -> BytecodeId<Abi, Parameters, InstantiationArgument> {
-        self.publish_bytecodes_in(".").await
+    ) -> ModuleId<Abi, Parameters, InstantiationArgument> {
+        self.publish_bytecode_files_in(".").await
     }
 
-    /// Publishes the bytecodes in the crate at `repository_path`.
+    /// Publishes the bytecode files in the crate at `repository_path`.
     ///
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
-    /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
-    /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_bytecodes_in<Abi, Parameters, InstantiationArgument>(
+    /// them for WebAssembly and uses the generated binaries as the contract and service bytecode files
+    /// to be published on this chain. Returns the module ID to reference the published module.
+    pub async fn publish_bytecode_files_in<Abi, Parameters, InstantiationArgument>(
         &self,
         repository_path: impl AsRef<Path>,
-    ) -> BytecodeId<Abi, Parameters, InstantiationArgument> {
+    ) -> ModuleId<Abi, Parameters, InstantiationArgument> {
         let repository_path = fs::canonicalize(repository_path)
             .await
             .expect("Failed to obtain absolute application repository path");
-        Self::build_bytecodes_in(&repository_path).await;
-        let (contract, service) = self.find_bytecodes_in(&repository_path).await;
+        Self::build_bytecode_files_in(&repository_path).await;
+        let (contract, service) = self.find_bytecode_files_in(&repository_path).await;
         let contract_blob = Blob::new_contract_bytecode(contract);
         let service_blob = Blob::new_service_bytecode(service);
         let contract_blob_hash = contract_blob.id().hash;
         let service_blob_hash = service_blob.id().hash;
         let vm_runtime = VmRuntime::Wasm;
 
-        let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash, vm_runtime);
+        let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
 
         let certificate = self
             .add_block_with_blobs(
                 |block| {
-                    block.with_system_operation(SystemOperation::PublishBytecode { bytecode_id });
+                    block.with_system_operation(SystemOperation::PublishModule { module_id });
                 },
                 vec![contract_blob, service_blob],
             )
@@ -340,11 +340,11 @@ impl ActiveChain {
         assert_eq!(executed_block.messages().len(), 1);
         assert_eq!(executed_block.messages()[0].len(), 0);
 
-        bytecode_id.with_abi()
+        module_id.with_abi()
     }
 
     /// Compiles the crate in the `repository` path.
-    async fn build_bytecodes_in(repository: &Path) {
+    async fn build_bytecode_files_in(repository: &Path) {
         let output = std::process::Command::new("cargo")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .current_dir(repository)
@@ -361,11 +361,11 @@ impl ActiveChain {
     }
 
     /// Searches the Cargo manifest of the crate calling this method for binaries to use as the
-    /// contract and service bytecodes.
+    /// contract and service bytecode files.
     ///
     /// Returns a tuple with the loaded contract and service [`CompressedBytecode`]s,
     /// ready to be published.
-    async fn find_bytecodes_in(
+    async fn find_bytecode_files_in(
         &self,
         repository: &Path,
     ) -> (CompressedBytecode, CompressedBytecode) {
@@ -384,7 +384,7 @@ impl ActiveChain {
             binaries.len(),
             2,
             "Could not figure out contract and service bytecode binaries.\
-            Please specify them manually using `publish_bytecode`."
+            Please specify them manually using `publish_module`."
         );
 
         let (contract_binary, service_binary) = if binaries[0].ends_with("contract") {
@@ -409,7 +409,7 @@ impl ActiveChain {
 
         tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
             .await
-            .expect("Failed to compress bytecodes")
+            .expect("Failed to compress bytecode files")
     }
 
     /// Searches for the directory where the built WebAssembly binaries should be.
@@ -450,19 +450,19 @@ impl ActiveChain {
             .height
     }
 
-    /// Creates an application on this microchain, using the bytecode referenced by `bytecode_id`.
+    /// Creates an application on this microchain, using the module referenced by `module_id`.
     ///
     /// Returns the [`ApplicationId`] of the created application.
     ///
     /// If necessary, this microchain will subscribe to the microchain that published the
-    /// bytecode to use, and fetch it.
+    /// module to use, and fetch it.
     ///
     /// The application is instantiated using the instantiation parameters, which consist of the
     /// global static `parameters`, the one time `instantiation_argument` and the
     /// `required_application_ids` of the applications that the new application will depend on.
     pub async fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
-        bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
+        module_id: ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
@@ -482,7 +482,7 @@ impl ActiveChain {
         let creation_certificate = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::CreateApplication {
-                    bytecode_id: bytecode_id.forget_abi(),
+                    module_id: module_id.forget_abi(),
                     parameters,
                     instantiation_argument,
                     required_application_ids,
@@ -499,7 +499,7 @@ impl ActiveChain {
         };
 
         ApplicationId {
-            bytecode_id: bytecode_id.just_abi(),
+            module_id: module_id.just_abi(),
             creation,
         }
     }

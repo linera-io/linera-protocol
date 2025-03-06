@@ -14,7 +14,7 @@ use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
+    identifiers::{ApplicationId, ChainDescription, MessageId, ModuleId},
     vm::VmRuntime,
 };
 use linera_views::batch::Batch;
@@ -208,7 +208,7 @@ fn create_dummy_application_id() -> ApplicationId {
     let chain_id = ChainDescription::Root(1).into();
 
     ApplicationId {
-        bytecode_id: BytecodeId::new(
+        module_id: ModuleId::new(
             CryptoHash::test_hash("contract"),
             CryptoHash::test_hash("service"),
             VmRuntime::Wasm,

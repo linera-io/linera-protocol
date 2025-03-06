@@ -4,8 +4,8 @@ This example application implements crowd-funding campaigns using fungible token
 the `fungible` application. This demonstrates how to compose applications together and
 how to instantiate applications where one chain has a special role.
 
-Once an application is built and its bytecode published on a Linera chain, the
-published bytecode can be used to create different instances. Each instance or crowd-funding
+Once an application is built and its module published on a Linera chain, the
+published module can be used to create different instances. Each instance or crowd-funding
 represents a different campaign.
 
 ## How It Works
@@ -38,7 +38,7 @@ TODO: The following documentation involves sleep to avoid some race conditions. 
 
 ### Setting Up
 
-The WebAssembly binaries for the bytecode can be built and published using [steps from the
+The WebAssembly binaries for the module can be built and published using [steps from the
 book](https://linera.dev/developers/getting_started.html),
 summarized below.
 

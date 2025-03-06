@@ -13,13 +13,13 @@ use linera_sdk::test::{QueryOutcome, TestValidator};
 /// which is then checked.
 #[tokio::test(flavor = "multi_thread")]
 async fn single_chain_test() {
-    let (validator, bytecode_id) =
-        TestValidator::with_current_bytecode::<counter::CounterAbi, (), u64>().await;
+    let (validator, module_id) =
+        TestValidator::with_current_module::<counter::CounterAbi, (), u64>().await;
     let mut chain = validator.new_chain().await;
 
     let initial_state = 42u64;
     let application_id = chain
-        .create_application(bytecode_id, (), initial_state, vec![])
+        .create_application(module_id, (), initial_state, vec![])
         .await;
 
     let increment = 15u64;

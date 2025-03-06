@@ -273,7 +273,7 @@ pub trait Storage: Sized {
         application_description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let contract_bytecode_blob_id = BlobId::new(
-            application_description.bytecode_id.contract_blob_hash,
+            application_description.module_id.contract_blob_hash,
             BlobType::ContractBytecode,
         );
         let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
@@ -288,7 +288,7 @@ pub trait Storage: Sized {
             .await
             .join()
             .await?;
-        match application_description.bytecode_id.vm_runtime {
+        match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_wasm_runtime)] {
@@ -333,7 +333,7 @@ pub trait Storage: Sized {
         application_description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let service_bytecode_blob_id = BlobId::new(
-            application_description.bytecode_id.service_blob_hash,
+            application_description.module_id.service_blob_hash,
             BlobType::ServiceBytecode,
         );
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
@@ -347,7 +347,7 @@ pub trait Storage: Sized {
         .await
         .join()
         .await?;
-        match application_description.bytecode_id.vm_runtime {
+        match application_description.module_id.vm_runtime {
             VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_wasm_runtime)] {

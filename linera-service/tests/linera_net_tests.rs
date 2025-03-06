@@ -549,11 +549,11 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let chain = client.load_wallet()?.default_chain().unwrap();
     let (contract, service) = client.build_example("counter").await?;
 
-    let bytecode_id = client
-        .publish_bytecode::<CounterAbi, (), u64>(contract, service, None)
+    let module_id = client
+        .publish_module::<CounterAbi, (), u64>(contract, service, None)
         .await?;
     let application_id = client
-        .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
+        .create_application(&module_id, &(), &original_counter_value, &[], None)
         .await?;
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
@@ -599,11 +599,11 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
     let (contract, service) = client1.build_example("social").await?;
-    let bytecode_id = client1
-        .publish_bytecode::<SocialAbi, (), ()>(contract, service, None)
+    let module_id = client1
+        .publish_module::<SocialAbi, (), ()>(contract, service, None)
         .await?;
     let application_id = client1
-        .create_application(&bytecode_id, &(), &(), &[], None)
+        .create_application(&module_id, &(), &(), &[], None)
         .await?;
 
     let port1 = get_node_port().await;
@@ -1536,8 +1536,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let parameter = Parameters {
         tokens: [token0, token1],
     };
-    let bytecode_id = node_service_admin
-        .publish_bytecode::<MatchingEngineAbi, Parameters, ()>(
+    let module_id = node_service_admin
+        .publish_module::<MatchingEngineAbi, Parameters, ()>(
             &chain_admin,
             contract_matching,
             service_matching,
@@ -1547,7 +1547,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let application_id_matching = node_service_admin
         .create_application(
             &chain_admin,
-            &bytecode_id,
+            &module_id,
             &parameter,
             &(),
             &[token0.forget_abi(), token1.forget_abi()],
@@ -1740,18 +1740,20 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     // Create fungible applications on the AMM chain, which will hold
     // the token0 and token1 amounts
-    let fungible_bytecode_id = node_service_amm
-        .publish_bytecode::<
-            fungible::FungibleTokenAbi,
-            fungible::Parameters,
-            fungible::InitialState
-        >(&chain_amm, contract_fungible, service_fungible, vm_runtime).await?;
+    let fungible_module_id = node_service_amm
+        .publish_module::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
+            &chain_amm,
+            contract_fungible,
+            service_fungible,
+            vm_runtime,
+        )
+        .await?;
 
     let params0 = fungible::Parameters::new("ZERO");
     let token0 = node_service_amm
         .create_application(
             &chain_amm,
-            &fungible_bytecode_id,
+            &fungible_module_id,
             &params0,
             &state_fungible0,
             &[],
@@ -1761,7 +1763,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let token1 = node_service_amm
         .create_application(
             &chain_amm,
-            &fungible_bytecode_id,
+            &fungible_module_id,
             &params1,
             &state_fungible1,
             &[],
@@ -1883,18 +1885,13 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     };
 
     // Create AMM application on Admin chain
-    let bytecode_id = node_service_amm
-        .publish_bytecode::<AmmAbi, Parameters, ()>(
-            &chain_amm,
-            contract_amm,
-            service_amm,
-            vm_runtime,
-        )
+    let module_id = node_service_amm
+        .publish_module::<AmmAbi, Parameters, ()>(&chain_amm, contract_amm, service_amm, vm_runtime)
         .await?;
     let application_id_amm = node_service_amm
         .create_application(
             &chain_amm,
-            &bytecode_id,
+            &module_id,
             &parameters,
             &(),
             &[token0.forget_abi(), token1.forget_abi()],

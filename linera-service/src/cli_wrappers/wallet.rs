@@ -23,7 +23,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::CryptoHash,
     data_types::{Amount, Bytecode},
-    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner},
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
@@ -376,23 +376,23 @@ impl ClientWrapper {
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
-    /// Runs `linera publish-bytecode`.
-    pub async fn publish_bytecode<Abi, Parameters, InstantiationArgument>(
+    /// Runs `linera publish-module`.
+    pub async fn publish_module<Abi, Parameters, InstantiationArgument>(
         &self,
         contract: PathBuf,
         service: PathBuf,
         publisher: impl Into<Option<ChainId>>,
-    ) -> Result<BytecodeId<Abi, Parameters, InstantiationArgument>> {
+    ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
         let stdout = self
             .command()
             .await?
-            .arg("publish-bytecode")
+            .arg("publish-module")
             .args([contract, service])
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
-        let bytecode_id: BytecodeId = stdout.trim().parse()?;
-        Ok(bytecode_id.with_abi())
+        let module_id: ModuleId = stdout.trim().parse()?;
+        Ok(module_id.with_abi())
     }
 
     /// Runs `linera create-application`.
@@ -402,7 +402,7 @@ impl ClientWrapper {
         InstantiationArgument: Serialize,
     >(
         &self,
-        bytecode_id: &BytecodeId<Abi, Parameters, InstantiationArgument>,
+        module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
         required_application_ids: &[ApplicationId],
@@ -413,7 +413,7 @@ impl ClientWrapper {
         let mut command = self.command().await?;
         command
             .arg("create-application")
-            .arg(bytecode_id.forget_abi().to_string())
+            .arg(module_id.forget_abi().to_string())
             .args(["--json-parameters", &json_parameters])
             .args(["--json-argument", &json_argument])
             .args(creator.into().iter().map(ChainId::to_string));
@@ -435,7 +435,7 @@ impl ClientWrapper {
         application_id: ApplicationId,
         requester_chain_id: ChainId,
         target_chain_id: Option<ChainId>,
-    ) -> Result<BytecodeId> {
+    ) -> Result<ModuleId> {
         let mut command = self.command().await?;
         command
             .arg("request-application")
@@ -1164,30 +1164,28 @@ impl NodeService {
             .context("missing publishDataBlob field in response")
     }
 
-    pub async fn publish_bytecode<Abi, Parameters, InstantiationArgument>(
+    pub async fn publish_module<Abi, Parameters, InstantiationArgument>(
         &self,
         chain_id: &ChainId,
         contract: PathBuf,
         service: PathBuf,
         vm_runtime: VmRuntime,
-    ) -> Result<BytecodeId<Abi, Parameters, InstantiationArgument>> {
+    ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
         let contract_code = Bytecode::load_from_file(&contract).await?;
         let service_code = Bytecode::load_from_file(&service).await?;
         let query = format!(
-            "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}, vmRuntime: {}) }}",
+            "mutation {{ publishModule(chainId: {}, contract: {}, service: {}, vmRuntime: {}) }}",
             chain_id.to_value(),
             contract_code.to_value(),
             service_code.to_value(),
             vm_runtime.to_value(),
         );
         let data = self.query_node(query).await?;
-        let bytecode_str = data["publishBytecode"]
+        let module_str = data["publishModule"]
             .as_str()
-            .context("bytecode ID not found")?;
-        let bytecode_id: BytecodeId = bytecode_str
-            .parse()
-            .context("could not parse bytecode ID")?;
-        Ok(bytecode_id.with_abi())
+            .context("module ID not found")?;
+        let module_id: ModuleId = module_str.parse().context("could not parse module ID")?;
+        Ok(module_id.with_abi())
     }
 
     pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
@@ -1257,12 +1255,12 @@ impl NodeService {
     >(
         &self,
         chain_id: &ChainId,
-        bytecode_id: &BytecodeId<Abi, Parameters, InstantiationArgument>,
+        module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
         required_application_ids: &[ApplicationId],
     ) -> Result<ApplicationId<Abi>> {
-        let bytecode_id = bytecode_id.forget_abi();
+        let module_id = module_id.forget_abi();
         let json_required_applications_ids = required_application_ids
             .iter()
             .map(ApplicationId::to_string)
@@ -1278,7 +1276,7 @@ impl NodeService {
         let query = format!(
             "mutation {{ createApplication(\
                  chainId: \"{chain_id}\",
-                 bytecodeId: \"{bytecode_id}\", \
+                 moduleId: \"{module_id}\", \
                  parameters: {new_parameters}, \
                  instantiationArgument: {new_argument}, \
                  requiredApplicationIds: {json_required_applications_ids}) \

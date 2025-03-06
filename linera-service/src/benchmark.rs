@@ -128,15 +128,15 @@ async fn benchmark_with_fungible(
         services.push(node_service);
     }
 
-    info!("Building the fungible application bytecode.");
+    info!("Building the fungible application module.");
     let path = Path::new("examples/fungible").canonicalize().context(
         "`linera-benchmark` is meant to run from the root of the `linera-protocol` repository",
     )?;
     let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
 
-    info!("Publishing the fungible application bytecode.");
-    let bytecode_id = publisher
-        .publish_bytecode::<FungibleTokenAbi, Parameters, InitialState>(contract, service, None)
+    info!("Publishing the fungible application module.");
+    let module_id = publisher
+        .publish_module::<FungibleTokenAbi, Parameters, InitialState>(contract, service, None)
         .await?;
 
     struct BenchmarkContext {
@@ -158,13 +158,7 @@ async fn benchmark_with_fungible(
             };
             let parameters = Parameters::new(format!("FUN{}", i).leak());
             let application_id = node_service
-                .create_application(
-                    &default_chain,
-                    &bytecode_id,
-                    &parameters,
-                    &initial_state,
-                    &[],
-                )
+                .create_application(&default_chain, &module_id, &parameters, &initial_state, &[])
                 .await?;
             let context = BenchmarkContext {
                 application_id,

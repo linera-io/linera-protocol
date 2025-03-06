@@ -13,7 +13,7 @@ interface contract-runtime-api {
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
-    create-application: func(bytecode-id: bytecode-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
+    create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, key: list<u8>, value: list<u8>);
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
@@ -36,7 +36,7 @@ interface contract-runtime-api {
     }
 
     record application-id {
-        bytecode-id: bytecode-id,
+        module-id: module-id,
         creation: message-id,
     }
 
@@ -49,12 +49,6 @@ interface contract-runtime-api {
 
     record block-height {
         inner0: u64,
-    }
-
-    record bytecode-id {
-        contract-blob-hash: crypto-hash,
-        service-blob-hash: crypto-hash,
-        vm-runtime: vm-runtime,
     }
 
     record chain-id {
@@ -97,6 +91,12 @@ interface contract-runtime-api {
         chain-id: chain-id,
         height: block-height,
         index: u32,
+    }
+
+    record module-id {
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
     }
 
     record owner {

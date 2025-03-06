@@ -84,7 +84,7 @@ OWNER_1="${INFO_1[3]}"
 Note that `linera --with-wallet 0` is equivalent to `linera --wallet "$LINERA_WALLET_0"
 --storage "$LINERA_STORAGE_0"`.
 
-Now, we can publish the fungible bytecode and create the fungible applications.
+Now, we can publish the fungible module and create the fungible applications.
 
 ```bash
 (cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)

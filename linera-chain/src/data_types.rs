@@ -86,10 +86,10 @@ impl ProposedBlock {
             if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
                 blob_ids.insert(BlobId::new(*blob_hash, BlobType::Data));
             }
-            if let Operation::System(SystemOperation::PublishBytecode { bytecode_id }) = operation {
+            if let Operation::System(SystemOperation::PublishModule { module_id }) = operation {
                 blob_ids.extend([
-                    BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode),
-                    BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode),
+                    BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
+                    BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
                 ]);
             }
         }

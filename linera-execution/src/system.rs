@@ -23,8 +23,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, BytecodeId, ChainDescription, ChainId,
-        ChannelFullName, MessageId, Owner,
+        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName,
+        MessageId, ModuleId, Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -90,7 +90,7 @@ pub struct SystemExecutionStateView<C> {
     pub balances: HashedMapView<C, AccountOwner, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
-    /// Track the locations of known bytecodes as well as the descriptions of known applications.
+    /// Track the locations of known bytecode files as well as the descriptions of known applications.
     pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
     pub closed: HashedRegisterView<C, bool>,
@@ -165,8 +165,8 @@ pub enum SystemOperation {
         chain_id: ChainId,
         channel: SystemChannel,
     },
-    /// Publishes a new application bytecode.
-    PublishBytecode { bytecode_id: BytecodeId },
+    /// Publishes a new application module.
+    PublishModule { module_id: ModuleId },
     /// Publishes a new data blob.
     PublishDataBlob { blob_hash: CryptoHash },
     /// Reads a blob and discards the result.
@@ -174,7 +174,7 @@ pub enum SystemOperation {
     ReadBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         parameters: Vec<u8>,
@@ -630,18 +630,18 @@ where
                 };
                 outcome.messages.push(message);
             }
-            PublishBytecode { bytecode_id } => {
+            PublishModule { module_id } => {
                 self.blob_published(&BlobId::new(
-                    bytecode_id.contract_blob_hash,
+                    module_id.contract_blob_hash,
                     BlobType::ContractBytecode,
                 ))?;
                 self.blob_published(&BlobId::new(
-                    bytecode_id.service_blob_hash,
+                    module_id.service_blob_hash,
                     BlobType::ServiceBytecode,
                 ))?;
             }
             CreateApplication {
-                bytecode_id,
+                module_id,
                 parameters,
                 instantiation_argument,
                 required_application_ids,
@@ -654,7 +654,7 @@ where
                 } = self
                     .create_application(
                         next_message_id,
-                        bytecode_id,
+                        module_id,
                         parameters,
                         required_application_ids,
                     )
@@ -875,7 +875,7 @@ where
             }
             RegisterApplications { applications } => {
                 for application in applications {
-                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
+                    self.check_and_record_bytecode_blobs(&application.module_id, txn_tracker)
                         .await?;
                     self.registry.register_application(application).await?;
                 }
@@ -1029,18 +1029,18 @@ where
     pub async fn create_application(
         &mut self,
         next_message_id: MessageId,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<CreateApplicationResult, SystemExecutionError> {
         let id = UserApplicationId {
-            bytecode_id,
+            module_id,
             creation: next_message_id,
         };
         let mut blobs_to_register = vec![];
         for application in required_application_ids.iter().chain(iter::once(&id)) {
             let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-                self.check_bytecode_blobs(&application.bytecode_id).await?;
+                self.check_bytecode_blobs(&application.module_id).await?;
             // We only remember to register the blobs that aren't recorded in `used_blobs`
             // already.
             if !self.used_blobs.contains(&contract_bytecode_blob_id).await? {
@@ -1119,10 +1119,10 @@ where
 
     async fn check_bytecode_blobs(
         &mut self,
-        bytecode_id: &BytecodeId,
+        module_id: &ModuleId,
     ) -> Result<(BlobId, BlobId), SystemExecutionError> {
         let contract_bytecode_blob_id =
-            BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
+            BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode);
 
         let mut missing_blobs = Vec::new();
         if !self
@@ -1135,7 +1135,7 @@ where
         }
 
         let service_bytecode_blob_id =
-            BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
+            BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode);
         if !self
             .context()
             .extra()
@@ -1166,11 +1166,11 @@ where
 
     async fn check_and_record_bytecode_blobs(
         &mut self,
-        bytecode_id: &BytecodeId,
+        module_id: &ModuleId,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), SystemExecutionError> {
         let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-            self.check_bytecode_blobs(bytecode_id).await?;
+            self.check_bytecode_blobs(module_id).await?;
         self.record_bytecode_blobs(
             vec![contract_bytecode_blob_id, service_bytecode_blob_id],
             txn_tracker,

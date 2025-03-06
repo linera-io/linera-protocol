@@ -7,7 +7,7 @@ test('Op mounting', () => {
       id: 'op',
       op: {
         System: {
-          PublishBytecode: {
+          PublishModule: {
             contract: {
               bytes:"0061..7874"
             },

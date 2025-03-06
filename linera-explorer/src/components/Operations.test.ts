@@ -22,7 +22,7 @@ test('Operations mounting', () => {
             block: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
             content: {
               System: {
-                PublishBytecode: {
+                PublishModule: {
                   contract: { bytes: "0061..7874" },
                   service: { bytes: "0061..7874" }
                 }

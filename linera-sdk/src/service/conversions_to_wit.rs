@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
+    identifiers::{ApplicationId, ChainId, MessageId, ModuleId},
     vm::VmRuntime,
 };
 
@@ -41,12 +41,12 @@ impl From<ChainId> for wit_service_api::ChainId {
     }
 }
 
-impl From<BytecodeId> for wit_service_api::BytecodeId {
-    fn from(bytecode_id: BytecodeId) -> Self {
-        wit_service_api::BytecodeId {
-            contract_blob_hash: bytecode_id.contract_blob_hash.into(),
-            service_blob_hash: bytecode_id.service_blob_hash.into(),
-            vm_runtime: bytecode_id.vm_runtime.into(),
+impl From<ModuleId> for wit_service_api::ModuleId {
+    fn from(module_id: ModuleId) -> Self {
+        wit_service_api::ModuleId {
+            contract_blob_hash: module_id.contract_blob_hash.into(),
+            service_blob_hash: module_id.service_blob_hash.into(),
+            vm_runtime: module_id.vm_runtime.into(),
         }
     }
 }
@@ -73,7 +73,7 @@ impl From<MessageId> for wit_service_api::MessageId {
 impl From<ApplicationId> for wit_service_api::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit_service_api::ApplicationId {
-            bytecode_id: application_id.bytecode_id.into(),
+            module_id: application_id.module_id.into(),
             creation: application_id.creation.into(),
         }
     }
