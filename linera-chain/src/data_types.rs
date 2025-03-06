@@ -742,7 +742,7 @@ impl BlockProposal {
             block,
             outcome: None,
         };
-        let signature = AccountSignature::new(&content, secret);
+        let signature = secret.sign(&content);
         Self {
             content,
             public_key: secret.public(),
@@ -764,7 +764,7 @@ impl BlockProposal {
             round,
             outcome: Some(executed_block.outcome),
         };
-        let signature = AccountSignature::new(&content, secret);
+        let signature = secret.sign(&content);
         Self {
             content,
             public_key: secret.public(),

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::TestString,
+    crypto::{AccountPublicKey, AccountSignature, TestString},
     data_types::{BlobContent, OracleResponse, Round},
     hashed::Hashed,
     identifiers::{AccountOwner, BlobType, ChainDescription, Destination, GenericApplicationId},
@@ -43,6 +43,8 @@ fn get_registry() -> Result<Registry> {
         tracer.trace_value(&mut samples, &validator_signature)?;
     }
     // 2. Trace the main entry point(s) + every enum separately.
+    tracer.trace_type::<AccountPublicKey>(&samples)?;
+    tracer.trace_type::<AccountSignature>(&samples)?;
     tracer.trace_type::<Round>(&samples)?;
     tracer.trace_type::<OracleResponse>(&samples)?;
     tracer.trace_type::<Recipient>(&samples)?;
