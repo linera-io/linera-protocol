@@ -189,7 +189,7 @@ impl TestValidator {
         chain
     }
 
-    /// Add a exists [`ActiveChain`]
+    /// Add an exists [`ActiveChain`]
     pub fn add_chain(&self, chain: ActiveChain) {
         self.chains.insert(chain.id(), chain.clone());
     }
