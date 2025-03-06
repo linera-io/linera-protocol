@@ -742,7 +742,14 @@ async fn test_wasm_end_to_end_fungible(
     );
 
     // Needed synchronization though removing it does not get error in 100% of cases.
-    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
+    assert_eq!(
+        node_service1.process_inbox(&chain1).await?.len(),
+        if example_name == "native-fungible" {
+            1
+        } else {
+            0
+        }
+    );
 
     let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
@@ -912,7 +919,14 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     );
 
     // Needed synchronization though removing it does not get error in 100% of cases.
-    assert_eq!(node_service.process_inbox(&chain1).await?.len(), 1);
+    assert_eq!(
+        node_service.process_inbox(&chain1).await?.len(),
+        if example_name == "native-fungible" {
+            1
+        } else {
+            0
+        }
+    );
 
     let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
