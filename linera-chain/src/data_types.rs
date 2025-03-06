@@ -381,7 +381,10 @@ impl From<Vec<u8>> for OperationResult {
 
 impl<'de> BcsHashable<'de> for OperationResult {}
 
-doc_scalar!(OperationResult, "The execution result of a single operation.");
+doc_scalar!(
+    OperationResult,
+    "The execution result of a single operation."
+);
 
 /// A [`ProposedBlock`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
