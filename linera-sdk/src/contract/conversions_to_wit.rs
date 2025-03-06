@@ -9,8 +9,8 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
-        MessageId, Owner, StreamName,
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
+        ModuleId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -90,12 +90,12 @@ impl From<BlockHeight> for wit_contract_api::BlockHeight {
     }
 }
 
-impl From<BytecodeId> for wit_contract_api::BytecodeId {
-    fn from(bytecode_id: BytecodeId) -> Self {
-        wit_contract_api::BytecodeId {
-            contract_blob_hash: bytecode_id.contract_blob_hash.into(),
-            service_blob_hash: bytecode_id.service_blob_hash.into(),
-            vm_runtime: bytecode_id.vm_runtime.into(),
+impl From<ModuleId> for wit_contract_api::ModuleId {
+    fn from(module_id: ModuleId) -> Self {
+        wit_contract_api::ModuleId {
+            contract_blob_hash: module_id.contract_blob_hash.into(),
+            service_blob_hash: module_id.service_blob_hash.into(),
+            vm_runtime: module_id.vm_runtime.into(),
         }
     }
 }
@@ -123,7 +123,7 @@ impl From<ApplicationId> for wit_contract_api::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit_contract_api::ApplicationId {
             application_description_hash: application_id.application_description_hash.into(),
-            bytecode_id: application_id.bytecode_id.into(),
+            module_id: application_id.module_id.into(),
         }
     }
 }

@@ -33,7 +33,7 @@ use linera_base::{
     ensure,
     hashed::Hashed,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, MessageId, ModuleId,
         Owner, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
@@ -751,15 +751,15 @@ pub async fn create_bytecode_blobs(
     contract: Bytecode,
     service: Bytecode,
     vm_runtime: VmRuntime,
-) -> (Blob, Blob, BytecodeId) {
+) -> (Blob, Blob, ModuleId) {
     let (compressed_contract, compressed_service) =
         tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
             .await
             .expect("Compression should not panic");
     let contract_blob = Blob::new_contract_bytecode(compressed_contract);
     let service_blob = Blob::new_service_bytecode(compressed_service);
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
-    (contract_blob, service_blob, bytecode_id)
+    let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+    (contract_blob, service_blob, module_id)
 }
 
 impl<P, S> ChainClient<P, S>
@@ -2847,38 +2847,38 @@ where
         }
     }
 
-    /// Publishes some bytecode.
+    /// Publishes some module.
     #[cfg(not(target_arch = "wasm32"))]
     #[instrument(level = "trace", skip(contract, service))]
-    pub async fn publish_bytecode(
+    pub async fn publish_module(
         &self,
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
-    ) -> Result<ClientOutcome<(BytecodeId, ConfirmedBlockCertificate)>, ChainClientError> {
-        let (contract_blob, service_blob, bytecode_id) =
+    ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, ChainClientError> {
+        let (contract_blob, service_blob, module_id) =
             create_bytecode_blobs(contract, service, vm_runtime).await;
-        self.publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
+        self.publish_module_blobs(contract_blob, service_blob, module_id)
             .await
     }
 
-    /// Publishes some bytecode.
+    /// Publishes some module.
     #[cfg(not(target_arch = "wasm32"))]
-    #[instrument(level = "trace", skip(contract_blob, service_blob, bytecode_id))]
-    pub async fn publish_bytecode_blobs(
+    #[instrument(level = "trace", skip(contract_blob, service_blob, module_id))]
+    pub async fn publish_module_blobs(
         &self,
         contract_blob: Blob,
         service_blob: Blob,
-        bytecode_id: BytecodeId,
-    ) -> Result<ClientOutcome<(BytecodeId, ConfirmedBlockCertificate)>, ChainClientError> {
+        module_id: ModuleId,
+    ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, ChainClientError> {
         self.execute_operations(
-            vec![Operation::System(SystemOperation::PublishBytecode {
-                bytecode_id,
+            vec![Operation::System(SystemOperation::PublishModule {
+                module_id,
             })],
             vec![contract_blob, service_blob],
         )
         .await?
-        .try_map(|certificate| Ok((bytecode_id, certificate)))
+        .try_map(|certificate| Ok((module_id, certificate)))
     }
 
     /// Publishes some data blobs.
@@ -2920,7 +2920,7 @@ where
         InstantiationArgument: Serialize,
     >(
         &self,
-        bytecode_id: BytecodeId<A, Parameters, InstantiationArgument>,
+        module_id: ModuleId<A, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
         required_application_ids: Vec<UserApplicationId>,
@@ -2930,7 +2930,7 @@ where
         let parameters = serde_json::to_vec(parameters)?;
         Ok(self
             .create_application_untyped(
-                bytecode_id.forget_abi(),
+                module_id.forget_abi(),
                 parameters,
                 instantiation_argument,
                 required_application_ids,
@@ -2944,7 +2944,7 @@ where
         level = "trace",
         skip(
             self,
-            bytecode_id,
+            module_id,
             parameters,
             instantiation_argument,
             required_application_ids
@@ -2952,14 +2952,14 @@ where
     )]
     pub async fn create_application_untyped(
         &self,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId, ConfirmedBlockCertificate)>, ChainClientError>
     {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
-            bytecode_id,
+            module_id,
             parameters,
             instantiation_argument,
             required_application_ids,
@@ -2983,7 +2983,7 @@ where
             ))?;
             let id = ApplicationId {
                 application_description_hash: blob_id.hash,
-                bytecode_id,
+                module_id,
             };
             Ok((id, certificate))
         })

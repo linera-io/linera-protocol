@@ -41,17 +41,11 @@ interface base-runtime-api {
 
     record application-id {
         application-description-hash: crypto-hash,
-        bytecode-id: bytecode-id,
+        module-id: module-id,
     }
 
     record block-height {
         inner0: u64,
-    }
-
-    record bytecode-id {
-        contract-blob-hash: crypto-hash,
-        service-blob-hash: crypto-hash,
-        vm-runtime: vm-runtime,
     }
 
     record chain-id {
@@ -109,6 +103,12 @@ interface base-runtime-api {
         info,
         debug,
         trace,
+    }
+
+    record module-id {
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
     }
 
     record owner {

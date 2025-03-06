@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Sanitizer of WebAssembly bytecodes to ensure they will consume the same amount of fuel in both
+//! Sanitizer of WebAssembly bytecode files to ensure they will consume the same amount of fuel in both
 //! the [Wasmer](https://wasmer.io) and [Wasmtime](https://wasmtime.dev) runtimes.
 //!
 //! Ensures that all functions in the module end with a `return` instruction, because when a
@@ -26,7 +26,7 @@ pub fn sanitize(bytecode: Bytecode) -> Result<Bytecode, anyhow::Error> {
     Ok(changed_bytecode.unwrap_or(bytecode))
 }
 
-/// Sanitizer of WebAssembly bytecodes.
+/// Sanitizer of WebAssembly bytecode files.
 ///
 /// Ensures all functions end with a `return` instruction. See the module level documentation for
 /// more information.

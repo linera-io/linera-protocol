@@ -27,7 +27,11 @@ benchmark = [
     "linera-client/benchmark",
     "linera-chain/benchmark",
 ]
-wasmer = ["linera-client/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
+wasmer = [
+    "linera-client/wasmer",
+    "linera-execution/wasmer",
+    "linera-storage/wasmer",
+]
 wasmtime = [
     "linera-client/wasmtime",
     "linera-execution/wasmtime",
@@ -126,7 +130,9 @@ tracing.workspace = true
 cfg_aliases.workspace = true
 
 [dev-dependencies]
-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+] }
 amm.workspace = true
 base64.workspace = true
 counter.workspace = true

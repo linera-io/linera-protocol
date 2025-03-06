@@ -24,7 +24,10 @@ ignored = ["base64ct"]
 
 [features]
 ethereum = ["async-trait", "linera-ethereum"]
-unstable-oracles = ["linera-core/unstable-oracles", "linera-execution/unstable-oracles"]
+unstable-oracles = [
+    "linera-core/unstable-oracles",
+    "linera-execution/unstable-oracles",
+]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",

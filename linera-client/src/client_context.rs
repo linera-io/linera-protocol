@@ -44,7 +44,7 @@ use {
 use {
     linera_base::{
         data_types::{BlobContent, Bytecode},
-        identifiers::BytecodeId,
+        identifiers::ModuleId,
         vm::VmRuntime,
     },
     linera_core::client::create_bytecode_blobs,
@@ -548,13 +548,13 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
-    pub async fn publish_bytecode(
+    pub async fn publish_module(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
         vm_runtime: VmRuntime,
-    ) -> Result<BytecodeId, Error> {
+    ) -> Result<ModuleId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract)
             .await
@@ -563,28 +563,28 @@ where
             .await
             .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
-        info!("Publishing bytecode");
-        let (contract_blob, service_blob, bytecode_id) =
+        info!("Publishing module");
+        let (contract_blob, service_blob, module_id) =
             create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
-        let (bytecode_id, _) = self
+        let (module_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let contract_blob = contract_blob.clone();
                 let service_blob = service_blob.clone();
                 let chain_client = chain_client.clone();
                 async move {
                     chain_client
-                        .publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
+                        .publish_module_blobs(contract_blob, service_blob, module_id)
                         .await
-                        .context("Failed to publish bytecode")
+                        .context("Failed to publish module")
                 }
             })
             .await?;
 
-        info!("{}", "Bytecode published successfully!");
+        info!("{}", "Module published successfully!");
 
         info!("Synchronizing client and processing inbox");
         self.process_inbox(chain_client).await?;
-        Ok(bytecode_id)
+        Ok(module_id)
     }
 
     pub async fn publish_data_blob(

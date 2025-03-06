@@ -45,8 +45,8 @@ ApplicationId:
   STRUCT:
     - application_description_hash:
         TYPENAME: CryptoHash
-    - bytecode_id:
-        TYPENAME: BytecodeId
+    - module_id:
+        TYPENAME: ModuleId
 ApplicationPermissions:
   STRUCT:
     - execute_operations:
@@ -170,14 +170,6 @@ BlockProposal:
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
-BytecodeId:
-  STRUCT:
-    - contract_blob_hash:
-        TYPENAME: CryptoHash
-    - service_blob_hash:
-        TYPENAME: CryptoHash
-    - vm_runtime:
-        TYPENAME: VmRuntime
 Certificate:
   ENUM:
     0:
@@ -573,6 +565,14 @@ MessageKind:
       Tracked: UNIT
     3:
       Bouncing: UNIT
+ModuleId:
+  STRUCT:
+    - contract_blob_hash:
+        TYPENAME: CryptoHash
+    - service_blob_hash:
+        TYPENAME: CryptoHash
+    - vm_runtime:
+        TYPENAME: VmRuntime
 NodeError:
   ENUM:
     0:
@@ -1109,10 +1109,10 @@ SystemOperation:
           - channel:
               TYPENAME: SystemChannel
     8:
-      PublishBytecode:
+      PublishModule:
         STRUCT:
-          - bytecode_id:
-              TYPENAME: BytecodeId
+          - module_id:
+              TYPENAME: ModuleId
     9:
       PublishDataBlob:
         STRUCT:
@@ -1126,8 +1126,8 @@ SystemOperation:
     11:
       CreateApplication:
         STRUCT:
-          - bytecode_id:
-              TYPENAME: BytecodeId
+          - module_id:
+              TYPENAME: ModuleId
           - parameters: BYTES
           - instantiation_argument: BYTES
           - required_application_ids:

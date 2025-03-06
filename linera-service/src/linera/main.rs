@@ -854,7 +854,7 @@ impl Runnable for Job {
                 faucet.run().await?;
             }
 
-            PublishBytecode {
+            PublishModule {
                 contract,
                 service,
                 vm_runtime,
@@ -862,14 +862,14 @@ impl Runnable for Job {
             } => {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
-                info!("Publishing bytecode on chain {}", publisher);
+                info!("Publishing module on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher)?;
-                let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
+                let module_id = context
+                    .publish_module(&chain_client, contract, service, vm_runtime)
                     .await?;
-                println!("{}", bytecode_id);
+                println!("{}", module_id);
                 info!(
-                    "Bytecode published in {} ms",
+                    "Module published in {} ms",
                     start_time.elapsed().as_millis()
                 );
             }
@@ -901,7 +901,7 @@ impl Runnable for Job {
             }
 
             CreateApplication {
-                bytecode_id,
+                module_id,
                 creator,
                 json_parameters,
                 json_parameters_path,
@@ -929,7 +929,7 @@ impl Runnable for Job {
                         async move {
                             chain_client
                                 .create_application_untyped(
-                                    bytecode_id,
+                                    module_id,
                                     parameters,
                                     argument,
                                     required_application_ids.unwrap_or_default(),
@@ -964,8 +964,8 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher)?;
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
-                let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
+                let module_id = context
+                    .publish_module(&chain_client, contract, service, vm_runtime)
                     .await?;
 
                 let (application_id, _) = context
@@ -977,7 +977,7 @@ impl Runnable for Job {
                         async move {
                             chain_client
                                 .create_application_untyped(
-                                    bytecode_id,
+                                    module_id,
                                     parameters,
                                     argument,
                                     required_application_ids.unwrap_or_default(),
@@ -1037,8 +1037,8 @@ impl Runnable for Job {
                     let project = project::Project::from_existing_project(project_path)?;
                     let (contract_path, service_path) = project.build(name)?;
 
-                    let bytecode_id = context
-                        .publish_bytecode(&chain_client, contract_path, service_path, vm_runtime)
+                    let module_id = context
+                        .publish_module(&chain_client, contract_path, service_path, vm_runtime)
                         .await?;
 
                     let (application_id, _) = context
@@ -1050,7 +1050,7 @@ impl Runnable for Job {
                             async move {
                                 chain_client
                                     .create_application_untyped(
-                                        bytecode_id,
+                                        module_id,
                                         parameters,
                                         argument,
                                         required_application_ids.unwrap_or_default(),
@@ -1316,7 +1316,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::ResourceControlPolicy { .. }
         | ClientCommand::FinalizeCommittee
         | ClientCommand::CreateGenesisConfig { .. }
-        | ClientCommand::PublishBytecode { .. }
+        | ClientCommand::PublishModule { .. }
         | ClientCommand::PublishDataBlob { .. }
         | ClientCommand::ReadDataBlob { .. }
         | ClientCommand::CreateApplication { .. }

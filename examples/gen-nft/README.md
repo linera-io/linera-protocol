@@ -65,16 +65,16 @@ OWNER_1="${INFO_1[3]}"
 OWNER_2="${INFO_2[3]}"
 ```
 
-Next, compile the `non-fungible` application WebAssembly binaries, and publish them as an application bytecode:
+Next, compile the `non-fungible` application WebAssembly binaries, and publish them as an application module:
 
 ```bash
 (cd examples/gen-nft && cargo build --release --target wasm32-unknown-unknown)
 
-BYTECODE_ID=$(linera publish-bytecode \
+MODULE_ID=$(linera publish-module \
     examples/target/wasm32-unknown-unknown/release/gen_nft_{contract,service}.wasm)
 ```
 
-Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused later.
+Here, we stored the new module ID in a variable `MODULE_ID` to be reused later.
 
 ### Creating an NFT
 
@@ -85,7 +85,7 @@ Refer to the [fungible app README](https://github.com/linera-io/linera-protocol/
 To create the NFT application, run the command below:
 
 ```bash
-APP_ID=$(linera create-application $BYTECODE_ID)
+APP_ID=$(linera create-application $MODULE_ID)
 ```
 
 This will store the application ID in a new variable `APP_ID`.

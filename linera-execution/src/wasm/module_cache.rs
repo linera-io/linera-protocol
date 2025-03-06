@@ -3,14 +3,14 @@
 
 //! A cache of compiled WebAssembly modules.
 //!
-//! The cache is limited by the total size of cached bytecodes. Note that this is a heuristic to
+//! The cache is limited by the total size of cached bytecode files. Note that this is a heuristic to
 //! estimate the total memory usage by the cache, since it's currently not possible to determine
 //! the size of a generic `Module`.
 
 use linera_base::data_types::Bytecode;
 use lru::LruCache;
 
-/// The default maximum size of the bytecodes stored in cache.
+/// The default maximum size of the bytecode files stored in cache.
 const DEFAULT_MAX_CACHE_SIZE: u64 = 512 /* MiB */ * 1024 /* KiB */ * 1024 /* bytes */;
 
 /// A cache of compiled WebAssembly modules.
@@ -65,7 +65,7 @@ impl<Module: Clone> ModuleCache<Module> {
         self.modules.put(bytecode, module);
     }
 
-    /// Evicts entries from the cache so that the total size of cached bytecodes is less than
+    /// Evicts entries from the cache so that the total size of cached bytecode files is less than
     /// `new_size`.
     fn reduce_size_to(&mut self, new_size: u64) {
         while self.total_size > new_size {

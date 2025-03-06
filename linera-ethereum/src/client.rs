@@ -45,7 +45,7 @@ pub trait JsonRpcClient {
         let res = serde_json::from_str(raw.get())?;
         ensure!(id == result.id, EthereumQueryError::IdIsNotMatching);
         ensure!(
-            *"2.0" == result.jsonrpc,
+            "2.0" == result.jsonrpc,
             EthereumQueryError::WrongJsonRpcVersion
         );
         Ok(res)

@@ -27,6 +27,6 @@ tracing.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 linera-views.workspace = true
-  [dev-dependencies.linera-core]
-  workspace = true
-  features = ["test"]
+[dev-dependencies.linera-core]
+features = ["test"]
+workspace = true

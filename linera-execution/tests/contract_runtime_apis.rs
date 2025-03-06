@@ -17,7 +17,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, Owner,
+        Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, Owner,
     },
     ownership::ChainOwnership,
     vm::VmRuntime,
@@ -750,7 +750,7 @@ impl TransferTestEndpoint {
         let vm_runtime = VmRuntime::Wasm;
 
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(contract_id, service_id, vm_runtime),
+            module_id: ModuleId::new(contract_id, service_id, vm_runtime),
             creator_chain_id: ChainId::root(1000),
             block_height: BlockHeight(0),
             application_index: 0,
@@ -783,7 +783,7 @@ impl TransferTestEndpoint {
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
     fn recipient_application_id() -> ApplicationId {
         ApplicationId {
-            bytecode_id: BytecodeId::new(
+            module_id: ModuleId::new(
                 CryptoHash::test_hash("recipient contract bytecode"),
                 CryptoHash::test_hash("recipient service bytecode"),
                 VmRuntime::Wasm,

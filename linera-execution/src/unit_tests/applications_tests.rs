@@ -4,7 +4,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, MessageId},
+    identifiers::{ChainId, MessageId, ModuleId},
     vm::VmRuntime,
 };
 
@@ -20,8 +20,8 @@ fn message_id(index: u32) -> MessageId {
     }
 }
 
-fn bytecode_id() -> BytecodeId {
-    BytecodeId::new(
+fn module_id() -> ModuleId {
+    ModuleId::new(
         CryptoHash::test_hash("contract"),
         CryptoHash::test_hash("service"),
         VmRuntime::Wasm,
@@ -30,14 +30,14 @@ fn bytecode_id() -> BytecodeId {
 
 fn app_id(index: u32) -> UserApplicationId {
     UserApplicationId {
-        bytecode_id: bytecode_id(),
+        module_id: module_id(),
         creation: message_id(index),
     }
 }
 
 fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
     UserApplicationDescription {
-        bytecode_id: bytecode_id(),
+        module_id: module_id(),
         creation: message_id(index),
         parameters: vec![],
         required_application_ids: deps.into_iter().map(app_id).collect(),

@@ -330,7 +330,7 @@ jobs:
 
   lint-cargo-sort:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
 
     steps:
     - uses: actions/checkout@v3
@@ -338,18 +338,12 @@ jobs:
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install cargo-sort
+    - name: Install taplo-sort
       run: |
-        RUSTFLAGS='' cargo install cargo-sort --git https://github.com/Twey/cargo-sort/ --tag linera
+        RUSTFLAGS='' cargo install taplo-cli@0.9.3 --locked
     - name: Check if Cargo.toml files are sorted
       run: |
-        cargo sort --check --workspace --grouped
-    - name: Check if example Cargo.toml files are sorted
-      run: |
-        cd examples
-        cargo sort --check --workspace --grouped
-        cd agent
-        cargo sort --check
+        taplo fmt --check
 
   lint-check-for-outdated-readme:
     runs-on: ubuntu-latest

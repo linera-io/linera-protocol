@@ -40,7 +40,9 @@ tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }
-linera-storage-service = { path = ".", default-features = false, features = ["test"] }
+linera-storage-service = { path = ".", default-features = false, features = [
+    "test",
+] }
 proptest = { workspace = true, features = ["alloc"] }
 serde-reflection.workspace = true
 serde_yaml.workspace = true

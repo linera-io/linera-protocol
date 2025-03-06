@@ -19,10 +19,10 @@ scylladb = ["linera-service/scylladb"]
 storage-service = ["linera-service/storage-service"]
 
 [dependencies]
-graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
+graphql_client = { version = "0.13", features = ["reqwest-rustls"] }
 linera-base.workspace = true
 reqwest.workspace = true
-serde = { workspace = true, features = [ "derive" ] }
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 

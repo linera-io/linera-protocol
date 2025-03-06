@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
     identifiers::{
-        AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
+        AccountOwner, ApplicationId, BlobId, BlobType, ChainId, MessageId, ModuleId, Owner,
     },
     vm::VmRuntime,
 };
@@ -55,11 +55,7 @@ pub fn create_dummy_user_application_description(
     let vm_runtime = VmRuntime::Wasm;
     (
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(
-                contract_blob.id().hash,
-                service_blob.id().hash,
-                vm_runtime,
-            ),
+            module_id: ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime),
             creator_chain_id: chain_id,
             block_height: 0.into(),
             application_index: index,

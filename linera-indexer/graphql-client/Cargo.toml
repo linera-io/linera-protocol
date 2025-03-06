@@ -12,9 +12,9 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
-graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
+graphql_client = { version = "0.13", features = ["reqwest-rustls"] }
 linera-base.workspace = true
-serde = { workspace = true, features = [ "derive" ] }
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

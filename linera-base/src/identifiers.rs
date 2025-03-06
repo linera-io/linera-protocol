@@ -297,8 +297,8 @@ pub struct MessageId {
 pub struct ApplicationId<A = ()> {
     /// The hash of the `UserApplicationDescription` this refers to.
     pub application_description_hash: CryptoHash,
-    /// The bytecode to use for the application.
-    pub bytecode_id: BytecodeId<A>,
+    /// The module to use for the application.
+    pub module_id: ModuleId<A>,
 }
 
 /// Alias for `ApplicationId`. Use this alias in the core
@@ -345,10 +345,10 @@ impl From<ApplicationId> for GenericApplicationId {
     }
 }
 
-/// A unique identifier for an application bytecode.
+/// A unique identifier for a module.
 #[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
+pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The hash of the blob containing the contract bytecode.
     pub contract_blob_hash: CryptoHash,
     /// The hash of the blob containing the service bytecode.
@@ -554,7 +554,7 @@ impl StreamName {
 
 // Cannot use #[derive(Clone)] because it requires `A: Clone`.
 impl<Abi, Parameters, InstantiationArgument> Clone
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
     fn clone(&self) -> Self {
         *self
@@ -562,15 +562,15 @@ impl<Abi, Parameters, InstantiationArgument> Clone
 }
 
 impl<Abi, Parameters, InstantiationArgument> Copy
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
 }
 
 impl<Abi, Parameters, InstantiationArgument> PartialEq
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
     fn eq(&self, other: &Self) -> bool {
-        let BytecodeId {
+        let ModuleId {
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
@@ -583,12 +583,12 @@ impl<Abi, Parameters, InstantiationArgument> PartialEq
 }
 
 impl<Abi, Parameters, InstantiationArgument> Eq
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
 }
 
 impl<Abi, Parameters, InstantiationArgument> PartialOrd
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
@@ -596,10 +596,10 @@ impl<Abi, Parameters, InstantiationArgument> PartialOrd
 }
 
 impl<Abi, Parameters, InstantiationArgument> Ord
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let BytecodeId {
+        let ModuleId {
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
@@ -615,10 +615,10 @@ impl<Abi, Parameters, InstantiationArgument> Ord
 }
 
 impl<Abi, Parameters, InstantiationArgument> Hash
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let BytecodeId {
+        let ModuleId {
             contract_blob_hash: contract_blob_id,
             service_blob_hash: service_blob_id,
             vm_runtime: vm_runtime_id,
@@ -631,37 +631,37 @@ impl<Abi, Parameters, InstantiationArgument> Hash
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename = "BytecodeId")]
-struct SerializableBytecodeId {
+#[serde(rename = "ModuleId")]
+struct SerializableModuleId {
     contract_blob_hash: CryptoHash,
     service_blob_hash: CryptoHash,
     vm_runtime: VmRuntime,
 }
 
 impl<Abi, Parameters, InstantiationArgument> Serialize
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
-        let serializable_bytecode_id = SerializableBytecodeId {
+        let serializable_module_id = SerializableModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
         };
         if serializer.is_human_readable() {
             let bytes =
-                bcs::to_bytes(&serializable_bytecode_id).map_err(serde::ser::Error::custom)?;
+                bcs::to_bytes(&serializable_module_id).map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
         } else {
-            SerializableBytecodeId::serialize(&serializable_bytecode_id, serializer)
+            SerializableModuleId::serialize(&serializable_module_id, serializer)
         }
     }
 }
 
 impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
+    for ModuleId<Abi, Parameters, InstantiationArgument>
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -669,35 +669,35 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let bytecode_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let serializable_bytecode_id: SerializableBytecodeId =
-                bcs::from_bytes(&bytecode_id_bytes).map_err(serde::de::Error::custom)?;
-            Ok(BytecodeId {
-                contract_blob_hash: serializable_bytecode_id.contract_blob_hash,
-                service_blob_hash: serializable_bytecode_id.service_blob_hash,
-                vm_runtime: serializable_bytecode_id.vm_runtime,
+            let module_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let serializable_module_id: SerializableModuleId =
+                bcs::from_bytes(&module_id_bytes).map_err(serde::de::Error::custom)?;
+            Ok(ModuleId {
+                contract_blob_hash: serializable_module_id.contract_blob_hash,
+                service_blob_hash: serializable_module_id.service_blob_hash,
+                vm_runtime: serializable_module_id.vm_runtime,
                 _phantom: PhantomData,
             })
         } else {
-            let serializable_bytecode_id = SerializableBytecodeId::deserialize(deserializer)?;
-            Ok(BytecodeId {
-                contract_blob_hash: serializable_bytecode_id.contract_blob_hash,
-                service_blob_hash: serializable_bytecode_id.service_blob_hash,
-                vm_runtime: serializable_bytecode_id.vm_runtime,
+            let serializable_module_id = SerializableModuleId::deserialize(deserializer)?;
+            Ok(ModuleId {
+                contract_blob_hash: serializable_module_id.contract_blob_hash,
+                service_blob_hash: serializable_module_id.service_blob_hash,
+                vm_runtime: serializable_module_id.vm_runtime,
                 _phantom: PhantomData,
             })
         }
     }
 }
 
-impl BytecodeId {
-    /// Creates a bytecode ID from contract/service hashes and the VM runtime to use.
+impl ModuleId {
+    /// Creates a module ID from contract/service hashes and the VM runtime to use.
     pub fn new(
         contract_blob_hash: CryptoHash,
         service_blob_hash: CryptoHash,
         vm_runtime: VmRuntime,
     ) -> Self {
-        BytecodeId {
+        ModuleId {
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
@@ -705,11 +705,11 @@ impl BytecodeId {
         }
     }
 
-    /// Specializes a bytecode ID for a given ABI.
+    /// Specializes a module ID for a given ABI.
     pub fn with_abi<Abi, Parameters, InstantiationArgument>(
         self,
-    ) -> BytecodeId<Abi, Parameters, InstantiationArgument> {
-        BytecodeId {
+    ) -> ModuleId<Abi, Parameters, InstantiationArgument> {
+        ModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
@@ -718,10 +718,10 @@ impl BytecodeId {
     }
 }
 
-impl<Abi, Parameters, InstantiationArgument> BytecodeId<Abi, Parameters, InstantiationArgument> {
-    /// Forgets the ABI of a bytecode ID (if any).
-    pub fn forget_abi(self) -> BytecodeId {
-        BytecodeId {
+impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, InstantiationArgument> {
+    /// Forgets the ABI of a module ID (if any).
+    pub fn forget_abi(self) -> ModuleId {
+        ModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
@@ -729,9 +729,9 @@ impl<Abi, Parameters, InstantiationArgument> BytecodeId<Abi, Parameters, Instant
         }
     }
 
-    /// Leaves just the ABI of a bytecode ID (if any).
-    pub fn just_abi(self) -> BytecodeId<Abi> {
-        BytecodeId {
+    /// Leaves just the ABI of a module ID (if any).
+    pub fn just_abi(self) -> ModuleId<Abi> {
+        ModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
@@ -752,7 +752,7 @@ impl<A> Copy for ApplicationId<A> {}
 impl<A: PartialEq> PartialEq for ApplicationId<A> {
     fn eq(&self, other: &Self) -> bool {
         self.application_description_hash == other.application_description_hash
-            && self.bytecode_id == other.bytecode_id
+            && self.module_id == other.module_id
     }
 }
 
@@ -760,22 +760,22 @@ impl<A: Eq> Eq for ApplicationId<A> {}
 
 impl<A: PartialOrd> PartialOrd for ApplicationId<A> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (self.application_description_hash, self.bytecode_id)
-            .partial_cmp(&(other.application_description_hash, other.bytecode_id))
+        (self.application_description_hash, self.module_id)
+            .partial_cmp(&(other.application_description_hash, other.module_id))
     }
 }
 
 impl<A: Ord> Ord for ApplicationId<A> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.application_description_hash, self.bytecode_id)
-            .cmp(&(other.application_description_hash, other.bytecode_id))
+        (self.application_description_hash, self.module_id)
+            .cmp(&(other.application_description_hash, other.module_id))
     }
 }
 
 impl<A> Hash for ApplicationId<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.application_description_hash.hash(state);
-        self.bytecode_id.hash(state);
+        self.module_id.hash(state);
     }
 }
 
@@ -786,7 +786,7 @@ impl<A> fmt::Debug for ApplicationId<A> {
                 "application_description_hash",
                 &self.application_description_hash,
             )
-            .field("bytecode_id", &self.bytecode_id)
+            .field("module_id", &self.module_id)
             .finish()
     }
 }
@@ -795,7 +795,7 @@ impl<A> fmt::Debug for ApplicationId<A> {
 #[serde(rename = "ApplicationId")]
 struct SerializableApplicationId {
     pub application_description_hash: CryptoHash,
-    pub bytecode_id: BytecodeId,
+    pub module_id: ModuleId,
 }
 
 impl<A> Serialize for ApplicationId<A> {
@@ -806,7 +806,7 @@ impl<A> Serialize for ApplicationId<A> {
         if serializer.is_human_readable() {
             let bytes = bcs::to_bytes(&SerializableApplicationId {
                 application_description_hash: self.application_description_hash,
-                bytecode_id: self.bytecode_id.forget_abi(),
+                module_id: self.module_id.forget_abi(),
             })
             .map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
@@ -814,7 +814,7 @@ impl<A> Serialize for ApplicationId<A> {
             SerializableApplicationId::serialize(
                 &SerializableApplicationId {
                     application_description_hash: self.application_description_hash,
-                    bytecode_id: self.bytecode_id.forget_abi(),
+                    module_id: self.module_id.forget_abi(),
                 },
                 serializer,
             )
@@ -834,13 +834,13 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
                 application_description_hash: application_id.application_description_hash,
-                bytecode_id: application_id.bytecode_id.with_abi(),
+                module_id: application_id.module_id.with_abi(),
             })
         } else {
             let value = SerializableApplicationId::deserialize(deserializer)?;
             Ok(ApplicationId {
                 application_description_hash: value.application_description_hash,
-                bytecode_id: value.bytecode_id.with_abi(),
+                module_id: value.module_id.with_abi(),
             })
         }
     }
@@ -848,10 +848,10 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
 
 impl ApplicationId {
     /// Creates an application ID from the application description hash.
-    pub fn new(application_description_hash: CryptoHash, bytecode_id: BytecodeId) -> Self {
+    pub fn new(application_description_hash: CryptoHash, module_id: ModuleId) -> Self {
         ApplicationId {
             application_description_hash,
-            bytecode_id,
+            module_id,
         }
     }
 
@@ -859,17 +859,17 @@ impl ApplicationId {
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            bytecode_id: self.bytecode_id.with_abi(),
+            module_id: self.module_id.with_abi(),
         }
     }
 }
 
 impl<A> ApplicationId<A> {
-    /// Forgets the ABI of a bytecode ID (if any).
+    /// Forgets the ABI of a module ID (if any).
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            bytecode_id: self.bytecode_id.forget_abi(),
+            module_id: self.module_id.forget_abi(),
         }
     }
 }
@@ -1062,10 +1062,7 @@ doc_scalar!(
     GenericApplicationId,
     "A unique identifier for a user application or for the system application"
 );
-bcs_scalar!(
-    BytecodeId,
-    "A unique identifier for an application bytecode"
-);
+bcs_scalar!(ModuleId, "A unique identifier for an application module");
 doc_scalar!(ChainDescription, "How to create a chain");
 doc_scalar!(
     ChainId,

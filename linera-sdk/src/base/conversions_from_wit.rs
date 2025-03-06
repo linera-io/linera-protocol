@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -67,12 +67,12 @@ macro_rules! impl_from_wit {
             }
         }
 
-        impl From<$wit_base_api::BytecodeId> for BytecodeId {
-            fn from(bytecode_id: $wit_base_api::BytecodeId) -> Self {
-                BytecodeId::new(
-                    bytecode_id.contract_blob_hash.into(),
-                    bytecode_id.service_blob_hash.into(),
-                    bytecode_id.vm_runtime.into(),
+        impl From<$wit_base_api::ModuleId> for ModuleId {
+            fn from(module_id: $wit_base_api::ModuleId) -> Self {
+                ModuleId::new(
+                    module_id.contract_blob_hash.into(),
+                    module_id.service_blob_hash.into(),
+                    module_id.vm_runtime.into(),
                 )
             }
         }
@@ -92,7 +92,7 @@ macro_rules! impl_from_wit {
                     application_description_hash: application_id
                         .application_description_hash
                         .into(),
-                    bytecode_id: application_id.bytecode_id.into(),
+                    module_id: application_id.module_id.into(),
                 }
             }
         }

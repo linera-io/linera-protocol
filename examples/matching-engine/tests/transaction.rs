@@ -66,8 +66,8 @@ pub async fn get_orders(
 ///   * User_b: It has 8 - 3 = 5 token B and the newly acquired 6 token A
 #[tokio::test]
 async fn single_transaction() {
-    let (validator, bytecode_id) =
-        TestValidator::with_current_bytecode::<MatchingEngineAbi, Parameters, ()>().await;
+    let (validator, module_id) =
+        TestValidator::with_current_module::<MatchingEngineAbi, Parameters, ()>().await;
 
     let mut user_chain_a = validator.new_chain().await;
     let owner_a = AccountOwner::from(user_chain_a.public_key());
@@ -76,11 +76,11 @@ async fn single_transaction() {
     let mut matching_chain = validator.new_chain().await;
     let admin_account = AccountOwner::from(matching_chain.public_key());
 
-    let fungible_bytecode_id_a = user_chain_a
-        .publish_bytecodes_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
+    let fungible_module_id_a = user_chain_a
+        .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
-    let fungible_bytecode_id_b = user_chain_b
-        .publish_bytecodes_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
+    let fungible_module_id_b = user_chain_b
+        .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
 
     let initial_state_a =
@@ -88,7 +88,7 @@ async fn single_transaction() {
     let params_a = fungible::Parameters::new("A");
     let token_id_a = user_chain_a
         .create_application(
-            fungible_bytecode_id_a,
+            fungible_module_id_a,
             params_a,
             initial_state_a.build(),
             vec![],
@@ -99,7 +99,7 @@ async fn single_transaction() {
     let params_b = fungible::Parameters::new("B");
     let token_id_b = user_chain_b
         .create_application(
-            fungible_bytecode_id_b,
+            fungible_module_id_b,
             params_b,
             initial_state_b.build(),
             vec![],
@@ -129,7 +129,7 @@ async fn single_transaction() {
     let matching_parameter = Parameters { tokens };
     let matching_id = matching_chain
         .create_application(
-            bytecode_id,
+            module_id,
             matching_parameter,
             (),
             vec![token_id_a.forget_abi(), token_id_b.forget_abi()],

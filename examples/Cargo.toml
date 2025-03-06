@@ -18,6 +18,7 @@ members = [
 ]
 
 [workspace.dependencies]
+alloy = { version = "0.9.2", default-features = false }
 assert_matches = "1.5.0"
 async-graphql = { version = "=7.0.2", default-features = false }
 base64 = "0.22.0"
@@ -26,9 +27,10 @@ candle-core = "0.4.1"
 candle-transformers = "0.4.1"
 futures = "0.3.24"
 futures-util = "0.3.26"
-getrandom = { version = "0.2.12", default-features = false, features = ["custom"] }
+getrandom = { version = "0.2.12", default-features = false, features = [
+    "custom",
+] }
 hex = "0.4.3"
-alloy = { version = "0.9.2", default-features = false }
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
@@ -38,18 +40,22 @@ rand = "0.8.5"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 sha3 = "0.10.8"
-test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
-tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = ["unstable_wasm"] }
+test-log = { version = "0.2.15", default-features = false, features = [
+    "trace",
+] }
+tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = [
+    "unstable_wasm",
+] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
+amm = { path = "./amm" }
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
 ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
 fungible = { path = "./fungible" }
+matching-engine = { path = "./matching-engine" }
 native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }
-amm = { path = "./amm" }
-matching-engine = { path = "./matching-engine" }
 
 [profile.release]
 debug = true

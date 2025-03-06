@@ -27,7 +27,7 @@ use reqwest::{header::HeaderMap, Client};
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
-    BytecodeId, ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
+    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, TransactionTracker,
     UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
@@ -340,7 +340,7 @@ where
             CreateApplication {
                 chain_id,
                 block_height,
-                bytecode_id,
+                module_id,
                 parameters,
                 required_application_ids,
                 callback,
@@ -351,7 +351,7 @@ where
                     .create_application(
                         chain_id,
                         block_height,
-                        bytecode_id,
+                        module_id,
                         parameters,
                         required_application_ids,
                         txn_tracker,
@@ -559,7 +559,7 @@ pub enum ExecutionRequest {
     CreateApplication {
         chain_id: ChainId,
         block_height: BlockHeight,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
         #[debug(skip)]

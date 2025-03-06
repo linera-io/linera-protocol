@@ -37,13 +37,13 @@ async fn new_view_and_context() -> (
 
 fn expected_application_id(
     context: &OperationContext,
-    bytecode_id: &BytecodeId,
+    module_id: &ModuleId,
     parameters: Vec<u8>,
     required_application_ids: Vec<UserApplicationId>,
     application_index: u32,
 ) -> UserApplicationId {
     let description = UserApplicationDescription {
-        bytecode_id: *bytecode_id,
+        module_id: *module_id,
         creator_chain_id: context.chain_id,
         block_height: context.height,
         application_index,
@@ -61,10 +61,10 @@ async fn application_message_index() -> anyhow::Result<()> {
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
     let vm_runtime = VmRuntime::Wasm;
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+    let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
 
     let operation = SystemOperation::CreateApplication {
-        bytecode_id,
+        module_id,
         parameters: vec![],
         instantiation_argument: vec![],
         required_application_ids: vec![],
@@ -81,7 +81,7 @@ async fn application_message_index() -> anyhow::Result<()> {
     let [ExecutionOutcome::System(_)] = &txn_tracker.into_outcome().unwrap().outcomes[..] else {
         panic!("Unexpected outcome");
     };
-    let id = expected_application_id(&context, &bytecode_id, vec![], vec![], 0);
+    let id = expected_application_id(&context, &module_id, vec![], vec![], 0);
     assert_eq!(new_application, Some((id, vec![])));
 
     Ok(())

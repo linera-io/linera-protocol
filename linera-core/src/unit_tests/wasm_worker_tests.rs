@@ -19,7 +19,7 @@ use linera_base::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
     hashed::Hashed,
-    identifiers::{BytecodeId, ChainDescription, ChainId},
+    identifiers::{ChainDescription, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -115,7 +115,7 @@ where
     )
     .await;
 
-    // Load some bytecode.
+    // Load the bytecode files for a module.
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
@@ -130,11 +130,11 @@ where
     let contract_blob_hash = contract_blob_id.hash;
     let service_blob_hash = service_blob_id.hash;
 
-    let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash, vm_runtime);
+    let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
     let contract = WasmContractModule::new(contract_bytecode, wasm_runtime).await?;
 
-    // Publish some bytecode.
-    let publish_operation = SystemOperation::PublishBytecode { bytecode_id };
+    // Publish the module.
+    let publish_operation = SystemOperation::PublishModule { module_id };
     let publish_block = make_first_block(publisher_chain.into())
         .with_timestamp(1)
         .with_operation(publish_operation);
@@ -191,13 +191,13 @@ where
     let initial_value_bytes = serde_json::to_vec(&initial_value)?;
     let parameters_bytes = serde_json::to_vec(&())?;
     let create_operation = SystemOperation::CreateApplication {
-        bytecode_id,
+        module_id,
         parameters: parameters_bytes.clone(),
         instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
     let application_description = UserApplicationDescription {
-        bytecode_id,
+        module_id,
         creator_chain_id: creator_chain.into(),
         block_height: BlockHeight::from(0),
         application_index: 0,

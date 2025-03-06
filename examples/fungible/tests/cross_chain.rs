@@ -23,19 +23,17 @@ async fn test_cross_chain_transfer() {
     let initial_amount = Amount::from_tokens(20);
     let transfer_amount = Amount::from_tokens(15);
 
-    let (validator, bytecode_id) = TestValidator::with_current_bytecode::<
-        fungible::FungibleTokenAbi,
-        Parameters,
-        InitialState,
-    >()
-    .await;
+    let (validator, module_id) =
+        TestValidator::with_current_module::<fungible::FungibleTokenAbi, Parameters, InitialState>(
+        )
+        .await;
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
     let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
     let params = Parameters::new("FUN");
     let application_id = sender_chain
-        .create_application(bytecode_id, params, initial_state.build(), vec![])
+        .create_application(module_id, params, initial_state.build(), vec![])
         .await;
 
     let receiver_chain = validator.new_chain().await;
@@ -81,15 +79,15 @@ async fn test_bouncing_tokens() {
     let initial_amount = Amount::from_tokens(19);
     let transfer_amount = Amount::from_tokens(7);
 
-    let (validator, bytecode_id) =
-        TestValidator::with_current_bytecode::<FungibleTokenAbi, Parameters, InitialState>().await;
+    let (validator, module_id) =
+        TestValidator::with_current_module::<FungibleTokenAbi, Parameters, InitialState>().await;
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
     let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
     let params = Parameters::new("RET");
     let application_id = sender_chain
-        .create_application(bytecode_id, params, initial_state.build(), vec![])
+        .create_application(module_id, params, initial_state.build(), vec![])
         .await;
 
     let receiver_chain = validator.new_chain().await;

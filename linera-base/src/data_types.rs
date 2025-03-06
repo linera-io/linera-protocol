@@ -34,8 +34,8 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        ApplicationId, BlobId, BlobType, BytecodeId, ChainId, Destination, EventId,
-        GenericApplicationId, StreamId, UserApplicationId,
+        ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId, 
+        ModuleId, StreamId, UserApplicationId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -788,7 +788,7 @@ impl<'de> BcsHashable<'de> for OracleResponse {}
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitStore)]
 pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
-    pub bytecode_id: BytecodeId,
+    pub module_id: ModuleId,
     /// The chain ID that created the application.
     pub creator_chain_id: ChainId,
     /// Height of the block that created this application.
@@ -807,7 +807,7 @@ impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
         UserApplicationId::new(
             CryptoHash::new(&BlobContent::new_application_description(description)),
-            description.bytecode_id,
+            description.module_id,
         )
     }
 }

@@ -24,8 +24,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, BytecodeId, ChainDescription, ChainId,
-        ChannelFullName, MessageId, Owner,
+        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName,
+        MessageId, ModuleId, Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -163,8 +163,8 @@ pub enum SystemOperation {
         chain_id: ChainId,
         channel: SystemChannel,
     },
-    /// Publishes a new application bytecode.
-    PublishBytecode { bytecode_id: BytecodeId },
+    /// Publishes a new application module.
+    PublishModule { module_id: ModuleId },
     /// Publishes a new data blob.
     PublishDataBlob { blob_hash: CryptoHash },
     /// Reads a blob and discards the result.
@@ -172,7 +172,7 @@ pub enum SystemOperation {
     ReadBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         parameters: Vec<u8>,
@@ -618,18 +618,18 @@ where
                 };
                 outcome.messages.push(message);
             }
-            PublishBytecode { bytecode_id } => {
+            PublishModule { module_id } => {
                 self.blob_published(&BlobId::new(
-                    bytecode_id.contract_blob_hash,
+                    module_id.contract_blob_hash,
                     BlobType::ContractBytecode,
                 ))?;
                 self.blob_published(&BlobId::new(
-                    bytecode_id.service_blob_hash,
+                    module_id.service_blob_hash,
                     BlobType::ServiceBytecode,
                 ))?;
             }
             CreateApplication {
-                bytecode_id,
+                module_id,
                 parameters,
                 instantiation_argument,
                 required_application_ids,
@@ -642,7 +642,7 @@ where
                     .create_application(
                         context.chain_id,
                         context.height,
-                        bytecode_id,
+                        module_id,
                         parameters,
                         required_application_ids,
                         txn_tracker_moved,
@@ -982,19 +982,19 @@ where
         &mut self,
         chain_id: ChainId,
         block_height: BlockHeight,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
         mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, SystemExecutionError> {
         let application_index = txn_tracker.next_application_index();
-        for application_bytecode in required_application_ids
+        for application_module in required_application_ids
             .iter()
-            .map(|app_id| &app_id.bytecode_id)
-            .chain(iter::once(&bytecode_id))
+            .map(|app_id| &app_id.module_id)
+            .chain(iter::once(&module_id))
         {
             let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-                self.check_bytecode_blobs(application_bytecode).await?;
+                self.check_bytecode_blobs(application_module).await?;
             // We only remember to register the blobs that aren't recorded in `used_blobs`
             // already.
             self.blob_used(Some(&mut txn_tracker), contract_bytecode_blob_id)
@@ -1004,7 +1004,7 @@ where
         }
 
         let application_description = UserApplicationDescription {
-            bytecode_id,
+            module_id,
             creator_chain_id: chain_id,
             block_height,
             application_index,
@@ -1049,7 +1049,7 @@ where
         let description: UserApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
         let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-            self.check_bytecode_blobs(&description.bytecode_id).await?;
+            self.check_bytecode_blobs(&description.module_id).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         self.blob_used(txn_tracker.as_deref_mut(), contract_bytecode_blob_id)
@@ -1172,10 +1172,10 @@ where
 
     async fn check_bytecode_blobs(
         &mut self,
-        bytecode_id: &BytecodeId,
+        module_id: &ModuleId,
     ) -> Result<(BlobId, BlobId), SystemExecutionError> {
         let contract_bytecode_blob_id =
-            BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
+            BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode);
 
         let mut missing_blobs = Vec::new();
         if !self
@@ -1188,7 +1188,7 @@ where
         }
 
         let service_bytecode_blob_id =
-            BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
+            BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode);
         if !self
             .context()
             .extra()

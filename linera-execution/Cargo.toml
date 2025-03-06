@@ -41,7 +41,9 @@ wasmtime = [
 web = ["linera-base/web", "linera-views/web", "js-sys"]
 
 [dependencies]
-alloy = { workspace = true, default-features = false, optional = true, features = [ "rpc-types-eth" ] }
+alloy = { workspace = true, default-features = false, optional = true, features = [
+    "rpc-types-eth",
+] }
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
 async-graphql.workspace = true
@@ -80,7 +82,10 @@ wasmtime = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
-wasmer = { workspace = true, optional = true, features = ["cranelift", "singlepass"] }
+wasmer = { workspace = true, optional = true, features = [
+    "cranelift",
+    "singlepass",
+] }
 wasmer-compiler-singlepass.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -92,7 +97,10 @@ anyhow.workspace = true
 assert_matches.workspace = true
 bcs.workspace = true
 linera-base = { workspace = true, features = ["test"] }
-linera-execution = { path = ".", default-features = false, features = ["fs", "test"] }
+linera-execution = { path = ".", default-features = false, features = [
+    "fs",
+    "test",
+] }
 linera-witty = { workspace = true, features = ["log", "macros", "test"] }
 proptest.workspace = true
 test-case.workspace = true
