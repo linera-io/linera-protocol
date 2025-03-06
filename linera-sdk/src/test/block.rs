@@ -226,7 +226,8 @@ impl BlockBuilder {
             Round::Fast,
             self.validator.key_pair(),
         );
-        let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
+        let committee = self.validator.committee().await;
+        let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
         let certificate = builder
             .append(vote.public_key, vote.signature)
             .expect("Failed to sign block")
