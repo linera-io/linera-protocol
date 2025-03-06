@@ -98,7 +98,7 @@ impl Serialize for Ed25519PublicKey {
         S: serde::ser::Serializer,
     {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&self.to_string())
+            serializer.serialize_str(&hex::encode(self.as_bytes()))
         } else {
             serializer.serialize_newtype_struct("Ed25519PublicKey", &self.0)
         }
@@ -112,8 +112,8 @@ impl<'de> Deserialize<'de> for Ed25519PublicKey {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let value = Self::from_str(&s).map_err(serde::de::Error::custom)?;
-            Ok(value)
+            let value = hex::decode(s).map_err(serde::de::Error::custom)?;
+            Ok(Self::from_slice(&value).map_err(serde::de::Error::custom)?)
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Ed25519PublicKey")]
@@ -394,9 +394,7 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
             let value = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let sig =
-                dalek::Signature::try_from(value.as_slice()).map_err(serde::de::Error::custom)?;
-            Ok(Ed25519Signature(sig))
+            Self::from_slice(&value).map_err(serde::de::Error::custom)
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Ed25519Signature")]
@@ -488,5 +486,18 @@ mod tests {
         let s = serde_json::to_string(&key_in).unwrap();
         let key_out: Ed25519SecretKey = serde_json::from_str(&s).unwrap();
         assert_eq!(key_out.0.to_bytes(), key_in.0.to_bytes());
+    }
+
+    #[test]
+    fn test_signature_serialization() {
+        use crate::crypto::ed25519::Ed25519Signature;
+        let sig_in = Ed25519Signature::from_slice(&[0u8; 64]).unwrap();
+        let s = serde_json::to_string(&sig_in).unwrap();
+        let sig_out: Ed25519Signature = serde_json::from_str(&s).unwrap();
+        assert_eq!(sig_out.0.to_bytes(), sig_in.0.to_bytes());
+
+        let s = bcs::to_bytes(&sig_in).unwrap();
+        let sig_out: Ed25519Signature = bcs::from_bytes(&s).unwrap();
+        assert_eq!(sig_out, sig_in);
     }
 }
