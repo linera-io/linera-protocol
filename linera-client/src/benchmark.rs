@@ -25,11 +25,62 @@ use linera_rpc::node_provider::NodeProvider;
 use linera_sdk::abis::fungible;
 use linera_storage::Storage;
 use num_format::{Locale, ToFormattedString};
+use prometheus_parse::{HistogramCount, Scrape, Value};
 use tokio::{runtime::Handle, task, time};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn, Instrument as _};
+use tracing::{debug, error, info, warn, Instrument as _};
 
-use crate::Error;
+const PROXY_LATENCY_P99_THRESHOLD: f64 = 400.0;
+const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
+
+#[derive(Debug, thiserror::Error)]
+pub enum BenchmarkError {
+    #[error("Proxy of validator {0} unhealthy! Latency p99 is too high: {1} ms")]
+    ProxyUnhealthy(String, f64),
+    #[error("Failed to send message: {0}")]
+    SendError(#[from] crossbeam_channel::SendError<()>),
+    #[error("Failed to join task: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
+    #[error("Failed to parse validator metrics port: {0}")]
+    ParseValidatorMetricsPort(#[from] std::num::ParseIntError),
+    #[error("Failed to parse validator metrics address: {0}")]
+    ParseValidatorMetricsAddress(String),
+    #[error("Local node error: {0}")]
+    LocalNode(#[from] linera_core::local_node::LocalNodeError),
+    #[error("Chain client error: {0}")]
+    ChainClient(#[from] linera_core::client::ChainClientError),
+    #[error("Current histogram count is less than previous histogram count")]
+    HistogramCountMismatch,
+    #[error("Expected histogram value, got {0:?}")]
+    ExpectedHistogramValue(Value),
+    #[error("Expected untyped value, got {0:?}")]
+    ExpectedUntypedValue(Value),
+    #[error("Incomplete histogram data")]
+    IncompleteHistogramData,
+    #[error("Could not compute quantile")]
+    CouldNotComputeQuantile,
+    #[error("Bucket count is 0")]
+    BucketCountIsZero,
+    #[error("Bucket boundaries do not match: {0} vs {1}")]
+    BucketBoundariesDoNotMatch(f64, f64),
+    #[error("Reqwest error: {0}")]
+    Reqwest(#[from] reqwest::Error),
+    #[error("Io error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Previous histogram snapshot does not exist: {0}")]
+    PreviousHistogramSnapshotDoesNotExist(String),
+    #[error("No data available yet to calculate p99")]
+    NoDataYetForP99Calculation,
+    #[error("Unexpected empty bucket")]
+    UnexpectedEmptyBucket,
+}
+
+#[derive(Debug)]
+struct HistogramSnapshot {
+    buckets: Vec<HistogramCount>,
+    count: f64,
+    sum: f64,
+}
 
 pub struct Benchmark<Storage>
 where
@@ -53,11 +104,12 @@ where
         committee: Committee,
         local_node: LocalNodeClient<S>,
         close_chains: bool,
-    ) -> Result<(), Error> {
+        health_check_endpoints: Option<String>,
+    ) -> Result<(), BenchmarkError> {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
-        let handle = Handle::current();
 
+        let handle = Handle::current();
         // The bps control task will control the BPS from the threads. `crossbeam_channel` is used
         // for two reasons:
         // 1. it allows bounded channels with zero sized buffers.
@@ -119,11 +171,11 @@ where
         let mut bps_remainder = bps.unwrap_or_default() % num_chains;
         let bps_share = bps.map(|bps| bps / num_chains);
 
-        let mut join_set = task::JoinSet::<Result<(), Error>>::new();
+        let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
         for (chain_id, operations, key_pair) in blocks_infos {
             let bps_share = if bps_remainder > 0 {
                 bps_remainder -= 1;
-                Some(bps_share.unwrap() + 1)
+                bps_share.map(|share| share + 1)
             } else {
                 bps_share
             };
@@ -162,6 +214,8 @@ where
             });
         }
 
+        let metrics_watcher =
+            Self::create_metrics_watcher(health_check_endpoints, shutdown_notifier.clone()).await?;
         join_set
             .join_all()
             .await
@@ -170,8 +224,256 @@ where
         drop(sender);
         info!("All benchmark tasks completed");
         bps_control_task.await?;
+        if let Some(metrics_watcher) = metrics_watcher {
+            metrics_watcher.await??;
+        }
 
         Ok(())
+    }
+
+    async fn create_metrics_watcher(
+        health_check_endpoints: Option<String>,
+        shutdown_notifier: CancellationToken,
+    ) -> Result<Option<task::JoinHandle<Result<(), BenchmarkError>>>, BenchmarkError> {
+        if let Some(health_check_endpoints) = health_check_endpoints {
+            let metrics_addresses = health_check_endpoints
+                .split(',')
+                .map(|address| format!("http://{}/metrics", address.trim()))
+                .collect::<Vec<_>>();
+
+            let mut previous_histogram_snapshots: HashMap<String, HistogramSnapshot> =
+                HashMap::new();
+            let scrapes = Self::get_scrapes(&metrics_addresses).await?;
+            for (metrics_address, scrape) in scrapes {
+                previous_histogram_snapshots.insert(
+                    metrics_address,
+                    Self::parse_histogram(&scrape, LATENCY_METRIC_PREFIX)?,
+                );
+            }
+
+            let metrics_watcher: task::JoinHandle<Result<(), BenchmarkError>> = tokio::spawn(
+                async move {
+                    let mut health_interval = time::interval(time::Duration::from_secs(5));
+                    let mut shutdown_interval = time::interval(time::Duration::from_secs(1));
+                    loop {
+                        tokio::select! {
+                            biased;
+                            _ = health_interval.tick() => {
+                                let result = Self::validators_healthy(&metrics_addresses, &mut previous_histogram_snapshots).await;
+                                if let Err(ref err) = result {
+                                    info!("Shutting down benchmark due to error: {}", err);
+                                    shutdown_notifier.cancel();
+                                    break;
+                                } else if !result? {
+                                    info!("Shutting down benchmark due to unhealthy validators");
+                                    shutdown_notifier.cancel();
+                                    break;
+                                }
+                            }
+                            _ = shutdown_interval.tick() => {
+                                if shutdown_notifier.is_cancelled() {
+                                    info!("Shutdown signal received, stopping metrics watcher");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    Ok(())
+                },
+            );
+
+            Ok(Some(metrics_watcher))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn validators_healthy(
+        metrics_addresses: &[String],
+        previous_histogram_snapshots: &mut HashMap<String, HistogramSnapshot>,
+    ) -> Result<bool, BenchmarkError> {
+        let scrapes = Self::get_scrapes(metrics_addresses).await?;
+        for (metrics_address, scrape) in scrapes {
+            let histogram = Self::parse_histogram(&scrape, LATENCY_METRIC_PREFIX)?;
+            let diff = Self::diff_histograms(
+                previous_histogram_snapshots.get(&metrics_address).ok_or(
+                    BenchmarkError::PreviousHistogramSnapshotDoesNotExist(metrics_address.clone()),
+                )?,
+                &histogram,
+            )?;
+            let p99 = match Self::compute_quantile(&diff.buckets, diff.count, 0.99) {
+                Ok(p99) => p99,
+                Err(BenchmarkError::NoDataYetForP99Calculation) => {
+                    info!(
+                        "No data available yet to calculate p99 for {}",
+                        metrics_address
+                    );
+                    continue;
+                }
+                Err(e) => {
+                    error!("Error computing p99 for {}: {}", metrics_address, e);
+                    return Err(e);
+                }
+            };
+
+            let last_bucket_boundary = diff.buckets[diff.buckets.len() - 2].less_than;
+            if p99 == f64::INFINITY {
+                info!(
+                    "{} -> Estimated p99 for {} is higher than the last bucket boundary of {:?} ms",
+                    metrics_address, LATENCY_METRIC_PREFIX, last_bucket_boundary
+                );
+            } else {
+                info!(
+                    "{} -> Estimated p99 for {}: {:.2} ms",
+                    metrics_address, LATENCY_METRIC_PREFIX, p99
+                );
+            }
+            if p99 > PROXY_LATENCY_P99_THRESHOLD {
+                if p99 == f64::INFINITY {
+                    error!(
+                        "Proxy of validator {} unhealthy! Latency p99 is too high, it is higher than \
+                        the last bucket boundary of {:.2} ms",
+                        metrics_address, last_bucket_boundary
+                    );
+                } else {
+                    error!(
+                        "Proxy of validator {} unhealthy! Latency p99 is too high: {:.2} ms",
+                        metrics_address, p99
+                    );
+                }
+                return Ok(false);
+            }
+            previous_histogram_snapshots.insert(metrics_address.clone(), histogram);
+        }
+
+        Ok(true)
+    }
+
+    fn diff_histograms(
+        previous: &HistogramSnapshot,
+        current: &HistogramSnapshot,
+    ) -> Result<HistogramSnapshot, BenchmarkError> {
+        if current.count < previous.count {
+            return Err(BenchmarkError::HistogramCountMismatch);
+        }
+        let total_diff = current.count - previous.count;
+        let mut buckets_diff: Vec<HistogramCount> = Vec::new();
+        for (before, after) in previous.buckets.iter().zip(current.buckets.iter()) {
+            let bound_before = before.less_than;
+            let bound_after = after.less_than;
+            let cumulative_before = before.count;
+            let cumulative_after = after.count;
+            if (bound_before - bound_after).abs() > f64::EPSILON {
+                return Err(BenchmarkError::BucketBoundariesDoNotMatch(
+                    bound_before,
+                    bound_after,
+                ));
+            }
+            let diff = (cumulative_after - cumulative_before).max(0.0);
+            buckets_diff.push(HistogramCount {
+                less_than: bound_after,
+                count: diff,
+            });
+        }
+        Ok(HistogramSnapshot {
+            buckets: buckets_diff,
+            count: total_diff,
+            sum: current.sum - previous.sum,
+        })
+    }
+
+    async fn get_scrapes(
+        metrics_addresses: &[String],
+    ) -> Result<Vec<(String, Scrape)>, BenchmarkError> {
+        let mut scrapes = Vec::new();
+        for metrics_address in metrics_addresses {
+            let response = reqwest::get(metrics_address)
+                .await
+                .map_err(BenchmarkError::Reqwest)?;
+            let metrics = response.text().await.map_err(BenchmarkError::Reqwest)?;
+            let scrape = Scrape::parse(metrics.lines().map(|line| Ok(line.to_owned())))
+                .map_err(BenchmarkError::IoError)?;
+            scrapes.push((metrics_address.clone(), scrape));
+        }
+        Ok(scrapes)
+    }
+
+    fn parse_histogram(
+        scrape: &Scrape,
+        metric_prefix: &str,
+    ) -> Result<HistogramSnapshot, BenchmarkError> {
+        let mut buckets: Vec<HistogramCount> = Vec::new();
+        let mut total_count: Option<f64> = None;
+        let mut total_sum: Option<f64> = None;
+
+        // Iterate over each metric in the scrape.
+        for sample in &scrape.samples {
+            if sample.metric == metric_prefix {
+                if let Value::Histogram(histogram) = &sample.value {
+                    buckets.extend(histogram.iter().cloned());
+                } else {
+                    return Err(BenchmarkError::ExpectedHistogramValue(sample.value.clone()));
+                }
+            } else if sample.metric == format!("{}_count", metric_prefix) {
+                if let Value::Untyped(count) = sample.value {
+                    total_count = Some(count);
+                } else {
+                    return Err(BenchmarkError::ExpectedUntypedValue(sample.value.clone()));
+                }
+            } else if sample.metric == format!("{}_sum", metric_prefix) {
+                if let Value::Untyped(sum) = sample.value {
+                    total_sum = Some(sum);
+                } else {
+                    return Err(BenchmarkError::ExpectedUntypedValue(sample.value.clone()));
+                }
+            }
+        }
+
+        match (total_count, total_sum) {
+            (Some(count), Some(sum)) if !buckets.is_empty() => {
+                buckets.sort_by(|a, b| {
+                    a.less_than
+                        .partial_cmp(&b.less_than)
+                        .expect("Comparison should not fail")
+                });
+                Ok(HistogramSnapshot {
+                    buckets,
+                    count,
+                    sum,
+                })
+            }
+            _ => Err(BenchmarkError::IncompleteHistogramData),
+        }
+    }
+
+    fn compute_quantile(
+        buckets: &[HistogramCount],
+        total_count: f64,
+        quantile: f64,
+    ) -> Result<f64, BenchmarkError> {
+        if total_count == 0.0 {
+            // Had no samples in the last 5s.
+            return Err(BenchmarkError::NoDataYetForP99Calculation);
+        }
+        // Compute the target cumulative count.
+        let target = (quantile * total_count).ceil();
+        let mut prev_cumulative = 0.0;
+        let mut prev_bound = 0.0;
+        for bucket in buckets {
+            if bucket.count >= target {
+                let bucket_count = bucket.count - prev_cumulative;
+                if bucket_count == 0.0 {
+                    // Bucket that is supposed to contain the target quantile is empty, unexpectedly.
+                    return Err(BenchmarkError::UnexpectedEmptyBucket);
+                }
+                let fraction = (target - prev_cumulative) / bucket_count;
+                return Ok(prev_bound + (bucket.less_than - prev_bound) * fraction);
+            }
+            prev_cumulative = bucket.count;
+            prev_bound = bucket.less_than;
+        }
+        Err(BenchmarkError::CouldNotComputeQuantile)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -186,7 +488,7 @@ where
         committee: Committee,
         local_node: LocalNodeClient<S>,
         close_chains: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<(), BenchmarkError> {
         let chain_id = chain_client.chain_id();
         info!(
             "Starting benchmark at target BPS of {:?}, for chain {:?}",
@@ -211,7 +513,8 @@ where
             };
             let executed_block = local_node
                 .stage_block_execution(block.clone(), None)
-                .await?
+                .await
+                .map_err(BenchmarkError::LocalNode)?
                 .0;
 
             let value = Hashed::new(ConfirmedBlock::new(executed_block));
@@ -220,7 +523,8 @@ where
 
             chain_client
                 .submit_block_proposal(&committee, Box::new(proposal), value)
-                .await?;
+                .await
+                .map_err(BenchmarkError::ChainClient)?;
             let next_block_height = chain_client.next_block_height();
             // We assume the committee will not change during the benchmark.
             chain_client
@@ -230,7 +534,8 @@ where
                     next_block_height,
                     cross_chain_message_delivery,
                 )
-                .await?;
+                .await
+                .map_err(BenchmarkError::ChainClient)?;
 
             num_sent_proposals += 1;
             if let Some(bps) = bps {
@@ -254,7 +559,7 @@ where
     /// Closes the chain that was created for the benchmark.
     async fn close_benchmark_chain(
         chain_client: ChainClient<NodeProvider, S>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), BenchmarkError> {
         let start = Instant::now();
         chain_client
             .execute_operation(Operation::System(SystemOperation::CloseChain))

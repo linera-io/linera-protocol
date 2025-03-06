@@ -129,6 +129,7 @@ prettyplease = "0.2.16"
 proc-macro-error = "1.0.4"
 proc-macro2 = "1.0"
 prometheus = "0.13.3"
+prometheus-parse = "0.2.5"
 proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "0.13.2"
 quote = "1.0"
