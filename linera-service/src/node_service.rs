@@ -1000,6 +1000,7 @@ where
             .map_err(|_| NodeServiceError::UnknownChainId {
                 chain_id: chain_id.to_string(),
             })?;
+        client.synchronize_from_validators().await?;
         let hash = loop {
             let timeout = match client
                 .execute_operations(operations.clone(), vec![])
