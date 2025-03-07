@@ -10,7 +10,7 @@ use std::{
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
-    bcs,
+    bcs, bcs_scalar,
     crypto::{
         AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
         CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
@@ -381,7 +381,7 @@ impl From<Vec<u8>> for OperationResult {
 
 impl<'de> BcsHashable<'de> for OperationResult {}
 
-doc_scalar!(
+bcs_scalar!(
     OperationResult,
     "The execution result of a single operation."
 );
