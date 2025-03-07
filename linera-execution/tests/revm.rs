@@ -14,7 +14,7 @@ use std::{
 use alloy_sol_types::{sol, SolCall, SolValue};
 use anyhow::Context;
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -147,6 +147,9 @@ contract ExampleCounter {
         .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
     let app_id = From::from(&app_desc);
+    let app_desc_blob_id = Blob::new_application_description(&app_desc).id();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
 
     let contract = EvmContractModule::Revm {
         module: module.clone(),
@@ -206,7 +209,15 @@ contract ExampleCounter {
     };
 
     for increment in &increments {
-        let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+        let mut txn_tracker = TransactionTracker::new(
+            0,
+            0,
+            Some(vec![
+                OracleResponse::Blob(app_desc_blob_id),
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+            ]),
+        );
         value += increment;
         let operation = incrementCall { input: *increment };
         let bytes = operation.abi_encode();
