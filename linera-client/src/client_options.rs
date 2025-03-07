@@ -616,6 +616,17 @@ pub enum ClientCommand {
         /// they're being closed.
         #[arg(long)]
         close_chains: bool,
+        /// A comma-separated list of host:port pairs to query for health metrics.
+        /// If provided, the benchmark will check these endpoints for validator health
+        /// and terminate if any validator is unhealthy.
+        /// Example: "127.0.0.1:21100,validator-1.some-network.linera.net:21100"
+        #[arg(long)]
+        health_check_endpoints: Option<String>,
+        /// The maximum number of in-flight requests to validators when wrapping up the benchmark.
+        /// While wrapping up, this controls the concurrency level when processing inboxes and
+        /// closing chains.
+        #[arg(long, default_value = "5")]
+        wrap_up_max_in_flight: usize,
     },
 
     /// Create genesis configuration for a Linera deployment.

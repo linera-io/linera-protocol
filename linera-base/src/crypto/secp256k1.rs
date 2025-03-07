@@ -5,6 +5,7 @@
 //! Defines secp256k1 signature primitives used by the Linera protocol.
 
 use std::{
+    borrow::Cow,
     fmt,
     hash::{Hash, Hasher},
     str::FromStr,
@@ -15,10 +16,14 @@ use k256::{
     elliptic_curve::sec1::FromEncodedPoint,
     EncodedPoint,
 };
+use linera_witty::{
+    GuestPointer, HList, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
+    WitLoad, WitStore, WitType,
+};
 use serde::{Deserialize, Serialize};
 
-use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
-use crate::doc_scalar;
+use super::{BcsHashable, BcsSignable, CryptoError, CryptoHash, HasTypeName};
+use crate::{doc_scalar, identifiers::Owner};
 
 /// Name of the secp256k1 scheme.
 const SECP256K1_SCHEME_LABEL: &str = "secp256k1";
@@ -187,6 +192,120 @@ impl fmt::Debug for Secp256k1PublicKey {
     }
 }
 
+impl From<Secp256k1PublicKey> for Owner {
+    fn from(value: Secp256k1PublicKey) -> Self {
+        Self(CryptoHash::new(&value))
+    }
+}
+
+impl From<&Secp256k1PublicKey> for Owner {
+    fn from(value: &Secp256k1PublicKey) -> Self {
+        Self(CryptoHash::new(value))
+    }
+}
+
+impl<'de> BcsHashable<'de> for Secp256k1PublicKey {}
+
+impl WitType for Secp256k1PublicKey {
+    const SIZE: u32 = <(u64, u64, u64, u64, u8) as WitType>::SIZE;
+    type Layout = <(u64, u64, u64, u64, u8) as WitType>::Layout;
+    type Dependencies = HList![];
+
+    fn wit_type_name() -> Cow<'static, str> {
+        "secp256k1-public-key".into()
+    }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        concat!(
+            "    record secp256k1-public-key {\n",
+            "        part1: u64,\n",
+            "        part2: u64,\n",
+            "        part3: u64,\n",
+            "        part4: u64,\n",
+            "        part5: u8\n",
+            "    }\n",
+        )
+        .into()
+    }
+}
+
+impl WitLoad for Secp256k1PublicKey {
+    fn load<Instance>(
+        memory: &Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let (part1, part2, part3, part4, part5) = WitLoad::load(memory, location)?;
+        Ok(Self::from((part1, part2, part3, part4, part5)))
+    }
+
+    fn lift_from<Instance>(
+        flat_layout: <Self::Layout as Layout>::Flat,
+        memory: &Memory<'_, Instance>,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let (part1, part2, part3, part4, part5) = WitLoad::lift_from(flat_layout, memory)?;
+        Ok(Self::from((part1, part2, part3, part4, part5)))
+    }
+}
+
+impl WitStore for Secp256k1PublicKey {
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let (part1, part2, part3, part4, part5) = (*self).into();
+        (part1, part2, part3, part4, part5).store(memory, location)
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let (part1, part2, part3, part4, part5) = (*self).into();
+        (part1, part2, part3, part4, part5).lower(memory)
+    }
+}
+
+impl From<(u64, u64, u64, u64, u8)> for Secp256k1PublicKey {
+    fn from((part1, part2, part3, part4, part5): (u64, u64, u64, u64, u8)) -> Self {
+        let mut bytes = [0u8; SECP256K1_PUBLIC_KEY_SIZE];
+        bytes[0..8].copy_from_slice(&part1.to_be_bytes());
+        bytes[8..16].copy_from_slice(&part2.to_be_bytes());
+        bytes[16..24].copy_from_slice(&part3.to_be_bytes());
+        bytes[24..32].copy_from_slice(&part4.to_be_bytes());
+        bytes[32] = part5;
+        Self::from_bytes(&bytes).unwrap()
+    }
+}
+
+impl From<Secp256k1PublicKey> for (u64, u64, u64, u64, u8) {
+    fn from(key: Secp256k1PublicKey) -> Self {
+        let bytes = key.as_bytes();
+        let part1 = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
+        let part2 = u64::from_be_bytes(bytes[8..16].try_into().unwrap());
+        let part3 = u64::from_be_bytes(bytes[16..24].try_into().unwrap());
+        let part4 = u64::from_be_bytes(bytes[24..32].try_into().unwrap());
+        let part5 = bytes[32];
+        (part1, part2, part3, part4, part5)
+    }
+}
+
 impl Secp256k1KeyPair {
     /// Generates a new key pair.
     #[cfg(all(with_getrandom, with_testing))]
@@ -220,6 +339,19 @@ impl Secp256k1SecretKey {
     pub fn copy(&self) -> Self {
         Self(self.0.clone())
     }
+
+    /// Generates a new key pair.
+    #[cfg(all(with_getrandom, with_testing))]
+    pub fn generate() -> Self {
+        let mut rng = rand::rngs::OsRng;
+        Self::generate_from(&mut rng)
+    }
+
+    /// Generates a new key pair from the given RNG. Use with care.
+    #[cfg(with_getrandom)]
+    pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
+        Secp256k1SecretKey(SigningKey::random(rng))
+    }
 }
 
 impl Secp256k1Signature {
@@ -248,6 +380,9 @@ impl Secp256k1Signature {
         self.verify_inner::<T>(prehash, author)
     }
 
+    /// Verifies a batch of signatures.
+    ///
+    /// Returns an error on first failed signature.
     pub fn verify_batch<'a, 'de, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,

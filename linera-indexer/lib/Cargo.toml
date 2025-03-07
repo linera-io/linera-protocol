@@ -29,7 +29,7 @@ bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
 graphql-ws-client = { version = "0.5", features = ["client-graphql-client"] }
-graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
+graphql_client = { version = "0.13", features = ["reqwest-rustls"] }
 hyper = "0.14"
 linera-base.workspace = true
 linera-chain.workspace = true

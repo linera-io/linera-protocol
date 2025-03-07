@@ -18,14 +18,12 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
-    identifiers::{
-        Account, BlobId, BlobType, ChainId, ChannelFullName, Destination, MessageId, Owner,
-    },
+    identifiers::{Account, BlobId, ChainId, ChannelFullName, Destination, MessageId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
-    Message, MessageKind, Operation, SystemMessage, SystemOperation,
+    Message, MessageKind, Operation, SystemMessage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -81,20 +79,10 @@ pub struct ProposedBlock {
 impl ProposedBlock {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
-        let mut blob_ids = BTreeSet::new();
-        for operation in &self.operations {
-            if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
-                blob_ids.insert(BlobId::new(*blob_hash, BlobType::Data));
-            }
-            if let Operation::System(SystemOperation::PublishModule { module_id }) = operation {
-                blob_ids.extend([
-                    BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
-                    BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
-                ]);
-            }
-        }
-
-        blob_ids
+        self.operations
+            .iter()
+            .flat_map(Operation::published_blob_ids)
+            .collect()
     }
 
     /// Returns whether the block contains only rejected incoming messages, which
@@ -742,7 +730,7 @@ impl BlockProposal {
             block,
             outcome: None,
         };
-        let signature = AccountSignature::new(&content, secret);
+        let signature = secret.sign(&content);
         Self {
             content,
             public_key: secret.public(),
@@ -764,7 +752,7 @@ impl BlockProposal {
             round,
             outcome: Some(executed_block.outcome),
         };
-        let signature = AccountSignature::new(&content, secret);
+        let signature = secret.sign(&content);
         Self {
             content,
             public_key: secret.public(),

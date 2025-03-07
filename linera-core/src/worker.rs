@@ -19,7 +19,7 @@ use linera_base::{
     },
     doc_scalar,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, Owner, UserApplicationId},
+    identifiers::{BlobId, ChainId, EventId, Owner, UserApplicationId},
     time::timer::{sleep, timeout},
 };
 use linera_chain::{
@@ -212,6 +212,8 @@ pub enum WorkerError {
     BlobsNotFound(Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
+    #[error("Trying to overwrite an event: {0:?}")]
+    OverwritingEvent(Box<EventId>),
     #[error("The worker is too busy to handle new chains")]
     FullChainWorkerCache,
     #[error("Failed to join spawned worker task")]
