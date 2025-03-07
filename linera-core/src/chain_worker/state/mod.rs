@@ -204,6 +204,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        tracing::debug!("handling block proposal: {proposal:#?}");
         self.ensure_is_active()?;
         proposal
             .check_invariants()

@@ -40,7 +40,7 @@ use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{error, instrument, trace, warn, Instrument as _};
+use tracing::{error, instrument, trace, warn};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
@@ -280,8 +280,10 @@ where
 }
 
 /// The sender endpoint for [`ChainWorkerRequest`]s.
-type ChainActorEndpoint<StorageClient> =
-    mpsc::UnboundedSender<ChainWorkerRequest<<StorageClient as Storage>::Context>>;
+type ChainActorEndpoint<StorageClient> = mpsc::UnboundedSender<(
+    ChainWorkerRequest<<StorageClient as Storage>::Context>,
+    tracing::Span,
+)>;
 
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
@@ -660,7 +662,7 @@ where
         let (callback, response) = oneshot::channel();
 
         chain_actor
-            .send(request_builder(callback))
+            .send((request_builder(callback), tracing::Span::current()))
             .expect("`ChainWorkerActor` stopped executing unexpectedly");
 
         response
@@ -709,7 +711,7 @@ where
             self.chain_worker_tasks
                 .lock()
                 .unwrap()
-                .spawn_task(actor_task.in_current_span());
+                .spawn_task(actor_task);
         }
 
         Ok(sender)
@@ -726,7 +728,9 @@ where
         chain_id: ChainId,
     ) -> Option<(
         ChainActorEndpoint<StorageClient>,
-        Option<mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>>,
+        Option<
+            mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
+        >,
     )> {
         let mut chain_workers = self.chain_workers.lock().unwrap();
 
@@ -811,7 +815,7 @@ where
     }
 
     /// Processes a confirmed block certificate.
-    #[instrument(skip_all, fields(
+    #[instrument(skip_all,  fields(
         nick = self.nickname,
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
