@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use assert_matches::assert_matches;
+use how_to_perform_http_requests::Operation;
 use linera_sdk::{http, util::BlockingWait, Service as _, ServiceRuntime};
 
 use super::Service;
@@ -55,6 +56,31 @@ fn service_query_returns_http_request_error() {
     let error = extract_error_string(response);
 
     assert_eq!(error, "HTTP request failed with status code 401");
+}
+
+/// Tests if the service sends the HTTP response to the contract.
+#[test]
+fn service_sends_http_response_to_contract() {
+    let http_response = b"Hello, contract!";
+
+    let mut service = create_service();
+    let runtime = Arc::get_mut(&mut service.runtime).expect("Runtime should not be shared");
+
+    runtime.add_expected_http_request(
+        http::Request::get(TEST_BASE_URL),
+        http::Response::ok(http_response),
+    );
+
+    let request = async_graphql::Request::new("mutation { performHttpRequest }");
+
+    service.handle_query(request).blocking_wait();
+
+    let operations = service.runtime.scheduled_operations::<Operation>();
+
+    assert_eq!(
+        operations,
+        vec![Operation::HandleHttpResponse(http_response.to_vec())]
+    );
 }
 
 /// Creates a [`Service`] instance for testing.
