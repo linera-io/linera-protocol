@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
@@ -23,12 +24,16 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemOperation},
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse,
+    SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
 use rand::Rng;
 use test_case::test_case;
+use test_helpers::{
+    assert_insufficient_funding, assert_insufficient_funding_during_operation,
+    assert_insufficient_funding_fees,
+};
 
 #[cfg(feature = "dynamodb")]
 use crate::test_utils::DynamoDbStorageBuilder;
@@ -1035,22 +1040,14 @@ where
     // Client2 does not know about the money yet.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
-    // TODO(#1649): Make this code nicer.
-    assert_matches!(client2
+    let obtained_error = client2
         .transfer_to_account_unsafe_unconfirmed(
             None,
             Amount::from_tokens(2),
             Account::chain(client3.chain_id),
         )
-        .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
-            error
-        )))) if matches!(&*error, ChainError::ExecutionError(
-            execution_error, ChainExecutionContext::Operation(_)
-        ) if matches!(**execution_error, ExecutionError::SystemError(
-            SystemExecutionError::InsufficientFunding { .. }
-        )))
-    );
+        .await;
+    assert_insufficient_funding(obtained_error, ChainExecutionContext::Operation(0));
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
         .process_pending_block()
@@ -1228,30 +1225,12 @@ where
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
-    let obtained_error = sender.burn(None, Amount::from_tokens(4)).await;
 
-    // TODO(#1649): Make this code nicer.
-    assert_matches!(obtained_error,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
-            WorkerError::ChainError(error)
-        ))) if matches!(&*error, ChainError::ExecutionError(
-            execution_error,
-            ChainExecutionContext::Operation(0)
-        ) if matches!(**execution_error,
-            ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })
-        ))
-    );
+    let obtained_error = sender.burn(None, Amount::from_tokens(4)).await;
+    assert_insufficient_funding_during_operation(obtained_error, 0);
+
     let obtained_error = sender.burn(None, Amount::from_tokens(3)).await;
-    // TODO(#1649): Make this code nicer.
-    assert_matches!(obtained_error,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(&*error, ChainError::ExecutionError(
-            execution_error, ChainExecutionContext::Block
-        )  if matches!(**execution_error, ExecutionError::SystemError(
-            SystemExecutionError::InsufficientFundingForFees { .. }
-        )))
-    );
+    assert_insufficient_funding_fees(obtained_error);
     Ok(())
 }
 

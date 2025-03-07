@@ -42,8 +42,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, ChainId, ChannelName, Destination, EventId,
-        GenericApplicationId, MessageId, ModuleId, Owner, StreamName, UserApplicationId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
+        EventId, GenericApplicationId, MessageId, ModuleId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -1203,6 +1203,20 @@ impl Operation {
         match self {
             Self::System(_) => GenericApplicationId::System,
             Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
+        }
+    }
+
+    /// Returns the IDs of all blobs published in this operation.
+    pub fn published_blob_ids(&self) -> Vec<BlobId> {
+        match self {
+            Operation::System(SystemOperation::PublishDataBlob { blob_hash }) => {
+                vec![BlobId::new(*blob_hash, BlobType::Data)]
+            }
+            Operation::System(SystemOperation::PublishModule { module_id }) => vec![
+                BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
+                BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
+            ],
+            _ => vec![],
         }
     }
 }

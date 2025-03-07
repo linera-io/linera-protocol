@@ -17,7 +17,9 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorKeypair},
+    crypto::{
+        AccountPublicKey, AccountSecretKey, CryptoHash, Secp256k1SecretKey, ValidatorKeypair,
+    },
     data_types::*,
     hashed::Hashed,
     identifiers::{
@@ -399,7 +401,8 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
 
 /// Creates `count` key pairs and returns them, sorted by the `Owner` created from their public key.
 fn generate_key_pairs(count: usize) -> Vec<AccountSecretKey> {
-    let mut key_pairs = iter::repeat_with(AccountSecretKey::generate)
+    let mut key_pairs = iter::repeat_with(Secp256k1SecretKey::generate)
+        .map(AccountSecretKey::Secp256k1)
         .take(count)
         .collect::<Vec<_>>();
     key_pairs.sort_by_key(|key_pair| Owner::from(key_pair.public()));
@@ -451,8 +454,7 @@ where
         .into_first_proposal(&sender_key_pair);
     let unknown_key_pair = AccountSecretKey::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
-    bad_signature_block_proposal.signature =
-        linera_base::crypto::AccountSignature::new(&block_proposal.content, &unknown_key_pair);
+    bad_signature_block_proposal.signature = unknown_key_pair.sign(&block_proposal.content);
     assert_matches!(
         worker
             .handle_block_proposal(bad_signature_block_proposal)

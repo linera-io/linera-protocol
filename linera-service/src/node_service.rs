@@ -512,12 +512,21 @@ where
     async fn create_committee(
         &self,
         chain_id: ChainId,
-        epoch: Epoch,
         committee: Committee,
     ) -> Result<CryptoHash, Error> {
-        let operation =
-            SystemOperation::Admin(AdminOperation::CreateCommittee { epoch, committee });
-        self.execute_system_operation(operation, chain_id).await
+        Ok(self
+            .apply_client_command(&chain_id, move |client| {
+                let committee = committee.clone();
+                async move {
+                    let result = client
+                        .stage_new_committee(committee)
+                        .await
+                        .map_err(Error::from);
+                    (result, client)
+                }
+            })
+            .await?
+            .hash())
     }
 
     /// Subscribes to a system channel.

@@ -573,7 +573,7 @@ fn missing_blob_ids(maybe_blobs: &BTreeMap<BlobId, Option<Blob>>) -> Vec<BlobId>
     maybe_blobs
         .iter()
         .filter(|(_, maybe_blob)| maybe_blob.is_none())
-        .map(|(chain_id, _)| *chain_id)
+        .map(|(blob_id, _)| *blob_id)
         .collect()
 }
 

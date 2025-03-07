@@ -3,6 +3,8 @@
 
 //! Operations that don't persist any changes to the chain state.
 
+use std::collections::HashMap;
+
 use linera_base::{
     data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
@@ -14,7 +16,7 @@ use linera_chain::data_types::{
 };
 use linera_execution::{ChannelSubscription, Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::View;
+use linera_views::views::{View, ViewError};
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
@@ -171,6 +173,26 @@ where
         } else {
             Box::pin(chain.execute_block(block, local_time, round.multi_leader(), None)).await?
         };
+
+        // Verify that no event values are overwritten.
+        let mut new_events = HashMap::new();
+        for event in outcome.events.iter().flatten() {
+            let event_id = event.id(chain.chain_id());
+            if let Some(old_value) = new_events.insert(event_id.clone(), &event.value) {
+                ensure!(
+                    *old_value == event.value,
+                    WorkerError::OverwritingEvent(Box::new(event_id))
+                );
+            }
+            match self.0.storage.read_event(event_id.clone()).await {
+                Ok(old_value) => ensure!(
+                    old_value == event.value,
+                    WorkerError::OverwritingEvent(Box::new(event_id))
+                ),
+                Err(ViewError::EventsNotFound(_)) => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
 
         let executed_block = outcome.with(block.clone());
         ensure!(

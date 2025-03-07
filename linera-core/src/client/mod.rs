@@ -2995,29 +2995,11 @@ where
         &self,
         committee: Committee,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        loop {
-            let epoch = self.epoch().await?;
-            match self
-                .execute_block(
-                    vec![Operation::System(SystemOperation::Admin(
-                        AdminOperation::CreateCommittee {
-                            epoch: epoch.try_add_one()?,
-                            committee: committee.clone(),
-                        },
-                    ))],
-                    vec![],
-                )
-                .await?
-            {
-                ExecuteBlockOutcome::Executed(certificate) => {
-                    return Ok(ClientOutcome::Committed(certificate))
-                }
-                ExecuteBlockOutcome::Conflict(_) => continue,
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
-                }
-            };
-        }
+        let epoch = self.epoch().await?.try_add_one()?;
+        self.execute_operation(Operation::System(SystemOperation::Admin(
+            AdminOperation::CreateCommittee { epoch, committee },
+        )))
+        .await
     }
 
     /// Synchronizes the chain with the validators and creates blocks without any operations to
