@@ -20,6 +20,15 @@ use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(web)]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
+#[cfg(with_dynamodb)]
+use linera_views::dynamo_db::DynamoDbStore;
+#[cfg(with_rocksdb)]
+use linera_views::rocks_db::RocksDbStore;
+#[cfg(with_scylladb)]
+use linera_views::scylla_db::ScyllaDbStore;
+#[cfg(any(with_dynamodb, with_scylladb))]
+use linera_views::test_utils::test_cache_check_absence_admin_test;
+
 #[ignore]
 #[tokio::test]
 async fn test_read_multi_values_memory() {
@@ -31,7 +40,6 @@ async fn test_read_multi_values_memory() {
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_read_multi_values_dynamo_db() {
-    use linera_views::dynamo_db::DynamoDbStore;
     let config = DynamoDbStore::new_test_config().await.unwrap();
     big_read_multi_values::<DynamoDbStore>(config, 22000000, 1000).await;
 }
@@ -40,7 +48,6 @@ async fn test_read_multi_values_dynamo_db() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_read_multi_values_scylla_db() {
-    use linera_views::scylla_db::ScyllaDbStore;
     let config = ScyllaDbStore::new_test_config().await.unwrap();
     big_read_multi_values::<ScyllaDbStore>(config, 22200000, 200).await;
 }
@@ -65,9 +72,7 @@ async fn test_reads_memory() {
 #[tokio::test]
 async fn test_reads_rocks_db() {
     for scenario in get_random_test_scenarios() {
-        let store = linera_views::rocks_db::RocksDbStore::new_test_store()
-            .await
-            .unwrap();
+        let store = RocksDbStore::new_test_store().await.unwrap();
         run_reads(store, scenario).await;
     }
 }
@@ -76,9 +81,7 @@ async fn test_reads_rocks_db() {
 #[tokio::test]
 async fn test_reads_dynamo_db() {
     for scenario in get_random_test_scenarios() {
-        let store = linera_views::dynamo_db::DynamoDbStore::new_test_store()
-            .await
-            .unwrap();
+        let store = DynamoDbStore::new_test_store().await.unwrap();
         run_reads(store, scenario).await;
     }
 }
@@ -87,9 +90,7 @@ async fn test_reads_dynamo_db() {
 #[tokio::test]
 async fn test_reads_scylla_db() {
     for scenario in get_random_test_scenarios() {
-        let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
-            .await
-            .unwrap();
+        let store = ScyllaDbStore::new_test_store().await.unwrap();
         run_reads(store, scenario).await;
     }
 }
@@ -146,27 +147,21 @@ async fn test_key_value_store_view_memory_writes_from_blank() {
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_rocks_db_writes_from_blank() {
-    let store = linera_views::rocks_db::RocksDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = RocksDbStore::new_test_store().await.unwrap();
     run_writes_from_blank(&store).await;
 }
 
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_dynamo_db_writes_from_blank() {
-    let store = linera_views::dynamo_db::DynamoDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = DynamoDbStore::new_test_store().await.unwrap();
     run_writes_from_blank(&store).await;
 }
 
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_writes_from_blank() {
-    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = ScyllaDbStore::new_test_store().await.unwrap();
     run_writes_from_blank(&store).await;
 }
 
@@ -200,18 +195,14 @@ async fn test_big_value_read_write() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn scylla_db_tombstone_triggering_test() {
-    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = ScyllaDbStore::new_test_store().await.unwrap();
     linera_views::test_utils::tombstone_triggering_test(store).await;
 }
 
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_big_write_read() {
-    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = ScyllaDbStore::new_test_store().await.unwrap();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(store, target_size, value_sizes).await;
@@ -228,9 +219,7 @@ async fn test_memory_big_write_read() {
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_rocks_db_big_write_read() {
-    let store = linera_views::rocks_db::RocksDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = RocksDbStore::new_test_store().await.unwrap();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(store, target_size, value_sizes).await;
@@ -248,9 +237,7 @@ async fn test_indexed_db_big_write_read() {
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_dynamo_db_big_write_read() {
-    let store = linera_views::dynamo_db::DynamoDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = DynamoDbStore::new_test_store().await.unwrap();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(store, target_size, value_sizes).await;
@@ -265,9 +252,7 @@ async fn test_memory_writes_from_state() {
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_rocks_db_writes_from_state() {
-    let store = linera_views::rocks_db::RocksDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = RocksDbStore::new_test_store().await.unwrap();
     run_writes_from_state(&store).await;
 }
 
@@ -281,17 +266,25 @@ async fn test_indexed_db_writes_from_state() {
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_dynamo_db_writes_from_state() {
-    let store = linera_views::dynamo_db::DynamoDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = DynamoDbStore::new_test_store().await.unwrap();
     run_writes_from_state(&store).await;
 }
 
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_writes_from_state() {
-    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
-        .await
-        .unwrap();
+    let store = ScyllaDbStore::new_test_store().await.unwrap();
     run_writes_from_state(&store).await;
+}
+
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_scylladb_cache_key_absence() {
+    test_cache_check_absence_admin_test::<ScyllaDbStore>().await
+}
+
+#[cfg(with_dynamodb)]
+#[tokio::test]
+async fn test_dynamodb_cache_key_absence() {
+    test_cache_check_absence_admin_test::<DynamoDbStore>().await
 }

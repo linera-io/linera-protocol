@@ -33,6 +33,7 @@ impl IndexedDbStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
             cache_size: 1000,
+            cache_key_absence: false,
         };
         Self { common_config }
     }

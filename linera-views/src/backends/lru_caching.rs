@@ -87,8 +87,20 @@ impl<'a> LruPrefixCache {
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not create new entries in the cache.
     pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
-            *value = None;
+        if self.cache_key_absence {
+            for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
+                *value = None;
+            }
+        } else {
+            let keys = self
+                .map
+                .range(get_interval(key_prefix.to_vec()))
+                .map(|(key, _)| key.to_vec())
+                .collect::<Vec<_>>();
+            for key in keys {
+                self.map.remove(&key);
+                self.queue.remove(&key);
+            }
         }
     }
 
@@ -134,11 +146,9 @@ where
         {
             let lru_read_values = lru_read_values.lock().unwrap();
             if let Some(value) = lru_read_values.query(key) {
-                if lru_read_values.cache_key_absence || value.is_some() {
-                    #[cfg(with_metrics)]
-                    NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-                    return Ok(value.clone());
-                }
+                #[cfg(with_metrics)]
+                NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+                return Ok(value.clone());
             }
         }
         #[cfg(with_metrics)]
@@ -201,25 +211,17 @@ where
         {
             let lru_read_values = lru_read_values.lock().unwrap();
             for (i, key) in keys.into_iter().enumerate() {
-                let cache_fault = if let Some(value) = lru_read_values.query(&key) {
-                    if lru_read_values.cache_key_absence || value.is_some() {
-                        #[cfg(with_metrics)]
-                        NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-                        result.push(value.clone());
-                        false
-                    } else {
-                        true
-                    }
+                if let Some(value) = lru_read_values.query(&key) {
+                    #[cfg(with_metrics)]
+                    NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+                    result.push(value.clone());
                 } else {
-                    true
-                };
-                if cache_fault {
                     #[cfg(with_metrics)]
                     NUM_CACHE_FAULT.with_label_values(&[]).inc();
                     result.push(None);
                     cache_miss_indices.push(i);
                     miss_keys.push(key);
-                }
+                };
             }
         }
         if !miss_keys.is_empty() {
@@ -271,7 +273,9 @@ where
                         lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
                     }
                     WriteOperation::Delete { key } => {
-                        lru_read_values.insert(key.to_vec(), None);
+                        if lru_read_values.cache_key_absence {
+                            lru_read_values.insert(key.to_vec(), None);
+                        }
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
                         lru_read_values.delete_prefix(key_prefix);

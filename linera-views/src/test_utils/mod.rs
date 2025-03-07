@@ -774,3 +774,33 @@ where
     }
     assert_eq!(keys, read_keys);
 }
+
+/// Due to the fact that some store are caching values, it is possible
+/// that the following scenario occurs:
+/// * Store 1 deletes a key and mark it as missing in its cache.
+/// * Store 2 writes the key
+/// * Store 1 reads the key, see it as missing and returns false
+///   erroneously.
+///
+/// This test checks that the behavior is correct.
+pub async fn test_cache_check_absence_admin_test<S: TestKeyValueStore>()
+where
+    S::Error: Debug,
+{
+    let config = S::new_test_config().await.expect("config");
+    let namespace = generate_test_namespace();
+    S::create(&config, &namespace).await.expect("creation");
+    let key = vec![42];
+    //
+    let store1 = S::connect(&config, &namespace, &[]).await.expect("store");
+    let mut batch1 = Batch::new();
+    batch1.delete_key(key.clone());
+    store1.write_batch(batch1).await.expect("write batch1");
+    //
+    let store2 = S::connect(&config, &namespace, &[]).await.expect("store");
+    let mut batch2 = Batch::new();
+    batch2.put_key_value_bytes(key.clone(), vec![]);
+    store2.write_batch(batch2).await.expect("write batch2");
+    //
+    assert!(store1.contains_key(&key).await.unwrap());
+}
