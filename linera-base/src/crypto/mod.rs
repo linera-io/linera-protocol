@@ -274,6 +274,10 @@ pub enum CryptoError {
     PublicKeyParseError(bcs::Error),
     #[error("could not parse signature: {0}")]
     SignatureParseError(bcs::Error),
+    #[error("secp256k1 must not be empty")]
+    Secp256k1EmptySignature,
+    #[error("secp256k1 recovery id must be 0 or 1, got {0}")]
+    InvalidSecp256k1RecoveryId(u8),
 }
 
 #[cfg(with_getrandom)]
