@@ -493,6 +493,7 @@ where
         );
         let cross_chain_message_delivery = chain_client.options().cross_chain_message_delivery;
         let mut num_sent_proposals = 0;
+        chain_client.process_inbox().await?;
         loop {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");
