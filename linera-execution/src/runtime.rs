@@ -1382,10 +1382,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 };
                 let sender = this.execution_state_sender.clone();
 
+                let txn_tracker = TransactionTracker::default()
+                    .with_blobs(this.transaction_tracker.get_blobs_cache().clone());
+                let mut service_runtime =
+                    ServiceSyncRuntime::new_with_txn_tracker(sender, context, txn_tracker);
                 let QueryOutcome {
                     response,
                     operations,
-                } = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
+                } = service_runtime.run_query(application_id, query)?;
 
                 this.scheduled_operations.extend(operations);
                 response
@@ -1539,6 +1543,19 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
     pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
+        Self::new_with_txn_tracker(
+            execution_state_sender,
+            context,
+            TransactionTracker::default(),
+        )
+    }
+
+    /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
+    pub fn new_with_txn_tracker(
+        execution_state_sender: ExecutionStateSender,
+        context: QueryContext,
+        txn_tracker: TransactionTracker,
+    ) -> Self {
         let runtime = SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,
@@ -1550,7 +1567,7 @@ impl ServiceSyncRuntime {
                 execution_state_sender,
                 None,
                 ResourceController::default(),
-                TransactionTracker::default(),
+                txn_tracker,
             )
             .into(),
         ));

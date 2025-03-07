@@ -69,6 +69,11 @@ impl TransactionTracker {
         }
     }
 
+    pub fn with_blobs(mut self, blobs: BTreeMap<BlobId, Blob>) -> Self {
+        self.blobs = blobs;
+        self
+    }
+
     pub fn next_message_index(&self) -> u32 {
         self.next_message_index
     }

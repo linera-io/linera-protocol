@@ -98,7 +98,20 @@ where
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
-        let description = self.system.describe_application(id, txn_tracker).await?;
+        let blob_id = BlobId::new(
+            id.application_description_hash,
+            BlobType::ApplicationDescription,
+        );
+        let description = match txn_tracker
+            .as_ref()
+            .and_then(|tracker| tracker.get_blobs_cache().get(&blob_id))
+        {
+            Some(description) => {
+                let blob = description.clone();
+                bcs::from_bytes(blob.bytes())?
+            }
+            None => self.system.describe_application(id, txn_tracker).await?,
+        };
         let code = self
             .context()
             .extra()
