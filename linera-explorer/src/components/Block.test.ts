@@ -11,7 +11,6 @@ test('Block mounting', () => {
           status: "confirmed",
           block: {
             header: {
-              version: 1,
               chainId: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8",
               epoch: "0",
               height: 6,
@@ -47,6 +46,7 @@ test('Block mounting', () => {
               }]],
               events: [[]],
               oracleResponses: [],
+              blobs: [[]],
               incomingBundles: [{
                 origin: {
                   medium: "Direct",
