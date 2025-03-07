@@ -426,11 +426,7 @@ pub async fn big_read_multi_values<C: LocalKeyValueStore>(
 ) {
     let mut rng = make_deterministic_rng();
     let namespace = generate_test_namespace();
-    let root_key = &[];
-    //
-    let store = C::recreate_and_connect(&config, &namespace, root_key)
-        .await
-        .unwrap();
+    let store = C::recreate_and_connect(&config, &namespace).await.unwrap();
     let key_prefix = vec![42, 54];
     let mut batch = Batch::new();
     let mut keys = Vec::new();
@@ -445,7 +441,7 @@ pub async fn big_read_multi_values<C: LocalKeyValueStore>(
     }
     store.write_batch(batch).await.unwrap();
     // We reconnect so that the read is not using the cache.
-    let store = C::connect(&config, &namespace, root_key).await.unwrap();
+    let store = C::connect(&config, &namespace).await.unwrap();
     let values_read = store.read_multi_values_bytes(keys).await.unwrap();
     assert_eq!(values, values_read);
 }
@@ -675,9 +671,8 @@ where
     // Connecting to all of them at once
     {
         let mut connections = Vec::new();
-        let root_key = &[];
         for namespace in &working_namespaces {
-            let connection = S::connect(&config, namespace, root_key)
+            let connection = S::connect(&config, namespace)
                 .await
                 .expect("a connection to the namespace");
             connections.push(connection);
@@ -725,7 +720,7 @@ where
     {
         let size = 3;
         let mut rng = make_deterministic_rng();
-        let store = S::connect(&config, &namespace, &[]).await.expect("store");
+        let store = S::connect(&config, &namespace).await.expect("store");
         root_keys.push(vec![]);
         let mut batch = Batch::new();
         for _ in 0..2 {
@@ -760,9 +755,11 @@ where
 
     let mut read_keys = BTreeSet::new();
     for root_key in read_root_keys {
-        let store = S::connect(&config, &namespace, &root_key)
+        let store = S::connect(&config, &namespace)
             .await
-            .expect("store");
+            .expect("store")
+            .clone_with_root_key(&root_key)
+            .expect("clone_with_root_key");
         let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
         for key in keys.iterator() {
             let key = key.expect("key");

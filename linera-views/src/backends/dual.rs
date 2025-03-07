@@ -244,18 +244,14 @@ where
         format!("dual {} and {}", S1::get_name(), S2::get_name())
     }
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, Self::Error> {
-        let first_store = S1::connect(&config.first_config, namespace, root_key)
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
+        let first_store = S1::connect(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
-        let second_store = S2::connect(&config.second_config, namespace, root_key)
+        let second_store = S2::connect(&config.second_config, namespace)
             .await
             .map_err(DualStoreError::Second)?;
-        let store_in_use = A::assigned_store(root_key)?;
+        let store_in_use = A::assigned_store(&[])?;
         Ok(Self {
             first_store,
             second_store,

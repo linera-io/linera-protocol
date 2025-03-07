@@ -167,11 +167,7 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     fn get_name() -> String;
 
     /// Connects to an existing namespace using the given configuration.
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, Self::Error>;
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
 
     /// Takes a connection and creates a new one with a different `root_key`.
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
@@ -210,13 +206,12 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     fn maybe_create_and_connect(
         config: &Self::Config,
         namespace: &str,
-        root_key: &[u8],
     ) -> impl Future<Output = Result<Self, Self::Error>> {
         async {
             if !Self::exists(config, namespace).await? {
                 Self::create(config, namespace).await?;
             }
-            Self::connect(config, namespace, root_key).await
+            Self::connect(config, namespace).await
         }
     }
 
@@ -224,14 +219,13 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     fn recreate_and_connect(
         config: &Self::Config,
         namespace: &str,
-        root_key: &[u8],
     ) -> impl Future<Output = Result<Self, Self::Error>> {
         async {
             if Self::exists(config, namespace).await? {
                 Self::delete(config, namespace).await?;
             }
             Self::create(config, namespace).await?;
-            Self::connect(config, namespace, root_key).await
+            Self::connect(config, namespace).await
         }
     }
 }
@@ -286,8 +280,7 @@ pub trait TestKeyValueStore: KeyValueStore {
         async {
             let config = Self::new_test_config().await?;
             let namespace = generate_test_namespace();
-            let root_key = &[];
-            Self::recreate_and_connect(&config, &namespace, root_key).await
+            Self::recreate_and_connect(&config, &namespace).await
         }
     }
 }

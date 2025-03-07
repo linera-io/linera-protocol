@@ -50,9 +50,7 @@ impl RocksDbRunner {
         let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
         let store_config = RocksDbStoreConfig::new(spawn_mode, path_with_guard, common_config);
         let namespace = config.client.namespace.clone();
-        let root_key = &[];
-        let store =
-            RocksDbStore::maybe_create_and_connect(&store_config, &namespace, root_key).await?;
+        let store = RocksDbStore::maybe_create_and_connect(&store_config, &namespace).await?;
         Self::new(config, store).await
     }
 }

@@ -294,12 +294,8 @@ where
         format!("lru caching {}", K::get_name())
     }
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, Self::Error> {
-        let store = K::connect(&config.inner_config, namespace, root_key).await?;
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
+        let store = K::connect(&config.inner_config, namespace).await?;
         let cache_size = config.cache_size;
         Ok(LruCachingStore::new(store, cache_size))
     }

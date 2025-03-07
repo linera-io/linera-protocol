@@ -891,20 +891,18 @@ where
     pub async fn initialize(
         config: Store::Config,
         namespace: &str,
-        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
+        let store = Store::maybe_create_and_connect(&config, namespace).await?;
         Ok(Self::create(store, wasm_runtime, WallClock))
     }
 
     pub async fn new(
         config: Store::Config,
         namespace: &str,
-        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::connect(&config, namespace, root_key).await?;
+        let store = Store::connect(&config, namespace).await?;
         Ok(Self::create(store, wasm_runtime, WallClock))
     }
 }
@@ -918,11 +916,9 @@ where
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Store::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
-        let root_key = &[];
         DbStorage::<Store, TestClock>::new_for_testing(
             config,
             &namespace,
-            root_key,
             wasm_runtime,
             TestClock::new(),
         )
@@ -933,11 +929,10 @@ where
     pub async fn new_for_testing(
         config: Store::Config,
         namespace: &str,
-        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, Store::Error> {
-        let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
+        let store = Store::recreate_and_connect(&config, namespace).await?;
         Ok(Self::create(store, wasm_runtime, clock))
     }
 }

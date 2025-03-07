@@ -446,15 +446,11 @@ where
         K::get_name()
     }
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, Self::Error> {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
         let name = K::get_name();
         let counter = get_counter(&name);
         let _latency = counter.connect_latency.measure_latency();
-        let store = K::connect(config, namespace, root_key).await?;
+        let store = K::connect(config, namespace).await?;
         let counter = get_counter(&name);
         Ok(Self { counter, store })
     }
