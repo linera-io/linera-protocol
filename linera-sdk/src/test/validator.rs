@@ -195,6 +195,11 @@ impl TestValidator {
         self.new_chain_with_keypair(key_pair).await
     }
 
+    /// Adds an existing [`ActiveChain`].
+    pub fn add_chain(&self, chain: ActiveChain) {
+        self.chains.insert(chain.id(), chain);
+    }
+
     /// Adds a block to the admin chain to create a new chain.
     ///
     /// Returns the [`ChainDescription`] of the new chain.
