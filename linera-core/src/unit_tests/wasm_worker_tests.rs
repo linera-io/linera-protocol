@@ -298,7 +298,7 @@ where
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new()],
-            operation_results: vec![vec![0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00].into()],
+            operation_results: vec![bcs::to_bytes(15u64)?.into()],
         }
         .with(run_block),
     ));

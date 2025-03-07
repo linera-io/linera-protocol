@@ -381,7 +381,7 @@ impl From<Vec<u8>> for OperationResult {
 
 impl<'de> BcsHashable<'de> for OperationResult {}
 
-doc_scalar!(
+bcs_scalar!(
     OperationResult,
     "The execution result of a single operation."
 );
