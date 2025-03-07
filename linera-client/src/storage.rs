@@ -350,6 +350,7 @@ impl StorageConfigNamespace {
                 let config = ServiceStoreConfig {
                     inner_config,
                     cache_size: common_config.cache_size,
+                    cache_key_absence: common_config.cache_key_absence,
                 };
                 Ok(StoreConfig::Service(config, namespace))
             }

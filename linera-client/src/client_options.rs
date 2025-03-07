@@ -193,6 +193,7 @@ impl ClientOptions {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
             cache_size: self.cache_size,
+            cache_key_absence: false,
         }
     }
 

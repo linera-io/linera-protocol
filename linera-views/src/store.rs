@@ -29,6 +29,8 @@ pub struct CommonStoreConfig {
     pub max_stream_queries: usize,
     /// The cache size being used.
     pub cache_size: usize,
+    /// Caching the absence of keys.
+    pub cache_key_absence: bool,
 }
 
 impl CommonStoreConfig {
@@ -47,6 +49,7 @@ impl Default for CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries: 10,
             cache_size: 1000,
+            cache_key_absence: false,
         }
     }
 }

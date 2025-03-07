@@ -543,6 +543,7 @@ async fn run(options: ServerOptions) {
                 max_concurrent_queries,
                 max_stream_queries,
                 cache_size,
+                cache_key_absence: false,
             };
             let full_storage_config = storage_config
                 .add_common_config(common_config)
@@ -609,6 +610,7 @@ async fn run(options: ServerOptions) {
                 max_concurrent_queries,
                 max_stream_queries,
                 cache_size,
+                cache_key_absence: false,
             };
             let full_storage_config = storage_config
                 .add_common_config(common_config)

@@ -42,6 +42,7 @@ impl RocksDbRunner {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
             cache_size: config.client.cache_size,
+            cache_key_absence: false,
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);

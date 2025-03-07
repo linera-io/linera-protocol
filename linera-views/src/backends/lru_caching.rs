@@ -49,15 +49,17 @@ struct LruPrefixCache {
     map: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
     queue: LinkedHashMap<Vec<u8>, (), RandomState>,
     max_cache_size: usize,
+    cache_key_absence: bool,
 }
 
 impl<'a> LruPrefixCache {
     /// Creates an `LruPrefixCache`.
-    pub fn new(max_cache_size: usize) -> Self {
+    pub fn new(max_cache_size: usize, cache_key_absence: bool) -> Self {
         Self {
             map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
             max_cache_size,
+            cache_key_absence,
         }
     }
 
@@ -130,11 +132,13 @@ where
         };
         // First inquiring in the read_value_bytes LRU
         {
-            let lru_read_values_container = lru_read_values.lock().unwrap();
-            if let Some(value) = lru_read_values_container.query(key) {
-                #[cfg(with_metrics)]
-                NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-                return Ok(value.clone());
+            let lru_read_values = lru_read_values.lock().unwrap();
+            if let Some(value) = lru_read_values.query(key) {
+                if lru_read_values.cache_key_absence || value.is_some() {
+                    #[cfg(with_metrics)]
+                    NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+                    return Ok(value.clone());
+                }
             }
         }
         #[cfg(with_metrics)]
@@ -195,13 +199,21 @@ where
         let mut cache_miss_indices = Vec::new();
         let mut miss_keys = Vec::new();
         {
-            let lru_read_values_container = lru_read_values.lock().unwrap();
+            let lru_read_values = lru_read_values.lock().unwrap();
             for (i, key) in keys.into_iter().enumerate() {
-                if let Some(value) = lru_read_values_container.query(&key) {
-                    #[cfg(with_metrics)]
-                    NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
-                    result.push(value.clone());
+                let cache_fault = if let Some(value) = lru_read_values.query(&key) {
+                    if lru_read_values.cache_key_absence || value.is_some() {
+                        #[cfg(with_metrics)]
+                        NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
+                        result.push(value.clone());
+                        false
+                    } else {
+                        true
+                    }
                 } else {
+                    true
+                };
+                if cache_fault {
                     #[cfg(with_metrics)]
                     NUM_CACHE_FAULT.with_label_values(&[]).inc();
                     result.push(None);
@@ -282,6 +294,8 @@ pub struct LruCachingConfig<C> {
     pub inner_config: C,
     /// The cache size being used
     pub cache_size: usize,
+    /// Caching the absence of keys
+    pub cache_key_absence: bool,
 }
 
 impl<K> AdminKeyValueStore for LruCachingStore<K>
@@ -300,14 +314,17 @@ where
         root_key: &[u8],
     ) -> Result<Self, Self::Error> {
         let store = K::connect(&config.inner_config, namespace, root_key).await?;
-        let cache_size = config.cache_size;
-        Ok(LruCachingStore::new(store, cache_size))
+        Ok(LruCachingStore::new(
+            store,
+            config.cache_size,
+            config.cache_key_absence,
+        ))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
-        let cache_size = self.cache_size();
-        Ok(LruCachingStore::new(store, cache_size))
+        let (cache_size, cache_key_absence) = self.cache_config();
+        Ok(LruCachingStore::new(store, cache_size, cache_key_absence))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
@@ -346,38 +363,49 @@ where
     async fn new_test_config() -> Result<LruCachingConfig<K::Config>, K::Error> {
         let inner_config = K::new_test_config().await?;
         let cache_size = TEST_CACHE_SIZE;
+        let cache_key_absence = false;
         Ok(LruCachingConfig {
             inner_config,
             cache_size,
+            cache_key_absence,
         })
     }
 }
 
-fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>> {
+fn new_lru_prefix_cache(
+    cache_size: usize,
+    cache_key_absence: bool,
+) -> Option<Arc<Mutex<LruPrefixCache>>> {
     if cache_size == 0 {
         None
     } else {
-        Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
+        Some(Arc::new(Mutex::new(LruPrefixCache::new(
+            cache_size,
+            cache_key_absence,
+        ))))
     }
 }
 
 impl<K> LruCachingStore<K> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
-    pub fn new(store: K, cache_size: usize) -> Self {
-        let lru_read_values = new_lru_prefix_cache(cache_size);
+    pub fn new(store: K, cache_size: usize, cache_key_absence: bool) -> Self {
+        let lru_read_values = new_lru_prefix_cache(cache_size, cache_key_absence);
         Self {
             store,
             lru_read_values,
         }
     }
 
-    /// Gets the `cache_size`
-    pub fn cache_size(&self) -> usize {
+    /// Gets the `cache_config`
+    pub fn cache_config(&self) -> (usize, bool) {
         match &self.lru_read_values {
-            None => 0,
+            None => (0, false),
             Some(lru_read_values) => {
                 let lru_read_values = lru_read_values.lock().unwrap();
-                lru_read_values.max_cache_size
+                (
+                    lru_read_values.max_cache_size,
+                    lru_read_values.cache_key_absence,
+                )
             }
         }
     }

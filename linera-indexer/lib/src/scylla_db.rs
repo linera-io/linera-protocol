@@ -39,6 +39,7 @@ impl ScyllaDbRunner {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
             cache_size: config.client.cache_size,
+            cache_key_absence: false,
         };
         let namespace = config.client.table.clone();
         let root_key = &[];

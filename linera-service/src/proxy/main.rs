@@ -386,6 +386,7 @@ impl ProxyOptions {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
             cache_size: self.cache_size,
+            cache_key_absence: false,
         };
         let full_storage_config = self.storage_config.add_common_config(common_config).await?;
         let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
