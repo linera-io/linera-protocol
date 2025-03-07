@@ -272,13 +272,8 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
         "indexed db".to_string()
     }
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, IndexedDbStoreError> {
-        let mut start_key = ROOT_KEY_DOMAIN.to_vec();
-        start_key.extend(root_key);
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, IndexedDbStoreError> {
+        let start_key = ROOT_KEY_DOMAIN.to_vec();
         Self::connect_internal(config, namespace, start_key).await
     }
 
@@ -297,8 +292,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, IndexedDbStoreError> {
-        let root_key = &[];
-        Ok(Self::connect(config, "", root_key)
+        Ok(Self::connect(config, "")
             .await?
             .database
             .object_store_names()
@@ -315,8 +309,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, IndexedDbStoreError> {
-        let root_key = &[];
-        Ok(Self::connect(config, "", root_key)
+        Ok(Self::connect(config, "")
             .await?
             .database
             .object_store_names()
@@ -324,8 +317,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbStoreError> {
-        let root_key = &[];
-        Self::connect(config, "", root_key)
+        Self::connect(config, "")
             .await?
             .database
             .create_object_store(namespace)?;
@@ -333,8 +325,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), IndexedDbStoreError> {
-        let root_key = &[];
-        Ok(Self::connect(config, "", root_key)
+        Ok(Self::connect(config, "")
             .await?
             .database
             .delete_object_store(namespace)?)
@@ -352,10 +343,7 @@ mod testing {
     ) -> IndexedDbStore {
         let config = IndexedDbStoreConfig::new(max_stream_queries);
         let namespace = generate_test_namespace();
-        let root_key = &[];
-        IndexedDbStore::connect(&config, &namespace, root_key)
-            .await
-            .unwrap()
+        IndexedDbStore::connect(&config, &namespace).await.unwrap()
     }
 
     /// Creates a test IndexedDB store for working.
