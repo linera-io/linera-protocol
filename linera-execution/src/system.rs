@@ -1040,10 +1040,7 @@ where
         id: UserApplicationId,
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<UserApplicationDescription, SystemExecutionError> {
-        let blob_id = BlobId::new(
-            id.application_description_hash,
-            BlobType::ApplicationDescription,
-        );
+        let blob_id = id.description_blob_id();
         let blob_content = self.read_blob_content(blob_id).await?;
         self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
         let description: UserApplicationDescription = bcs::from_bytes(blob_content.bytes())?;

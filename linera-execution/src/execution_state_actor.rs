@@ -15,7 +15,7 @@ use linera_base::prometheus_util::{
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -68,10 +68,7 @@ where
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
-        let blob_id = BlobId::new(
-            id.application_description_hash,
-            BlobType::ApplicationDescription,
-        );
+        let blob_id = id.description_blob_id();
         let description = match txn_tracker.get_blobs_cache().get(&blob_id) {
             Some(description) => {
                 let blob = description.clone();
@@ -98,10 +95,7 @@ where
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
-        let blob_id = BlobId::new(
-            id.application_description_hash,
-            BlobType::ApplicationDescription,
-        );
+        let blob_id = id.description_blob_id();
         let description = match txn_tracker
             .as_ref()
             .and_then(|tracker| tracker.get_blobs_cache().get(&blob_id))

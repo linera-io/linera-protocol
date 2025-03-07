@@ -872,6 +872,15 @@ impl<A> ApplicationId<A> {
             module_id: self.module_id.forget_abi(),
         }
     }
+
+    /// Converts the application ID to the ID of the blob containing the
+    /// UserApplicationDescription.
+    pub fn description_blob_id(self) -> BlobId {
+        BlobId::new(
+            self.application_description_hash,
+            BlobType::ApplicationDescription,
+        )
+    }
 }
 
 impl Display for Owner {
