@@ -191,7 +191,7 @@ impl TestValidator {
 
     /// Add an existing [`ActiveChain`]
     pub fn add_chain(&self, chain: ActiveChain) {
-        self.chains.insert(chain.id(), chain.clone());
+        self.chains.insert(chain.id(), chain);
     }
 
     /// Adds a block to the admin chain to create a new chain.
