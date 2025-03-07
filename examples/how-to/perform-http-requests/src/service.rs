@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use async_graphql::{EmptyMutation, EmptySubscription, Request, Response, Schema};
-use how_to_perform_http_requests::Abi;
+use async_graphql::{EmptySubscription, Request, Response, Schema};
+use how_to_perform_http_requests::{Abi, Operation};
 use linera_sdk::{ensure, http, linera_base_types::WithServiceAbi, Service as _, ServiceRuntime};
 
 #[derive(Clone)]
@@ -34,7 +34,9 @@ impl linera_sdk::Service for Service {
             Query {
                 service: self.clone(),
             },
-            EmptyMutation,
+            Mutation {
+                service: self.clone(),
+            },
             EmptySubscription,
         )
         .finish();
@@ -76,6 +78,26 @@ impl Service {
         );
 
         Ok(response.body)
+    }
+}
+
+/// The handler for service mutations.
+struct Mutation {
+    service: Service,
+}
+
+#[async_graphql::Object]
+impl Mutation {
+    /// Performs an HTTP query in the service, and sends the response to the contract by scheduling
+    /// an [`Operation::HandleHttpResponse`].
+    pub async fn perform_http_request(&self) -> async_graphql::Result<bool> {
+        let response = self.service.perform_http_request()?;
+
+        self.service
+            .runtime
+            .schedule_operation(&Operation::HandleHttpResponse(response));
+
+        Ok(true)
     }
 }
 
