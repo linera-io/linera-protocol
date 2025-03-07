@@ -10,7 +10,7 @@ use std::{
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
-    bcs,
+    bcs, bcs_scalar,
     crypto::{
         AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
         CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
