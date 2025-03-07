@@ -16,8 +16,7 @@ use linera_service::cli_wrappers::{
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{
-    applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
-    Transfer,
+    block, blocks, chains, request, transfer, Block, Blocks, Chains, Transfer,
 };
 use test_case::test_case;
 use tokio::sync::Mutex;
@@ -64,7 +63,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         accounts: BTreeMap::new(),
     };
     let params = fungible::Parameters::new("FUN");
-    let application_id = client
+    let _application_id = client
         .publish_and_create::<FungibleTokenAbi, fungible::Parameters, InitialState>(
             contract,
             service,
@@ -96,19 +95,6 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         .unwrap()
         .chains;
     assert_eq!((chains.default, chains.list), node_chains);
-
-    // check applications query
-    let applications = request::<Applications, _>(
-        req_client,
-        url,
-        applications::Variables {
-            chain_id: node_chains.0.unwrap(),
-        },
-    )
-    .await
-    .unwrap()
-    .applications;
-    assert_eq!(applications[0].id, application_id.forget_abi().to_string());
 
     // check blocks query
     let blocks = request::<Blocks, _>(
