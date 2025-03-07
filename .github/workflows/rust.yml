@@ -334,16 +334,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Put lint toolchain file in place
-      run: |
-        ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Install taplo-fmt
-      run: |
-        RUSTFLAGS='' cargo install taplo-cli@0.9.3 --locked
-    - name: Check if Cargo.toml files are sorted
-      run: |
-        taplo fmt --check
+    - name: Install `taplo-cli`
+      run: RUSTFLAGS='' cargo install taplo-cli@0.9.3 --locked
+    - name: Check if `Cargo.toml` files are formatted
+      run: taplo fmt --check --diff
 
   lint-check-for-outdated-readme:
     runs-on: ubuntu-latest
