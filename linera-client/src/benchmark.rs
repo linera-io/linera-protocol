@@ -185,6 +185,7 @@ where
             let committee = committee.clone();
             let local_node = local_node.clone();
             let chain_client = chain_clients[&chain_id].clone();
+            chain_client.process_inbox().await?;
             let short_chain_id = format!("{:?}", chain_id);
             join_set.spawn_blocking(move || {
                 handle.block_on(
@@ -493,7 +494,6 @@ where
         );
         let cross_chain_message_delivery = chain_client.options().cross_chain_message_delivery;
         let mut num_sent_proposals = 0;
-        chain_client.process_inbox().await?;
         loop {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");

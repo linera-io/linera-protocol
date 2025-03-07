@@ -1349,6 +1349,9 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         )
         .await;
 
+    // Make sure that the transfer is received before we try to pledge.
+    node_service2.process_inbox(&chain2).await?;
+
     let app_crowd2 = node_service2
         .make_application(&chain2, &application_id_crowd)
         .await?;
