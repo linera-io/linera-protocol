@@ -60,3 +60,6 @@ impl Contract {
         assert_eq!(response_body, b"Hello, world!");
     }
 }
+
+#[path = "unit_tests/contract.rs"]
+mod unit_tests;
