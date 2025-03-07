@@ -114,7 +114,7 @@ async fn test_bouncing_tokens() {
         Some(initial_amount.saturating_sub(transfer_amount)),
     );
 
-    assert_eq!(certificate.outgoing_message_count(), 2);
+    assert_eq!(certificate.outgoing_message_count(), 1);
 
     receiver_chain
         .add_block(move |block| {

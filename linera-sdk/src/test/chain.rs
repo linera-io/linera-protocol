@@ -487,6 +487,7 @@ impl ActiveChain {
 
         let block = creation_certificate.inner().block();
         assert_eq!(block.messages().len(), 1);
+        assert!(block.messages()[0].is_empty());
 
         let description = UserApplicationDescription {
             module_id: module_id.forget_abi(),

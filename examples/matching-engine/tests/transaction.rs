@@ -153,7 +153,7 @@ async fn single_transaction() {
             })
             .await;
 
-        assert_eq!(bid_certificate.outgoing_message_count(), 3);
+        assert_eq!(bid_certificate.outgoing_message_count(), 2);
         bid_certificates.push(bid_certificate);
     }
 
@@ -205,7 +205,7 @@ async fn single_transaction() {
             })
             .await;
 
-        assert_eq!(ask_certificate.outgoing_message_count(), 3);
+        assert_eq!(ask_certificate.outgoing_message_count(), 2);
         ask_certificates.push(ask_certificate);
     }
 
@@ -257,7 +257,7 @@ async fn single_transaction() {
             block.with_operation(matching_id, operation);
         })
         .await;
-    assert_eq!(order_certificate.outgoing_message_count(), 2);
+    assert_eq!(order_certificate.outgoing_message_count(), 1);
     matching_chain
         .add_block(|block| {
             block.with_messages_from(&order_certificate);
