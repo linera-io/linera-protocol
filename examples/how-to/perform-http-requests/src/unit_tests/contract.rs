@@ -61,6 +61,27 @@ fn accepts_response_obtained_by_contract() {
         .blocking_wait();
 }
 
+/// Tests if the contract performs an HTTP request and rejects it if it receives an
+/// invalid response.
+#[test]
+#[should_panic(expected = "assertion `left == right` failed")]
+fn rejects_invalid_response_obtained_by_contract() {
+    let url = "http://some.test.url".to_owned();
+    let mut contract = create_contract();
+
+    contract
+        .runtime
+        .set_application_parameters(url.clone())
+        .add_expected_http_request(
+            http::Request::get(url),
+            http::Response::ok(b"Untrusted response".to_vec()),
+        );
+
+    contract
+        .execute_operation(Operation::PerformHttpRequest)
+        .blocking_wait();
+}
+
 /// Creates a [`Contract`] instance for testing.
 fn create_contract() -> Contract {
     let runtime = ContractRuntime::new();
