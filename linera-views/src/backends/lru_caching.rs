@@ -64,6 +64,7 @@ impl<'a> LruPrefixCache {
         if value.is_none() && !self.has_exclusive_access {
             // Just forget about the entry.
             self.map.remove(&key);
+            self.queue.remove(&key);
             return;
         }
         match self.map.entry(key.clone()) {
@@ -100,6 +101,7 @@ impl<'a> LruPrefixCache {
             }
             for key in keys {
                 self.map.remove(&key);
+                self.queue.remove(&key);
             }
         }
     }
