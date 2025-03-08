@@ -36,15 +36,10 @@ static NUM_CACHE_FAULT: LazyLock<IntCounterVec> =
 static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> =
     LazyLock::new(|| register_int_counter_vec("num_cache_success", "Number of cache success", &[]));
 
-/// The `LruPrefixCache` stores the data for simple `read_values` queries
-/// It is inspired by the crate `lru-cache`.
+/// Stores the data for simple `read_values` queries.
 ///
-/// We cannot apply this crate directly because the batch operation
-/// need to update the cache. In the case of `DeletePrefix` we have to
-/// handle the keys by prefixes. And so we need to have a `BTreeMap` to
-/// keep track of this.
-
-/// The data structures
+/// This data-structure is inspired by the crate `lru-cache` but was modified to support
+/// range deletions.
 struct LruPrefixCache {
     map: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
     queue: LinkedHashMap<Vec<u8>, (), RandomState>,
