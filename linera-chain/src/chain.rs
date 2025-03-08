@@ -172,7 +172,7 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 /// The BCS-serialized size of an empty [`Block`].
-const EMPTY_BLOCK_SIZE: usize = 91;
+const EMPTY_BLOCK_SIZE: usize = 92;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
@@ -776,6 +776,7 @@ where
         let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
         let mut messages = Vec::new();
+        let mut operation_results = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
@@ -889,6 +890,16 @@ where
             oracle_responses.push(txn_outcome.oracle_responses);
             messages.push(txn_messages);
             events.push(txn_outcome.events);
+
+            if let Transaction::ExecuteOperation(_) = transaction {
+                resource_controller
+                    .track_block_size_of(&(&txn_outcome.operation_result))
+                    .with_execution_context(chain_execution_context)?;
+                resource_controller
+                    .track_executed_block_size_sequence_extension(operation_results.len(), 1)
+                    .with_execution_context(chain_execution_context)?;
+                operation_results.push(txn_outcome.operation_result.into());
+            }
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -918,6 +929,7 @@ where
             state_hash,
             oracle_responses,
             events,
+            operation_results,
         };
         Ok(outcome)
     }

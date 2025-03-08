@@ -33,6 +33,7 @@ mod types {
     pub type Origin = Value;
     pub type Target = Value;
     pub type UserApplicationDescription = Value;
+    pub type OperationResult = Value;
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct Notification {
@@ -65,7 +66,7 @@ mod types {
         ownership::ChainOwnership,
     };
     pub use linera_chain::{
-        data_types::{MessageAction, MessageBundle, Origin, Target},
+        data_types::{MessageAction, MessageBundle, OperationResult, Origin, Target},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
@@ -237,6 +238,7 @@ mod from {
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
+                operation_results_hash,
             } = header;
             let block::BlockBlockValueBlockBody {
                 incoming_bundles,
@@ -244,6 +246,7 @@ mod from {
                 operations,
                 oracle_responses,
                 events,
+                operation_results,
             } = body;
 
             let block_header = BlockHeader {
@@ -259,6 +262,7 @@ mod from {
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
+                operation_results_hash,
             };
             let block_body = BlockBody {
                 incoming_bundles: incoming_bundles
@@ -275,6 +279,7 @@ mod from {
                     .into_iter()
                     .map(|events| events.into_iter().map(Into::into).collect())
                     .collect(),
+                operation_results,
             };
 
             Block {
