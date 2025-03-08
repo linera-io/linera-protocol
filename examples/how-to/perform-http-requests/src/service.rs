@@ -109,6 +109,16 @@ impl Mutation {
 
         Ok(true)
     }
+
+    /// Requests the contract to use this service as an oracle to perform an HTTP request, by
+    /// scheduling an [`Operation::PerformHttpRequest`].
+    pub async fn perform_http_request_as_oracle(&self) -> async_graphql::Result<bool> {
+        self.service
+            .runtime
+            .schedule_operation(&Operation::UseServiceAsOracle);
+
+        Ok(true)
+    }
 }
 
 #[path = "unit_tests/service.rs"]
