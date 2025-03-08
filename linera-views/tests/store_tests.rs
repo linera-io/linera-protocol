@@ -217,18 +217,24 @@ async fn test_big_value_read_write() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn scylla_db_tombstone_triggering_test() {
+    use linera_views::store::AdminKeyValueStore as _;
+
     let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
         .await
         .unwrap();
+    let store = store.clone_with_root_key(&[]).unwrap();
     linera_views::test_utils::tombstone_triggering_test(store).await;
 }
 
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_big_write_read() {
+    use linera_views::store::AdminKeyValueStore as _;
+
     let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
         .await
         .unwrap();
+    let store = store.clone_with_root_key(&[]).unwrap();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(store, target_size, value_sizes).await;
@@ -265,9 +271,12 @@ async fn test_indexed_db_big_write_read() {
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_dynamo_db_big_write_read() {
+    use linera_views::store::AdminKeyValueStore as _;
+
     let store = linera_views::dynamo_db::DynamoDbStore::new_test_store()
         .await
         .unwrap();
+    let store = store.clone_with_root_key(&[]).unwrap();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(store, target_size, value_sizes).await;
