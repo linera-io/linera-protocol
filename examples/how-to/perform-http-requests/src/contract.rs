@@ -4,7 +4,7 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use how_to_perform_http_requests::{Abi, Operation};
-use linera_sdk::{linera_base_types::WithContractAbi, Contract as _, ContractRuntime};
+use linera_sdk::{http, linera_base_types::WithContractAbi, Contract as _, ContractRuntime};
 
 pub struct Contract {
     runtime: ContractRuntime<Self>,
@@ -35,6 +35,7 @@ impl linera_sdk::Contract for Contract {
             Operation::HandleHttpResponse(response_body) => {
                 self.handle_http_response(response_body)
             }
+            Operation::PerformHttpRequest => self.perform_http_request(),
         }
     }
 
@@ -58,6 +59,19 @@ impl Contract {
     /// exactly an expected value.
     fn handle_http_response(&self, response_body: Vec<u8>) {
         assert_eq!(response_body, b"Hello, world!");
+    }
+
+    /// Performs an HTTP request directly in the contract.
+    ///
+    /// This only works if the HTTP response (including any HTTP headers the response contains) is
+    /// the same in a quorum of validators. Otherwise, the contract should call the service as an
+    /// oracle to perform the HTTP request and the service should only return the data that will be
+    /// the same in a quorum of validators.
+    fn perform_http_request(&mut self) {
+        let url = self.runtime.application_parameters();
+        let response = self.runtime.http_request(http::Request::get(url));
+
+        self.handle_http_response(response.body);
     }
 }
 

@@ -28,4 +28,6 @@ impl ServiceAbi for Abi {
 pub enum Operation {
     /// Handles the HTTP response of a request made outside the contract.
     HandleHttpResponse(Vec<u8>),
+    /// Performs an HTTP request inside the contract.
+    PerformHttpRequest,
 }
