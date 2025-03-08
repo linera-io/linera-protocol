@@ -164,9 +164,9 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        if let Some(values) = &self.cache {
-            let values = values.lock().unwrap();
-            if let Some(value) = values.query(key) {
+        if let Some(cache) = &self.cache {
+            let cache = cache.lock().unwrap();
+            if let Some(value) = cache.query(key) {
                 return Ok(value.is_some());
             }
         }
@@ -174,7 +174,7 @@ where
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        let Some(values) = &self.cache else {
+        let Some(cache) = &self.cache else {
             return self.store.contains_keys(keys).await;
         };
         let size = keys.len();
@@ -182,9 +182,9 @@ where
         let mut indices = Vec::new();
         let mut key_requests = Vec::new();
         {
-            let values = values.lock().unwrap();
+            let cache = cache.lock().unwrap();
             for i in 0..size {
-                if let Some(value) = values.query(&keys[i]) {
+                if let Some(value) = cache.query(&keys[i]) {
                     results[i] = value.is_some();
                 } else {
                     indices.push(i);
