@@ -86,7 +86,7 @@ pub enum EvmExecutionError {
     #[error("It is illegal to call execute_message from an operation")]
     OperationCallExecuteMessage,
     #[error("The operation should contain the evm selector and so have length 4 or more")]
-    TooShortOperation,
+    OperationIsTooShort,
     #[error("Transact commit error")]
     TransactCommitError(String),
     #[error("The operation was reverted")]
@@ -444,8 +444,6 @@ enum Choice {
     Call,
 }
 
-// The OperationContext / MessageContext / FinalizeContext are not used
-// in the wasmer / wasmtime. Should we used it? It seems
 impl<Runtime> UserContract for RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
@@ -455,12 +453,13 @@ where
         _context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
+        let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         let mut vec = self.module.clone();
         vec.extend_from_slice(&argument);
         let tx_data = Bytes::copy_from_slice(&vec);
         let (output, logs) = self.transact_commit_tx_data(Choice::Create, tx_data)?;
         let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs)?;
+        self.write_logs(&contract_address, logs, "deploy")?;
         let Output::Create(_, Some(contract_address_used)) = output else {
             unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
         };
@@ -475,7 +474,7 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         ensure!(
             operation.len() >= 4,
-            ExecutionError::EvmError(EvmExecutionError::TooShortOperation)
+            ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
         );
         ensure!(
             &operation[..4] != EXECUTE_MESSAGE_SELECTOR,
@@ -484,7 +483,7 @@ where
         let tx_data = Bytes::copy_from_slice(&operation);
         let (output, logs) = self.transact_commit_tx_data(Choice::Call, tx_data)?;
         let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs)?;
+        self.write_logs(&contract_address, logs, "operation")?;
         let Output::Call(output) = output else {
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
@@ -564,16 +563,17 @@ where
         &mut self,
         contract_address: &Address,
         logs: Vec<Log>,
+        origin: &str,
     ) -> Result<(), ExecutionError> {
         if !logs.is_empty() {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-            let stream_name = bcs::to_bytes("ethereum_event").unwrap();
+            let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
             for (log, index) in logs.iter().enumerate() {
-                let mut key = bcs::to_bytes(&contract_address).unwrap();
-                bcs::serialize_into(&mut key, "deploy").unwrap();
-                bcs::serialize_into(&mut key, index).unwrap();
-                let value = bcs::to_bytes(&log).unwrap();
+                let mut key = bcs::to_bytes(&contract_address)?;
+                bcs::serialize_into(&mut key, origin)?;
+                bcs::serialize_into(&mut key, index)?;
+                let value = bcs::to_bytes(&log)?;
                 runtime.emit(stream_name.clone(), key, value)?;
             }
         }
@@ -604,6 +604,19 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
+        let argument: serde_json::Value = serde_json::from_slice(&argument)?;
+        let argument = argument["query"].to_string();
+        if let Some(residual) = argument.strip_prefix("\"mutation { v") {
+            let operation = &residual[0..residual.len() - 3];
+            let operation = hex::decode(operation).unwrap();
+            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            runtime.schedule_operation(operation)?;
+            let answer = serde_json::json!({"data": ""});
+            let answer = serde_json::to_vec(&answer).unwrap();
+            return Ok(answer);
+        }
+        let argument = argument[10..argument.len() - 3].to_string();
+        let argument = hex::decode(&argument).unwrap();
         let tx_data = Bytes::copy_from_slice(&argument);
         let address = self.db.contract_address;
         let mut evm: Evm<'_, (), _> = Evm::builder()
@@ -615,20 +628,20 @@ where
             })
             .build();
 
-        let result = evm.transact();
-        let result_state = match result {
-            Ok(result_state) => result_state,
-            Err(error) => {
-                let error = format!("{:?}", error);
-                let error = EvmExecutionError::TransactCommitError(error);
-                return Err(ExecutionError::EvmError(error));
-            }
-        };
+        let result_state = evm.transact().map_err(|error| {
+            let error = format!("{:?}", error);
+            let error = EvmExecutionError::TransactCommitError(error);
+            ExecutionError::EvmError(error)
+        })?;
         let (output, _logs) = process_execution_result(result_state.result)?;
         // We drop the logs since the "eth_call" execution does not return any log.
         let Output::Call(output) = output else {
             unreachable!("It is impossible for a Choice::Call to lead to a Output::Create");
         };
-        Ok(output.as_ref().to_vec())
+        let answer = output.as_ref().to_vec();
+        let answer = hex::encode(&answer);
+        let answer: serde_json::Value = serde_json::json!({"data": answer});
+        let answer = serde_json::to_vec(&answer).unwrap();
+        Ok(answer)
     }
 }

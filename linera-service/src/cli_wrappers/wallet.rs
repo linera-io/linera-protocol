@@ -342,6 +342,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera wallet publish-and-create`.
+    #[allow(clippy::too_many_arguments)]
     pub async fn publish_and_create<
         A: ContractAbi,
         Parameters: Serialize,
@@ -350,6 +351,7 @@ impl ClientWrapper {
         &self,
         contract: PathBuf,
         service: PathBuf,
+        vm_runtime: VmRuntime,
         parameters: &Parameters,
         argument: &InstantiationArgument,
         required_application_ids: &[ApplicationId],
@@ -358,9 +360,11 @@ impl ClientWrapper {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
         let mut command = self.command().await?;
+        let vm_runtime = format!("{}", vm_runtime);
         command
             .arg("publish-and-create")
             .args([contract, service])
+            .args(["--vm-runtime", &vm_runtime.to_lowercase()])
             .args(publisher.into().iter().map(ChainId::to_string))
             .args(["--json-parameters", &json_parameters])
             .args(["--json-argument", &json_argument]);

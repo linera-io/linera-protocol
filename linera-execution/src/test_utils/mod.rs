@@ -6,6 +6,8 @@
 #![allow(unused_imports)]
 
 mod mock_application;
+#[cfg(with_revm)]
+pub mod solidity;
 mod system_execution_state;
 
 use std::{collections::BTreeMap, sync::Arc, thread, vec};

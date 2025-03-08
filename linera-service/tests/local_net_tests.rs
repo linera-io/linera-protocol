@@ -15,6 +15,8 @@ use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use guard::INTEGRATION_TEST_GUARD;
+#[cfg(feature = "benchmark")]
+use linera_base::vm::VmRuntime;
 use linera_base::{
     crypto::Secp256k1SecretKey,
     data_types::{Amount, BlockHeight},
@@ -761,6 +763,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract,
             service,
+            VmRuntime::Wasm,
             &params,
             &state,
             &[],
