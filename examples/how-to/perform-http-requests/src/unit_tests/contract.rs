@@ -5,8 +5,10 @@
 
 //! Unit tests for the contract.
 
-use how_to_perform_http_requests::Operation;
-use linera_sdk::{http, util::BlockingWait as _, Contract as _, ContractRuntime};
+use how_to_perform_http_requests::{Abi, Operation};
+use linera_sdk::{
+    http, linera_base_types::ApplicationId, util::BlockingWait as _, Contract as _, ContractRuntime,
+};
 
 use super::Contract;
 
@@ -79,6 +81,41 @@ fn rejects_invalid_response_obtained_by_contract() {
 
     contract
         .execute_operation(Operation::PerformHttpRequest)
+        .blocking_wait();
+}
+
+/// Tests if the contract uses the service as an oracle to perform an HTTP request and
+/// accepts the response if it's valid.
+#[test]
+fn accepts_response_from_oracle() {
+    let application_id = ApplicationId::default().with_abi::<Abi>();
+    let url = "http://some.test.url".to_owned();
+    let mut contract = create_contract();
+
+    let http_response_graphql_list = "Hello, world!"
+        .as_bytes()
+        .iter()
+        .map(|&byte| async_graphql::Value::Number(byte.into()))
+        .collect();
+
+    contract
+        .runtime
+        .set_application_id(application_id)
+        .set_application_parameters(url.clone())
+        .add_expected_service_query(
+            application_id,
+            async_graphql::Request::new("query { performHttpRequest }"),
+            async_graphql::Response::new(async_graphql::Value::Object(
+                [(
+                    async_graphql::Name::new("performHttpRequest"),
+                    async_graphql::Value::List(http_response_graphql_list),
+                )]
+                .into(),
+            )),
+        );
+
+    contract
+        .execute_operation(Operation::UseServiceAsOracle)
         .blocking_wait();
 }
 
