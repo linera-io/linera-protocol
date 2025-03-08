@@ -49,6 +49,8 @@ struct LruPrefixCache {
     map: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
     queue: LinkedHashMap<Vec<u8>, (), RandomState>,
     max_cache_size: usize,
+    /// Whether we have exclusive R/W access to the keys under the root key of the store.
+    has_exclusive_access: bool,
 }
 
 impl<'a> LruPrefixCache {
@@ -58,11 +60,17 @@ impl<'a> LruPrefixCache {
             map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
             max_cache_size,
+            has_exclusive_access: false,
         }
     }
 
     /// Inserts an entry into the cache.
     pub fn insert(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+        if value.is_none() && !self.has_exclusive_access {
+            // Just forget about the entry.
+            self.map.remove(&key);
+            return;
+        }
         match self.map.entry(key.clone()) {
             btree_map::Entry::Occupied(mut entry) => {
                 entry.insert(value);
@@ -85,8 +93,19 @@ impl<'a> LruPrefixCache {
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not create new entries in the cache.
     pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
-            *value = None;
+        if self.has_exclusive_access {
+            for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
+                *value = None;
+            }
+        } else {
+            // Just forget about the entries.
+            let mut keys = Vec::new();
+            for (key, _) in self.map.range(get_interval(key_prefix.to_vec())) {
+                keys.push(key.to_vec());
+            }
+            for key in keys {
+                self.map.remove(&key);
+            }
         }
     }
 
@@ -101,6 +120,7 @@ impl<'a> LruPrefixCache {
 pub struct LruCachingStore<K> {
     /// The inner store that is called by the LRU cache one
     store: K,
+    /// The cache of values.
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
@@ -303,7 +323,9 @@ where
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
         let cache_size = self.cache_size();
-        Ok(LruCachingStore::new(store, cache_size))
+        let store = LruCachingStore::new(store, cache_size);
+        store.enable_exclusive_access();
+        Ok(store)
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
@@ -349,31 +371,40 @@ where
     }
 }
 
-fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>> {
-    if cache_size == 0 {
-        None
-    } else {
-        Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
-    }
-}
-
 impl<K> LruCachingStore<K> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
     pub fn new(store: K, cache_size: usize) -> Self {
-        let lru_read_values = new_lru_prefix_cache(cache_size);
+        let lru_read_values = {
+            if cache_size == 0 {
+                None
+            } else {
+                Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
+            }
+        };
         Self {
             store,
             lru_read_values,
         }
     }
 
-    /// Gets the `cache_size`
+    /// Gets the `cache_size`.
     pub fn cache_size(&self) -> usize {
         match &self.lru_read_values {
             None => 0,
             Some(lru_read_values) => {
                 let lru_read_values = lru_read_values.lock().unwrap();
                 lru_read_values.max_cache_size
+            }
+        }
+    }
+
+    /// Sets the value `has_exclusive_access` to `true`, if applicable.
+    pub fn enable_exclusive_access(&self) {
+        match &self.lru_read_values {
+            None => (),
+            Some(lru_read_values) => {
+                let mut lru_read_values = lru_read_values.lock().unwrap();
+                lru_read_values.has_exclusive_access = true;
             }
         }
     }
