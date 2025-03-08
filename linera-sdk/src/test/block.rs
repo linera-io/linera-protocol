@@ -6,6 +6,7 @@
 //! Helps with the construction of blocks, adding operations and
 
 use linera_base::{
+    abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner},
@@ -147,8 +148,11 @@ impl BlockBuilder {
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
-        operation: impl ToBcsBytes,
-    ) -> &mut Self {
+        operation: Abi::Operation,
+    ) -> &mut Self
+    where
+        Abi: ContractAbi,
+    {
         self.block.operations.push(Operation::User {
             application_id: application_id.forget_abi(),
             bytes: operation
