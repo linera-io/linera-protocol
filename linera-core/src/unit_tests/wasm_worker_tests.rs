@@ -19,20 +19,18 @@ use linera_base::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
     hashed::Hashed,
-    identifiers::{ChainDescription, ChainId, Destination, MessageId, ModuleId, UserApplicationId},
+    identifiers::{ChainDescription, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, OutgoingMessage},
+    data_types::BlockExecutionOutcome,
     test::{make_child_block, make_first_block, BlockTestExt},
     types::ConfirmedBlock,
 };
 use linera_execution::{
-    committee::Epoch,
-    system::{SystemMessage, SystemOperation},
-    test_utils::SystemExecutionState,
-    Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
+    committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState,
+    ExecutionRuntimeContext, Operation, OperationContext, ResourceController, TransactionTracker,
     WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
@@ -42,7 +40,11 @@ use linera_views::dynamo_db::DynamoDbStore;
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
-use linera_views::{memory::MemoryStore, views::CryptoHashView};
+use linera_views::{
+    context::Context,
+    memory::MemoryStore,
+    views::{CryptoHashView, View},
+};
 use test_case::test_case;
 
 use super::{init_worker_with_chains, make_certificate};
@@ -148,6 +150,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
+            blobs: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![vec![]],
         }
@@ -193,34 +196,27 @@ where
         instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
-    let application_id = UserApplicationId {
-        module_id,
-        creation: MessageId {
-            chain_id: creator_chain.into(),
-            height: BlockHeight::from(0),
-            index: 0,
-        },
-    };
     let application_description = UserApplicationDescription {
         module_id,
-        creation: application_id.creation,
+        creator_chain_id: creator_chain.into(),
+        block_height: BlockHeight::from(0),
+        application_index: 0,
         required_application_ids: vec![],
         parameters: parameters_bytes,
     };
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let application_description_blob_id = application_description_blob.id();
+    let application_id = From::from(&application_description);
     let create_block = make_first_block(creator_chain.into())
         .with_timestamp(2)
         .with_operation(create_operation);
-    creator_system_state
-        .registry
-        .known_applications
-        .insert(application_id, application_description.clone());
     creator_system_state.timestamp = Timestamp::from(2);
     let mut creator_state = creator_system_state.into_view().await;
     creator_state
         .simulate_instantiation(
             contract.into(),
             Timestamp::from(2),
-            application_description,
+            application_description.clone(),
             initial_value_bytes.clone(),
             contract_blob,
             service_blob,
@@ -228,25 +224,27 @@ where
         .await?;
     let create_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(creator_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(SystemMessage::ApplicationCreated),
-            }]],
+            messages: vec![vec![]],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![vec![
                 OracleResponse::Blob(contract_blob_id),
                 OracleResponse::Blob(service_blob_id),
             ]],
+            blobs: vec![vec![application_description_blob.clone()]],
         }
         .with(create_block),
     ));
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
+    storage
+        .write_blobs(&[application_description_blob.clone()])
+        .await?;
+    creator_state
+        .context()
+        .extra()
+        .add_blobs([application_description_blob])
+        .await?;
     let info = worker
         .fully_handle_certificate_with_notifications(create_certificate.clone(), &())
         .await
@@ -285,7 +283,11 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(vec![OracleResponse::Blob(application_description_blob_id)]),
+            ),
             &mut controller,
         )
         .await?;
@@ -294,8 +296,9 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
+            blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![Vec::new()],
+            oracle_responses: vec![vec![OracleResponse::Blob(application_description_blob_id)]],
         }
         .with(run_block),
     ));

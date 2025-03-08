@@ -115,8 +115,8 @@ struct ApplicationStatus {
     caller_id: Option<UserApplicationId>,
     /// The application ID.
     id: UserApplicationId,
-    /// The parameters from the application description.
-    parameters: Vec<u8>,
+    /// The application description.
+    description: UserApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
     /// The current execution outcome of the application.
@@ -127,7 +127,7 @@ struct ApplicationStatus {
 #[derive(Debug)]
 struct LoadedApplication<Instance> {
     instance: Arc<Mutex<Instance>>,
-    parameters: Vec<u8>,
+    description: UserApplicationDescription,
 }
 
 impl<Instance> LoadedApplication<Instance> {
@@ -135,7 +135,7 @@ impl<Instance> LoadedApplication<Instance> {
     fn new(instance: Instance, description: UserApplicationDescription) -> Self {
         LoadedApplication {
             instance: Arc::new(Mutex::new(instance)),
-            parameters: description.parameters,
+            description,
         }
     }
 }
@@ -146,7 +146,7 @@ impl<Instance> Clone for LoadedApplication<Instance> {
     fn clone(&self) -> Self {
         LoadedApplication {
             instance: self.instance.clone(),
-            parameters: self.parameters.clone(),
+            description: self.description.clone(),
         }
     }
 }
@@ -401,10 +401,16 @@ impl SyncRuntimeInternal<UserContractInstance> {
             }
             #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
-                let (code, description) = self
+                let txn_tracker_moved = mem::take(&mut self.transaction_tracker);
+                let (code, description, txn_tracker_moved) = self
                     .execution_state_sender
-                    .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
+                    .send_request(move |callback| ExecutionRequest::LoadContract {
+                        id,
+                        callback,
+                        txn_tracker: txn_tracker_moved,
+                    })?
                     .recv_response()?;
+                self.transaction_tracker = txn_tracker_moved;
 
                 let instance = code.instantiate(this)?;
 
@@ -457,7 +463,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
             id: callee_id,
-            parameters: application.parameters,
+            description: application.description,
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
             outcome: RawExecutionOutcome::default(),
@@ -523,10 +529,16 @@ impl SyncRuntimeInternal<UserServiceInstance> {
             }
             #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
-                let (code, description) = self
+                let txn_tracker_moved = mem::take(&mut self.transaction_tracker);
+                let (code, description, txn_tracker_moved) = self
                     .execution_state_sender
-                    .send_request(|callback| ExecutionRequest::LoadService { id, callback })?
+                    .send_request(move |callback| ExecutionRequest::LoadService {
+                        id,
+                        callback,
+                        txn_tracker: txn_tracker_moved,
+                    })?
                     .recv_response()?;
+                self.transaction_tracker = txn_tracker_moved;
 
                 let instance = code.instantiate(this)?;
                 Ok(entry
@@ -739,11 +751,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        Ok(self.current_application().id.creation.chain_id)
+        Ok(self.current_application().description.creator_chain_id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        Ok(self.current_application().parameters.clone())
+        Ok(self.current_application().description.parameters.clone())
     }
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
@@ -1154,7 +1166,7 @@ impl ContractSyncRuntimeHandle {
             let status = ApplicationStatus {
                 caller_id: None,
                 id: application_id,
-                parameters: application.parameters.clone(),
+                description: application.description.clone(),
                 signer,
                 outcome: RawExecutionOutcome::default(),
             };
@@ -1175,7 +1187,7 @@ impl ContractSyncRuntimeHandle {
         let application_status = runtime.pop_application();
         assert_eq!(application_status.caller_id, None);
         assert_eq!(application_status.id, application_id);
-        assert_eq!(application_status.parameters, contract.parameters);
+        assert_eq!(application_status.description, contract.description);
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
@@ -1370,10 +1382,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 };
                 let sender = this.execution_state_sender.clone();
 
+                let txn_tracker = TransactionTracker::default()
+                    .with_blobs(this.transaction_tracker.created_blobs().clone());
+                let mut service_runtime =
+                    ServiceSyncRuntime::new_with_txn_tracker(sender, context, txn_tracker);
                 let QueryOutcome {
                     response,
                     operations,
-                } = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
+                } = service_runtime.run_query(application_id, query)?;
 
                 this.scheduled_operations.extend(operations);
                 response
@@ -1449,39 +1465,28 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<UserApplicationId, ExecutionError> {
         let chain_id = self.inner().chain_id;
-        let height = self.block_height()?;
-        let index = self.inner().transaction_tracker.next_message_index();
+        let block_height = self.block_height()?;
 
-        let message_id = MessageId {
-            chain_id,
-            height,
-            index,
-        };
+        let txn_tracker_moved = mem::take(&mut self.inner().transaction_tracker);
 
         let CreateApplicationResult {
             app_id,
-            message,
-            blobs_to_register,
+            txn_tracker: txn_tracker_moved,
         } = self
             .inner()
             .execution_state_sender
-            .send_request(|callback| ExecutionRequest::CreateApplication {
-                next_message_id: message_id,
+            .send_request(move |callback| ExecutionRequest::CreateApplication {
+                chain_id,
+                block_height,
                 module_id,
                 parameters,
                 required_application_ids,
                 callback,
+                txn_tracker: txn_tracker_moved,
             })?
             .recv_response()??;
-        for blob_id in blobs_to_register {
-            self.inner()
-                .transaction_tracker
-                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
-        }
-        let outcome = RawExecutionOutcome::default().with_message(message);
-        self.inner()
-            .transaction_tracker
-            .add_system_outcome(outcome)?;
+
+        self.inner().transaction_tracker = txn_tracker_moved;
 
         let (contract, context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
@@ -1538,6 +1543,19 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
     pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
+        Self::new_with_txn_tracker(
+            execution_state_sender,
+            context,
+            TransactionTracker::default(),
+        )
+    }
+
+    /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
+    pub fn new_with_txn_tracker(
+        execution_state_sender: ExecutionStateSender,
+        context: QueryContext,
+        txn_tracker: TransactionTracker,
+    ) -> Self {
         let runtime = SyncRuntime(Some(
             SyncRuntimeInternal::new(
                 context.chain_id,
@@ -1549,7 +1567,7 @@ impl ServiceSyncRuntime {
                 execution_state_sender,
                 None,
                 ResourceController::default(),
-                TransactionTracker::default(),
+                txn_tracker,
             )
             .into(),
         ));
@@ -1662,7 +1680,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             this.push_application(ApplicationStatus {
                 caller_id: None,
                 id: queried_id,
-                parameters: application.parameters,
+                description: application.description,
                 signer: None,
                 outcome: RawExecutionOutcome::default(),
             });

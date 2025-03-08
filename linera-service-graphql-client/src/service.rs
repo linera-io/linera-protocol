@@ -4,7 +4,7 @@
 use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, OracleResponse, Round, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     identifiers::{
         Account, BlobId, ChainDescription, ChainId, ChannelName, Destination, GenericApplicationId,
         Owner, StreamName,
@@ -237,6 +237,7 @@ mod from {
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
+                blobs_hash,
             } = header;
             let block::BlockBlockValueBlockBody {
                 incoming_bundles,
@@ -244,6 +245,7 @@ mod from {
                 operations,
                 oracle_responses,
                 events,
+                blobs,
             } = body;
 
             let block_header = BlockHeader {
@@ -259,6 +261,7 @@ mod from {
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
+                blobs_hash,
             };
             let block_body = BlockBody {
                 incoming_bundles: incoming_bundles
@@ -274,6 +277,10 @@ mod from {
                 events: events
                     .into_iter()
                     .map(|events| events.into_iter().map(Into::into).collect())
+                    .collect(),
+                blobs: blobs
+                    .into_iter()
+                    .map(|blobs| blobs.into_iter().map(Into::into).collect())
                     .collect(),
             };
 

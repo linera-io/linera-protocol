@@ -1014,34 +1014,6 @@ impl Runnable for Job {
                 println!("{}", application_id);
             }
 
-            RequestApplication {
-                application_id,
-                target_chain_id,
-                requester_chain_id,
-            } => {
-                let start_time = Instant::now();
-                let requester_chain_id =
-                    requester_chain_id.unwrap_or_else(|| context.default_chain());
-                info!("Requesting application for chain {}", requester_chain_id);
-                let chain_client = context.make_chain_client(requester_chain_id)?;
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let chain_client = chain_client.clone();
-                        async move {
-                            chain_client
-                                .request_application(application_id, target_chain_id)
-                                .await
-                        }
-                    })
-                    .await
-                    .context("Failed to request application")?;
-                info!(
-                    "Application requested in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-                debug!("{:?}", certificate);
-            }
-
             Assign { owner, message_id } => {
                 let start_time = Instant::now();
                 let chain_id = ChainId::child(message_id);
@@ -1368,7 +1340,6 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::ReadDataBlob { .. }
         | ClientCommand::CreateApplication { .. }
         | ClientCommand::PublishAndCreate { .. }
-        | ClientCommand::RequestApplication { .. }
         | ClientCommand::Keygen { .. }
         | ClientCommand::Assign { .. }
         | ClientCommand::Wallet { .. }

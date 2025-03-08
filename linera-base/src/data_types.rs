@@ -35,7 +35,7 @@ use crate::{
     doc_scalar, hex_debug, http,
     identifiers::{
         ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
-        MessageId, ModuleId, StreamId, UserApplicationId,
+        ModuleId, StreamId, UserApplicationId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -784,13 +784,17 @@ pub enum OracleResponse {
 
 impl<'de> BcsHashable<'de> for OracleResponse {}
 
-/// Description of the necessary information to run a user application.
+/// Description of the necessary information to run a user application used within blobs.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub module_id: ModuleId,
-    /// The unique ID of the application's creation.
-    pub creation: MessageId,
+    /// The chain ID that created the application.
+    pub creator_chain_id: ChainId,
+    /// Height of the block that created this application.
+    pub block_height: BlockHeight,
+    /// The index of the application among those created in the same block.
+    pub application_index: u32,
     /// The parameters of the application.
     #[serde(with = "serde_bytes")]
     #[debug(with = "hex_debug")]
@@ -801,10 +805,19 @@ pub struct UserApplicationDescription {
 
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId {
-            module_id: description.module_id,
-            creation: description.creation,
-        }
+        UserApplicationId::new(
+            CryptoHash::new(&BlobContent::new_application_description(description)),
+            description.module_id,
+        )
+    }
+}
+
+impl BcsHashable<'_> for UserApplicationDescription {}
+
+impl UserApplicationDescription {
+    /// Gets the serialized bytes for this `UserApplicationDescription`.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        bcs::to_bytes(self).expect("Serializing blob bytes should not fail!")
     }
 }
 
@@ -941,8 +954,7 @@ impl CompressedBytecode {
 impl<'a> BcsHashable<'a> for BlobContent {}
 
 /// A blob of binary data.
-#[derive(Hash, Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobContent {
     /// The type of data represented by the bytes.
     blob_type: BlobType,
@@ -980,6 +992,14 @@ impl BlobContent {
         )
     }
 
+    /// Creates a new application description [`BlobContent`] from a [`UserApplicationDescription`].
+    pub fn new_application_description(
+        application_description: &UserApplicationDescription,
+    ) -> Self {
+        let bytes = application_description.to_bytes();
+        BlobContent::new(BlobType::ApplicationDescription, bytes)
+    }
+
     /// Gets a reference to the blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
@@ -1003,8 +1023,7 @@ impl From<Blob> for BlobContent {
 }
 
 /// A blob of binary data, with its hash.
-#[derive(Debug, Hash, Clone)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Blob {
     /// ID of the blob.
     hash: CryptoHash,
@@ -1043,6 +1062,16 @@ impl Blob {
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
     pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         Blob::new(BlobContent::new_service_bytecode(compressed_bytecode))
+    }
+
+    /// Creates a new application description [`BlobContent`] from the provided
+    /// description.
+    pub fn new_application_description(
+        application_description: &UserApplicationDescription,
+    ) -> Self {
+        Blob::new(BlobContent::new_application_description(
+            application_description,
+        ))
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
@@ -1111,6 +1140,8 @@ impl<'a> Deserialize<'a> for Blob {
         }
     }
 }
+
+impl<'de> BcsHashable<'de> for Blob {}
 
 /// An event recorded in an executed block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]

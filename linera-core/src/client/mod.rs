@@ -56,7 +56,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
-        CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
+        OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
     SystemQuery, SystemResponse,
@@ -415,7 +415,7 @@ where
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 if let Some(blobs) = remote_node.try_download_blobs(blob_ids).await {
                     let _ = self.local_node.store_blobs(&blobs).await;
-                    result = self.handle_certificate(certificate).await;
+                    result = self.handle_certificate(certificate.clone()).await;
                 }
             }
 
@@ -2198,12 +2198,19 @@ where
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
     pub async fn query_application(&self, query: Query) -> Result<QueryOutcome, ChainClientError> {
-        let outcome = self
-            .client
-            .local_node
-            .query_application(self.chain_id, query)
-            .await?;
-        Ok(outcome)
+        loop {
+            let result = self
+                .client
+                .local_node
+                .query_application(self.chain_id, query.clone())
+                .await;
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                self.receive_certificates_for_blobs(blob_ids.clone())
+                    .await?;
+                continue; // We found the missing blob: retry.
+            }
+            return Ok(result?);
+        }
     }
 
     /// Queries a system application.
@@ -2399,22 +2406,6 @@ where
             response.info.chain_balance,
             response.info.requested_owner_balance,
         ))
-    }
-
-    /// Requests a `RegisterApplications` message from another chain so the application can be used
-    /// on this one.
-    #[instrument(level = "trace")]
-    pub async fn request_application(
-        &self,
-        application_id: UserApplicationId,
-        chain_id: Option<ChainId>,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
-        self.execute_operation(Operation::System(SystemOperation::RequestApplication {
-            application_id,
-            chain_id,
-        }))
-        .await
     }
 
     /// Sends tokens to a chain.
@@ -2969,12 +2960,22 @@ where
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
-            let creation = certificate
+            let mut creation: Vec<_> = certificate
                 .block()
-                .message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
-                .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
+                .created_blob_ids()
+                .into_iter()
+                .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
+                .collect();
+            if creation.len() > 1 {
+                return Err(ChainClientError::InternalError(
+                    "Unexpected number of application descriptions published",
+                ));
+            }
+            let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
+                "ApplicationDescription blob not found.",
+            ))?;
             let id = ApplicationId {
-                creation,
+                application_description_hash: blob_id.hash,
                 module_id,
             };
             Ok((id, certificate))

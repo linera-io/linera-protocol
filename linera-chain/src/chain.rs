@@ -172,7 +172,7 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 /// The BCS-serialized size of an empty [`Block`].
-const EMPTY_BLOCK_SIZE: usize = 91;
+const EMPTY_BLOCK_SIZE: usize = 92;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
@@ -375,8 +375,7 @@ where
     ) -> Result<UserApplicationDescription, ChainError> {
         self.execution_state
             .system
-            .registry
-            .describe_application(application_id)
+            .describe_application(application_id, None)
             .await
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
@@ -773,8 +772,10 @@ where
         // Collect messages, events and oracle responses, each as one list per transaction.
         let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
         let mut next_message_index = 0;
+        let mut next_application_index = 0;
         let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
+        let mut blobs = Vec::new();
         let mut messages = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
@@ -786,7 +787,11 @@ where
                 Some(None) => return Err(ChainError::MissingOracleResponseList),
                 None => None,
             };
-            let mut txn_tracker = TransactionTracker::new(next_message_index, maybe_responses);
+            let mut txn_tracker = TransactionTracker::new(
+                next_message_index,
+                next_application_index,
+                maybe_responses,
+            );
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
                     resource_controller
@@ -838,14 +843,11 @@ where
                 }
             }
 
-            self.execution_state
-                .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
-                .await
-                .with_execution_context(chain_execution_context)?;
             let txn_outcome = txn_tracker
                 .into_outcome()
                 .with_execution_context(chain_execution_context)?;
             next_message_index = txn_outcome.next_message_index;
+            next_application_index = txn_outcome.next_application_index;
 
             // Update the channels.
             self.process_unsubscribes(txn_outcome.unsubscribe).await?;
@@ -889,6 +891,7 @@ where
             oracle_responses.push(txn_outcome.oracle_responses);
             messages.push(txn_messages);
             events.push(txn_outcome.events);
+            blobs.push(txn_outcome.blobs);
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -918,6 +921,7 @@ where
             state_hash,
             oracle_responses,
             events,
+            blobs,
         };
         Ok(outcome)
     }

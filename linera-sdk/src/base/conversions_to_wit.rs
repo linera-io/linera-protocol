@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
     vm::VmRuntime,
 };
 
@@ -85,21 +85,13 @@ macro_rules! impl_to_wit {
             }
         }
 
-        impl From<MessageId> for $wit_base_api::MessageId {
-            fn from(message_id: MessageId) -> Self {
-                $wit_base_api::MessageId {
-                    chain_id: message_id.chain_id.into(),
-                    height: message_id.height.into(),
-                    index: message_id.index,
-                }
-            }
-        }
-
         impl From<ApplicationId> for $wit_base_api::ApplicationId {
             fn from(application_id: ApplicationId) -> Self {
                 $wit_base_api::ApplicationId {
+                    application_description_hash: application_id
+                        .application_description_hash
+                        .into(),
                     module_id: application_id.module_id.into(),
-                    creation: application_id.creation.into(),
                 }
             }
         }

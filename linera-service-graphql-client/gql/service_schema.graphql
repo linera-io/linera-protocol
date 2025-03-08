@@ -103,6 +103,10 @@ type BlockBody {
 	The list of events produced by each transaction.
 	"""
 	events: [[Event!]!]!
+	"""
+	The list of blobs produced by each transaction.
+	"""
+	blobs: [[Blob!]!]!
 }
 
 """
@@ -162,6 +166,10 @@ type BlockHeader {
 	Cryptographic hash of all the events in the block.
 	"""
 	eventsHash: CryptoHash!
+	"""
+	Cryptographic hash of all the created blobs in the block.
+	"""
+	blobsHash: CryptoHash!
 }
 
 """
@@ -826,11 +834,6 @@ type MutationRoot {
 	Creates a new application.
 	"""
 	createApplication(chainId: ChainId!, moduleId: ModuleId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
-	"""
-	Requests a `RegisterApplications` message from another chain so the application can be used
-	on this one.
-	"""
-	requestApplication(chainId: ChainId!, applicationId: ApplicationId!, targetChainId: ChainId): CryptoHash!
 }
 
 """

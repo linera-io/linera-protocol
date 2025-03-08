@@ -15,7 +15,7 @@ use linera_base::{
         AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
         CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
-    data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
     identifiers::{Account, BlobId, ChainId, ChannelFullName, Destination, MessageId, Owner},
@@ -383,6 +383,8 @@ pub struct BlockExecutionOutcome {
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
     pub events: Vec<Vec<Event>>,
+    /// The list of blobs created by each transaction.
+    pub blobs: Vec<Vec<Blob>>,
 }
 
 /// The hash and chain ID of a `CertificateValue`.
@@ -674,12 +676,14 @@ impl ExecutedBlock {
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = self.outcome.oracle_blob_ids();
         blob_ids.extend(self.block.published_blob_ids());
+        blob_ids.extend(self.outcome.iter_created_blobs_ids());
         blob_ids
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
         self.outcome.oracle_blob_ids().contains(blob_id)
             || self.block.published_blob_ids().contains(blob_id)
+            || self.outcome.created_blobs_ids().contains(blob_id)
     }
 }
 
@@ -708,6 +712,21 @@ impl BlockExecutionOutcome {
         self.oracle_responses
             .iter()
             .any(|responses| !responses.is_empty())
+    }
+
+    pub fn iter_created_blobs(&self) -> impl Iterator<Item = (BlobId, Blob)> + '_ {
+        self.blobs
+            .iter()
+            .flatten()
+            .map(|blob| (blob.id(), blob.clone()))
+    }
+
+    pub fn iter_created_blobs_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
+        self.blobs.iter().flatten().map(|blob| blob.id())
+    }
+
+    pub fn created_blobs_ids(&self) -> HashSet<BlobId> {
+        self.iter_created_blobs_ids().collect()
     }
 }
 
@@ -771,6 +790,17 @@ impl BlockProposal {
                 .outcome
                 .iter()
                 .flat_map(|outcome| outcome.oracle_blob_ids()),
+        )
+    }
+
+    pub fn expected_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
+        self.content.block.published_blob_ids().into_iter().chain(
+            self.content.outcome.iter().flat_map(|outcome| {
+                outcome
+                    .oracle_blob_ids()
+                    .into_iter()
+                    .chain(outcome.iter_created_blobs_ids())
+            }),
         )
     }
 

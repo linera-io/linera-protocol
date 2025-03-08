@@ -14,7 +14,7 @@ use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainDescription, MessageId, ModuleId},
+    identifiers::{ApplicationId, ChainDescription, ModuleId},
     vm::VmRuntime,
 };
 use linera_views::batch::Batch;
@@ -23,6 +23,7 @@ use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal};
 use crate::{
     execution_state_actor::ExecutionRequest,
     runtime::{LoadedApplication, ResourceController, SyncRuntime},
+    test_utils::create_dummy_user_application_description,
     ContractRuntime, RawExecutionOutcome, TransactionTracker, UserContractInstance,
 };
 
@@ -186,7 +187,7 @@ fn create_runtime<Application>() -> (
         execution_state_sender,
         None,
         resource_controller,
-        TransactionTracker::new(0, Some(Vec::new())),
+        TransactionTracker::new(0, 0, Some(Vec::new())),
     );
 
     (runtime, execution_state_receiver)
@@ -194,10 +195,12 @@ fn create_runtime<Application>() -> (
 
 /// Creates an [`ApplicationStatus`] for a dummy application.
 fn create_dummy_application() -> ApplicationStatus {
+    let (description, _, _) = create_dummy_user_application_description(0);
+    let id = From::from(&description);
     ApplicationStatus {
         caller_id: None,
-        id: create_dummy_application_id(),
-        parameters: vec![],
+        id,
+        description,
         signer: None,
         outcome: RawExecutionOutcome::default(),
     }
@@ -205,19 +208,13 @@ fn create_dummy_application() -> ApplicationStatus {
 
 /// Creates a dummy [`ApplicationId`].
 fn create_dummy_application_id() -> ApplicationId {
-    let chain_id = ChainDescription::Root(1).into();
-
     ApplicationId {
         module_id: ModuleId::new(
             CryptoHash::test_hash("contract"),
             CryptoHash::test_hash("service"),
             VmRuntime::Wasm,
         ),
-        creation: MessageId {
-            chain_id,
-            height: BlockHeight(1),
-            index: 1,
-        },
+        application_description_hash: CryptoHash::test_hash("application description"),
     }
 }
 
@@ -226,9 +223,10 @@ fn create_fake_application_with_runtime(
     runtime: &SyncRuntimeHandle<Arc<dyn Any + Send + Sync>>,
 ) -> LoadedApplication<Arc<dyn Any + Send + Sync>> {
     let fake_instance: Arc<dyn Any + Send + Sync> = runtime.0.clone();
+    let (description, _, _) = create_dummy_user_application_description(0);
 
     LoadedApplication {
         instance: Arc::new(Mutex::new(fake_instance)),
-        parameters: vec![],
+        description,
     }
 }

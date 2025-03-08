@@ -1,12 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::data_types::{Blob, BlockHeight, Bytecode};
 #[cfg(with_testing)]
 use linera_base::vm::VmRuntime;
-use linera_base::{
-    data_types::{Blob, BlockHeight, Bytecode},
-    identifiers::ApplicationId,
-};
 use linera_views::context::MemoryContext;
 
 use super::*;
@@ -38,6 +35,24 @@ async fn new_view_and_context() -> (
     (view, context)
 }
 
+fn expected_application_id(
+    context: &OperationContext,
+    module_id: &ModuleId,
+    parameters: Vec<u8>,
+    required_application_ids: Vec<UserApplicationId>,
+    application_index: u32,
+) -> UserApplicationId {
+    let description = UserApplicationDescription {
+        module_id: *module_id,
+        creator_chain_id: context.chain_id,
+        block_height: context.height,
+        application_index,
+        parameters,
+        required_application_ids,
+    };
+    From::from(&description)
+}
+
 #[tokio::test]
 async fn application_message_index() -> anyhow::Result<()> {
     let (mut view, context) = new_view_and_context().await;
@@ -63,23 +78,10 @@ async fn application_message_index() -> anyhow::Result<()> {
         .system
         .execute_operation(context, operation, &mut txn_tracker)
         .await?;
-    let [ExecutionOutcome::System(result)] = &txn_tracker.into_outcome().unwrap().outcomes[..]
-    else {
+    let [ExecutionOutcome::System(_)] = &txn_tracker.into_outcome().unwrap().outcomes[..] else {
         panic!("Unexpected outcome");
     };
-    assert_eq!(
-        result.messages[CREATE_APPLICATION_MESSAGE_INDEX as usize].message,
-        SystemMessage::ApplicationCreated
-    );
-    let creation = MessageId {
-        chain_id: context.chain_id,
-        height: context.height,
-        index: CREATE_APPLICATION_MESSAGE_INDEX,
-    };
-    let id = ApplicationId {
-        module_id,
-        creation,
-    };
+    let id = expected_application_id(&context, &module_id, vec![], vec![], 0);
     assert_eq!(new_application, Some((id, vec![])));
 
     Ok(())

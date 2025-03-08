@@ -36,8 +36,8 @@ interface contract-runtime-api {
     }
 
     record application-id {
+        application-description-hash: crypto-hash,
         module-id: module-id,
-        creation: message-id,
     }
 
     record application-permissions {

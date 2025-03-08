@@ -333,11 +333,13 @@ where
     let tx_count = block.operations.len() + block.incoming_bundles.len();
     let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
     let events = iter::repeat_with(Vec::new).take(tx_count).collect();
+    let blobs = iter::repeat_with(Vec::new).take(tx_count).collect();
     let state_hash = system_state.into_hash().await;
     let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages,
             events,
+            blobs,
             state_hash,
             oracle_responses,
         }
@@ -806,6 +808,7 @@ where
                     )],
                 ],
                 events: vec![Vec::new(); 2],
+                blobs: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public().into()),
@@ -835,6 +838,7 @@ where
                     Amount::from_tokens(3),
                 )]],
                 events: vec![Vec::new()],
+                blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public().into()),
@@ -1071,6 +1075,7 @@ where
                         vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
                     ],
                     events: vec![Vec::new(); 2],
+                    blobs: vec![Vec::new(); 2],
                     state_hash: SystemExecutionState {
                         committees: [(epoch, committee.clone())].into_iter().collect(),
                         ownership: ChainOwnership::single(recipient_key_pair.public().into()),
@@ -1365,6 +1370,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
+            blobs: vec![Vec::new()],
             state_hash: state.into_hash().await,
             oracle_responses: vec![Vec::new()],
         }
@@ -2399,6 +2405,7 @@ where
                     ),
                 ]],
                 events: vec![Vec::new()],
+                blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair.public().into()),
@@ -2465,6 +2472,7 @@ where
                     vec![direct_credit_message(user_id, Amount::from_tokens(2))],
                 ],
                 events: vec![Vec::new(); 2],
+                blobs: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
@@ -2567,6 +2575,7 @@ where
             BlockExecutionOutcome {
                 messages: vec![Vec::new(); 3],
                 events: vec![Vec::new(); 3],
+                blobs: vec![Vec::new(); 3],
                 state_hash: SystemExecutionState {
                     subscriptions: [ChannelSubscription {
                         chain_id: admin_id,
@@ -2719,6 +2728,7 @@ where
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
                 events: vec![Vec::new()],
+                blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(owner1),
@@ -2753,6 +2763,7 @@ where
                     },
                 )]],
                 events: vec![Vec::new()],
+                blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(owner0),
@@ -2850,6 +2861,7 @@ where
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
                 events: vec![Vec::new()],
+                blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(owner1),
@@ -2884,6 +2896,7 @@ where
                     })],
                 ],
                 events: vec![Vec::new(); 2],
+                blobs: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(owner0),
@@ -2945,6 +2958,7 @@ where
             BlockExecutionOutcome {
                 messages: vec![Vec::new()],
                 events: vec![Vec::new()],
+                blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(owner0),
@@ -3796,7 +3810,8 @@ where
     let (application_id, application);
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        (application_id, application) = chain.execution_state.register_mock_application().await?;
+        (application_id, application, _) =
+            chain.execution_state.register_mock_application(0).await?;
         chain.save().await?;
     }
 
@@ -3885,7 +3900,8 @@ where
     let (application_id, application);
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        (application_id, application) = chain.execution_state.register_mock_application().await?;
+        (application_id, application, _) =
+            chain.execution_state.register_mock_application(0).await?;
         chain.save().await?;
     }
 
@@ -3972,12 +3988,13 @@ where
     }
     .into_view()
     .await;
-    let _ = state.register_mock_application().await?;
+    let _ = state.register_mock_application(0).await?;
 
     let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![],
             events: vec![],
+            blobs: vec![],
             state_hash: state.crypto_hash_mut().await?,
             oracle_responses: vec![],
         }

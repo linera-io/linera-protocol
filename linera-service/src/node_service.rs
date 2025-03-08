@@ -636,30 +636,6 @@ where
         })
         .await
     }
-
-    /// Requests a `RegisterApplications` message from another chain so the application can be used
-    /// on this one.
-    async fn request_application(
-        &self,
-        chain_id: ChainId,
-        application_id: UserApplicationId,
-        target_chain_id: Option<ChainId>,
-    ) -> Result<CryptoHash, Error> {
-        loop {
-            let client = self.context.lock().await.make_chain_client(chain_id)?;
-            let result = client
-                .request_application(application_id, target_chain_id)
-                .await;
-            self.context.lock().await.update_wallet(&client).await?;
-            let timeout = match result? {
-                ClientOutcome::Committed(certificate) => return Ok(certificate.hash()),
-                ClientOutcome::WaitForTimeout(timeout) => timeout,
-            };
-            let mut stream = client.subscribe().await?;
-            drop(client);
-            util::wait_for_next_round(&mut stream, timeout).await;
-        }
-    }
 }
 
 #[async_graphql::Object(cache_control(no_cache))]

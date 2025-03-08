@@ -2,12 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt::Debug};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{Blob, BlockHeight, Event, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, ChainId, MessageId, Owner},
 };
@@ -285,6 +288,7 @@ impl<'de> Deserialize<'de> for Block {
         let operations_hash = hashing::hash_vec(&inner.body.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
+        let blobs_hash = hashing::hash_vec_vec(&inner.body.blobs);
 
         let header = BlockHeader {
             chain_id: inner.header.chain_id,
@@ -299,6 +303,7 @@ impl<'de> Deserialize<'de> for Block {
             messages_hash,
             oracle_responses_hash,
             events_hash,
+            blobs_hash,
         };
 
         Ok(Self {
@@ -344,6 +349,8 @@ pub struct BlockHeader {
     pub oracle_responses_hash: CryptoHash,
     /// Cryptographic hash of all the events in the block.
     pub events_hash: CryptoHash,
+    /// Cryptographic hash of all the created blobs in the block.
+    pub blobs_hash: CryptoHash,
 }
 
 /// The body of a block containing all the data included in the block.
@@ -360,6 +367,8 @@ pub struct BlockBody {
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
     pub events: Vec<Vec<Event>>,
+    /// The list of blobs produced by each transaction.
+    pub blobs: Vec<Vec<Blob>>,
 }
 
 impl Block {
@@ -369,6 +378,7 @@ impl Block {
         let operations_hash = hashing::hash_vec(&block.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&outcome.events);
+        let blobs_hash = hashing::hash_vec_vec(&outcome.blobs);
 
         let header = BlockHeader {
             chain_id: block.chain_id,
@@ -383,6 +393,7 @@ impl Block {
             messages_hash,
             oracle_responses_hash,
             events_hash,
+            blobs_hash,
         };
 
         let body = BlockBody {
@@ -391,6 +402,7 @@ impl Block {
             messages: outcome.messages,
             oracle_responses: outcome.oracle_responses,
             events: outcome.events,
+            blobs: outcome.blobs,
         };
 
         Self { header, body }
@@ -492,12 +504,15 @@ impl Block {
     pub fn required_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
+        blob_ids.extend(self.created_blob_ids());
         blob_ids
     }
 
     /// Returns whether this block requires the blob with the specified ID.
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.oracle_blob_ids().contains(blob_id) || self.published_blob_ids().contains(blob_id)
+        self.oracle_blob_ids().contains(blob_id)
+            || self.published_blob_ids().contains(blob_id)
+            || self.created_blob_ids().contains(blob_id)
     }
 
     /// Returns all the published blob IDs in this block's operations.
@@ -506,6 +521,26 @@ impl Block {
             .operations
             .iter()
             .flat_map(Operation::published_blob_ids)
+            .collect()
+    }
+
+    /// Returns all the blob IDs created by the block's operations.
+    pub fn created_blob_ids(&self) -> BTreeSet<BlobId> {
+        self.body
+            .blobs
+            .iter()
+            .flatten()
+            .map(|blob| blob.id())
+            .collect()
+    }
+
+    /// Returns all the blobs created by the block's operations.
+    pub fn created_blobs(&self) -> BTreeMap<BlobId, Blob> {
+        self.body
+            .blobs
+            .iter()
+            .flatten()
+            .map(|blob| (blob.id(), blob.clone()))
             .collect()
     }
 
@@ -546,6 +581,7 @@ impl From<Block> for ExecutedBlock {
                     messages_hash: _,
                     oracle_responses_hash: _,
                     events_hash: _,
+                    blobs_hash: _,
                 },
             body:
                 BlockBody {
@@ -554,6 +590,7 @@ impl From<Block> for ExecutedBlock {
                     messages,
                     oracle_responses,
                     events,
+                    blobs,
                 },
         } = block;
 
@@ -573,6 +610,7 @@ impl From<Block> for ExecutedBlock {
             messages,
             oracle_responses,
             events,
+            blobs,
         };
 
         ExecutedBlock { block, outcome }

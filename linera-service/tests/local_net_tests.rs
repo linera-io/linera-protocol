@@ -570,15 +570,9 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     client
         .project_publish(project_dir, vec![], None, &0)
         .await?;
-    let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
-
-    assert_eq!(
-        node_service.try_get_applications_uri(&chain).await?.len(),
-        1
-    );
 
     node_service.ensure_is_running()?;
 
@@ -607,15 +601,9 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     client
         .project_publish(example_dir, vec![], None, &0)
         .await?;
-    let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
-
-    assert_eq!(
-        node_service.try_get_applications_uri(&chain).await?.len(),
-        1
-    );
 
     node_service.ensure_is_running()?;
 

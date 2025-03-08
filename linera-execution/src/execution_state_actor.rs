@@ -13,9 +13,9 @@ use linera_base::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
 };
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -28,8 +28,8 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, RawExecutionOutcome,
-    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    RawOutgoingMessage, SystemExecutionError, SystemMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -64,10 +64,22 @@ where
     pub(crate) async fn load_contract(
         &mut self,
         id: UserApplicationId,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
-        let description = self.system.registry.describe_application(id).await?;
+        let blob_id = id.description_blob_id();
+        let description = match txn_tracker.created_blobs().get(&blob_id) {
+            Some(description) => {
+                let blob = description.clone();
+                bcs::from_bytes(blob.bytes())?
+            }
+            None => {
+                self.system
+                    .describe_application(id, Some(txn_tracker))
+                    .await?
+            }
+        };
         let code = self
             .context()
             .extra()
@@ -79,10 +91,21 @@ where
     pub(crate) async fn load_service(
         &mut self,
         id: UserApplicationId,
+        txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
-        let description = self.system.registry.describe_application(id).await?;
+        let blob_id = id.description_blob_id();
+        let description = match txn_tracker
+            .as_ref()
+            .and_then(|tracker| tracker.created_blobs().get(&blob_id))
+        {
+            Some(description) => {
+                let blob = description.clone();
+                bcs::from_bytes(blob.bytes())?
+            }
+            None => self.system.describe_application(id, txn_tracker).await?,
+        };
         let code = self
             .context()
             .extra()
@@ -99,9 +122,23 @@ where
         use ExecutionRequest::*;
         match request {
             #[cfg(not(web))]
-            LoadContract { id, callback } => callback.respond(self.load_contract(id).await?),
+            LoadContract {
+                id,
+                callback,
+                mut txn_tracker,
+            } => {
+                let (code, description) = self.load_contract(id, &mut txn_tracker).await?;
+                callback.respond((code, description, txn_tracker))
+            }
             #[cfg(not(web))]
-            LoadService { id, callback } => callback.respond(self.load_service(id).await?),
+            LoadService {
+                id,
+                callback,
+                mut txn_tracker,
+            } => {
+                let (code, description) = self.load_service(id, Some(&mut txn_tracker)).await?;
+                callback.respond((code, description, txn_tracker))
+            }
 
             ChainBalance { callback } => {
                 let balance = *self.system.balance.get();
@@ -308,19 +345,23 @@ where
             }
 
             CreateApplication {
-                next_message_id,
+                chain_id,
+                block_height,
                 module_id,
                 parameters,
                 required_application_ids,
                 callback,
+                txn_tracker,
             } => {
                 let create_application_result = self
                     .system
                     .create_application(
-                        next_message_id,
+                        chain_id,
+                        block_height,
                         module_id,
                         parameters,
                         required_application_ids,
+                        txn_tracker,
                     )
                     .await?;
                 callback.respond(Ok(create_application_result));
@@ -370,14 +411,26 @@ pub enum ExecutionRequest {
     LoadContract {
         id: UserApplicationId,
         #[debug(skip)]
-        callback: Sender<(UserContractCode, UserApplicationDescription)>,
+        callback: Sender<(
+            UserContractCode,
+            UserApplicationDescription,
+            TransactionTracker,
+        )>,
+        #[debug(skip)]
+        txn_tracker: TransactionTracker,
     },
 
     #[cfg(not(web))]
     LoadService {
         id: UserApplicationId,
         #[debug(skip)]
-        callback: Sender<(UserServiceCode, UserApplicationDescription)>,
+        callback: Sender<(
+            UserServiceCode,
+            UserApplicationDescription,
+            TransactionTracker,
+        )>,
+        #[debug(skip)]
+        txn_tracker: TransactionTracker,
     },
 
     ChainBalance {
@@ -511,10 +564,13 @@ pub enum ExecutionRequest {
     },
 
     CreateApplication {
-        next_message_id: MessageId,
+        chain_id: ChainId,
+        block_height: BlockHeight,
         module_id: ModuleId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
+        #[debug(skip)]
+        txn_tracker: TransactionTracker,
         #[debug(skip)]
         callback: Sender<Result<CreateApplicationResult, ExecutionError>>,
     },

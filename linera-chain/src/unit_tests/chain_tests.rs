@@ -71,7 +71,9 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
     (
         UserApplicationDescription {
             module_id,
-            creation: make_admin_message_id(BlockHeight(2)),
+            creator_chain_id: admin_id(),
+            block_height: BlockHeight(2),
+            application_index: 0,
             required_application_ids: vec![],
             parameters: vec![],
         },
@@ -115,7 +117,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 721;
+    let maximum_executed_block_size = 723;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -202,7 +204,13 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
-    extra.add_blobs([contract_blob, service_blob]).await?;
+    extra
+        .add_blobs([
+            contract_blob,
+            service_blob,
+            Blob::new_application_description(&app_description),
+        ])
+        .await?;
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {
@@ -214,10 +222,6 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .await?;
     let open_chain_message = Message::System(SystemMessage::OpenChain(config));
 
-    let register_app_message = SystemMessage::RegisterApplications {
-        applications: vec![app_description],
-    };
-
     // The OpenChain message must be included in the first block. Also register the app.
     let bundle = IncomingBundle {
         origin: Origin::chain(admin_id()),
@@ -226,10 +230,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
             height: BlockHeight(1),
             transaction_index: 0,
             timestamp: Timestamp::from(0),
-            messages: vec![
-                open_chain_message.to_posted(0, MessageKind::Protected),
-                register_app_message.to_posted(1, MessageKind::Simple),
-            ],
+            messages: vec![open_chain_message.to_posted(0, MessageKind::Protected)],
         },
         action: MessageAction::Accept,
     };

@@ -57,10 +57,10 @@ Amount:
   NEWTYPESTRUCT: U128
 ApplicationId:
   STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
     - module_id:
         TYPENAME: ModuleId
-    - creation:
-        TYPENAME: MessageId
 ApplicationPermissions:
   STRUCT:
     - execute_operations:
@@ -95,6 +95,8 @@ BlobType:
       ContractBytecode: UNIT
     2:
       ServiceBytecode: UNIT
+    3:
+      ApplicationDescription: UNIT
 Block:
   STRUCT:
     - header:
@@ -121,6 +123,10 @@ BlockBody:
         SEQ:
           SEQ:
             TYPENAME: Event
+    - blobs:
+        SEQ:
+          SEQ:
+            TYPENAME: BlobContent
 BlockExecutionOutcome:
   STRUCT:
     - messages:
@@ -137,6 +143,10 @@ BlockExecutionOutcome:
         SEQ:
           SEQ:
             TYPENAME: Event
+    - blobs:
+        SEQ:
+          SEQ:
+            TYPENAME: BlobContent
 BlockHeader:
   STRUCT:
     - chain_id:
@@ -1050,16 +1060,6 @@ SystemMessage:
               TYPENAME: ChannelSubscription
     7:
       ApplicationCreated: UNIT
-    8:
-      RegisterApplications:
-        STRUCT:
-          - applications:
-              SEQ:
-                TYPENAME: UserApplicationDescription
-    9:
-      RequestApplication:
-        NEWTYPE:
-          TYPENAME: ApplicationId
 SystemOperation:
   ENUM:
     0:
@@ -1148,13 +1148,6 @@ SystemOperation:
               SEQ:
                 TYPENAME: ApplicationId
     12:
-      RequestApplication:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-    13:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
@@ -1192,16 +1185,6 @@ TimeoutConfig:
         TYPENAME: TimeDelta
 Timestamp:
   NEWTYPESTRUCT: U64
-UserApplicationDescription:
-  STRUCT:
-    - module_id:
-        TYPENAME: ModuleId
-    - creation:
-        TYPENAME: MessageId
-    - parameters: BYTES
-    - required_application_ids:
-        SEQ:
-          TYPENAME: ApplicationId
 ValidatedBlockCertificate:
   STRUCT:
     - value:

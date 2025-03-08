@@ -62,8 +62,8 @@ impl From<wit_contract_api::MessageId> for MessageId {
 impl From<wit_contract_api::ApplicationId> for ApplicationId {
     fn from(application_id: wit_contract_api::ApplicationId) -> Self {
         ApplicationId {
+            application_description_hash: application_id.application_description_hash.into(),
             module_id: application_id.module_id.into(),
-            creation: application_id.creation.into(),
         }
     }
 }

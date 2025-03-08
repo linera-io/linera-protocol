@@ -681,8 +681,7 @@ where
 
         if let Some(id) = fungible_application_id {
             let start = Instant::now();
-            self.supply_fungible_tokens(&key_pairs, id, &chain_clients)
-                .await?;
+            self.supply_fungible_tokens(&key_pairs, id).await?;
             info!(
                 "Supplied fungible tokens in {} ms",
                 start.elapsed().as_millis()
@@ -901,7 +900,6 @@ where
         &mut self,
         key_pairs: &HashMap<ChainId, AccountSecretKey>,
         application_id: ApplicationId,
-        chain_clients: &HashMap<ChainId, ChainClient<NodeProvider, S>>,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
@@ -937,49 +935,6 @@ where
                 .expect("should execute block with Transfer operations");
         }
         self.update_wallet_from_client(&chain_client).await?;
-        // Make sure all chains have registered the application now.
-        let mut join_set = task::JoinSet::new();
-        for (chain_id, chain_client) in chain_clients.iter() {
-            let chain_id = *chain_id;
-            let chain_client = chain_client.clone();
-            join_set.spawn(async move {
-                let mut delay_ms = 0;
-                let mut total_delay_ms = 0;
-                loop {
-                    linera_base::time::timer::sleep(Duration::from_millis(delay_ms)).await;
-                    chain_client.process_inbox().await?;
-                    let chain_state = chain_client.chain_state_view().await?;
-                    if chain_state
-                        .execution_state
-                        .system
-                        .registry
-                        .known_applications
-                        .contains_key(&application_id)
-                        .await?
-                    {
-                        return Ok::<_, Error>(());
-                    }
-
-                    total_delay_ms += delay_ms;
-                    // If we've been waiting already for more than 10 seconds, give up.
-                    if total_delay_ms > 10_000 {
-                        break;
-                    }
-
-                    if delay_ms == 0 {
-                        delay_ms = 100;
-                    } else {
-                        delay_ms *= 2;
-                    }
-                }
-                panic!("Could not instantiate application on chain {chain_id:?}");
-            });
-        }
-        join_set
-            .join_all()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(())
     }

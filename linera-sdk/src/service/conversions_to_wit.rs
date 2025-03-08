@@ -5,8 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, MessageId, ModuleId},
+    identifiers::{ApplicationId, ModuleId},
     vm::VmRuntime,
 };
 
@@ -21,22 +20,6 @@ impl From<CryptoHash> for wit_service_api::CryptoHash {
             part2: parts[1],
             part3: parts[2],
             part4: parts[3],
-        }
-    }
-}
-
-impl From<BlockHeight> for wit_service_api::BlockHeight {
-    fn from(block_height: BlockHeight) -> Self {
-        wit_service_api::BlockHeight {
-            inner0: block_height.0,
-        }
-    }
-}
-
-impl From<ChainId> for wit_service_api::ChainId {
-    fn from(chain_id: ChainId) -> Self {
-        wit_service_api::ChainId {
-            inner0: chain_id.0.into(),
         }
     }
 }
@@ -60,21 +43,11 @@ impl From<VmRuntime> for wit_service_api::VmRuntime {
     }
 }
 
-impl From<MessageId> for wit_service_api::MessageId {
-    fn from(message_id: MessageId) -> Self {
-        wit_service_api::MessageId {
-            chain_id: message_id.chain_id.into(),
-            height: message_id.height.into(),
-            index: message_id.index,
-        }
-    }
-}
-
 impl From<ApplicationId> for wit_service_api::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit_service_api::ApplicationId {
+            application_description_hash: application_id.application_description_hash.into(),
             module_id: application_id.module_id.into(),
-            creation: application_id.creation.into(),
         }
     }
 }

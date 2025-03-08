@@ -40,8 +40,8 @@ interface base-runtime-api {
     }
 
     record application-id {
+        application-description-hash: crypto-hash,
         module-id: module-id,
-        creation: message-id,
     }
 
     record block-height {
@@ -103,12 +103,6 @@ interface base-runtime-api {
         info,
         debug,
         trace,
-    }
-
-    record message-id {
-        chain-id: chain-id,
-        height: block-height,
-        index: u32,
     }
 
     record module-id {

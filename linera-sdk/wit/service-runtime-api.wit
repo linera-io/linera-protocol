@@ -6,16 +6,8 @@ interface service-runtime-api {
     fetch-url: func(url: string) -> list<u8>;
 
     record application-id {
+        application-description-hash: crypto-hash,
         module-id: module-id,
-        creation: message-id,
-    }
-
-    record block-height {
-        inner0: u64,
-    }
-
-    record chain-id {
-        inner0: crypto-hash,
     }
 
     record crypto-hash {
@@ -23,12 +15,6 @@ interface service-runtime-api {
         part2: u64,
         part3: u64,
         part4: u64,
-    }
-
-    record message-id {
-        chain-id: chain-id,
-        height: block-height,
-        index: u32,
     }
 
     record module-id {

@@ -13,18 +13,19 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, Blob, BlockHeight, CompressedBytecode, Timestamp, UserApplicationDescription,
+        Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp,
+        UserApplicationDescription,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainDescription, ChainId, MessageId, ModuleId, Owner,
+        Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, Owner,
     },
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_execution::{
     test_utils::{
-        create_dummy_message_context, create_dummy_operation_context, test_accounts_strategy,
-        ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,
+        test_accounts_strategy, ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     Operation, OperationContext, ResourceController, SystemExecutionError,
@@ -48,12 +49,17 @@ async fn test_transfer_system_api(
 
     let mut view = sender.create_system_state(amount).into_view().await;
 
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
     let (application_id, application) = view
-        .register_mock_application_with(
-            TransferTestEndpoint::sender_application_description(),
-            TransferTestEndpoint::sender_application_contract_blob(),
-            TransferTestEndpoint::sender_application_service_blob(),
-        )
+        .register_mock_application_with(application_description, contract_blob, service_blob)
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
@@ -80,7 +86,15 @@ async fn test_transfer_system_api(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(vec![
+            OracleResponse::Blob(app_desc_blob_id),
+            OracleResponse::Blob(contract_blob_id),
+            OracleResponse::Blob(service_blob_id),
+        ]),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -97,7 +111,7 @@ async fn test_transfer_system_api(
         ..
     } = tracker.into_outcome()?;
     assert_eq!(outcomes.len(), 3);
-    assert!(oracle_responses.is_empty());
+    assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
 
     let ExecutionOutcome::System(ref outcome) = outcomes[0] else {
@@ -111,7 +125,7 @@ async fn test_transfer_system_api(
         Timestamp::from(0),
         Message::System(outcome.messages[0].message.clone()),
         None,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await?;
@@ -135,12 +149,17 @@ async fn test_unauthorized_transfer_system_api(
 
     let mut view = sender.create_system_state(amount).into_view().await;
 
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
     let (application_id, application) = view
-        .register_mock_application_with(
-            TransferTestEndpoint::sender_application_description(),
-            TransferTestEndpoint::sender_application_contract_blob(),
-            TransferTestEndpoint::sender_application_service_blob(),
-        )
+        .register_mock_application_with(application_description, contract_blob, service_blob)
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
@@ -172,7 +191,15 @@ async fn test_unauthorized_transfer_system_api(
             context,
             Timestamp::from(0),
             operation,
-            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(vec![
+                    OracleResponse::Blob(app_desc_blob_id),
+                    OracleResponse::Blob(contract_blob_id),
+                    OracleResponse::Blob(service_blob_id),
+                ]),
+            ),
             &mut controller,
         )
         .await;
@@ -217,12 +244,17 @@ async fn test_claim_system_api(
     let mut source_view = source_state.into_view().await;
     let mut claimer_view = claimer_state.into_view().await;
 
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
     let (application_id, application) = claimer_view
-        .register_mock_application_with(
-            TransferTestEndpoint::sender_application_description(),
-            TransferTestEndpoint::sender_application_contract_blob(),
-            TransferTestEndpoint::sender_application_service_blob(),
-        )
+        .register_mock_application_with(application_description, contract_blob, service_blob)
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
@@ -253,7 +285,15 @@ async fn test_claim_system_api(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(vec![
+            OracleResponse::Blob(app_desc_blob_id),
+            OracleResponse::Blob(contract_blob_id),
+            OracleResponse::Blob(service_blob_id),
+        ]),
+    );
     claimer_view
         .execute_operation(
             context,
@@ -271,7 +311,7 @@ async fn test_claim_system_api(
         ..
     } = tracker.into_outcome()?;
     assert_eq!(outcomes.len(), 3);
-    assert!(oracle_responses.is_empty());
+    assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
 
     let ExecutionOutcome::System(ref outcome) = outcomes[0] else {
@@ -280,7 +320,7 @@ async fn test_claim_system_api(
 
     assert_eq!(outcome.messages.len(), 1);
 
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     source_view
         .execute_message(
             create_dummy_message_context(None),
@@ -320,7 +360,7 @@ async fn test_claim_system_api(
 
     assert_eq!(outcome.messages.len(), 1);
 
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     let context = MessageContext {
         chain_id: claimer_chain_id,
         ..create_dummy_message_context(None)
@@ -367,12 +407,17 @@ async fn test_unauthorized_claims(
 
     let mut claimer_view = claimer_state.into_view().await;
 
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
     let (application_id, application) = claimer_view
-        .register_mock_application_with(
-            TransferTestEndpoint::sender_application_description(),
-            TransferTestEndpoint::sender_application_contract_blob(),
-            TransferTestEndpoint::sender_application_service_blob(),
-        )
+        .register_mock_application_with(application_description, contract_blob, service_blob)
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
@@ -403,7 +448,15 @@ async fn test_unauthorized_claims(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(vec![
+            OracleResponse::Blob(app_desc_blob_id),
+            OracleResponse::Blob(contract_blob_id),
+            OracleResponse::Blob(service_blob_id),
+        ]),
+    );
     let result = claimer_view
         .execute_operation(
             context,
@@ -435,7 +488,19 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await
+        .unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -456,7 +521,15 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(
+            0,
+            0,
+            Some(vec![
+                OracleResponse::Blob(app_desc_blob_id),
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+            ]),
+        ),
         &mut controller,
     )
     .await
@@ -476,7 +549,7 @@ async fn test_read_owner_balance_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -499,7 +572,7 @@ async fn test_read_owner_balance_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await
@@ -516,7 +589,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -540,7 +613,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await
@@ -560,7 +633,7 @@ async fn test_read_owner_balances_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -584,7 +657,7 @@ async fn test_read_owner_balances_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await
@@ -604,7 +677,7 @@ async fn test_read_balance_owners_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -628,7 +701,7 @@ async fn test_read_balance_owners_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await
@@ -662,11 +735,9 @@ impl TransferTestEndpoint {
 
         UserApplicationDescription {
             module_id: ModuleId::new(contract_id, service_id, vm_runtime),
-            creation: MessageId {
-                chain_id: ChainId::root(1000),
-                height: BlockHeight(0),
-                index: 0,
-            },
+            creator_chain_id: ChainId::root(1000),
+            block_height: BlockHeight(0),
+            application_index: 0,
             parameters: vec![],
             required_application_ids: vec![],
         }
@@ -701,11 +772,9 @@ impl TransferTestEndpoint {
                 CryptoHash::test_hash("recipient service bytecode"),
                 VmRuntime::Wasm,
             ),
-            creation: MessageId {
-                chain_id: ChainId::root(2000),
-                height: BlockHeight(0),
-                index: 0,
-            },
+            application_description_hash: CryptoHash::test_hash(
+                "recipient application description",
+            ),
         }
     }
 

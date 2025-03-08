@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -49,11 +49,10 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
         .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
+    let app_id = From::from(&app_desc);
+    let app_desc_blob_id = Blob::new_application_description(&app_desc).id();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
 
     let contract = EvmContractModule::Revm {
         module: module.clone(),
@@ -112,7 +111,15 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         account: None,
     };
     for increment in &increments {
-        let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+        let mut txn_tracker = TransactionTracker::new(
+            0,
+            0,
+            Some(vec![
+                OracleResponse::Blob(app_desc_blob_id),
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+            ]),
+        );
         value += increment;
         let operation = incrementCall { input: *increment };
         let bytes = operation.abi_encode();

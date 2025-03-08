@@ -185,11 +185,12 @@ where
             let committee = committee.clone();
             let local_node = local_node.clone();
             let chain_client = chain_clients[&chain_id].clone();
+            chain_client.process_inbox().await?;
             let short_chain_id = format!("{:?}", chain_id);
             join_set.spawn_blocking(move || {
                 handle.block_on(
                     async move {
-                        Self::run_benchmark_internal(
+                        Box::pin(Self::run_benchmark_internal(
                             bps_share,
                             operations,
                             key_pair,
@@ -199,7 +200,7 @@ where
                             sender,
                             committee,
                             local_node,
-                        )
+                        ))
                         .await?;
 
                         Ok(())
