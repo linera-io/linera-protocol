@@ -238,6 +238,7 @@ impl ClientWrapper {
         num_other_initial_chains: u32,
         initial_funding: Amount,
         policy_config: ResourceControlPolicyConfig,
+        http_allow_list: Option<Vec<String>>,
     ) -> Result<()> {
         let mut command = self.command().await?;
         command
@@ -252,7 +253,9 @@ impl ClientWrapper {
                 "--policy-config",
                 &policy_config.to_string().to_kebab_case(),
             ]);
-
+        if let Some(allow_list) = http_allow_list {
+            command.arg("--http-allow-list").arg(allow_list.join(","));
+        }
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
         }
