@@ -242,9 +242,9 @@ impl BatchExt for Batch {
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         self.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
-        self.put_key_value(value_key.to_vec(), certificate.value())?;
+        self.put_key_value(block_key.to_vec(), certificate.value())?;
         Ok(())
     }
 
@@ -545,8 +545,8 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        let maybe_value = self.store.read_value::<ConfirmedBlock>(&value_key).await?;
+        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let maybe_value = self.store.read_value::<ConfirmedBlock>(&block_key).await?;
         #[cfg(with_metrics)]
         READ_HASHED_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
@@ -842,8 +842,8 @@ where
             .iter()
             .flat_map(|hash| {
                 let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
-                let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
-                vec![cert_key, value_key]
+                let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
+                vec![cert_key, block_key]
             })
             .collect::<Result<_, _>>()?)
     }
@@ -891,20 +891,18 @@ where
     pub async fn initialize(
         config: Store::Config,
         namespace: &str,
-        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
+        let store = Store::maybe_create_and_connect(&config, namespace).await?;
         Ok(Self::create(store, wasm_runtime, WallClock))
     }
 
     pub async fn new(
         config: Store::Config,
         namespace: &str,
-        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::connect(&config, namespace, root_key).await?;
+        let store = Store::connect(&config, namespace).await?;
         Ok(Self::create(store, wasm_runtime, WallClock))
     }
 }
@@ -918,11 +916,9 @@ where
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Store::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
-        let root_key = &[];
         DbStorage::<Store, TestClock>::new_for_testing(
             config,
             &namespace,
-            root_key,
             wasm_runtime,
             TestClock::new(),
         )
@@ -933,11 +929,10 @@ where
     pub async fn new_for_testing(
         config: Store::Config,
         namespace: &str,
-        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, Store::Error> {
-        let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
+        let store = Store::recreate_and_connect(&config, namespace).await?;
         Ok(Self::create(store, wasm_runtime, clock))
     }
 }

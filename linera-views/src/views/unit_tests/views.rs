@@ -216,8 +216,7 @@ impl TestContextFactory for RocksDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = RocksDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
-        let root_key = &[];
-        let store = RocksDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
+        let store = RocksDbStore::recreate_and_connect(&config, &namespace).await?;
         let context = ViewContext::create_root_context(store, ()).await?;
 
         Ok(context)
@@ -235,8 +234,7 @@ impl TestContextFactory for DynamoDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = DynamoDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
-        let root_key = &[];
-        let store = DynamoDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
+        let store = DynamoDbStore::recreate_and_connect(&config, &namespace).await?;
         Ok(ViewContext::create_root_context(store, ()).await?)
     }
 }
@@ -252,8 +250,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = ScyllaDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
-        let root_key = &[];
-        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
+        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace).await?;
         let context = ViewContext::create_root_context(store, ()).await?;
         Ok(context)
     }

@@ -600,11 +600,9 @@ async fn main() {
     let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
     let namespace = "linera_storage_service";
-    let root_key = &[];
     let (store, endpoint) = match options {
         ServiceStoreServerOptions::Memory { endpoint } => {
-            let store =
-                MemoryStore::new(common_config.max_stream_queries, namespace, root_key).unwrap();
+            let store = MemoryStore::new(common_config.max_stream_queries, namespace).unwrap();
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }
@@ -615,7 +613,7 @@ async fn main() {
             // The server is run in multi-threaded mode so we can use the block_in_place.
             let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
             let config = RocksDbStoreConfig::new(spawn_mode, path_with_guard, common_config);
-            let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)
+            let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
                 .await
                 .expect("store");
             let store = ServiceStoreServerInternal::RocksDb(store);

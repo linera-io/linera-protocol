@@ -209,8 +209,7 @@ async fn main() -> std::io::Result<()> {
 
     let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
     let namespace = "schema_export";
-    let root_key = &[];
-    let storage = DbStorage::<MemoryStore, _>::initialize(store_config, namespace, root_key, None)
+    let storage = DbStorage::<MemoryStore, _>::initialize(store_config, namespace, None)
         .await
         .expect("storage");
     let config = ChainListenerConfig::default();

@@ -435,10 +435,8 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     async fn connect(
         config: &Self::Config,
         namespace: &str,
-        root_key: &[u8],
     ) -> Result<Self, RocksDbStoreInternalError> {
-        let mut start_key = ROOT_KEY_DOMAIN.to_vec();
-        start_key.extend(root_key);
+        let start_key = ROOT_KEY_DOMAIN.to_vec();
         RocksDbStoreInternal::build(config, namespace, start_key)
     }
 

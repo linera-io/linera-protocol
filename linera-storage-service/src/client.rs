@@ -415,11 +415,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         "service store".to_string()
     }
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, ServiceStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceStoreError> {
         let semaphore = config
             .common_config
             .max_concurrent_queries
@@ -428,7 +424,6 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let max_stream_queries = config.common_config.max_stream_queries;
         let mut start_key = vec![KeyPrefix::Key as u8];
         start_key.extend(&namespace);
-        start_key.extend(root_key);
         let prefix_len = namespace.len() + 1;
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
@@ -568,8 +563,7 @@ pub async fn storage_service_check_absence(endpoint: &str) -> Result<bool, Servi
 pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), ServiceStoreError> {
     let config = service_config_from_endpoint(endpoint).unwrap();
     let namespace = "namespace";
-    let root_key = &[];
-    let store = ServiceStoreClientInternal::connect(&config, namespace, root_key).await?;
+    let store = ServiceStoreClientInternal::connect(&config, namespace).await?;
     let _value = store.read_value_bytes(&[42]).await?;
     Ok(())
 }
