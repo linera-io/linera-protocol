@@ -45,7 +45,7 @@ pub enum JournalConsistencyError {
     #[error("The journal block could not be retrieved, it could be missing or corrupted.")]
     FailureToRetrieveJournalBlock,
 
-    #[error("Refusing to use the journal with exclusive database access to the root object.")]
+    #[error("Refusing to use the journal without exclusive database access to the root object.")]
     JournalRequiresExclusiveAccess,
 }
 
