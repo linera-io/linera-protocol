@@ -97,6 +97,21 @@ fn service_requests_contract_to_perform_http_request() {
     assert_eq!(operations, vec![Operation::PerformHttpRequest]);
 }
 
+/// Tests if the service requests the contract to use the service as an oracle to perform an HTTP
+/// request.
+#[test]
+fn service_requests_contract_to_use_it_as_an_oracle() {
+    let service = create_service();
+
+    let request = async_graphql::Request::new("mutation { performHttpRequestAsOracle }");
+
+    service.handle_query(request).blocking_wait();
+
+    let operations = service.runtime.scheduled_operations::<Operation>();
+
+    assert_eq!(operations, vec![Operation::UseServiceAsOracle]);
+}
+
 /// Creates a [`Service`] instance for testing.
 fn create_service() -> Service {
     let runtime = ServiceRuntime::new().with_application_parameters(TEST_BASE_URL.to_owned());
