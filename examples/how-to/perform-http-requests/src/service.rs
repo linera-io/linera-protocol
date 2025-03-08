@@ -99,6 +99,16 @@ impl Mutation {
 
         Ok(true)
     }
+
+    /// Requests the contract to perform an HTTP request, by scheduling an
+    /// [`Operation::PerformHttpRequest`].
+    pub async fn perform_http_request_in_contract(&self) -> async_graphql::Result<bool> {
+        self.service
+            .runtime
+            .schedule_operation(&Operation::PerformHttpRequest);
+
+        Ok(true)
+    }
 }
 
 #[path = "unit_tests/service.rs"]
