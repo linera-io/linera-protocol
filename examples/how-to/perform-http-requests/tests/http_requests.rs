@@ -126,3 +126,31 @@ async fn contract_rejects_invalid_http_response_from_service() {
         .graphql_mutation(application_id, "mutation { performHttpRequest }")
         .await;
 }
+
+/// Tests if the contract accepts a valid HTTP response it obtains by itself.
+#[test_log::test(tokio::test)]
+async fn contract_accepts_valid_http_response_it_obtains_by_itself() -> anyhow::Result<()> {
+    const HTTP_RESPONSE_BODY: &str = "Hello, world!";
+
+    let http_server =
+        HttpServer::start(Router::new().route("/", get(|| async { HTTP_RESPONSE_BODY }))).await?;
+    let port = http_server.port();
+    let url = format!("http://localhost:{port}/");
+
+    let (validator, application_id, chain) =
+        TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
+
+    validator
+        .change_resource_control_policy(|policy| {
+            policy
+                .http_request_allow_list
+                .insert("localhost".to_owned());
+        })
+        .await;
+
+    chain
+        .graphql_mutation(application_id, "mutation { performHttpRequestInContract }")
+        .await;
+
+    Ok(())
+}
