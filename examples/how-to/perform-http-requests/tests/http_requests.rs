@@ -69,3 +69,31 @@ async fn service_query_cant_send_http_request_to_unauthorized_host() {
         .graphql_query(application_id, "query { performHttpRequest }")
         .await;
 }
+
+/// Tests if the service sends a valid HTTP response to the contract.
+#[test_log::test(tokio::test)]
+async fn service_sends_valid_http_response_to_contract() -> anyhow::Result<()> {
+    const HTTP_RESPONSE_BODY: &str = "Hello, world!";
+
+    let http_server =
+        HttpServer::start(Router::new().route("/", get(|| async { HTTP_RESPONSE_BODY }))).await?;
+    let port = http_server.port();
+    let url = format!("http://localhost:{port}/");
+
+    let (validator, application_id, chain) =
+        TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
+
+    validator
+        .change_resource_control_policy(|policy| {
+            policy
+                .http_request_allow_list
+                .insert("localhost".to_owned());
+        })
+        .await;
+
+    chain
+        .graphql_mutation(application_id, "mutation { performHttpRequest }")
+        .await;
+
+    Ok(())
+}
