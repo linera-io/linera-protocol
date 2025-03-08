@@ -270,6 +270,7 @@ where
     }
 
     /// Runs the faucet.
+    #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
     pub async fn run(self) -> anyhow::Result<()> {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
