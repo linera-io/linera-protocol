@@ -87,7 +87,8 @@ impl<'a> LruPrefixCache {
         }
     }
 
-    /// Marks cached keys that match the prefix as deleted. Importantly, this does not create new entries in the cache.
+    /// Marks cached keys that match the prefix as deleted. Importantly, this does not
+    /// create new entries in the cache.
     pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
             for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
