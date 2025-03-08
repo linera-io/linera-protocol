@@ -27,7 +27,7 @@ use linera_execution::{
         SystemExecutionError, SystemOperation, SystemQuery, SystemResponse,
         CREATE_APPLICATION_MESSAGE_INDEX,
     },
-    ExecutionError, Query, QueryOutcome, QueryResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -661,5 +661,37 @@ impl ActiveChain {
             response: json_response,
             operations,
         }
+    }
+
+    /// Executes a GraphQL `mutation` on an `application` and proposes a block with the resulting
+    /// scheduled operations.
+    ///
+    /// Returns the certificate of the new block.
+    pub async fn graphql_mutation<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+        query: impl Into<async_graphql::Request>,
+    ) -> ConfirmedBlockCertificate
+    where
+        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
+    {
+        let QueryOutcome { operations, .. } = self.graphql_query(application_id, query).await;
+
+        self.add_block(|block| {
+            for operation in operations {
+                match operation {
+                    Operation::User {
+                        application_id,
+                        bytes,
+                    } => {
+                        block.with_raw_operation(application_id, bytes);
+                    }
+                    Operation::System(system_operation) => {
+                        block.with_system_operation(system_operation);
+                    }
+                }
+            }
+        })
+        .await
     }
 }

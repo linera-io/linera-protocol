@@ -6,6 +6,7 @@
 //! Helps with the construction of blocks, adding operations and
 
 use linera_base::{
+    abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner},
@@ -149,13 +150,28 @@ impl BlockBuilder {
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
-        operation: impl ToBcsBytes,
-    ) -> &mut Self {
-        self.block.operations.push(Operation::User {
-            application_id: application_id.forget_abi(),
-            bytes: operation
+        operation: Abi::Operation,
+    ) -> &mut Self
+    where
+        Abi: ContractAbi,
+    {
+        self.with_raw_operation(
+            application_id.forget_abi(),
+            operation
                 .to_bcs_bytes()
                 .expect("Failed to serialize operation"),
+        )
+    }
+
+    /// Adds an already serialized user `operation` to this block.
+    pub fn with_raw_operation(
+        &mut self,
+        application_id: ApplicationId,
+        operation: impl Into<Vec<u8>>,
+    ) -> &mut Self {
+        self.block.operations.push(Operation::User {
+            application_id,
+            bytes: operation.into(),
         });
         self
     }
