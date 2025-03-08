@@ -427,6 +427,7 @@ pub async fn big_read_multi_values<C: LocalKeyValueStore>(
     let mut rng = make_deterministic_rng();
     let namespace = generate_test_namespace();
     let store = C::recreate_and_connect(&config, &namespace).await.unwrap();
+    let store = store.clone_with_root_key(&[]).unwrap();
     let key_prefix = vec![42, 54];
     let mut batch = Batch::new();
     let mut keys = Vec::new();
@@ -442,6 +443,7 @@ pub async fn big_read_multi_values<C: LocalKeyValueStore>(
     store.write_batch(batch).await.unwrap();
     // We reconnect so that the read is not using the cache.
     let store = C::connect(&config, &namespace).await.unwrap();
+    let store = store.clone_with_root_key(&[]).unwrap();
     let values_read = store.read_multi_values_bytes(keys).await.unwrap();
     assert_eq!(values, values_read);
 }

@@ -75,10 +75,13 @@ async fn test_reads_rocks_db() {
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_reads_dynamo_db() {
+    use linera_views::store::AdminKeyValueStore as _;
+
     for scenario in get_random_test_scenarios() {
         let store = linera_views::dynamo_db::DynamoDbStore::new_test_store()
             .await
             .unwrap();
+        let store = store.clone_with_root_key(&[]).unwrap();
         run_reads(store, scenario).await;
     }
 }
@@ -86,6 +89,20 @@ async fn test_reads_dynamo_db() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_reads_scylla_db() {
+    use linera_views::store::AdminKeyValueStore as _;
+
+    for scenario in get_random_test_scenarios() {
+        let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
+            .await
+            .unwrap();
+        let store = store.clone_with_root_key(&[]).unwrap();
+        run_reads(store, scenario).await;
+    }
+}
+
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_reads_scylla_db_no_journaling() {
     for scenario in get_random_test_scenarios() {
         let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
             .await
