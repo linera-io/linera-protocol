@@ -22,6 +22,7 @@ use linera_base::{
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
+    committee::Epoch,
     system::{
         SystemExecutionError, SystemOperation, SystemQuery, SystemResponse,
         CREATE_APPLICATION_MESSAGE_INDEX,
@@ -91,6 +92,20 @@ impl ActiveChain {
     /// Sets the [`AccountSecretKey`] to use for signing new blocks.
     pub fn set_key_pair(&mut self, key_pair: AccountSecretKey) {
         self.key_pair = key_pair
+    }
+
+    /// Returns the current [`Epoch`] the chain is in.
+    pub async fn epoch(&self) -> Epoch {
+        self.validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to load chain")
+            .execution_state
+            .system
+            .epoch
+            .get()
+            .expect("Active chains should be in an epoch")
     }
 
     /// Reads the current shared balance available to all of the owners of this microchain.
@@ -244,6 +259,7 @@ impl ActiveChain {
         let mut block = BlockBuilder::new(
             self.description.into(),
             self.key_pair.public().into(),
+            self.epoch().await,
             tip.as_ref(),
             self.validator.clone(),
         );

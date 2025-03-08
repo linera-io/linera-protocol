@@ -9,7 +9,10 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
 use dashmap::DashMap;
-use futures::FutureExt as _;
+use futures::{
+    lock::{MappedMutexGuard, Mutex, MutexGuard},
+    FutureExt as _,
+};
 use linera_base::{
     crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
@@ -19,8 +22,10 @@ use linera_base::{
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
-    WasmRuntime,
+    system::{
+        AdminOperation, OpenChainConfig, SystemChannel, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX,
+    },
+    ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::memory::MemoryStore;
@@ -45,7 +50,7 @@ use crate::ContractAbi;
 pub struct TestValidator {
     validator_secret: ValidatorSecretKey,
     account_secret: AccountSecretKey,
-    committee: Committee,
+    committee: Arc<Mutex<(Epoch, Committee)>>,
     storage: DbStorage<MemoryStore, TestClock>,
     worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
     clock: TestClock,
@@ -71,10 +76,13 @@ impl TestValidator {
     pub async fn new() -> Self {
         let validator_keypair = ValidatorKeypair::generate();
         let account_secret = AccountSecretKey::generate();
-        let committee = Committee::make_simple(vec![(
-            validator_keypair.public_key,
-            account_secret.public(),
-        )]);
+        let committee = Arc::new(Mutex::new((
+            Epoch::ZERO,
+            Committee::make_simple(vec![(
+                validator_keypair.public_key,
+                account_secret.public(),
+            )]),
+        )));
         let wasm_runtime = Some(WasmRuntime::default());
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()
@@ -166,11 +174,50 @@ impl TestValidator {
         &self.validator_secret
     }
 
-    /// Returns the committee that this test validator is part of.
+    /// Returns the latest committee that this test validator is part of.
     ///
     /// The committee contains only this validator.
-    pub fn committee(&self) -> &Committee {
-        &self.committee
+    pub async fn committee(&self) -> MappedMutexGuard<'_, (Epoch, Committee), Committee> {
+        MutexGuard::map(self.committee.lock().await, |(_epoch, committee)| committee)
+    }
+
+    /// Updates the admin chain, creating a new epoch with an updated
+    /// [`ResourceControlPolicy`].
+    pub async fn change_resource_control_policy(
+        &self,
+        adjustment: impl FnOnce(&mut ResourceControlPolicy),
+    ) {
+        let (epoch, committee) = {
+            let (ref mut epoch, ref mut committee) = &mut *self.committee.lock().await;
+
+            epoch
+                .try_add_assign_one()
+                .expect("Reached the limit of epochs");
+
+            adjustment(committee.policy_mut());
+
+            (*epoch, committee.clone())
+        };
+
+        let admin_chain = self.get_chain(&ChainId::root(0));
+
+        let certificate = admin_chain
+            .add_block(|block| {
+                block.with_system_operation(SystemOperation::Admin(
+                    AdminOperation::CreateCommittee { epoch, committee },
+                ));
+            })
+            .await;
+
+        for entry in self.chains.iter() {
+            let chain = entry.value();
+
+            chain
+                .add_block(|block| {
+                    block.with_system_messages_from(&certificate, SystemChannel::Admin);
+                })
+                .await;
+        }
     }
 
     /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
@@ -210,13 +257,13 @@ impl TestValidator {
             .get(&admin_id)
             .expect("Admin chain should be created when the `TestValidator` is constructed");
 
+        let (epoch, committee) = self.committee.lock().await.clone();
+
         let new_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
-            committees: [(Epoch::ZERO, self.committee.clone())]
-                .into_iter()
-                .collect(),
+            committees: [(epoch, committee)].into_iter().collect(),
             admin_id,
-            epoch: Epoch::ZERO,
+            epoch,
             balance: Amount::ZERO,
             application_permissions: ApplicationPermissions::default(),
         };
@@ -244,11 +291,12 @@ impl TestValidator {
     async fn create_admin_chain(&self) {
         let key_pair = AccountSecretKey::generate();
         let description = ChainDescription::Root(0);
+        let committee = self.committee.lock().await.1.clone();
 
         self.worker()
             .storage_client()
             .create_chain(
-                self.committee.clone(),
+                committee,
                 ChainId::root(0),
                 description,
                 key_pair.public().into(),
