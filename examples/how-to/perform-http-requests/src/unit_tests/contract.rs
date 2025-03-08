@@ -6,7 +6,7 @@
 //! Unit tests for the contract.
 
 use how_to_perform_http_requests::Operation;
-use linera_sdk::{util::BlockingWait as _, Contract as _, ContractRuntime};
+use linera_sdk::{http, util::BlockingWait as _, Contract as _, ContractRuntime};
 
 use super::Contract;
 
@@ -38,6 +38,26 @@ fn rejects_invalid_off_chain_response() {
 
     contract
         .execute_operation(Operation::HandleHttpResponse(b"Fake response".to_vec()))
+        .blocking_wait();
+}
+
+/// Tests if the contract performs an HTTP request and accepts it if it receives a valid
+/// response.
+#[test]
+fn accepts_response_obtained_by_contract() {
+    let url = "http://some.test.url".to_owned();
+    let mut contract = create_contract();
+
+    contract
+        .runtime
+        .set_application_parameters(url.clone())
+        .add_expected_http_request(
+            http::Request::get(url),
+            http::Response::ok(b"Hello, world!".to_vec()),
+        );
+
+    contract
+        .execute_operation(Operation::PerformHttpRequest)
         .blocking_wait();
 }
 
