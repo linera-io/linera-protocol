@@ -397,12 +397,9 @@ impl<K> LruCachingStore<K> {
 
     /// Sets the value `has_exclusive_access` to `true`, if applicable.
     pub fn enable_exclusive_access(&self) {
-        match &self.lru_read_values {
-            None => (),
-            Some(lru_read_values) => {
-                let mut lru_read_values = lru_read_values.lock().unwrap();
-                lru_read_values.has_exclusive_access = true;
-            }
+        if let Some(lru_read_values) = &self.lru_read_values {
+            let mut lru_read_values = lru_read_values.lock().unwrap();
+            lru_read_values.has_exclusive_access = true;
         }
     }
 }

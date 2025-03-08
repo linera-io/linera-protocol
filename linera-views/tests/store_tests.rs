@@ -102,7 +102,7 @@ async fn test_reads_scylla_db() {
 
 #[cfg(with_scylladb)]
 #[tokio::test]
-async fn test_reads_scylla_db_no_journaling() {
+async fn test_reads_scylla_db_no_root_key() {
     for scenario in get_random_test_scenarios() {
         let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
             .await
