@@ -40,10 +40,13 @@ sa::const_assert!(JOURNAL_TAG < MIN_VIEW_TAG);
 
 /// Data type indicating that the database is not consistent
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum JournalConsistencyError {
-    /// The journal block could not be retrieved, it could be missing or corrupted
-    #[error("the journal block could not be retrieved, it could be missing or corrupted")]
+    #[error("The journal block could not be retrieved, it could be missing or corrupted.")]
     FailureToRetrieveJournalBlock,
+
+    #[error("Refusing to use the journal without exclusive database access to the root object.")]
+    JournalRequiresExclusiveAccess,
 }
 
 #[repr(u8)]
@@ -102,6 +105,8 @@ struct JournalHeader {
 pub struct JournalingKeyValueStore<K> {
     /// The inner store.
     store: K,
+    /// Whether we have exclusive R/W access to the keys under root key.
+    has_exclusive_access: bool,
 }
 
 impl<K> DeletePrefixExpander for &JournalingKeyValueStore<K>
@@ -184,12 +189,18 @@ where
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
         let store = K::connect(config, namespace).await?;
-        Ok(Self { store })
+        Ok(Self {
+            store,
+            has_exclusive_access: false,
+        })
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
-        Ok(Self { store })
+        Ok(Self {
+            store,
+            has_exclusive_access: true,
+        })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
@@ -233,6 +244,9 @@ where
         if Self::is_fastpath_feasible(&batch) {
             self.store.write_batch(batch).await
         } else {
+            if !self.has_exclusive_access {
+                return Err(JournalConsistencyError::JournalRequiresExclusiveAccess.into());
+            }
             let header = self.write_journal(batch).await?;
             self.coherently_resolve_journal(header).await
         }
@@ -406,6 +420,9 @@ where
 impl<K> JournalingKeyValueStore<K> {
     /// Creates a new journaling store.
     pub fn new(store: K) -> Self {
-        Self { store }
+        Self {
+            store,
+            has_exclusive_access: false,
+        }
     }
 }
