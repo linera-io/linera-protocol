@@ -242,9 +242,9 @@ impl BatchExt for Batch {
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         self.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
-        self.put_key_value(value_key.to_vec(), certificate.value())?;
+        self.put_key_value(block_key.to_vec(), certificate.value())?;
         Ok(())
     }
 
@@ -545,8 +545,8 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        let maybe_value = self.store.read_value::<ConfirmedBlock>(&value_key).await?;
+        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let maybe_value = self.store.read_value::<ConfirmedBlock>(&block_key).await?;
         #[cfg(with_metrics)]
         READ_HASHED_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
@@ -842,8 +842,8 @@ where
             .iter()
             .flat_map(|hash| {
                 let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
-                let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
-                vec![cert_key, value_key]
+                let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
+                vec![cert_key, block_key]
             })
             .collect::<Result<_, _>>()?)
     }
