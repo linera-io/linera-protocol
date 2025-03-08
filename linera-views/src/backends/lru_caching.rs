@@ -38,7 +38,7 @@ static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> =
 
 /// Stores the data for simple `read_values` queries.
 ///
-/// This data-structure is inspired by the crate `lru-cache` but was modified to support
+/// This data structure is inspired by the crate `lru-cache` but was modified to support
 /// range deletions.
 struct LruPrefixCache {
     map: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
