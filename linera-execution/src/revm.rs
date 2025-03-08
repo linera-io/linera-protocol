@@ -86,7 +86,7 @@ pub enum EvmExecutionError {
     #[error("It is illegal to call execute_message from an operation")]
     OperationCallExecuteMessage,
     #[error("The operation should contain the evm selector and so have length 4 or more")]
-    TooShortOperation,
+    OperationIsTooShort,
     #[error("Transact commit error")]
     TransactCommitError(String),
     #[error("The operation was reverted")]
@@ -459,7 +459,7 @@ where
         let tx_data = Bytes::copy_from_slice(&vec);
         let (output, logs) = self.transact_commit_tx_data(Choice::Create, tx_data)?;
         let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs)?;
+        self.write_logs(&contract_address, logs, "deploy")?;
         let Output::Create(_, Some(contract_address_used)) = output else {
             unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
         };
@@ -474,7 +474,7 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         ensure!(
             operation.len() >= 4,
-            ExecutionError::EvmError(EvmExecutionError::TooShortOperation)
+            ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
         );
         ensure!(
             &operation[..4] != EXECUTE_MESSAGE_SELECTOR,
@@ -483,7 +483,7 @@ where
         let tx_data = Bytes::copy_from_slice(&operation);
         let (output, logs) = self.transact_commit_tx_data(Choice::Call, tx_data)?;
         let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs)?;
+        self.write_logs(&contract_address, logs, "operation")?;
         let Output::Call(output) = output else {
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
@@ -563,16 +563,17 @@ where
         &mut self,
         contract_address: &Address,
         logs: Vec<Log>,
+        origin: &str,
     ) -> Result<(), ExecutionError> {
         if !logs.is_empty() {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-            let stream_name = bcs::to_bytes("ethereum_event").unwrap();
+            let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
             for (log, index) in logs.iter().enumerate() {
-                let mut key = bcs::to_bytes(&contract_address).unwrap();
-                bcs::serialize_into(&mut key, "deploy").unwrap();
-                bcs::serialize_into(&mut key, index).unwrap();
-                let value = bcs::to_bytes(&log).unwrap();
+                let mut key = bcs::to_bytes(&contract_address)?;
+                bcs::serialize_into(&mut key, origin)?;
+                bcs::serialize_into(&mut key, index)?;
+                let value = bcs::to_bytes(&log)?;
                 runtime.emit(stream_name.clone(), key, value)?;
             }
         }

@@ -1429,7 +1429,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
             contract_crowd,
             service_crowd,
             VmRuntime::Wasm,
-            // TODO(#723): This hack will disappear soon.
             &application_id_fungible,
             &state_crowd,
             &[application_id_fungible.forget_abi()],
