@@ -154,3 +154,32 @@ async fn contract_accepts_valid_http_response_it_obtains_by_itself() -> anyhow::
 
     Ok(())
 }
+
+/// Tests if the contract rejects an invalid HTTP response it obtains by itself.
+#[test_log::test(tokio::test)]
+#[should_panic(expected = "Failed to execute block")]
+async fn contract_rejects_invalid_http_response_it_obtains_by_itself() {
+    const HTTP_RESPONSE_BODY: &str = "Untrusted response";
+
+    let http_server =
+        HttpServer::start(Router::new().route("/", get(|| async { HTTP_RESPONSE_BODY })))
+            .await
+            .expect("Failed to start test HTTP server");
+    let port = http_server.port();
+    let url = format!("http://localhost:{port}/");
+
+    let (validator, application_id, chain) =
+        TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
+
+    validator
+        .change_resource_control_policy(|policy| {
+            policy
+                .http_request_allow_list
+                .insert("localhost".to_owned());
+        })
+        .await;
+
+    chain
+        .graphql_mutation(application_id, "mutation { performHttpRequestInContract }")
+        .await;
+}
