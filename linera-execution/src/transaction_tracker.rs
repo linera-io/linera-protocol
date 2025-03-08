@@ -132,7 +132,7 @@ impl TransactionTracker {
         self.blobs.insert(blob.id(), blob);
     }
 
-    pub fn get_blobs_cache(&self) -> &BTreeMap<BlobId, Blob> {
+    pub fn created_blobs(&self) -> &BTreeMap<BlobId, Blob> {
         &self.blobs
     }
 

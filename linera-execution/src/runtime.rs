@@ -1383,7 +1383,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 let sender = this.execution_state_sender.clone();
 
                 let txn_tracker = TransactionTracker::default()
-                    .with_blobs(this.transaction_tracker.get_blobs_cache().clone());
+                    .with_blobs(this.transaction_tracker.created_blobs().clone());
                 let mut service_runtime =
                     ServiceSyncRuntime::new_with_txn_tracker(sender, context, txn_tracker);
                 let QueryOutcome {

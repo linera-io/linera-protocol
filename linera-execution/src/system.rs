@@ -9,9 +9,9 @@ mod tests;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fmt::{self, Display, Formatter},
-    iter, mem,
+    mem,
 };
 
 use async_graphql::Enum;
@@ -409,8 +409,6 @@ pub enum SystemExecutionError {
     OracleResponseMismatch,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
-    #[error("Invalid index for operation: {0:?}")]
-    InvalidOperationIndex(Option<u32>),
 }
 
 impl From<ViewError> for SystemExecutionError {
@@ -988,20 +986,15 @@ where
         mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, SystemExecutionError> {
         let application_index = txn_tracker.next_application_index();
-        for application_module in required_application_ids
-            .iter()
-            .map(|app_id| &app_id.module_id)
-            .chain(iter::once(&module_id))
-        {
-            let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-                self.check_bytecode_blobs(application_module).await?;
-            // We only remember to register the blobs that aren't recorded in `used_blobs`
-            // already.
-            self.blob_used(Some(&mut txn_tracker), contract_bytecode_blob_id)
-                .await?;
-            self.blob_used(Some(&mut txn_tracker), service_bytecode_blob_id)
-                .await?;
-        }
+
+        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
+            self.check_bytecode_blobs(&module_id).await?;
+        // We only remember to register the blobs that aren't recorded in `used_blobs`
+        // already.
+        self.blob_used(Some(&mut txn_tracker), contract_bytecode_blob_id)
+            .await?;
+        self.blob_used(Some(&mut txn_tracker), service_bytecode_blob_id)
+            .await?;
 
         let application_description = UserApplicationDescription {
             module_id,
@@ -1027,7 +1020,7 @@ where
         application_description: &UserApplicationDescription,
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(), SystemExecutionError> {
-        // Make sure that referenced applications ids have been registered.
+        // Make sure that referenced applications IDs have been registered.
         for required_id in &application_description.required_application_ids {
             Box::pin(self.describe_application(*required_id, txn_tracker.as_deref_mut())).await?;
         }
@@ -1041,7 +1034,13 @@ where
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<UserApplicationDescription, SystemExecutionError> {
         let blob_id = id.description_blob_id();
-        let blob_content = self.read_blob_content(blob_id).await?;
+        let blob_content = match txn_tracker
+            .as_ref()
+            .and_then(|tracker| tracker.created_blobs().get(&blob_id))
+        {
+            Some(blob) => blob.content().clone(),
+            None => self.read_blob_content(blob_id).await?,
+        };
         self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
         let description: UserApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
@@ -1060,7 +1059,7 @@ where
         Ok(description)
     }
 
-    /// Retrieves the recursive dependencies of applications and apply a topological sort.
+    /// Retrieves the recursive dependencies of applications and applies a topological sort.
     pub async fn find_dependencies(
         &mut self,
         mut stack: Vec<UserApplicationId>,
@@ -1095,26 +1094,6 @@ where
                     stack.push(*child);
                 }
             }
-        }
-        Ok(result)
-    }
-
-    /// Retrieves applications' descriptions preceded by their recursive dependencies.
-    pub async fn describe_applications_with_dependencies(
-        &mut self,
-        ids: Vec<UserApplicationId>,
-        extra_registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
-        let ids_with_deps = self.find_dependencies(ids, txn_tracker).await?;
-        let mut result = Vec::new();
-        for id in ids_with_deps {
-            let description = if let Some(description) = extra_registered_apps.get(&id) {
-                description.clone()
-            } else {
-                self.describe_application(id, Some(txn_tracker)).await?
-            };
-            result.push(description);
         }
         Ok(result)
     }

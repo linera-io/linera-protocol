@@ -24,8 +24,8 @@ use linera_base::{
 };
 use linera_execution::{
     test_utils::{
-        create_dummy_message_context, create_dummy_operation_context, test_accounts_strategy,
-        ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,
+        test_accounts_strategy, ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     Operation, OperationContext, ResourceController, SystemExecutionError,
@@ -572,11 +572,7 @@ async fn test_read_owner_balance_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(
-            0,
-            0,
-            Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
-        ),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await
@@ -617,11 +613,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(
-            0,
-            0,
-            Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
-        ),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await
@@ -665,11 +657,7 @@ async fn test_read_owner_balances_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(
-            0,
-            0,
-            Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
-        ),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await
@@ -713,11 +701,7 @@ async fn test_read_balance_owners_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(
-            0,
-            0,
-            Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
-        ),
+        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
     .await

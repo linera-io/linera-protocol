@@ -69,7 +69,7 @@ where
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
-        let description = match txn_tracker.get_blobs_cache().get(&blob_id) {
+        let description = match txn_tracker.created_blobs().get(&blob_id) {
             Some(description) => {
                 let blob = description.clone();
                 bcs::from_bytes(blob.bytes())?
@@ -98,7 +98,7 @@ where
         let blob_id = id.description_blob_id();
         let description = match txn_tracker
             .as_ref()
-            .and_then(|tracker| tracker.get_blobs_cache().get(&blob_id))
+            .and_then(|tracker| tracker.created_blobs().get(&blob_id))
         {
             Some(description) => {
                 let blob = description.clone();

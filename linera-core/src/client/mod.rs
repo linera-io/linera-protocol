@@ -412,14 +412,7 @@ where
             }
             let mut result = self.handle_certificate(certificate.clone()).await;
 
-            let mut old_missing_blob_ids = vec![];
-            while let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                if blob_ids == &old_missing_blob_ids {
-                    // looks like we haven't been able to download any missing blobs
-                    break;
-                }
-                // save for future checks if we're making any progress
-                old_missing_blob_ids = blob_ids.clone();
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 if let Some(blobs) = remote_node.try_download_blobs(blob_ids).await {
                     let _ = self.local_node.store_blobs(&blobs).await;
                     result = self.handle_certificate(certificate.clone()).await;

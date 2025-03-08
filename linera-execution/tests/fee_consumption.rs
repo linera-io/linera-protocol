@@ -9,11 +9,13 @@ use std::{sync::Arc, vec};
 
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
-    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
-    test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
+    test_utils::{
+        blob_oracle_responses, ExpectedCall, RegisterMockApplication, SystemExecutionState,
+    },
     ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     RawExecutionOutcome, ResourceControlPolicy, ResourceController, TransactionTracker,
 };
@@ -196,11 +198,7 @@ async fn test_fee_consumption(
         message_id: MessageId::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let mut txn_tracker = TransactionTracker::new(
-        0,
-        0,
-        Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
-    );
+    let mut txn_tracker = TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter())));
     view.execute_message(
         context,
         Timestamp::from(0),

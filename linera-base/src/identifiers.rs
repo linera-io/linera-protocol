@@ -292,7 +292,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application from a blob.
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct ApplicationId<A = ()> {
     /// The hash of the `UserApplicationDescription` this refers to.
@@ -779,18 +779,6 @@ impl<A> Hash for ApplicationId<A> {
     }
 }
 
-impl<A> fmt::Debug for ApplicationId<A> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ApplicationId")
-            .field(
-                "application_description_hash",
-                &self.application_description_hash,
-            )
-            .field("module_id", &self.module_id)
-            .finish()
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "ApplicationId")]
 struct SerializableApplicationId {
@@ -874,7 +862,7 @@ impl<A> ApplicationId<A> {
     }
 
     /// Converts the application ID to the ID of the blob containing the
-    /// UserApplicationDescription.
+    /// [`UserApplicationDescription`].
     pub fn description_blob_id(self) -> BlobId {
         BlobId::new(
             self.application_description_hash,

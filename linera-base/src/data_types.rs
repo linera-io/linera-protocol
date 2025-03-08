@@ -785,7 +785,7 @@ pub enum OracleResponse {
 impl<'de> BcsHashable<'de> for OracleResponse {}
 
 /// Description of the necessary information to run a user application used within blobs.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitStore)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub module_id: ModuleId,
@@ -815,7 +815,7 @@ impl From<&UserApplicationDescription> for UserApplicationId {
 impl BcsHashable<'_> for UserApplicationDescription {}
 
 impl UserApplicationDescription {
-    /// Gets the serialized bytes for this `BlobUserApplicationDescription`.
+    /// Gets the serialized bytes for this `UserApplicationDescription`.
     pub fn to_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).expect("Serializing blob bytes should not fail!")
     }

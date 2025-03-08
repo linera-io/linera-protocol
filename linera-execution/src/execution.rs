@@ -77,7 +77,8 @@ where
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
-        let next_message_index = application_description.application_index + 1;
+        let next_message_index = 0;
+        let next_application_index = application_description.application_index + 1;
 
         let application_id = From::from(&application_description);
 
@@ -105,7 +106,8 @@ where
             tracker,
             account: None,
         };
-        let mut txn_tracker = TransactionTracker::new(next_message_index, next_message_index, None);
+        let mut txn_tracker =
+            TransactionTracker::new(next_message_index, next_application_index, None);
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
         self.run_user_action(
             application_id,

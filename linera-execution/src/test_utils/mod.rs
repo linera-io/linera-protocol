@@ -250,3 +250,12 @@ pub fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<AccountOwner, 
         0..5,
     )
 }
+
+/// Creates a vector of ['OracleResponse`]s for the supplied [`BlobId`]s.
+pub fn blob_oracle_responses<'a>(blobs: impl Iterator<Item = &'a BlobId>) -> Vec<OracleResponse> {
+    blobs
+        .into_iter()
+        .copied()
+        .map(OracleResponse::Blob)
+        .collect()
+}
