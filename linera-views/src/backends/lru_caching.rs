@@ -87,7 +87,8 @@ impl<'a> LruPrefixCache {
         }
     }
 
-    /// Marks cached keys that match the prefix as deleted. Importantly, this does not create new entries in the cache.
+    /// Marks cached keys that match the prefix as deleted. Importantly, this does not
+    /// create new entries in the cache.
     pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
             for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
@@ -117,8 +118,8 @@ impl<'a> LruPrefixCache {
 pub struct LruCachingStore<K> {
     /// The inner store that is called by the LRU cache one
     store: K,
-    /// The cache of values.
-    lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
+    /// The LRU cache of values.
+    cache: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
 impl<K> WithError for LruCachingStore<K>
@@ -142,13 +143,13 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let Some(lru_read_values) = &self.lru_read_values else {
+        let Some(cache) = &self.cache else {
             return self.store.read_value_bytes(key).await;
         };
         // First inquiring in the read_value_bytes LRU
         {
-            let lru_read_values_container = lru_read_values.lock().unwrap();
-            if let Some(value) = lru_read_values_container.query(key) {
+            let cache = cache.lock().unwrap();
+            if let Some(value) = cache.query(key) {
                 #[cfg(with_metrics)]
                 NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
                 return Ok(value.clone());
@@ -157,15 +158,15 @@ where
         #[cfg(with_metrics)]
         NUM_CACHE_FAULT.with_label_values(&[]).inc();
         let value = self.store.read_value_bytes(key).await?;
-        let mut lru_read_values = lru_read_values.lock().unwrap();
-        lru_read_values.insert(key.to_vec(), value.clone());
+        let mut cache = cache.lock().unwrap();
+        cache.insert(key.to_vec(), value.clone());
         Ok(value)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        if let Some(values) = &self.lru_read_values {
-            let values = values.lock().unwrap();
-            if let Some(value) = values.query(key) {
+        if let Some(cache) = &self.cache {
+            let cache = cache.lock().unwrap();
+            if let Some(value) = cache.query(key) {
                 return Ok(value.is_some());
             }
         }
@@ -173,7 +174,7 @@ where
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        let Some(values) = &self.lru_read_values else {
+        let Some(cache) = &self.cache else {
             return self.store.contains_keys(keys).await;
         };
         let size = keys.len();
@@ -181,9 +182,9 @@ where
         let mut indices = Vec::new();
         let mut key_requests = Vec::new();
         {
-            let values = values.lock().unwrap();
+            let cache = cache.lock().unwrap();
             for i in 0..size {
-                if let Some(value) = values.query(&keys[i]) {
+                if let Some(value) = cache.query(&keys[i]) {
                     results[i] = value.is_some();
                 } else {
                     indices.push(i);
@@ -204,7 +205,7 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let Some(lru_read_values) = &self.lru_read_values else {
+        let Some(cache) = &self.cache else {
             return self.store.read_multi_values_bytes(keys).await;
         };
 
@@ -212,9 +213,9 @@ where
         let mut cache_miss_indices = Vec::new();
         let mut miss_keys = Vec::new();
         {
-            let lru_read_values_container = lru_read_values.lock().unwrap();
+            let cache = cache.lock().unwrap();
             for (i, key) in keys.into_iter().enumerate() {
-                if let Some(value) = lru_read_values_container.query(&key) {
+                if let Some(value) = cache.query(&key) {
                     #[cfg(with_metrics)]
                     NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
                     result.push(value.clone());
@@ -232,12 +233,12 @@ where
                 .store
                 .read_multi_values_bytes(miss_keys.clone())
                 .await?;
-            let mut lru_read_values = lru_read_values.lock().unwrap();
+            let mut cache = cache.lock().unwrap();
             for (i, (key, value)) in cache_miss_indices
                 .into_iter()
                 .zip(miss_keys.into_iter().zip(values))
             {
-                lru_read_values.insert(key, value.clone());
+                cache.insert(key, value.clone());
                 result[i] = value;
             }
         }
@@ -264,22 +265,22 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        let Some(lru_read_values) = &self.lru_read_values else {
+        let Some(cache) = &self.cache else {
             return self.store.write_batch(batch).await;
         };
 
         {
-            let mut lru_read_values = lru_read_values.lock().unwrap();
+            let mut cache = cache.lock().unwrap();
             for operation in &batch.operations {
                 match operation {
                     WriteOperation::Put { key, value } => {
-                        lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
+                        cache.insert(key.to_vec(), Some(value.to_vec()));
                     }
                     WriteOperation::Delete { key } => {
-                        lru_read_values.insert(key.to_vec(), None);
+                        cache.insert(key.to_vec(), None);
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
-                        lru_read_values.delete_prefix(key_prefix);
+                        cache.delete_prefix(key_prefix);
                     }
                 }
             }
@@ -371,35 +372,32 @@ where
 impl<K> LruCachingStore<K> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
     pub fn new(store: K, cache_size: usize) -> Self {
-        let lru_read_values = {
+        let cache = {
             if cache_size == 0 {
                 None
             } else {
                 Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
             }
         };
-        Self {
-            store,
-            lru_read_values,
-        }
+        Self { store, cache }
     }
 
     /// Gets the `cache_size`.
     pub fn cache_size(&self) -> usize {
-        match &self.lru_read_values {
+        match &self.cache {
             None => 0,
-            Some(lru_read_values) => {
-                let lru_read_values = lru_read_values.lock().unwrap();
-                lru_read_values.max_cache_size
+            Some(cache) => {
+                let cache = cache.lock().unwrap();
+                cache.max_cache_size
             }
         }
     }
 
     /// Sets the value `has_exclusive_access` to `true`, if applicable.
     pub fn enable_exclusive_access(&self) {
-        if let Some(lru_read_values) = &self.lru_read_values {
-            let mut lru_read_values = lru_read_values.lock().unwrap();
-            lru_read_values.has_exclusive_access = true;
+        if let Some(cache) = &self.cache {
+            let mut cache = cache.lock().unwrap();
+            cache.has_exclusive_access = true;
         }
     }
 }
