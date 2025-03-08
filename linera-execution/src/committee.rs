@@ -380,4 +380,9 @@ impl Committee {
     pub fn policy(&self) -> &ResourceControlPolicy {
         &self.policy
     }
+
+    /// Returns a mutable reference to this committee's [`ResourceControlPolicy`].
+    pub fn policy_mut(&mut self) -> &mut ResourceControlPolicy {
+        &mut self.policy
+    }
 }

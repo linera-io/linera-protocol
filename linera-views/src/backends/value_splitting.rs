@@ -289,12 +289,8 @@ where
         format!("value splitting {}", K::get_name())
     }
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, Self::Error> {
-        let store = K::connect(config, namespace, root_key).await?;
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
+        let store = K::connect(config, namespace).await?;
         Ok(Self { store })
     }
 
@@ -475,10 +471,8 @@ impl LimitedTestMemoryStore {
     /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
         let namespace = generate_test_namespace();
-        let root_key = &[];
         let store =
-            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, root_key)
-                .unwrap();
+            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap();
         LimitedTestMemoryStore { store }
     }
 }

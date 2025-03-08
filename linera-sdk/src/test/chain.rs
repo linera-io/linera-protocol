@@ -24,8 +24,9 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
+    committee::Epoch,
     system::{SystemOperation, SystemQuery, SystemResponse},
-    Query, QueryOutcome, QueryResponse,
+    Operation, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -90,6 +91,20 @@ impl ActiveChain {
     /// Sets the [`AccountSecretKey`] to use for signing new blocks.
     pub fn set_key_pair(&mut self, key_pair: AccountSecretKey) {
         self.key_pair = key_pair
+    }
+
+    /// Returns the current [`Epoch`] the chain is in.
+    pub async fn epoch(&self) -> Epoch {
+        self.validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to load chain")
+            .execution_state
+            .system
+            .epoch
+            .get()
+            .expect("Active chains should be in an epoch")
     }
 
     /// Reads the current shared balance available to all of the owners of this microchain.
@@ -243,6 +258,7 @@ impl ActiveChain {
         let mut block = BlockBuilder::new(
             self.description.into(),
             self.key_pair.public().into(),
+            self.epoch().await,
             tip.as_ref(),
             self.validator.clone(),
         );
@@ -587,5 +603,37 @@ impl ActiveChain {
             response: json_response,
             operations,
         }
+    }
+
+    /// Executes a GraphQL `mutation` on an `application` and proposes a block with the resulting
+    /// scheduled operations.
+    ///
+    /// Returns the certificate of the new block.
+    pub async fn graphql_mutation<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+        query: impl Into<async_graphql::Request>,
+    ) -> ConfirmedBlockCertificate
+    where
+        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
+    {
+        let QueryOutcome { operations, .. } = self.graphql_query(application_id, query).await;
+
+        self.add_block(|block| {
+            for operation in operations {
+                match operation {
+                    Operation::User {
+                        application_id,
+                        bytes,
+                    } => {
+                        block.with_raw_operation(application_id, bytes);
+                    }
+                    Operation::System(system_operation) => {
+                        block.with_system_operation(system_operation);
+                    }
+                }
+            }
+        })
+        .await
     }
 }

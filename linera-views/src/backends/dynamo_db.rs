@@ -351,7 +351,6 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     async fn connect(
         config: &Self::Config,
         namespace: &str,
-        root_key: &[u8],
     ) -> Result<Self, DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let client = config.client().await?;
@@ -361,7 +360,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
         let namespace = namespace.to_string();
-        let start_key = extend_root_key(root_key);
+        let start_key = extend_root_key(&[]);
         let store = Self {
             client,
             namespace,
@@ -416,7 +415,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
-        let mut store = Self::connect(config, namespace, &[]).await?;
+        let mut store = Self::connect(config, namespace).await?;
         store.start_key = PARTITION_KEY_ROOT_KEY.to_vec();
 
         let keys = store.find_keys_by_prefix(EMPTY_ROOT_KEY).await?;

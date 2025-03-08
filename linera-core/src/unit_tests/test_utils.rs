@@ -1030,15 +1030,10 @@ impl StorageBuilder for MemoryStorageBuilder {
             self.namespace = generate_test_namespace();
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
-        let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
+        Ok(
+            DbStorage::new_for_testing(config, &namespace, self.wasm_runtime, self.clock.clone())
+                .await?,
         )
-        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1102,15 +1097,10 @@ impl StorageBuilder for RocksDbStorageBuilder {
             self.namespace = generate_test_namespace();
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
-        let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
+        Ok(
+            DbStorage::new_for_testing(config, &namespace, self.wasm_runtime, self.clock.clone())
+                .await?,
         )
-        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1155,15 +1145,10 @@ impl StorageBuilder for ServiceStorageBuilder {
             self.namespace = generate_test_namespace();
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
-        let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
+        Ok(
+            DbStorage::new_for_testing(config, &namespace, self.wasm_runtime, self.clock.clone())
+                .await?,
         )
-        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1205,15 +1190,10 @@ impl StorageBuilder for DynamoDbStorageBuilder {
             self.namespace = generate_test_namespace();
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
-        let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
+        Ok(
+            DbStorage::new_for_testing(config, &namespace, self.wasm_runtime, self.clock.clone())
+                .await?,
         )
-        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1255,15 +1235,10 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
             self.namespace = generate_test_namespace();
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
-        let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
+        Ok(
+            DbStorage::new_for_testing(config, &namespace, self.wasm_runtime, self.clock.clone())
+                .await?,
         )
-        .await?)
     }
 
     fn clock(&self) -> &TestClock {

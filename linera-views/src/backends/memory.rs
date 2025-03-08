@@ -267,29 +267,24 @@ impl MemoryStore {
     fn sync_maybe_create_and_connect(
         config: &MemoryStoreConfig,
         namespace: &str,
-        root_key: &[u8],
         kill_on_drop: bool,
     ) -> Result<Self, MemoryStoreError> {
         let mut memory_stores = MEMORY_STORES.lock().expect("lock should not be poisoned");
         if !memory_stores.sync_exists(namespace) {
             memory_stores.sync_create(namespace);
         }
-        memory_stores.sync_connect(config, namespace, root_key, kill_on_drop)
+        memory_stores.sync_connect(config, namespace, &[], kill_on_drop)
     }
 
     /// Creates a `MemoryStore` from a number of queries and a namespace.
-    pub fn new(
-        max_stream_queries: usize,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, MemoryStoreError> {
+    pub fn new(max_stream_queries: usize, namespace: &str) -> Result<Self, MemoryStoreError> {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries,
         };
         let config = MemoryStoreConfig { common_config };
         let kill_on_drop = false;
-        MemoryStore::sync_maybe_create_and_connect(&config, namespace, root_key, kill_on_drop)
+        MemoryStore::sync_maybe_create_and_connect(&config, namespace, kill_on_drop)
     }
 
     /// Creates a `MemoryStore` from a number of queries and a namespace for testing.
@@ -297,7 +292,6 @@ impl MemoryStore {
     pub fn new_for_testing(
         max_stream_queries: usize,
         namespace: &str,
-        root_key: &[u8],
     ) -> Result<Self, MemoryStoreError> {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
@@ -305,7 +299,7 @@ impl MemoryStore {
         };
         let config = MemoryStoreConfig { common_config };
         let kill_on_drop = true;
-        MemoryStore::sync_maybe_create_and_connect(&config, namespace, root_key, kill_on_drop)
+        MemoryStore::sync_maybe_create_and_connect(&config, namespace, kill_on_drop)
     }
 }
 
@@ -316,16 +310,12 @@ impl AdminKeyValueStore for MemoryStore {
         "memory".to_string()
     }
 
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, MemoryStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, MemoryStoreError> {
         let mut memory_stores = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
         let kill_on_drop = false;
-        memory_stores.sync_connect(config, namespace, root_key, kill_on_drop)
+        memory_stores.sync_connect(config, namespace, &[], kill_on_drop)
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
@@ -400,8 +390,7 @@ impl TestKeyValueStore for MemoryStore {
 #[cfg(with_testing)]
 pub fn create_test_memory_store() -> MemoryStore {
     let namespace = generate_test_namespace();
-    let root_key = &[];
-    MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, root_key).unwrap()
+    MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace).unwrap()
 }
 
 /// The error type for [`MemoryStore`].

@@ -6,6 +6,7 @@
 //! Helps with the construction of blocks, adding operations and
 
 use linera_base::{
+    abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner},
@@ -19,6 +20,7 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_execution::{
+    committee::Epoch,
     system::{Recipient, SystemChannel, SystemOperation},
     Operation,
 };
@@ -48,6 +50,7 @@ impl BlockBuilder {
     pub(crate) fn new(
         chain_id: ChainId,
         owner: Owner,
+        epoch: Epoch,
         previous_block: Option<&ConfirmedBlockCertificate>,
         validator: TestValidator,
     ) -> Self {
@@ -64,7 +67,7 @@ impl BlockBuilder {
 
         BlockBuilder {
             block: ProposedBlock {
-                epoch: 0.into(),
+                epoch,
                 chain_id,
                 incoming_bundles: vec![],
                 operations: vec![],
@@ -136,13 +139,28 @@ impl BlockBuilder {
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
-        operation: impl ToBcsBytes,
-    ) -> &mut Self {
-        self.block.operations.push(Operation::User {
-            application_id: application_id.forget_abi(),
-            bytes: operation
+        operation: Abi::Operation,
+    ) -> &mut Self
+    where
+        Abi: ContractAbi,
+    {
+        self.with_raw_operation(
+            application_id.forget_abi(),
+            operation
                 .to_bcs_bytes()
                 .expect("Failed to serialize operation"),
+        )
+    }
+
+    /// Adds an already serialized user `operation` to this block.
+    pub fn with_raw_operation(
+        &mut self,
+        application_id: ApplicationId,
+        operation: impl Into<Vec<u8>>,
+    ) -> &mut Self {
+        self.block.operations.push(Operation::User {
+            application_id,
+            bytes: operation.into(),
         });
         self
     }
@@ -213,7 +231,8 @@ impl BlockBuilder {
             Round::Fast,
             self.validator.key_pair(),
         );
-        let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
+        let committee = self.validator.committee().await;
+        let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
         let certificate = builder
             .append(vote.public_key, vote.signature)
             .expect("Failed to sign block")

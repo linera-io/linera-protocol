@@ -33,7 +33,7 @@ pub trait Entrypoint {
     fn entrypoint();
 }
 
-/// Type to export a simple function without parameters or return values.
+/// Type to export a simple function without parameters or a return value.
 pub struct SimpleFunction;
 
 #[wit_export(package = "witty-macros:test-modules")]

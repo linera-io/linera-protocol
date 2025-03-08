@@ -41,9 +41,8 @@ impl ScyllaDbRunner {
             cache_size: config.client.cache_size,
         };
         let namespace = config.client.table.clone();
-        let root_key = &[];
         let store_config = ScyllaDbStoreConfig::new(config.client.uri.clone(), common_config);
-        let store = ScyllaDbStore::connect(&store_config, &namespace, root_key).await?;
+        let store = ScyllaDbStore::connect(&store_config, &namespace).await?;
         Self::new(config, store).await
     }
 }

@@ -644,7 +644,6 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     async fn connect(
         config: &Self::Config,
         namespace: &str,
-        root_key: &[u8],
     ) -> Result<Self, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
@@ -659,7 +658,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
-        let root_key = get_big_root_key(root_key);
+        let root_key = get_big_root_key(&[]);
         Ok(Self {
             store,
             semaphore,

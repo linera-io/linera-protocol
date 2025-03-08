@@ -126,13 +126,8 @@ impl SystemExecutionState {
         }
 
         let namespace = generate_test_namespace();
-        let root_key = &[];
-        let context = MemoryContext::new_for_testing(
-            TEST_MEMORY_MAX_STREAM_QUERIES,
-            &namespace,
-            root_key,
-            extra,
-        );
+        let context =
+            MemoryContext::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, extra);
         let mut view = ExecutionStateView::load(context)
             .await
             .expect("Loading from memory should work");

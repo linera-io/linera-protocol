@@ -3021,11 +3021,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // Make a committee and worker (only used for signing certificates)
     let store_config = MemoryStore::new_test_config().await?;
     let namespace = generate_test_namespace();
-    let root_key = &[];
     let store = DbStorage::<MemoryStore, _>::new_for_testing(
         store_config,
         &namespace,
-        root_key,
         None,
         TestClock::new(),
     )
