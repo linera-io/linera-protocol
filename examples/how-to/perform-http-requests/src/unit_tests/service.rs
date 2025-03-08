@@ -83,6 +83,20 @@ fn service_sends_http_response_to_contract() {
     );
 }
 
+/// Tests if the service requests the contract to perform an HTTP request.
+#[test]
+fn service_requests_contract_to_perform_http_request() {
+    let service = create_service();
+
+    let request = async_graphql::Request::new("mutation { performHttpRequestInContract }");
+
+    service.handle_query(request).blocking_wait();
+
+    let operations = service.runtime.scheduled_operations::<Operation>();
+
+    assert_eq!(operations, vec![Operation::PerformHttpRequest]);
+}
+
 /// Creates a [`Service`] instance for testing.
 fn create_service() -> Service {
     let runtime = ServiceRuntime::new().with_application_parameters(TEST_BASE_URL.to_owned());
