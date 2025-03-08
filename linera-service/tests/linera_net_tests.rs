@@ -2004,7 +2004,12 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     // Create AMM application on Admin chain
     let module_id = node_service_amm
-        .publish_module::<AmmAbi, Parameters, ()>(&chain_amm, contract_amm, service_amm, VmRuntime::Wasm)
+        .publish_module::<AmmAbi, Parameters, ()>(
+            &chain_amm,
+            contract_amm,
+            service_amm,
+            VmRuntime::Wasm,
+        )
         .await?;
     let application_id_amm = node_service_amm
         .create_application(
