@@ -860,6 +860,7 @@ ResourceControlPolicy:
     - message_byte:
         TYPENAME: Amount
     - maximum_fuel_per_block: U64
+    - maximum_service_oracle_execution_ms: U64
     - maximum_executed_block_size: U64
     - maximum_bytecode_size: U64
     - maximum_blob_size: U64

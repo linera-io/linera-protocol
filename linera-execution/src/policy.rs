@@ -46,6 +46,8 @@ pub struct ResourceControlPolicy {
     // arguments.
     /// The maximum amount of fuel a block can consume.
     pub maximum_fuel_per_block: u64,
+    /// The maximum time in milliseconds that a block can spend executing services as oracles.
+    pub maximum_service_oracle_execution_ms: u64,
     /// The maximum size of an executed block. This includes the block proposal itself as well as
     /// the execution outcome.
     pub maximum_executed_block_size: u64,
@@ -82,6 +84,7 @@ impl fmt::Display for ResourceControlPolicy {
             message,
             message_byte,
             maximum_fuel_per_block,
+            maximum_service_oracle_execution_ms,
             maximum_executed_block_size,
             maximum_blob_size,
             maximum_published_blobs,
@@ -107,6 +110,8 @@ impl fmt::Display for ResourceControlPolicy {
             {message:.2} per outgoing messages\n\
             {message_byte:.2} per byte in the argument of an outgoing messages\n\
             {maximum_fuel_per_block} maximum fuel per block\n\
+            {maximum_service_oracle_execution_ms} ms maximum service-as-oracle execution time per \
+                block\n\
             {maximum_executed_block_size} maximum size of an executed block\n\
             {maximum_blob_size} maximum size of a data blob, bytecode or other binary blob\n\
             {maximum_published_blobs} maximum number of blobs published per block\n\
@@ -145,6 +150,7 @@ impl ResourceControlPolicy {
             message: Amount::default(),
             message_byte: Amount::default(),
             maximum_fuel_per_block: u64::MAX,
+            maximum_service_oracle_execution_ms: u64::MAX,
             maximum_executed_block_size: u64::MAX,
             maximum_blob_size: u64::MAX,
             maximum_published_blobs: u64::MAX,
@@ -211,6 +217,7 @@ impl ResourceControlPolicy {
             operation: Amount::from_micros(10),
             message: Amount::from_micros(10),
             maximum_fuel_per_block: 100_000_000,
+            maximum_service_oracle_execution_ms: 10_000,
             maximum_executed_block_size: 1_000_000,
             maximum_blob_size: 1_000_000,
             maximum_published_blobs: 10,
