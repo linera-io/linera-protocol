@@ -36,6 +36,7 @@ impl linera_sdk::Contract for Contract {
                 self.handle_http_response(response_body)
             }
             Operation::PerformHttpRequest => self.perform_http_request(),
+            Operation::UseServiceAsOracle => self.use_service_as_oracle(),
         }
     }
 
@@ -72,6 +73,46 @@ impl Contract {
         let response = self.runtime.http_request(http::Request::get(url));
 
         self.handle_http_response(response.body);
+    }
+
+    /// Uses the service as an oracle to perform the HTTP request.
+    ///
+    /// The service can then receive a non-deterministic response and return to the contract a
+    /// deterministic response.
+    fn use_service_as_oracle(&mut self) {
+        let application_id = self.runtime.application_id();
+        let request = async_graphql::Request::new("query { performHttpRequest }");
+
+        let graphql_response = self.runtime.query_service(application_id, request);
+
+        let async_graphql::Value::Object(graphql_response_data) = graphql_response.data else {
+            panic!("Unexpected response from service: {graphql_response:#?}");
+        };
+        let async_graphql::Value::List(ref http_response_list) =
+            graphql_response_data["performHttpRequest"]
+        else {
+            panic!(
+                "Unexpected response for service's `performHttpRequest` query: {:#?}",
+                graphql_response_data
+            );
+        };
+        let http_response = http_response_list
+            .iter()
+            .map(|value| {
+                let async_graphql::Value::Number(number) = value else {
+                    panic!("Unexpected type in HTTP request body's bytes: {value:#?}");
+                };
+
+                number
+                    .as_i64()
+                    .and_then(|integer| u8::try_from(integer).ok())
+                    .unwrap_or_else(|| {
+                        panic!("Unexpected value in HTTP request body's bytes: {number:#?}")
+                    })
+            })
+            .collect();
+
+        self.handle_http_response(http_response);
     }
 }
 

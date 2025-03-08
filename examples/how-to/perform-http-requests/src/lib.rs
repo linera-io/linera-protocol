@@ -30,4 +30,6 @@ pub enum Operation {
     HandleHttpResponse(Vec<u8>),
     /// Performs an HTTP request inside the contract.
     PerformHttpRequest,
+    /// Requests the service to perform the HTTP request as an oracle.
+    UseServiceAsOracle,
 }
