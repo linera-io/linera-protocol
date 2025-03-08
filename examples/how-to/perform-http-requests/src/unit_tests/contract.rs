@@ -119,6 +119,42 @@ fn accepts_response_from_oracle() {
         .blocking_wait();
 }
 
+/// Tests if the contract uses the service as an oracle to perform an HTTP request and
+/// rejects the response if it's invalid.
+#[test]
+#[should_panic(expected = "assertion `left == right` failed")]
+fn rejects_invalid_response_from_oracle() {
+    let application_id = ApplicationId::default().with_abi::<Abi>();
+    let url = "http://some.test.url".to_owned();
+    let mut contract = create_contract();
+
+    let http_response_graphql_list = "Invalid response"
+        .as_bytes()
+        .iter()
+        .map(|&byte| async_graphql::Value::Number(byte.into()))
+        .collect();
+
+    contract
+        .runtime
+        .set_application_id(application_id)
+        .set_application_parameters(url.clone())
+        .add_expected_service_query(
+            application_id,
+            async_graphql::Request::new("query { performHttpRequest }"),
+            async_graphql::Response::new(async_graphql::Value::Object(
+                [(
+                    async_graphql::Name::new("performHttpRequest"),
+                    async_graphql::Value::List(http_response_graphql_list),
+                )]
+                .into(),
+            )),
+        );
+
+    contract
+        .execute_operation(Operation::UseServiceAsOracle)
+        .blocking_wait();
+}
+
 /// Creates a [`Contract`] instance for testing.
 fn create_contract() -> Contract {
     let runtime = ContractRuntime::new();
