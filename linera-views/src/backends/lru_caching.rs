@@ -49,22 +49,25 @@ struct LruPrefixCache {
     map: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
     queue: LinkedHashMap<Vec<u8>, (), RandomState>,
     max_cache_size: usize,
-    cache_key_absence: bool,
 }
 
 impl<'a> LruPrefixCache {
     /// Creates an `LruPrefixCache`.
-    pub fn new(max_cache_size: usize, cache_key_absence: bool) -> Self {
+    pub fn new(max_cache_size: usize) -> Self {
         Self {
             map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
             max_cache_size,
-            cache_key_absence,
         }
     }
 
     /// Inserts an entry into the cache.
-    pub fn insert(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+    pub fn insert(&mut self, key: Vec<u8>, value: Option<Vec<u8>>, cache_key_absence: bool) {
+        if !cache_key_absence && value.is_none() {
+            self.map.remove(&key);
+            self.queue.remove(&key);
+            return;
+        }
         match self.map.entry(key.clone()) {
             btree_map::Entry::Occupied(mut entry) => {
                 entry.insert(value);
@@ -86,8 +89,8 @@ impl<'a> LruPrefixCache {
     }
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not create new entries in the cache.
-    pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
-        if self.cache_key_absence {
+    pub fn delete_prefix(&mut self, key_prefix: &[u8], cache_key_absence: bool) {
+        if cache_key_absence {
             for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
                 *value = None;
             }
@@ -115,6 +118,7 @@ impl<'a> LruPrefixCache {
 pub struct LruCachingStore<K> {
     /// The inner store that is called by the LRU cache one
     store: K,
+    cache_key_absence: bool,
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
@@ -151,11 +155,13 @@ where
                 return Ok(value.clone());
             }
         }
-        #[cfg(with_metrics)]
-        NUM_CACHE_FAULT.with_label_values(&[]).inc();
         let value = self.store.read_value_bytes(key).await?;
-        let mut lru_read_values = lru_read_values.lock().unwrap();
-        lru_read_values.insert(key.to_vec(), value.clone());
+        if self.cache_key_absence || value.is_some() {
+            #[cfg(with_metrics)]
+            NUM_CACHE_FAULT.with_label_values(&[]).inc();
+            let mut lru_read_values = lru_read_values.lock().unwrap();
+            lru_read_values.insert(key.to_vec(), value.clone(), self.cache_key_absence);
+        }
         Ok(value)
     }
 
@@ -234,7 +240,9 @@ where
                 .into_iter()
                 .zip(miss_keys.into_iter().zip(values))
             {
-                lru_read_values.insert(key, value.clone());
+                if self.cache_key_absence || value.is_some() {
+                    lru_read_values.insert(key, value.clone(), self.cache_key_absence);
+                }
                 result[i] = value;
             }
         }
@@ -270,15 +278,17 @@ where
             for operation in &batch.operations {
                 match operation {
                     WriteOperation::Put { key, value } => {
-                        lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
+                        lru_read_values.insert(
+                            key.to_vec(),
+                            Some(value.to_vec()),
+                            self.cache_key_absence,
+                        );
                     }
                     WriteOperation::Delete { key } => {
-                        if lru_read_values.cache_key_absence {
-                            lru_read_values.insert(key.to_vec(), None);
-                        }
+                        lru_read_values.insert(key.to_vec(), None, self.cache_key_absence);
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
-                        lru_read_values.delete_prefix(key_prefix);
+                        lru_read_values.delete_prefix(key_prefix, self.cache_key_absence);
                     }
                 }
             }
@@ -376,26 +386,21 @@ where
     }
 }
 
-fn new_lru_prefix_cache(
-    cache_size: usize,
-    cache_key_absence: bool,
-) -> Option<Arc<Mutex<LruPrefixCache>>> {
+fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>> {
     if cache_size == 0 {
         None
     } else {
-        Some(Arc::new(Mutex::new(LruPrefixCache::new(
-            cache_size,
-            cache_key_absence,
-        ))))
+        Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
     }
 }
 
 impl<K> LruCachingStore<K> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
     pub fn new(store: K, cache_size: usize, cache_key_absence: bool) -> Self {
-        let lru_read_values = new_lru_prefix_cache(cache_size, cache_key_absence);
+        let lru_read_values = new_lru_prefix_cache(cache_size);
         Self {
             store,
+            cache_key_absence,
             lru_read_values,
         }
     }
@@ -406,10 +411,7 @@ impl<K> LruCachingStore<K> {
             None => (0, false),
             Some(lru_read_values) => {
                 let lru_read_values = lru_read_values.lock().unwrap();
-                (
-                    lru_read_values.max_cache_size,
-                    lru_read_values.cache_key_absence,
-                )
+                (lru_read_values.max_cache_size, self.cache_key_absence)
             }
         }
     }
