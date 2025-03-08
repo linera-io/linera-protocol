@@ -20,6 +20,9 @@ use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(web)]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
+#[cfg(any(with_dynamodb, with_scylladb))]
+use linera_views::test_utils::test_cache_check_absence_admin_test;
+
 #[ignore]
 #[tokio::test]
 async fn test_read_multi_values_memory() {
@@ -320,4 +323,16 @@ async fn test_scylla_db_writes_from_state() {
         .await
         .unwrap();
     run_writes_from_state(&store).await;
+}
+
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_scylladb_cache_key_absence() {
+    test_cache_check_absence_admin_test::<linera_views::scylla_db::ScyllaDbStore>().await
+}
+
+#[cfg(with_dynamodb)]
+#[tokio::test]
+async fn test_dynamodb_cache_key_absence() {
+    test_cache_check_absence_admin_test::<linera_views::dynamo_db::DynamoDbStore>().await
 }
