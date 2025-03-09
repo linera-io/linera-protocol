@@ -6,6 +6,7 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use custom_debug_derive::Debug;
@@ -478,10 +479,23 @@ impl SyncRuntimeInternal<UserContractInstance> {
             .with_blobs(self.transaction_tracker.created_blobs().clone());
         let mut service_runtime =
             ServiceSyncRuntime::new_with_txn_tracker(sender, context, txn_tracker);
+
+        // TODO(#3533): Use the timeout to limit execution time.
+        let _timeout = self
+            .resource_controller
+            .remaining_service_oracle_execution_time()?;
+        let execution_start = Instant::now();
+        let result = service_runtime.run_query(application_id, query);
+
+        // Always track the execution time, irrespective to whether the service ran successfully or
+        // timed out
+        self.resource_controller
+            .track_service_oracle_execution(execution_start.elapsed())?;
+
         let QueryOutcome {
             response,
             operations,
-        } = service_runtime.run_query(application_id, query)?;
+        } = result?;
 
         self.scheduled_operations.extend(operations);
         Ok(response)
