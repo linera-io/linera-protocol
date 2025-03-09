@@ -1,0 +1,1 @@
+searchState.loadedDescShard("cranelift_native", 0, "Performs autodetection of the host for the purposes of …\nVersion number of this crate.\nReturn an <code>isa</code> builder configured for the current host …\nReturn an <code>isa</code> builder configured for the current host …\nReturn an <code>isa</code> builder configured for the current host …")

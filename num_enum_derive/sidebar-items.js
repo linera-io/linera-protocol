@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["Default","FromPrimitive","IntoPrimitive","TryFromPrimitive","UnsafeFromPrimitive"]};

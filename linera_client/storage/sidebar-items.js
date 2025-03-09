@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","StorageConfig","StoreConfig"],"fn":["full_initialize_storage","run_with_storage"],"struct":["StorageConfigNamespace"],"trait":["Runnable"]};

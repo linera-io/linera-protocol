@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An implementation of the SHA-3 cryptographic hash algorithms."><title>sha3 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sha3" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../sha3/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../sha3/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../sha3/index.html">sha3</a><span class="version">0.10.8</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">sha3</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/sha3/lib.rs.html#1-217">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An implementation of the <a href="https://en.wikipedia.org/wiki/SHA-3">SHA-3</a> cryptographic hash algorithms.</p>
+<p>There are 6 standard algorithms specified in the SHA-3 standard:</p>
+<ul>
+<li><code>SHA3-224</code></li>
+<li><code>SHA3-256</code></li>
+<li><code>SHA3-384</code></li>
+<li><code>SHA3-512</code></li>
+<li><code>SHAKE128</code>, an extendable output function (XOF)</li>
+<li><code>SHAKE256</code>, an extendable output function (XOF)</li>
+<li><code>Keccak224</code>, <code>Keccak256</code>, <code>Keccak384</code>, <code>Keccak512</code> (NIST submission
+without padding changes)</li>
+</ul>
+<p>Additionally supports <code>TurboSHAKE</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Output size of SHA3-256 is fixed, so its functionality is usually
+accessed via the <code>Digest</code> trait:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hex_literal::hex;
+<span class="kw">use </span>sha3::{Digest, Sha3_256};
+
+<span class="comment">// create a SHA3-256 object
+</span><span class="kw">let </span><span class="kw-2">mut </span>hasher = Sha3_256::new();
+
+<span class="comment">// write input message
+</span>hasher.update(<span class="string">b"abc"</span>);
+
+<span class="comment">// read hash digest
+</span><span class="kw">let </span>result = hasher.finalize();
+
+<span class="macro">assert_eq!</span>(result[..], <span class="macro">hex!</span>(<span class="string">"
+    3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532
+"</span>)[..]);</code></pre></div>
+<p>SHAKE functions have an extendable output, so finalization method returns
+XOF reader from which results of arbitrary length can be read. Note that
+these functions do not implement <code>Digest</code>, so lower-level traits have to
+be imported:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sha3::{Shake128, digest::{Update, ExtendableOutput, XofReader}};
+<span class="kw">use </span>hex_literal::hex;
+
+<span class="kw">let </span><span class="kw-2">mut </span>hasher = Shake128::default();
+hasher.update(<span class="string">b"abc"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>reader = hasher.finalize_xof();
+<span class="kw">let </span><span class="kw-2">mut </span>res1 = [<span class="number">0u8</span>; <span class="number">10</span>];
+reader.read(<span class="kw-2">&amp;mut </span>res1);
+<span class="macro">assert_eq!</span>(res1, <span class="macro">hex!</span>(<span class="string">"5881092dd818bf5cf8a3"</span>));</code></pre></div>
+<p>Also see <a href="https://github.com/RustCrypto/hashes">RustCrypto/hashes</a> readme.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.digest"><code>pub use <a class="mod" href="../digest/index.html" title="mod digest">digest</a>;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CShake128Core.html" title="struct sha3::CShake128Core">CShake128Core</a></div><div class="desc docblock-short">Core
+CSHAKE128
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.CShake128ReaderCore.html" title="struct sha3::CShake128ReaderCore">CShake128ReaderCore</a></div><div class="desc docblock-short">Core
+CSHAKE128
+reader state.</div></li><li><div class="item-name"><a class="struct" href="struct.CShake256Core.html" title="struct sha3::CShake256Core">CShake256Core</a></div><div class="desc docblock-short">Core
+CSHAKE256
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.CShake256ReaderCore.html" title="struct sha3::CShake256ReaderCore">CShake256ReaderCore</a></div><div class="desc docblock-short">Core
+CSHAKE256
+reader state.</div></li><li><div class="item-name"><a class="struct" href="struct.Keccak224Core.html" title="struct sha3::Keccak224Core">Keccak224Core</a></div><div class="desc docblock-short">Core
+Keccak-224
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Keccak256Core.html" title="struct sha3::Keccak256Core">Keccak256Core</a></div><div class="desc docblock-short">Core
+Keccak-256
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Keccak256FullCore.html" title="struct sha3::Keccak256FullCore">Keccak256FullCore</a></div><div class="desc docblock-short">Core
+SHA-3 CryptoNight variant
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Keccak384Core.html" title="struct sha3::Keccak384Core">Keccak384Core</a></div><div class="desc docblock-short">Core
+Keccak-384
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Keccak512Core.html" title="struct sha3::Keccak512Core">Keccak512Core</a></div><div class="desc docblock-short">Core
+Keccak-512
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Sha3_224Core.html" title="struct sha3::Sha3_224Core">Sha3_224Core</a></div><div class="desc docblock-short">Core
+SHA-3-224
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Sha3_256Core.html" title="struct sha3::Sha3_256Core">Sha3_256Core</a></div><div class="desc docblock-short">Core
+SHA-3-256
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Sha3_384Core.html" title="struct sha3::Sha3_384Core">Sha3_384Core</a></div><div class="desc docblock-short">Core
+SHA-3-384
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Sha3_512Core.html" title="struct sha3::Sha3_512Core">Sha3_512Core</a></div><div class="desc docblock-short">Core
+SHA-3-512
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Shake128Core.html" title="struct sha3::Shake128Core">Shake128Core</a></div><div class="desc docblock-short">Core
+SHAKE128
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Shake128ReaderCore.html" title="struct sha3::Shake128ReaderCore">Shake128ReaderCore</a></div><div class="desc docblock-short">Core
+SHAKE128
+reader state.</div></li><li><div class="item-name"><a class="struct" href="struct.Shake256Core.html" title="struct sha3::Shake256Core">Shake256Core</a></div><div class="desc docblock-short">Core
+SHAKE256
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.Shake256ReaderCore.html" title="struct sha3::Shake256ReaderCore">Shake256ReaderCore</a></div><div class="desc docblock-short">Core
+SHAKE256
+reader state.</div></li><li><div class="item-name"><a class="struct" href="struct.TurboShake128Core.html" title="struct sha3::TurboShake128Core">TurboShake128Core</a></div><div class="desc docblock-short">Core
+TurboSHAKE128
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.TurboShake128ReaderCore.html" title="struct sha3::TurboShake128ReaderCore">TurboShake128ReaderCore</a></div><div class="desc docblock-short">Core
+TurboSHAKE128
+reader state.</div></li><li><div class="item-name"><a class="struct" href="struct.TurboShake256Core.html" title="struct sha3::TurboShake256Core">TurboShake256Core</a></div><div class="desc docblock-short">Core
+TurboSHAKE256
+hasher state.</div></li><li><div class="item-name"><a class="struct" href="struct.TurboShake256ReaderCore.html" title="struct sha3::TurboShake256ReaderCore">TurboShake256ReaderCore</a></div><div class="desc docblock-short">Core
+TurboSHAKE256
+reader state.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Digest.html" title="trait sha3::Digest">Digest</a></div><div class="desc docblock-short">Convenience wrapper trait covering functionality of cryptographic hash
+functions with fixed output size.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.CShake128.html" title="type sha3::CShake128">CShake128</a></div><div class="desc docblock-short">CSHAKE128
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.CShake256.html" title="type sha3::CShake256">CShake256</a></div><div class="desc docblock-short">CSHAKE256
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.CShake128Reader.html" title="type sha3::CShake128Reader">CShake128Reader</a></div><div class="desc docblock-short">CSHAKE128
+reader state.</div></li><li><div class="item-name"><a class="type" href="type.CShake256Reader.html" title="type sha3::CShake256Reader">CShake256Reader</a></div><div class="desc docblock-short">CSHAKE256
+reader state.</div></li><li><div class="item-name"><a class="type" href="type.Keccak224.html" title="type sha3::Keccak224">Keccak224</a></div><div class="desc docblock-short">Keccak-224
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Keccak256.html" title="type sha3::Keccak256">Keccak256</a></div><div class="desc docblock-short">Keccak-256
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Keccak384.html" title="type sha3::Keccak384">Keccak384</a></div><div class="desc docblock-short">Keccak-384
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Keccak512.html" title="type sha3::Keccak512">Keccak512</a></div><div class="desc docblock-short">Keccak-512
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Keccak256Full.html" title="type sha3::Keccak256Full">Keccak256Full</a></div><div class="desc docblock-short">SHA-3 CryptoNight variant
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Sha3_224.html" title="type sha3::Sha3_224">Sha3_224</a></div><div class="desc docblock-short">SHA-3-224
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Sha3_256.html" title="type sha3::Sha3_256">Sha3_256</a></div><div class="desc docblock-short">SHA-3-256
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Sha3_384.html" title="type sha3::Sha3_384">Sha3_384</a></div><div class="desc docblock-short">SHA-3-384
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Sha3_512.html" title="type sha3::Sha3_512">Sha3_512</a></div><div class="desc docblock-short">SHA-3-512
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Shake128.html" title="type sha3::Shake128">Shake128</a></div><div class="desc docblock-short">SHAKE128
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Shake256.html" title="type sha3::Shake256">Shake256</a></div><div class="desc docblock-short">SHAKE256
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.Shake128Reader.html" title="type sha3::Shake128Reader">Shake128Reader</a></div><div class="desc docblock-short">SHAKE128
+reader state.</div></li><li><div class="item-name"><a class="type" href="type.Shake256Reader.html" title="type sha3::Shake256Reader">Shake256Reader</a></div><div class="desc docblock-short">SHAKE256
+reader state.</div></li><li><div class="item-name"><a class="type" href="type.TurboShake128.html" title="type sha3::TurboShake128">TurboShake128</a></div><div class="desc docblock-short">TurboSHAKE128
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.TurboShake256.html" title="type sha3::TurboShake256">TurboShake256</a></div><div class="desc docblock-short">TurboSHAKE256
+hasher state.</div></li><li><div class="item-name"><a class="type" href="type.TurboShake128Reader.html" title="type sha3::TurboShake128Reader">TurboShake128Reader</a></div><div class="desc docblock-short">TurboSHAKE128
+reader state.</div></li><li><div class="item-name"><a class="type" href="type.TurboShake256Reader.html" title="type sha3::TurboShake256Reader">TurboShake256Reader</a></div><div class="desc docblock-short">TurboSHAKE256
+reader state.</div></li></ul></section></div></main></body></html>

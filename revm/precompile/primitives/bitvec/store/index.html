@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Storage Memory Description"><title>revm::precompile::primitives::bitvec::store - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="revm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../../revm/index.html">revm</a><span class="version">19.4.0</span></h2></div><h2 class="location"><a href="#">Module store</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In revm::precompile::primitives::bitvec</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../../../index.html">revm</a>::<wbr><a href="../../../index.html">precompile</a>::<wbr><a href="../../index.html">primitives</a>::<wbr><a href="../index.html">bitvec</a>::<wbr><a class="mod" href="#">store</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../../src/bitvec/lib.rs.html#38">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="storage-memory-description"><a class="doc-anchor" href="#storage-memory-description">§</a>Storage Memory Description</h2>
+<p>This module defines the <code>bitvec</code> memory model used to interface bit-slice
+regions to raw memory, and manage type-state changes as demanded by the region
+descriptor.</p>
+<p>The <a href="../prelude/trait.BitStore.html" title="trait revm::precompile::primitives::bitvec::prelude::BitStore"><code>BitStore</code></a> trait is the primary type-level description of <code>bitvec</code> views
+of the memory space and provides the runtime system that drives the crate memory
+model.</p>
+<h3 id="memory-model"><a class="doc-anchor" href="#memory-model">§</a>Memory Model</h3>
+<p><code>bitvec</code> considers all memory within <a href="../prelude/struct.BitSlice.html" title="struct revm::precompile::primitives::bitvec::prelude::BitSlice"><code>BitSlice</code></a> regions as if it were composed
+of discrete bits, each divisible and independent from its neighbors, just as the
+Rust memory model considers elements <code>T</code> in a slice <code>[T]</code>. Much as ordinary byte
+slices <code>[u8]</code> provide an API where each byte is distinct and independent from
+its neighbors, but the underlying processor silicon clusters them in words and
+cachelines, both the processor silicon <em>and</em> the Rust compiler require that bits
+in a <code>BitSlice</code> be grouped into memory elements, and collectively subjected to
+aliasing rules within their batch.</p>
+<p><code>bitvec</code> manages this through the <code>BitStore</code> trait. It is implemented on three
+type families available from the Rust standard libraries:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/primitive/index.html" title="mod core::primitive">unsigned integers</a></li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/index.html" title="mod core::sync::atomic">atomic</a> unsigned integers</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/cell/struct.Cell.html" title="struct core::cell::Cell"><code>Cell</code></a> wrappers of unsigned integers</li>
+</ul>
+<p><code>bitvec</code> receives memory regions typed with one of these families and wraps it
+in one of its data structures based on the <code>BitSlice</code> region. The target
+processor is responsible for handling any contention between <code>T: BitStore</code>
+memory elements; this is irrelevant to the <code>bitvec</code> model. <code>bitvec</code> is solely
+responsible for proving to the Rust compiler that all memory accesses through
+its types are correctly managed according to the <code>&amp;</code>/<code>&amp;mut</code> shared/exclusion
+reference model, and the <a href="https://doc.rust-lang.org/1.81.0/core/cell/struct.UnsafeCell.html" title="struct core::cell::UnsafeCell"><code>UnsafeCell</code></a> shared-mutation model.</p>
+<p>Through <code>BitStore</code>, <code>bitvec</code> is able to demonstrate that <code>&amp;mut BitSlice</code>
+references to a region of <em>bits</em> have no other <code>BitSlice</code> references capable of
+viewing those bits. However, multiple <code>&amp;mut BitSlice</code> references may view the
+same underlying memory element, which is undefined behavior in the Rust compiler
+unless additional synchronization and mutual exclusion is provided to prevent
+racing writes and unsynchronized reads.</p>
+<p>As such, <code>BitStore</code> provides a closed type-system graph that the <code>BitSlice</code>
+region API uses to mark events that can induce aliasing over memory locations.
+When a <code>&amp;mut BitSlice&lt;_, T&gt;</code> typed with an ordinary unsigned integer uses any of
+the APIs that call [<code>.split_at_mut()</code>], it transitions its <code>BitStore</code> parameter
+to <code>&amp;mut BitSlice&lt;_, T::Alias&gt;</code>. The <a href="../prelude/trait.BitStore.html#associatedtype.Alias" title="associated type revm::precompile::primitives::bitvec::prelude::BitStore::Alias"><code>::Alias</code></a> associated type is always a
+type that manages aliasing references to a single memory location: either an
+<a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/index.html" title="mod core::sync::atomic">atomic</a> unsigned integer <code>T</code> or a <a href="https://doc.rust-lang.org/1.81.0/core/cell/struct.Cell.html" title="struct core::cell::Cell"><code>Cell&lt;T&gt;</code></a>. The Rust standard
+library guarantees that these types will behave correctly when multiple
+references to a single location attempt to perform memory transactions.</p>
+<p>The atomic and <code>Cell</code> types stay as themselves when <a href="../prelude/struct.BitSlice.html" title="struct revm::precompile::primitives::bitvec::prelude::BitSlice"><code>BitSlice</code></a> introduces
+aliasing conditions, as they are already alias-aware.</p>
+<p>Foreign implementations of <code>BitStore</code> are required to follow the conventions
+used here: unsynchronized storage types must create marker newtypes over an
+appropriate synchronized type for <code>::Alias</code> and uphold the “only <code>&amp;mut</code> has
+write permission” rule, while synchronized storage types do not need to perform
+these transitions, but may never transition to an unsynchronized type either.</p>
+<p>The <code>bitvec</code> memory description model as implemented in the <a href="../domain/index.html" title="mod revm::precompile::primitives::bitvec::domain"><code>domain</code></a> module is
+able to perform the inverse transition: where a <code>BitSlice</code> can demonstrate a
+static awareness that the <code>&amp;</code>/<code>&amp;mut</code> exclusion rules are satisfied for a
+particular element slice <code>[T]</code>, it may apply the <a href="../prelude/trait.BitStore.html#associatedtype.Unalias" title="associated type revm::precompile::primitives::bitvec::prelude::BitStore::Unalias"><code>::Unalias</code></a> marker to undo
+any <code>::Alias</code>ing, and present a type that has no more aliasing protection than
+that with which the memory region was initially declared.</p>
+<p>Namely, this means that the <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/index.html" title="mod core::sync::atomic">atomic</a> and <a href="https://doc.rust-lang.org/1.81.0/core/cell/struct.Cell.html" title="struct core::cell::Cell"><code>Cell</code></a> wrappers will <em>never</em> be
+removed from a region that had them before it was given to <code>bitvec</code>, while a
+region of ordinary integers may regain the ability to be viewed without
+synchrony  guards if <code>bitvec</code> can prove safety in the <code>domain</code> module.</p>
+<p>In order to retain <code>bitvec</code>’s promise that an <code>&amp;mut BitSlice&lt;_, T&gt;</code> has the sole
+right of observation for all bits in its region, the unsigned integers alias to
+a crate-internal wrapper over the alias-capable standard-library types. This
+wrapper forbids mutation through shared references, so two <a href="../prelude/struct.BitSlice.html" title="struct revm::precompile::primitives::bitvec::prelude::BitSlice"><code>BitSlice</code></a>
+references that alias a memory location, but do not overlap in bits, may not be
+coërced to interfere with each other.</p>
+</div></details><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.BitStore.html" title="trait revm::precompile::primitives::bitvec::store::BitStore">BitStore</a></div><div class="desc docblock-short">Bit Storage</div></li></ul></section></div></main></body></html>

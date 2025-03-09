@@ -1,0 +1,154 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Represents a GraphQL extension"><title>Extension in async_graphql::extensions - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><h2 class="location"><a href="#">Extension</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.execute">execute</a></li><li><a href="#method.parse_query">parse_query</a></li><li><a href="#method.prepare_request">prepare_request</a></li><li><a href="#method.request">request</a></li><li><a href="#method.resolve">resolve</a></li><li><a href="#method.subscribe">subscribe</a></li><li><a href="#method.validation">validation</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In async_graphql::extensions</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">async_graphql</a>::<wbr><a href="index.html">extensions</a>::<wbr><a class="trait" href="#">Extension</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/async_graphql/extensions/mod.rs.html#330-395">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Extension: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static {
+    // Provided methods
+    fn <a href="#method.request" class="fn">request</a>&lt;'life0, 'life1, 'life2, 'life3, 'async_trait&gt;(
+        &amp;'life0 self,
+        ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+        next: <a class="struct" href="struct.NextRequest.html" title="struct async_graphql::extensions::NextRequest">NextRequest</a>&lt;'life3&gt;,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.subscribe" class="fn">subscribe</a>&lt;'s&gt;(
+        &amp;self,
+        ctx: &amp;<a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'_&gt;,
+        stream: <a class="type" href="../../futures_core/stream/type.BoxStream.html" title="type futures_core::stream::BoxStream">BoxStream</a>&lt;'s, <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt;,
+        next: <a class="struct" href="struct.NextSubscribe.html" title="struct async_graphql::extensions::NextSubscribe">NextSubscribe</a>&lt;'_&gt;,
+    ) -&gt; <a class="type" href="../../futures_core/stream/type.BoxStream.html" title="type futures_core::stream::BoxStream">BoxStream</a>&lt;'s, <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.prepare_request" class="fn">prepare_request</a>&lt;'life0, 'life1, 'life2, 'life3, 'async_trait&gt;(
+        &amp;'life0 self,
+        ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+        request: <a class="struct" href="../struct.Request.html" title="struct async_graphql::Request">Request</a>,
+        next: <a class="struct" href="struct.NextPrepareRequest.html" title="struct async_graphql::extensions::NextPrepareRequest">NextPrepareRequest</a>&lt;'life3&gt;,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.ServerResult.html" title="type async_graphql::ServerResult">ServerResult</a>&lt;<a class="struct" href="../struct.Request.html" title="struct async_graphql::Request">Request</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.parse_query" class="fn">parse_query</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'life5, 'async_trait&gt;(
+        &amp;'life0 self,
+        ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+        query: &amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        variables: &amp;'life4 <a class="struct" href="../struct.Variables.html" title="struct async_graphql::Variables">Variables</a>,
+        next: <a class="struct" href="struct.NextParseQuery.html" title="struct async_graphql::extensions::NextParseQuery">NextParseQuery</a>&lt;'life5&gt;,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.ServerResult.html" title="type async_graphql::ServerResult">ServerResult</a>&lt;<a class="struct" href="../../async_graphql_parser/types/executable/struct.ExecutableDocument.html" title="struct async_graphql_parser::types::executable::ExecutableDocument">ExecutableDocument</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait,
+             'life4: 'async_trait,
+             'life5: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.validation" class="fn">validation</a>&lt;'life0, 'life1, 'life2, 'life3, 'async_trait&gt;(
+        &amp;'life0 self,
+        ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+        next: <a class="struct" href="struct.NextValidation.html" title="struct async_graphql::extensions::NextValidation">NextValidation</a>&lt;'life3&gt;,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type async_graphql::Result">Result</a>&lt;<a class="struct" href="../struct.ValidationResult.html" title="struct async_graphql::ValidationResult">ValidationResult</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../struct.ServerError.html" title="struct async_graphql::ServerError">ServerError</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.execute" class="fn">execute</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'async_trait&gt;(
+        &amp;'life0 self,
+        ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+        operation_name: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;,
+        next: <a class="struct" href="struct.NextExecute.html" title="struct async_graphql::extensions::NextExecute">NextExecute</a>&lt;'life4&gt;,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait,
+             'life4: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.resolve" class="fn">resolve</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'async_trait&gt;(
+        &amp;'life0 self,
+        ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+        info: <a class="struct" href="struct.ResolveInfo.html" title="struct async_graphql::extensions::ResolveInfo">ResolveInfo</a>&lt;'life3&gt;,
+        next: <a class="struct" href="struct.NextResolve.html" title="struct async_graphql::extensions::NextResolve">NextResolve</a>&lt;'life4&gt;,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.ServerResult.html" title="type async_graphql::ServerResult">ServerResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../enum.Value.html" title="enum async_graphql::Value">Value</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait,
+             'life3: 'async_trait,
+             'life4: 'async_trait</span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Represents a GraphQL extension</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.request" class="method"><a class="src rightside" href="../../src/async_graphql/extensions/mod.rs.html#332-334">source</a><h4 class="code-header">fn <a href="#method.request" class="fn">request</a>&lt;'life0, 'life1, 'life2, 'life3, 'async_trait&gt;(
+    &amp;'life0 self,
+    ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+    next: <a class="struct" href="struct.NextRequest.html" title="struct async_graphql::extensions::NextRequest">NextRequest</a>&lt;'life3&gt;,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called at start query/mutation request.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.subscribe" class="method"><a class="src rightside" href="../../src/async_graphql/extensions/mod.rs.html#337-344">source</a><h4 class="code-header">fn <a href="#method.subscribe" class="fn">subscribe</a>&lt;'s&gt;(
+    &amp;self,
+    ctx: &amp;<a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'_&gt;,
+    stream: <a class="type" href="../../futures_core/stream/type.BoxStream.html" title="type futures_core::stream::BoxStream">BoxStream</a>&lt;'s, <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt;,
+    next: <a class="struct" href="struct.NextSubscribe.html" title="struct async_graphql::extensions::NextSubscribe">NextSubscribe</a>&lt;'_&gt;,
+) -&gt; <a class="type" href="../../futures_core/stream/type.BoxStream.html" title="type futures_core::stream::BoxStream">BoxStream</a>&lt;'s, <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt;</h4></section></summary><div class="docblock"><p>Called at subscribe request.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prepare_request" class="method"><a class="src rightside" href="../../src/async_graphql/extensions/mod.rs.html#347-354">source</a><h4 class="code-header">fn <a href="#method.prepare_request" class="fn">prepare_request</a>&lt;'life0, 'life1, 'life2, 'life3, 'async_trait&gt;(
+    &amp;'life0 self,
+    ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+    request: <a class="struct" href="../struct.Request.html" title="struct async_graphql::Request">Request</a>,
+    next: <a class="struct" href="struct.NextPrepareRequest.html" title="struct async_graphql::extensions::NextPrepareRequest">NextPrepareRequest</a>&lt;'life3&gt;,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.ServerResult.html" title="type async_graphql::ServerResult">ServerResult</a>&lt;<a class="struct" href="../struct.Request.html" title="struct async_graphql::Request">Request</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called at prepare request.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.parse_query" class="method"><a class="src rightside" href="../../src/async_graphql/extensions/mod.rs.html#357-365">source</a><h4 class="code-header">fn <a href="#method.parse_query" class="fn">parse_query</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'life5, 'async_trait&gt;(
+    &amp;'life0 self,
+    ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+    query: &amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    variables: &amp;'life4 <a class="struct" href="../struct.Variables.html" title="struct async_graphql::Variables">Variables</a>,
+    next: <a class="struct" href="struct.NextParseQuery.html" title="struct async_graphql::extensions::NextParseQuery">NextParseQuery</a>&lt;'life5&gt;,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.ServerResult.html" title="type async_graphql::ServerResult">ServerResult</a>&lt;<a class="struct" href="../../async_graphql_parser/types/executable/struct.ExecutableDocument.html" title="struct async_graphql_parser::types::executable::ExecutableDocument">ExecutableDocument</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,
+    'life4: 'async_trait,
+    'life5: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called at parse query.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.validation" class="method"><a class="src rightside" href="../../src/async_graphql/extensions/mod.rs.html#368-374">source</a><h4 class="code-header">fn <a href="#method.validation" class="fn">validation</a>&lt;'life0, 'life1, 'life2, 'life3, 'async_trait&gt;(
+    &amp;'life0 self,
+    ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+    next: <a class="struct" href="struct.NextValidation.html" title="struct async_graphql::extensions::NextValidation">NextValidation</a>&lt;'life3&gt;,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type async_graphql::Result">Result</a>&lt;<a class="struct" href="../struct.ValidationResult.html" title="struct async_graphql::ValidationResult">ValidationResult</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../struct.ServerError.html" title="struct async_graphql::ServerError">ServerError</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called at validation query.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.execute" class="method"><a class="src rightside" href="../../src/async_graphql/extensions/mod.rs.html#377-384">source</a><h4 class="code-header">fn <a href="#method.execute" class="fn">execute</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'async_trait&gt;(
+    &amp;'life0 self,
+    ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+    operation_name: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life3 <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;,
+    next: <a class="struct" href="struct.NextExecute.html" title="struct async_graphql::extensions::NextExecute">NextExecute</a>&lt;'life4&gt;,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="struct" href="../struct.Response.html" title="struct async_graphql::Response">Response</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,
+    'life4: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called at execute query.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.resolve" class="method"><a class="src rightside" href="../../src/async_graphql/extensions/mod.rs.html#387-394">source</a><h4 class="code-header">fn <a href="#method.resolve" class="fn">resolve</a>&lt;'life0, 'life1, 'life2, 'life3, 'life4, 'async_trait&gt;(
+    &amp;'life0 self,
+    ctx: &amp;'life1 <a class="struct" href="struct.ExtensionContext.html" title="struct async_graphql::extensions::ExtensionContext">ExtensionContext</a>&lt;'life2&gt;,
+    info: <a class="struct" href="struct.ResolveInfo.html" title="struct async_graphql::extensions::ResolveInfo">ResolveInfo</a>&lt;'life3&gt;,
+    next: <a class="struct" href="struct.NextResolve.html" title="struct async_graphql::extensions::NextResolve">NextResolve</a>&lt;'life4&gt;,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.ServerResult.html" title="type async_graphql::ServerResult">ServerResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../enum.Value.html" title="enum async_graphql::Value">Value</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,
+    'life3: 'async_trait,
+    'life4: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Called at resolve field.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/async_graphql/extensions/trait.Extension.js" async></script></section></div></main></body></html>

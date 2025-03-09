@@ -1,0 +1,157 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides universal suffix-position call syntax for any function."><title>Pipe in tap::pipe - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tap/index.html">tap</a><span class="version">1.0.1</span></h2></div><h2 class="location"><a href="#">Pipe</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.pipe">pipe</a></li><li><a href="#method.pipe_as_mut">pipe_as_mut</a></li><li><a href="#method.pipe_as_ref">pipe_as_ref</a></li><li><a href="#method.pipe_borrow">pipe_borrow</a></li><li><a href="#method.pipe_borrow_mut">pipe_borrow_mut</a></li><li><a href="#method.pipe_deref">pipe_deref</a></li><li><a href="#method.pipe_deref_mut">pipe_deref_mut</a></li><li><a href="#method.pipe_ref">pipe_ref</a></li><li><a href="#method.pipe_ref_mut">pipe_ref_mut</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In tap::pipe</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">tap</a>::<wbr><a href="index.html">pipe</a>::<wbr><a class="trait" href="#">Pipe</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tap/pipe.rs.html#55-232">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Pipe {
+    // Provided methods
+    fn <a href="#method.pipe" class="fn">pipe</a>&lt;R&gt;(self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(Self) -&gt; R) -&gt; R
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_ref" class="fn">pipe_ref</a>&lt;'a, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a Self</a>) -&gt; R) -&gt; R
+       <span class="where">where R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_ref_mut" class="fn">pipe_ref_mut</a>&lt;'a, R&gt;(
+        &amp;'a mut self,
+        func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut Self</a>) -&gt; R,
+    ) -&gt; R
+       <span class="where">where R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_borrow" class="fn">pipe_borrow</a>&lt;'a, B, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a B</a>) -&gt; R) -&gt; R
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;B&gt;,
+             B: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_borrow_mut" class="fn">pipe_borrow_mut</a>&lt;'a, B, R&gt;(
+        &amp;'a mut self,
+        func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut B</a>) -&gt; R,
+    ) -&gt; R
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;B&gt;,
+             B: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_as_ref" class="fn">pipe_as_ref</a>&lt;'a, U, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a U</a>) -&gt; R) -&gt; R
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;U&gt;,
+             U: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_as_mut" class="fn">pipe_as_mut</a>&lt;'a, U, R&gt;(
+        &amp;'a mut self,
+        func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut U</a>) -&gt; R,
+    ) -&gt; R
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsMut.html" title="trait core::convert::AsMut">AsMut</a>&lt;U&gt;,
+             U: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_deref" class="fn">pipe_deref</a>&lt;'a, T, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a T</a>) -&gt; R) -&gt; R
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = T&gt;,
+             T: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pipe_deref_mut" class="fn">pipe_deref_mut</a>&lt;'a, T, R&gt;(
+        &amp;'a mut self,
+        func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut T</a>) -&gt; R,
+    ) -&gt; R
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.DerefMut.html" title="trait core::ops::deref::DerefMut">DerefMut</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = T&gt;,
+             T: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides universal suffix-position call syntax for any function.</p>
+<p>This trait provides methods that allow any closure or free function to be placed
+as a suffix-position call, by writing them as</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>not_a_method(x: i32) -&gt; u8 { x <span class="kw">as </span>u8 }
+receiver.pipe(not_a_method);</code></pre></div>
+<p>Piping into functions that take more than one argument still requires writing a
+closure with ordinary function-call syntax. This is after all only a library,
+not a syntax transformation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::pipe::Pipe;
+<span class="kw">fn </span>add(x: i32, y: i32) -&gt; i32 { x + y }
+
+<span class="kw">let </span>out = <span class="number">5</span>.pipe(|x| add(x, <span class="number">10</span>));
+<span class="macro">assert_eq!</span>(out, <span class="number">15</span>);</code></pre></div>
+<p>Like tapping, piping is useful for cases where you want to write a sequence of
+processing steps without introducing many intermediate bindings, and your steps
+contain functions which are not eligible for dot-call syntax.</p>
+<p>The main difference between piping and tapping is that tapping always returns
+the value that was passed into the tap, while piping forwards the value into the
+effect function, and returns the output of evaluating the effect function with
+the value. Piping is a transformation, not merely an inspection or modification.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.pipe" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#73-79">source</a><h4 class="code-header">fn <a href="#method.pipe" class="fn">pipe</a>&lt;R&gt;(self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(Self) -&gt; R) -&gt; R<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Pipes by value. This is generally the method you want to use.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::pipe::Pipe;
+
+<span class="kw">fn </span>triple(x: i32) -&gt; i64 {
+  x <span class="kw">as </span>i64 * <span class="number">3
+</span>}
+
+<span class="macro">assert_eq!</span>(
+  <span class="number">10</span>.pipe(triple),
+  <span class="number">30</span>,
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_ref" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#97-102">source</a><h4 class="code-header">fn <a href="#method.pipe_ref" class="fn">pipe_ref</a>&lt;'a, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a Self</a>) -&gt; R) -&gt; R<div class="where">where
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Borrows <code>self</code> and passes that borrow into the pipe function.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::pipe::Pipe;
+
+<span class="kw">fn </span>fold(v: <span class="kw-2">&amp;</span>Vec&lt;i32&gt;) -&gt; i32 {
+  v.iter().copied().sum()
+}
+<span class="kw">let </span>vec = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];
+<span class="kw">let </span>sum = vec.pipe_ref(fold);
+<span class="macro">assert_eq!</span>(sum, <span class="number">15</span>);
+<span class="macro">assert_eq!</span>(vec.len(), <span class="number">5</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_ref_mut" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#122-130">source</a><h4 class="code-header">fn <a href="#method.pipe_ref_mut" class="fn">pipe_ref_mut</a>&lt;'a, R&gt;(&amp;'a mut self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut Self</a>) -&gt; R) -&gt; R<div class="where">where
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Mutably borrows <code>self</code> and passes that borrow into the pipe function.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::pipe::Pipe;
+
+<span class="kw">let </span><span class="kw-2">mut </span>vec = <span class="macro">vec!</span>[<span class="bool-val">false</span>, <span class="bool-val">true</span>];
+<span class="kw">let </span>last = vec
+  .pipe_ref_mut(Vec::pop)
+  .pipe(Option::unwrap);
+<span class="macro">assert!</span>(last);</code></pre></div>
+<p>Both of these functions are eligible for method-call syntax, and should
+not be piped. Writing out non-trivial examples for these is a lot of
+boilerplate.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_borrow" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#145-152">source</a><h4 class="code-header">fn <a href="#method.pipe_borrow" class="fn">pipe_borrow</a>&lt;'a, B, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a B</a>) -&gt; R) -&gt; R<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;B&gt;,
+    B: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Borrows <code>self</code>, then passes <code>self.borrow()</code> into the pipe function.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>tap::pipe::Pipe;
+
+<span class="kw">let </span>len = Cow::&lt;<span class="lifetime">'static</span>, str&gt;::from(<span class="string">"hello, world"</span>)
+  .pipe_borrow(str::len);
+<span class="macro">assert_eq!</span>(len, <span class="number">12</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_borrow_mut" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#169-179">source</a><h4 class="code-header">fn <a href="#method.pipe_borrow_mut" class="fn">pipe_borrow_mut</a>&lt;'a, B, R&gt;(
+    &amp;'a mut self,
+    func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut B</a>) -&gt; R,
+) -&gt; R<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;B&gt;,
+    B: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Mutably borrows <code>self</code>, then passes <code>self.borrow_mut()</code> into the pipe
+function.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::pipe::Pipe;
+
+<span class="kw">let </span><span class="kw-2">mut </span>txt = <span class="string">"hello, world"</span>.to_string();
+<span class="kw">let </span>ptr = txt
+  .pipe_borrow_mut(str::as_mut_ptr);</code></pre></div>
+<p>This is a very contrived example, but the <code>BorrowMut</code> trait has almost
+no implementors in the standard library, and of the implementations
+available, there are almost no methods that fit this API.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_as_ref" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#183-190">source</a><h4 class="code-header">fn <a href="#method.pipe_as_ref" class="fn">pipe_as_ref</a>&lt;'a, U, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a U</a>) -&gt; R) -&gt; R<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;U&gt;,
+    U: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Borrows <code>self</code>, then passes <code>self.as_ref()</code> into the pipe function.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_as_mut" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#195-205">source</a><h4 class="code-header">fn <a href="#method.pipe_as_mut" class="fn">pipe_as_mut</a>&lt;'a, U, R&gt;(&amp;'a mut self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut U</a>) -&gt; R) -&gt; R<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsMut.html" title="trait core::convert::AsMut">AsMut</a>&lt;U&gt;,
+    U: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Mutably borrows <code>self</code>, then passes <code>self.as_mut()</code> into the pipe
+function.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_deref" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#209-216">source</a><h4 class="code-header">fn <a href="#method.pipe_deref" class="fn">pipe_deref</a>&lt;'a, T, R&gt;(&amp;'a self, func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a T</a>) -&gt; R) -&gt; R<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = T&gt;,
+    T: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Borrows <code>self</code>, then passes <code>self.deref()</code> into the pipe function.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pipe_deref_mut" class="method"><a class="src rightside" href="../../src/tap/pipe.rs.html#221-231">source</a><h4 class="code-header">fn <a href="#method.pipe_deref_mut" class="fn">pipe_deref_mut</a>&lt;'a, T, R&gt;(
+    &amp;'a mut self,
+    func: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;'a mut T</a>) -&gt; R,
+) -&gt; R<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.DerefMut.html" title="trait core::ops::deref::DerefMut">DerefMut</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = T&gt;,
+    T: 'a + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: 'a + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Mutably borrows <code>self</code>, then passes <code>self.deref_mut()</code> into the pipe
+function.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Pipe-for-T" class="impl"><a class="src rightside" href="../../src/tap/pipe.rs.html#234">source</a><a href="#impl-Pipe-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../trait.Pipe.html" title="trait tap::Pipe">Pipe</a> for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></div><script src="../../trait.impl/tap/pipe/trait.Pipe.js" async></script></section></div></main></body></html>

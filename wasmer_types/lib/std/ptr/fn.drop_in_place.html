@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Executes the destructor (if any) of the pointed-to value."><title>drop_in_place in wasmer_types::lib::std::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmer_types::lib::std::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="fn" href="#">drop_in_place</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.8.0">1.8.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/ptr/mod.rs.html#542">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn drop_in_place&lt;T&gt;(to_drop: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)<div class="where">where
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmer_types::lib::std::marker::Sized">Sized</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Executes the destructor (if any) of the pointed-to value.</p>
+<p>This is almost the same as calling <a href="fn.read.html" title="fn wasmer_types::lib::std::ptr::read"><code>ptr::read</code></a> and discarding
+the result, but has the following advantages:</p>
+<ul>
+<li>
+<p>It is <em>required</em> to use <code>drop_in_place</code> to drop unsized types like
+trait objects, because they can’t be read out onto the stack and
+dropped normally.</p>
+</li>
+<li>
+<p>It is friendlier to the optimizer to do this over <a href="fn.read.html" title="fn wasmer_types::lib::std::ptr::read"><code>ptr::read</code></a> when
+dropping manually allocated memory (e.g., in the implementations of
+<code>Box</code>/<code>Rc</code>/<code>Vec</code>), as the compiler doesn’t need to prove that it’s
+sound to elide the copy.</p>
+</li>
+<li>
+<p>It can be used to drop <a href="https://doc.rust-lang.org/1.81.0/core/pin/index.html" title="mod core::pin">pinned</a> data when <code>T</code> is not <code>repr(packed)</code>
+(pinned data must not be moved before it is dropped).</p>
+</li>
+</ul>
+<p>Unaligned values cannot be dropped in place, they must be copied to an aligned
+location first using <a href="fn.read_unaligned.html" title="fn wasmer_types::lib::std::ptr::read_unaligned"><code>ptr::read_unaligned</code></a>. For packed structs, this move is
+done automatically by the compiler. This means the fields of packed structs
+are not dropped in-place.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p><code>to_drop</code> must be <a href="index.html#safety" title="mod wasmer_types::lib::std::ptr">valid</a> for both reads and writes.</p>
+</li>
+<li>
+<p><code>to_drop</code> must be properly aligned, even if <code>T</code> has size 0.</p>
+</li>
+<li>
+<p><code>to_drop</code> must be nonnull, even if <code>T</code> has size 0.</p>
+</li>
+<li>
+<p>The value <code>to_drop</code> points to must be valid for dropping, which may mean
+it must uphold additional invariants. These invariants depend on the type
+of the value being dropped. For instance, when dropping a Box, the box’s
+pointer to the heap must be valid.</p>
+</li>
+<li>
+<p>While <code>drop_in_place</code> is executing, the only way to access parts of
+<code>to_drop</code> is through the <code>&amp;mut self</code> references supplied to the
+<code>Drop::drop</code> methods that <code>drop_in_place</code> invokes.</p>
+</li>
+</ul>
+<p>Additionally, if <code>T</code> is not <a href="../marker/trait.Copy.html" title="trait wasmer_types::lib::std::marker::Copy"><code>Copy</code></a>, using the pointed-to value after
+calling <code>drop_in_place</code> can cause undefined behavior. Note that <code>*to_drop = foo</code> counts as a use because it will cause the value to be dropped
+again. <a href="fn.write.html" title="fn wasmer_types::lib::std::ptr::write"><code>write()</code></a> can be used to overwrite data without causing it to be
+dropped.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Manually remove the last item from a vector:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+<span class="kw">use </span>std::rc::Rc;
+
+<span class="kw">let </span>last = Rc::new(<span class="number">1</span>);
+<span class="kw">let </span>weak = Rc::downgrade(<span class="kw-2">&amp;</span>last);
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = <span class="macro">vec!</span>[Rc::new(<span class="number">0</span>), last];
+
+<span class="kw">unsafe </span>{
+    <span class="comment">// Get a raw pointer to the last element in `v`.
+    </span><span class="kw">let </span>ptr = <span class="kw-2">&amp;mut </span>v[<span class="number">1</span>] <span class="kw">as </span><span class="kw-2">*mut </span><span class="kw">_</span>;
+    <span class="comment">// Shorten `v` to prevent the last item from being dropped. We do that first,
+    // to prevent issues if the `drop_in_place` below panics.
+    </span>v.set_len(<span class="number">1</span>);
+    <span class="comment">// Without a call `drop_in_place`, the last item would never be dropped,
+    // and the memory it manages would be leaked.
+    </span>ptr::drop_in_place(ptr);
+}
+
+<span class="macro">assert_eq!</span>(v, <span class="kw-2">&amp;</span>[<span class="number">0</span>.into()]);
+
+<span class="comment">// Ensure that the last item was dropped.
+</span><span class="macro">assert!</span>(weak.upgrade().is_none());</code></pre></div>
+</div></details></section></div></main></body></html>

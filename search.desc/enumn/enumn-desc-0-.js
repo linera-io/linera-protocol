@@ -1,0 +1,1 @@
+searchState.loadedDescShard("enumn", 0, "github crates-io docs-rs")

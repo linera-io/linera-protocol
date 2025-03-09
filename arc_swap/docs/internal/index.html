@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Internal details."><title>arc_swap::docs::internal - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="arc_swap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../arc_swap/index.html">arc_swap</a><span class="version">1.7.1</span></h2></div><h2 class="location"><a href="#">Module internal</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In arc_swap::docs</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">arc_swap</a>::<wbr><a href="../index.html">docs</a>::<wbr><a class="mod" href="#">internal</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/arc_swap/docs/internal.rs.html#1-106">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Internal details.</p>
+<p>While the other parts of documentation are useful to users of the crate, this part is probably
+helpful only if you want to look into the code or are curious about how it works internally.</p>
+<p>Also note that any of these details may change in future versions and are not part of the
+stability guarantees. Don’t rely on anything here.</p>
+<h2 id="storing-the-arc"><a class="doc-anchor" href="#storing-the-arc">§</a>Storing the <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc"><code>Arc</code></a>.</h2>
+<p>The <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc"><code>Arc</code></a> can be turned into a raw pointer and back. This is abstracted by the <a href="../../trait.RefCnt.html" title="trait arc_swap::RefCnt"><code>RefCnt</code></a>
+trait and it is technically possible to implement it for custom types (this crate also
+implements it for <a href="https://doc.rust-lang.org/1.81.0/alloc/rc/struct.Rc.html" title="struct alloc::rc::Rc"><code>Rc</code></a> and <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Weak.html" title="struct alloc::sync::Weak"><code>Weak</code></a>, though the actual usefulness of these is a bit
+questionable).</p>
+<p>The raw pointer is stored inside an <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/struct.AtomicPtr.html" title="struct core::sync::atomic::AtomicPtr"><code>AtomicPtr</code></a>.</p>
+<h2 id="protection-of-reference-counts"><a class="doc-anchor" href="#protection-of-reference-counts">§</a>Protection of reference counts</h2>
+<p>The first idea would be to just use <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/struct.AtomicPtr.html" title="struct core::sync::atomic::AtomicPtr"><code>AtomicPtr</code></a> with whatever the <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html#method.into_raw" title="associated function alloc::sync::Arc::into_raw"><code>Arc::into_raw</code></a> returns.
+Then replacing it would be fine (there’s no need to update ref counts). The load needs to
+increment the reference count ‒ one still stays inside and another is returned to the caller.
+This is done by re-creating the Arc from the raw pointer and then cloning it, throwing one
+instance away (without destroying it).</p>
+<p>This approach has a problem. There’s a short time between we read the raw pointer and increment
+the count. If some other thread replaces the stored Arc and throws it away, the ref count could
+drop to 0, get destroyed and we would be trying to bump ref counts in a ghost, which would be
+totally broken.</p>
+<p>To prevent this, we actually use two approaches in a hybrid manner.</p>
+<p>The first one is based on hazard pointers idea, but slightly modified. There’s a global
+repository of pointers that owe a reference. When someone swaps a pointer, it walks this list
+and pays all the debts (and takes them out of the repository).</p>
+<p>For simplicity and performance, storing into the repository is fallible. If storing into the
+repository fails (because the thread used up all its own slots, or because the pointer got
+replaced in just the wrong moment and it can’t confirm the reservation), unlike the full
+hazard-pointers approach, we don’t retry, but fall back onto secondary strategy.</p>
+<p>The secondary strategy is similar, but a bit more complex (and therefore slower, that’s why it
+is only a fallback). We first publish an intent to read a pointer (and where we are reading it
+from). Then we actually do so and publish the debt, like previously.</p>
+<p>The writer pays the debts as usual. But also, if it sees the intent to read the value, it helps
+along, reads it, bumps the reference and passes it to the reader. Therefore, if the reader
+fails to do the protection itself, because it got interrupted by a writer, it finds a
+ready-made replacement value it can just use and doesn’t have to retry. Also, the writer
+doesn’t have to wait for the reader in any way, because it can just solve its problem and move
+on.</p>
+<h2 id="unsafety"><a class="doc-anchor" href="#unsafety">§</a>Unsafety</h2>
+<p>All the uses of the unsafe keyword is just to turn the raw pointer back to Arc. It originated
+from an Arc in the first place, so the only thing to ensure is it is still valid. That means its
+ref count never dropped to 0.</p>
+<p>At the beginning, there’s ref count of 1 stored in the raw pointer (and maybe some others
+elsewhere, but we can’t rely on these). This 1 stays there for the whole time the pointer is
+stored there. When the arc is replaced, this 1 is returned to the caller, so we just have to
+make sure no more readers access it by that time.</p>
+<h2 id="leases-and-debts"><a class="doc-anchor" href="#leases-and-debts">§</a>Leases and debts</h2>
+<p>Instead of incrementing the reference count, the pointer reference can be owed. In such case, it
+is recorded into a global storage. As each thread has its own storage (the global storage is
+composed of multiple thread storages), the readers don’t contend. When the pointer is no longer
+in use, the debt is erased.</p>
+<p>The writer pays all the existing debts, therefore the reader have the full Arc with ref count at
+that time. The reader is made aware the debt was paid and decrements the reference count.</p>
+<h2 id="memory-orders"><a class="doc-anchor" href="#memory-orders">§</a>Memory orders</h2><h3 id="synchronizing-the-data-pointed-to-by-the-pointer"><a class="doc-anchor" href="#synchronizing-the-data-pointed-to-by-the-pointer">§</a>Synchronizing the data pointed to by the pointer.</h3>
+<p>We have AcqRel (well, SeqCst, but that’s included) on the swap and Acquire on the loads. In case
+of the double read around the debt allocation, we do that on the <em>second</em>, because of ABA.
+That’s also why that SeqCst on the allocation of debt itself is not enough.
+the <em>latest</em> decrement. By making both the increment and decrement AcqRel, we effectively chain
+the edges together.</p>
+<h2 id="memory-orders-around-debts"><a class="doc-anchor" href="#memory-orders-around-debts">§</a>Memory orders around debts</h2>
+<p>The linked list of debt nodes only grows. The shape of the list (existence of nodes) is
+synchronized through Release on creation and Acquire on load on the head pointer.</p>
+<p>The debts work similar to locks ‒ Acquire and Release make all the pointer manipulation at the
+interval where it is written down. However, we use the SeqCst on the allocation of the debt
+because when we see an empty slot, we need to make sure that it happened after we have
+overwritten the pointer.</p>
+<p>In case the writer pays the debt, it sees the new enough data (for the same reasons the stale
+empties are not seen). The reference count on the Arc is AcqRel and makes sure it is not
+destroyed too soon. The writer traverses all the slots, therefore they don’t need to synchronize
+with each other.</p>
+<p>Further details are inside the internal <code>debt</code> module.</p>
+</div></details></section></div></main></body></html>

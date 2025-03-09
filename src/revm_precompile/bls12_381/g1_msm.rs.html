@@ -1,0 +1,205 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/revm-precompile-16.0.0/src/bls12_381/g1_msm.rs`."><title>g1_msm.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="revm_precompile" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+</pre></div><pre class="rust"><code><span class="kw">use super</span>::{
+    g1::{encode_g1_point, extract_g1_input, G1_INPUT_ITEM_LENGTH},
+    msm::msm_required_gas,
+    utils::{extract_scalar_input, NBITS, SCALAR_LENGTH},
+};
+<span class="kw">use crate</span>::{u64_to_address, PrecompileWithAddress};
+<span class="kw">use </span>blst::{blst_p1, blst_p1_affine, blst_p1_from_affine, blst_p1_to_affine, p1_affines};
+<span class="kw">use </span>revm_primitives::{Bytes, Precompile, PrecompileError, PrecompileOutput, PrecompileResult};
+
+<span class="doccomment">/// [EIP-2537](https://eips.ethereum.org/EIPS/eip-2537#specification) BLS12_G1MSM precompile.
+</span><span class="kw">pub const </span>PRECOMPILE: PrecompileWithAddress =
+    PrecompileWithAddress(u64_to_address(ADDRESS), Precompile::Standard(g1_msm));
+
+<span class="doccomment">/// BLS12_G1MSM precompile address.
+</span><span class="kw">pub const </span>ADDRESS: u64 = <span class="number">0x0c</span>;
+
+<span class="doccomment">/// Base gas fee for BLS12-381 g1_mul operation.
+</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>BASE_GAS_FEE: u64 = <span class="number">12000</span>;
+
+<span class="doccomment">/// Input length of g1_mul operation.
+</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>INPUT_LENGTH: usize = <span class="number">160</span>;
+
+<span class="doccomment">/// Discounts table for G1 MSM as a vector of pairs `[k, discount]`.
+</span><span class="kw">pub static </span>DISCOUNT_TABLE: [u16; <span class="number">128</span>] = [
+    <span class="number">1000</span>, <span class="number">949</span>, <span class="number">848</span>, <span class="number">797</span>, <span class="number">764</span>, <span class="number">750</span>, <span class="number">738</span>, <span class="number">728</span>, <span class="number">719</span>, <span class="number">712</span>, <span class="number">705</span>, <span class="number">698</span>, <span class="number">692</span>, <span class="number">687</span>, <span class="number">682</span>, <span class="number">677</span>, <span class="number">673</span>, <span class="number">669</span>, <span class="number">665</span>,
+    <span class="number">661</span>, <span class="number">658</span>, <span class="number">654</span>, <span class="number">651</span>, <span class="number">648</span>, <span class="number">645</span>, <span class="number">642</span>, <span class="number">640</span>, <span class="number">637</span>, <span class="number">635</span>, <span class="number">632</span>, <span class="number">630</span>, <span class="number">627</span>, <span class="number">625</span>, <span class="number">623</span>, <span class="number">621</span>, <span class="number">619</span>, <span class="number">617</span>, <span class="number">615</span>,
+    <span class="number">613</span>, <span class="number">611</span>, <span class="number">609</span>, <span class="number">608</span>, <span class="number">606</span>, <span class="number">604</span>, <span class="number">603</span>, <span class="number">601</span>, <span class="number">599</span>, <span class="number">598</span>, <span class="number">596</span>, <span class="number">595</span>, <span class="number">593</span>, <span class="number">592</span>, <span class="number">591</span>, <span class="number">589</span>, <span class="number">588</span>, <span class="number">586</span>, <span class="number">585</span>,
+    <span class="number">584</span>, <span class="number">582</span>, <span class="number">581</span>, <span class="number">580</span>, <span class="number">579</span>, <span class="number">577</span>, <span class="number">576</span>, <span class="number">575</span>, <span class="number">574</span>, <span class="number">573</span>, <span class="number">572</span>, <span class="number">570</span>, <span class="number">569</span>, <span class="number">568</span>, <span class="number">567</span>, <span class="number">566</span>, <span class="number">565</span>, <span class="number">564</span>, <span class="number">563</span>,
+    <span class="number">562</span>, <span class="number">561</span>, <span class="number">560</span>, <span class="number">559</span>, <span class="number">558</span>, <span class="number">557</span>, <span class="number">556</span>, <span class="number">555</span>, <span class="number">554</span>, <span class="number">553</span>, <span class="number">552</span>, <span class="number">551</span>, <span class="number">550</span>, <span class="number">549</span>, <span class="number">548</span>, <span class="number">547</span>, <span class="number">547</span>, <span class="number">546</span>, <span class="number">545</span>,
+    <span class="number">544</span>, <span class="number">543</span>, <span class="number">542</span>, <span class="number">541</span>, <span class="number">540</span>, <span class="number">540</span>, <span class="number">539</span>, <span class="number">538</span>, <span class="number">537</span>, <span class="number">536</span>, <span class="number">536</span>, <span class="number">535</span>, <span class="number">534</span>, <span class="number">533</span>, <span class="number">532</span>, <span class="number">532</span>, <span class="number">531</span>, <span class="number">530</span>, <span class="number">529</span>,
+    <span class="number">528</span>, <span class="number">528</span>, <span class="number">527</span>, <span class="number">526</span>, <span class="number">525</span>, <span class="number">525</span>, <span class="number">524</span>, <span class="number">523</span>, <span class="number">522</span>, <span class="number">522</span>, <span class="number">521</span>, <span class="number">520</span>, <span class="number">520</span>, <span class="number">519</span>,
+];
+
+<span class="doccomment">/// Implements EIP-2537 G1MSM precompile.
+/// G1 multi-scalar-multiplication call expects `160*k` bytes as an input that is interpreted
+/// as byte concatenation of `k` slices each of them being a byte concatenation
+/// of encoding of G1 point (`128` bytes) and encoding of a scalar value (`32`
+/// bytes).
+/// Output is an encoding of multi-scalar-multiplication operation result - single G1
+/// point (`128` bytes).
+/// See also: &lt;https://eips.ethereum.org/EIPS/eip-2537#abi-for-g1-multiexponentiation&gt;
+</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>g1_msm(input: <span class="kw-2">&amp;</span>Bytes, gas_limit: u64) -&gt; PrecompileResult {
+    <span class="kw">let </span>input_len = input.len();
+    <span class="kw">if </span>input_len == <span class="number">0 </span>|| input_len % INPUT_LENGTH != <span class="number">0 </span>{
+        <span class="kw">return </span><span class="prelude-val">Err</span>(PrecompileError::Other(<span class="macro">format!</span>(
+            <span class="string">"G1MSM input length should be multiple of {}, was {}"</span>,
+            INPUT_LENGTH, input_len
+        ))
+        .into());
+    }
+
+    <span class="kw">let </span>k = input_len / INPUT_LENGTH;
+    <span class="kw">let </span>required_gas = msm_required_gas(k, <span class="kw-2">&amp;</span>DISCOUNT_TABLE, BASE_GAS_FEE);
+    <span class="kw">if </span>required_gas &gt; gas_limit {
+        <span class="kw">return </span><span class="prelude-val">Err</span>(PrecompileError::OutOfGas.into());
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>g1_points: Vec&lt;blst_p1&gt; = Vec::with_capacity(k);
+    <span class="kw">let </span><span class="kw-2">mut </span>scalars: Vec&lt;u8&gt; = Vec::with_capacity(k * SCALAR_LENGTH);
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..k {
+        <span class="kw">let </span>slice = <span class="kw-2">&amp;</span>input[i * INPUT_LENGTH..i * INPUT_LENGTH + G1_INPUT_ITEM_LENGTH];
+
+        <span class="comment">// BLST batch API for p1_affines blows up when you pass it a point at infinity, so we must
+        // filter points at infinity (and their corresponding scalars) from the input.
+        </span><span class="kw">if </span>slice.iter().all(|i| <span class="kw-2">*</span>i == <span class="number">0</span>) {
+            <span class="kw">continue</span>;
+        }
+
+        <span class="comment">// NB: Scalar multiplications, MSMs and pairings MUST perform a subgroup check.
+        //
+        // So we set the subgroup_check flag to `true`
+        </span><span class="kw">let </span>p0_aff = <span class="kw-2">&amp;</span>extract_g1_input(slice, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>p0 = blst_p1::default();
+        <span class="comment">// SAFETY: p0 and p0_aff are blst values.
+        </span><span class="kw">unsafe </span>{ blst_p1_from_affine(<span class="kw-2">&amp;mut </span>p0, p0_aff) };
+        g1_points.push(p0);
+
+        scalars.extend_from_slice(
+            <span class="kw-2">&amp;</span>extract_scalar_input(
+                <span class="kw-2">&amp;</span>input[i * INPUT_LENGTH + G1_INPUT_ITEM_LENGTH
+                    ..i * INPUT_LENGTH + G1_INPUT_ITEM_LENGTH + SCALAR_LENGTH],
+            )<span class="question-mark">?
+            </span>.b,
+        );
+    }
+
+    <span class="comment">// return infinity point if all points are infinity
+    </span><span class="kw">if </span>g1_points.is_empty() {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(PrecompileOutput::new(required_gas, [<span class="number">0</span>; <span class="number">128</span>].into()));
+    }
+
+    <span class="kw">let </span>points = p1_affines::from(<span class="kw-2">&amp;</span>g1_points);
+    <span class="kw">let </span>multiexp = points.mult(<span class="kw-2">&amp;</span>scalars, NBITS);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>multiexp_aff = blst_p1_affine::default();
+    <span class="comment">// SAFETY: multiexp_aff and multiexp are blst values.
+    </span><span class="kw">unsafe </span>{ blst_p1_to_affine(<span class="kw-2">&amp;mut </span>multiexp_aff, <span class="kw-2">&amp;</span>multiexp) };
+
+    <span class="kw">let </span>out = encode_g1_point(<span class="kw-2">&amp;</span>multiexp_aff);
+    <span class="prelude-val">Ok</span>(PrecompileOutput::new(required_gas, out))
+}
+</code></pre></div></section></main></body></html>

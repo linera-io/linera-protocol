@@ -1,0 +1,106 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Selects from a set of channel operations."><title>select in crossbeam_channel - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crossbeam_channel" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../crossbeam_channel/index.html">crossbeam_channel</a><span class="version">0.5.14</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">crossbeam_channel</a>::<wbr><a class="macro" href="#">select</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/crossbeam_channel/select_macro.rs.html#1111-1121">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> select {
+    ($(<span class="macro-nonterminal">$tokens</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Selects from a set of channel operations.</p>
+<p>This macro allows you to define a set of channel operations, wait until any one of them becomes
+ready, and finally execute it. If multiple operations are ready at the same time, a random one
+among them is selected (i.e. the unbiased selection). Use <code>select_biased!</code> for the biased
+selection.</p>
+<p>It is also possible to define a <code>default</code> case that gets executed if none of the operations are
+ready, either right away or for a certain duration of time.</p>
+<p>An operation is considered to be ready if it doesn’t have to block. Note that it is ready even
+when it will simply return an error because the channel is disconnected.</p>
+<p>The <code>select!</code> macro is a convenience wrapper around <a href="struct.Select.html" title="struct crossbeam_channel::Select"><code>Select</code></a>. However, it cannot select over a
+dynamically created list of channel operations.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Block until a send or a receive operation is selected:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_channel::{select, unbounded};
+
+<span class="kw">let </span>(s1, r1) = unbounded();
+<span class="kw">let </span>(s2, r2) = unbounded();
+s1.send(<span class="number">10</span>).unwrap();
+
+<span class="comment">// Since both operations are initially ready, a random one will be executed.
+</span><span class="macro">select!</span> {
+    recv(r1) -&gt; msg =&gt; <span class="macro">assert_eq!</span>(msg, <span class="prelude-val">Ok</span>(<span class="number">10</span>)),
+    send(s2, <span class="number">20</span>) -&gt; res =&gt; {
+        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Ok</span>(()));
+        <span class="macro">assert_eq!</span>(r2.recv(), <span class="prelude-val">Ok</span>(<span class="number">20</span>));
+    }
+}</code></pre></div>
+<p>Select from a set of operations without blocking:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>crossbeam_channel::{select, unbounded};
+
+<span class="kw">let </span>(s1, r1) = unbounded();
+<span class="kw">let </span>(s2, r2) = unbounded();
+
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_secs(<span class="number">1</span>));
+    s1.send(<span class="number">10</span>).unwrap();
+});
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_millis(<span class="number">500</span>));
+    s2.send(<span class="number">20</span>).unwrap();
+});
+
+<span class="comment">// None of the operations are initially ready.
+</span><span class="macro">select!</span> {
+    recv(r1) -&gt; msg =&gt; <span class="macro">panic!</span>(),
+    recv(r2) -&gt; msg =&gt; <span class="macro">panic!</span>(),
+    default =&gt; <span class="macro">println!</span>(<span class="string">"not ready"</span>),
+}</code></pre></div>
+<p>Select over a set of operations with a timeout:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>crossbeam_channel::{select, unbounded};
+
+<span class="kw">let </span>(s1, r1) = unbounded();
+<span class="kw">let </span>(s2, r2) = unbounded();
+
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_secs(<span class="number">1</span>));
+    s1.send(<span class="number">10</span>).unwrap();
+});
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_millis(<span class="number">500</span>));
+    s2.send(<span class="number">20</span>).unwrap();
+});
+
+<span class="comment">// None of the two operations will become ready within 100 milliseconds.
+</span><span class="macro">select!</span> {
+    recv(r1) -&gt; msg =&gt; <span class="macro">panic!</span>(),
+    recv(r2) -&gt; msg =&gt; <span class="macro">panic!</span>(),
+    default(Duration::from_millis(<span class="number">100</span>)) =&gt; <span class="macro">println!</span>(<span class="string">"timed out"</span>),
+}</code></pre></div>
+<p>Optionally add a receive operation to <code>select!</code> using <a href="fn.never.html" title="fn crossbeam_channel::never"><code>never</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>crossbeam_channel::{select, never, unbounded};
+
+<span class="kw">let </span>(s1, r1) = unbounded();
+<span class="kw">let </span>(s2, r2) = unbounded();
+
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_secs(<span class="number">1</span>));
+    s1.send(<span class="number">10</span>).unwrap();
+});
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_millis(<span class="number">500</span>));
+    s2.send(<span class="number">20</span>).unwrap();
+});
+
+<span class="comment">// This receiver can be a `Some` or a `None`.
+</span><span class="kw">let </span>r2 = <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>r2);
+
+<span class="comment">// None of the two operations will become ready within 100 milliseconds.
+</span><span class="macro">select!</span> {
+    recv(r1) -&gt; msg =&gt; <span class="macro">panic!</span>(),
+    recv(r2.unwrap_or(<span class="kw-2">&amp;</span>never())) -&gt; msg =&gt; <span class="macro">assert_eq!</span>(msg, <span class="prelude-val">Ok</span>(<span class="number">20</span>)),
+}</code></pre></div>
+<p>To optionally add a timeout to <code>select!</code>, see the <a href="fn.never.html#examples" title="fn crossbeam_channel::never">example</a> for <a href="fn.never.html" title="fn crossbeam_channel::never"><code>never</code></a>.</p>
+</div></details></section></div></main></body></html>

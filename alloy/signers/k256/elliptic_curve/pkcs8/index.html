@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: PKCS#8 (Private Keys)"><title>alloy::signers::k256::elliptic_curve::pkcs8 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="alloy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../../../crates.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../../../alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../../../alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../../../../alloy/index.html">alloy</a><span class="version">0.9.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In alloy::signers::k256::elliptic_curve</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a href="../../../../index.html">alloy</a>::<wbr><a href="../../../index.html">signers</a>::<wbr><a href="../../index.html">k256</a>::<wbr><a href="../index.html">elliptic_curve</a>::<wbr><a class="mod" href="#">pkcs8</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../../src/pkcs8/lib.rs.html#1-111">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-pkcs8-private-keys"><a class="doc-anchor" href="#rustcrypto-pkcs8-private-keys">§</a><a href="https://github.com/rustcrypto">RustCrypto</a>: PKCS#8 (Private Keys)</h2>
+<p><a href="https://crates.io/crates/pkcs8"><img src="https://buildstats.info/crate/pkcs8" alt="crate" /></a>
+<a href="https://docs.rs/pkcs8/"><img src="https://docs.rs/pkcs8/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/formats/actions"><img src="https://github.com/RustCrypto/formats/workflows/pkcs8/badge.svg?branch=master&amp;event=push" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.65+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/300570-formats"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>Pure Rust implementation of Public-Key Cryptography Standards (PKCS) #8:
+Private-Key Information Syntax Specification (<a href="https://tools.ietf.org/html/rfc5208">RFC 5208</a>).</p>
+<p><a href="https://docs.rs/pkcs8/">Documentation</a></p>
+<h3 id="about-pkcs8"><a class="doc-anchor" href="#about-pkcs8">§</a>About PKCS#8</h3>
+<p>PKCS#8 is a format for cryptographic private keys, often containing pairs
+of private and public keys.</p>
+<p>You can identify a PKCS#8 private key encoded as PEM (i.e. text) by the
+following:</p>
+<div class="example-wrap"><pre class="language-text"><code>-----BEGIN PRIVATE KEY-----
+</code></pre></div>
+<p>PKCS#8 private keys can optionally be encrypted under a password using
+key derivation algorithms like PBKDF2 and <a href="https://en.wikipedia.org/wiki/Scrypt">scrypt</a>, and encrypted with
+ciphers like AES-CBC. When a PKCS#8 private key has been encrypted,
+it starts with the following:</p>
+<div class="example-wrap"><pre class="language-text"><code>-----BEGIN ENCRYPTED PRIVATE KEY-----
+</code></pre></div>
+<p>PKCS#8 private keys can also be serialized in an ASN.1-based binary format.
+The PEM text encoding is a Base64 representation of this format.</p>
+<h3 id="supported-algorithms"><a class="doc-anchor" href="#supported-algorithms">§</a>Supported Algorithms</h3>
+<p>This crate is implemented in an algorithm-agnostic manner with the goal of
+enabling PKCS#8 support for any algorithm.</p>
+<p>That said, it has been tested for interoperability against keys generated by
+OpenSSL for the  following algorithms:</p>
+<ul>
+<li>ECC (<code>id-ecPublicKey</code>)</li>
+<li>Ed25519 (<code>id-Ed25519</code>)</li>
+<li>RSA (<code>id-rsaEncryption</code>)</li>
+<li>X25519 (<code>id-X25519</code>)</li>
+</ul>
+<p>Please open an issue if you encounter trouble using it with a particular
+algorithm, including the ones listed above or other algorithms.</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.65</strong> at a minimum.</p>
+<p>We may change the MSRV in the future, but it will be accompanied by a minor
+version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h3 id="about-this-crate"><a class="doc-anchor" href="#about-this-crate">§</a>About this crate</h3>
+<p>This library provides generalized PKCS#8 support designed to work with a
+number of different algorithms. It supports <code>no_std</code> platforms including
+ones without a heap (albeit with reduced functionality).</p>
+<p>It supports decoding/encoding the following types:</p>
+<ul>
+<li>[<code>EncryptedPrivateKeyInfo</code>]: (with <code>pkcs5</code> feature) encrypted key.</li>
+<li><a href="struct.PrivateKeyInfo.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::PrivateKeyInfo"><code>PrivateKeyInfo</code></a>: algorithm identifier and data representing a private key.
+Optionally also includes public key data for asymmetric keys.</li>
+<li><a href="struct.SubjectPublicKeyInfo.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::SubjectPublicKeyInfo"><code>SubjectPublicKeyInfo</code></a>: algorithm identifier and data representing a public key
+(re-exported from the <a href="spki/index.html" title="mod alloy::signers::k256::elliptic_curve::pkcs8::spki"><code>spki</code></a> crate)</li>
+</ul>
+<p>When the <code>pem</code> feature is enabled, it also supports decoding/encoding
+documents from “PEM encoding” format as defined in RFC 7468.</p>
+<h3 id="encrypted-private-key-support"><a class="doc-anchor" href="#encrypted-private-key-support">§</a>Encrypted Private Key Support</h3>
+<p>[<code>EncryptedPrivateKeyInfo</code>] supports decoding/encoding encrypted PKCS#8
+private keys and is gated under the <code>pkcs5</code> feature.</p>
+<p>When the <code>encryption</code> feature of this crate is enabled, it provides
+[<code>EncryptedPrivateKeyInfo::decrypt</code>] and [<code>PrivateKeyInfo::encrypt</code>]
+functions which are able to decrypt/encrypt keys using the following
+algorithms:</p>
+<ul>
+<li><a href="https://tools.ietf.org/html/rfc8018#section-6.2">PKCS#5v2 Password Based Encryption Scheme 2 (RFC 8018)</a>
+<ul>
+<li>Key derivation functions:
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Scrypt">scrypt</a> (<a href="https://datatracker.ietf.org/doc/html/rfc7914">RFC 7914</a>)</li>
+<li>PBKDF2 (<a href="https://datatracker.ietf.org/doc/html/rfc8018#section-5.2">RFC 8018</a>)
+<ul>
+<li>SHA-2 based PRF with HMAC-SHA224, HMAC-SHA256, HMAC-SHA384, or HMAC-SHA512</li>
+<li>SHA-1 based PRF with HMAC-SHA1, when the <code>sha1</code> feature of this crate is enabled.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Symmetric encryption: AES-128-CBC, AES-192-CBC, or AES-256-CBC
+(best available options for PKCS#5v2)</li>
+</ul>
+</li>
+</ul>
+<h3 id="legacy-des-cbc-and-des-ede3-cbc-3des-support-optional"><a class="doc-anchor" href="#legacy-des-cbc-and-des-ede3-cbc-3des-support-optional">§</a>Legacy DES-CBC and DES-EDE3-CBC (3DES) support (optional)</h3>
+<p>When the <code>des-insecure</code> and/or <code>3des</code> features are enabled this crate provides support for
+private keys encrypted with with DES-CBC and DES-EDE3-CBC (3DES or Triple DES) symmetric
+encryption, respectively.</p>
+<p>⚠️ WARNING ⚠️</p>
+<p>DES support (gated behind the <code>des-insecure</code> feature) is implemented to
+allow for decryption of legacy PKCS#8 files only.</p>
+<p>Such PKCS#8 documents should be considered <em>INSECURE</em> due to the short
+56-bit key size of DES.</p>
+<p>New keys should use AES instead.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="der/index.html" title="mod alloy::signers::k256::elliptic_curve::pkcs8::der">der</a></div><div class="desc docblock-short"><a href="https://github.com/rustcrypto">RustCrypto</a>: ASN.1 DER</div></li><li><div class="item-name"><a class="mod" href="spki/index.html" title="mod alloy::signers::k256::elliptic_curve::pkcs8::spki">spki</a></div><div class="desc docblock-short"><a href="https://github.com/rustcrypto">RustCrypto</a>: X.509 Subject Public Key Info (SPKI)</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Document.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::Document">Document</a></div><div class="desc docblock-short">ASN.1 DER-encoded document.</div></li><li><div class="item-name"><a class="struct" href="struct.ObjectIdentifier.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::ObjectIdentifier">ObjectIdentifier</a></div><div class="desc docblock-short">Object identifier (OID).</div></li><li><div class="item-name"><a class="struct" href="struct.PrivateKeyInfo.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::PrivateKeyInfo">PrivateKeyInfo</a></div><div class="desc docblock-short">PKCS#8 <code>PrivateKeyInfo</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.SecretDocument.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::SecretDocument">SecretDocument</a></div><div class="desc docblock-short">Secret <a href="struct.Document.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::Document"><code>Document</code></a> type.</div></li><li><div class="item-name"><a class="struct" href="struct.SubjectPublicKeyInfo.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::SubjectPublicKeyInfo">SubjectPublicKeyInfo</a></div><div class="desc docblock-short">X.509 <code>SubjectPublicKeyInfo</code> (SPKI) as defined in <a href="https://tools.ietf.org/html/rfc5280#section-4.1.2.7">RFC 5280 § 4.1.2.7</a>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum alloy::signers::k256::elliptic_curve::pkcs8::Error">Error</a></div><div class="desc docblock-short">Error type</div></li><li><div class="item-name"><a class="enum" href="enum.LineEnding.html" title="enum alloy::signers::k256::elliptic_curve::pkcs8::LineEnding">LineEnding</a></div><div class="desc docblock-short">Line endings: variants of newline characters that can be used with Base64.</div></li><li><div class="item-name"><a class="enum" href="enum.Version.html" title="enum alloy::signers::k256::elliptic_curve::pkcs8::Version">Version</a></div><div class="desc docblock-short">Version identifier for PKCS#8 documents.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.AssociatedOid.html" title="trait alloy::signers::k256::elliptic_curve::pkcs8::AssociatedOid">AssociatedOid</a></div><div class="desc docblock-short">A trait which associates an OID with a type.</div></li><li><div class="item-name"><a class="trait" href="trait.DecodePrivateKey.html" title="trait alloy::signers::k256::elliptic_curve::pkcs8::DecodePrivateKey">DecodePrivateKey</a></div><div class="desc docblock-short">Parse a private key object from a PKCS#8 encoded document.</div></li><li><div class="item-name"><a class="trait" href="trait.DecodePublicKey.html" title="trait alloy::signers::k256::elliptic_curve::pkcs8::DecodePublicKey">DecodePublicKey</a></div><div class="desc docblock-short">Parse a public key object from an encoded SPKI document.</div></li><li><div class="item-name"><a class="trait" href="trait.EncodePrivateKey.html" title="trait alloy::signers::k256::elliptic_curve::pkcs8::EncodePrivateKey">EncodePrivateKey</a></div><div class="desc docblock-short">Serialize a private key object to a PKCS#8 encoded document.</div></li><li><div class="item-name"><a class="trait" href="trait.EncodePublicKey.html" title="trait alloy::signers::k256::elliptic_curve::pkcs8::EncodePublicKey">EncodePublicKey</a></div><div class="desc docblock-short">Serialize a public key object to a SPKI-encoded document.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.AlgorithmIdentifierRef.html" title="type alloy::signers::k256::elliptic_curve::pkcs8::AlgorithmIdentifierRef">AlgorithmIdentifierRef</a></div><div class="desc docblock-short"><code>AlgorithmIdentifier</code> reference which has <code>AnyRef</code> parameters.</div></li><li><div class="item-name"><a class="type" href="type.Result.html" title="type alloy::signers::k256::elliptic_curve::pkcs8::Result">Result</a></div><div class="desc docblock-short">Result type</div></li><li><div class="item-name"><a class="type" href="type.SubjectPublicKeyInfoRef.html" title="type alloy::signers::k256::elliptic_curve::pkcs8::SubjectPublicKeyInfoRef">SubjectPublicKeyInfoRef</a></div><div class="desc docblock-short"><a href="struct.SubjectPublicKeyInfo.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::SubjectPublicKeyInfo"><code>SubjectPublicKeyInfo</code></a> with <a href="der/struct.AnyRef.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::der::AnyRef"><code>AnyRef</code></a> algorithm parameters, and <a href="der/asn1/struct.BitStringRef.html" title="struct alloy::signers::k256::elliptic_curve::pkcs8::der::asn1::BitStringRef"><code>BitStringRef</code></a> params.</div></li></ul></section></div></main></body></html>

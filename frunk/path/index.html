@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Holds models, traits, and logic for generic traversal of models"><title>frunk::path - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="frunk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../frunk/index.html">frunk</a><span class="version">0.4.3</span></h2></div><h2 class="location"><a href="#">Module path</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate frunk</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">frunk</a>::<wbr><a class="mod" href="#">path</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/frunk_core/lib.rs.html#75">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Holds models, traits, and logic for generic traversal of models</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>Address&lt;<span class="lifetime">'a</span>&gt; {
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+}
+
+<span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>User&lt;<span class="lifetime">'a</span>&gt; {
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    address: Address&lt;<span class="lifetime">'a</span>&gt;,
+}
+
+<span class="kw">let </span>u = User {
+  name: <span class="string">"Joe"</span>,
+  address: Address { name: <span class="string">"blue pond" </span>},
+};
+
+<span class="kw">let </span>name_path = <span class="macro">path!</span>(name);
+
+{
+<span class="kw">let </span>traversed_name = name_path.get(<span class="kw-2">&amp;</span>u);
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>traversed_name, <span class="string">"Joe"</span>);
+}
+
+<span class="comment">// You can also **add** paths together
+</span><span class="kw">let </span>address_path = <span class="macro">path!</span>(address);
+<span class="kw">let </span>address_name_path = address_path + name_path;
+
+<span class="kw">let </span>traversed_address_name = address_name_path.get(u);
+<span class="macro">assert_eq!</span>(traversed_address_name, <span class="string">"blue pond"</span>);</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A%23%5Ballow(unused_extern_crates)%5D%0Aextern+crate+r%23frunk;%0Ause+frunk_proc_macros::path;%0Ause+frunk_derives::LabelledGeneric;%0Afn+main()+%7B%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+Address%3C'a%3E+%7B%0A++++name:+%26'a+str,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+User%3C'a%3E+%7B%0A++++name:+%26'a+str,%0A++++address:+Address%3C'a%3E,%0A%7D%0A%0Alet+u+=+User+%7B%0A++name:+%22Joe%22,%0A++address:+Address+%7B+name:+%22blue+pond%22+%7D,%0A%7D;%0A%0Alet+name_path+=+path!(name);%0A%0A%7B%0Alet+traversed_name+=+name_path.get(%26u);%0Aassert_eq!(*traversed_name,+%22Joe%22);%0A%7D%0A%0A//+You+can+also+**add**+paths+together%0Alet+address_path+=+path!(address);%0Alet+address_name_path+=+address_path+%2B+name_path;%0A%0Alet+traversed_address_name+=+address_name_path.get(u);%0Aassert_eq!(traversed_address_name,+%22blue+pond%22);%0A%7D&amp;edition=2021">Run</a></div>
+<p>There is also a Path! type macro that allows you to declare type constraints for
+shape-dependent functions on LabelledGeneric types.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>Dog&lt;<span class="lifetime">'a</span>&gt; {
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    dimensions: Dimensions,
+}
+
+<span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>Cat&lt;<span class="lifetime">'a</span>&gt; {
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    dimensions: Dimensions,
+}
+
+<span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>Dimensions {
+    height: usize,
+    width: usize,
+    unit: SizeUnit,
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">enum </span>SizeUnit {
+    Cm,
+    Inch,
+}
+
+<span class="kw">let </span>dog = Dog {
+    name: <span class="string">"Joe"</span>,
+    dimensions: Dimensions {
+        height: <span class="number">10</span>,
+        width: <span class="number">5</span>,
+        unit: SizeUnit::Inch,
+    },
+};
+
+<span class="kw">let </span>cat = Cat {
+    name: <span class="string">"Schmoe"</span>,
+    dimensions: Dimensions {
+        height: <span class="number">7</span>,
+        width: <span class="number">3</span>,
+        unit: SizeUnit::Cm,
+    },
+};
+
+<span class="comment">// Prints height as long as `A` has the right "shape" (e.g.
+// has `dimensions.height: usize` and `dimension.unit: SizeUnit)
+</span><span class="kw">fn </span>print_height&lt;<span class="lifetime">'a</span>, A, HeightIdx, UnitIdx&gt;(obj: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>A) -&gt; String
+<span class="kw">where
+    </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>A: PathTraverser&lt;<span class="macro">Path!</span>(dimensions.height), HeightIdx, TargetValue = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>usize&gt;
+        + PathTraverser&lt;<span class="macro">Path!</span>(dimensions.unit), UnitIdx, TargetValue = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>SizeUnit&gt;,
+{
+    <span class="macro">format!</span>(
+        <span class="string">"Height [{} {:?}]"</span>,
+        <span class="macro">path!</span>(dimensions.height).get(obj),
+        <span class="macro">path!</span>(dimensions.unit).get(obj)
+    )
+}
+
+<span class="macro">assert_eq!</span>(print_height(<span class="kw-2">&amp;</span>dog), <span class="string">"Height [10 Inch]"</span>.to_string());
+<span class="macro">assert_eq!</span>(print_height(<span class="kw-2">&amp;</span>cat), <span class="string">"Height [7 Cm]"</span>.to_string());</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A%23%5Ballow(unused_extern_crates)%5D%0Aextern+crate+r%23frunk;%0Ause+frunk_proc_macros::%7Bpath,+Path%7D;%0Ause+frunk_core::path::PathTraverser;%0Ause+frunk_derives::LabelledGeneric;%0Afn+main()+%7B%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+Dog%3C'a%3E+%7B%0A++++name:+%26'a+str,%0A++++dimensions:+Dimensions,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+Cat%3C'a%3E+%7B%0A++++name:+%26'a+str,%0A++++dimensions:+Dimensions,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+Dimensions+%7B%0A++++height:+usize,%0A++++width:+usize,%0A++++unit:+SizeUnit,%0A%7D%0A%0A%23%5Bderive(Debug)%5D%0Aenum+SizeUnit+%7B%0A++++Cm,%0A++++Inch,%0A%7D%0A%0Alet+dog+=+Dog+%7B%0A++++name:+%22Joe%22,%0A++++dimensions:+Dimensions+%7B%0A++++++++height:+10,%0A++++++++width:+5,%0A++++++++unit:+SizeUnit::Inch,%0A++++%7D,%0A%7D;%0A%0Alet+cat+=+Cat+%7B%0A++++name:+%22Schmoe%22,%0A++++dimensions:+Dimensions+%7B%0A++++++++height:+7,%0A++++++++width:+3,%0A++++++++unit:+SizeUnit::Cm,%0A++++%7D,%0A%7D;%0A%0A//+Prints+height+as+long+as+%60A%60+has+the+right+%22shape%22+(e.g.%0A//+has+%60dimensions.height:+usize%60+and+%60dimension.unit:+SizeUnit)%0Afn+print_height%3C'a,+A,+HeightIdx,+UnitIdx%3E(obj:+%26'a+A)+-%3E+String%0Awhere%0A++++%26'a+A:+PathTraverser%3CPath!(dimensions.height),+HeightIdx,+TargetValue+=+%26'a+usize%3E%0A++++++++%2B+PathTraverser%3CPath!(dimensions.unit),+UnitIdx,+TargetValue+=+%26'a+SizeUnit%3E,%0A%7B%0A++++format!(%0A++++++++%22Height+%5B%7B%7D+%7B:?%7D%5D%22,%0A++++++++path!(dimensions.height).get(obj),%0A++++++++path!(dimensions.unit).get(obj)%0A++++)%0A%7D%0A%0Aassert_eq!(print_height(%26dog),+%22Height+%5B10+Inch%5D%22.to_string());%0Aassert_eq!(print_height(%26cat),+%22Height+%5B7+Cm%5D%22.to_string());%0A%7D&amp;edition=2021">Run</a></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Path.html" title="struct frunk::path::Path">Path</a></div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.PathTraverser.html" title="trait frunk::path::PathTraverser">PathTraverser</a></div><div class="desc docblock-short">Trait for traversing based on Path</div></li></ul></section></div></main></body></html>

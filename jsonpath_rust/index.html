@@ -1,0 +1,108 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Json path"><title>jsonpath_rust - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="jsonpath_rust" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../jsonpath_rust/index.html">jsonpath_rust</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">jsonpath_rust</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/jsonpath_rust/lib.rs.html#1-1320">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="json-path"><a class="doc-anchor" href="#json-path">§</a>Json path</h2>
+<p>The library provides the basic functionality
+to find the slice of data according to the query.
+The idea comes from xpath for xml structures.
+The details can be found over <a href="https://goessner.net/articles/JsonPath/"><code>there</code></a>
+Therefore JSONPath is a query language for JSON,
+similar to XPath for XML. The jsonpath query is a set of assertions to specify the JSON fields that need to be verified.</p>
+<h2 id="simple-example"><a class="doc-anchor" href="#simple-example">§</a>Simple example</h2>
+<p>Let’s suppose we have a following json:</p>
+<div class="example-wrap"><pre class="language-json"><code> {
+  &quot;shop&quot;: {
+   &quot;orders&quot;: [
+      {&quot;id&quot;: 1, &quot;active&quot;: true},
+      {&quot;id&quot;: 2 },
+      {&quot;id&quot;: 3 },
+      {&quot;id&quot;: 4, &quot;active&quot;: true}
+    ]
+  }
+}
+</code></pre></div>
+<p>And we pursue to find all orders id having the field ‘active’
+we can construct the jsonpath instance like that
+<code>$.shop.orders[?(@.active)].id</code> and get the result <code>[1,4]</code></p>
+<h2 id="another-examples"><a class="doc-anchor" href="#another-examples">§</a>Another examples</h2><div class="example-wrap"><pre class="language-json"><code>{ &quot;store&quot;: {
+    &quot;book&quot;: [
+      { &quot;category&quot;: &quot;reference&quot;,
+        &quot;author&quot;: &quot;Nigel Rees&quot;,
+        &quot;title&quot;: &quot;Sayings of the Century&quot;,
+        &quot;price&quot;: 8.95
+      },
+      { &quot;category&quot;: &quot;fiction&quot;,
+        &quot;author&quot;: &quot;Evelyn Waugh&quot;,
+        &quot;title&quot;: &quot;Sword of Honour&quot;,
+        &quot;price&quot;: 12.99
+      },
+      { &quot;category&quot;: &quot;fiction&quot;,
+        &quot;author&quot;: &quot;Herman Melville&quot;,
+        &quot;title&quot;: &quot;Moby Dick&quot;,
+        &quot;isbn&quot;: &quot;0-553-21311-3&quot;,
+        &quot;price&quot;: 8.99
+      },
+      { &quot;category&quot;: &quot;fiction&quot;,
+        &quot;author&quot;: &quot;J. R. R. Tolkien&quot;,
+        &quot;title&quot;: &quot;The Lord of the Rings&quot;,
+        &quot;isbn&quot;: &quot;0-395-19395-8&quot;,
+        &quot;price&quot;: 22.99
+      }
+    ],
+    &quot;bicycle&quot;: {
+      &quot;color&quot;: &quot;red&quot;,
+      &quot;price&quot;: 19.95
+    }
+  }
+}
+</code></pre></div>
+<p>and examples</p>
+<ul>
+<li><code>$.store.book[*].author</code> : the authors of all books in the store</li>
+<li><code> $..book[?(@.isbn)]</code> : filter all books with isbn number</li>
+<li><code> $..book[?(@.price&lt;10)]</code> : filter all books cheapier than 10</li>
+<li><code> $..*</code> : all Elements in XML document. All members of JSON structure</li>
+<li><code> $..book[0,1]</code> : The first two books</li>
+<li><code> $..book[:2]</code> : The first two books</li>
+</ul>
+<h2 id="operators"><a class="doc-anchor" href="#operators">§</a>Operators</h2>
+<ul>
+<li><code>$</code> : Pointer to the root of the json. It is gently advising to start every jsonpath from the root. Also, inside the filters to point out that the path is starting from the root.</li>
+<li><code>@</code>Pointer to the current element inside the filter operations.It is used inside the filter operations to iterate the collection.</li>
+<li><code>*</code> or <code>[*]</code>Wildcard. It brings to the list all objects and elements regardless their names.It is analogue a flatmap operation.</li>
+<li><code>&lt;..&gt;</code>| Descent operation. It brings to the list all objects, children of that objects and etc It is analogue a flatmap operation.</li>
+<li><code>.&lt;name&gt;</code> or <code>.['&lt;name&gt;']</code>the key pointing to the field of the objectIt is used to obtain the specific field.</li>
+<li><code>['&lt;name&gt;' (, '&lt;name&gt;')]</code>the list of keysthe same usage as for a single key but for list</li>
+<li><code>[&lt;number&gt;]</code>the filter getting the element by its index.</li>
+<li><code>[&lt;number&gt; (, &lt;number&gt;)]</code>the list if elements of array according to their indexes representing these numbers. |</li>
+<li><code>[&lt;start&gt;:&lt;end&gt;:&lt;step&gt;]</code>slice operator to get a list of element operating with their indexes. By default step = 1, start = 0, end = array len. The elements can be omitted <code>[:]</code></li>
+<li><code>[?(&lt;expression&gt;)]</code>the logical expression to filter elements in the list.It is used with arrays preliminary.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> <span class="kw">use </span>serde_json::{json,Value};
+ <span class="kw">use </span>jsonpath_rust::jp_v;
+ <span class="kw">use </span><span class="self">self</span>::jsonpath_rust::JsonPathFinder;
+ <span class="kw">use </span><span class="self">self</span>::jsonpath_rust::JsonPathValue;
+
+ <span class="kw">fn </span>test(){
+     <span class="kw">let  </span>finder = JsonPathFinder::from_str(<span class="string">r#"{"first":{"second":[{"active":1},{"passive":1}]}}"#</span>, <span class="string">"$.first.second[?(@.active)]"</span>).unwrap();
+     <span class="kw">let </span>slice_of_data:Vec&lt;JsonPathValue&lt;Value&gt;&gt; = finder.find_slice();
+     <span class="kw">let </span>js = <span class="macro">json!</span>({<span class="string">"active"</span>:<span class="number">2</span>});
+     <span class="macro">assert_eq!</span>(slice_of_data, <span class="macro">jp_v!</span>[<span class="kw-2">&amp;</span>js;<span class="string">"$.first.second[0]"</span>,]);
+ }</code></pre></div>
+<p>or even simpler:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> <span class="kw">use </span>serde_json::{json,Value};
+ <span class="kw">use </span><span class="self">self</span>::jsonpath_rust::JsonPathFinder;
+ <span class="kw">use </span><span class="self">self</span>::jsonpath_rust::JsonPathValue;
+ <span class="kw">fn </span>test(json: <span class="kw-2">&amp;</span>str, path: <span class="kw-2">&amp;</span>str, expected: Vec&lt;JsonPathValue&lt;Value&gt;&gt;) {
+    <span class="kw">match </span>JsonPathFinder::from_str(json, path) {
+        <span class="prelude-val">Ok</span>(finder) =&gt; <span class="macro">assert_eq!</span>(finder.find_slice(), expected),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">"error while parsing json or jsonpath: {}"</span>, e)
+    }
+
+
+ }</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="parser/index.html" title="mod jsonpath_rust::parser">parser</a></div><div class="desc docblock-short">The parser for the jsonpath.
+The module grammar denotes the structure of the parsing grammar</div></li><li><div class="item-name"><a class="mod" href="path/index.html" title="mod jsonpath_rust::path">path</a></div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.chain.html" title="macro jsonpath_rust::chain">chain</a></div></li><li><div class="item-name"><a class="macro" href="macro.filter.html" title="macro jsonpath_rust::filter">filter</a></div></li><li><div class="item-name"><a class="macro" href="macro.function.html" title="macro jsonpath_rust::function">function</a></div></li><li><div class="item-name"><a class="macro" href="macro.idx.html" title="macro jsonpath_rust::idx">idx</a></div></li><li><div class="item-name"><a class="macro" href="macro.jp_v.html" title="macro jsonpath_rust::jp_v">jp_v</a></div><div class="desc docblock-short">just to create a json path value of data
+Example:</div></li><li><div class="item-name"><a class="macro" href="macro.op.html" title="macro jsonpath_rust::op">op</a></div></li><li><div class="item-name"><a class="macro" href="macro.path.html" title="macro jsonpath_rust::path">path</a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.JsonPathFinder.html" title="struct jsonpath_rust::JsonPathFinder">JsonPathFinder</a></div><div class="desc docblock-short">The base structure stitching the json instance and jsonpath instance</div></li><li><div class="item-name"><a class="struct" href="struct.JsonPathInst.html" title="struct jsonpath_rust::JsonPathInst">JsonPathInst</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.JsonPathValue.html" title="enum jsonpath_rust::JsonPathValue">JsonPathValue</a></div><div class="desc docblock-short">A result of json path
+Can be either a slice of initial data or a new generated value(like length of array)</div></li><li><div class="item-name"><a class="enum" href="enum.JsonPtr.html" title="enum jsonpath_rust::JsonPtr">JsonPtr</a></div><div class="desc docblock-short">Json paths may return either pointers to the original json or new data. This custom pointer type allows us to handle both cases.
+Unlike JsonPathValue, this type does not represent NoValue to allow the implementation of Deref.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.JsonPathQuery.html" title="trait jsonpath_rust::JsonPathQuery">JsonPathQuery</a></div><div class="desc docblock-short">the trait allows to mix the method path to the value of <a href="../serde_json/value/enum.Value.html" title="enum serde_json::value::Value">Value</a>
+and thus the using can be shortened to the following one:</div></li></ul></section></div></main></body></html>

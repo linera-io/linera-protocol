@@ -1,0 +1,147 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A lock-free concurrent slab."><title>sharded_slab - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sharded_slab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../sharded_slab/index.html">sharded_slab</a><span class="version">0.1.7</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">sharded_slab</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/sharded_slab/lib.rs.html#1-1106">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A lock-free concurrent slab.</p>
+<p>Slabs provide pre-allocated storage for many instances of a single data
+type. When a large number of values of a single type are required,
+this can be more efficient than allocating each item individually. Since the
+allocated items are the same size, memory fragmentation is reduced, and
+creating and removing new items can be very cheap.</p>
+<p>This crate implements a lock-free concurrent slab, indexed by <code>usize</code>s.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>First, add this to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>sharded-slab = &quot;0.1.1&quot;
+</code></pre></div>
+<p>This crate provides two  types, <a href="https://crates.io/crates/loom"><code>Slab</code></a> and <a href="struct.Pool.html" title="struct sharded_slab::Pool"><code>Pool</code></a>, which provide
+slightly different APIs for using a sharded slab.</p>
+<p><a href="https://crates.io/crates/loom"><code>Slab</code></a> implements a slab for <em>storing</em> small types, sharing them between
+threads, and accessing them by index. New entries are allocated by
+<a href="struct.Slab.html#method.insert" title="method sharded_slab::Slab::insert">inserting</a> data, moving it in by value. Similarly, entries may be
+deallocated by <a href="struct.Slab.html#method.take" title="method sharded_slab::Slab::take">taking</a> from the slab, moving the value out. This API is
+similar to a <code>Vec&lt;Option&lt;T&gt;&gt;</code>, but allowing lock-free concurrent insertion
+and removal.</p>
+<p>In contrast, the <a href="struct.Pool.html" title="struct sharded_slab::Pool"><code>Pool</code></a> type provides an <a href="https://en.wikipedia.org/wiki/Object_pool_pattern">object pool</a> style API for
+<em>reusing storage</em>. Rather than constructing values and moving them into the
+pool, as with <a href="https://crates.io/crates/loom"><code>Slab</code></a>, <a href="struct.Pool.html#method.create" title="method sharded_slab::Pool::create">allocating an entry</a> from the pool takes a
+closure that’s provided with a mutable reference to initialize the entry in
+place. When entries are deallocated, they are <a href="trait.Clear.html" title="trait sharded_slab::Clear">cleared</a> in place. Types
+which own a heap allocation can be cleared by dropping any <em>data</em> they
+store, but retaining any previously-allocated capacity. This means that a
+<a href="struct.Pool.html" title="struct sharded_slab::Pool"><code>Pool</code></a> may be used to reuse a set of existing heap allocations, reducing
+allocator load.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Inserting an item into the slab, returning an index:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>slab = Slab::new();
+
+<span class="kw">let </span>key = slab.insert(<span class="string">"hello world"</span>).unwrap();
+<span class="macro">assert_eq!</span>(slab.get(key).unwrap(), <span class="string">"hello world"</span>);</code></pre></div>
+<p>To share a slab across threads, it may be wrapped in an <code>Arc</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
+<span class="kw">let </span>slab = Arc::new(Slab::new());
+
+<span class="kw">let </span>slab2 = slab.clone();
+<span class="kw">let </span>thread2 = std::thread::spawn(<span class="kw">move </span>|| {
+    <span class="kw">let </span>key = slab2.insert(<span class="string">"hello from thread two"</span>).unwrap();
+    <span class="macro">assert_eq!</span>(slab2.get(key).unwrap(), <span class="string">"hello from thread two"</span>);
+    key
+});
+
+<span class="kw">let </span>key1 = slab.insert(<span class="string">"hello from thread one"</span>).unwrap();
+<span class="macro">assert_eq!</span>(slab.get(key1).unwrap(), <span class="string">"hello from thread one"</span>);
+
+<span class="comment">// Wait for thread 2 to complete.
+</span><span class="kw">let </span>key2 = thread2.join().unwrap();
+
+<span class="comment">// The item inserted by thread 2 remains in the slab.
+</span><span class="macro">assert_eq!</span>(slab.get(key2).unwrap(), <span class="string">"hello from thread two"</span>);</code></pre></div>
+<p>If items in the slab must be mutated, a <code>Mutex</code> or <code>RwLock</code> may be used for
+each item, providing granular locking of items rather than of the slab:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
+<span class="kw">let </span>slab = Arc::new(Slab::new());
+
+<span class="kw">let </span>key = slab.insert(Mutex::new(String::from(<span class="string">"hello world"</span>))).unwrap();
+
+<span class="kw">let </span>slab2 = slab.clone();
+<span class="kw">let </span>thread2 = std::thread::spawn(<span class="kw">move </span>|| {
+    <span class="kw">let </span>hello = slab2.get(key).expect(<span class="string">"item missing"</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>hello = hello.lock().expect(<span class="string">"mutex poisoned"</span>);
+    <span class="kw-2">*</span>hello = String::from(<span class="string">"hello everyone!"</span>);
+});
+
+thread2.join().unwrap();
+
+<span class="kw">let </span>hello = slab.get(key).expect(<span class="string">"item missing"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>hello = hello.lock().expect(<span class="string">"mutex poisoned"</span>);
+<span class="macro">assert_eq!</span>(hello.as_str(), <span class="string">"hello everyone!"</span>);</code></pre></div>
+<h2 id="configuration"><a class="doc-anchor" href="#configuration">§</a>Configuration</h2>
+<p>For performance reasons, several values used by the slab are calculated as
+constants. In order to allow users to tune the slab’s parameters, we provide
+a <a href="trait.Config.html"><code>Config</code></a> trait which defines these parameters as associated <code>consts</code>.
+The <code>Slab</code> type is generic over a <code>C: Config</code> parameter.</p>
+<h2 id="comparison-with-similar-crates"><a class="doc-anchor" href="#comparison-with-similar-crates">§</a>Comparison with Similar Crates</h2>
+<ul>
+<li>
+<p><a href="https://crates.io/crates/loom"><code>slab</code></a>: Carl Lerche’s <code>slab</code> crate provides a slab implementation with a
+similar API, implemented by storing all data in a single vector.</p>
+<p>Unlike <code>sharded_slab</code>, inserting and removing elements from the slab
+requires  mutable access. This means that if the slab is accessed
+concurrently by multiple threads, it is necessary for it to be protected
+by a <code>Mutex</code> or <code>RwLock</code>. Items may not be inserted or removed (or
+accessed, if a <code>Mutex</code> is used) concurrently, even when they are
+unrelated. In many cases, the lock can become a significant bottleneck. On
+the other hand, this crate allows separate indices in the slab to be
+accessed, inserted, and removed concurrently without requiring a global
+lock. Therefore, when the slab is shared across multiple threads, this
+crate offers significantly better performance than <code>slab</code>.</p>
+<p>However, the lock free slab introduces some additional constant-factor
+overhead. This means that in use-cases where a slab is <em>not</em> shared by
+multiple threads and locking is not required, this crate will likely offer
+slightly worse performance.</p>
+<p>In summary: <code>sharded-slab</code> offers significantly improved performance in
+concurrent use-cases, while <code>slab</code> should be preferred in single-threaded
+use-cases.</p>
+</li>
+</ul>
+<h2 id="safety-and-correctness"><a class="doc-anchor" href="#safety-and-correctness">§</a>Safety and Correctness</h2>
+<p>Most implementations of lock-free data structures in Rust require some
+amount of unsafe code, and this crate is not an exception. In order to catch
+potential bugs in this unsafe code, we make use of <a href="https://crates.io/crates/loom"><code>loom</code></a>, a
+permutation-testing tool for concurrent Rust programs. All <code>unsafe</code> blocks
+this crate occur in accesses to <code>loom</code> <code>UnsafeCell</code>s. This means that when
+those accesses occur in this crate’s tests, <code>loom</code> will assert that they are
+valid under the C11 memory model across multiple permutations of concurrent
+executions of those tests.</p>
+<p>In order to guard against the <a href="https://en.wikipedia.org/wiki/ABA_problem">ABA problem</a>, this crate makes use of
+<em>generational indices</em>. Each slot in the slab tracks a generation counter
+which is incremented every time a value is inserted into that slot, and the
+indices returned by <a href="struct.Slab.html#method.insert"><code>Slab::insert</code></a> include the generation of the slot when
+the value was inserted, packed into the high-order bits of the index. This
+ensures that if a value is inserted, removed,  and a new value is inserted
+into the same slot in the slab, the key returned by the first call to
+<code>insert</code> will not map to the new value.</p>
+<p>Since a fixed number of bits are set aside to use for storing the generation
+counter, the counter will wrap  around after being incremented a number of
+times. To avoid situations where a returned index lives long enough to see the
+generation counter wrap around to the same value, it is good to be fairly
+generous when configuring the allocation of index bits.</p>
+<h2 id="performance"><a class="doc-anchor" href="#performance">§</a>Performance</h2>
+<p>These graphs were produced by <a href="https://github.com/hawkw/sharded-slab/blob/master/benches/bench.rs">benchmarks</a> of the sharded slab implementation,
+using the <a href="https://crates.io/crates/criterion"><code>criterion</code></a> crate.</p>
+<p>The first shows the results of a benchmark where an increasing number of
+items are inserted and then removed into a slab concurrently by five
+threads. It compares the performance of the sharded slab implementation
+with a <code>RwLock&lt;slab::Slab&gt;</code>:</p>
+ <img width="1124" alt="Screen Shot 2019-10-01 at 5 09 49 PM" src="https://user-images.githubusercontent.com/2796466/66078398-cd6c9f80-e516-11e9-9923-0ed6292e8498.png">
+<p>The second graph shows the results of a benchmark where an increasing
+number of items are inserted and then removed by a <em>single</em> thread. It
+compares the performance of the sharded slab implementation with an
+<code>RwLock&lt;slab::Slab&gt;</code> and a <code>mut slab::Slab</code>.</p>
+ <img width="925" alt="Screen Shot 2019-10-01 at 5 13 45 PM" src="https://user-images.githubusercontent.com/2796466/66078469-f0974f00-e516-11e9-95b5-f65f0aa7e494.png">
+<p>These benchmarks demonstrate that, while the sharded approach introduces
+a small constant-factor overhead, it offers significantly better
+performance across concurrent accesses.</p>
+<h2 id="implementation-notes"><a class="doc-anchor" href="#implementation-notes">§</a>Implementation Notes</h2>
+<p>See <a href="implementation/index.html" title="mod sharded_slab::implementation">this page</a> for details on this crate’s design
+and implementation.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="implementation/index.html" title="mod sharded_slab::implementation">implementation</a></div><div class="desc docblock-short">Notes on <code>sharded-slab</code>’s implementation and design.</div></li><li><div class="item-name"><a class="mod" href="pool/index.html" title="mod sharded_slab::pool">pool</a></div><div class="desc docblock-short">A lock-free concurrent object pool.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DefaultConfig.html" title="struct sharded_slab::DefaultConfig">DefaultConfig</a></div><div class="desc docblock-short">Default slab configuration values.</div></li><li><div class="item-name"><a class="struct" href="struct.Entry.html" title="struct sharded_slab::Entry">Entry</a></div><div class="desc docblock-short">A handle that allows access to an occupied entry in a <a href="struct.Slab.html" title="struct sharded_slab::Slab"><code>Slab</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.OwnedEntry.html" title="struct sharded_slab::OwnedEntry">OwnedEntry</a></div><div class="desc docblock-short">An owned reference to an occupied entry in a <a href="struct.Slab.html" title="struct sharded_slab::Slab"><code>Slab</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Pool.html" title="struct sharded_slab::Pool">Pool</a></div><div class="desc docblock-short">A lock-free concurrent object pool.</div></li><li><div class="item-name"><a class="struct" href="struct.Slab.html" title="struct sharded_slab::Slab">Slab</a></div><div class="desc docblock-short">A sharded slab.</div></li><li><div class="item-name"><a class="struct" href="struct.UniqueIter.html" title="struct sharded_slab::UniqueIter">UniqueIter</a></div><div class="desc docblock-short">An exclusive fused iterator over the items in a <a href="struct.Slab.html" title="struct sharded_slab::Slab"><code>Slab</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.VacantEntry.html" title="struct sharded_slab::VacantEntry">VacantEntry</a></div><div class="desc docblock-short">A handle to a vacant entry in a <a href="struct.Slab.html" title="struct sharded_slab::Slab"><code>Slab</code></a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Clear.html" title="trait sharded_slab::Clear">Clear</a></div><div class="desc docblock-short">Trait implemented by types which can be cleared in place, retaining any
+allocated memory.</div></li><li><div class="item-name"><a class="trait" href="trait.Config.html" title="trait sharded_slab::Config">Config</a></div><div class="desc docblock-short">Configuration parameters which can be overridden to tune the behavior of a slab.</div></li></ul></section></div></main></body></html>

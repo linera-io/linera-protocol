@@ -1,0 +1,217 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A writeable object that can fail while writing."><title>TryWriteable in writeable - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="writeable" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../writeable/index.html">writeable</a><span class="version">0.5.5</span></h2></div><h2 class="location"><a href="#">TryWriteable</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Error">Error</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.try_write_to_parts">try_write_to_parts</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.try_write_to">try_write_to</a></li><li><a href="#method.try_write_to_string">try_write_to_string</a></li><li><a href="#method.writeable_cmp_bytes">writeable_cmp_bytes</a></li><li><a href="#method.writeable_length_hint">writeable_length_hint</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-TryWriteable-for-Result%3CT,+E%3E">Result&lt;T, E&gt;</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate writeable</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">writeable</a>::<wbr><a class="trait" href="#">TryWriteable</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/writeable/try_writeable.rs.html#95-290">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait TryWriteable {
+    type <a href="#associatedtype.Error" class="associatedtype">Error</a>;
+
+    // Required method
+    fn <a href="#tymethod.try_write_to_parts" class="fn">try_write_to_parts</a>&lt;S: <a class="trait" href="trait.PartsWrite.html" title="trait writeable::PartsWrite">PartsWrite</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(
+        &amp;self,
+        sink: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut S</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.try_write_to" class="fn">try_write_to</a>&lt;W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Write.html" title="trait core::fmt::Write">Write</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(
+        &amp;self,
+        sink: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut W</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.writeable_length_hint" class="fn">writeable_length_hint</a>(&amp;self) -&gt; <a class="struct" href="struct.LengthHint.html" title="struct writeable::LengthHint">LengthHint</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_write_to_string" class="fn">try_write_to_string</a>(
+        &amp;self,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;, (Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>, <a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;)&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.writeable_cmp_bytes" class="fn">writeable_cmp_bytes</a>(&amp;self, other: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A writeable object that can fail while writing.</p>
+<p>The default <a href="trait.Writeable.html" title="trait writeable::Writeable"><code>Writeable</code></a> trait returns a <a href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error"><code>fmt::Error</code></a>, which originates from the sink.
+In contrast, this trait allows the <em>writeable itself</em> to trigger an error as well.</p>
+<p>Implementations are expected to always make a <em>best attempt</em> at writing to the sink
+and should write replacement values in the error state. Therefore, the returned <code>Result</code>
+can be safely ignored to emulate a “lossy” mode.</p>
+<p>Any error substrings should be annotated with <a href="struct.Part.html#associatedconstant.ERROR" title="associated constant writeable::Part::ERROR"><code>Part::ERROR</code></a>.</p>
+<h2 id="implementer-notes"><a class="doc-anchor" href="#implementer-notes">§</a>Implementer Notes</h2>
+<p>This trait requires that implementers make a <em>best attempt</em> at writing to the sink,
+<em>even in the error state</em>, such as with a placeholder or fallback string.</p>
+<p>In <a href="trait.TryWriteable.html#tymethod.try_write_to_parts" title="method writeable::TryWriteable::try_write_to_parts"><code>TryWriteable::try_write_to_parts()</code></a>, error substrings should be annotated with
+<a href="struct.Part.html#associatedconstant.ERROR" title="associated constant writeable::Part::ERROR"><code>Part::ERROR</code></a>. Because of this, writing to parts is not default-implemented like
+it is on <a href="trait.Writeable.html" title="trait writeable::Writeable"><code>Writeable</code></a>.</p>
+<p>The trait is implemented on <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result&lt;T, E&gt;</code></a> where <code>T</code> and <code>E</code> both implement <a href="trait.Writeable.html" title="trait writeable::Writeable"><code>Writeable</code></a>;
+In the <code>Ok</code> case, <code>T</code> is written, and in the <code>Err</code> case, <code>E</code> is written as a fallback value.
+This impl, which writes <a href="struct.Part.html#associatedconstant.ERROR" title="associated constant writeable::Part::ERROR"><code>Part::ERROR</code></a>, can be used as a basis for more advanced impls.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Implementing on a custom type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::fmt;
+<span class="kw">use </span>writeable::LengthHint;
+<span class="kw">use </span>writeable::PartsWrite;
+<span class="kw">use </span>writeable::TryWriteable;
+
+<span class="attr">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">enum </span>HelloWorldWriteableError {
+    MissingName,
+}
+
+<span class="attr">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>HelloWorldWriteable {
+    <span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;,
+}
+
+<span class="kw">impl </span>TryWriteable <span class="kw">for </span>HelloWorldWriteable {
+    <span class="kw">type </span>Error = HelloWorldWriteableError;
+
+    <span class="kw">fn </span>try_write_to_parts&lt;S: PartsWrite + <span class="question-mark">?</span>Sized&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        sink: <span class="kw-2">&amp;mut </span>S,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt;, fmt::Error&gt; {
+        sink.write_str(<span class="string">"Hello, "</span>)<span class="question-mark">?</span>;
+        <span class="comment">// Use `impl TryWriteable for Result` to generate the error part:
+        </span><span class="kw">let </span>err = <span class="self">self</span>.name.ok_or(<span class="string">"nobody"</span>).try_write_to_parts(sink)<span class="question-mark">?</span>.err();
+        sink.write_char(<span class="string">'!'</span>)<span class="question-mark">?</span>;
+        <span class="comment">// Return a doubly-wrapped Result.
+        // The outer Result is for fmt::Error, handled by the `?`s above.
+        // The inner Result is for our own Self::Error.
+        </span><span class="kw">if </span>err.is_none() {
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(HelloWorldWriteableError::MissingName))
+        }
+    }
+
+    <span class="kw">fn </span>writeable_length_hint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LengthHint {
+        <span class="self">self</span>.name.ok_or(<span class="string">"nobody"</span>).writeable_length_hint() + <span class="number">8
+    </span>}
+}
+
+<span class="comment">// Success case:
+</span><span class="macro">writeable::assert_try_writeable_eq!</span>(
+    HelloWorldWriteable {
+        name: <span class="prelude-val">Some</span>(<span class="string">"Alice"</span>)
+    },
+    <span class="string">"Hello, Alice!"
+</span>);
+
+<span class="comment">// Failure case, including the ERROR part:
+</span><span class="macro">writeable::assert_try_writeable_parts_eq!</span>(
+    HelloWorldWriteable { name: <span class="prelude-val">None </span>},
+    <span class="string">"Hello, nobody!"</span>,
+    <span class="prelude-val">Err</span>(HelloWorldWriteableError::MissingName),
+    [(<span class="number">7</span>, <span class="number">13</span>, writeable::Part::ERROR)]
+);</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><section id="associatedtype.Error" class="method"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#96">source</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a></h4></section></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.try_write_to_parts" class="method"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#164-167">source</a><h4 class="code-header">fn <a href="#tymethod.try_write_to_parts" class="fn">try_write_to_parts</a>&lt;S: <a class="trait" href="trait.PartsWrite.html" title="trait writeable::PartsWrite">PartsWrite</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(
+    &amp;self,
+    sink: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut S</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Writes the content of this writeable to a sink with parts (annotations).</p>
+<p>For more information, see:</p>
+<ul>
+<li><a href="trait.TryWriteable.html#method.try_write_to" title="method writeable::TryWriteable::try_write_to"><code>TryWriteable::try_write_to()</code></a> for the general behavior.</li>
+<li><a href="trait.TryWriteable.html" title="trait writeable::TryWriteable"><code>TryWriteable</code></a> for an example with parts.</li>
+<li><a href="struct.Part.html" title="struct writeable::Part"><code>Part</code></a> for more about parts.</li>
+</ul>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.try_write_to" class="method"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#150-155">source</a><h4 class="code-header">fn <a href="#method.try_write_to" class="fn">try_write_to</a>&lt;W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Write.html" title="trait core::fmt::Write">Write</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(
+    &amp;self,
+    sink: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut W</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Writes the content of this writeable to a sink.</p>
+<p>If the sink hits an error, writing immediately ends,
+<code>Err(</code><a href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error"><code>fmt::Error</code></a><code>)</code> is returned, and the sink does not contain valid output.</p>
+<p>If the writeable hits an error, writing is continued with a replacement value,
+<code>Ok(Err(</code><a href="trait.TryWriteable.html#associatedtype.Error" title="associated type writeable::TryWriteable::Error"><code>TryWriteable::Error</code></a><code>))</code> is returned, and the caller may continue using the sink.</p>
+<h5 id="lossy-mode"><a class="doc-anchor" href="#lossy-mode">§</a>Lossy Mode</h5>
+<p>The <a href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error"><code>fmt::Error</code></a> should always be handled, but the <a href="trait.TryWriteable.html#associatedtype.Error" title="associated type writeable::TryWriteable::Error"><code>TryWriteable::Error</code></a> can be
+ignored if a fallback string is desired instead of an error.</p>
+<p>To handle the sink error, but not the writeable error, write:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let _ </span>= my_writeable.try_write_to(<span class="kw-2">&amp;mut </span>sink)<span class="question-mark">?</span>;</code></pre></div>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>The following examples use <code>Result&lt;&amp;str, usize&gt;</code>, which implements <a href="trait.TryWriteable.html" title="trait writeable::TryWriteable"><code>TryWriteable</code></a> because both <code>&amp;str</code> and <code>usize</code> do.</p>
+<p>Success case:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>writeable::TryWriteable;
+
+<span class="kw">let </span>w: <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>str, usize&gt; = <span class="prelude-val">Ok</span>(<span class="string">"success"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>sink = String::new();
+<span class="kw">let </span>result = w.try_write_to(<span class="kw-2">&amp;mut </span>sink);
+
+<span class="macro">assert_eq!</span>(result, <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())));
+<span class="macro">assert_eq!</span>(sink, <span class="string">"success"</span>);</code></pre></div>
+<p>Failure case:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>writeable::TryWriteable;
+
+<span class="kw">let </span>w: <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>str, usize&gt; = <span class="prelude-val">Err</span>(<span class="number">44</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>sink = String::new();
+<span class="kw">let </span>result = w.try_write_to(<span class="kw-2">&amp;mut </span>sink);
+
+<span class="macro">assert_eq!</span>(result, <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(<span class="number">44</span>)));
+<span class="macro">assert_eq!</span>(sink, <span class="string">"44"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.writeable_length_hint" class="method"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#173-175">source</a><h4 class="code-header">fn <a href="#method.writeable_length_hint" class="fn">writeable_length_hint</a>(&amp;self) -&gt; <a class="struct" href="struct.LengthHint.html" title="struct writeable::LengthHint">LengthHint</a></h4></section></summary><div class="docblock"><p>Returns a hint for the number of UTF-8 bytes that will be written to the sink.</p>
+<p>This function returns the length of the “lossy mode” string; for more information,
+see <a href="trait.TryWriteable.html#method.try_write_to" title="method writeable::TryWriteable::try_write_to"><code>TryWriteable::try_write_to()</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_write_to_string" class="method"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#195-208">source</a><h4 class="code-header">fn <a href="#method.try_write_to_string" class="fn">try_write_to_string</a>(
+    &amp;self,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;, (Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>, <a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;)&gt;</h4></section></summary><div class="docblock"><p>Writes the content of this writeable to a string.</p>
+<p>In the failure case, this function returns the error and the best-effort string (“lossy mode”).</p>
+<p>Examples</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// use the best-effort string
+</span><span class="kw">let </span>r1: Cow&lt;str&gt; = <span class="prelude-val">Ok</span>::&lt;<span class="kw-2">&amp;</span>str, u8&gt;(<span class="string">"ok"</span>)
+    .try_write_to_string()
+    .unwrap_or_else(|(<span class="kw">_</span>, s)| s);
+<span class="comment">// propagate the error
+</span><span class="kw">let </span>r2: <span class="prelude-ty">Result</span>&lt;Cow&lt;str&gt;, u8&gt; = <span class="prelude-val">Ok</span>::&lt;<span class="kw-2">&amp;</span>str, u8&gt;(<span class="string">"ok"</span>)
+    .try_write_to_string()
+    .map_err(|(e, <span class="kw">_</span>)| e);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.writeable_cmp_bytes" class="method"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#283-289">source</a><h4 class="code-header">fn <a href="#method.writeable_cmp_bytes" class="fn">writeable_cmp_bytes</a>(&amp;self, other: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a></h4></section></summary><div class="docblock"><p>Compares the content of this writeable to a byte slice.</p>
+<p>This function compares the “lossy mode” string; for more information,
+see <a href="trait.TryWriteable.html#method.try_write_to" title="method writeable::TryWriteable::try_write_to"><code>TryWriteable::try_write_to()</code></a>.</p>
+<p>For more information, see <a href="trait.Writeable.html#method.writeable_cmp_bytes" title="method writeable::Writeable::writeable_cmp_bytes"><code>Writeable::writeable_cmp_bytes()</code></a>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::cmp::Ordering;
+<span class="kw">use </span>core::fmt;
+<span class="kw">use </span>writeable::TryWriteable;
+
+<span class="attr">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">enum </span>HelloWorldWriteableError {
+    MissingName
+}
+
+<span class="attr">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>HelloWorldWriteable {
+    <span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;
+}
+
+<span class="kw">impl </span>TryWriteable <span class="kw">for </span>HelloWorldWriteable {
+    <span class="kw">type </span>Error = HelloWorldWriteableError;
+    <span class="comment">// see impl in TryWriteable docs
+</span>}
+
+<span class="comment">// Success case:
+</span><span class="kw">let </span>writeable = HelloWorldWriteable { name: <span class="prelude-val">Some</span>(<span class="string">"Alice"</span>) };
+<span class="kw">let </span>writeable_str = writeable.try_write_to_string().expect(<span class="string">"name is Some"</span>);
+
+<span class="macro">assert_eq!</span>(Ordering::Equal, writeable.writeable_cmp_bytes(<span class="string">b"Hello, Alice!"</span>));
+
+<span class="macro">assert_eq!</span>(Ordering::Greater, writeable.writeable_cmp_bytes(<span class="string">b"Alice!"</span>));
+<span class="macro">assert_eq!</span>(Ordering::Greater, (<span class="kw-2">*</span>writeable_str).cmp(<span class="string">"Alice!"</span>));
+
+<span class="macro">assert_eq!</span>(Ordering::Less, writeable.writeable_cmp_bytes(<span class="string">b"Hello, Bob!"</span>));
+<span class="macro">assert_eq!</span>(Ordering::Less, (<span class="kw-2">*</span>writeable_str).cmp(<span class="string">"Hello, Bob!"</span>));
+
+<span class="comment">// Failure case:
+</span><span class="kw">let </span>writeable = HelloWorldWriteable { name: <span class="prelude-val">None </span>};
+<span class="kw">let </span><span class="kw-2">mut </span>writeable_str = String::new();
+<span class="kw">let _ </span>= writeable.try_write_to(<span class="kw-2">&amp;mut </span>writeable_str).expect(<span class="string">"write to String is infallible"</span>);
+
+<span class="macro">assert_eq!</span>(Ordering::Equal, writeable.writeable_cmp_bytes(<span class="string">b"Hello, nobody!"</span>));
+
+<span class="macro">assert_eq!</span>(Ordering::Greater, writeable.writeable_cmp_bytes(<span class="string">b"Hello, alice!"</span>));
+<span class="macro">assert_eq!</span>(Ordering::Greater, (<span class="kw-2">*</span>writeable_str).cmp(<span class="string">"Hello, alice!"</span>));
+
+<span class="macro">assert_eq!</span>(Ordering::Less, writeable.writeable_cmp_bytes(<span class="string">b"Hello, zero!"</span>));
+<span class="macro">assert_eq!</span>(Ordering::Less, (<span class="kw-2">*</span>writeable_str).cmp(<span class="string">"Hello, zero!"</span>));</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-TryWriteable-for-Result%3CT,+E%3E" class="impl"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#292-346">source</a><a href="#impl-TryWriteable-for-Result%3CT,+E%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, E&gt; <a class="trait" href="trait.TryWriteable.html" title="trait writeable::TryWriteable">TryWriteable</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    T: <a class="trait" href="trait.Writeable.html" title="trait writeable::Writeable">Writeable</a>,
+    E: <a class="trait" href="trait.Writeable.html" title="trait writeable::Writeable">Writeable</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a> = E</h4></section><section id="method.try_write_to-1" class="method trait-impl"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#300-308">source</a><a href="#method.try_write_to-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.try_write_to" class="fn">try_write_to</a>&lt;W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Write.html" title="trait core::fmt::Write">Write</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(
+    &amp;self,
+    sink: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut W</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.try_write_to_parts" class="method trait-impl"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#311-321">source</a><a href="#method.try_write_to_parts" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.try_write_to_parts" class="fn">try_write_to_parts</a>&lt;S: <a class="trait" href="trait.PartsWrite.html" title="trait writeable::PartsWrite">PartsWrite</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(
+    &amp;self,
+    sink: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut S</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.writeable_length_hint-1" class="method trait-impl"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#324-329">source</a><a href="#method.writeable_length_hint-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.writeable_length_hint" class="fn">writeable_length_hint</a>(&amp;self) -&gt; <a class="struct" href="struct.LengthHint.html" title="struct writeable::LengthHint">LengthHint</a></h4></section><section id="method.try_write_to_string-1" class="method trait-impl"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#332-337">source</a><a href="#method.try_write_to_string-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.try_write_to_string" class="fn">try_write_to_string</a>(
+    &amp;self,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;, (Self::<a class="associatedtype" href="trait.TryWriteable.html#associatedtype.Error" title="type writeable::TryWriteable::Error">Error</a>, <a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;)&gt;</h4></section><section id="method.writeable_cmp_bytes-1" class="method trait-impl"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#340-345">source</a><a href="#method.writeable_cmp_bytes-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.writeable_cmp_bytes" class="fn">writeable_cmp_bytes</a>(&amp;self, other: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a></h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-TryWriteable-for-WriteableAsTryWriteableInfallible%3CT%3E" class="impl"><a class="src rightside" href="../src/writeable/try_writeable.rs.html#413-449">source</a><a href="#impl-TryWriteable-for-WriteableAsTryWriteableInfallible%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.TryWriteable.html" title="trait writeable::TryWriteable">TryWriteable</a> for <a class="struct" href="adapters/struct.WriteableAsTryWriteableInfallible.html" title="struct writeable::adapters::WriteableAsTryWriteableInfallible">WriteableAsTryWriteableInfallible</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="trait.Writeable.html" title="trait writeable::Writeable">Writeable</a>,</div></h3></section></summary><div class="impl-items"><section id="associatedtype.Error-2" class="associatedtype trait-impl"><a href="#associatedtype.Error-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></div></details></div><script src="../trait.impl/writeable/try_writeable/trait.TryWriteable.js" data-ignore-extern-crates="core" async></script></section></div></main></body></html>

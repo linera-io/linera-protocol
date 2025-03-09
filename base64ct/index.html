@@ -1,0 +1,81 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: Constant-Time Base64"><title>base64ct - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="base64ct" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../base64ct/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../base64ct/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../base64ct/index.html">base64ct</a><span class="version">1.6.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">base64ct</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/base64ct/lib.rs.html#1-105">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-constant-time-base64"><a class="doc-anchor" href="#rustcrypto-constant-time-base64">§</a><a href="https://github.com/rustcrypto">RustCrypto</a>: Constant-Time Base64</h2>
+<p><a href="https://crates.io/crates/base64ct"><img src="https://buildstats.info/crate/base64ct" alt="crate" /></a>
+<a href="https://docs.rs/base64ct/"><img src="https://docs.rs/base64ct/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/formats/actions/workflows/base64ct.yml"><img src="https://github.com/RustCrypto/formats/actions/workflows/base64ct.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.60+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/300570-formats"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>Pure Rust implementation of Base64 (<a href="https://tools.ietf.org/html/rfc4648">RFC 4648</a>).</p>
+<p>Implements multiple Base64 alphabets without data-dependent branches or lookup
+tables, thereby providing portable “best effort” constant-time operation.</p>
+<p>Supports <code>no_std</code> environments and avoids heap allocations in the core API
+(but also provides optional <code>alloc</code> support for convenience).</p>
+<p><a href="https://docs.rs/base64ct/">Documentation</a></p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p>This crate implements several Base64 alphabets in constant-time for sidechannel
+resistance, aimed at purposes like encoding/decoding the “PEM” format used to
+store things like cryptographic private keys (i.e. in the <a href="https://github.com/RustCrypto/formats/tree/master/pem-rfc7468"><code>pem-rfc7468</code></a> crate).</p>
+<p>The paper <a href="https://arxiv.org/pdf/2108.04600.pdf">Util::Lookup: Exploiting key decoding in cryptographic libraries</a>
+demonstrates how the leakage from non-constant-time Base64 parsers can be used
+to practically extract RSA private keys from SGX enclaves.</p>
+<p>The padded variants require (<code>=</code>) padding. Unpadded variants expressly
+reject such padding.</p>
+<p>Whitespace is expressly disallowed, with the exception of the
+<a href="https://docs.rs/base64ct/latest/base64ct/struct.Decoder.html#method.new_wrapped"><code>Decoder::new_wrapped</code></a> and <a href="https://docs.rs/base64ct/latest/base64ct/struct.Encoder.html#method.new_wrapped"><code>Encoder::new_wrapped</code></a> modes which provide
+fixed-width line wrapping.</p>
+<h3 id="supported-base64-variants"><a class="doc-anchor" href="#supported-base64-variants">§</a>Supported Base64 variants</h3>
+<ul>
+<li>Standard Base64: <code>[A-Z]</code>, <code>[a-z]</code>, <code>[0-9]</code>, <code>+</code>, <code>/</code></li>
+<li>URL-safe Base64: <code>[A-Z]</code>, <code>[a-z]</code>, <code>[0-9]</code>, <code>-</code>, <code>_</code></li>
+<li>bcrypt Base64: <code>.</code>, <code>/</code>, <code>[A-Z]</code>, <code>[a-z]</code>, <code>[0-9]</code></li>
+<li><code>crypt(3)</code> Base64: <code>.</code>, <code>-</code>, <code>[0-9]</code>, <code>[A-Z]</code>, <code>[a-z]</code></li>
+</ul>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.60</strong> at a minimum.</p>
+<p>We may change the MSRV in the future, but it will be accompanied by a minor
+version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2><h3 id="allocating-enable-alloc-crate-feature"><a class="doc-anchor" href="#allocating-enable-alloc-crate-feature">§</a>Allocating (enable <code>alloc</code> crate feature)</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64ct::{Base64, Encoding};
+
+<span class="kw">let </span>bytes = <span class="string">b"example bytestring!"</span>;
+<span class="kw">let </span>encoded = Base64::encode_string(bytes);
+<span class="macro">assert_eq!</span>(encoded, <span class="string">"ZXhhbXBsZSBieXRlc3RyaW5nIQ=="</span>);
+
+<span class="kw">let </span>decoded = Base64::decode_vec(<span class="kw-2">&amp;</span>encoded).unwrap();
+<span class="macro">assert_eq!</span>(decoded, bytes);</code></pre></div>
+<h3 id="heapless-no_std-usage"><a class="doc-anchor" href="#heapless-no_std-usage">§</a>Heapless <code>no_std</code> usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64ct::{Base64, Encoding};
+
+<span class="kw">const </span>BUF_SIZE: usize = <span class="number">128</span>;
+
+<span class="kw">let </span>bytes = <span class="string">b"example bytestring!"</span>;
+<span class="macro">assert!</span>(Base64::encoded_len(bytes) &lt;= BUF_SIZE);
+
+<span class="kw">let </span><span class="kw-2">mut </span>enc_buf = [<span class="number">0u8</span>; BUF_SIZE];
+<span class="kw">let </span>encoded = Base64::encode(bytes, <span class="kw-2">&amp;mut </span>enc_buf).unwrap();
+<span class="macro">assert_eq!</span>(encoded, <span class="string">"ZXhhbXBsZSBieXRlc3RyaW5nIQ=="</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>dec_buf = [<span class="number">0u8</span>; BUF_SIZE];
+<span class="kw">let </span>decoded = Base64::decode(encoded, <span class="kw-2">&amp;mut </span>dec_buf).unwrap();
+<span class="macro">assert_eq!</span>(decoded, bytes);</code></pre></div>
+<h2 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h2>
+<p>Implemented using integer arithmetic alone without any lookup tables or
+data-dependent branches, thereby providing portable “best effort”
+constant-time operation.</p>
+<p>Not constant-time with respect to message length (only data).</p>
+<p>Adapted from the following constant-time C++ implementation of Base64:</p>
+<p><a href="https://github.com/Sc00bz/ConstTimeEncoding/blob/master/base64.cpp">https://github.com/Sc00bz/ConstTimeEncoding/blob/master/base64.cpp</a></p>
+<p>Copyright (c) 2014 Steve “Sc00bz” Thomas (steve at tobtu dot com).
+Derived code is dual licensed MIT + Apache 2 (with permission from Sc00bz).</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Base64.html" title="struct base64ct::Base64">Base64</a></div><div class="desc docblock-short">Standard Base64 encoding with <code>=</code> padding.</div></li><li><div class="item-name"><a class="struct" href="struct.Base64Bcrypt.html" title="struct base64ct::Base64Bcrypt">Base64Bcrypt</a></div><div class="desc docblock-short">bcrypt Base64 encoding.</div></li><li><div class="item-name"><a class="struct" href="struct.Base64Crypt.html" title="struct base64ct::Base64Crypt">Base64Crypt</a></div><div class="desc docblock-short"><code>crypt(3)</code> Base64 encoding.</div></li><li><div class="item-name"><a class="struct" href="struct.Base64ShaCrypt.html" title="struct base64ct::Base64ShaCrypt">Base64ShaCrypt</a></div><div class="desc docblock-short"><code>crypt(3)</code> Base64 encoding for the following schemes.</div></li><li><div class="item-name"><a class="struct" href="struct.Base64Unpadded.html" title="struct base64ct::Base64Unpadded">Base64Unpadded</a></div><div class="desc docblock-short">Standard Base64 encoding <em>without</em> padding.</div></li><li><div class="item-name"><a class="struct" href="struct.Base64Url.html" title="struct base64ct::Base64Url">Base64Url</a></div><div class="desc docblock-short">URL-safe Base64 encoding with <code>=</code> padding.</div></li><li><div class="item-name"><a class="struct" href="struct.Base64UrlUnpadded.html" title="struct base64ct::Base64UrlUnpadded">Base64UrlUnpadded</a></div><div class="desc docblock-short">URL-safe Base64 encoding <em>without</em> padding.</div></li><li><div class="item-name"><a class="struct" href="struct.Decoder.html" title="struct base64ct::Decoder">Decoder</a></div><div class="desc docblock-short">Stateful Base64 decoder with support for buffered, incremental decoding.</div></li><li><div class="item-name"><a class="struct" href="struct.Encoder.html" title="struct base64ct::Encoder">Encoder</a></div><div class="desc docblock-short">Stateful Base64 encoder with support for buffered, incremental encoding.</div></li><li><div class="item-name"><a class="struct" href="struct.InvalidEncodingError.html" title="struct base64ct::InvalidEncodingError">InvalidEncodingError</a></div><div class="desc docblock-short">Invalid encoding of provided Base64 string.</div></li><li><div class="item-name"><a class="struct" href="struct.InvalidLengthError.html" title="struct base64ct::InvalidLengthError">InvalidLengthError</a></div><div class="desc docblock-short">Insufficient output buffer length.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum base64ct::Error">Error</a></div><div class="desc docblock-short">Generic error, union of <a href="struct.InvalidLengthError.html" title="struct base64ct::InvalidLengthError"><code>InvalidLengthError</code></a> and <a href="struct.InvalidEncodingError.html" title="struct base64ct::InvalidEncodingError"><code>InvalidEncodingError</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.LineEnding.html" title="enum base64ct::LineEnding">LineEnding</a></div><div class="desc docblock-short">Line endings: variants of newline characters that can be used with Base64.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Encoding.html" title="trait base64ct::Encoding">Encoding</a></div><div class="desc docblock-short">Base64 encoding trait.</div></li></ul></section></div></main></body></html>

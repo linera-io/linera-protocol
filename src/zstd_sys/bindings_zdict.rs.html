@@ -1,0 +1,177 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/zstd-sys-2.0.13+zstd.1.5.6/src/bindings_zdict.rs`."><title>bindings_zdict.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="zstd_sys" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+</pre></div><pre class="rust"><code><span class="comment">/*
+This file is auto-generated from the public API of the zstd library.
+It is released under the same BSD license.
+
+BSD License
+
+For Zstandard software
+
+Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+ * Neither the name Facebook, nor Meta, nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+/* automatically generated by rust-bindgen 0.69.4 */
+
+</span><span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="attr">#[doc = <span class="string">" ZDICT_trainFromBuffer():\n  Train a dictionary from an array of samples.\n  Redirect towards ZDICT_optimizeTrainFromBuffer_fastCover() single-threaded, with d=8, steps=4,\n  f=20, and accel=1.\n  Samples must be stored concatenated in a single flat buffer `samplesBuffer`,\n  supplied with an array of sizes `samplesSizes`, providing the size of each sample, in order.\n  The resulting dictionary will be saved into `dictBuffer`.\n @return: size of dictionary stored into `dictBuffer` (&lt;= `dictBufferCapacity`)\n          or an error code, which can be tested with ZDICT_isError().\n  Note:  Dictionary training will fail if there are not enough samples to construct a\n         dictionary, or if most of the samples are too small (&lt; 8 bytes being the lower limit).\n         If dictionary training fails, you should use zstd without a dictionary, as the dictionary\n         would've been ineffective anyways. If you believe your samples would benefit from a dictionary\n         please open an issue with details, and we can look into it.\n  Note: ZDICT_trainFromBuffer()'s memory usage is about 6 MB.\n  Tips: In general, a reasonable dictionary has a size of ~ 100 KB.\n        It's possible to select smaller or larger size, just by specifying `dictBufferCapacity`.\n        In general, it's recommended to provide a few thousands samples, though this can vary a lot.\n        It's recommended that total size of all samples be about ~x100 times the target size of dictionary."</span>]
+    </span><span class="kw">pub fn </span>ZDICT_trainFromBuffer(
+        dictBuffer: <span class="kw-2">*mut </span>::core::ffi::c_void,
+        dictBufferCapacity: usize,
+        samplesBuffer: <span class="kw-2">*const </span>::core::ffi::c_void,
+        samplesSizes: <span class="kw-2">*const </span>usize,
+        nbSamples: ::core::ffi::c_uint,
+    ) -&gt; usize;
+}
+<span class="attr">#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+</span><span class="kw">pub struct </span>ZDICT_params_t {
+    <span class="attr">#[doc = <span class="string">"&lt; optimize for a specific zstd compression level; 0 means default"</span>]
+    </span><span class="kw">pub </span>compressionLevel: ::core::ffi::c_int,
+    <span class="attr">#[doc = <span class="string">"&lt; Write log to stderr; 0 = none (default); 1 = errors; 2 = progression; 3 = details; 4 = debug;"</span>]
+    </span><span class="kw">pub </span>notificationLevel: ::core::ffi::c_uint,
+    <span class="attr">#[doc = <span class="string">"&lt; force dictID value; 0 means auto mode (32-bits random value)\n   NOTE: The zstd format reserves some dictionary IDs for future use.\n         You may use them in private settings, but be warned that they\n         may be used by zstd in a public dictionary registry in the future.\n         These dictionary IDs are:\n           - low range  : &lt;= 32767\n           - high range : &gt;= (2^31)"</span>]
+    </span><span class="kw">pub </span>dictID: ::core::ffi::c_uint,
+}
+<span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="attr">#[doc = <span class="string">" ZDICT_finalizeDictionary():\n Given a custom content as a basis for dictionary, and a set of samples,\n finalize dictionary by adding headers and statistics according to the zstd\n dictionary format.\n\n Samples must be stored concatenated in a flat buffer `samplesBuffer`,\n supplied with an array of sizes `samplesSizes`, providing the size of each\n sample in order. The samples are used to construct the statistics, so they\n should be representative of what you will compress with this dictionary.\n\n The compression level can be set in `parameters`. You should pass the\n compression level you expect to use in production. The statistics for each\n compression level differ, so tuning the dictionary for the compression level\n can help quite a bit.\n\n You can set an explicit dictionary ID in `parameters`, or allow us to pick\n a random dictionary ID for you, but we can't guarantee no collisions.\n\n The dstDictBuffer and the dictContent may overlap, and the content will be\n appended to the end of the header. If the header + the content doesn't fit in\n maxDictSize the beginning of the content is truncated to make room, since it\n is presumed that the most profitable content is at the end of the dictionary,\n since that is the cheapest to reference.\n\n `maxDictSize` must be &gt;= max(dictContentSize, ZSTD_DICTSIZE_MIN).\n\n @return: size of dictionary stored into `dstDictBuffer` (&lt;= `maxDictSize`),\n          or an error code, which can be tested by ZDICT_isError().\n Note: ZDICT_finalizeDictionary() will push notifications into stderr if\n       instructed to, using notificationLevel&gt;0.\n NOTE: This function currently may fail in several edge cases including:\n         * Not enough samples\n         * Samples are uncompressible\n         * Samples are all exactly the same"</span>]
+    </span><span class="kw">pub fn </span>ZDICT_finalizeDictionary(
+        dstDictBuffer: <span class="kw-2">*mut </span>::core::ffi::c_void,
+        maxDictSize: usize,
+        dictContent: <span class="kw-2">*const </span>::core::ffi::c_void,
+        dictContentSize: usize,
+        samplesBuffer: <span class="kw-2">*const </span>::core::ffi::c_void,
+        samplesSizes: <span class="kw-2">*const </span>usize,
+        nbSamples: ::core::ffi::c_uint,
+        parameters: ZDICT_params_t,
+    ) -&gt; usize;
+}
+<span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="kw">pub fn </span>ZDICT_getDictID(
+        dictBuffer: <span class="kw-2">*const </span>::core::ffi::c_void,
+        dictSize: usize,
+    ) -&gt; ::core::ffi::c_uint;
+}
+<span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="kw">pub fn </span>ZDICT_getDictHeaderSize(
+        dictBuffer: <span class="kw-2">*const </span>::core::ffi::c_void,
+        dictSize: usize,
+    ) -&gt; usize;
+}
+<span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="kw">pub fn </span>ZDICT_isError(errorCode: usize) -&gt; ::core::ffi::c_uint;
+}
+<span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="kw">pub fn </span>ZDICT_getErrorName(errorCode: usize) -&gt; <span class="kw-2">*const </span>::core::ffi::c_char;
+}
+</code></pre></div></section></main></body></html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Extends `Write` with methods for writing numbers. (For `std::io`.)"><title>WriteBytesExt in byteorder - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="byteorder" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../byteorder/index.html">byteorder</a><span class="version">1.5.0</span></h2></div><h2 class="location"><a href="#">WriteBytesExt</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.write_f32">write_f32</a></li><li><a href="#method.write_f64">write_f64</a></li><li><a href="#method.write_i128">write_i128</a></li><li><a href="#method.write_i16">write_i16</a></li><li><a href="#method.write_i24">write_i24</a></li><li><a href="#method.write_i32">write_i32</a></li><li><a href="#method.write_i48">write_i48</a></li><li><a href="#method.write_i64">write_i64</a></li><li><a href="#method.write_i8">write_i8</a></li><li><a href="#method.write_int">write_int</a></li><li><a href="#method.write_int128">write_int128</a></li><li><a href="#method.write_u128">write_u128</a></li><li><a href="#method.write_u16">write_u16</a></li><li><a href="#method.write_u24">write_u24</a></li><li><a href="#method.write_u32">write_u32</a></li><li><a href="#method.write_u48">write_u48</a></li><li><a href="#method.write_u64">write_u64</a></li><li><a href="#method.write_u8">write_u8</a></li><li><a href="#method.write_uint">write_uint</a></li><li><a href="#method.write_uint128">write_uint128</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate byteorder</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">byteorder</a>::<wbr><a class="trait" href="#">WriteBytesExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/byteorder/io.rs.html#1073-1575">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait WriteBytesExt: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 20 methods</span></summary>    // Provided methods
+    fn <a href="#method.write_u8" class="fn">write_u8</a>(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i8" class="fn">write_i8</a>(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u16" class="fn">write_u16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i16" class="fn">write_i16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u24" class="fn">write_u24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i24" class="fn">write_i24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u32" class="fn">write_u32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i32" class="fn">write_i32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u48" class="fn">write_u48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i48" class="fn">write_i48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u64" class="fn">write_u64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i64" class="fn">write_i64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u128" class="fn">write_u128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i128" class="fn">write_i128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_uint" class="fn">write_uint</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_int" class="fn">write_int</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_uint128" class="fn">write_uint128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(
+        &amp;mut self,
+        n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>,
+        nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_int128" class="fn">write_int128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(
+        &amp;mut self,
+        n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>,
+        nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_f32" class="fn">write_f32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_f64" class="fn">write_f64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Extends <a href="https://doc.rust-lang.org/std/io/trait.Write.html"><code>Write</code></a> with methods for writing numbers. (For <code>std::io</code>.)</p>
+<p>Most of the methods defined here have an unconstrained type parameter that
+must be explicitly instantiated. Typically, it is instantiated with either
+the <a href="enum.BigEndian.html"><code>BigEndian</code></a> or <a href="enum.LittleEndian.html"><code>LittleEndian</code></a> types defined in this crate.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Write unsigned 16 bit big-endian integers to a <a href="https://doc.rust-lang.org/std/io/trait.Write.html"><code>Write</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = <span class="macro">vec!</span>[];
+wtr.write_u16::&lt;BigEndian&gt;(<span class="number">517</span>).unwrap();
+wtr.write_u16::&lt;BigEndian&gt;(<span class="number">768</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>, <span class="number">3</span>, <span class="number">0</span>]);</code></pre></div>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.write_u8" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1098-1100">source</a><h4 class="code-header">fn <a href="#method.write_u8" class="fn">write_u8</a>(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned 8 bit integer to the underlying writer.</p>
+<p>Note that since this writes a single byte, no byte order conversions
+are used. It is included for completeness.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>Write unsigned 8 bit integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::WriteBytesExt;
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_u8(<span class="number">2</span>).unwrap();
+wtr.write_u8(<span class="number">5</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x02\x05"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i8" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1126-1128">source</a><h4 class="code-header">fn <a href="#method.write_i8" class="fn">write_i8</a>(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed 8 bit integer to the underlying writer.</p>
+<p>Note that since this writes a single byte, no byte order conversions
+are used. It is included for completeness.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>Write signed 8 bit integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::WriteBytesExt;
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_i8(<span class="number">2</span>).unwrap();
+wtr.write_i8(-<span class="number">5</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x02\xfb"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u16" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1151-1155">source</a><h4 class="code-header">fn <a href="#method.write_u16" class="fn">write_u16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned 16 bit integer to the underlying writer.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>Write unsigned 16 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_u16::&lt;BigEndian&gt;(<span class="number">517</span>).unwrap();
+wtr.write_u16::&lt;BigEndian&gt;(<span class="number">768</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x02\x05\x03\x00"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i16" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1178-1182">source</a><h4 class="code-header">fn <a href="#method.write_i16" class="fn">write_i16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed 16 bit integer to the underlying writer.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Write signed 16 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_i16::&lt;BigEndian&gt;(<span class="number">193</span>).unwrap();
+wtr.write_i16::&lt;BigEndian&gt;(-<span class="number">132</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x00\xc1\xff\x7c"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u24" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1205-1209">source</a><h4 class="code-header">fn <a href="#method.write_u24" class="fn">write_u24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned 24 bit integer to the underlying writer.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Write unsigned 24 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_u24::&lt;BigEndian&gt;(<span class="number">267</span>).unwrap();
+wtr.write_u24::&lt;BigEndian&gt;(<span class="number">120111</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x00\x01\x0b\x01\xd5\x2f"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i24" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1232-1236">source</a><h4 class="code-header">fn <a href="#method.write_i24" class="fn">write_i24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed 24 bit integer to the underlying writer.</p>
+<h5 id="errors-5"><a class="doc-anchor" href="#errors-5">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Write signed 24 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_i24::&lt;BigEndian&gt;(-<span class="number">34253</span>).unwrap();
+wtr.write_i24::&lt;BigEndian&gt;(<span class="number">120111</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\xff\x7a\x33\x01\xd5\x2f"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u32" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1259-1263">source</a><h4 class="code-header">fn <a href="#method.write_u32" class="fn">write_u32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned 32 bit integer to the underlying writer.</p>
+<h5 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<p>Write unsigned 32 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_u32::&lt;BigEndian&gt;(<span class="number">267</span>).unwrap();
+wtr.write_u32::&lt;BigEndian&gt;(<span class="number">1205419366</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x00\x00\x01\x0b\x47\xd9\x3d\x66"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i32" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1286-1290">source</a><h4 class="code-header">fn <a href="#method.write_i32" class="fn">write_i32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed 32 bit integer to the underlying writer.</p>
+<h5 id="errors-7"><a class="doc-anchor" href="#errors-7">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p>Write signed 32 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_i32::&lt;BigEndian&gt;(-<span class="number">34253</span>).unwrap();
+wtr.write_i32::&lt;BigEndian&gt;(<span class="number">1205419366</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\xff\xff\x7a\x33\x47\xd9\x3d\x66"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u48" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1313-1317">source</a><h4 class="code-header">fn <a href="#method.write_u48" class="fn">write_u48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned 48 bit integer to the underlying writer.</p>
+<h5 id="errors-8"><a class="doc-anchor" href="#errors-8">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<p>Write unsigned 48 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_u48::&lt;BigEndian&gt;(<span class="number">52360336390828</span>).unwrap();
+wtr.write_u48::&lt;BigEndian&gt;(<span class="number">541</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x2f\x9f\x17\x40\x3a\xac\x00\x00\x00\x00\x02\x1d"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i48" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1340-1344">source</a><h4 class="code-header">fn <a href="#method.write_i48" class="fn">write_i48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed 48 bit integer to the underlying writer.</p>
+<h5 id="errors-9"><a class="doc-anchor" href="#errors-9">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<p>Write signed 48 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_i48::&lt;BigEndian&gt;(-<span class="number">108363435763825</span>).unwrap();
+wtr.write_i48::&lt;BigEndian&gt;(<span class="number">77</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x9d\x71\xab\xe7\x97\x8f\x00\x00\x00\x00\x00\x4d"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u64" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1367-1371">source</a><h4 class="code-header">fn <a href="#method.write_u64" class="fn">write_u64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned 64 bit integer to the underlying writer.</p>
+<h5 id="errors-10"><a class="doc-anchor" href="#errors-10">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<p>Write unsigned 64 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_u64::&lt;BigEndian&gt;(<span class="number">918733457491587</span>).unwrap();
+wtr.write_u64::&lt;BigEndian&gt;(<span class="number">143</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x00\x03\x43\x95\x4d\x60\x86\x83\x00\x00\x00\x00\x00\x00\x00\x8f"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i64" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1394-1398">source</a><h4 class="code-header">fn <a href="#method.write_i64" class="fn">write_i64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed 64 bit integer to the underlying writer.</p>
+<h5 id="errors-11"><a class="doc-anchor" href="#errors-11">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<p>Write signed 64 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_i64::&lt;BigEndian&gt;(i64::min_value()).unwrap();
+wtr.write_i64::&lt;BigEndian&gt;(i64::max_value()).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x80\x00\x00\x00\x00\x00\x00\x00\x7f\xff\xff\xff\xff\xff\xff\xff"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1402-1406">source</a><h4 class="code-header">fn <a href="#method.write_u128" class="fn">write_u128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned 128 bit integer to the underlying writer.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1410-1414">source</a><h4 class="code-header">fn <a href="#method.write_i128" class="fn">write_i128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed 128 bit integer to the underlying writer.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_uint" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1442-1450">source</a><h4 class="code-header">fn <a href="#method.write_uint" class="fn">write_uint</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned n-bytes integer to the underlying writer.</p>
+<h5 id="errors-12"><a class="doc-anchor" href="#errors-12">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>If the given integer is not representable in the given number of bytes,
+this method panics. If <code>nbytes &gt; 8</code>, this method panics.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<p>Write unsigned 40 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_uint::&lt;BigEndian&gt;(<span class="number">312550384361</span>, <span class="number">5</span>).unwrap();
+wtr.write_uint::&lt;BigEndian&gt;(<span class="number">43</span>, <span class="number">5</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x48\xc5\x74\x62\xe9\x00\x00\x00\x00\x2b"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_int" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1478-1486">source</a><h4 class="code-header">fn <a href="#method.write_int" class="fn">write_int</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed n-bytes integer to the underlying writer.</p>
+<h5 id="errors-13"><a class="doc-anchor" href="#errors-13">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>If the given integer is not representable in the given number of bytes,
+this method panics. If <code>nbytes &gt; 8</code>, this method panics.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<p>Write signed 56 bit big-endian integers to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_int::&lt;BigEndian&gt;(-<span class="number">3548172039376767</span>, <span class="number">7</span>).unwrap();
+wtr.write_int::&lt;BigEndian&gt;(<span class="number">43</span>, <span class="number">7</span>).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\xf3\x64\xf4\xd1\xfd\xb0\x81\x00\x00\x00\x00\x00\x00\x2b"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_uint128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1493-1501">source</a><h4 class="code-header">fn <a href="#method.write_uint128" class="fn">write_uint128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes an unsigned n-bytes integer to the underlying writer.</p>
+<p>If the given integer is not representable in the given number of bytes,
+this method panics. If <code>nbytes &gt; 16</code>, this method panics.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_int128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1508-1516">source</a><h4 class="code-header">fn <a href="#method.write_int128" class="fn">write_int128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a signed n-bytes integer to the underlying writer.</p>
+<p>If the given integer is not representable in the given number of bytes,
+this method panics. If <code>nbytes &gt; 16</code>, this method panics.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_f32" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1541-1545">source</a><h4 class="code-header">fn <a href="#method.write_f32" class="fn">write_f32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a IEEE754 single-precision (4 bytes) floating point number to
+the underlying writer.</p>
+<h5 id="errors-14"><a class="doc-anchor" href="#errors-14">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<p>Write a big-endian single-precision floating point number to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f32;
+
+<span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_f32::&lt;BigEndian&gt;(f32::consts::PI).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x40\x49\x0f\xdb"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_f64" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1570-1574">source</a><h4 class="code-header">fn <a href="#method.write_f64" class="fn">write_f64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a IEEE754 double-precision (8 bytes) floating point number to
+the underlying writer.</p>
+<h5 id="errors-15"><a class="doc-anchor" href="#errors-15">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all"><code>Write::write_all</code></a>.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<p>Write a big-endian double-precision floating point number to a <code>Write</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f64;
+
+<span class="kw">use </span>byteorder::{BigEndian, WriteBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = Vec::new();
+wtr.write_f64::&lt;BigEndian&gt;(f64::consts::PI).unwrap();
+<span class="macro">assert_eq!</span>(wtr, <span class="string">b"\x40\x09\x21\xfb\x54\x44\x2d\x18"</span>);</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-WriteBytesExt-for-W" class="impl"><a class="src rightside" href="../src/byteorder/io.rs.html#1579">source</a><a href="#impl-WriteBytesExt-for-W" class="anchor">§</a><h3 class="code-header">impl&lt;W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.WriteBytesExt.html" title="trait byteorder::WriteBytesExt">WriteBytesExt</a> for W</h3></section><div class="docblock"><p>All types that implement <code>Write</code> get methods defined in <code>WriteBytesExt</code>
+for free.</p>
+</div></div><script src="../trait.impl/byteorder/io/trait.WriteBytesExt.js" async></script></section></div></main></body></html>

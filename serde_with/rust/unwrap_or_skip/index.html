@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serialize inner value if `Some``(T)`. If `None`, serialize the unit struct `()`."><title>serde_with::rust::unwrap_or_skip - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde_with" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../serde_with/index.html">serde_with</a><span class="version">3.12.0</span></h2></div><h2 class="location"><a href="#">Module unwrap_or_skip</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In serde_with::rust</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">serde_with</a>::<wbr><a href="../index.html">rust</a>::<wbr><a class="mod" href="#">unwrap_or_skip</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/serde_with/rust.rs.html#145">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Serialize inner value if <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.Some" title="variant core::option::Option::Some"><code>Some</code></a><code>(T)</code>. If <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, serialize the unit struct <code>()</code>.</p>
+<p>When used in conjunction with <code>skip_serializing_if = "Option::is_none"</code> and
+<code>default</code>, you can build an optional value by skipping if it is <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, or serializing its
+inner value if <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.Some" title="variant core::option::Option::Some"><code>Some</code></a><code>(T)</code>.</p>
+<p>Not all serialization formats easily support optional values.
+While JSON uses the <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> type to represent optional values and only serializes the inner
+part of the <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.Some" title="variant core::option::Option::Some"><code>Some</code></a><code>()</code>, other serialization formats, such as <a href="https://github.com/ron-rs/ron">RON</a>, choose to serialize the
+<a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.Some" title="variant core::option::Option::Some"><code>Some</code></a> around a value.
+This helper helps building a truly optional value for such serializers.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Deserialize, Serialize)]
+</span><span class="kw">struct </span>Doc {
+    mandatory: usize,
+    <span class="attr">#[serde(
+        default,                                    <span class="comment">// &lt;- important for deserialization
+        </span>skip_serializing_if = <span class="string">"Option::is_none"</span>,    <span class="comment">// &lt;- important for serialization
+        </span>with = <span class="string">"::serde_with::rust::unwrap_or_skip"</span>,
+    )]
+    </span>optional: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+}
+
+<span class="comment">// Transparently add/remove Some() wrapper
+</span><span class="kw">let </span>s = <span class="string">r#"(
+    mandatory: 1,
+    optional: 2,
+)"#</span>;
+<span class="kw">let </span>v = Doc {
+    mandatory: <span class="number">1</span>,
+    optional: <span class="prelude-val">Some</span>(<span class="number">2</span>),
+};
+<span class="macro">assert_eq!</span>(v, ron::de::from_str(s).unwrap());
+<span class="macro">assert_eq!</span>(s, ron::ser::to_string_pretty(<span class="kw-2">&amp;</span>v, pretty_config).unwrap());
+
+<span class="comment">// Missing values are deserialized as `None`
+// while `None` values are skipped during serialization.
+</span><span class="kw">let </span>s = <span class="string">r#"(
+    mandatory: 1,
+)"#</span>;
+<span class="kw">let </span>v = Doc {
+    mandatory: <span class="number">1</span>,
+    optional: <span class="prelude-val">None</span>,
+};
+<span class="macro">assert_eq!</span>(v, ron::de::from_str(s).unwrap());
+<span class="macro">assert_eq!</span>(s, ron::ser::to_string_pretty(<span class="kw-2">&amp;</span>v, pretty_config).unwrap());</code></pre></div>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.deserialize.html" title="fn serde_with::rust::unwrap_or_skip::deserialize">deserialize</a></div><div class="desc docblock-short">Deserialize value wrapped in Some(T)</div></li><li><div class="item-name"><a class="fn" href="fn.serialize.html" title="fn serde_with::rust::unwrap_or_skip::serialize">serialize</a></div><div class="desc docblock-short">Serialize value if Some(T), unit struct if None</div></li></ul></section></div></main></body></html>

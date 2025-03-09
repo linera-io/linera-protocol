@@ -1,0 +1,60 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generic implementation of Hash-based Message Authentication Code (HMAC)."><title>hmac - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="hmac" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../hmac/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../hmac/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg" alt="logo"></a><h2><a href="../hmac/index.html">hmac</a><span class="version">0.12.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">hmac</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/hmac/lib.rs.html#1-131">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generic implementation of Hash-based Message Authentication Code (HMAC).</p>
+<p>To use it you will need a cryptographic hash function implementation which
+implements the <a href="https://docs.rs/digest"><code>digest</code></a> crate traits. You can find compatible crates
+(e.g. <a href="https://docs.rs/sha2"><code>sha2</code></a>) in the <a href="https://github.com/RustCrypto/hashes"><code>RustCrypto/hashes</code></a> repository.</p>
+<p>This crate provides two HMAC implementation <a href="type.Hmac.html" title="type hmac::Hmac"><code>Hmac</code></a> and <a href="struct.SimpleHmac.html" title="struct hmac::SimpleHmac"><code>SimpleHmac</code></a>.
+The first one is a buffered wrapper around block-level <a href="struct.HmacCore.html" title="struct hmac::HmacCore"><code>HmacCore</code></a>.
+Internally it uses efficient state representation, but works only with
+hash functions which expose block-level API and consume blocks eagerly
+(e.g. it will not work with the BLAKE2 family of  hash functions).
+On the other hand, <a href="struct.SimpleHmac.html" title="struct hmac::SimpleHmac"><code>SimpleHmac</code></a> is a bit less efficient memory-wise,
+but works with all hash functions which implement the <a href="https://docs.rs/digest"><code>Digest</code></a> trait.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Let us demonstrate how to use HMAC using the SHA-256 hash function.</p>
+<p>In the following examples <a href="type.Hmac.html" title="type hmac::Hmac"><code>Hmac</code></a> is interchangeable with <a href="struct.SimpleHmac.html" title="struct hmac::SimpleHmac"><code>SimpleHmac</code></a>.</p>
+<p>To get authentication code:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sha2::Sha256;
+<span class="kw">use </span>hmac::{Hmac, Mac};
+<span class="kw">use </span>hex_literal::hex;
+
+<span class="comment">// Create alias for HMAC-SHA256
+</span><span class="kw">type </span>HmacSha256 = Hmac&lt;Sha256&gt;;
+
+<span class="kw">let </span><span class="kw-2">mut </span>mac = HmacSha256::new_from_slice(<span class="string">b"my secret and secure key"</span>)
+    .expect(<span class="string">"HMAC can take key of any size"</span>);
+mac.update(<span class="string">b"input message"</span>);
+
+<span class="comment">// `result` has type `CtOutput` which is a thin wrapper around array of
+// bytes for providing constant time equality check
+</span><span class="kw">let </span>result = mac.finalize();
+<span class="comment">// To get underlying array use `into_bytes`, but be careful, since
+// incorrect use of the code value may permit timing attacks which defeats
+// the security provided by the `CtOutput`
+</span><span class="kw">let </span>code_bytes = result.into_bytes();
+<span class="kw">let </span>expected = <span class="macro">hex!</span>(<span class="string">"
+    97d2a569059bbcd8ead4444ff99071f4
+    c01d005bcefe0d3567e1be628e5fdcd9
+"</span>);
+<span class="macro">assert_eq!</span>(code_bytes[..], expected[..]);</code></pre></div>
+<p>To verify the message:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>mac = HmacSha256::new_from_slice(<span class="string">b"my secret and secure key"</span>)
+    .expect(<span class="string">"HMAC can take key of any size"</span>);
+
+mac.update(<span class="string">b"input message"</span>);
+
+<span class="kw">let </span>code_bytes = <span class="macro">hex!</span>(<span class="string">"
+    97d2a569059bbcd8ead4444ff99071f4
+    c01d005bcefe0d3567e1be628e5fdcd9
+"</span>);
+<span class="comment">// `verify_slice` will return `Ok(())` if code is correct, `Err(MacError)` otherwise
+</span>mac.verify_slice(<span class="kw-2">&amp;</span>code_bytes[..]).unwrap();</code></pre></div>
+<h2 id="block-and-input-sizes"><a class="doc-anchor" href="#block-and-input-sizes">§</a>Block and input sizes</h2>
+<p>Usually it is assumed that block size is larger than output size. Due to the
+generic nature of the implementation, this edge case must be handled as well
+to remove potential panic. This is done by truncating hash output to the hash
+block size if needed.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.digest"><code>pub use <a class="mod" href="../digest/index.html" title="mod digest">digest</a>;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.HmacCore.html" title="struct hmac::HmacCore">HmacCore</a></div><div class="desc docblock-short">Generic core HMAC instance, which operates over blocks.</div></li><li><div class="item-name"><a class="struct" href="struct.SimpleHmac.html" title="struct hmac::SimpleHmac">SimpleHmac</a></div><div class="desc docblock-short">Simplified HMAC instance able to operate over hash functions
+which do not expose block-level API and hash functions which
+process blocks lazily (e.g. BLAKE2).</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Mac.html" title="trait hmac::Mac">Mac</a></div><div class="desc docblock-short">Convenience wrapper trait covering functionality of Message Authentication algorithms.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Hmac.html" title="type hmac::Hmac">Hmac</a></div><div class="desc docblock-short">Generic HMAC instance.</div></li></ul></section></div></main></body></html>

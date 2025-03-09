@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Rayon-core houses the core stable APIs of Rayon."><title>rayon_core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rayon_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../rayon_core/index.html">rayon_core</a><span class="version">1.12.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">rayon_core</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rayon_core/lib.rs.html#1-875">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Rayon-core houses the core stable APIs of Rayon.</p>
+<p>These APIs have been mirrored in the Rayon crate and it is recommended to use these from there.</p>
+<p><a href="fn.join.html"><code>join</code></a> is used to take two closures and potentially run them in parallel.</p>
+<ul>
+<li>It will run in parallel if task B gets stolen before task A can finish.</li>
+<li>It will run sequentially if task A finishes before task B is stolen and can continue on task B.</li>
+</ul>
+<p><a href="fn.scope.html"><code>scope</code></a> creates a scope in which you can run any number of parallel tasks.
+These tasks can spawn nested tasks and scopes, but given the nature of work stealing, the order of execution can not be guaranteed.
+The scope will exist until all tasks spawned within the scope have been completed.</p>
+<p><a href="fn.spawn.html"><code>spawn</code></a> add a task into the ‘static’ or ‘global’ scope, or a local scope created by the <a href="fn.scope.html"><code>scope()</code></a> function.</p>
+<p><a href="struct.threadpool.html"><code>ThreadPool</code></a> can be used to create your own thread pools (using <a href="struct.ThreadPoolBuilder.html"><code>ThreadPoolBuilder</code></a>) or to customize the global one.
+Tasks spawned within the pool (using <a href="struct.ThreadPool.html#method.install"><code>install()</code></a>, <a href="struct.ThreadPool.html#method.join"><code>join()</code></a>, etc.) will be added to a deque,
+where it becomes available for work stealing from other threads in the local threadpool.</p>
+<h2 id="global-fallback-when-threading-is-unsupported"><a class="doc-anchor" href="#global-fallback-when-threading-is-unsupported">§</a>Global fallback when threading is unsupported</h2>
+<p>Rayon uses <code>std</code> APIs for threading, but some targets have incomplete implementations that
+always return <code>Unsupported</code> errors. The WebAssembly <code>wasm32-unknown-unknown</code> and <code>wasm32-wasi</code>
+targets are notable examples of this. Rather than panicking on the unsupported error when
+creating the implicit global threadpool, Rayon configures a fallback mode instead.</p>
+<p>This fallback mode mostly functions as if it were using a single-threaded “pool”, like setting
+<code>RAYON_NUM_THREADS=1</code>. For example, <code>join</code> will execute its two closures sequentially, since
+there is no other thread to share the work. However, since the pool is not running independent
+of the main thread, non-blocking calls like <code>spawn</code> may not execute at all, unless a lower-
+priority call like <code>broadcast</code> gives them an opening. The fallback mode does not try to emulate
+anything like thread preemption or <code>async</code> task switching, but <code>yield_now</code> or <code>yield_local</code>
+can also volunteer execution time.</p>
+<p>Explicit <code>ThreadPoolBuilder</code> methods always report their error without any fallback.</p>
+<h2 id="restricting-multiple-versions"><a class="doc-anchor" href="#restricting-multiple-versions">§</a>Restricting multiple versions</h2>
+<p>In order to ensure proper coordination between threadpools, and especially
+to make sure there’s only one global threadpool, <code>rayon-core</code> is actively
+restricted from building multiple versions of itself into a single target.
+You may see a build error like this in violation:</p>
+<div class="example-wrap"><pre class="language-text"><code>error: native library `rayon-core` is being linked to by more
+than one package, and can only be linked to by one package
+</code></pre></div>
+<p>While we strive to keep <code>rayon-core</code> semver-compatible, it’s still
+possible to arrive at this situation if different crates have overly
+restrictive tilde or inequality requirements for <code>rayon-core</code>.  The
+conflicting requirements will need to be resolved before the build will
+succeed.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BroadcastContext.html" title="struct rayon_core::BroadcastContext">BroadcastContext</a></div><div class="desc docblock-short">Provides context to a closure called by <code>broadcast</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Configuration.html" title="struct rayon_core::Configuration">Configuration</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Contains the rayon thread pool configuration. Use <a href="struct.ThreadPoolBuilder.html"><code>ThreadPoolBuilder</code></a> instead.</div></li><li><div class="item-name"><a class="struct" href="struct.FnContext.html" title="struct rayon_core::FnContext">FnContext</a></div><div class="desc docblock-short">Provides the calling context to a closure called by <code>join_context</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Scope.html" title="struct rayon_core::Scope">Scope</a></div><div class="desc docblock-short">Represents a fork-join scope which can be used to spawn any number of tasks.
+See <a href="fn.scope.html"><code>scope()</code></a> for more information.</div></li><li><div class="item-name"><a class="struct" href="struct.ScopeFifo.html" title="struct rayon_core::ScopeFifo">ScopeFifo</a></div><div class="desc docblock-short">Represents a fork-join scope which can be used to spawn any number of tasks.
+Those spawned from the same thread are prioritized in relative FIFO order.
+See <a href="fn.scope_fifo.html"><code>scope_fifo()</code></a> for more information.</div></li><li><div class="item-name"><a class="struct" href="struct.ThreadBuilder.html" title="struct rayon_core::ThreadBuilder">ThreadBuilder</a></div><div class="desc docblock-short">Thread builder used for customization via
+<a href="struct.ThreadPoolBuilder.html#method.spawn_handler"><code>ThreadPoolBuilder::spawn_handler</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ThreadPool.html" title="struct rayon_core::ThreadPool">ThreadPool</a></div><div class="desc docblock-short">Represents a user created <a href="https://en.wikipedia.org/wiki/Thread_pool">thread-pool</a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ThreadPoolBuildError.html" title="struct rayon_core::ThreadPoolBuildError">ThreadPoolBuildError</a></div><div class="desc docblock-short">Error when initializing a thread pool.</div></li><li><div class="item-name"><a class="struct" href="struct.ThreadPoolBuilder.html" title="struct rayon_core::ThreadPoolBuilder">ThreadPoolBuilder</a></div><div class="desc docblock-short">Used to create a new <a href="struct.ThreadPool.html"><code>ThreadPool</code></a> or to configure the global rayon thread pool.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Yield.html" title="enum rayon_core::Yield">Yield</a></div><div class="desc docblock-short">Result of <a href="fn.yield_now.html" title="fn rayon_core::yield_now"><code>yield_now()</code></a> or <a href="fn.yield_local.html" title="fn rayon_core::yield_local"><code>yield_local()</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.broadcast.html" title="fn rayon_core::broadcast">broadcast</a></div><div class="desc docblock-short">Executes <code>op</code> within every thread in the current threadpool. If this is
+called from a non-Rayon thread, it will execute in the global threadpool.
+Any attempts to use <code>join</code>, <code>scope</code>, or parallel iterators will then operate
+within that threadpool. When the call has completed on each thread, returns
+a vector containing all of their return values.</div></li><li><div class="item-name"><a class="fn" href="fn.current_num_threads.html" title="fn rayon_core::current_num_threads">current_num_threads</a></div><div class="desc docblock-short">Returns the number of threads in the current registry. If this
+code is executing within a Rayon thread-pool, then this will be
+the number of threads for the thread-pool of the current
+thread. Otherwise, it will be the number of threads for the global
+thread-pool.</div></li><li><div class="item-name"><a class="fn" href="fn.current_thread_has_pending_tasks.html" title="fn rayon_core::current_thread_has_pending_tasks">current_thread_has_pending_tasks</a></div><div class="desc docblock-short">If called from a Rayon worker thread, indicates whether that
+thread’s local deque still has pending tasks. Otherwise, returns
+<code>None</code>. For more information, see <a href="struct.ThreadPool.html#method.current_thread_has_pending_tasks">the
+<code>ThreadPool::current_thread_has_pending_tasks()</code> method</a>.</div></li><li><div class="item-name"><a class="fn" href="fn.current_thread_index.html" title="fn rayon_core::current_thread_index">current_thread_index</a></div><div class="desc docblock-short">If called from a Rayon worker thread, returns the index of that
+thread within its current pool; if not called from a Rayon thread,
+returns <code>None</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.in_place_scope.html" title="fn rayon_core::in_place_scope">in_place_scope</a></div><div class="desc docblock-short">Creates a “fork-join” scope <code>s</code> and invokes the closure with a
+reference to <code>s</code>. This closure can then spawn asynchronous tasks
+into <code>s</code>. Those tasks may run asynchronously with respect to the
+closure; they may themselves spawn additional tasks into <code>s</code>. When
+the closure returns, it will block until all tasks that have been
+spawned into <code>s</code> complete.</div></li><li><div class="item-name"><a class="fn" href="fn.in_place_scope_fifo.html" title="fn rayon_core::in_place_scope_fifo">in_place_scope_fifo</a></div><div class="desc docblock-short">Creates a “fork-join” scope <code>s</code> with FIFO order, and invokes the
+closure with a reference to <code>s</code>. This closure can then spawn
+asynchronous tasks into <code>s</code>. Those tasks may run asynchronously with
+respect to the closure; they may themselves spawn additional tasks
+into <code>s</code>. When the closure returns, it will block until all tasks
+that have been spawned into <code>s</code> complete.</div></li><li><div class="item-name"><a class="fn" href="fn.initialize.html" title="fn rayon_core::initialize">initialize</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Deprecated in favor of <code>ThreadPoolBuilder::build_global</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.join.html" title="fn rayon_core::join">join</a></div><div class="desc docblock-short">Takes two closures and <em>potentially</em> runs them in parallel. It
+returns a pair of the results from those closures.</div></li><li><div class="item-name"><a class="fn" href="fn.join_context.html" title="fn rayon_core::join_context">join_context</a></div><div class="desc docblock-short">Identical to <code>join</code>, except that the closures have a parameter
+that provides context for the way the closure has been called,
+especially indicating whether they’re executing on a different
+thread than where <code>join_context</code> was called.  This will occur if
+the second job is stolen by a different thread, or if
+<code>join_context</code> was called from outside the thread pool to begin
+with.</div></li><li><div class="item-name"><a class="fn" href="fn.max_num_threads.html" title="fn rayon_core::max_num_threads">max_num_threads</a></div><div class="desc docblock-short">Returns the maximum number of threads that Rayon supports in a single thread-pool.</div></li><li><div class="item-name"><a class="fn" href="fn.scope.html" title="fn rayon_core::scope">scope</a></div><div class="desc docblock-short">Creates a “fork-join” scope <code>s</code> and invokes the closure with a
+reference to <code>s</code>. This closure can then spawn asynchronous tasks
+into <code>s</code>. Those tasks may run asynchronously with respect to the
+closure; they may themselves spawn additional tasks into <code>s</code>. When
+the closure returns, it will block until all tasks that have been
+spawned into <code>s</code> complete.</div></li><li><div class="item-name"><a class="fn" href="fn.scope_fifo.html" title="fn rayon_core::scope_fifo">scope_fifo</a></div><div class="desc docblock-short">Creates a “fork-join” scope <code>s</code> with FIFO order, and invokes the
+closure with a reference to <code>s</code>. This closure can then spawn
+asynchronous tasks into <code>s</code>. Those tasks may run asynchronously with
+respect to the closure; they may themselves spawn additional tasks
+into <code>s</code>. When the closure returns, it will block until all tasks
+that have been spawned into <code>s</code> complete.</div></li><li><div class="item-name"><a class="fn" href="fn.spawn.html" title="fn rayon_core::spawn">spawn</a></div><div class="desc docblock-short">Puts the task into the Rayon threadpool’s job queue in the “static”
+or “global” scope. Just like a standard thread, this task is not
+tied to the current stack frame, and hence it cannot hold any
+references other than those with <code>'static</code> lifetime. If you want
+to spawn a task that references stack data, use <a href="fn.scope.html">the <code>scope()</code>
+function</a> to create a scope.</div></li><li><div class="item-name"><a class="fn" href="fn.spawn_broadcast.html" title="fn rayon_core::spawn_broadcast">spawn_broadcast</a></div><div class="desc docblock-short">Spawns an asynchronous task on every thread in this thread-pool. This task
+will run in the implicit, global scope, which means that it may outlast the
+current stack frame – therefore, it cannot capture any references onto the
+stack (you will likely need a <code>move</code> closure).</div></li><li><div class="item-name"><a class="fn" href="fn.spawn_fifo.html" title="fn rayon_core::spawn_fifo">spawn_fifo</a></div><div class="desc docblock-short">Fires off a task into the Rayon threadpool in the “static” or
+“global” scope.  Just like a standard thread, this task is not
+tied to the current stack frame, and hence it cannot hold any
+references other than those with <code>'static</code> lifetime. If you want
+to spawn a task that references stack data, use <a href="fn.scope_fifo.html">the <code>scope_fifo()</code>
+function</a> to create a scope.</div></li><li><div class="item-name"><a class="fn" href="fn.yield_local.html" title="fn rayon_core::yield_local">yield_local</a></div><div class="desc docblock-short">Cooperatively yields execution to local Rayon work.</div></li><li><div class="item-name"><a class="fn" href="fn.yield_now.html" title="fn rayon_core::yield_now">yield_now</a></div><div class="desc docblock-short">Cooperatively yields execution to Rayon.</div></li></ul></section></div></main></body></html>

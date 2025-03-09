@@ -1,0 +1,138 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(From)]` generates"><title>From in derive_more::derive - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../derive_more/index.html">derive_more</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In derive_more::derive</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="../index.html">derive_more</a>::<wbr><a href="index.html">derive</a>::<wbr><a class="derive" href="#">From</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/derive_more_impl/lib.rs.html#103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(From)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[from]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-derivefrom-generates"><a class="doc-anchor" href="#what-derivefrom-generates">§</a>What <code>#[derive(From)]</code> generates</h2>
+<p>The point of deriving this type is that it makes it easy to create a new
+instance of the type by using the <code>.into()</code> method on the value(s) that it
+should contain. This is done by implementing the <code>From</code> trait for the type
+that is passed to the derive.</p>
+<h3 id="structs"><a class="doc-anchor" href="#structs">§</a>Structs</h3>
+<p>For structs with a single field you can call <code>.into()</code> on the desired content
+itself after deriving <code>From</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, From, PartialEq)]
+</span><span class="kw">struct </span>Int(i32);
+
+<span class="macro">assert_eq!</span>(Int(<span class="number">2</span>), <span class="number">2</span>.into());</code></pre></div>
+<p>For structs that have multiple fields <code>.into()</code> needs to be called on a tuple
+containing the desired content for each field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, From, PartialEq)]
+</span><span class="kw">struct </span>Point(i32, i32);
+
+<span class="macro">assert_eq!</span>(Point(<span class="number">1</span>, <span class="number">2</span>), (<span class="number">1</span>, <span class="number">2</span>).into());</code></pre></div>
+<p>To specify concrete types to derive convert from use <code>#[from(&lt;types&gt;)]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, From, PartialEq)]
+#[from(Cow&lt;<span class="lifetime">'static</span>, str&gt;, String, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str)]
+</span><span class="kw">struct </span>Str(Cow&lt;<span class="lifetime">'static</span>, str&gt;);
+
+<span class="macro">assert_eq!</span>(Str(<span class="string">"&amp;str"</span>.into()), <span class="string">"&amp;str"</span>.into());
+<span class="macro">assert_eq!</span>(Str(<span class="string">"String"</span>.into()), <span class="string">"String"</span>.to_owned().into());
+<span class="macro">assert_eq!</span>(Str(<span class="string">"Cow"</span>.into()), Cow::Borrowed(<span class="string">"Cow"</span>).to_owned().into());
+
+<span class="attr">#[derive(Debug, From, PartialEq)]
+#[from((i16, i16), (i32, i32))]
+</span><span class="kw">struct </span>Point {
+    x: i32,
+    y: i32,
+}
+
+<span class="macro">assert_eq!</span>(Point { x: <span class="number">1_i32</span>, y: <span class="number">2_i32 </span>}, (<span class="number">1_i16</span>, <span class="number">2_i16</span>).into());
+<span class="macro">assert_eq!</span>(Point { x: <span class="number">3_i32</span>, y: <span class="number">4_i32 </span>}, (<span class="number">3_i32</span>, <span class="number">4_i32</span>).into());</code></pre></div>
+<p>Also, you can forward implementation to the inner type, which means deriving <code>From</code> for any type, that derives <code>From</code>
+inner type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, From, PartialEq)]
+#[from(forward)]
+</span><span class="kw">struct </span>Str {
+    inner: Cow&lt;<span class="lifetime">'static</span>, str&gt;,
+}
+
+<span class="macro">assert_eq!</span>(Str { inner: <span class="string">"&amp;str"</span>.into() }, <span class="string">"&amp;str"</span>.into());
+<span class="macro">assert_eq!</span>(Str { inner: <span class="string">"String"</span>.into() }, <span class="string">"String"</span>.to_owned().into());
+<span class="macro">assert_eq!</span>(Str { inner: <span class="string">"Cow"</span>.into() }, Cow::Borrowed(<span class="string">"Cow"</span>).to_owned().into());</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>For enums <code>.into()</code> works for each variant as if they were structs. This
+includes specifying concrete types via <code>#[from(&lt;types&gt;)]</code> or forwarding
+implementation with <code>#[from(forward)]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, From, PartialEq)]
+</span><span class="kw">enum </span>IntOrPoint {
+    Int(i32),
+    Point {
+        x: i32,
+        y: i32,
+    },
+}
+
+<span class="macro">assert_eq!</span>(IntOrPoint::Int(<span class="number">1</span>), <span class="number">1</span>.into());
+<span class="macro">assert_eq!</span>(IntOrPoint::Point { x: <span class="number">1</span>, y: <span class="number">2 </span>}, (<span class="number">1</span>, <span class="number">2</span>).into());</code></pre></div>
+<p>By default, <code>From</code> is generated for every enum variant, but you can skip some
+variants via <code>#[from(skip)]</code> (or <code>#[from(ignore)]</code>) or only concrete fields via <code>#[from]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, From, PartialEq)]
+</span><span class="kw">enum </span>Int {
+    <span class="attr">#[from]
+    </span>Derived(i32),
+    NotDerived(i32),
+}
+
+<span class="comment">// Is equivalent to:
+
+</span><span class="attr">#[derive(Debug, From, PartialEq)]
+</span><span class="kw">enum </span>Int {
+    Derived(i32),
+    <span class="attr">#[from(skip)] </span><span class="comment">// or #[from(ignore)]
+    </span>NotDerived(i32),
+}</code></pre></div>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Allow converting from i32
+</span><span class="attr">#[derive(From, PartialEq)]
+</span><span class="kw">struct </span>MyInt(i32);
+
+<span class="comment">// Forward from call to the field, so allow converting
+// from anything that can be converted into an i64 (so most integers)
+</span><span class="attr">#[derive(From, PartialEq)]
+#[from(forward)]
+</span><span class="kw">struct </span>MyInt64(i64);
+
+<span class="comment">// You can ignore a variant
+</span><span class="attr">#[derive(From, PartialEq)]
+</span><span class="kw">enum </span>MyEnum {
+    SmallInt(i32),
+    NamedBigInt { int: i64 },
+    <span class="attr">#[from(ignore)]
+    </span>NoFromImpl(i64),
+}
+
+<span class="comment">// Or explicitly annotate the ones you need
+</span><span class="attr">#[derive(From, PartialEq)]
+</span><span class="kw">enum </span>MyEnum2 {
+    <span class="attr">#[from]
+    </span>SmallInt(i32),
+    <span class="attr">#[from]
+    </span>NamedBigInt { int: i64 },
+    NoFromImpl(i64),
+}
+
+<span class="comment">// And even specify additional conversions for them
+</span><span class="attr">#[derive(From, PartialEq)]
+</span><span class="kw">enum </span>MyEnum3 {
+    <span class="attr">#[from(i8, i32)]
+    </span>SmallInt(i32),
+    <span class="attr">#[from(i16, i64)]
+    </span>NamedBigInt { int: i64 },
+    NoFromImpl(i64),
+}
+
+<span class="macro">assert!</span>(MyInt(<span class="number">2</span>) == <span class="number">2</span>.into());
+<span class="macro">assert!</span>(MyInt64(<span class="number">6</span>) == <span class="number">6u8</span>.into());
+<span class="macro">assert!</span>(MyEnum::SmallInt(<span class="number">123</span>) == <span class="number">123i32</span>.into());
+<span class="macro">assert!</span>(MyEnum::SmallInt(<span class="number">123</span>) != <span class="number">123i64</span>.into());
+<span class="macro">assert!</span>(MyEnum::NamedBigInt{int: <span class="number">123</span>} == <span class="number">123i64</span>.into());
+<span class="macro">assert!</span>(MyEnum3::SmallInt(<span class="number">123</span>) == <span class="number">123i8</span>.into());
+<span class="macro">assert!</span>(MyEnum3::NamedBigInt{int: <span class="number">123</span>} == <span class="number">123i16</span>.into());</code></pre></div>
+</div></details></section></div></main></body></html>
