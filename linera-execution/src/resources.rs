@@ -3,7 +3,7 @@
 
 //! This module tracks the resources used during the execution of a transaction.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -56,6 +56,8 @@ pub struct ResourceTracker {
     pub messages: u32,
     /// The total size of the arguments of outgoing user messages.
     pub message_bytes: u64,
+    /// The time spent executing services as oracles.
+    pub service_oracle_execution: Duration,
     /// The amount allocated to message grants.
     pub grants: Amount,
 }
@@ -262,6 +264,38 @@ where
             .bytes_stored
             .checked_add(delta)
             .ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+
+    /// Returns the remaining time services can spend executing as oracles.
+    pub(crate) fn remaining_service_oracle_execution_time(
+        &self,
+    ) -> Result<Duration, ExecutionError> {
+        let tracker = self.tracker.as_ref();
+        let spent_execution_time = tracker.service_oracle_execution;
+        let limit = Duration::from_millis(self.policy.maximum_service_oracle_execution_ms);
+
+        limit
+            .checked_sub(spent_execution_time)
+            .ok_or(ExecutionError::MaximumServiceOracleExecutionTimeExceeded)
+    }
+
+    /// Tracks the time spent executing the service as an oracle.
+    pub(crate) fn track_service_oracle_execution(
+        &mut self,
+        execution_time: Duration,
+    ) -> Result<(), ExecutionError> {
+        let tracker = self.tracker.as_mut();
+        let spent_execution_time = &mut tracker.service_oracle_execution;
+        let limit = Duration::from_millis(self.policy.maximum_service_oracle_execution_ms);
+
+        *spent_execution_time = spent_execution_time.saturating_add(execution_time);
+
+        ensure!(
+            *spent_execution_time < limit,
+            ExecutionError::MaximumServiceOracleExecutionTimeExceeded
+        );
+
         Ok(())
     }
 }

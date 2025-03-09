@@ -232,6 +232,8 @@ pub enum ExecutionError {
     ExcessiveWrite,
     #[error("Block execution required too much fuel")]
     MaximumFuelExceeded,
+    #[error("Services running as oracles in block took longer than allowed")]
+    MaximumServiceOracleExecutionTimeExceeded,
     #[error("Serialized size of the executed block exceeds limit")]
     ExecutedBlockTooLarge,
     #[error("Runtime failed to respond to application")]
