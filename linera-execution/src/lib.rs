@@ -842,7 +842,7 @@ pub enum QueryResponse {
 /// A message together with routing information.
 #[derive(Clone, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawOutgoingMessage<Message, Grant = Resources> {
+pub struct RawOutgoingMessage<Message, Grant> {
     /// The destination of the message.
     pub destination: Destination,
     /// Whether the message is authenticated.
