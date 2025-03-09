@@ -3053,8 +3053,6 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
-        self.synchronize_chain_state(self.admin_id).await?;
-
         let (mut min_epoch, mut next_epoch) = {
             let query = ChainInfoQuery::new(self.chain_id).with_committees();
             let info = *self
