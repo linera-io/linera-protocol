@@ -900,7 +900,7 @@ pub enum MessageKind {
 /// the application that created them.
 #[derive(Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawExecutionOutcome<Message, Grant = Resources> {
+pub struct RawExecutionOutcome<Message, Grant> {
     /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
