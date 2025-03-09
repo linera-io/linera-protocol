@@ -23,7 +23,7 @@ use linera_base::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
-    Message, MessageKind, Operation, SystemMessage,
+    Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -282,28 +282,6 @@ pub struct BlockProposal {
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
 
-/// A posted message together with routing information.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct OutgoingMessage {
-    /// The destination of the message.
-    pub destination: Destination,
-    /// The user authentication carried by the message, if any.
-    #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
-    /// A grant to pay for the message execution.
-    #[debug(skip_if = Amount::is_zero)]
-    pub grant: Amount,
-    /// Where to send a refund for the unused part of the grant after execution, if any.
-    #[debug(skip_if = Option::is_none)]
-    pub refund_grant_to: Option<Account>,
-    /// The kind of message being sent.
-    pub kind: MessageKind,
-    /// The message itself.
-    pub message: Message,
-}
-
-impl<'de> BcsHashable<'de> for OutgoingMessage {}
-
 /// A message together with kind, authentication and grant information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct PostedMessage {
@@ -324,11 +302,21 @@ pub struct PostedMessage {
     pub message: Message,
 }
 
-impl OutgoingMessage {
+pub trait OutgoingMessageExt {
     /// Returns whether this message is sent via the given medium to the specified
     /// recipient. If the medium is a channel, does not verify that the recipient is
     /// actually subscribed to that channel.
-    pub fn has_destination(&self, medium: &Medium, recipient: ChainId) -> bool {
+    fn has_destination(&self, medium: &Medium, recipient: ChainId) -> bool;
+
+    /// Returns the posted message, i.e. the outgoing message without the destination.
+    fn into_posted(self, index: u32) -> PostedMessage;
+}
+
+impl OutgoingMessageExt for OutgoingMessage {
+    /// Returns whether this message is sent via the given medium to the specified
+    /// recipient. If the medium is a channel, does not verify that the recipient is
+    /// actually subscribed to that channel.
+    fn has_destination(&self, medium: &Medium, recipient: ChainId) -> bool {
         match (&self.destination, medium) {
             (Destination::Recipient(_), Medium::Channel(_))
             | (Destination::Subscribers(_), Medium::Direct) => false,
@@ -344,7 +332,7 @@ impl OutgoingMessage {
     }
 
     /// Returns the posted message, i.e. the outgoing message without the destination.
-    pub fn into_posted(self, index: u32) -> PostedMessage {
+    fn into_posted(self, index: u32) -> PostedMessage {
         let OutgoingMessage {
             destination: _,
             authenticated_signer,

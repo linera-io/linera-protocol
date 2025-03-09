@@ -136,11 +136,10 @@ mod from {
     use linera_base::{data_types::Event, hashed::Hashed, identifiers::StreamId};
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
-        data_types::{
-            ExecutedBlock, IncomingBundle, MessageBundle, OutgoingMessage, PostedMessage,
-        },
+        data_types::{ExecutedBlock, IncomingBundle, MessageBundle, PostedMessage},
         types::ConfirmedBlock,
     };
+    use linera_execution::OutgoingMessage;
 
     use super::*;
 

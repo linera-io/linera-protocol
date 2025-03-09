@@ -896,6 +896,28 @@ pub enum MessageKind {
     Bouncing,
 }
 
+/// A posted message together with routing information.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct OutgoingMessage {
+    /// The destination of the message.
+    pub destination: Destination,
+    /// The user authentication carried by the message, if any.
+    #[debug(skip_if = Option::is_none)]
+    pub authenticated_signer: Option<Owner>,
+    /// A grant to pay for the message execution.
+    #[debug(skip_if = Amount::is_zero)]
+    pub grant: Amount,
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    #[debug(skip_if = Option::is_none)]
+    pub refund_grant_to: Option<Account>,
+    /// The kind of message being sent.
+    pub kind: MessageKind,
+    /// The message itself.
+    pub message: Message,
+}
+
+impl<'de> BcsHashable<'de> for OutgoingMessage {}
+
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug)]

@@ -10,13 +10,12 @@ use linera_base::{
     data_types::Timestamp,
     identifiers::{ChainId, Destination},
 };
-use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ChainClient, ChainClientError},
     node::ValidatorNodeProvider,
     worker::Reason,
 };
-use linera_execution::{Message, SystemMessage};
+use linera_execution::{Message, OutgoingMessage, SystemMessage};
 use linera_storage::{Clock as _, Storage};
 use tracing::{debug, error, info, instrument, warn, Instrument as _};
 

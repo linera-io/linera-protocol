@@ -26,9 +26,9 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
-    Operation, OperationContext, Query, QueryContext, QueryOutcome, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceController, ResourceTracker, ServiceRuntimeEndpoint,
-    TransactionTracker,
+    Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
+    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker,
+    ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        Origin, OutgoingMessage, PostedMessage, ProposedBlock, Target, Transaction,
+        Origin, PostedMessage, ProposedBlock, Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
