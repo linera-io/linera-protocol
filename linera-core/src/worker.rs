@@ -815,7 +815,7 @@ where
     }
 
     /// Processes a confirmed block certificate.
-    #[instrument(skip_all,  fields(
+    #[instrument(skip_all, fields(
         nick = self.nickname,
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
