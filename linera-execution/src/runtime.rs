@@ -120,7 +120,7 @@ struct ApplicationStatus {
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
     /// The current execution outcome of the application.
-    outcome: RawExecutionOutcome<Vec<u8>>,
+    outcome: RawExecutionOutcome<Vec<u8>, Resources>,
 }
 
 /// A loaded application instance.
@@ -474,13 +474,13 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Cleans up the runtime after the execution of a call to a different contract.
     fn finish_call(&mut self) -> Result<(), ExecutionError> {
         let ApplicationStatus {
-            id: callee_id,
+            id,
             signer,
             outcome,
             ..
         } = self.pop_application();
 
-        self.handle_outcome(outcome, signer, callee_id)?;
+        self.handle_outcome(outcome, signer, id)?;
 
         Ok(())
     }
