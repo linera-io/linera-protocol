@@ -460,6 +460,32 @@ impl SyncRuntimeInternal<UserContractInstance> {
         self.pop_application();
         Ok(())
     }
+
+    /// Runs the service in a separate thread as an oracle.
+    fn run_service_oracle_query(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let context = QueryContext {
+            chain_id: self.chain_id,
+            next_block_height: self.height,
+            local_time: self.local_time,
+        };
+        let sender = self.execution_state_sender.clone();
+
+        let txn_tracker = TransactionTracker::default()
+            .with_blobs(self.transaction_tracker.created_blobs().clone());
+        let mut service_runtime =
+            ServiceSyncRuntime::new_with_txn_tracker(sender, context, txn_tracker);
+        let QueryOutcome {
+            response,
+            operations,
+        } = service_runtime.run_query(application_id, query)?;
+
+        self.scheduled_operations.extend(operations);
+        Ok(response)
+    }
 }
 
 impl SyncRuntimeInternal<UserServiceInstance> {
@@ -1360,24 +1386,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                     _ => return Err(ExecutionError::OracleResponseMismatch),
                 }
             } else {
-                let context = QueryContext {
-                    chain_id: this.chain_id,
-                    next_block_height: this.height,
-                    local_time: this.local_time,
-                };
-                let sender = this.execution_state_sender.clone();
-
-                let txn_tracker = TransactionTracker::default()
-                    .with_blobs(this.transaction_tracker.created_blobs().clone());
-                let mut service_runtime =
-                    ServiceSyncRuntime::new_with_txn_tracker(sender, context, txn_tracker);
-                let QueryOutcome {
-                    response,
-                    operations,
-                } = service_runtime.run_query(application_id, query)?;
-
-                this.scheduled_operations.extend(operations);
-                response
+                this.run_service_oracle_query(application_id, query)?
             };
 
         this.transaction_tracker
