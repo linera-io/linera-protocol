@@ -120,7 +120,7 @@ struct ApplicationStatus {
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
     /// The current execution outcome of the application.
-    outcome: RawExecutionOutcome<Vec<u8>>,
+    outcome: RawExecutionOutcome<Vec<u8>, Resources>,
 }
 
 /// A loaded application instance.

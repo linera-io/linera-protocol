@@ -346,23 +346,6 @@ pub trait UserService {
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
-/// The result of calling into a user application.
-#[derive(Default)]
-pub struct ApplicationCallOutcome {
-    /// The return value.
-    pub value: Vec<u8>,
-    /// The externally-visible result.
-    pub execution_outcome: RawExecutionOutcome<Vec<u8>>,
-}
-
-impl ApplicationCallOutcome {
-    /// Adds a `message` to this [`ApplicationCallOutcome`].
-    pub fn with_message(mut self, message: RawOutgoingMessage<Vec<u8>>) -> Self {
-        self.execution_outcome.messages.push(message);
-        self
-    }
-}
-
 /// Configuration options for the execution runtime available to applications.
 #[derive(Clone, Copy, Default)]
 pub struct ExecutionRuntimeConfig {}
@@ -859,7 +842,7 @@ pub enum QueryResponse {
 /// A message together with routing information.
 #[derive(Clone, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawOutgoingMessage<Message, Grant = Resources> {
+pub struct RawOutgoingMessage<Message, Grant> {
     /// The destination of the message.
     pub destination: Destination,
     /// Whether the message is authenticated.
@@ -917,7 +900,7 @@ pub enum MessageKind {
 /// the application that created them.
 #[derive(Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawExecutionOutcome<Message, Grant = Resources> {
+pub struct RawExecutionOutcome<Message, Grant> {
     /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
