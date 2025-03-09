@@ -46,8 +46,8 @@ AdminOperation:
         STRUCT:
           - epoch:
               TYPENAME: Epoch
-          - committee:
-              TYPENAME: Committee
+          - blob_hash:
+              TYPENAME: CryptoHash
     1:
       RemoveCommittee:
         STRUCT:
@@ -97,6 +97,8 @@ BlobType:
       ServiceBytecode: UNIT
     3:
       ApplicationDescription: UNIT
+    4:
+      Committee: UNIT
 Block:
   STRUCT:
     - header:
@@ -447,6 +449,14 @@ Event:
         TYPENAME: StreamId
     - key: BYTES
     - value: BYTES
+EventId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - stream_id:
+        TYPENAME: StreamId
+    - key:
+        SEQ: U8
 GenericApplicationId:
   ENUM:
     0:
@@ -731,6 +741,11 @@ OracleResponse:
       Round:
         NEWTYPE:
           OPTION: U32
+    5:
+      Event:
+        TUPLE:
+          - TYPENAME: EventId
+          - SEQ: U8
 Origin:
   STRUCT:
     - sender:
@@ -1035,32 +1050,20 @@ SystemMessage:
         NEWTYPE:
           TYPENAME: OpenChainConfig
     3:
-      CreateCommittee:
-        STRUCT:
-          - epoch:
-              TYPENAME: Epoch
-          - committee:
-              TYPENAME: Committee
-    4:
-      RemoveCommittee:
-        STRUCT:
-          - epoch:
-              TYPENAME: Epoch
-    5:
       Subscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
           - subscription:
               TYPENAME: ChannelSubscription
-    6:
+    4:
       Unsubscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
           - subscription:
               TYPENAME: ChannelSubscription
-    7:
+    5:
       ApplicationCreated: UNIT
 SystemOperation:
   ENUM:
@@ -1130,16 +1133,21 @@ SystemOperation:
           - module_id:
               TYPENAME: ModuleId
     9:
-      PublishDataBlob:
+      PublishCommitteeBlob:
         STRUCT:
           - blob_hash:
               TYPENAME: CryptoHash
     10:
+      PublishDataBlob:
+        STRUCT:
+          - blob_hash:
+              TYPENAME: CryptoHash
+    11:
       ReadBlob:
         STRUCT:
           - blob_id:
               TYPENAME: BlobId
-    11:
+    12:
       CreateApplication:
         STRUCT:
           - module_id:
@@ -1149,10 +1157,18 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    12:
+    13:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
+    14:
+      ProcessNewEpoch:
+        NEWTYPE:
+          TYPENAME: Epoch
+    15:
+      ProcessRemovedEpoch:
+        NEWTYPE:
+          TYPENAME: Epoch
 TimeDelta:
   NEWTYPESTRUCT: U64
 Timeout:

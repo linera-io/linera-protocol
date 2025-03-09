@@ -478,20 +478,11 @@ where
         .unwrap()
         .unwrap();
 
-    // Regression test for #2869.
-    let sub_message_id = MessageId {
-        index: message_id.index + 1,
-        ..message_id
-    };
-    assert_matches!(
-        certificate.block().messages()[0][sub_message_id.index as usize].message,
-        Message::System(SystemMessage::Subscribe { .. })
-    );
     assert_eq!(
         sender
             .client
             .local_node()
-            .certificate_for(&sub_message_id)
+            .certificate_for(&message_id)
             .await
             .unwrap(),
         certificate
@@ -1111,22 +1102,10 @@ where
     user.process_inbox().await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
-    // Stop listening for new committees.
-    let cert = user
-        .unsubscribe_from_new_committees()
-        .await
-        .unwrap()
-        .unwrap();
-    admin
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    admin.process_inbox().await.unwrap();
-
     // Create a new committee.
     let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.next_block_height(), BlockHeight::from(3));
+    assert_eq!(admin.next_block_height(), BlockHeight::from(5));
     assert!(admin.pending_proposal().is_none());
     assert!(admin.key_pair().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
@@ -1156,20 +1135,8 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
     user.synchronize_from_validators().await.unwrap();
 
-    // User is unsubscribed, so the migration message is not even in the inbox yet.
     user.process_inbox().await.unwrap();
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
-
-    // Now subscribe explicitly to migrations.
-    let cert = user.subscribe_to_new_committees().await.unwrap().unwrap();
-    admin
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    builder
-        .check_that_validators_have_empty_outboxes(admin.chain_id())
-        .await;
-    admin.process_inbox().await.unwrap();
+    assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
 
     // Have the admin chain deprecate the previous epoch.
     admin.finalize_committee().await.unwrap();
@@ -1184,18 +1151,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_matches!(
-        admin.receive_certificate_and_update_validators(cert).await,
-        Err(ChainClientError::CommitteeDeprecationError)
-    );
-    // Transfer is blocked because the epoch #0 has been retired by admin.
-    admin.synchronize_from_validators().await.unwrap();
-    admin.process_inbox().await.unwrap();
-    assert_eq!(admin.local_balance().await.unwrap(), Amount::ZERO);
-
-    // Have the user receive the notification to migrate to epoch #2.
-    user.synchronize_from_validators().await.unwrap();
-    user.process_inbox().await.unwrap();
+    admin
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.

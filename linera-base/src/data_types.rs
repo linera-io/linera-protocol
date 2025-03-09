@@ -780,6 +780,8 @@ pub enum OracleResponse {
     Assert,
     /// The block's validation round.
     Round(Option<u32>),
+    /// An event was read.
+    Event(EventId, Vec<u8>),
 }
 
 impl<'de> BcsHashable<'de> for OracleResponse {}
@@ -998,6 +1000,11 @@ impl BlobContent {
     ) -> Self {
         let bytes = application_description.to_bytes();
         BlobContent::new(BlobType::ApplicationDescription, bytes)
+    }
+
+    /// Creates a new committee [`BlobContent`] from the provided serialized committee.
+    pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
+        BlobContent::new(BlobType::Committee, committee)
     }
 
     /// Gets a reference to the blob's bytes.
