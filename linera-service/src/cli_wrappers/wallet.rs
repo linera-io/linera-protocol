@@ -1113,6 +1113,19 @@ impl NodeService {
         Ok(ApplicationWrapper::from(link))
     }
 
+    pub async fn make_raw_application<A: ContractAbi>(
+        &self,
+        chain_id: &ChainId,
+        application_id: &ApplicationId<A>,
+    ) -> Result<ApplicationRawWrapper<A>> {
+        let application_id = application_id.forget_abi().to_string();
+        let link = format!(
+            "http://localhost:{}/chains/{chain_id}/raw_applications/{application_id}",
+            self.port
+        );
+        Ok(ApplicationRawWrapper::from(link))
+    }
+
     pub async fn publish_data_blob(
         &self,
         chain_id: &ChainId,
@@ -1366,6 +1379,110 @@ impl FaucetService {
 
     pub fn instance(&self) -> Faucet {
         Faucet::new(format!("http://localhost:{}/", self.port))
+    }
+}
+
+/// A running `Application` to be queried in GraphQL.
+pub struct ApplicationRawWrapper<A> {
+    uri: String,
+    _phantom: PhantomData<A>,
+}
+
+/// The result of the raw request
+enum RawRequestResult {
+    Query(Vec<u8>),
+    Operation(CryptoHash),
+}
+
+impl<A> ApplicationRawWrapper<A> {
+    async fn raw_request(&self, query: impl AsRef<str>) -> Result<RawRequestResult> {
+        const MAX_RETRIES: usize = 5;
+
+        for i in 0.. {
+            let query = query.as_ref();
+            let client = reqwest_client();
+            let result = client
+                .post(&self.uri)
+                .json(&json!({ "query": query }))
+                .send()
+                .await;
+            let response = match result {
+                Ok(response) => response,
+                Err(error) if i < MAX_RETRIES => {
+                    warn!(
+                        "Failed to post query \"{}\": {error}; retrying",
+                        truncate_query_output(query),
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "raw_query: failed to post query={}",
+                            truncate_query_output(query)
+                        )
+                    });
+                }
+            };
+            anyhow::ensure!(
+                response.status().is_success(),
+                "Query \"{}\" failed: {}",
+                truncate_query_output(query),
+                response
+                    .text()
+                    .await
+                    .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+            );
+            let value: Value = response.json().await.context("invalid JSON")?;
+            let value = value["data"].clone();
+            match value {
+                Value::Array(vec) => {
+                    let mut vector = Vec::new();
+                    for value in vec {
+                        let Value::Number(number) = value else {
+                            anyhow::bail!("value should be a number");
+                        };
+                        let number = number.as_u64().expect("Conversion to u64 failed");
+                        let number = number as u8;
+                        vector.push(number);
+                    }
+                    return Ok(RawRequestResult::Query(vector));
+                }
+                Value::String(hash) => {
+                    let hash = CryptoHash::from_str(&hash)?;
+                    return Ok(RawRequestResult::Operation(hash));
+                }
+                _ => anyhow::bail!("no matching for these types"),
+            }
+        }
+        unreachable!()
+    }
+
+    pub async fn raw_query(&self, query: &str) -> Result<Vec<u8>> {
+        let query = format!("query {{ {} }}", query);
+        let result = self.raw_request(query).await?;
+        let RawRequestResult::Query(result) = result else {
+            unreachable!("For a query, we can get only a query as result");
+        };
+        Ok(result)
+    }
+
+    pub async fn raw_operation(&self, operation: &str) -> Result<CryptoHash> {
+        let mutation = format!("mutation {{ {} }}", operation);
+        let result = self.raw_request(mutation).await?;
+        let RawRequestResult::Operation(hash) = result else {
+            unreachable!("For a mutation, we can get only an operation as result");
+        };
+        Ok(hash)
+    }
+}
+
+impl<A> From<String> for ApplicationRawWrapper<A> {
+    fn from(uri: String) -> ApplicationRawWrapper<A> {
+        ApplicationRawWrapper {
+            uri,
+            _phantom: PhantomData,
+        }
     }
 }
 
