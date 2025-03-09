@@ -774,15 +774,16 @@ where
     assert_eq!(keys, read_keys);
 }
 
-/// Due to the fact that some store are caching values, it is possible
-/// that the following scenario occurs:
-/// * Store 1 deletes a key and mark it as missing in its cache.
-/// * Store 2 writes the key
-/// * Store 1 reads the key, see it as missing and returns false
-///   erroneously.
+/// A store can be in exclusive access where it stores the absence of values
+/// or in shared access where only values are stored and (key, value) once
+/// written are never modified nor erased.
 ///
-/// This test checks that the behavior is correct.
-pub async fn test_cache_check_absence_admin_test<S: TestKeyValueStore>()
+/// In case of no exclusive access the following scenarion is checked
+/// * Store 1 deletes a key and does not mark it as missing in its cache.
+/// * Store 2 writes the key
+/// * Store 1 reads the key, but since it is no in the cache it can read
+///   it correctly.
+pub async fn no_exclusive_access_admin_test<S: TestKeyValueStore>()
 where
     S::Error: Debug,
 {
@@ -802,4 +803,41 @@ where
     store2.write_batch(batch2).await.expect("write batch2");
     //
     assert!(store1.contains_key(&key).await.unwrap());
+}
+
+/// In case of exclusive access. We have the following scenario:
+/// * Store 1 deletes a key and mark it as missing in its cache.
+/// * Store 2 writes the key (it should not be doing it)
+/// * Store 1 reads the key, see it as missing.
+pub async fn exclusive_access_admin_test<S: TestKeyValueStore>()
+where
+    S::Error: Debug,
+{
+    let config = S::new_test_config().await.expect("config");
+    let namespace = generate_test_namespace();
+    S::create(&config, &namespace).await.expect("creation");
+    let key = vec![42];
+    //
+    let store1 = S::connect(&config, &namespace).await.expect("store");
+    let store1 = store1.clone_with_root_key(&[]).expect("store1");
+    let mut batch1 = Batch::new();
+    batch1.delete_key(key.clone());
+    store1.write_batch(batch1).await.expect("write batch1");
+    //
+    let store2 = S::connect(&config, &namespace).await.expect("store");
+    let store2 = store2.clone_with_root_key(&[]).expect("store2");
+    let mut batch2 = Batch::new();
+    batch2.put_key_value_bytes(key.clone(), vec![]);
+    store2.write_batch(batch2).await.expect("write batch2");
+    //
+    assert!(!store1.contains_key(&key).await.unwrap());
+}
+
+/// Both checks together.
+pub async fn access_admin_test<S: TestKeyValueStore>()
+where
+    S::Error: Debug,
+{
+    no_exclusive_access_admin_test::<S>().await;
+    exclusive_access_admin_test::<S>().await;
 }

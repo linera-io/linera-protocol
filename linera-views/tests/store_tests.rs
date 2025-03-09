@@ -21,7 +21,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 #[cfg(any(with_dynamodb, with_scylladb))]
-use linera_views::test_utils::test_cache_check_absence_admin_test;
+use linera_views::test_utils::access_admin_test;
 
 #[ignore]
 #[tokio::test]
@@ -327,12 +327,12 @@ async fn test_scylla_db_writes_from_state() {
 
 #[cfg(with_scylladb)]
 #[tokio::test]
-async fn test_scylladb_cache_key_absence() {
-    test_cache_check_absence_admin_test::<linera_views::scylla_db::ScyllaDbStore>().await
+async fn test_scylladb_access() {
+    access_admin_test::<linera_views::scylla_db::ScyllaDbStore>().await
 }
 
 #[cfg(with_dynamodb)]
 #[tokio::test]
-async fn test_dynamodb_cache_key_absence() {
-    test_cache_check_absence_admin_test::<linera_views::dynamo_db::DynamoDbStore>().await
+async fn test_dynamodb_access() {
+    access_admin_test::<linera_views::dynamo_db::DynamoDbStore>().await
 }
