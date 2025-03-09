@@ -297,6 +297,7 @@ impl LineraNetConfig for LocalNetConfig {
                 self.num_other_initial_chains,
                 self.initial_amount,
                 self.policy_config,
+                Some(vec!["localhost".to_owned()]),
             )
             .await
             .unwrap();

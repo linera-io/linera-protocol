@@ -268,6 +268,10 @@ pub enum ExecutionError {
     BlobTooLarge,
     #[error("Bytecode exceeds size limit")]
     BytecodeTooLarge,
+    #[error("Attempt to perform an HTTP request to an unauthorized host: {0:?}")]
+    UnauthorizedHttpRequest(reqwest::Url),
+    #[error("Attempt to perform an HTTP request to an invalid URL")]
+    InvalidUrlForHttpRequest(#[from] url::ParseError),
     // TODO(#2127): Remove this error and the unstable-oracles feature once there are fees
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]

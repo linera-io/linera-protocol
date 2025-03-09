@@ -14,7 +14,7 @@ use linera_base::prometheus_util::{
 };
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
-    hex_debug, hex_vec_debug, http,
+    ensure, hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -22,7 +22,7 @@ use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use reqwest::{header::HeaderMap, Client};
+use reqwest::{header::HeaderMap, Client, Url};
 
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
@@ -379,8 +379,24 @@ where
                     .map(|http::Header { name, value }| Ok((name.parse()?, value.try_into()?)))
                     .collect::<Result<HeaderMap, ExecutionError>>()?;
 
+                let url = Url::parse(&request.url)?;
+                let host = url
+                    .host_str()
+                    .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
+
+                let (_epoch, committee) = self
+                    .system
+                    .current_committee()
+                    .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
+                let allowed_hosts = &committee.policy().http_request_allow_list;
+
+                ensure!(
+                    allowed_hosts.contains(host),
+                    ExecutionError::UnauthorizedHttpRequest(url)
+                );
+
                 let response = Client::new()
-                    .request(request.method.into(), request.url)
+                    .request(request.method.into(), url)
                     .body(request.body)
                     .headers(headers)
                     .send()

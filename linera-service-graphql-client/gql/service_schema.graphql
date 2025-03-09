@@ -1098,6 +1098,10 @@ input ResourceControlPolicy {
 	The maximum data to write per block
 	"""
 	maximumBytesWrittenPerBlock: Int!
+	"""
+	The list of hosts that contracts and services can send HTTP requests to.
+	"""
+	httpRequestAllowList: [String!]!
 }
 
 """
