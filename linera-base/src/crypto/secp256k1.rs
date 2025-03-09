@@ -63,7 +63,7 @@ pub struct Secp256k1Signature(pub Signature);
 
 impl Secp256k1PublicKey {
     /// A fake public key used for testing.
-    #[cfg(with_testing)]
+    #[cfg(all(with_testing, not(target_arch = "wasm32")))]
     pub fn test_key(seed: u8) -> Self {
         use rand::SeedableRng;
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed as u64);
