@@ -346,23 +346,6 @@ pub trait UserService {
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
-/// The result of calling into a user application.
-#[derive(Default)]
-pub struct ApplicationCallOutcome {
-    /// The return value.
-    pub value: Vec<u8>,
-    /// The externally-visible result.
-    pub execution_outcome: RawExecutionOutcome<Vec<u8>>,
-}
-
-impl ApplicationCallOutcome {
-    /// Adds a `message` to this [`ApplicationCallOutcome`].
-    pub fn with_message(mut self, message: RawOutgoingMessage<Vec<u8>>) -> Self {
-        self.execution_outcome.messages.push(message);
-        self
-    }
-}
-
 /// Configuration options for the execution runtime available to applications.
 #[derive(Clone, Copy, Default)]
 pub struct ExecutionRuntimeConfig {}
