@@ -200,6 +200,7 @@ where
     }
 
     /// Handles a proposal for the next block for this chain.
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -235,6 +236,7 @@ where
     }
 
     /// Processes a validated block issued for this multi-owner chain.
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
@@ -246,6 +248,7 @@ where
     }
 
     /// Processes a confirmed block (aka a commit).
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
@@ -258,6 +261,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: Origin,
@@ -281,6 +285,7 @@ where
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
@@ -315,6 +320,7 @@ where
     }
 
     /// Adds the blob to pending blocks or validated block certificates that are missing it.
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn handle_pending_blob(
         &mut self,
         blob: Blob,
