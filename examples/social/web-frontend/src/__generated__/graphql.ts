@@ -148,7 +148,7 @@ export type OwnPost = {
 /** A post on the social app. */
 export type Post = {
   __typename?: 'Post';
-  /** Comments with there ChainId */
+  /** Comments with their ChainId */
   comments: Array<Comment>;
   /** The post's image_url(optional). */
   imageUrl?: Maybe<Scalars['String']['output']>;
