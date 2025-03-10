@@ -1,0 +1,1 @@
+searchState.loadedDescShard("aurora_engine_modexp", 0, "Trait providing the interface for the modexp function. The …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nComputes <code>(base ^ exp) % modulus</code>, where all values are …\nComputes <code>(base ^ exp) % modulus</code>, where all values are …")

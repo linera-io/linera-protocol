@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Decorator Definition"><title>DecoratorDef in handlebars - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="handlebars" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../handlebars/index.html">handlebars</a><span class="version">4.5.0</span></h2></div><h2 class="location"><a href="#">DecoratorDef</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.call">call</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate handlebars</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">handlebars</a>::<wbr><a class="trait" href="#">DecoratorDef</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/handlebars/decorators/mod.rs.html#59-67">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait DecoratorDef {
+    // Required method
+    fn <a href="#tymethod.call" class="fn">call</a>&lt;'reg: 'rc, 'rc&gt;(
+        &amp;'reg self,
+        d: &amp;<a class="struct" href="struct.Decorator.html" title="struct handlebars::Decorator">Decorator</a>&lt;'reg, 'rc&gt;,
+        r: &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;,
+        ctx: &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>,
+        rc: &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.RenderError.html" title="struct handlebars::RenderError">RenderError</a>&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Decorator Definition</p>
+<p>Implement this trait to define your own decorators. Currently decorator
+shares same definition with helper.</p>
+<p>In handlebars, it is recommended to use decorator to change context data and update helper
+definition.</p>
+<h3 id="updating-context-data"><a class="doc-anchor" href="#updating-context-data">§</a>Updating context data</h3>
+<p>In decorator, you can change some context data you are about to render.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>handlebars::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>update_data&lt;<span class="lifetime">'reg</span>: <span class="lifetime">'rc</span>, <span class="lifetime">'rc</span>&gt;(<span class="kw">_</span>: <span class="kw-2">&amp;</span>Decorator, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Handlebars, ctx: <span class="kw-2">&amp;</span>Context, rc: <span class="kw-2">&amp;mut </span>RenderContext)
+        -&gt; <span class="prelude-ty">Result</span>&lt;(), RenderError&gt; {
+    <span class="comment">// modify json object
+    </span><span class="kw">let </span><span class="kw-2">mut </span>new_ctx = ctx.clone();
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>data = new_ctx.data_mut();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref mut </span>m) = data.as_object_mut() {
+            m.insert(<span class="string">"hello"</span>.to_string(), to_json(<span class="string">"world"</span>));
+        }
+    }
+    rc.set_context(new_ctx);
+    <span class="prelude-val">Ok</span>(())
+}
+</code></pre></div>
+<h3 id="define-local-helper"><a class="doc-anchor" href="#define-local-helper">§</a>Define local helper</h3>
+<p>You can override behavior of a helper from position of decorator to the end of template.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>handlebars::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>override_helper(<span class="kw">_</span>: <span class="kw-2">&amp;</span>Decorator, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Handlebars, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Context, rc: <span class="kw-2">&amp;mut </span>RenderContext)
+        -&gt; <span class="prelude-ty">Result</span>&lt;(), RenderError&gt; {
+    <span class="kw">let </span>new_helper = |h: <span class="kw-2">&amp;</span>Helper, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Handlebars, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Context, rc: <span class="kw-2">&amp;mut </span>RenderContext, out: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Output|
+            -&gt; <span class="prelude-ty">Result</span>&lt;(), RenderError&gt; {
+        <span class="comment">// your helper logic
+        </span><span class="prelude-val">Ok</span>(())
+    };
+    rc.register_local_helper(<span class="string">"distance"</span>, Box::new(new_helper));
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><section id="tymethod.call" class="method"><a class="src rightside" href="../src/handlebars/decorators/mod.rs.html#60-66">source</a><h4 class="code-header">fn <a href="#tymethod.call" class="fn">call</a>&lt;'reg: 'rc, 'rc&gt;(
+    &amp;'reg self,
+    d: &amp;<a class="struct" href="struct.Decorator.html" title="struct handlebars::Decorator">Decorator</a>&lt;'reg, 'rc&gt;,
+    r: &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;,
+    ctx: &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>,
+    rc: &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.RenderError.html" title="struct handlebars::RenderError">RenderError</a>&gt;</h4></section></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-DecoratorDef-for-F" class="impl"><a class="src rightside" href="../src/handlebars/decorators/mod.rs.html#70-88">source</a><a href="#impl-DecoratorDef-for-F" class="anchor">§</a><h3 class="code-header">impl&lt;F: for&lt;'reg, 'rc&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;<a class="struct" href="struct.Decorator.html" title="struct handlebars::Decorator">Decorator</a>&lt;'reg, 'rc&gt;, &amp;'reg <a class="struct" href="struct.Handlebars.html" title="struct handlebars::Handlebars">Registry</a>&lt;'reg&gt;, &amp;'rc <a class="struct" href="struct.Context.html" title="struct handlebars::Context">Context</a>, &amp;mut <a class="struct" href="struct.RenderContext.html" title="struct handlebars::RenderContext">RenderContext</a>&lt;'reg, 'rc&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.RenderError.html" title="struct handlebars::RenderError">RenderError</a>&gt;&gt; <a class="trait" href="trait.DecoratorDef.html" title="trait handlebars::DecoratorDef">DecoratorDef</a> for F</h3></section><div class="docblock"><p>Implement DecoratorDef for bare function so we can use function as decorator</p>
+</div></div><script src="../trait.impl/handlebars/decorators/trait.DecoratorDef.js" async></script></section></div></main></body></html>

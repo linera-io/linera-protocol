@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EOF_MAGIC","EOF_MAGIC_HASH"],"enum":["EofDecodeError"],"static":["EOF_MAGIC_BYTES"],"struct":["Eof","EofBody","EofHeader","TypesSection"]};

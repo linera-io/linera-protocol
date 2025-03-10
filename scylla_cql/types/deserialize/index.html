@@ -1,0 +1,179 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Framework for deserialization of data returned by database queries."><title>scylla_cql::types::deserialize - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="scylla_cql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../scylla_cql/index.html">scylla_cql</a><span class="version">0.4.1</span></h2></div><h2 class="location"><a href="#">Module deserialize</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In scylla_cql::types</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">scylla_cql</a>::<wbr><a href="../index.html">types</a>::<wbr><a class="mod" href="#">deserialize</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/scylla_cql/types/deserialize/mod.rs.html#1-348">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Framework for deserialization of data returned by database queries.</p>
+<p>Deserialization is based on two traits:</p>
+<ul>
+<li>A type that implements <code>DeserializeValue&lt;'frame, 'metadata&gt;</code> can be deserialized
+from a single <em>CQL value</em> - i.e. an element of a row in the query result,</li>
+<li>A type that implements <code>DeserializeRow&lt;'frame, 'metadata&gt;</code> can be deserialized
+from a single <em>row</em> of a query result.</li>
+</ul>
+<p>Those traits are quite similar to each other, both in the idea behind them
+and the interface that they expose.</p>
+<p>It’s important to understand what is a <em>deserialized type</em>. It’s not just
+an implementor of Deserialize{Value, Row}; there are some implementors of
+<code>Deserialize{Value, Row}</code> who are not yet final types, but <strong>partially</strong>
+deserialized types that support further deserialization - <em>type
+deserializers</em>, such as <code>ListlikeIterator</code>, <code>UdtIterator</code> or <code>ColumnIterator</code>.</p>
+<h2 id="lifetime-parameters"><a class="doc-anchor" href="#lifetime-parameters">§</a>Lifetime parameters</h2>
+<ul>
+<li><code>'frame</code> is the lifetime of the frame. Any deserialized type that is going to borrow
+from the frame must have its lifetime bound by <code>'frame</code>.</li>
+<li><code>'metadata</code> is the lifetime of the result metadata. As result metadata is only needed
+for the very deserialization process and the <strong>final</strong> deserialized types (i.e. those
+that are not going to deserialize anything else, opposite of e.g. <code>MapIterator</code>) can
+later live independently of the metadata, this is different from <code>'frame</code>.</li>
+</ul>
+<p><em>Type deserializers</em>, as they still need to deserialize some type, are naturally bound
+by ’metadata lifetime. However, final types are completely deserialized, so they should
+not be bound by ’metadata - only by ’frame.</p>
+<p>Rationale:
+<code>DeserializeValue</code> requires two types of data in order to perform
+deserialization:</p>
+<ol>
+<li>a reference to the CQL frame (a FrameSlice),</li>
+<li>the type of the column being deserialized, being part of the
+ResultMetadata.</li>
+</ol>
+<p>Similarly, <code>DeserializeRow</code> requires two types of data in order to
+perform deserialization:</p>
+<ol>
+<li>a reference to the CQL frame (a FrameSlice),</li>
+<li>a slice of specifications of all columns in the row, being part of
+the ResultMetadata.</li>
+</ol>
+<p>When deserializing owned types, both the frame and the metadata can have
+any lifetime and it’s not important. When deserializing borrowed types,
+however, they borrow from the frame, so their lifetime must necessarily
+be bound by the lifetime of the frame. Metadata is only needed for the
+deserialization, so its lifetime does not abstractly bound the
+deserialized value. Not to unnecessarily shorten the deserialized
+values’ lifetime to the metadata’s lifetime (due to unification of
+metadata’s and frame’s lifetime in value deserializers), a separate
+lifetime parameter is introduced for result metadata: <code>'metadata</code>.</p>
+<h2 id="type_check-and-deserialize"><a class="doc-anchor" href="#type_check-and-deserialize">§</a><code>type_check</code> and <code>deserialize</code></h2>
+<p>The deserialization process is divided into two parts: type checking and
+actual deserialization, represented by <code>DeserializeValue</code>/<code>DeserializeRow</code>’s
+methods called <code>type_check</code> and <code>deserialize</code>.</p>
+<p>The <code>deserialize</code> method can assume that <code>type_check</code> was called before, so
+it doesn’t have to verify the type again. This can be a performance gain
+when deserializing query results with multiple rows: as each row in a result
+has the same type, it is only necessary to call <code>type_check</code> once for the
+whole result and then <code>deserialize</code> for each row.</p>
+<p>Note that <code>deserialize</code> is not an <code>unsafe</code> method - although you can be
+sure that the driver will call <code>type_check</code> before <code>deserialize</code>, you
+shouldn’t do unsafe things based on this assumption.</p>
+<h2 id="data-ownership"><a class="doc-anchor" href="#data-ownership">§</a>Data ownership</h2>
+<p>Some CQL types can be easily consumed while still partially serialized.
+For example, types like <code>blob</code> or <code>text</code> can be just represented with
+<code>&amp;[u8]</code> and <code>&amp;str</code> that just point to a part of the serialized response.
+This is more efficient than using <code>Vec&lt;u8&gt;</code> or <code>String</code> because it avoids
+an allocation and a copy, however it is less convenient because those types
+are bound with a lifetime.</p>
+<p>The framework supports types that refer to the serialized response’s memory
+in three different ways:</p>
+<h3 id="owned-types"><a class="doc-anchor" href="#owned-types">§</a>Owned types</h3>
+<p>Some types don’t borrow anything and fully own their data, e.g. <code>i32</code> or
+<code>String</code>. They aren’t constrained by any lifetime and should implement
+the respective trait for <em>all</em> lifetimes, i.e.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thiserror::Error;
+<span class="kw">struct </span>MyVec(Vec&lt;u8&gt;);
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">enum </span>MyDeserError {
+    <span class="attr">#[error(<span class="string">"Expected bytes"</span>)]
+    </span>ExpectedBytes,
+    <span class="attr">#[error(<span class="string">"Expected non-null"</span>)]
+    </span>ExpectedNonNull,
+}
+<span class="kw">impl</span>&lt;<span class="lifetime">'frame</span>, <span class="lifetime">'metadata</span>&gt; DeserializeValue&lt;<span class="lifetime">'frame</span>, <span class="lifetime">'metadata</span>&gt; <span class="kw">for </span>MyVec {
+    <span class="kw">fn </span>type_check(typ: <span class="kw-2">&amp;</span>ColumnType) -&gt; <span class="prelude-ty">Result</span>&lt;(), TypeCheckError&gt; {
+         <span class="kw">if let </span>ColumnType::Blob = typ {
+             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+         }
+         <span class="prelude-val">Err</span>(TypeCheckError::new(MyDeserError::ExpectedBytes))
+     }
+
+     <span class="kw">fn </span>deserialize(
+         _typ: <span class="kw-2">&amp;</span><span class="lifetime">'metadata </span>ColumnType&lt;<span class="lifetime">'metadata</span>&gt;,
+         v: <span class="prelude-ty">Option</span>&lt;FrameSlice&lt;<span class="lifetime">'frame</span>&gt;&gt;,
+     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DeserializationError&gt; {
+         v.ok_or_else(|| DeserializationError::new(MyDeserError::ExpectedNonNull))
+            .map(|v| <span class="self">Self</span>(v.as_slice().to_vec()))
+     }
+}</code></pre></div>
+<h3 id="borrowing-types"><a class="doc-anchor" href="#borrowing-types">§</a>Borrowing types</h3>
+<p>Some types do not fully contain their data but rather will point to some
+bytes in the serialized response, e.g. <code>&amp;str</code> or <code>&amp;[u8]</code>. Those types will
+usually contain a lifetime in their definition. In order to properly
+implement <code>DeserializeValue</code> or <code>DeserializeRow</code> for such a type, the <code>impl</code>
+should still have a generic lifetime parameter, but the lifetimes from the
+type definition should be constrained with the generic lifetime parameter.
+For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thiserror::Error;
+<span class="kw">struct </span>MySlice&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8]);
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">enum </span>MyDeserError {
+    <span class="attr">#[error(<span class="string">"Expected bytes"</span>)]
+    </span>ExpectedBytes,
+    <span class="attr">#[error(<span class="string">"Expected non-null"</span>)]
+    </span>ExpectedNonNull,
+}
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, <span class="lifetime">'frame</span>, <span class="lifetime">'metadata</span>&gt; DeserializeValue&lt;<span class="lifetime">'frame</span>, <span class="lifetime">'metadata</span>&gt; <span class="kw">for </span>MySlice&lt;<span class="lifetime">'a</span>&gt;
+<span class="kw">where
+    </span><span class="lifetime">'frame</span>: <span class="lifetime">'a</span>,
+{
+    <span class="kw">fn </span>type_check(typ: <span class="kw-2">&amp;</span>ColumnType) -&gt; <span class="prelude-ty">Result</span>&lt;(), TypeCheckError&gt; {
+         <span class="kw">if let </span>ColumnType::Blob = typ {
+             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+         }
+         <span class="prelude-val">Err</span>(TypeCheckError::new(MyDeserError::ExpectedBytes))
+     }
+
+     <span class="kw">fn </span>deserialize(
+         _typ: <span class="kw-2">&amp;</span><span class="lifetime">'metadata </span>ColumnType&lt;<span class="lifetime">'metadata</span>&gt;,
+         v: <span class="prelude-ty">Option</span>&lt;FrameSlice&lt;<span class="lifetime">'frame</span>&gt;&gt;,
+     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DeserializationError&gt; {
+         v.ok_or_else(|| DeserializationError::new(MyDeserError::ExpectedNonNull))
+            .map(|v| <span class="self">Self</span>(v.as_slice()))
+     }
+}</code></pre></div>
+<h3 id="reference-counted-types"><a class="doc-anchor" href="#reference-counted-types">§</a>Reference-counted types</h3>
+<p>Internally, the driver uses the <code>bytes::Bytes</code> type to keep the contents
+of the serialized response. It supports creating derived <code>Bytes</code> objects
+which point to a subslice but keep the whole, original <code>Bytes</code> object alive.</p>
+<p>During deserialization, a type can obtain a <code>Bytes</code> subslice that points
+to the serialized value. This approach combines advantages of the previous
+two approaches - creating a derived <code>Bytes</code> object can be cheaper than
+allocation and a copy (it supports <code>Arc</code>-like semantics) and the <code>Bytes</code>
+type is not constrained by a lifetime. However, you should be aware that
+the subslice will keep the whole <code>Bytes</code> object that holds the frame alive.
+It is not recommended to use this approach for long-living objects because
+it can introduce space leaks.</p>
+<p>Example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thiserror::Error;
+<span class="kw">struct </span>MyBytes(Bytes);
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">enum </span>MyDeserError {
+    <span class="attr">#[error(<span class="string">"Expected bytes"</span>)]
+    </span>ExpectedBytes,
+    <span class="attr">#[error(<span class="string">"Expected non-null"</span>)]
+    </span>ExpectedNonNull,
+}
+<span class="kw">impl</span>&lt;<span class="lifetime">'frame</span>, <span class="lifetime">'metadata</span>&gt; DeserializeValue&lt;<span class="lifetime">'frame</span>, <span class="lifetime">'metadata</span>&gt; <span class="kw">for </span>MyBytes {
+    <span class="kw">fn </span>type_check(typ: <span class="kw-2">&amp;</span>ColumnType) -&gt; <span class="prelude-ty">Result</span>&lt;(), TypeCheckError&gt; {
+         <span class="kw">if let </span>ColumnType::Blob = typ {
+             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+         }
+         <span class="prelude-val">Err</span>(TypeCheckError::new(MyDeserError::ExpectedBytes))
+     }
+
+     <span class="kw">fn </span>deserialize(
+         _typ: <span class="kw-2">&amp;</span><span class="lifetime">'metadata </span>ColumnType&lt;<span class="lifetime">'metadata</span>&gt;,
+         v: <span class="prelude-ty">Option</span>&lt;FrameSlice&lt;<span class="lifetime">'frame</span>&gt;&gt;,
+     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DeserializationError&gt; {
+         v.ok_or_else(|| DeserializationError::new(MyDeserError::ExpectedNonNull))
+            .map(|v| <span class="self">Self</span>(v.to_bytes()))
+     }
+}</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.FrameSlice"><code>pub use frame_slice::<a class="struct" href="frame_slice/struct.FrameSlice.html" title="struct scylla_cql::types::deserialize::frame_slice::FrameSlice">FrameSlice</a>;</code></div></li><li><div class="item-name" id="reexport.DeserializeRow"><code>pub use row::<a class="trait" href="row/trait.DeserializeRow.html" title="trait scylla_cql::types::deserialize::row::DeserializeRow">DeserializeRow</a>;</code></div></li><li><div class="item-name" id="reexport.DeserializeValue"><code>pub use value::<a class="trait" href="value/trait.DeserializeValue.html" title="trait scylla_cql::types::deserialize::value::DeserializeValue">DeserializeValue</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="frame_slice/index.html" title="mod scylla_cql::types::deserialize::frame_slice">frame_slice</a></div></li><li><div class="item-name"><a class="mod" href="result/index.html" title="mod scylla_cql::types::deserialize::result">result</a></div></li><li><div class="item-name"><a class="mod" href="row/index.html" title="mod scylla_cql::types::deserialize::row">row</a></div><div class="desc docblock-short">Provides types for dealing with row deserialization.</div></li><li><div class="item-name"><a class="mod" href="value/index.html" title="mod scylla_cql::types::deserialize::value">value</a></div><div class="desc docblock-short">Provides types for dealing with CQL value deserialization.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DeserializationError.html" title="struct scylla_cql::types::deserialize::DeserializationError">DeserializationError</a></div><div class="desc docblock-short">An error indicating that a failure happened during deserialization.</div></li><li><div class="item-name"><a class="struct" href="struct.TypeCheckError.html" title="struct scylla_cql::types::deserialize::TypeCheckError">TypeCheckError</a></div><div class="desc docblock-short">An error indicating that a failure happened during type check.</div></li></ul></section></div></main></body></html>

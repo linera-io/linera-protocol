@@ -1,0 +1,180 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="SNAFU"><title>snafu - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="snafu" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../snafu/index.html">snafu</a><span class="version">0.8.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#attributes">Attribute Macros</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">snafu</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/snafu/lib.rs.html#1-1612">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="snafu"><a class="doc-anchor" href="#snafu">§</a>SNAFU</h2>
+<p>SNAFU is a library to easily generate errors and add information
+to underlying errors, especially when the same underlying error
+type can occur in different contexts.</p>
+<p>For detailed information, please see the <a href="derive.Snafu.html" title="derive snafu::Snafu"><code>Snafu</code></a> macro and the
+<a href="guide/index.html" title="mod snafu::guide">user’s guide</a>.</p>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li><a href="struct.Whatever.html" title="struct snafu::Whatever">Turnkey errors based on strings</a></li>
+<li><a href="derive.Snafu.html" title="derive snafu::Snafu">Custom error types</a>
+<ul>
+<li>Including a conversion path from turnkey errors</li>
+</ul>
+</li>
+<li><a href="struct.Backtrace.html" title="struct snafu::Backtrace">Backtraces</a></li>
+<li>Extension traits for
+<ul>
+<li><a href="trait.ResultExt.html" title="trait snafu::ResultExt"><code>Results</code></a></li>
+<li><a href="trait.OptionExt.html" title="trait snafu::OptionExt"><code>Options</code></a></li>
+</ul>
+</li>
+<li>Suitable for libraries and applications</li>
+<li><code>no_std</code> compatibility</li>
+<li>Generic types and lifetimes</li>
+</ul>
+<h3 id="quick-start"><a class="doc-anchor" href="#quick-start">§</a>Quick start</h3>
+<p>If you want to report errors without hassle, start with the
+<a href="struct.Whatever.html" title="struct snafu::Whatever"><code>Whatever</code></a> type and the <a href="prelude/macro.whatever.html" title="macro snafu::prelude::whatever"><code>whatever!</code></a> macro:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, Whatever};
+
+<span class="kw">fn </span>is_valid_id(id: u16) -&gt; <span class="prelude-ty">Result</span>&lt;(), Whatever&gt; {
+    <span class="kw">if </span>id &lt; <span class="number">10 </span>{
+        <span class="macro">whatever!</span>(<span class="string">"ID may not be less than 10, but it was {id}"</span>);
+    }
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>You can also use it to wrap any other error:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, Whatever};
+
+<span class="kw">fn </span>read_config_file(path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String, Whatever&gt; {
+    std::fs::read_to_string(path)
+        .with_whatever_context(|<span class="kw">_</span>| <span class="macro">format!</span>(<span class="string">"Could not read file {path}"</span>))
+}</code></pre></div>
+<p><a href="struct.Whatever.html" title="struct snafu::Whatever"><code>Whatever</code></a> allows for a short message and tracks a
+<a href="struct.Backtrace.html" title="struct snafu::Backtrace"><code>Backtrace</code></a> for every error:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, ErrorCompat, Whatever};
+
+<span class="kw">if let </span><span class="prelude-val">Err</span>(e) = returns_an_error() {
+    <span class="macro">eprintln!</span>(<span class="string">"An error occurred: {e}"</span>);
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(bt) = ErrorCompat::backtrace(<span class="kw-2">&amp;</span>e) {
+        <span class="macro">eprintln!</span>(<span class="string">"{bt}"</span>);
+    }
+}</code></pre></div>
+<h3 id="custom-error-types"><a class="doc-anchor" href="#custom-error-types">§</a>Custom error types</h3>
+<p>Many projects will hit limitations of the <code>Whatever</code> type. When
+that occurs, it’s time to create your own error type by deriving
+<a href="derive.Snafu.html" title="derive snafu::Snafu"><code>Snafu</code></a>!</p>
+<h4 id="struct-style"><a class="doc-anchor" href="#struct-style">§</a>Struct style</h4>
+<p>SNAFU will read your error struct definition and create a <em>context
+selector</em> type (called <code>InvalidIdSnafu</code> in this example). These
+context selectors are used with the <a href="prelude/macro.ensure.html" title="macro snafu::prelude::ensure"><code>ensure!</code></a> macro to provide
+ergonomic error creation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(display(<span class="string">"ID may not be less than 10, but it was {id}"</span>))]
+</span><span class="kw">struct </span>InvalidIdError {
+    id: u16,
+}
+
+<span class="kw">fn </span>is_valid_id(id: u16) -&gt; <span class="prelude-ty">Result</span>&lt;(), InvalidIdError&gt; {
+    <span class="macro">ensure!</span>(id &gt;= <span class="number">10</span>, InvalidIdSnafu { id });
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>If you add a <code>source</code> field to your error, you can then wrap an
+underlying error using the <a href="trait.ResultExt.html#tymethod.context" title="method snafu::ResultExt::context"><code>context</code></a>
+extension method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(display(<span class="string">"Could not read file {path}"</span>))]
+</span><span class="kw">struct </span>ConfigFileError {
+    source: std::io::Error,
+    path: String,
+}
+
+<span class="kw">fn </span>read_config_file(path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String, ConfigFileError&gt; {
+    std::fs::read_to_string(path).context(ConfigFileSnafu { path })
+}</code></pre></div>
+<h4 id="enum-style"><a class="doc-anchor" href="#enum-style">§</a>Enum style</h4>
+<p>While error structs are good for constrained cases, they don’t
+allow for reporting multiple possible kinds of errors at one
+time. Error enums solve that problem.</p>
+<p>SNAFU will read your error enum definition and create a <em>context
+selector</em> type for each variant (called <code>InvalidIdSnafu</code> in this
+example). These context selectors are used with the <a href="prelude/macro.ensure.html" title="macro snafu::prelude::ensure"><code>ensure!</code></a>
+macro to provide ergonomic error creation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    <span class="attr">#[snafu(display(<span class="string">"ID may not be less than 10, but it was {id}"</span>))]
+    </span>InvalidId { id: u16 },
+}
+
+<span class="kw">fn </span>is_valid_id(id: u16) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="macro">ensure!</span>(id &gt;= <span class="number">10</span>, InvalidIdSnafu { id });
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>If you add a <code>source</code> field to a variant, you can then wrap an
+underlying error using the <a href="trait.ResultExt.html#tymethod.context" title="method snafu::ResultExt::context"><code>context</code></a>
+extension method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    <span class="attr">#[snafu(display(<span class="string">"Could not read file {path}"</span>))]
+    </span>ConfigFile {
+        source: std::io::Error,
+        path: String,
+    },
+}
+
+<span class="kw">fn </span>read_config_file(path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&gt; {
+    std::fs::read_to_string(path).context(ConfigFileSnafu { path })
+}</code></pre></div>
+<p>You can combine the power of the <a href="prelude/macro.whatever.html" title="macro snafu::prelude::whatever"><code>whatever!</code></a> macro with an
+enum error type. This is great if you started out with
+<a href="struct.Whatever.html" title="struct snafu::Whatever"><code>Whatever</code></a> and are moving to a custom error type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    <span class="attr">#[snafu(display(<span class="string">"ID may not be less than 10, but it was {id}"</span>))]
+    </span>InvalidId { id: u16 },
+
+    <span class="attr">#[snafu(whatever, display(<span class="string">"{message}"</span>))]
+    </span>Whatever {
+        message: String,
+        <span class="attr">#[snafu(source(from(Box&lt;<span class="kw">dyn </span>std::error::Error&gt;, <span class="prelude-val">Some</span>)))]
+        </span>source: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;,
+    },
+}
+
+<span class="kw">fn </span>is_valid_id(id: u16) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="macro">ensure!</span>(id &gt;= <span class="number">10</span>, InvalidIdSnafu { id });
+    <span class="macro">whatever!</span>(<span class="string">"Just kidding... this function always fails!"</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>You may wish to make the type <code>Send</code> and/or <code>Sync</code>, allowing
+your error type to be used in multithreaded programs, by changing
+<code>dyn std::error::Error</code> to <code>dyn std::error::Error + Send + Sync</code>.</p>
+<h3 id="next-steps"><a class="doc-anchor" href="#next-steps">§</a>Next steps</h3>
+<p>Read the documentation for the <a href="derive.Snafu.html" title="derive snafu::Snafu"><code>Snafu</code></a> macro to see all of the
+capabilities, then read the <a href="guide/index.html" title="mod snafu::guide">user’s guide</a> for deeper
+understanding.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.__InternalExtractErrorType"><code>pub use report::__InternalExtractErrorType;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="guide/index.html" title="mod snafu::guide">guide</a></div><div class="desc docblock-short">Not currently built; please add the <code>guide</code> feature flag.</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod snafu::prelude">prelude</a></div><div class="desc docblock-short">Traits and macros used by most projects. Add <code>use snafu::prelude::*</code> to your code to quickly get started with
+SNAFU.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.ensure.html" title="macro snafu::ensure">ensure</a></div><div class="desc docblock-short">Ensure a condition is true. If it is not, return from the function
+with an error.</div></li><li><div class="item-name"><a class="macro" href="macro.ensure_whatever.html" title="macro snafu::ensure_whatever">ensure_whatever</a></div><div class="desc docblock-short">Ensure a condition is true. If it is not, return a stringly-typed
+error message.</div></li><li><div class="item-name"><a class="macro" href="macro.location.html" title="macro snafu::location">location</a></div><div class="desc docblock-short">Constructs a <a href="struct.Location.html" title="struct snafu::Location"><code>Location</code></a> using the current file, line, and column.</div></li><li><div class="item-name"><a class="macro" href="macro.whatever.html" title="macro snafu::whatever">whatever</a></div><div class="desc docblock-short">Instantiate and return a stringly-typed error message.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Backtrace.html" title="struct snafu::Backtrace">Backtrace</a></div><div class="desc docblock-short">A captured OS thread stack backtrace.</div></li><li><div class="item-name"><a class="struct" href="struct.ChainCompat.html" title="struct snafu::ChainCompat">ChainCompat</a></div><div class="desc docblock-short">An iterator over an Error and its sources.</div></li><li><div class="item-name"><a class="struct" href="struct.CleanedErrorText.html" title="struct snafu::CleanedErrorText">CleanedErrorText</a></div><div class="desc docblock-short">An iterator over an Error and its sources that removes duplicated
+text from the error display strings.</div></li><li><div class="item-name"><a class="struct" href="struct.Location.html" title="struct snafu::Location">Location</a></div><div class="desc docblock-short">The source code location where the error was reported.</div></li><li><div class="item-name"><a class="struct" href="struct.NoneError.html" title="struct snafu::NoneError">NoneError</a></div><div class="desc docblock-short">A temporary error type used when converting an <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> into a
+<a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a></div></li><li><div class="item-name"><a class="struct" href="struct.Report.html" title="struct snafu::Report">Report</a></div><div class="desc docblock-short">Opinionated solution to format an error in a user-friendly
+way. Useful as the return type from <code>main</code> and test functions.</div></li><li><div class="item-name"><a class="struct" href="struct.Whatever.html" title="struct snafu::Whatever">Whatever</a></div><div class="desc docblock-short">A basic error type that you can use as a first step to better
+error handling.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.AsBacktrace.html" title="trait snafu::AsBacktrace">AsBacktrace</a></div><div class="desc docblock-short">View a backtrace-like value as an optional backtrace.</div></li><li><div class="item-name"><a class="trait" href="trait.AsErrorSource.html" title="trait snafu::AsErrorSource">AsErrorSource</a></div><div class="desc docblock-short">Converts the receiver into an <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error"><code>Error</code></a> trait object, suitable
+for use in <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html#method.source" title="method core::error::Error::source"><code>Error::source</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.ErrorCompat.html" title="trait snafu::ErrorCompat">ErrorCompat</a></div><div class="desc docblock-short">Backports changes to the <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error"><code>Error</code></a> trait to versions of Rust
+lacking them.</div></li><li><div class="item-name"><a class="trait" href="trait.FromString.html" title="trait snafu::FromString">FromString</a></div><div class="desc docblock-short">Takes a string message and builds the corresponding error.</div></li><li><div class="item-name"><a class="trait" href="trait.GenerateImplicitData.html" title="trait snafu::GenerateImplicitData">GenerateImplicitData</a></div><div class="desc docblock-short">Construct data to be included as part of an error. The data must
+require no arguments to be created.</div></li><li><div class="item-name"><a class="trait" href="trait.IntoError.html" title="trait snafu::IntoError">IntoError</a></div><div class="desc docblock-short">Combines an underlying error with additional information
+about the error.</div></li><li><div class="item-name"><a class="trait" href="trait.OptionExt.html" title="trait snafu::OptionExt">OptionExt</a></div><div class="desc docblock-short">Additions to <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.ResultExt.html" title="trait snafu::ResultExt">ResultExt</a></div><div class="desc docblock-short">Additions to <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a>.</div></li></ul><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.report.html" title="attr snafu::report">report</a></div><div class="desc docblock-short">Adapts a function to provide user-friendly error output for <code>main</code>
+functions and tests.</div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Snafu.html" title="derive snafu::Snafu">Snafu</a></div><div class="desc docblock-short">The <code>Snafu</code> macro is the entrypoint to defining your own error
+types. It is designed to require little configuration for the
+recommended and typical usecases while still offering flexibility for
+unique situations.</div></li></ul></section></div></main></body></html>

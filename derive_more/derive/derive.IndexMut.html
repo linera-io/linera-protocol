@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(IndexMut)]` generates"><title>IndexMut in derive_more::derive - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../derive_more/index.html">derive_more</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In derive_more::derive</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="../index.html">derive_more</a>::<wbr><a href="index.html">derive</a>::<wbr><a class="derive" href="#">IndexMut</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/derive_more_impl/lib.rs.html#103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(IndexMut)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[index_mut]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-deriveindexmut-generates"><a class="doc-anchor" href="#what-deriveindexmut-generates">§</a>What <code>#[derive(IndexMut)]</code> generates</h2>
+<p>Deriving <code>IndexMut</code> only works for a single field of a struct.
+Furthermore it requires that the type also implements <code>Index</code>, so usually
+<code>Index</code> should also be derived.
+The result is that you will mutably index it’s member directly.</p>
+<p>With <code>#[index_mut]</code> or <code>#[index_mut(ignore)]</code> it’s possible to indicate the
+field that you want to derive <code>IndexMut</code> for.</p>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Index, IndexMut)]
+</span><span class="kw">struct </span>MyVec(Vec&lt;i32&gt;);
+
+<span class="attr">#[derive(Index, IndexMut)]
+</span><span class="kw">struct </span>Numbers {
+    <span class="attr">#[index]
+    #[index_mut]
+    </span>numbers: Vec&lt;i32&gt;,
+    useless: bool,
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>myvec = MyVec(<span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">8</span>]);
+myvec[<span class="number">0</span>] = <span class="number">50</span>;
+<span class="macro">assert_eq!</span>(<span class="number">50</span>, myvec[<span class="number">0</span>]);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = Numbers{numbers: <span class="macro">vec!</span>[<span class="number">100</span>, <span class="number">200</span>], useless: <span class="bool-val">false</span>};
+numbers[<span class="number">1</span>] = <span class="number">400</span>;
+<span class="macro">assert_eq!</span>(<span class="number">400</span>, numbers[<span class="number">1</span>]);</code></pre></div>
+<h3 id="regular-structs"><a class="doc-anchor" href="#regular-structs">§</a>Regular structs</h3>
+<p>When deriving <code>IndexMut</code> for a struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Index, IndexMut)]
+</span><span class="kw">struct </span>Numbers {
+    <span class="attr">#[index]
+    #[index_mut]
+    </span>numbers: Vec&lt;i32&gt;,
+    useless: bool,
+}</code></pre></div>
+<p>Code like this will be generated to implement <code>IndexMut</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;__IdxT&gt; derive_more::IndexMut&lt;__IdxT&gt; <span class="kw">for </span>Numbers
+<span class="kw">where
+    </span>Vec&lt;i32&gt;: derive_more::IndexMut&lt;__IdxT&gt;,
+{
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>index_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, idx: __IdxT) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Output {
+        &lt;Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IndexMut&lt;__IdxT&gt;&gt;::index_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>.numbers, idx)
+    }
+}</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>Deriving <code>IndexMut</code> is not supported for enums.</p>
+</div></details></section></div></main></body></html>

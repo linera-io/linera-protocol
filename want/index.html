@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A Futures channel-like utility to signal when a value is wanted."><title>want - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="want" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../want/index.html">want</a><span class="version">0.3.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">want</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/want/lib.rs.html#1-579">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A Futures channel-like utility to signal when a value is wanted.</p>
+<p>Futures are supposed to be lazy, and only starting work if <code>Future::poll</code>
+is called. The same is true of <code>Stream</code>s, but when using a channel as
+a <code>Stream</code>, it can be hard to know if the receiver is ready for the next
+value.</p>
+<p>Put another way, given a <code>(tx, rx)</code> from <code>futures::sync::mpsc::channel()</code>,
+how can the sender (<code>tx</code>) know when the receiver (<code>rx</code>) actually wants more
+work to be produced? Just because there is room in the channel buffer
+doesn’t mean the work would be used by the receiver.</p>
+<p>This is where something like <code>want</code> comes in. Added to a channel, you can
+make sure that the <code>tx</code> only creates the message and sends it when the <code>rx</code>
+has <code>poll()</code> for it, and the buffer was empty.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2><div class="example-wrap"><pre class="language-nightly"><code># //#![feature(async_await)]
+extern crate want;
+
+# fn spawn&lt;T&gt;(_t: T) {}
+# fn we_still_want_message() -&gt; bool { true }
+# fn mpsc_channel() -&gt; (Tx, Rx) { (Tx, Rx) }
+# struct Tx;
+# impl Tx { fn send&lt;T&gt;(&amp;mut self, _: T) {} }
+# struct Rx;
+# impl Rx { async fn recv(&amp;mut self) -&gt; Option&lt;Expensive&gt; { Some(Expensive) } }
+
+// Some message that is expensive to produce.
+struct Expensive;
+
+// Some futures-aware MPSC channel...
+let (mut tx, mut rx) = mpsc_channel();
+
+// And our `want` channel!
+let (mut gv, mut tk) = want::new();
+
+
+// Our receiving task...
+spawn(async move {
+    // Maybe something comes up that prevents us from ever
+    // using the expensive message.
+    //
+    // Without `want`, the &quot;send&quot; task may have started to
+    // produce the expensive message even though we wouldn&#39;t
+    // be able to use it.
+    if !we_still_want_message() {
+        return;
+    }
+
+    // But we can use it! So tell the `want` channel.
+    tk.want();
+
+    match rx.recv().await {
+        Some(_msg) =&gt; println!(&quot;got a message&quot;),
+        None =&gt; println!(&quot;DONE&quot;),
+    }
+});
+
+// Our sending task
+spawn(async move {
+    // It&#39;s expensive to create a new message, so we wait until the
+    // receiving end truly *wants* the message.
+    if let Err(_closed) = gv.want().await {
+        // Looks like they will never want it...
+        return;
+    }
+
+    // They want it, let&#39;s go!
+    tx.send(Expensive);
+});
+
+# fn main() {}
+</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Closed.html" title="struct want::Closed">Closed</a></div><div class="desc docblock-short">The <code>Taker</code> has canceled its interest in a value.</div></li><li><div class="item-name"><a class="struct" href="struct.Giver.html" title="struct want::Giver">Giver</a></div><div class="desc docblock-short">An entity that gives a value when wanted.</div></li><li><div class="item-name"><a class="struct" href="struct.SharedGiver.html" title="struct want::SharedGiver">SharedGiver</a></div><div class="desc docblock-short">A cloneable <code>Giver</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Taker.html" title="struct want::Taker">Taker</a></div><div class="desc docblock-short">An entity that wants a value.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.new.html" title="fn want::new">new</a></div><div class="desc docblock-short">Create a new <code>want</code> channel.</div></li></ul></section></div></main></body></html>

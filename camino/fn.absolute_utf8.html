@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Makes the path absolute without accessing the filesystem, converting it to a `Utf8PathBuf`."><title>absolute_utf8 in camino - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="camino" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../camino/index.html">camino</a><span class="version">1.1.9</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">camino</a>::<wbr><a class="fn" href="#">absolute_utf8</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/camino/lib.rs.html#3141-3150">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn absolute_utf8&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(path: P) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.Utf8PathBuf.html" title="struct camino::Utf8PathBuf">Utf8PathBuf</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Makes the path absolute without accessing the filesystem, converting it to a <a href="struct.Utf8PathBuf.html" title="struct camino::Utf8PathBuf"><code>Utf8PathBuf</code></a>.</p>
+<p>If the path is relative, the current directory is used as the base directory. All intermediate
+components will be resolved according to platform-specific rules, but unlike
+<a href="struct.Utf8Path.html#method.canonicalize" title="method camino::Utf8Path::canonicalize"><code>canonicalize</code></a> or <a href="struct.Utf8Path.html#method.canonicalize_utf8" title="method camino::Utf8Path::canonicalize_utf8"><code>canonicalize_utf8</code></a>,
+this does not resolve symlinks and may succeed even if the path does not exist.</p>
+<p><em>Requires Rust 1.79 or newer.</em></p>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>Errors if:</p>
+<ul>
+<li>The path is empty.</li>
+<li>The <a href="https://doc.rust-lang.org/1.81.0/std/env/fn.current_dir.html" title="fn std::env::current_dir">current directory</a> cannot be determined.</li>
+<li>The path is not valid UTF-8.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="posix-paths"><a class="doc-anchor" href="#posix-paths">§</a>POSIX paths</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() -&gt; std::io::Result&lt;()&gt; {
+    <span class="kw">use </span>camino::Utf8Path;
+
+    <span class="comment">// Relative to absolute
+    </span><span class="kw">let </span>absolute = camino::absolute_utf8(<span class="string">"foo/./bar"</span>)<span class="question-mark">?</span>;
+    <span class="macro">assert!</span>(absolute.ends_with(<span class="string">"foo/bar"</span>));
+
+    <span class="comment">// Absolute to absolute
+    </span><span class="kw">let </span>absolute = camino::absolute_utf8(<span class="string">"/foo//test/.././bar.rs"</span>)<span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(absolute, Utf8Path::new(<span class="string">"/foo/test/../bar.rs"</span>));
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>The path is resolved using <a href="https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_13">POSIX semantics</a> except that it stops short of
+resolving symlinks. This means it will keep <code>..</code> components and trailing slashes.</p>
+<h3 id="windows-paths"><a class="doc-anchor" href="#windows-paths">§</a>Windows paths</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() -&gt; std::io::Result&lt;()&gt; {
+    <span class="kw">use </span>camino::Utf8Path;
+
+    <span class="comment">// Relative to absolute
+    </span><span class="kw">let </span>absolute = camino::absolute_utf8(<span class="string">"foo/./bar"</span>)<span class="question-mark">?</span>;
+    <span class="macro">assert!</span>(absolute.ends_with(<span class="string">r"foo\bar"</span>));
+
+    <span class="comment">// Absolute to absolute
+    </span><span class="kw">let </span>absolute = camino::absolute_utf8(<span class="string">r"C:\foo//test\..\./bar.rs"</span>)<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(absolute, Utf8Path::new(<span class="string">r"C:\foo\bar.rs"</span>));
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>For verbatim paths this will simply return the path as given. For other paths this is currently
+equivalent to calling <a href="https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamew"><code>GetFullPathNameW</code></a>.</p>
+<p>Note that this <a href="https://doc.rust-lang.org/1.81.0/std/io/index.html#platform-specific-behavior" title="mod std::io">may change in the future</a>.</p>
+</div></details></section></div></main></body></html>

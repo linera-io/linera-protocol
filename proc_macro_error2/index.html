@@ -1,0 +1,209 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="proc-macro-error2"><title>proc_macro_error2 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="proc_macro_error2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../proc_macro_error2/index.html">proc_macro_error2</a><span class="version">2.0.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#attributes">Attribute Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">proc_macro_error2</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/proc_macro_error2/lib.rs.html#1-565">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="proc-macro-error2"><a class="doc-anchor" href="#proc-macro-error2">§</a>proc-macro-error2</h2>
+<p>This crate aims to make error reporting in proc-macros simple and easy to use.
+Migrate from <code>panic!</code>-based errors for as little effort as possible!</p>
+<p>(Also, you can explicitly <a href="dummy/index.html">append a dummy token stream</a> to your errors).</p>
+<p>To achieve his, this crate serves as a tiny shim around <code>proc_macro::Diagnostic</code> and
+<code>compile_error!</code>. It detects the best way of emitting available based on compiler’s version.
+When the underlying diagnostic type is finally stabilized, this crate will simply be
+delegating to it requiring no changes in your code!</p>
+<p>So you can just use this crate and have <em>both</em> some of <code>proc_macro::Diagnostic</code> functionality
+available on stable ahead of time <em>and</em> your error-reporting code future-proof.</p>
+<h3 id="cargo-features"><a class="doc-anchor" href="#cargo-features">§</a>Cargo features</h3>
+<p>This crate provides <em>enabled by default</em> <code>syn-error</code> feature that gates
+<code>impl From&lt;syn::Error&gt; for Diagnostic</code> conversion. If you don’t use <code>syn</code> and want
+to cut off some of compilation time, you can disable it via</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+proc-macro-error2 = { version = &quot;2.0.0&quot;, default-features = false }
+</code></pre></div>
+<p>*<strong>Please note that disabling this feature makes sense only if you don’t depend on <code>syn</code>
+directly or indirectly, and you very likely do.</strong></p>
+<h3 id="real-world-examples"><a class="doc-anchor" href="#real-world-examples">§</a>Real world examples</h3>
+<ul>
+<li><a href="https://github.com/TeXitoi/structopt/tree/master/structopt-derive"><code>structopt-derive</code></a>
+(abort-like usage)</li>
+<li><a href="https://github.com/auto-impl-rs/auto_impl/"><code>auto-impl</code></a> (emit-like usage)</li>
+</ul>
+<h3 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h3>
+<ul>
+<li>Warnings are emitted only on nightly, they are ignored on stable.</li>
+<li>“help” suggestions can’t have their own span info on stable,
+(essentially inheriting the parent span).</li>
+<li>If a panic occurs somewhere in your macro no errors will be displayed. This is not a
+technical limitation but rather intentional design. <code>panic</code> is not for error reporting.</li>
+</ul>
+<h4 id="proc_macro_error-attribute"><a class="doc-anchor" href="#proc_macro_error-attribute">§</a><code>#[proc_macro_error]</code> attribute</h4>
+<p><strong>This attribute MUST be present on the top level of your macro</strong> (the function
+annotated with any of <code>#[proc_macro]</code>, <code>#[proc_macro_derive]</code>, <code>#[proc_macro_attribute]</code>).</p>
+<p>This attribute performs the setup and cleanup necessary to make things work.</p>
+<p>In most cases you’ll need the simple <code>#[proc_macro_error]</code> form without any
+additional settings. Feel free to <a href="#macros">skip the “Syntax” section</a>.</p>
+<h5 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h5>
+<p><code>#[proc_macro_error]</code> or <code>#[proc_macro_error(settings...)]</code>, where <code>settings...</code>
+is a comma-separated list of:</p>
+<ul>
+<li>
+<p><code>proc_macro_hack</code>:</p>
+<p>In order to correctly cooperate with <code>#[proc_macro_hack]</code>, <code>#[proc_macro_error]</code>
+attribute must be placed <em>before</em> (above) it, like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[proc_macro_error]
+#[proc_macro_hack]
+#[proc_macro]
+</span><span class="kw">fn </span>my_macro(input: TokenStream) -&gt; TokenStream {
+    <span class="macro">unimplemented!</span>()
+}</code></pre></div>
+<p>If, for some reason, you can’t place it like that you can use
+<code>#[proc_macro_error(proc_macro_hack)]</code> instead.</p>
+<h2 id="note"><a class="doc-anchor" href="#note">§</a>Note</h2>
+<p>If <code>proc-macro-hack</code> was detected (by any means) <code>allow_not_macro</code>
+and <code>assert_unwind_safe</code> will be applied automatically.</p>
+</li>
+<li>
+<p><code>allow_not_macro</code>:</p>
+<p>By default, the attribute checks that it’s applied to a proc-macro.
+If none of <code>#[proc_macro]</code>, <code>#[proc_macro_derive]</code> nor <code>#[proc_macro_attribute]</code> are
+present it will panic. It’s the intention - this crate is supposed to be used only with
+proc-macros.</p>
+<p>This setting is made to bypass the check, useful in certain circumstances.</p>
+<p>Pay attention: the function this attribute is applied to must return
+<code>proc_macro::TokenStream</code>.</p>
+<p>This setting is implied if <code>proc-macro-hack</code> was detected.</p>
+</li>
+<li>
+<p><code>assert_unwind_safe</code>:</p>
+<p>By default, your code must be <a href="https://doc.rust-lang.org/std/panic/trait.UnwindSafe.html#what-is-unwind-safety">unwind safe</a>. If your code is not unwind safe,
+but you believe it’s correct, you can use this setting to bypass the check.
+You would need this for code that uses <code>lazy_static</code> or <code>thread_local</code> with
+<code>Cell/RefCell</code> inside (and the like).</p>
+<p>This setting is implied if <code>#[proc_macro_error]</code> is applied to a function
+marked as <code>#[proc_macro]</code>, <code>#[proc_macro_derive]</code> or <code>#[proc_macro_attribute]</code>.</p>
+<p>This setting is also implied if <code>proc-macro-hack</code> was detected.</p>
+</li>
+</ul>
+<h3 id="macros"><a class="doc-anchor" href="#macros">§</a>Macros</h3>
+<p>Most of the time you want to use the macros. Syntax is described in the next section below.</p>
+<p>You’ll need to decide how you want to emit errors:</p>
+<ul>
+<li>Emit the error and abort. Very much panic-like usage. Served by <a href="macro.abort.html"><code>abort!</code></a> and
+<a href="macro.abort_call_site.html"><code>abort_call_site!</code></a>.</li>
+<li>Emit the error but do not abort right away, looking for other errors to report.
+Served by <a href="macro.emit_error.html"><code>emit_error!</code></a> and <a href="macro.emit_call_site_warning.html"><code>emit_call_site_error!</code></a>.</li>
+</ul>
+<p>You <strong>can</strong> mix these usages.</p>
+<p><code>abort</code> and <code>emit_error</code> take a “source span” as the first argument. This source
+will be used to highlight the place the error originates from. It must be one of:</p>
+<ul>
+<li><em>Something</em> that implements <a href="https://docs.rs/quote/1.0.3/quote/trait.ToTokens.html"><code>ToTokens</code></a> (most types in <code>syn</code> and <code>proc-macro2</code> do).
+This source is the preferable one since it doesn’t lose span information on multi-token
+spans, see <a href="https://gitlab.com/CreepySkeleton/proc-macro-error/-/issues/6">this issue</a>
+for details.</li>
+<li><a href="https://doc.rust-lang.org/proc_macro/struct.Span.html"><code>proc_macro::Span</code></a></li>
+<li><a href="https://docs.rs/proc-macro2/1.0.10/proc_macro2/struct.Span.html"><code>proc-macro2::Span</code></a></li>
+</ul>
+<p>The rest is your message in format-like style.</p>
+<p>See <a href="#syntax-1">the next section</a> for detailed syntax.</p>
+<ul>
+<li>
+<p><a href="macro.abort.html"><code>abort!</code></a>:</p>
+<p>Very much panic-like usage - abort right away and show the error.
+Expands to <a href="https://doc.rust-lang.org/std/primitive.never.html"><code>!</code></a> (never type).</p>
+</li>
+<li>
+<p><a href="macro.abort_call_site.html"><code>abort_call_site!</code></a>:</p>
+<p>Shortcut for <code>abort!(Span::call_site(), ...)</code>. Expands to <a href="https://doc.rust-lang.org/std/primitive.never.html"><code>!</code></a> (never type).</p>
+</li>
+<li>
+<p><a href="macro.emit_error.html"><code>emit_error!</code></a>:</p>
+<p><a href="https://doc.rust-lang.org/proc_macro/struct.Diagnostic.html"><code>proc_macro::Diagnostic</code></a>-like usage - emit the error but keep going,
+looking for other errors to report.
+The compilation will fail nonetheless. Expands to <a href="https://doc.rust-lang.org/std/primitive.unit.html"><code>()</code></a> (unit type).</p>
+</li>
+<li>
+<p><a href="macro.emit_call_site_warning.html"><code>emit_call_site_error!</code></a>:</p>
+<p>Shortcut for <code>emit_error!(Span::call_site(), ...)</code>. Expands to <a href="https://doc.rust-lang.org/std/primitive.unit.html"><code>()</code></a> (unit type).</p>
+</li>
+<li>
+<p><a href="macro.emit_warning.html"><code>emit_warning!</code></a>:</p>
+<p>Like <code>emit_error!</code> but emit a warning instead of error. The compilation won’t fail
+because of warnings.
+Expands to <a href="https://doc.rust-lang.org/std/primitive.unit.html"><code>()</code></a> (unit type).</p>
+<p><strong>Beware</strong>: warnings are nightly only, they are completely ignored on stable.</p>
+</li>
+<li>
+<p><a href="macro.emit_call_site_error.html"><code>emit_call_site_warning!</code></a>:</p>
+<p>Shortcut for <code>emit_warning!(Span::call_site(), ...)</code>. Expands to <a href="https://doc.rust-lang.org/std/primitive.unit.html"><code>()</code></a> (unit type).</p>
+</li>
+<li>
+<p><a href="struct.Diagnostic.html"><code>diagnostic</code></a>:</p>
+<p>Build an instance of <code>Diagnostic</code> in format-like style.</p>
+</li>
+</ul>
+<h5 id="syntax-1"><a class="doc-anchor" href="#syntax-1">§</a>Syntax</h5>
+<p>All the macros have pretty much the same syntax:</p>
+<ol>
+<li>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">abort!</span>(single_expr)</code></pre></div>
+<p>Shortcut for <code>Diagnostic::from(expr).abort()</code>.</p>
+</li>
+<li>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">abort!</span>(span, message)</code></pre></div>
+<p>The first argument is an expression the span info should be taken from.</p>
+<p>The second argument is the error message, it must implement <a href="https://doc.rust-lang.org/std/string/trait.ToString.html"><code>ToString</code></a>.</p>
+</li>
+<li>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">abort!</span>(span, format_literal, format_args...)</code></pre></div>
+<p>This form is pretty much the same as 2, except <code>format!(format_literal, format_args...)</code>
+will be used to for the message instead of <a href="https://doc.rust-lang.org/std/string/trait.ToString.html"><code>ToString</code></a>.</p>
+</li>
+</ol>
+<p>That’s it. <code>abort!</code>, <code>emit_warning</code>, <code>emit_error</code> share this exact syntax.</p>
+<p><code>abort_call_site!</code>, <code>emit_call_site_warning</code>, <code>emit_call_site_error</code> lack 1 form
+and do not take span in 2’th and 3’th forms. Those are essentially shortcuts for
+<code>macro!(Span::call_site(), args...)</code>.</p>
+<p><code>diagnostic!</code> requires a <a href="enum.Level.html" title="enum proc_macro_error2::Level"><code>Level</code></a> instance between <code>span</code> and second argument
+(1’th form is the same).</p>
+<blockquote>
+<p><strong>Important!</strong></p>
+<p>If you have some type from <code>proc_macro</code> or <code>syn</code> to point to, do not call <code>.span()</code>
+on it but rather use it directly:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ty: syn::Type = syn::parse2(input).unwrap();
+<span class="macro">abort!</span>(ty, <span class="string">"BOOM"</span>);
+<span class="comment">//     ^^ &lt;-- avoid .span()</span></code></pre></div>
+<p><code>.span()</code> calls work too, but you may experience regressions in message quality.</p>
+</blockquote>
+<h5 id="note-attachments"><a class="doc-anchor" href="#note-attachments">§</a>Note attachments</h5>
+<ol start="3">
+<li>Every macro can have “note” attachments (only 2 and 3 form).</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>opt_help = <span class="kw">if </span>have_some_info { <span class="prelude-val">Some</span>(<span class="string">"did you mean `this`?"</span>) } <span class="kw">else </span>{ <span class="prelude-val">None </span>};
+
+<span class="macro">abort!</span>(
+    span, message; <span class="comment">// &lt;--- attachments start with `;` (semicolon)
+
+    </span>help = <span class="string">"format {} {}"</span>, <span class="string">"arg1"</span>, <span class="string">"arg2"</span>; <span class="comment">// &lt;--- every attachment ends with `;`,
+                                           //      maybe except the last one
+
+    </span>note = <span class="string">"to_string"</span>; <span class="comment">// &lt;--- one arg uses `.to_string()` instead of `format!()`
+
+    </span>yay = <span class="string">"I see what {} did here"</span>, <span class="string">"you"</span>; <span class="comment">// &lt;--- "help =" and "hint =" are mapped
+                                           // to Diagnostic::help,
+                                           // anything else is Diagnostic::note
+
+    </span>wow = note_span =&gt; <span class="string">"custom span"</span>; <span class="comment">// &lt;--- attachments can have their own span
+                                      //      it takes effect only on nightly though
+
+    </span>hint =<span class="question-mark">? </span>opt_help; <span class="comment">// &lt;-- "optional" attachment, get displayed only if `Some`
+                      //     must be single `Option` expression
+
+    </span>note =<span class="question-mark">? </span>note_span =&gt; opt_help <span class="comment">// &lt;-- optional attachments can have custom spans too
+</span>);</code></pre></div>
+<h4 id="diagnostic-type"><a class="doc-anchor" href="#diagnostic-type">§</a>Diagnostic type</h4>
+<p><a href="struct.Diagnostic.html"><code>Diagnostic</code></a> type is intentionally designed to be API compatible with <a href="https://doc.rust-lang.org/proc_macro/struct.Diagnostic.html"><code>proc_macro::Diagnostic</code></a>.
+Not all API is implemented, only the part that can be reasonably implemented on stable.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.append_dummy"><code>pub use crate::dummy::<a class="fn" href="dummy/fn.append_dummy.html" title="fn proc_macro_error2::dummy::append_dummy">append_dummy</a>;</code></div></li><li><div class="item-name" id="reexport.set_dummy"><code>pub use crate::dummy::<a class="fn" href="dummy/fn.set_dummy.html" title="fn proc_macro_error2::dummy::set_dummy">set_dummy</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="dummy/index.html" title="mod proc_macro_error2::dummy">dummy</a></div><div class="desc docblock-short">Facility to emit dummy implementations (or whatever) in case
+an error happen.</div></li></ul><h2 id="macros-1" class="section-header">Macros<a href="#macros-1" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.abort.html" title="macro proc_macro_error2::abort">abort</a></div><div class="desc docblock-short">Abort proc-macro execution right now and display the error.</div></li><li><div class="item-name"><a class="macro" href="macro.abort_call_site.html" title="macro proc_macro_error2::abort_call_site">abort_call_site</a></div><div class="desc docblock-short">Shortcut for <code>abort!(Span::call_site(), msg...)</code>. This macro
+is still preferable over plain panic, panics are not for error reporting.</div></li><li><div class="item-name"><a class="macro" href="macro.diagnostic.html" title="macro proc_macro_error2::diagnostic">diagnostic</a></div><div class="desc docblock-short">Build <a href="struct.Diagnostic.html"><code>Diagnostic</code></a> instance from provided arguments.</div></li><li><div class="item-name"><a class="macro" href="macro.emit_call_site_error.html" title="macro proc_macro_error2::emit_call_site_error">emit_call_site_error</a></div><div class="desc docblock-short">Shortcut for <code>emit_error!(Span::call_site(), ...)</code>. This macro
+is still preferable over plain panic, panics are not for error reporting..</div></li><li><div class="item-name"><a class="macro" href="macro.emit_call_site_warning.html" title="macro proc_macro_error2::emit_call_site_warning">emit_call_site_warning</a></div><div class="desc docblock-short">Shortcut for <code>emit_warning!(Span::call_site(), ...)</code>.</div></li><li><div class="item-name"><a class="macro" href="macro.emit_error.html" title="macro proc_macro_error2::emit_error">emit_error</a></div><div class="desc docblock-short">Emit an error while not aborting the proc-macro right away.</div></li><li><div class="item-name"><a class="macro" href="macro.emit_warning.html" title="macro proc_macro_error2::emit_warning">emit_warning</a></div><div class="desc docblock-short">Emit a warning. Warnings are not errors and compilation won’t fail because of them.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Diagnostic.html" title="struct proc_macro_error2::Diagnostic">Diagnostic</a></div><div class="desc docblock-short">Represents a single diagnostic message</div></li><li><div class="item-name"><a class="struct" href="struct.SpanRange.html" title="struct proc_macro_error2::SpanRange">SpanRange</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Level.html" title="enum proc_macro_error2::Level">Level</a></div><div class="desc docblock-short">Represents a diagnostic level</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.DiagnosticExt.html" title="trait proc_macro_error2::DiagnosticExt">DiagnosticExt</a></div><div class="desc docblock-short">A collection of methods that do not exist in <code>proc_macro::Diagnostic</code>
+but still useful to have around.</div></li><li><div class="item-name"><a class="trait" href="trait.OptionExt.html" title="trait proc_macro_error2::OptionExt">OptionExt</a></div><div class="desc docblock-short">This traits expands <code>Option</code> with some handy shortcuts.</div></li><li><div class="item-name"><a class="trait" href="trait.ResultExt.html" title="trait proc_macro_error2::ResultExt">ResultExt</a></div><div class="desc docblock-short">This traits expands <code>Result&lt;T, Into&lt;Diagnostic&gt;&gt;</code> with some handy shortcuts.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.abort_if_dirty.html" title="fn proc_macro_error2::abort_if_dirty">abort_if_dirty</a></div><div class="desc docblock-short">Abort macro execution and display all the emitted errors, if any.</div></li></ul><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.proc_macro_error.html" title="attr proc_macro_error2::proc_macro_error">proc_macro_error</a></div></li></ul></section></div></main></body></html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: Object Identifiers (OIDs)"><title>const_oid - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="const_oid" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../const_oid/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../const_oid/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../const_oid/index.html">const_oid</a><span class="version">0.9.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">const_oid</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/const_oid/lib.rs.html#1-280">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-object-identifiers-oids"><a class="doc-anchor" href="#rustcrypto-object-identifiers-oids">§</a><a href="https://github.com/rustcrypto">RustCrypto</a>: Object Identifiers (OIDs)</h2>
+<p><a href="https://crates.io/crates/const-oid"><img src="https://buildstats.info/crate/const-oid" alt="crate" /></a>
+<a href="https://docs.rs/const-oid/"><img src="https://docs.rs/const-oid/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/formats/actions"><img src="https://github.com/RustCrypto/formats/workflows/const-oid/badge.svg?branch=master&amp;event=push" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.57+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/300570-formats"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard
+as defined in ITU <a href="https://www.itu.int/rec/T-REC-X.660">X.660</a>, with support for BER/DER encoding/decoding as well
+as heapless <code>no_std</code> (i.e. embedded) environments.</p>
+<p><a href="https://docs.rs/const-oid/">Documentation</a></p>
+<h3 id="about-oids"><a class="doc-anchor" href="#about-oids">§</a>About OIDs</h3>
+<p>Object Identifiers, a.k.a. OIDs, are an International Telecommunications
+Union (ITU) and ISO/IEC standard for naming any object, concept, or “thing”
+with a globally unambiguous persistent name.</p>
+<p>The ITU’s <a href="https://www.itu.int/rec/T-REC-X.660">X.660</a> standard provides the OID specification. Every OID is part of
+a hierarchical namespace which begins with a <em>root OID</em>, which is either the
+ITU’s root OID (0), the ISO’s root OID (1), or the joint ISO/ITU root OID (2).</p>
+<p>The following is an example of an OID, in this case identifying the
+<code>rsaEncryption</code> algorithm:</p>
+<div class="example-wrap"><pre class="language-text"><code>1.2.840.113549.1.1.1
+</code></pre></div>
+<p>For more information, see: <a href="https://en.wikipedia.org/wiki/Object_identifier">https://en.wikipedia.org/wiki/Object_identifier</a></p>
+<h3 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h3>
+<p>This library supports parsing OIDs in const contexts, e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>const_oid::ObjectIdentifier;
+
+<span class="kw">pub const </span>MY_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap(<span class="string">"1.2.840.113549.1.1.1"</span>);</code></pre></div>
+<p>The OID parser is implemented entirely in terms of <code>const fn</code> and without the
+use of proc macros.</p>
+<p>Additionally, it also includes a <code>const fn</code> OID serializer, and stores the OIDs
+parsed from const contexts encoded using the BER/DER serialization
+(sans header).</p>
+<p>This allows <code>ObjectIdentifier</code> to impl <code>AsRef&lt;[u8]&gt;</code> which can be used to
+obtain the BER/DER serialization of an OID, even one declared <code>const</code>.</p>
+<p>Additionally, it impls <code>FromStr</code> and <code>TryFrom&lt;&amp;[u8]&gt;</code> and functions just as
+well as a runtime OID library.</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.57</strong> at a minimum.</p>
+<p>We may change the MSRV in the future, but it will be accompanied by a minor
+version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Arcs.html" title="struct const_oid::Arcs">Arcs</a></div><div class="desc docblock-short"><a href="https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator"><code>Iterator</code></a> over <a href="type.Arc.html" title="type const_oid::Arc"><code>Arc</code></a> values (a.k.a. nodes) in an <a href="struct.ObjectIdentifier.html" title="struct const_oid::ObjectIdentifier"><code>ObjectIdentifier</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ObjectIdentifier.html" title="struct const_oid::ObjectIdentifier">ObjectIdentifier</a></div><div class="desc docblock-short">Object identifier (OID).</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum const_oid::Error">Error</a></div><div class="desc docblock-short">OID errors.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.AssociatedOid.html" title="trait const_oid::AssociatedOid">AssociatedOid</a></div><div class="desc docblock-short">A trait which associates an OID with a type.</div></li><li><div class="item-name"><a class="trait" href="trait.DynAssociatedOid.html" title="trait const_oid::DynAssociatedOid">DynAssociatedOid</a></div><div class="desc docblock-short">A trait which associates a dynamic, <code>&amp;self</code>-dependent OID with a type,
+which may change depending on the type’s value.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Arc.html" title="type const_oid::Arc">Arc</a></div><div class="desc docblock-short">Type alias used to represent an “arc” (i.e. integer identifier value).</div></li><li><div class="item-name"><a class="type" href="type.Result.html" title="type const_oid::Result">Result</a></div><div class="desc docblock-short">Result type</div></li></ul></section></div></main></body></html>

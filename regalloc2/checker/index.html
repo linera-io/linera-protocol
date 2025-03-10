@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Checker: verifies that spills/reloads/moves retain equivalent dataflow to original, VReg-based code."><title>regalloc2::checker - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regalloc2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../regalloc2/index.html">regalloc2</a><span class="version">0.10.2</span></h2></div><h2 class="location"><a href="#">Module checker</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate regalloc2</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">regalloc2</a>::<wbr><a class="mod" href="#">checker</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/regalloc2/checker.rs.html#9-993">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Checker: verifies that spills/reloads/moves retain equivalent
+dataflow to original, VReg-based code.</p>
+<p>The basic idea is that we track symbolic values as they flow
+through spills and reloads.  The symbolic values represent
+particular virtual registers in the original function body
+presented to the register allocator. Any instruction in the
+original function body (i.e., not added by the allocator)
+conceptually generates a symbolic value “Vn” when storing to (or
+modifying) a virtual register.</p>
+<p>A symbolic value is logically a <em>set of virtual registers</em>,
+representing all virtual registers equal to the value in the given
+storage slot at a given program point. This representation (as
+opposed to tracking just one virtual register) is necessary
+because the regalloc may implement moves in the source program
+(via move instructions or blockparam assignments on edges) in
+“intelligent” ways, taking advantage of values that are already in
+the right place, so we need to know <em>all</em> names for a value.</p>
+<p>These symbolic values are precise but partial: in other words, if
+a physical register is described as containing a virtual register
+at a program point, it must actually contain the value of this
+register (modulo any analysis bugs); but it may describe fewer
+virtual registers even in cases where one <em>could</em> statically prove
+that it contains a certain register, because the analysis is not
+perfectly path-sensitive or value-sensitive. However, all
+assignments <em>produced by our register allocator</em> should be
+analyzed fully precisely. (This last point is important and bears
+repeating: we only need to verify the programs that we produce,
+not arbitrary programs.)</p>
+<p>Operand constraints (fixed register, register, any) are also checked
+at each operand.</p>
+<h3 id="formal-definition"><a class="doc-anchor" href="#formal-definition">§</a>Formal Definition</h3>
+<p>The analysis lattice consists of the elements of 𝒫(V), the
+powerset (set of all subsets) of V (the set of all virtual
+registers). The ⊤ (top) value in the lattice is V itself, and the
+⊥ (bottom) value in the lattice is ∅ (the empty set). The lattice
+ordering relation is the subset relation: S ≤ U iff S ⊆ U. These
+definitions imply that the lattice meet-function (greatest lower
+bound) is set-intersection.</p>
+<p>(For efficiency, we represent ⊤ not by actually listing out all
+virtual registers, but by representing a special “top” value, but
+the semantics are the same.)</p>
+<p>The dataflow analysis state at each program point (each point
+before or after an instruction) is:</p>
+<ul>
+<li>map of: Allocation -&gt; lattice value</li>
+</ul>
+<p>And the transfer functions for instructions are (where <code>A</code> is the
+above map from allocated physical registers to lattice values):</p>
+<ul>
+<li>
+<p><code>Edit::Move</code> inserted by RA:       [ alloc_d := alloc_s ]</p>
+<p>A’ = A[alloc_d → A[alloc_s]]</p>
+</li>
+<li>
+<p>statement in pre-regalloc function [ V_i := op V_j, V_k, … ]
+with allocated form                [ A_i := op A_j, A_k, … ]</p>
+<p>A’ = { A_k → A[A_k] \ { V_i } for k ≠ i } ∪
+{ A_i -&gt; { V_i } }</p>
+<p>In other words, a statement, even after allocation, generates
+a symbol that corresponds to its original virtual-register
+def. Simultaneously, that same virtual register symbol is removed
+from all other allocs: they no longer carry the current value.</p>
+</li>
+<li>
+<p>Parallel moves or blockparam-assignments in original program
+[ V_d1 := V_s1, V_d2 := V_s2, … ]</p>
+<p>A’ = { A_k → subst(A[A_k]) for all k }
+where subst(S) removes symbols for overwritten virtual
+registers (V_d1 .. V_dn) and then adds V_di whenever
+V_si appeared prior to the removals.</p>
+</li>
+</ul>
+<p>To check correctness, we first find the dataflow fixpoint with the
+above lattice and transfer/meet functions. Then, at each op, we
+examine the dataflow solution at the preceding program point, and
+check that the allocation for each op arg (input/use) contains the
+symbol corresponding to the original virtual register specified
+for this arg.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Checker.html" title="struct regalloc2::checker::Checker">Checker</a></div></li><li><div class="item-name"><a class="struct" href="struct.CheckerErrors.html" title="struct regalloc2::checker::CheckerErrors">CheckerErrors</a></div><div class="desc docblock-short">A set of errors detected by the regalloc checker.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.CheckerError.html" title="enum regalloc2::checker::CheckerError">CheckerError</a></div><div class="desc docblock-short">A single error detected by the regalloc checker.</div></li></ul></section></div></main></body></html>

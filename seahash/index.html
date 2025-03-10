@@ -1,0 +1,120 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="SeaHash: A blazingly fast, portable hash function with proven statistical guarantees."><title>seahash - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="seahash" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../seahash/index.html">seahash</a><span class="version">4.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">seahash</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/seahash/lib.rs.html#1-168">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>SeaHash: A blazingly fast, portable hash function with proven statistical guarantees.</p>
+<p>SeaHash is a hash function with performance better than (around 3-20% improvement) xxHash and
+MetroHash. Furthermore, SeaHash has mathematically provable statistical guarantees.</p>
+<p>SeaHash is a portable hash function, meaning that the output is not dependent on the hosting
+architecture, and makes no assumptions on endianness or the alike. This stable layout allows it
+to be used for on-disk/permanent storage (e.g. checksums).</p>
+<h2 id="design-advantages-and-features"><a class="doc-anchor" href="#design-advantages-and-features">§</a>Design, advantages, and features</h2>
+<ul>
+<li><strong>High quality</strong>: It beats most other general purpose hash functions because it provides full
+avalanche inbetween state updates.</li>
+<li><strong>Performance</strong>: SeaHash beats every high-quality (grading 10/10 in smhasher) hash function
+that I know of.</li>
+<li><strong>Provable quality guarantees</strong>: Contrary to most other non-cryptographic hash function,
+SeaHash can be proved to satisfy the avalanche criterion as well as BIC.</li>
+<li><strong>Parallelizable</strong>: Consists of multiple, independent states to take advantage of ILP and/or
+software threads.</li>
+<li><strong>Bulk reads</strong>: Reads 8 or 4 bytes a time.</li>
+<li><strong>Stable and portable</strong>: Does not depend on the target architecture, and produces a stable
+value, which is only changed in major version bumps.</li>
+<li><strong>Keyed</strong>: Designed to not leak the seed/key. Note that it has not gone through
+cryptoanalysis yet, so the keyed version shouldn’t be relied on when security is needed.</li>
+<li><strong>Hardware accelerateable</strong>: SeaHash is designed such that ASICs can implement it with really
+high performance.</li>
+</ul>
+<h2 id="a-word-of-warning"><a class="doc-anchor" href="#a-word-of-warning">§</a>A word of warning!</h2>
+<p>This is <strong>not</strong> a cryptographic function, and it certainly should not be used as one. If you
+want a good cryptographic hash function, you should use SHA-3 (Keccak) or BLAKE2.</p>
+<p>It is not secure, nor does it aim to be. It aims to have high quality pseudorandom output and
+few collisions, as well as being fast.</p>
+<h2 id="benchmark"><a class="doc-anchor" href="#benchmark">§</a>Benchmark</h2>
+<p>On normal hardware, it is expected to run with a rate around 5.9-6.7 GB/S on a 2.5 GHz CPU.
+Further improvement can be seen when hashing very big buffers in parallel.</p>
+<div><table><thead><tr><th>Function</th><th>Quality</th><th>Cycles per byte (lower is better)</th><th>Author</th></tr></thead><tbody>
+<tr><td><strong>SeaHash</strong></td><td><strong>Excellent</strong></td><td><strong>0.24</strong></td><td><strong>Ticki</strong></td></tr>
+<tr><td>xxHash</td><td>Excellent</td><td>0.31</td><td>Collet</td></tr>
+<tr><td>MetroHash</td><td>Excellent</td><td>0.35</td><td>Rogers</td></tr>
+<tr><td>Murmur</td><td>Excellent</td><td>0.64</td><td>Appleby</td></tr>
+<tr><td>Rabin</td><td>Medium</td><td>1.51</td><td>Rabin</td></tr>
+<tr><td>CityHash</td><td>Excellent</td><td>1.62</td><td>Pike, Alakuijala</td></tr>
+<tr><td>LoseLose</td><td>Terrible</td><td>2.01</td><td>Kernighan, Ritchie</td></tr>
+<tr><td>FNV</td><td>Poor</td><td>3.12</td><td>Fowler, Noll, Vo</td></tr>
+<tr><td>SipHash</td><td>Pseudorandom</td><td>3.21</td><td>Aumasson, Bernstein</td></tr>
+<tr><td>CRC</td><td>Good</td><td>3.91</td><td>Peterson</td></tr>
+<tr><td>DJB2</td><td>Poor</td><td>4.13</td><td>Bernstein</td></tr>
+</tbody></table>
+</div><h3 id="ideal-architecture"><a class="doc-anchor" href="#ideal-architecture">§</a>Ideal architecture</h3>
+<p>SeaHash is designed and optimized for the most common architecture in use:</p>
+<ul>
+<li>Little-endian</li>
+<li>64-bit</li>
+<li>64 or more bytes cache lines</li>
+<li>4 or more instruction pipelines</li>
+<li>4 or more 64-bit registers</li>
+</ul>
+<p>Anything that does not hold the above requirements will perform worse by up to 30-40%. Note that
+this means it is still faster than CityHash (~1 GB/S), MurMurHash (~2.6 GB/S), FNV (~0.5 GB/S),
+etc.</p>
+<h2 id="achieving-the-performance"><a class="doc-anchor" href="#achieving-the-performance">§</a>Achieving the performance</h2>
+<p>Like any good general-purpose hash function, SeaHash reads 8 bytes at once effectively reducing
+the running time by an order of ~5.</p>
+<p>Secondly, SeaHash achieves the performance by heavily exploiting Instruction-Level Parallelism.
+In particular, it fetches 4 integers in every round and independently diffuses them. This
+yields four different states, which are finally combined.</p>
+<h2 id="statistical-guarantees"><a class="doc-anchor" href="#statistical-guarantees">§</a>Statistical guarantees</h2>
+<p>SeaHash comes with certain proven guarantees about the statistical properties of the output:</p>
+<ol>
+<li>Pick some <em>n</em>-byte sequence, <em>s</em>. The number of <em>n</em>-byte sequence colliding with <em>s</em> is
+independent of the choice of <em>s</em> (all equivalence class have equal size).</li>
+<li>If you flip any bit in the input, the probability for any bit in the output to be flipped is
+0.5.</li>
+<li>The hash value of a sequence of uniformly distributed bytes is itself uniformly distributed.</li>
+</ol>
+<p>The first guarantee can be derived through deduction, by proving that the diffusion function is
+bijective (reverse the XORs and find the congruence inverses to the primes).</p>
+<p>The second guarantee requires more complex calculations: Construct a matrix of probabilities
+and set one to certain (1), then apply transformations through the respective operations. The
+proof is a bit long, but relatively simple.</p>
+<p>The third guarantee requires proving that the hash value is a tree, such that:</p>
+<ul>
+<li>Leafs represents the input values.</li>
+<li>Single-child nodes reduce to the diffusion of the child.</li>
+<li>Multiple-child nodes reduce to the sum of the children.</li>
+</ul>
+<p>Then simply show that each of these reductions transform uniformly distributed variables to
+uniformly distributed variables.</p>
+<h2 id="inner-workings"><a class="doc-anchor" href="#inner-workings">§</a>Inner workings</h2>
+<p>In technical terms, SeaHash follows a alternating 4-state length-padded Merkle–Damgård
+construction with an XOR-diffuse compression function (click to enlarge):</p>
+<p>[<img src="http://ticki.github.io/img/seahash_construction_diagram.svg" alt="A diagram." />]
+(http://ticki.github.io/img/seahash_construction_diagram.svg)</p>
+<p>It starts with 4 initial states, then it alternates between them (increment, wrap on 4) and
+does XOR with the respective block. When a state has been visited the diffusion function (f) is
+applied. The very last block is padded with zeros.</p>
+<p>After all the blocks have been gone over, all the states are XOR’d to the number of bytes
+written. The sum is then passed through the diffusion function, which produces the final hash
+value.</p>
+<p>The diffusion function is drawn below.</p>
+<div class="example-wrap"><pre class="language-notest"><code>x ← px
+x ← x ⊕ ((x ≫ 32) ≫ (x ≫ 60))
+x ← px
+</code></pre></div>
+<p>The advantage of having four completely segregated (note that there is no mix round, so they’re
+entirely independent) states is that fast parallelism is possible. For example, if I were to
+hash 1 TB, I can spawn up four threads which can run independently without <em>any</em>
+intercommunication or synchronization before the last round.</p>
+<p>If the diffusion function (f) was cryptographically secure, it would pass cryptoanalysis
+trivially. This might seem irrelevant, as it clearly isn’t cryptographically secure, but it
+tells us something about the inner semantics. In particular, any diffusion function with
+sufficient statistical quality will make up a good hash function in this construction.</p>
+<p>Read <a href="http://ticki.github.io/blog/seahash-explained/">the blog post</a> for more details.</p>
+<h2 id="asic-version"><a class="doc-anchor" href="#asic-version">§</a>ASIC version</h2>
+<p>SeaHash is specifically designed such that it can be efficiently implemented in the form of
+ASIC while only using very few transistors.</p>
+<h2 id="specification"><a class="doc-anchor" href="#specification">§</a>Specification</h2>
+<p>See the <a href="./reference"><code>reference</code></a> module.</p>
+<h2 id="credits"><a class="doc-anchor" href="#credits">§</a>Credits</h2>
+<p>Aside for myself (@ticki), there are couple of other people who have helped creating this.
+Joshua Landau suggested using the <a href="http://www.pcg-random.org/">PCG family of diffusions</a>,
+created by Melissa E. O’Neill. Sokolov Yura spotted multiple bugs in SeaHash.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="reference/index.html" title="mod seahash::reference">reference</a></div><div class="desc docblock-short">A slow, but clear reference implementation of SeaHash.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.SeaHasher.html" title="struct seahash::SeaHasher">SeaHasher</a></div><div class="desc docblock-short">The streaming version of the algorithm.</div></li><li><div class="item-name"><a class="struct" href="struct.State.html" title="struct seahash::State">State</a></div><div class="desc docblock-short">A SeaHash state.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.hash.html" title="fn seahash::hash">hash</a></div><div class="desc docblock-short">Hash some buffer.</div></li><li><div class="item-name"><a class="fn" href="fn.hash_seeded.html" title="fn seahash::hash_seeded">hash_seeded</a></div><div class="desc docblock-short">Hash some buffer according to a chosen seed.</div></li></ul></section></div></main></body></html>

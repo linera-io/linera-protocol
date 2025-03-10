@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["QueryError"],"mod":["builders","paginator"],"struct":["Query","QueryInput","QueryOutput"]};

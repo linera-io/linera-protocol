@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Documentation for Additional Attributes"><title>strum::additional_attributes - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="strum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../strum/index.html">strum</a><span class="version">0.26.3</span></h2></div><h2 class="location"><a href="#">Module additional_attributes</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In crate strum</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">strum</a>::<wbr><a class="mod" href="#">additional_attributes</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/strum/additional_attributes.rs.html#1-92">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="documentation-for-additional-attributes"><a class="doc-anchor" href="#documentation-for-additional-attributes">§</a>Documentation for Additional Attributes</h2><h3 id="attributes-on-enums"><a class="doc-anchor" href="#attributes-on-enums">§</a>Attributes on Enums</h3>
+<p>Strum supports several custom attributes to modify the generated code. At the enum level, the following attributes are supported:</p>
+<ul>
+<li>
+<p><code>#[strum(serialize_all = "case_style")]</code> attribute can be used to change the case used when serializing to and deserializing
+from strings. This feature is enabled by <a href="https://github.com/withoutboats/heck">withoutboats/heck</a> and supported case styles are:</p>
+<ul>
+<li><code>camelCase</code></li>
+<li><code>PascalCase</code></li>
+<li><code>kebab-case</code></li>
+<li><code>snake_case</code></li>
+<li><code>SCREAMING_SNAKE_CASE</code></li>
+<li><code>SCREAMING-KEBAB-CASE</code></li>
+<li><code>lowercase</code></li>
+<li><code>UPPERCASE</code></li>
+<li><code>title_case</code></li>
+<li><code>mixed_case</code></li>
+<li><code>Train-Case</code></li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>strum_macros;
+ 
+<span class="attr">#[derive(Debug, Eq, PartialEq, strum_macros::Display)]
+#[strum(serialize_all = <span class="string">"snake_case"</span>)]
+</span><span class="kw">enum </span>Brightness {
+    DarkBlack,
+    Dim {
+        glow: usize,
+    },
+    <span class="attr">#[strum(serialize = <span class="string">"bright"</span>)]
+    </span>BrightWhite,
+}
+ 
+<span class="macro">assert_eq!</span>(
+    String::from(<span class="string">"dark_black"</span>),
+    Brightness::DarkBlack.to_string().as_ref()
+);
+<span class="macro">assert_eq!</span>(
+    String::from(<span class="string">"dim"</span>),
+    Brightness::Dim { glow: <span class="number">0 </span>}.to_string().as_ref()
+);
+<span class="macro">assert_eq!</span>(
+    String::from(<span class="string">"bright"</span>),
+    Brightness::BrightWhite.to_string().as_ref()
+);</code></pre></div>
+</li>
+<li>
+<p>You can also apply the <code>#[strum(ascii_case_insensitive)]</code> attribute to the enum,
+and this has the same effect of applying it to every variant.</p>
+</li>
+</ul>
+<h3 id="attributes-on-variants"><a class="doc-anchor" href="#attributes-on-variants">§</a>Attributes on Variants</h3>
+<p>Custom attributes are applied to a variant by adding <code>#[strum(parameter="value")]</code> to the variant.</p>
+<ul>
+<li>
+<p><code>serialize="..."</code>: Changes the text that <code>FromStr()</code> looks for when parsing a string. This attribute can
+be applied multiple times to an element and the enum variant will be parsed if any of them match.</p>
+</li>
+<li>
+<p><code>to_string="..."</code>: Similar to <code>serialize</code>. This value will be included when using <code>FromStr()</code>. More importantly,
+this specifies what text to use when calling <code>variant.to_string()</code> with the <code>Display</code> derivation, or when calling <code>variant.as_ref()</code> with <code>AsRefStr</code>.</p>
+</li>
+<li>
+<p><code>default</code>: Applied to a single variant of an enum. The variant must be a Tuple-like
+variant with a single piece of data that can be create from a <code>&amp;str</code> i.e. <code>T: From&lt;&amp;str&gt;</code>.
+The generated code will now return the variant with the input string captured as shown below
+instead of failing.</p>
+<div class="example-wrap"><pre class="language-text"><code>// Replaces this:
+_ =&gt; Err(strum::ParseError::VariantNotFound)
+// With this in generated code:
+default =&gt; Ok(Variant(default.into()))
+</code></pre></div>
+<p>The plugin will fail if the data doesn’t implement From&lt;&amp;str&gt;. You can only have one <code>default</code>
+on your enum.</p>
+</li>
+<li>
+<p><code>disabled</code>: removes variant from generated code.</p>
+</li>
+<li>
+<p><code>ascii_case_insensitive</code>: makes the comparison to this variant case insensitive (ASCII only).
+If the whole enum is marked <code>ascii_case_insensitive</code>, you can specify <code>ascii_case_insensitive = false</code>
+to disable case insensitivity on this variant.</p>
+</li>
+<li>
+<p><code>message=".."</code>: Adds a message to enum variant. This is used in conjunction with the <code>EnumMessage</code>
+trait to associate a message with a variant. If <code>detailed_message</code> is not provided,
+then <code>message</code> will also be returned when <code>get_detailed_message</code> is called.</p>
+</li>
+<li>
+<p><code>detailed_message=".."</code>: Adds a more detailed message to a variant. If this value is omitted, then
+<code>message</code> will be used in it’s place.</p>
+</li>
+<li>
+<p>Structured documentation, as in <code>/// ...</code>: If using <code>EnumMessage</code>, is accessible via get_documentation().</p>
+</li>
+<li>
+<p><code>props(key="value")</code>: Enables associating additional information with a given variant.</p>
+</li>
+</ul>
+</div></details></section></div></main></body></html>

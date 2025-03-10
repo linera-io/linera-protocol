@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides a cross platform abstraction for writing colored text to a terminal. Colors are written using either ANSI escape sequences or by communicating with a Windows console. Much of this API was motivated by use inside command line applications, where colors or styles can be configured by the end user and/or the environment."><title>termcolor - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="termcolor" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../termcolor/index.html">termcolor</a><span class="version">1.4.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">termcolor</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/termcolor/lib.rs.html#1-2572">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides a cross platform abstraction for writing colored text to
+a terminal. Colors are written using either ANSI escape sequences or by
+communicating with a Windows console. Much of this API was motivated by use
+inside command line applications, where colors or styles can be configured
+by the end user and/or the environment.</p>
+<p>This crate also provides platform independent support for writing colored text
+to an in memory buffer. While this is easy to do with ANSI escape sequences
+(because they are in the buffer themselves), it is trickier to do with the
+Windows console API, which requires synchronous communication.</p>
+<p>In ANSI mode, this crate also provides support for writing hyperlinks.</p>
+<h2 id="organization"><a class="doc-anchor" href="#organization">§</a>Organization</h2>
+<p>The <code>WriteColor</code> trait extends the <code>io::Write</code> trait with methods for setting
+colors or resetting them.</p>
+<p><code>StandardStream</code> and <code>StandardStreamLock</code> both satisfy <code>WriteColor</code> and are
+analogous to <code>std::io::Stdout</code> and <code>std::io::StdoutLock</code>, or <code>std::io::Stderr</code>
+and <code>std::io::StderrLock</code>.</p>
+<p><code>Buffer</code> is an in memory buffer that supports colored text. In a parallel
+program, each thread might write to its own buffer. A buffer can be printed to
+using a <code>BufferWriter</code>. The advantage of this design is that each thread can
+work in parallel on a buffer without having to synchronize access to global
+resources such as the Windows console. Moreover, this design also prevents
+interleaving of buffer output.</p>
+<p><code>Ansi</code> and <code>NoColor</code> both satisfy <code>WriteColor</code> for arbitrary implementors of
+<code>io::Write</code>. These types are useful when you know exactly what you need. An
+analogous type for the Windows console is not provided since it cannot exist.</p>
+<h2 id="example-using-standardstream"><a class="doc-anchor" href="#example-using-standardstream">§</a>Example: using <code>StandardStream</code></h2>
+<p>The <code>StandardStream</code> type in this crate works similarly to <code>std::io::Stdout</code>,
+except it is augmented with methods for coloring by the <code>WriteColor</code> trait.
+For example, to write some green text:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write;
+<span class="kw">use </span>termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stdout = StandardStream::stdout(ColorChoice::Always);
+stdout.set_color(ColorSpec::new().set_fg(<span class="prelude-val">Some</span>(Color::Green)))<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(<span class="kw-2">&amp;mut </span>stdout, <span class="string">"green text!"</span>)<span class="question-mark">?</span>;</code></pre></div>
+<p>Note that any text written to the terminal now will be colored
+green when using ANSI escape sequences, even if it is written via
+stderr, and even if stderr had previously been set to <code>Color::Red</code>.
+Users will need to manage any color changes themselves by calling
+<a href="trait.WriteColor.html#tymethod.set_color"><code>WriteColor::set_color</code></a>, and this
+may include calling <a href="trait.WriteColor.html#tymethod.reset"><code>WriteColor::reset</code></a>
+before the program exits to a shell.</p>
+<h2 id="example-using-bufferwriter"><a class="doc-anchor" href="#example-using-bufferwriter">§</a>Example: using <code>BufferWriter</code></h2>
+<p>A <code>BufferWriter</code> can create buffers and write buffers to stdout or stderr. It
+does <em>not</em> implement <code>io::Write</code> or <code>WriteColor</code> itself. Instead, <code>Buffer</code>
+implements <code>io::Write</code> and <code>io::WriteColor</code>.</p>
+<p>This example shows how to print some green text to stderr.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write;
+<span class="kw">use </span>termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bufwtr = BufferWriter::stderr(ColorChoice::Always);
+<span class="kw">let </span><span class="kw-2">mut </span>buffer = bufwtr.buffer();
+buffer.set_color(ColorSpec::new().set_fg(<span class="prelude-val">Some</span>(Color::Green)))<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(<span class="kw-2">&amp;mut </span>buffer, <span class="string">"green text!"</span>)<span class="question-mark">?</span>;
+bufwtr.print(<span class="kw-2">&amp;</span>buffer)<span class="question-mark">?</span>;</code></pre></div>
+<h2 id="detecting-presence-of-a-terminal"><a class="doc-anchor" href="#detecting-presence-of-a-terminal">§</a>Detecting presence of a terminal</h2>
+<p>In many scenarios when using color, one often wants to enable colors
+automatically when writing to a terminal and disable colors automatically when
+writing to anything else. The typical way to achieve this in Unix environments
+is via libc’s
+<a href="https://man7.org/linux/man-pages/man3/isatty.3.html"><code>isatty</code></a>
+function.
+Unfortunately, this notoriously does not work well in Windows environments. To
+work around that, the recommended solution is to use the standard library’s
+<a href="https://doc.rust-lang.org/std/io/trait.IsTerminal.html"><code>IsTerminal</code></a> trait.
+It goes out of its way to get it as right as possible in Windows environments.</p>
+<p>For example, in a command line application that exposes a <code>--color</code> flag,
+your logic for how to enable colors might look like this:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::IsTerminal;
+
+<span class="kw">use </span>termcolor::{ColorChoice, StandardStream};
+
+<span class="kw">let </span>preference = argv.get_flag(<span class="string">"color"</span>).unwrap_or(<span class="string">"auto"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>choice = preference.parse::&lt;ColorChoice&gt;()<span class="question-mark">?</span>;
+<span class="kw">if </span>choice == ColorChoice::Auto &amp;&amp; !std::io::stdin().is_terminal() {
+    choice = ColorChoice::Never;
+}
+<span class="kw">let </span>stdout = StandardStream::stdout(choice);
+<span class="comment">// ... write to stdout</span></code></pre></div>
+<p>Currently, <code>termcolor</code> does not provide anything to do this for you.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Ansi.html" title="struct termcolor::Ansi">Ansi</a></div><div class="desc docblock-short">Satisfies <code>WriteColor</code> using standard ANSI escape sequences.</div></li><li><div class="item-name"><a class="struct" href="struct.Buffer.html" title="struct termcolor::Buffer">Buffer</a></div><div class="desc docblock-short">Write colored text to memory.</div></li><li><div class="item-name"><a class="struct" href="struct.BufferWriter.html" title="struct termcolor::BufferWriter">BufferWriter</a></div><div class="desc docblock-short">Writes colored buffers to stdout or stderr.</div></li><li><div class="item-name"><a class="struct" href="struct.BufferedStandardStream.html" title="struct termcolor::BufferedStandardStream">BufferedStandardStream</a></div><div class="desc docblock-short">Like <code>StandardStream</code>, but does buffered writing.</div></li><li><div class="item-name"><a class="struct" href="struct.ColorChoiceParseError.html" title="struct termcolor::ColorChoiceParseError">ColorChoiceParseError</a></div><div class="desc docblock-short">An error that occurs when parsing a <code>ColorChoice</code> fails.</div></li><li><div class="item-name"><a class="struct" href="struct.ColorSpec.html" title="struct termcolor::ColorSpec">ColorSpec</a></div><div class="desc docblock-short">A color specification.</div></li><li><div class="item-name"><a class="struct" href="struct.HyperlinkSpec.html" title="struct termcolor::HyperlinkSpec">HyperlinkSpec</a></div><div class="desc docblock-short">A hyperlink specification.</div></li><li><div class="item-name"><a class="struct" href="struct.NoColor.html" title="struct termcolor::NoColor">NoColor</a></div><div class="desc docblock-short">Satisfies <code>WriteColor</code> but ignores all color options.</div></li><li><div class="item-name"><a class="struct" href="struct.ParseColorError.html" title="struct termcolor::ParseColorError">ParseColorError</a></div><div class="desc docblock-short">An error from parsing an invalid color specification.</div></li><li><div class="item-name"><a class="struct" href="struct.StandardStream.html" title="struct termcolor::StandardStream">StandardStream</a></div><div class="desc docblock-short">Satisfies <code>io::Write</code> and <code>WriteColor</code>, and supports optional coloring
+to either of the standard output streams, stdout and stderr.</div></li><li><div class="item-name"><a class="struct" href="struct.StandardStreamLock.html" title="struct termcolor::StandardStreamLock">StandardStreamLock</a></div><div class="desc docblock-short"><code>StandardStreamLock</code> is a locked reference to a <code>StandardStream</code>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Color.html" title="enum termcolor::Color">Color</a></div><div class="desc docblock-short">The set of available colors for the terminal foreground/background.</div></li><li><div class="item-name"><a class="enum" href="enum.ColorChoice.html" title="enum termcolor::ColorChoice">ColorChoice</a></div><div class="desc docblock-short">ColorChoice represents the color preferences of an end user.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.WriteColor.html" title="trait termcolor::WriteColor">WriteColor</a></div><div class="desc docblock-short">This trait describes the behavior of writers that support colored output.</div></li></ul></section></div></main></body></html>

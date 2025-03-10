@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Conditional compilation based on the presence of atomic instructions."><title>if_atomic in radium - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="radium" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../radium/index.html">radium</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">radium</a>::<wbr><a class="macro" href="#">if_atomic</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/radium/macros.rs.html#129-178">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> if_atomic {
+    ( <span class="kw">if </span>atomic(<span class="number">8</span>) { $(<span class="macro-nonterminal">$a</span>:tt)* } $( <span class="kw">else </span>{ $(<span class="macro-nonterminal">$b</span>:tt)* } )<span class="question-mark">? </span>$( <span class="kw">if </span>$(<span class="macro-nonterminal">$rest</span>:tt)* )<span class="question-mark">? </span>) =&gt; { ... };
+    ( <span class="kw">if </span>atomic(<span class="number">16</span>) { $(<span class="macro-nonterminal">$a</span>:tt)* } $( <span class="kw">else </span>{ $(<span class="macro-nonterminal">$b</span>:tt)* } )<span class="question-mark">? </span>$( <span class="kw">if </span>$(<span class="macro-nonterminal">$rest</span>:tt)* )<span class="question-mark">? </span>) =&gt; { ... };
+    ( <span class="kw">if </span>atomic(<span class="number">32</span>) { $(<span class="macro-nonterminal">$a</span>:tt)* } $( <span class="kw">else </span>{ $(<span class="macro-nonterminal">$b</span>:tt)* } )<span class="question-mark">? </span>$( <span class="kw">if </span>$(<span class="macro-nonterminal">$rest</span>:tt)* )<span class="question-mark">? </span>) =&gt; { ... };
+    ( <span class="kw">if </span>atomic(<span class="number">64</span>) { $(<span class="macro-nonterminal">$a</span>:tt)* } $( <span class="kw">else </span>{ $(<span class="macro-nonterminal">$b</span>:tt)* } )<span class="question-mark">? </span>$( <span class="kw">if </span>$(<span class="macro-nonterminal">$rest</span>:tt)* )<span class="question-mark">? </span>) =&gt; { ... };
+    ( <span class="kw">if </span>atomic(ptr) { $(<span class="macro-nonterminal">$a</span>:tt)* } $( <span class="kw">else </span>{ $(<span class="macro-nonterminal">$b</span>:tt)* } )<span class="question-mark">? </span>$( <span class="kw">if </span>$(<span class="macro-nonterminal">$rest</span>:tt)* )<span class="question-mark">? </span>) =&gt; { ... };
+    ( <span class="kw">if </span>atomic(bool) $(<span class="macro-nonterminal">$rest</span>:tt)* ) =&gt; { ... };
+    ( <span class="kw">if </span>atomic(size) $(<span class="macro-nonterminal">$rest</span>:tt)* ) =&gt; { ... };
+    ( <span class="kw">if </span>! atomic( <span class="macro-nonterminal">$t</span>:tt ) { $(<span class="macro-nonterminal">$a</span>:tt)* } $( <span class="kw">else </span>{ $(<span class="macro-nonterminal">$b</span>:tt)* } )<span class="question-mark">? </span>$( <span class="kw">if </span>$(<span class="macro-nonterminal">$rest</span>:tt)* )<span class="question-mark">? </span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Conditional compilation based on the presence of atomic instructions.</p>
+<p>This macro allows you to write <code>if</code>/<code>else</code> clauses, evaluated at
+compile-time, that test the presence of atomic instructions and preserve or
+destroy their guarded code accordingly.</p>
+<p>The <code>if atomic(WIDTH)</code> test preserves the contents of its block when the
+target architecture has atomic instructions for the requested <code>WIDTH</code>, and
+removes them from the syntax tree when the target does not. If an <code>else</code>
+clause is provided, the contents of the <code>else</code> block are used as a
+substitute when the <code>if</code> is destroyed.</p>
+<p>This macro can be used in any position. When it is used in item or statement
+position, it can contain multiple <code>if</code> clauses, and each will be evaluated
+in turn. Expression and type positions can only accept exactly one code
+span, and so may only have exactly one <code>if</code>/<code>else</code> clause. An <code>else</code> clause
+is required here so that the macro will always expand to something; an empty
+expansion is a parse error.</p>
+<h2 id="macro-syntax"><a class="doc-anchor" href="#macro-syntax">§</a>Macro Syntax</h2>
+<p>The macro contents <code>if atomic() {} else {}</code> are part of the macro
+invocation. Only the contents of the two blocks are actual Rust code.</p>
+<p>The acceptable arguments to <code>atomic()</code> are:</p>
+<ul>
+<li><code>8</code></li>
+<li><code>16</code></li>
+<li><code>32</code></li>
+<li><code>64</code></li>
+<li><code>ptr</code></li>
+<li><code>bool</code>: alias for <code>8</code></li>
+<li><code>size</code>: alias for <code>ptr</code></li>
+</ul>
+<p>In addition, the <code>atomic()</code> test can be inverted, as <code>!atomic()</code>, to reverse
+the preserve/destroy behavior of the <code>if</code> and <code>else</code> blocks.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This demonstrates the use of <code>if_atomic!</code> to produce multiple statements,
+and then to produce a single type-name.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">radium::if_atomic!</span> {
+  <span class="kw">if </span>atomic(size) { <span class="kw">use </span>core::sync::atomic::AtomicUsize; }
+  <span class="kw">if </span>!atomic(size) { <span class="kw">use </span>core::cell::Cell; }
+}
+
+<span class="kw">struct </span>RadiumRc&lt;T: <span class="question-mark">?</span>Sized&gt; {
+  strong: <span class="macro">radium::if_atomic!</span> {
+    <span class="kw">if </span>atomic(ptr) { AtomicUsize }
+    <span class="kw">else </span>{ Cell&lt;usize&gt; }
+  },
+  weak: radium::types::RadiumUsize,
+  data: T,
+}</code></pre></div>
+</div></details></section></div></main></body></html>

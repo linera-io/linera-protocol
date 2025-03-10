@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(AddAssign)]` generates"><title>BitXorAssign in derive_more - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_more/index.html">derive_more</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">derive_more</a>::<wbr><a class="derive" href="#">BitXorAssign</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/derive_more_impl/lib.rs.html#103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(BitXorAssign)]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-deriveaddassign-generates"><a class="doc-anchor" href="#what-deriveaddassign-generates">§</a>What <code>#[derive(AddAssign)]</code> generates</h2>
+<p>This code is very similar to the code that is generated for <code>#[derive(Add)]</code>.
+The difference is that it mutates the existing instance instead of creating a
+new one.</p>
+<h3 id="tuple-structs"><a class="doc-anchor" href="#tuple-structs">§</a>Tuple structs</h3>
+<p>When deriving <code>AddAssign</code> for a tuple struct with two fields like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AddAssign)]
+</span><span class="kw">struct </span>MyInts(i32, i32);</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::AddAssign <span class="kw">for </span>MyInts {
+    <span class="kw">fn </span>add_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: MyInts) {
+        <span class="self">self</span>.<span class="number">0</span>.add_assign(rhs.<span class="number">0</span>);
+        <span class="self">self</span>.<span class="number">1</span>.add_assign(rhs.<span class="number">1</span>);
+    }
+}</code></pre></div>
+<p>The behaviour is similar with more or less fields.</p>
+<h3 id="regular-structs"><a class="doc-anchor" href="#regular-structs">§</a>Regular structs</h3>
+<p>When deriving for a regular struct with two fields like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AddAssign)]
+</span><span class="kw">struct </span>Point2D {
+    x: i32,
+    y: i32,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::AddAssign <span class="kw">for </span>Point2D {
+    <span class="kw">fn </span>add_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: Point2D) {
+        <span class="self">self</span>.x.add_assign(rhs.x);
+        <span class="self">self</span>.y.add_assign(rhs.y);
+    }
+}</code></pre></div>
+<p>The behaviour is similar with more or less fields.</p>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>Deriving <code>AddAssign</code> is not (yet) supported for enums.
+This is mostly due to the fact that it is not trivial convert the <code>Add</code>
+derivation code, because that returns a <code>Result&lt;EnumType&gt;</code> instead of an
+<code>EnumType</code>.
+Handling the case where it errors would be hard and maybe impossible.</p>
+</div></details></section></div></main></body></html>

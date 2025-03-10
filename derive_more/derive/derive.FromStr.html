@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(FromStr)]` generates"><title>FromStr in derive_more::derive - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../derive_more/index.html">derive_more</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In derive_more::derive</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="../index.html">derive_more</a>::<wbr><a href="index.html">derive</a>::<wbr><a class="derive" href="#">FromStr</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/derive_more_impl/lib.rs.html#103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(FromStr)]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-derivefromstr-generates"><a class="doc-anchor" href="#what-derivefromstr-generates">§</a>What <code>#[derive(FromStr)]</code> generates</h2>
+<p>Deriving <code>FromStr</code> only works for enums with no fields
+or newtypes, i.e structs with only a single
+field. The result is that you will be able to call the <code>parse()</code> method on a
+string to convert it to your newtype. This only works when the type that is
+contained in the type implements <code>FromStr</code>.</p>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(FromStr, Debug, Eq, PartialEq)]
+</span><span class="kw">struct </span>MyInt(i32);
+
+<span class="attr">#[derive(FromStr, Debug, Eq, PartialEq)]
+</span><span class="kw">struct </span>Point1D{
+    x: i32,
+}
+
+<span class="macro">assert_eq!</span>(MyInt(<span class="number">5</span>), <span class="string">"5"</span>.parse().unwrap());
+<span class="macro">assert_eq!</span>(Point1D{x: <span class="number">100</span>}, <span class="string">"100"</span>.parse().unwrap());</code></pre></div>
+<h3 id="tuple-structs"><a class="doc-anchor" href="#tuple-structs">§</a>Tuple structs</h3>
+<p>When deriving <code>FromStr</code> for a tuple struct with one field:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(FromStr)]
+</span><span class="kw">struct </span>MyInt(i32);</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::FromStr <span class="kw">for </span>MyInt {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= &lt;i32 <span class="kw">as </span>derive_more::FromStr&gt;::Err;
+    <span class="kw">fn </span>from_str(src: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(MyInt(i32::from_str(src)<span class="question-mark">?</span>));
+    }
+}</code></pre></div>
+<h3 id="regular-structs"><a class="doc-anchor" href="#regular-structs">§</a>Regular structs</h3>
+<p>When deriving <code>FromStr</code> for a regular struct with one field:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(FromStr)]
+</span><span class="kw">struct </span>Point1D {
+    x: i32,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::FromStr <span class="kw">for </span>Point1D {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= &lt;i32 <span class="kw">as </span>derive_more::FromStr&gt;::Err;
+    <span class="kw">fn </span>from_str(src: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(Point1D {
+            x: i32::from_str(src)<span class="question-mark">?</span>,
+        });
+    }
+}</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>When deriving <code>FromStr</code> for an enums with variants with no fields it will
+generate a <code>from_str</code> method that converts strings that match the variant name
+to the variant. If using a case insensitive match would give a unique variant
+(i.e you dont have both a <code>MyEnum::Foo</code> and a <code>MyEnum::foo</code> variant) then case
+insensitive matching will be used, otherwise it will fall back to exact string
+matching.</p>
+<p>Since the string may not match any variants an error type is needed, so the
+<code>derive_more::FromStrError</code> will be used for that purpose.</p>
+<p>e.g. Given the following enum:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(FromStr)]
+</span><span class="kw">enum </span>EnumNoFields {
+    Foo,
+    Bar,
+    Baz,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::FromStr <span class="kw">for </span>EnumNoFields {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= derive_more::FromStrError;
+    <span class="kw">fn </span>from_str(src: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span>src.to_lowercase().as_str() {
+            <span class="string">"foo" </span>=&gt; EnumNoFields::Foo,
+            <span class="string">"bar" </span>=&gt; EnumNoFields::Bar,
+            <span class="string">"baz" </span>=&gt; EnumNoFields::Baz,
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(derive_more::FromStrError::new(<span class="string">"EnumNoFields"</span>)),
+        })
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>
