@@ -943,31 +943,6 @@ pub struct ChannelSubscription {
     pub name: ChannelName,
 }
 
-/// Externally visible results of an execution, tagged by their application.
-#[derive(Debug)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[expect(clippy::large_enum_variant)]
-pub enum ExecutionOutcome {
-    System(RawExecutionOutcome<SystemMessage>),
-    User(UserApplicationId, RawExecutionOutcome<Vec<u8>>),
-}
-
-impl ExecutionOutcome {
-    pub fn application_id(&self) -> GenericApplicationId {
-        match self {
-            ExecutionOutcome::System(_) => GenericApplicationId::System,
-            ExecutionOutcome::User(app_id, _) => GenericApplicationId::User(*app_id),
-        }
-    }
-
-    pub fn message_count(&self) -> usize {
-        match self {
-            ExecutionOutcome::System(outcome) => outcome.messages.len(),
-            ExecutionOutcome::User(_, outcome) => outcome.messages.len(),
-        }
-    }
-}
-
 impl<Message> RawExecutionOutcome<Message> {
     pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;

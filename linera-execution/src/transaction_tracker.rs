@@ -5,13 +5,14 @@ use std::{collections::BTreeMap, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ArithmeticError, Blob, Event, OracleResponse},
+    data_types::{Amount, ArithmeticError, Blob, Event, OracleResponse},
     ensure,
     identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
 };
 
 use crate::{
-    ExecutionError, ExecutionOutcome, RawExecutionOutcome, SystemExecutionError, SystemMessage,
+    ExecutionError, Message, OutgoingMessage, RawExecutionOutcome, RawOutgoingMessage,
+    SystemExecutionError, SystemMessage,
 };
 
 /// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
@@ -23,7 +24,7 @@ pub struct TransactionTracker {
     #[debug(skip_if = Vec::is_empty)]
     oracle_responses: Vec<OracleResponse>,
     #[debug(skip_if = Vec::is_empty)]
-    outcomes: Vec<ExecutionOutcome>,
+    outgoing_messages: Vec<OutgoingMessage>,
     next_message_index: u32,
     next_application_index: u32,
     /// Events recorded by contracts' `emit` calls.
@@ -42,7 +43,7 @@ pub struct TransactionOutcome {
     #[debug(skip_if = Vec::is_empty)]
     pub oracle_responses: Vec<OracleResponse>,
     #[debug(skip_if = Vec::is_empty)]
-    pub outcomes: Vec<ExecutionOutcome>,
+    pub outgoing_messages: Vec<OutgoingMessage>,
     pub next_message_index: u32,
     pub next_application_index: u32,
     /// Events recorded by contracts' `emit` calls.
@@ -88,7 +89,7 @@ impl TransactionTracker {
         &mut self,
         outcome: RawExecutionOutcome<SystemMessage>,
     ) -> Result<(), ArithmeticError> {
-        self.add_outcome(ExecutionOutcome::System(outcome))
+        self.add_outcome(Message::System, outcome)
     }
 
     pub fn add_user_outcome(
@@ -96,27 +97,51 @@ impl TransactionTracker {
         application_id: ApplicationId,
         outcome: RawExecutionOutcome<Vec<u8>>,
     ) -> Result<(), ArithmeticError> {
-        self.add_outcome(ExecutionOutcome::User(application_id, outcome))
+        self.add_outcome(
+            |bytes| Message::User {
+                application_id,
+                bytes,
+            },
+            outcome,
+        )
     }
 
-    pub fn add_outcomes(
+    fn add_outcome<M, F>(
         &mut self,
-        outcomes: impl IntoIterator<Item = ExecutionOutcome>,
-    ) -> Result<(), ArithmeticError> {
-        for outcome in outcomes {
-            self.add_outcome(outcome)?;
+        lift: F,
+        outcome: RawExecutionOutcome<M>,
+    ) -> Result<(), ArithmeticError>
+    where
+        F: Fn(M) -> Message,
+    {
+        for RawOutgoingMessage {
+            destination,
+            authenticated,
+            grant,
+            kind,
+            message,
+        } in outcome.messages
+        {
+            let authenticated_signer = outcome.authenticated_signer.filter(|_| authenticated);
+            let refund_grant_to = outcome.refund_grant_to.filter(|_| grant > Amount::ZERO);
+            self.add_outgoing_message(OutgoingMessage {
+                destination,
+                authenticated_signer,
+                grant,
+                refund_grant_to,
+                kind,
+                message: lift(message),
+            })?;
         }
         Ok(())
     }
 
-    fn add_outcome(&mut self, outcome: ExecutionOutcome) -> Result<(), ArithmeticError> {
-        let message_count =
-            u32::try_from(outcome.message_count()).map_err(|_| ArithmeticError::Overflow)?;
+    fn add_outgoing_message(&mut self, message: OutgoingMessage) -> Result<(), ArithmeticError> {
         self.next_message_index = self
             .next_message_index
-            .checked_add(message_count)
+            .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
-        self.outcomes.push(outcome);
+        self.outgoing_messages.push(message);
         Ok(())
     }
 
@@ -183,7 +208,7 @@ impl TransactionTracker {
         let TransactionTracker {
             replaying_oracle_responses,
             oracle_responses,
-            outcomes,
+            outgoing_messages,
             next_message_index,
             next_application_index,
             events,
@@ -198,7 +223,7 @@ impl TransactionTracker {
             );
         }
         Ok(TransactionOutcome {
-            outcomes,
+            outgoing_messages,
             oracle_responses,
             next_message_index,
             next_application_index,

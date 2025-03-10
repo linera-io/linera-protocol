@@ -218,7 +218,7 @@ async fn test_fee_consumption(
     .await?;
 
     let txn_outcome = txn_tracker.into_outcome()?;
-    assert!(txn_outcome.outcomes.is_empty());
+    assert!(txn_outcome.outgoing_messages.is_empty());
 
     match initial_grant {
         None => {

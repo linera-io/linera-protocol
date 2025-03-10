@@ -6,14 +6,13 @@
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    system::Recipient, test_utils::SystemExecutionState, ExecutionOutcome, Message, MessageContext,
-    Operation, OperationContext, Query, QueryContext, QueryOutcome, QueryResponse,
-    RawExecutionOutcome, ResourceController, SystemMessage, SystemOperation, SystemQuery,
-    SystemResponse, TransactionTracker,
+    system::Recipient, test_utils::SystemExecutionState, Message, MessageContext, Operation,
+    OperationContext, Query, QueryContext, QueryOutcome, QueryResponse, ResourceController,
+    SystemMessage, SystemOperation, SystemQuery, SystemResponse, TransactionTracker,
 };
 
 #[tokio::test]
@@ -55,19 +54,8 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     .await
     .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
-    let account = Account {
-        chain_id: ChainId::root(0),
-        owner: Some(AccountOwner::User(owner)),
-    };
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    assert_eq!(
-        txn_outcome.outcomes,
-        vec![ExecutionOutcome::System(
-            RawExecutionOutcome::default()
-                .with_authenticated_signer(Some(owner))
-                .with_refund_grant_to(Some(account))
-        )]
-    );
+    assert!(txn_outcome.outgoing_messages.is_empty());
     Ok(())
 }
 
@@ -109,10 +97,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    assert_eq!(
-        txn_outcome.outcomes,
-        vec![ExecutionOutcome::System(RawExecutionOutcome::default())]
-    );
+    assert!(txn_outcome.outgoing_messages.is_empty());
     Ok(())
 }
 

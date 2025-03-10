@@ -7,7 +7,7 @@ use linera_base::vm::VmRuntime;
 use linera_views::context::MemoryContext;
 
 use super::*;
-use crate::{ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};
+use crate::{ExecutionStateView, Message, TestExecutionRuntimeContext};
 
 /// Returns an execution state view and a matching operation context, for epoch 1, with root
 /// chain 0 as the admin ID and one empty committee.
@@ -78,9 +78,6 @@ async fn application_message_index() -> anyhow::Result<()> {
         .system
         .execute_operation(context, operation, &mut txn_tracker)
         .await?;
-    let [ExecutionOutcome::System(_)] = &txn_tracker.into_outcome().unwrap().outcomes[..] else {
-        panic!("Unexpected outcome");
-    };
     let id = expected_application_id(&context, &module_id, vec![], vec![], 0);
     assert_eq!(new_application, Some((id, vec![])));
 
@@ -111,13 +108,10 @@ async fn open_chain_message_index() {
         .await
         .unwrap();
     assert_eq!(new_application, None);
-    let [ExecutionOutcome::System(result)] = &txn_tracker.into_outcome().unwrap().outcomes[..]
-    else {
-        panic!("Unexpected outcome");
-    };
     assert_eq!(
-        result.messages[OPEN_CHAIN_MESSAGE_INDEX as usize].message,
-        SystemMessage::OpenChain(config)
+        txn_tracker.into_outcome().unwrap().outgoing_messages[OPEN_CHAIN_MESSAGE_INDEX as usize]
+            .message,
+        Message::System(SystemMessage::OpenChain(config))
     );
 }
 

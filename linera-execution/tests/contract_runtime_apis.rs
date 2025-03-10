@@ -8,7 +8,6 @@ use std::{
     vec,
 };
 
-use anyhow::bail;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
@@ -27,9 +26,9 @@ use linera_execution::{
         blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,
         test_accounts_strategy, ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
-    Operation, OperationContext, ResourceController, SystemExecutionError,
-    SystemExecutionStateView, TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, Message, MessageContext, Operation,
+    OperationContext, ResourceController, SystemExecutionError, SystemExecutionStateView,
+    TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
 use test_case::test_matrix;
@@ -105,25 +104,20 @@ async fn test_transfer_system_api(
     .await?;
 
     let TransactionOutcome {
-        outcomes,
+        outgoing_messages,
         oracle_responses,
         next_message_index,
         ..
     } = tracker.into_outcome()?;
-    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outgoing_messages.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
-
-    let ExecutionOutcome::System(ref outcome) = outcomes[0] else {
-        bail!("Missing system outcome with expected credit message");
-    };
-
-    assert_eq!(outcome.messages.len(), 1);
+    assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     view.execute_message(
         create_dummy_message_context(None),
         Timestamp::from(0),
-        Message::System(outcome.messages[0].message.clone()),
+        outgoing_messages[0].message.clone(),
         None,
         &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
@@ -305,27 +299,22 @@ async fn test_claim_system_api(
         .await?;
 
     let TransactionOutcome {
-        outcomes,
+        outgoing_messages,
         oracle_responses,
         next_message_index,
         ..
     } = tracker.into_outcome()?;
-    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outgoing_messages.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
-
-    let ExecutionOutcome::System(ref outcome) = outcomes[0] else {
-        bail!("Missing system outcome with expected withdraw message");
-    };
-
-    assert_eq!(outcome.messages.len(), 1);
+    assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     source_view
         .execute_message(
             create_dummy_message_context(None),
             Timestamp::from(0),
-            Message::System(outcome.messages[0].message.clone()),
+            outgoing_messages[0].message.clone(),
             None,
             &mut tracker,
             &mut controller,
@@ -345,20 +334,15 @@ async fn test_claim_system_api(
         .await?;
 
     let TransactionOutcome {
-        outcomes,
+        outgoing_messages,
         oracle_responses,
         next_message_index,
         ..
     } = tracker.into_outcome()?;
-    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outgoing_messages.len(), 1);
     assert!(oracle_responses.is_empty());
     assert_eq!(next_message_index, 1);
-
-    let ExecutionOutcome::System(ref outcome) = outcomes[0] else {
-        bail!("Missing system outcome with expected credit message");
-    };
-
-    assert_eq!(outcome.messages.len(), 1);
+    assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     let context = MessageContext {
@@ -369,7 +353,7 @@ async fn test_claim_system_api(
         .execute_message(
             context,
             Timestamp::from(0),
-            Message::System(outcome.messages[0].message.clone()),
+            outgoing_messages[0].message.clone(),
             None,
             &mut tracker,
             &mut controller,
