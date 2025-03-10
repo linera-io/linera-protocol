@@ -24,7 +24,7 @@ use crate::{
     execution_state_actor::ExecutionRequest,
     runtime::{LoadedApplication, ResourceController, SyncRuntime},
     test_utils::create_dummy_user_application_description,
-    ContractRuntime, RawExecutionOutcome, TransactionTracker, UserContractInstance,
+    ContractRuntime, TransactionTracker, UserContractInstance,
 };
 
 /// Test if dropping [`SyncRuntime`] does not leak memory.
@@ -202,7 +202,6 @@ fn create_dummy_application() -> ApplicationStatus {
         id,
         description,
         signer: None,
-        outcome: RawExecutionOutcome::default(),
     }
 }
 

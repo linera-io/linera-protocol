@@ -13,9 +13,7 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlockHeight, OracleResponse, Resources,
         SendMessageRequest, Timestamp,
     },
-    identifiers::{
-        Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
-    },
+    identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -171,44 +169,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     )
     .await
     .unwrap();
-    let account = Account {
-        chain_id: ChainId::root(0),
-        owner: Some(AccountOwner::User(owner)),
-    };
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    assert_eq!(
-        txn_outcome.outcomes,
-        vec![
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default()
-                    .with_authenticated_signer(Some(owner))
-                    .with_refund_grant_to(Some(account)),
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default()
-                    .with_authenticated_signer(Some(owner))
-                    .with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default()
-                    .with_refund_grant_to(Some(account))
-                    .with_authenticated_signer(Some(owner))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default()
-                    .with_authenticated_signer(Some(owner))
-                    .with_refund_grant_to(Some(account))
-            ),
-        ]
-    );
+    assert!(txn_outcome.outcomes.is_empty());
 
     {
         let state_key = state_key.clone();
@@ -356,36 +318,8 @@ async fn test_simulated_session() -> anyhow::Result<()> {
         &mut controller,
     )
     .await?;
-    let account = Account {
-        chain_id: ChainId::root(0),
-        owner: None,
-    };
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    assert_eq!(
-        txn_outcome.outcomes,
-        vec![
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-        ]
-    );
+    assert!(txn_outcome.outcomes.is_empty());
     Ok(())
 }
 
@@ -702,37 +636,22 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         txn_outcome.outcomes,
         vec![
             ExecutionOutcome::User(
-                fourth_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
                 third_id,
                 RawExecutionOutcome::default()
                     .with_refund_grant_to(Some(account))
                     .with_message(expected_first_message)
             ),
             ExecutionOutcome::User(
-                second_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                first_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                fourth_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+                third_id,
+                RawExecutionOutcome::default()
+                    .with_refund_grant_to(Some(account))
+                    .with_message(expected_second_message)
             ),
             ExecutionOutcome::User(
                 third_id,
                 RawExecutionOutcome::default()
                     .with_refund_grant_to(Some(account))
-                    .with_message(expected_second_message)
                     .with_message(expected_third_message)
-            ),
-            ExecutionOutcome::User(
-                second_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 first_id,
@@ -1023,18 +942,12 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
         txn_outcome.outcomes,
-        &[
-            ExecutionOutcome::User(
-                application_id,
-                RawExecutionOutcome::default()
-                    .with_message(expected_dummy_message)
-                    .with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                application_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-        ]
+        &[ExecutionOutcome::User(
+            application_id,
+            RawExecutionOutcome::default()
+                .with_message(expected_dummy_message)
+                .with_refund_grant_to(Some(account))
+        ),]
     );
 
     Ok(())
@@ -1110,26 +1023,12 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
         txn_outcome.outcomes,
-        &[
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default()
-                    .with_message(expected_dummy_message)
-                    .with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-        ]
+        &[ExecutionOutcome::User(
+            target_id,
+            RawExecutionOutcome::default()
+                .with_message(expected_dummy_message)
+                .with_refund_grant_to(Some(account))
+        ),]
     );
 
     Ok(())
@@ -1215,34 +1114,12 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
         txn_outcome.outcomes,
-        &[
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default()
-                    .with_message(expected_dummy_message)
-                    .with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                middle_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                middle_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-        ]
+        &[ExecutionOutcome::User(
+            target_id,
+            RawExecutionOutcome::default()
+                .with_message(expected_dummy_message)
+                .with_refund_grant_to(Some(account))
+        ),]
     );
 
     Ok(())
@@ -1372,33 +1249,22 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         txn_outcome.outcomes,
         &[
             ExecutionOutcome::User(
-                silent_target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
-            ),
-            ExecutionOutcome::User(
-                sending_target_id,
+                caller_id,
                 RawExecutionOutcome::default()
                     .with_message(expected_first_message.clone())
-                    .with_message(expected_second_message)
                     .with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
-                caller_id,
+                sending_target_id,
                 RawExecutionOutcome::default()
                     .with_message(expected_first_message)
                     .with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 sending_target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                silent_target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+                RawExecutionOutcome::default()
+                    .with_message(expected_second_message)
+                    .with_refund_grant_to(Some(account))
             ),
         ]
     );

@@ -110,7 +110,7 @@ async fn test_transfer_system_api(
         next_message_index,
         ..
     } = tracker.into_outcome()?;
-    assert_eq!(outcomes.len(), 3);
+    assert_eq!(outcomes.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
 
@@ -310,7 +310,7 @@ async fn test_claim_system_api(
         next_message_index,
         ..
     } = tracker.into_outcome()?;
-    assert_eq!(outcomes.len(), 3);
+    assert_eq!(outcomes.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
 
