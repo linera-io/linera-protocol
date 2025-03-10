@@ -31,8 +31,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle,
-        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin, PostedMessage,
-        ProposedBlock, SignatureAggregator,
+        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, OperationResult, Origin,
+        PostedMessage, ProposedBlock, SignatureAggregator,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -336,7 +336,7 @@ where
     let events = iter::repeat_with(Vec::new).take(tx_count).collect();
     let blobs = iter::repeat_with(Vec::new).take(tx_count).collect();
     let operation_results = iter::repeat_with(Vec::new)
-        .map(Into::into)
+        .map(OperationResult)
         .take(block.operations.len())
         .collect();
     let state_hash = system_state.into_hash().await;
@@ -805,7 +805,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new(); 2],
-                operation_results: vec![Default::default(); 2],
+                operation_results: vec![OperationResult::default(); 2],
             }
             .with(
                 make_first_block(ChainId::root(1))
@@ -835,7 +835,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
-                operation_results: vec![Vec::new().into()],
+                operation_results: vec![OperationResult::default()],
             }
             .with(
                 make_child_block(&certificate0.clone().into_value())
@@ -1073,7 +1073,7 @@ where
                     .into_hash()
                     .await,
                     oracle_responses: vec![Vec::new(); 2],
-                    operation_results: vec![Vec::new().into()],
+                    operation_results: vec![OperationResult::default()],
                 }
                 .with(block_proposal.content.block),
             )),
@@ -2383,7 +2383,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
-                operation_results: vec![Vec::new().into()],
+                operation_results: vec![OperationResult::default()],
             }
             .with(
                 make_first_block(admin_id)
@@ -2460,7 +2460,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
-                operation_results: vec![Vec::new().into(); 2],
+                operation_results: vec![OperationResult::default(); 2],
             }
             .with(
                 make_child_block(&certificate0.clone().into_value())
@@ -2550,7 +2550,7 @@ where
                         OracleResponse::Blob(committee_blob.id()),
                     ],
                 ],
-                operation_results: vec![Default::default()],
+                operation_results: vec![OperationResult::default()],
             }
             .with(
                 make_first_block(user_id)
@@ -2664,7 +2664,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
-                operation_results: vec![Vec::new().into()],
+                operation_results: vec![OperationResult::default()],
             }
             .with(
                 make_first_block(user_id)
@@ -2702,7 +2702,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())]],
-                operation_results: vec![Vec::new().into()],
+                operation_results: vec![OperationResult::default()],
             }
             .with(
                 make_first_block(admin_id).with_operation(SystemOperation::Admin(
@@ -2803,7 +2803,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![Vec::new()],
-                operation_results: vec![Vec::new().into()],
+                operation_results: vec![OperationResult::default()],
             }
             .with(
                 make_first_block(user_id)
@@ -2845,7 +2845,7 @@ where
                 .into_hash()
                 .await,
                 oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
-                operation_results: vec![Vec::new().into(); 2],
+                operation_results: vec![OperationResult::default(); 2],
             }
             .with(
                 make_first_block(admin_id)

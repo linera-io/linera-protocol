@@ -24,7 +24,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_chain::{
-    data_types::BlockExecutionOutcome,
+    data_types::{BlockExecutionOutcome, OperationResult},
     test::{make_child_block, make_first_block, BlockTestExt},
     types::ConfirmedBlock,
 };
@@ -153,7 +153,7 @@ where
             blobs: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![vec![]],
-            operation_results: vec![Default::default()],
+            operation_results: vec![OperationResult::default()],
         }
         .with(publish_block),
     ));
@@ -233,7 +233,7 @@ where
                 OracleResponse::Blob(service_blob_id),
             ]],
             blobs: vec![vec![application_description_blob.clone()]],
-            operation_results: vec![Vec::new().into()],
+            operation_results: vec![OperationResult::default()],
         }
         .with(create_block),
     ));
@@ -301,7 +301,7 @@ where
             blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![vec![OracleResponse::Blob(application_description_blob_id)]],
-            operation_results: vec![bcs::to_bytes(&15u64)?.into()],
+            operation_results: vec![OperationResult(bcs::to_bytes(&15u64)?)],
         }
         .with(run_block),
     ));

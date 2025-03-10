@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        Origin, PostedMessage, ProposedBlock, Target, Transaction,
+        OperationResult, Origin, PostedMessage, ProposedBlock, Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -896,7 +896,7 @@ where
                 resource_controller
                     .track_executed_block_size_sequence_extension(operation_results.len(), 1)
                     .with_execution_context(chain_execution_context)?;
-                operation_results.push(txn_outcome.operation_result.into());
+                operation_results.push(OperationResult(txn_outcome.operation_result));
             }
         }
 

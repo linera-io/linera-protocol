@@ -358,14 +358,8 @@ impl OutgoingMessageExt for OutgoingMessage {
 pub struct OperationResult(
     #[debug(with = "hex_debug")]
     #[serde(with = "serde_bytes")]
-    Vec<u8>,
+    pub Vec<u8>,
 );
-
-impl From<Vec<u8>> for OperationResult {
-    fn from(operation_outcome: Vec<u8>) -> Self {
-        OperationResult(operation_outcome)
-    }
-}
 
 impl<'de> BcsHashable<'de> for OperationResult {}
 

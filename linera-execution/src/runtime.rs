@@ -1083,13 +1083,13 @@ impl ContractSyncRuntimeHandle {
         let signer = action.signer();
         let closure = move |code: &mut UserContractInstance| match action {
             UserAction::Instantiate(context, argument) => {
-                code.instantiate(context, argument).map(|_| None)
+                code.instantiate(context, argument).map(|()| None)
             }
             UserAction::Operation(context, operation) => {
                 code.execute_operation(context, operation).map(Option::Some)
             }
             UserAction::Message(context, message) => {
-                code.execute_message(context, message).map(|_| None)
+                code.execute_message(context, message).map(|()| None)
             }
         };
 
