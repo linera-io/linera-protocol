@@ -12,7 +12,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse, Resources,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse,
         SendMessageRequest, Timestamp,
     },
     ensure, http,
@@ -32,10 +32,10 @@ use crate::{
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext, ModuleId,
-    Operation, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome, ServiceRuntime,
-    TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN,
-    MAX_STREAM_NAME_LEN,
+    Operation, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome,
+    RawOutgoingMessage, ServiceRuntime, TransactionTracker, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserContractInstance, UserServiceCode,
+    UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -119,8 +119,6 @@ struct ApplicationStatus {
     description: UserApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
-    /// The current execution outcome of the application.
-    outcome: RawExecutionOutcome<Vec<u8>, Resources>,
 }
 
 /// A loaded application instance.
@@ -331,19 +329,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             .expect("Call stack is unexpectedly empty")
     }
 
-    /// Returns a mutable reference to the [`ApplicationStatus`] of the current application.
-    ///
-    /// The current application is the last to be pushed to the `call_stack`.
-    ///
-    /// # Panics
-    ///
-    /// If the call stack is empty.
-    fn current_application_mut(&mut self) -> &mut ApplicationStatus {
-        self.call_stack
-            .last_mut()
-            .expect("Call stack is unexpectedly empty")
-    }
-
     /// Inserts a new [`ApplicationStatus`] to the end of the `call_stack`.
     ///
     /// Ensures the application's ID is also tracked in the `active_applications` set.
@@ -466,47 +451,13 @@ impl SyncRuntimeInternal<UserContractInstance> {
             description: application.description,
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
-            outcome: RawExecutionOutcome::default(),
         });
         Ok((application.instance, callee_context))
     }
 
     /// Cleans up the runtime after the execution of a call to a different contract.
     fn finish_call(&mut self) -> Result<(), ExecutionError> {
-        let ApplicationStatus {
-            id,
-            signer,
-            outcome,
-            ..
-        } = self.pop_application();
-
-        self.handle_outcome(outcome, signer, id)?;
-
-        Ok(())
-    }
-
-    /// Handles a newly produced [`RawExecutionOutcome`], conditioning and adding it to the stack
-    /// of outcomes.
-    ///
-    /// Calculates the fees, charges for the grants and attaches the authenticated `signer` and the
-    /// destination of grant refunds.
-    fn handle_outcome(
-        &mut self,
-        raw_outcome: RawExecutionOutcome<Vec<u8>, Resources>,
-        signer: Option<Owner>,
-        application_id: UserApplicationId,
-    ) -> Result<(), ExecutionError> {
-        let outcome = raw_outcome
-            .with_refund_grant_to(self.refund_grant_to)
-            .with_authenticated_signer(signer)
-            .into_priced(&self.resource_controller.policy)?;
-
-        for message in &outcome.messages {
-            self.resource_controller.track_grant(message.grant)?;
-        }
-
-        self.transaction_tracker
-            .add_user_outcome(application_id, outcome)?;
+        self.pop_application();
         Ok(())
     }
 }
@@ -1168,7 +1119,6 @@ impl ContractSyncRuntimeHandle {
                 id: application_id,
                 description: application.description.clone(),
                 signer,
-                outcome: RawExecutionOutcome::default(),
             };
 
             runtime.push_application(status);
@@ -1190,8 +1140,6 @@ impl ContractSyncRuntimeHandle {
         assert_eq!(application_status.description, contract.description);
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
-
-        runtime.handle_outcome(application_status.outcome, signer, application_id)?;
 
         Ok(())
     }
@@ -1232,9 +1180,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let application = this.current_application_mut();
+        let application = this.current_application();
+        let authenticated_signer = application.signer;
+        let application_id = application.id;
 
-        application.outcome.messages.push(message.into());
+        let message =
+            RawOutgoingMessage::from(message).into_priced(&this.resource_controller.policy)?;
+        this.resource_controller.track_grant(message.grant)?;
+
+        let outcome = RawExecutionOutcome {
+            authenticated_signer,
+            refund_grant_to: this.refund_grant_to,
+            messages: vec![message],
+        };
+        this.transaction_tracker
+            .add_user_outcome(application_id, outcome)?;
 
         Ok(())
     }
@@ -1682,7 +1642,6 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
                 id: queried_id,
                 description: application.description,
                 signer: None,
-                outcome: RawExecutionOutcome::default(),
             });
             (query_context, application.instance)
         };
