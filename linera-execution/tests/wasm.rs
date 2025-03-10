@@ -7,14 +7,13 @@ use std::sync::Arc;
 
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId},
+    identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
-    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
-    Query, QueryContext, QueryOutcome, QueryResponse, RawExecutionOutcome, ResourceControlPolicy,
-    ResourceController, ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime,
-    WasmServiceModule,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
+    QueryContext, QueryOutcome, QueryResponse, ResourceControlPolicy, ResourceController,
+    ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
 use linera_views::{context::Context as _, views::View};
 use serde_json::json;
@@ -91,10 +90,6 @@ async fn test_fuel_for_counter_wasm_application(
     };
 
     for (index, increment) in increments.iter().enumerate() {
-        let account = Account {
-            chain_id: ChainId::root(0),
-            owner: None,
-        };
         let mut txn_tracker = TransactionTracker::new(
             0,
             0,
@@ -117,19 +112,7 @@ async fn test_fuel_for_counter_wasm_application(
         )
         .await?;
         let txn_outcome = txn_tracker.into_outcome().unwrap();
-        assert_eq!(
-            txn_outcome.outcomes,
-            vec![
-                ExecutionOutcome::User(
-                    app_id.forget_abi(),
-                    RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-                ),
-                ExecutionOutcome::User(
-                    app_id.forget_abi(),
-                    RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-                ),
-            ]
-        );
+        assert!(txn_outcome.outcomes.is_empty());
     }
     assert_eq!(controller.tracker.fuel, expected_fuel);
     assert_eq!(
