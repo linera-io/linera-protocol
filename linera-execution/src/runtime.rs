@@ -325,7 +325,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     /// # Panics
     ///
     /// If the call stack is empty.
-    fn current_application(&mut self) -> &ApplicationStatus {
+    fn current_application(&self) -> &ApplicationStatus {
         self.call_stack
             .last()
             .expect("Call stack is unexpectedly empty")
@@ -1214,7 +1214,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     }
 
     fn authenticated_caller_id(&mut self) -> Result<Option<UserApplicationId>, ExecutionError> {
-        let mut this = self.inner();
+        let this = self.inner();
         if this.call_stack.len() <= 1 {
             return Ok(None);
         }
@@ -1241,7 +1241,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn subscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let application_id = this.current_application_mut().id;
+        let application_id = this.current_application().id;
         let full_name = ChannelFullName::user(name, application_id);
         this.transaction_tracker.subscribe(full_name, chain);
 
@@ -1250,7 +1250,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn unsubscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let application_id = this.current_application_mut().id;
+        let application_id = this.current_application().id;
         let full_name = ChannelFullName::user(name, application_id);
         this.transaction_tracker.unsubscribe(full_name, chain);
 
@@ -1348,7 +1348,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
         );
-        let application_id = this.current_application_mut().id.into();
+        let application_id = this.current_application().id.into();
         let stream_id = StreamId {
             stream_name,
             application_id,
@@ -1432,7 +1432,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     }
 
     fn close_chain(&mut self) -> Result<(), ExecutionError> {
-        let mut this = self.inner();
+        let this = self.inner();
         let application_id = this.current_application().id;
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::CloseChain {
@@ -1446,7 +1446,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         &mut self,
         application_permissions: ApplicationPermissions,
     ) -> Result<(), ExecutionError> {
-        let mut this = self.inner();
+        let this = self.inner();
         let application_id = this.current_application().id;
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::ChangeApplicationPermissions {
