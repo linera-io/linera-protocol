@@ -33,7 +33,7 @@ use linera_views::{
     map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    views::{ClonableView, HashableView, View, ViewError},
+    views::{ClonableView, HashableView, View},
 };
 use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
@@ -44,8 +44,8 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
     ChannelName, ChannelSubscription, ExecutionError, ExecutionRuntimeContext, MessageContext,
-    MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, ResourceController,
+    TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -368,6 +368,7 @@ where
         context: OperationContext,
         operation: SystemOperation,
         txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Option<(UserApplicationId, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut new_application = None;
@@ -439,9 +440,15 @@ where
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
-                        let committee =
-                            bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
-                        self.blob_used(Some(txn_tracker), blob_id).await?;
+                        let content = self.read_blob_content(blob_id).await?;
+                        let committee = bcs::from_bytes(content.bytes())?;
+                        self.blob_used(
+                            Some(txn_tracker),
+                            resource_controller,
+                            blob_id,
+                            content.bytes().len(),
+                        )
+                        .await?;
                         self.committees.get_mut().insert(epoch, committee);
                         self.epoch.set(Some(epoch));
                         txn_tracker.add_event(
@@ -531,6 +538,7 @@ where
                         parameters,
                         required_application_ids,
                         txn_tracker_moved,
+                        resource_controller,
                     )
                     .await?;
                 *txn_tracker = txn_tracker_moved;
@@ -543,8 +551,14 @@ where
                 self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
             }
             ReadBlob { blob_id } => {
-                self.read_blob_content(blob_id).await?;
-                self.blob_used(Some(txn_tracker), blob_id).await?;
+                let content = self.read_blob_content(blob_id).await?;
+                self.blob_used(
+                    Some(txn_tracker),
+                    resource_controller,
+                    blob_id,
+                    content.bytes().len(),
+                )
+                .await?;
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
@@ -568,8 +582,15 @@ where
                 };
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
-                let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
-                self.blob_used(Some(txn_tracker), blob_id).await?;
+                let content = self.read_blob_content(blob_id).await?;
+                let committee = bcs::from_bytes(content.bytes())?;
+                self.blob_used(
+                    Some(txn_tracker),
+                    resource_controller,
+                    blob_id,
+                    content.bytes().len(),
+                )
+                .await?;
                 self.committees.get_mut().insert(epoch, committee);
                 self.epoch.set(Some(epoch));
             }
@@ -874,6 +895,7 @@ where
         Ok(messages)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_application(
         &mut self,
         chain_id: ChainId,
@@ -882,17 +904,27 @@ where
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
         mut txn_tracker: TransactionTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
 
-        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-            self.check_bytecode_blobs(&module_id).await?;
+        let (contract_blob, service_blob) = self.get_bytecode_blobs(&module_id).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
-        self.blob_used(Some(&mut txn_tracker), contract_bytecode_blob_id)
-            .await?;
-        self.blob_used(Some(&mut txn_tracker), service_bytecode_blob_id)
-            .await?;
+        self.blob_used(
+            Some(&mut txn_tracker),
+            resource_controller,
+            contract_blob.id(),
+            contract_blob.bytes().len(),
+        )
+        .await?;
+        self.blob_used(
+            Some(&mut txn_tracker),
+            resource_controller,
+            service_blob.id(),
+            service_blob.bytes().len(),
+        )
+        .await?;
 
         let application_description = UserApplicationDescription {
             module_id,
@@ -902,8 +934,12 @@ where
             parameters,
             required_application_ids,
         };
-        self.check_required_applications(&application_description, Some(&mut txn_tracker))
-            .await?;
+        self.check_required_applications(
+            &application_description,
+            Some(&mut txn_tracker),
+            resource_controller,
+        )
+        .await?;
 
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
 
@@ -917,10 +953,16 @@ where
         &mut self,
         application_description: &UserApplicationDescription,
         mut txn_tracker: Option<&mut TransactionTracker>,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(), ExecutionError> {
         // Make sure that referenced applications IDs have been registered.
         for required_id in &application_description.required_application_ids {
-            Box::pin(self.describe_application(*required_id, txn_tracker.as_deref_mut())).await?;
+            Box::pin(self.describe_application(
+                *required_id,
+                txn_tracker.as_deref_mut(),
+                resource_controller,
+            ))
+            .await?;
         }
         Ok(())
     }
@@ -930,6 +972,7 @@ where
         &mut self,
         id: UserApplicationId,
         mut txn_tracker: Option<&mut TransactionTracker>,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<UserApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
         let blob_content = match txn_tracker
@@ -939,19 +982,34 @@ where
             Some(blob) => blob.content().clone(),
             None => self.read_blob_content(blob_id).await?,
         };
-        self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
+        self.blob_used(
+            txn_tracker.as_deref_mut(),
+            resource_controller,
+            blob_id,
+            blob_content.bytes().len(),
+        )
+        .await?;
         let description: UserApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
-        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-            self.check_bytecode_blobs(&description.module_id).await?;
+        let (contract_blob, service_blob) = self.get_bytecode_blobs(&description.module_id).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
-        self.blob_used(txn_tracker.as_deref_mut(), contract_bytecode_blob_id)
-            .await?;
-        self.blob_used(txn_tracker.as_deref_mut(), service_bytecode_blob_id)
-            .await?;
+        self.blob_used(
+            txn_tracker.as_deref_mut(),
+            resource_controller,
+            contract_blob.id(),
+            contract_blob.bytes().len(),
+        )
+        .await?;
+        self.blob_used(
+            txn_tracker.as_deref_mut(),
+            resource_controller,
+            service_blob.id(),
+            service_blob.bytes().len(),
+        )
+        .await?;
 
-        self.check_required_applications(&description, txn_tracker)
+        self.check_required_applications(&description, txn_tracker, resource_controller)
             .await?;
 
         Ok(description)
@@ -962,6 +1020,7 @@ where
         &mut self,
         mut stack: Vec<UserApplicationId>,
         txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<UserApplicationId>, ExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
@@ -986,7 +1045,9 @@ where
             seen.insert(id);
             // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
             stack.push(id);
-            let app = self.describe_application(id, Some(txn_tracker)).await?;
+            let app = self
+                .describe_application(id, Some(txn_tracker), resource_controller)
+                .await?;
             for child in app.required_application_ids.iter().rev() {
                 if !seen.contains(child) {
                     stack.push(*child);
@@ -1001,8 +1062,17 @@ where
     pub(crate) async fn blob_used(
         &mut self,
         maybe_txn_tracker: Option<&mut TransactionTracker>,
+        resource_controller: &mut ResourceController<Option<Owner>>,
         blob_id: BlobId,
+        size: usize,
     ) -> Result<bool, ExecutionError> {
+        // Charge fees only for data and committee blobs.
+        if matches!(blob_id.blob_type, BlobType::Data | BlobType::Committee) {
+            resource_controller
+                .with_state(self)
+                .await?
+                .track_blob_read(size as u64)?;
+        }
         if self.used_blobs.contains(&blob_id).await? {
             return Ok(false); // Nothing to do.
         }
@@ -1021,11 +1091,8 @@ where
     }
 
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
-        match self.context().extra().get_blob(blob_id).await {
-            Ok(blob) => Ok(blob.into()),
-            Err(ViewError::BlobsNotFound(_)) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
-            Err(error) => Err(error.into()),
-        }
+        let blobs = self.context().extra().get_blobs(&[blob_id]).await?;
+        Ok(blobs.into_iter().next().unwrap().into())
     }
 
     pub async fn assert_blob_exists(&mut self, blob_id: BlobId) -> Result<(), ExecutionError> {
@@ -1036,39 +1103,19 @@ where
         }
     }
 
-    async fn check_bytecode_blobs(
+    async fn get_bytecode_blobs(
         &mut self,
         module_id: &ModuleId,
-    ) -> Result<(BlobId, BlobId), ExecutionError> {
+    ) -> Result<(Blob, Blob), ExecutionError> {
         let contract_bytecode_blob_id =
             BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode);
-
-        let mut missing_blobs = Vec::new();
-        if !self
-            .context()
-            .extra()
-            .contains_blob(contract_bytecode_blob_id)
-            .await?
-        {
-            missing_blobs.push(contract_bytecode_blob_id);
-        }
-
         let service_bytecode_blob_id =
             BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode);
-        if !self
-            .context()
-            .extra()
-            .contains_blob(service_bytecode_blob_id)
+        let extra = self.context().extra();
+        let mut blobs = extra
+            .get_blobs(&[contract_bytecode_blob_id, service_bytecode_blob_id])
             .await?
-        {
-            missing_blobs.push(service_bytecode_blob_id);
-        }
-
-        ensure!(
-            missing_blobs.is_empty(),
-            ExecutionError::BlobsNotFound(missing_blobs)
-        );
-
-        Ok((contract_bytecode_blob_id, service_bytecode_blob_id))
+            .into_iter();
+        Ok((blobs.next().unwrap(), blobs.next().unwrap()))
     }
 }

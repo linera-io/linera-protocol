@@ -30,8 +30,8 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, OutgoingMessage,
-    TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserServiceCode,
+    ResourceController, TransactionTracker, UserApplicationDescription, UserApplicationId,
+    UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -67,6 +67,7 @@ where
         &mut self,
         id: UserApplicationId,
         txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
@@ -78,7 +79,7 @@ where
             }
             None => {
                 self.system
-                    .describe_application(id, Some(txn_tracker))
+                    .describe_application(id, Some(txn_tracker), resource_controller)
                     .await?
             }
         };
@@ -94,6 +95,7 @@ where
         &mut self,
         id: UserApplicationId,
         txn_tracker: Option<&mut TransactionTracker>,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
@@ -106,7 +108,11 @@ where
                 let blob = description.clone();
                 bcs::from_bytes(blob.bytes())?
             }
-            None => self.system.describe_application(id, txn_tracker).await?,
+            None => {
+                self.system
+                    .describe_application(id, txn_tracker, resource_controller)
+                    .await?
+            }
         };
         let code = self
             .context()
@@ -120,6 +126,7 @@ where
     pub(crate) async fn handle_request(
         &mut self,
         request: ExecutionRequest,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
@@ -129,7 +136,9 @@ where
                 callback,
                 mut txn_tracker,
             } => {
-                let (code, description) = self.load_contract(id, &mut txn_tracker).await?;
+                let (code, description) = self
+                    .load_contract(id, &mut txn_tracker, resource_controller)
+                    .await?;
                 callback.respond((code, description, txn_tracker))
             }
             #[cfg(not(web))]
@@ -138,7 +147,9 @@ where
                 callback,
                 mut txn_tracker,
             } => {
-                let (code, description) = self.load_service(id, Some(&mut txn_tracker)).await?;
+                let (code, description) = self
+                    .load_service(id, Some(&mut txn_tracker), resource_controller)
+                    .await?;
                 callback.respond((code, description, txn_tracker))
             }
 
@@ -350,6 +361,7 @@ where
                         parameters,
                         required_application_ids,
                         txn_tracker,
+                        resource_controller,
                     )
                     .await?;
                 callback.respond(Ok(create_application_result));
@@ -402,13 +414,21 @@ where
 
             ReadBlobContent { blob_id, callback } => {
                 let blob = self.system.read_blob_content(blob_id).await?;
-                let is_new = self.system.blob_used(None, blob_id).await?;
+                let is_new = self
+                    .system
+                    .blob_used(None, resource_controller, blob_id, blob.bytes().len())
+                    .await?;
                 callback.respond((blob, is_new))
             }
 
             AssertBlobExists { blob_id, callback } => {
                 self.system.assert_blob_exists(blob_id).await?;
-                callback.respond(self.system.blob_used(None, blob_id).await?)
+                // Treating this as reading a size-0 blob for fee purposes.
+                callback.respond(
+                    self.system
+                        .blob_used(None, resource_controller, blob_id, 0)
+                        .await?,
+                )
             }
 
             GetApplicationPermissions { callback } => {

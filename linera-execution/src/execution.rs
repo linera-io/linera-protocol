@@ -203,7 +203,7 @@ where
     ) -> Result<(), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
-            .with_state_and_grant(self, cloned_grant.as_mut())
+            .with_state_and_grant(&mut self.system, cloned_grant.as_mut())
             .await?
             .balance()?;
         let controller = ResourceController {
@@ -213,7 +213,9 @@ where
         };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self.load_contract(application_id, txn_tracker).await?;
+        let (code, description) = self
+            .load_contract(application_id, txn_tracker, resource_controller)
+            .await?;
         let txn_tracker_moved = mem::take(txn_tracker);
         let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let runtime = ContractSyncRuntime::new(
@@ -237,7 +239,7 @@ where
         contract_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
+            self.handle_request(request, resource_controller).await?;
         }
 
         let (result, controller, txn_tracker_moved) = contract_runtime_task.join().await?;
@@ -246,7 +248,7 @@ where
         txn_tracker.add_operation_result(result);
 
         resource_controller
-            .with_state_and_grant(self, grant)
+            .with_state_and_grant(&mut self.system, grant)
             .await?
             .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
@@ -267,7 +269,7 @@ where
             Operation::System(op) => {
                 let new_application = self
                     .system
-                    .execute_operation(context, op, txn_tracker)
+                    .execute_operation(context, op, txn_tracker, resource_controller)
                     .await?;
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
@@ -426,7 +428,9 @@ where
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self.load_service(application_id, None).await?;
+        let (code, description) = self
+            .load_service(application_id, None, &mut ResourceController::default())
+            .await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
@@ -442,7 +446,8 @@ where
         service_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
+            self.handle_request(request, &mut ResourceController::default())
+                .await?;
         }
 
         service_runtime_task.join().await
@@ -474,7 +479,7 @@ where
             futures::select! {
                 maybe_request = incoming_execution_requests.next() => {
                     if let Some(request) = maybe_request {
-                        self.handle_request(request).await?;
+                        self.handle_request(request, &mut ResourceController::default()).await?;
                     }
                 }
                 outcome = &mut outcome_receiver => {

@@ -1133,11 +1133,18 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
-    let user = builder.add_root_chain(1, Amount::ZERO).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(4)).await?;
+    let user = builder.add_root_chain(1, Amount::from_tokens(1)).await?;
     let validators = builder.initial_committee.validators().clone();
 
-    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
+    let policy = ResourceControlPolicy {
+        blob_read: Amount::from_micros(1),
+        blob_published: Amount::from_micros(10),
+        blob_byte_published: Amount::from_nanos(1),
+        blob_byte_read: Amount::from_attos(1),
+        ..ResourceControlPolicy::default()
+    };
+    let committee = Committee::new(validators.clone(), policy.clone());
     admin.stage_new_committee(committee).await.unwrap();
     admin.finalize_committee().await.unwrap();
 
@@ -1147,8 +1154,17 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
     // Create a new committee.
-    let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
+    let committee = Committee::new(validators, policy.clone());
+    let balance = admin.local_balance().await?;
+    let committee_size = bcs::serialized_size(&committee)? as u128;
     admin.stage_new_committee(committee).await.unwrap();
+    assert_eq!(
+        admin.local_balance().await?,
+        balance
+            - (policy.blob_byte_published + policy.blob_byte_read) * committee_size
+            - policy.blob_published
+            - policy.blob_read
+    );
     assert_eq!(admin.next_block_height(), BlockHeight::from(5));
     assert!(admin.pending_proposal().is_none());
     assert!(admin.key_pair().await.is_ok());
@@ -1183,7 +1199,14 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
     user.synchronize_from_validators().await.unwrap();
 
+    let balance = user.local_balance().await?;
     user.process_inbox().await.unwrap();
+    assert_eq!(
+        user.local_balance().await?,
+        balance + Amount::from_tokens(3)
+            - policy.blob_byte_read * committee_size
+            - policy.blob_read
+    );
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
 
     // Have the admin chain deprecate the previous epoch.
@@ -1205,6 +1228,7 @@ where
         .unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
 
+    let balance = admin.local_balance().await?;
     // Try again to make a transfer back to the admin chain.
     let cert = user
         .transfer_to_account(
@@ -1221,7 +1245,10 @@ where
         .unwrap();
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
-    assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
+    assert_eq!(
+        admin.local_balance().await.unwrap(),
+        balance + Amount::from_tokens(3)
+    );
     Ok(())
 }
 

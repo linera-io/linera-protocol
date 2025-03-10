@@ -52,6 +52,10 @@ fn resources_test_case() -> Resources {
     Resources {
         bytes_to_read: 1_474_560,
         bytes_to_write: 571,
+        blobs_to_read: 71,
+        blobs_to_publish: 73,
+        blob_bytes_to_read: 67,
+        blob_bytes_to_publish: 71,
         fuel: 1_000,
         message_size: 4,
         messages: 93,
@@ -72,6 +76,10 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
         grant: Resources {
             bytes_to_read: 200,
             bytes_to_write: 0,
+            blobs_to_read: 100,
+            blobs_to_publish: 1000,
+            blob_bytes_to_read: 10,
+            blob_bytes_to_publish: 100,
             fuel: 8,
             message_size: 1,
             messages: 0,

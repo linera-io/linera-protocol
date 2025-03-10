@@ -7,14 +7,14 @@ use std::{sync::Arc, time::Duration};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError},
+    data_types::{Amount, ArithmeticError, BlobContent},
     ensure,
     identifiers::{AccountOwner, Owner},
 };
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
 
-use crate::{ExecutionError, ExecutionStateView, Message, Operation, ResourceControlPolicy};
+use crate::{ExecutionError, Message, Operation, ResourceControlPolicy, SystemExecutionStateView};
 
 #[derive(Clone, Debug, Default)]
 pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
@@ -43,6 +43,14 @@ pub struct ResourceTracker {
     pub bytes_read: u64,
     /// The number of bytes written.
     pub bytes_written: u64,
+    /// The number of blobs read.
+    pub blobs_read: u32,
+    /// The number of blobs published.
+    pub blobs_published: u32,
+    /// The number of blob bytes read.
+    pub blob_bytes_read: u64,
+    /// The number of blob bytes published.
+    pub blob_bytes_published: u64,
     /// The change in the number of bytes being stored by user applications.
     pub bytes_stored: i32,
     /// The number of operations executed.
@@ -266,6 +274,42 @@ where
         Ok(())
     }
 
+    /// Tracks a number of blob bytes written.
+    pub(crate) fn track_blob_read(&mut self, count: u64) -> Result<(), ExecutionError> {
+        {
+            let tracker = self.tracker.as_mut();
+            tracker.blob_bytes_read = tracker
+                .blob_bytes_read
+                .checked_add(count)
+                .ok_or(ArithmeticError::Overflow)?;
+            tracker.blobs_read = tracker
+                .blobs_read
+                .checked_add(1)
+                .ok_or(ArithmeticError::Overflow)?;
+        }
+        self.update_balance(self.policy.blob_read_price(count)?)?;
+        Ok(())
+    }
+
+    /// Tracks a number of blob bytes published.
+    pub fn track_blob_published(&mut self, content: &BlobContent) -> Result<(), ExecutionError> {
+        self.policy.check_blob_size(content)?;
+        let size = content.bytes().len() as u64;
+        {
+            let tracker = self.tracker.as_mut();
+            tracker.blob_bytes_published = tracker
+                .blob_bytes_published
+                .checked_add(size)
+                .ok_or(ArithmeticError::Overflow)?;
+            tracker.blobs_published = tracker
+                .blobs_published
+                .checked_add(1)
+                .ok_or(ArithmeticError::Overflow)?;
+        }
+        self.update_balance(self.policy.blob_published_price(size)?)?;
+        Ok(())
+    }
+
     /// Tracks a change in the number of bytes stored.
     // TODO(#1536): This is not fully implemented.
     #[allow(dead_code)]
@@ -439,7 +483,7 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
     /// where the accounting functions of [`ResourceController`] are available.
     pub async fn with_state<'a, C>(
         &mut self,
-        view: &'a mut ExecutionStateView<C>,
+        view: &'a mut SystemExecutionStateView<C>,
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
         C: Context + Clone + Send + Sync + 'static,
@@ -452,7 +496,7 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
     /// [`ResourceController`] are available.
     pub async fn with_state_and_grant<'a, C>(
         &mut self,
-        view: &'a mut ExecutionStateView<C>,
+        view: &'a mut SystemExecutionStateView<C>,
         grant: Option<&'a mut Amount>,
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
@@ -464,17 +508,12 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
         if let Some(grant) = grant {
             sources.push(grant);
         } else {
-            sources.push(view.system.balance.get_mut());
+            sources.push(view.balance.get_mut());
         }
         // Then the local account, if any. Currently, any negative fee (e.g. storage
         // refund) goes preferably to this account.
         if let Some(owner) = &self.account {
-            if let Some(balance) = view
-                .system
-                .balances
-                .get_mut(&AccountOwner::User(*owner))
-                .await?
-            {
+            if let Some(balance) = view.balances.get_mut(&AccountOwner::User(*owner)).await? {
                 sources.push(balance);
             }
         }
