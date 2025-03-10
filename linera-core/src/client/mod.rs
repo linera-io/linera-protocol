@@ -3074,7 +3074,7 @@ where
     }
 
     /// Returns operations to process all pending epoch changes: first the new epochs, in order,
-    /// then the revoked epochs, in order.
+    /// then the removed epochs, in order.
     async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, ChainClientError> {
         let (mut min_epoch, mut next_epoch) = {
             let query = ChainInfoQuery::new(self.chain_id).with_committees();

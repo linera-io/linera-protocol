@@ -197,12 +197,11 @@ pub enum SystemOperation {
 /// Operations that are only allowed on the admin chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum AdminOperation {
-    /// Registers a new committee. This will notify the subscribers of the admin chain so that they
-    /// can migrate to the new epoch by accepting the resulting `CreateCommittee` as an incoming
-    /// message in a block.
+    /// Registers a new committee. Other chains can then migrate to the new epoch by executing
+    /// [`SystemOperation::ProcessNewEpoch`].
     CreateCommittee { epoch: Epoch, blob_hash: CryptoHash },
-    /// Removes a committee. Once the resulting `RemoveCommittee` message is accepted by a chain,
-    /// blocks from the retired epoch will not be accepted until they are followed (hence
+    /// Removes a committee. Other chains should execute [`SystemOperation::RemoveCommittee`], so
+    /// that blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { epoch: Epoch },
 }
