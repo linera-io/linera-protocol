@@ -115,9 +115,7 @@ impl Eq for MockApplication {}
 
 impl<Runtime> Drop for MockApplicationInstance<Runtime> {
     fn drop(&mut self) {
-        if self.expected_calls.is_empty() {
-            self.active_instances.fetch_sub(1, Ordering::AcqRel);
-        }
+        self.active_instances.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
