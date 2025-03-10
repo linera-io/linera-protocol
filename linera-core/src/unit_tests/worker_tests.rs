@@ -31,8 +31,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle,
-        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin, OutgoingMessage,
-        PostedMessage, ProposedBlock, SignatureAggregator,
+        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin, PostedMessage,
+        ProposedBlock, SignatureAggregator,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -48,8 +48,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
-    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, QueryOutcome,
-    QueryResponse, SystemExecutionError, SystemQuery, SystemResponse,
+    ChannelSubscription, ExecutionError, Message, MessageKind, OutgoingMessage, Query,
+    QueryContext, QueryOutcome, QueryResponse, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{

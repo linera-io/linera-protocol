@@ -5,7 +5,6 @@
 
 use std::{collections::BTreeMap, vec};
 
-use anyhow::Context as _;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
@@ -24,8 +23,8 @@ use linera_execution::{
         create_dummy_user_application_registrations, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
-    Message, Operation, OperationContext, Query, QueryContext, QueryOutcome, QueryResponse,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeContext, Message, Operation,
+    OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome, QueryResponse,
     RawExecutionOutcome, RawOutgoingMessage, ResourceControlPolicy, ResourceController,
     SystemOperation, TransactionTracker,
 };
@@ -170,7 +169,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     .await
     .unwrap();
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    assert!(txn_outcome.outcomes.is_empty());
+    assert!(txn_outcome.outgoing_messages.is_empty());
 
     {
         let state_key = state_key.clone();
@@ -319,7 +318,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     )
     .await?;
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    assert!(txn_outcome.outcomes.is_empty());
+    assert!(txn_outcome.outgoing_messages.is_empty());
     Ok(())
 }
 
@@ -632,34 +631,24 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
+    let mut expected = TransactionTracker::default();
+    expected.add_user_outcome(
+        third_id,
+        RawExecutionOutcome::default()
+            .with_refund_grant_to(Some(account))
+            .with_message(expected_first_message)
+            .with_message(expected_second_message)
+            .with_message(expected_third_message),
+    )?;
+    expected.add_user_outcome(
+        first_id,
+        RawExecutionOutcome::default()
+            .with_refund_grant_to(Some(account))
+            .with_message(expected_fourth_message),
+    )?;
     assert_eq!(
-        txn_outcome.outcomes,
-        vec![
-            ExecutionOutcome::User(
-                third_id,
-                RawExecutionOutcome::default()
-                    .with_refund_grant_to(Some(account))
-                    .with_message(expected_first_message)
-            ),
-            ExecutionOutcome::User(
-                third_id,
-                RawExecutionOutcome::default()
-                    .with_refund_grant_to(Some(account))
-                    .with_message(expected_second_message)
-            ),
-            ExecutionOutcome::User(
-                third_id,
-                RawExecutionOutcome::default()
-                    .with_refund_grant_to(Some(account))
-                    .with_message(expected_third_message)
-            ),
-            ExecutionOutcome::User(
-                first_id,
-                RawExecutionOutcome::default()
-                    .with_refund_grant_to(Some(account))
-                    .with_message(expected_fourth_message)
-            ),
-        ]
+        txn_outcome.outgoing_messages,
+        expected.into_outcome().unwrap().outgoing_messages
     );
     Ok(())
 }
@@ -940,14 +929,16 @@ async fn test_simple_message() -> anyhow::Result<()> {
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
+    let mut expected = TransactionTracker::default();
+    expected.add_user_outcome(
+        application_id,
+        RawExecutionOutcome::default()
+            .with_message(expected_dummy_message)
+            .with_refund_grant_to(Some(account)),
+    )?;
     assert_eq!(
-        txn_outcome.outcomes,
-        &[ExecutionOutcome::User(
-            application_id,
-            RawExecutionOutcome::default()
-                .with_message(expected_dummy_message)
-                .with_refund_grant_to(Some(account))
-        ),]
+        txn_outcome.outgoing_messages,
+        expected.into_outcome().unwrap().outgoing_messages
     );
 
     Ok(())
@@ -1021,14 +1012,16 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
+    let mut expected = TransactionTracker::default();
+    expected.add_user_outcome(
+        target_id,
+        RawExecutionOutcome::default()
+            .with_message(expected_dummy_message)
+            .with_refund_grant_to(Some(account)),
+    )?;
     assert_eq!(
-        txn_outcome.outcomes,
-        &[ExecutionOutcome::User(
-            target_id,
-            RawExecutionOutcome::default()
-                .with_message(expected_dummy_message)
-                .with_refund_grant_to(Some(account))
-        ),]
+        txn_outcome.outgoing_messages,
+        expected.into_outcome().unwrap().outgoing_messages
     );
 
     Ok(())
@@ -1112,14 +1105,16 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         owner: None,
     };
     let txn_outcome = txn_tracker.into_outcome().unwrap();
+    let mut expected = TransactionTracker::default();
+    expected.add_user_outcome(
+        target_id,
+        RawExecutionOutcome::default()
+            .with_message(expected_dummy_message)
+            .with_refund_grant_to(Some(account)),
+    )?;
     assert_eq!(
-        txn_outcome.outcomes,
-        &[ExecutionOutcome::User(
-            target_id,
-            RawExecutionOutcome::default()
-                .with_message(expected_dummy_message)
-                .with_refund_grant_to(Some(account))
-        ),]
+        txn_outcome.outgoing_messages,
+        expected.into_outcome().unwrap().outgoing_messages
     );
 
     Ok(())
@@ -1245,28 +1240,23 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     // Return to checking the user application outcomes
     let txn_outcome = txn_tracker.into_outcome().unwrap();
+    let mut expected = TransactionTracker::default();
+    expected.add_user_outcome(
+        caller_id,
+        RawExecutionOutcome::default()
+            .with_message(expected_first_message.clone())
+            .with_refund_grant_to(Some(account)),
+    )?;
+    expected.add_user_outcome(
+        sending_target_id,
+        RawExecutionOutcome::default()
+            .with_message(expected_first_message)
+            .with_message(expected_second_message)
+            .with_refund_grant_to(Some(account)),
+    )?;
     assert_eq!(
-        txn_outcome.outcomes,
-        &[
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default()
-                    .with_message(expected_first_message.clone())
-                    .with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                sending_target_id,
-                RawExecutionOutcome::default()
-                    .with_message(expected_first_message)
-                    .with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                sending_target_id,
-                RawExecutionOutcome::default()
-                    .with_message(expected_second_message)
-                    .with_refund_grant_to(Some(account))
-            ),
-        ]
+        txn_outcome.outgoing_messages,
+        expected.into_outcome().unwrap().outgoing_messages
     );
 
     Ok(())
@@ -1344,17 +1334,9 @@ async fn test_open_chain() -> anyhow::Result<()> {
 
     assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    let message = txn_outcome
-        .outcomes
-        .iter()
-        .flat_map(|outcome| match outcome {
-            ExecutionOutcome::System(outcome) => &outcome.messages,
-            ExecutionOutcome::User(_, _) => panic!("Unexpected message"),
-        })
-        .nth((index - first_message_index) as usize)
-        .context("Message index out of bounds")?;
-    let RawOutgoingMessage {
-        message: SystemMessage::OpenChain(config),
+    let message = &txn_outcome.outgoing_messages[(index - first_message_index) as usize];
+    let OutgoingMessage {
+        message: Message::System(SystemMessage::OpenChain(config)),
         destination: Destination::Recipient(recipient_id),
         ..
     } = message

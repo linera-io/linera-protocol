@@ -479,7 +479,7 @@ pub enum ExecutionRequest {
         signer: Option<Owner>,
         application_id: UserApplicationId,
         #[debug(skip)]
-        callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
+        callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
 
     Claim {
@@ -490,7 +490,7 @@ pub enum ExecutionRequest {
         signer: Option<Owner>,
         application_id: UserApplicationId,
         #[debug(skip)]
-        callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
+        callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
 
     SystemTimestamp {

@@ -896,18 +896,40 @@ pub enum MessageKind {
     Bouncing,
 }
 
+/// A posted message together with routing information.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct OutgoingMessage {
+    /// The destination of the message.
+    pub destination: Destination,
+    /// The user authentication carried by the message, if any.
+    #[debug(skip_if = Option::is_none)]
+    pub authenticated_signer: Option<Owner>,
+    /// A grant to pay for the message execution.
+    #[debug(skip_if = Amount::is_zero)]
+    pub grant: Amount,
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    #[debug(skip_if = Option::is_none)]
+    pub refund_grant_to: Option<Account>,
+    /// The kind of message being sent.
+    pub kind: MessageKind,
+    /// The message itself.
+    pub message: Message,
+}
+
+impl<'de> BcsHashable<'de> for OutgoingMessage {}
+
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawExecutionOutcome<Message, Grant> {
+pub struct RawExecutionOutcome<Message> {
     /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     pub refund_grant_to: Option<Account>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer and including grant with the refund policy described above.
-    pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
+    pub messages: Vec<RawOutgoingMessage<Message, Amount>>,
 }
 
 /// The identifier of a channel, relative to a particular application.
@@ -921,32 +943,7 @@ pub struct ChannelSubscription {
     pub name: ChannelName,
 }
 
-/// Externally visible results of an execution, tagged by their application.
-#[derive(Debug)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[expect(clippy::large_enum_variant)]
-pub enum ExecutionOutcome {
-    System(RawExecutionOutcome<SystemMessage, Amount>),
-    User(UserApplicationId, RawExecutionOutcome<Vec<u8>, Amount>),
-}
-
-impl ExecutionOutcome {
-    pub fn application_id(&self) -> GenericApplicationId {
-        match self {
-            ExecutionOutcome::System(_) => GenericApplicationId::System,
-            ExecutionOutcome::User(app_id, _) => GenericApplicationId::User(*app_id),
-        }
-    }
-
-    pub fn message_count(&self) -> usize {
-        match self {
-            ExecutionOutcome::System(outcome) => outcome.messages.len(),
-            ExecutionOutcome::User(_, outcome) => outcome.messages.len(),
-        }
-    }
-}
-
-impl<Message, Grant> RawExecutionOutcome<Message, Grant> {
+impl<Message> RawExecutionOutcome<Message> {
     pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
@@ -958,13 +955,13 @@ impl<Message, Grant> RawExecutionOutcome<Message, Grant> {
     }
 
     /// Adds a `message` to this [`RawExecutionOutcome`].
-    pub fn with_message(mut self, message: RawOutgoingMessage<Message, Grant>) -> Self {
+    pub fn with_message(mut self, message: RawOutgoingMessage<Message, Amount>) -> Self {
         self.messages.push(message);
         self
     }
 }
 
-impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
+impl<Message> Default for RawExecutionOutcome<Message> {
     fn default() -> Self {
         Self {
             authenticated_signer: None,
@@ -992,28 +989,6 @@ impl<Message> RawOutgoingMessage<Message, Resources> {
             grant: policy.total_price(&grant)?,
             kind,
             message,
-        })
-    }
-}
-
-impl<Message> RawExecutionOutcome<Message, Resources> {
-    pub fn into_priced(
-        self,
-        policy: &ResourceControlPolicy,
-    ) -> Result<RawExecutionOutcome<Message, Amount>, ArithmeticError> {
-        let RawExecutionOutcome {
-            authenticated_signer,
-            refund_grant_to,
-            messages,
-        } = self;
-        let messages = messages
-            .into_iter()
-            .map(|message| message.into_priced(policy))
-            .collect::<Result<_, _>>()?;
-        Ok(RawExecutionOutcome {
-            authenticated_signer,
-            refund_grant_to,
-            messages,
         })
     }
 }

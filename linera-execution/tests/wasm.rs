@@ -112,7 +112,7 @@ async fn test_fuel_for_counter_wasm_application(
         )
         .await?;
         let txn_outcome = txn_tracker.into_outcome().unwrap();
-        assert!(txn_outcome.outcomes.is_empty());
+        assert!(txn_outcome.outgoing_messages.is_empty());
     }
     assert_eq!(controller.tracker.fuel, expected_fuel);
     assert_eq!(
