@@ -119,8 +119,6 @@ struct ApplicationStatus {
     description: UserApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
-    /// The current execution outcome of the application.
-    outcome: RawExecutionOutcome<Vec<u8>, Resources>,
 }
 
 /// A loaded application instance.
@@ -466,23 +464,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
             description: application.description,
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
-            outcome: RawExecutionOutcome::default(),
         });
         Ok((application.instance, callee_context))
-    }
-
-    /// Cleans up the runtime after the execution of a call to a different contract.
-    fn finish_call(&mut self) -> Result<(), ExecutionError> {
-        let ApplicationStatus {
-            id,
-            signer,
-            outcome,
-            ..
-        } = self.pop_application();
-
-        self.handle_outcome(outcome, signer, id)?;
-
-        Ok(())
     }
 
     /// Handles a newly produced [`RawExecutionOutcome`], conditioning and adding it to the stack
@@ -1168,7 +1151,6 @@ impl ContractSyncRuntimeHandle {
                 id: application_id,
                 description: application.description.clone(),
                 signer,
-                outcome: RawExecutionOutcome::default(),
             };
 
             runtime.push_application(status);
@@ -1190,8 +1172,6 @@ impl ContractSyncRuntimeHandle {
         assert_eq!(application_status.description, contract.description);
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
-
-        runtime.handle_outcome(application_status.outcome, signer, application_id)?;
 
         Ok(())
     }
@@ -1232,9 +1212,11 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let application = this.current_application_mut();
+        let application_id = this.current_application().id;
+        let signer = this.current_application().signer;
+        let raw_outcome = RawExecutionOutcome::default().with_message(message.into());
 
-        application.outcome.messages.push(message.into());
+        this.handle_outcome(raw_outcome, signer, application_id)?;
 
         Ok(())
     }
@@ -1328,7 +1310,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .expect("Applications should not have reentrant calls")
             .execute_operation(context, argument)?;
 
-        self.inner().finish_call()?;
+        let _ = self.inner().pop_application();
 
         Ok(value)
     }
@@ -1495,7 +1477,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .expect("Applications should not have reentrant calls")
             .instantiate(context, argument)?;
 
-        self.inner().finish_call()?;
+        let _ = self.inner().pop_application();
 
         Ok(app_id)
     }
@@ -1682,7 +1664,6 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
                 id: queried_id,
                 description: application.description,
                 signer: None,
-                outcome: RawExecutionOutcome::default(),
             });
             (query_context, application.instance)
         };
