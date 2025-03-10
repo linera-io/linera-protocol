@@ -192,6 +192,13 @@ impl TransactionTracker {
         Ok(replaying)
     }
 
+    /// If in replay mode, returns the next oracle response, or an error if it is missing.
+    ///
+    /// If not in replay mode, `None` is returned, and the caller must execute the actual oracle
+    /// to obtain the value.
+    ///
+    /// In both cases, the value (returned or obtained from the oracle) must be recorded using
+    /// `add_oracle_response`.
     pub fn next_replayed_oracle_response(
         &mut self,
     ) -> Result<Option<OracleResponse>, SystemExecutionError> {
