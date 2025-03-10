@@ -3053,6 +3053,29 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
+        let mut epoch_change_ops = self.collect_epoch_changes().await?.into_iter();
+
+        let mut certificates = Vec::new();
+        loop {
+            let incoming_bundles = self.pending_message_bundles().await?;
+            let block_operations = epoch_change_ops.next().into_iter().collect::<Vec<_>>();
+            if incoming_bundles.is_empty() && block_operations.is_empty() {
+                return Ok((certificates, None));
+            }
+            match self.execute_block(block_operations, vec![]).await {
+                Ok(ExecuteBlockOutcome::Executed(certificate))
+                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
+                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                    return Ok((certificates, Some(timeout)));
+                }
+                Err(error) => return Err(error),
+            };
+        }
+    }
+
+    /// Returns operations to process all pending epoch changes: first the new epochs, in order,
+    /// then the revoked epochs, in order.
+    async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, ChainClientError> {
         let (mut min_epoch, mut next_epoch) = {
             let query = ChainInfoQuery::new(self.chain_id).with_committees();
             let info = *self
@@ -3084,24 +3107,7 @@ where
             )));
             min_epoch.try_add_assign_one()?;
         }
-        let mut epoch_change_ops = epoch_change_ops.into_iter();
-
-        let mut certificates = Vec::new();
-        loop {
-            let incoming_bundles = self.pending_message_bundles().await?;
-            let block_operations = epoch_change_ops.next().into_iter().collect::<Vec<_>>();
-            if incoming_bundles.is_empty() && block_operations.is_empty() {
-                return Ok((certificates, None));
-            }
-            match self.execute_block(block_operations, vec![]).await {
-                Ok(ExecuteBlockOutcome::Executed(certificate))
-                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
-                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
-                    return Ok((certificates, Some(timeout)));
-                }
-                Err(error) => return Err(error),
-            };
-        }
+        Ok(epoch_change_ops)
     }
 
     /// Returns whether the system event on the admin chain with the given stream name and key
