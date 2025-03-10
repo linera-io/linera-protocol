@@ -12,7 +12,7 @@ use std::{
 };
 
 use k256::{
-    ecdsa::{Signature, SigningKey, VerifyingKey},
+    ecdsa::{RecoveryId, Signature, SigningKey, VerifyingKey},
     elliptic_curve::sec1::FromEncodedPoint,
     EncodedPoint,
 };
@@ -33,6 +33,9 @@ const SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
 
 /// Length of secp256k1 signature.
 const SECP256K1_SIGNATURE_SIZE: usize = 64;
+
+/// Length of secp256k1 ethereum signature.
+const SECP256K1_ETHEREUM_SIGNATURE_SIZE: usize = 65;
 
 /// A secp256k1 secret key.
 #[derive(Eq, PartialEq)]
@@ -201,6 +204,14 @@ impl From<Secp256k1PublicKey> for Owner {
 impl From<&Secp256k1PublicKey> for Owner {
     fn from(value: &Secp256k1PublicKey) -> Self {
         Self(CryptoHash::new(value))
+    }
+}
+
+impl FromStr for Secp256k1Signature {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Secp256k1Signature::from_slice(hex::decode(s)?.as_slice())
     }
 }
 
@@ -426,6 +437,54 @@ impl Secp256k1Signature {
             .map_err(CryptoError::Secp256k1Error)?;
         Ok(Secp256k1Signature(sig))
     }
+
+    /// Parses bytes into a signature.
+    /// Expects the signature to be serialized in ethereum format:
+    /// - 65 bytes long
+    /// - last byte is `v` (recovery param)
+    pub fn from_ethereum_signature(
+        bytes: &[u8],
+    ) -> Result<(k256::ecdsa::RecoveryId, Self), CryptoError> {
+        let Some((v, rs)) = bytes.split_last() else {
+            return Err(CryptoError::Secp256k1EmptySignature);
+        };
+        if rs.len() != SECP256K1_SIGNATURE_SIZE {
+            return Err(CryptoError::IncorrectSignatureBytes {
+                scheme: SECP256K1_SCHEME_LABEL,
+                len: rs.len(),
+                expected: SECP256K1_ETHEREUM_SIGNATURE_SIZE,
+            });
+        }
+
+        // Consult either of the two to learn about how recovery ID is computed
+        // - https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md
+        // - https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/cryptography/ECDSA.sol#L56
+        let rid = RecoveryId::from_byte(match *v {
+            0 | 27 => 0,
+            1 | 28 => 1,
+            _ => return Err(CryptoError::InvalidSecp256k1RecoveryId(*v)),
+        })
+        .ok_or(CryptoError::InvalidSecp256k1RecoveryId(*v))?;
+
+        let signature = Self::from_slice(rs)?;
+        Ok((rid, signature))
+    }
+
+    /// Tries to recover the public key from the hash and signature.
+    ///
+    /// The `hash` is the prehashed message that was signed.
+    pub fn recover_from_hash(
+        &self,
+        recovery_id: RecoveryId,
+        hash: &[u8],
+    ) -> Result<Secp256k1PublicKey, CryptoError> {
+        VerifyingKey::recover_from_prehash(hash, &self.0, recovery_id)
+            .map_err(|e| CryptoError::InvalidSignature {
+                error: e.to_string(),
+                type_name: "Secp256k1PublicKey".to_string(),
+            })
+            .map(Secp256k1PublicKey)
+    }
 }
 
 impl Serialize for Secp256k1Signature {
@@ -603,5 +662,38 @@ mod tests {
         let s = serde_json::to_string(&sig).unwrap();
         let sig2: Secp256k1Signature = serde_json::from_str(&s).unwrap();
         assert_eq!(sig, sig2);
+    }
+
+    #[test]
+    fn parse_ethereum_signature() {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TestVector {
+            pub recovery_id: u8,
+            pub message: String,
+            pub hash_message: String,
+            pub signature: String,
+            pub public_key_uncompressed: String,
+            pub public_key_compressed: String,
+        }
+
+        // Test vectors from https://gist.github.com/webmaster128/130b628d83621a33579751846699ed15
+        let test_vectors: Vec<TestVector> =
+            serde_json::from_str(include_str!("secp256k1_test_vectors.json")).unwrap();
+
+        for test in test_vectors.iter() {
+            let (rid, signature) = super::Secp256k1Signature::from_ethereum_signature(
+                &hex::decode(&test.signature).unwrap(),
+            )
+            .unwrap();
+
+            assert_eq!(rid.to_byte(), test.recovery_id);
+
+            let pubkey = signature
+                .recover_from_hash(rid, &hex::decode(&test.hash_message).unwrap())
+                .unwrap();
+
+            assert_eq!(pubkey.to_string(), test.public_key_compressed);
+        }
     }
 }
