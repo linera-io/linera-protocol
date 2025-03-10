@@ -200,8 +200,8 @@ pub enum AdminOperation {
     /// Registers a new committee. Other chains can then migrate to the new epoch by executing
     /// [`SystemOperation::ProcessNewEpoch`].
     CreateCommittee { epoch: Epoch, blob_hash: CryptoHash },
-    /// Removes a committee. Other chains should execute [`SystemOperation::RemoveCommittee`], so
-    /// that blocks from the retired epoch will not be accepted until they are followed (hence
+    /// Removes a committee. Other chains should execute [`SystemOperation::ProcessRemovedEpoch`],
+    /// so that blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { epoch: Epoch },
 }
