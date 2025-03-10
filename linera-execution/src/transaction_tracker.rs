@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, Blob, Event, OracleResponse},
+    data_types::{ArithmeticError, Blob, Event, OracleResponse},
     ensure,
     identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
 };
@@ -86,7 +86,7 @@ impl TransactionTracker {
 
     pub fn add_system_outcome(
         &mut self,
-        outcome: RawExecutionOutcome<SystemMessage, Amount>,
+        outcome: RawExecutionOutcome<SystemMessage>,
     ) -> Result<(), ArithmeticError> {
         self.add_outcome(ExecutionOutcome::System(outcome))
     }
@@ -94,7 +94,7 @@ impl TransactionTracker {
     pub fn add_user_outcome(
         &mut self,
         application_id: ApplicationId,
-        outcome: RawExecutionOutcome<Vec<u8>, Amount>,
+        outcome: RawExecutionOutcome<Vec<u8>>,
     ) -> Result<(), ArithmeticError> {
         self.add_outcome(ExecutionOutcome::User(application_id, outcome))
     }

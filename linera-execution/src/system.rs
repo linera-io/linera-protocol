@@ -785,7 +785,7 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-    ) -> Result<RawExecutionOutcome<SystemMessage, Amount>, SystemExecutionError> {
+    ) -> Result<RawExecutionOutcome<SystemMessage>, SystemExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
         match message {
