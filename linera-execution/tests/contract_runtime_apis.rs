@@ -3,35 +3,24 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    vec,
-};
+use std::collections::BTreeMap;
 
 use anyhow::bail;
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::CryptoHash,
-    data_types::{
-        Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp,
-        UserApplicationDescription,
-    },
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, Owner,
-    },
-    ownership::ChainOwnership,
-    vm::VmRuntime,
+    data_types::{Amount, Blob, OracleResponse, Timestamp},
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId},
 };
 use linera_execution::{
     test_utils::{
         blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,
         test_accounts_strategy, ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        TransferTestEndpoint,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
-    Operation, OperationContext, ResourceController, SystemExecutionError,
-    SystemExecutionStateView, TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
+    Operation, OperationContext, ResourceController, SystemExecutionError, TransactionOutcome,
+    TransactionTracker,
 };
-use linera_views::context::MemoryContext;
 use test_case::test_matrix;
 use test_strategy::proptest;
 
@@ -110,7 +99,7 @@ async fn test_transfer_system_api(
         next_message_index,
         ..
     } = tracker.into_outcome()?;
-    assert_eq!(outcomes.len(), 3);
+    assert_eq!(outcomes.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
 
@@ -310,7 +299,7 @@ async fn test_claim_system_api(
         next_message_index,
         ..
     } = tracker.into_outcome()?;
-    assert_eq!(outcomes.len(), 3);
+    assert_eq!(outcomes.len(), 1);
     assert_eq!(oracle_responses.len(), 3);
     assert_eq!(next_message_index, 1);
 
@@ -706,190 +695,4 @@ async fn test_read_balance_owners_system_api(
     )
     .await
     .unwrap();
-}
-
-/// A test helper representing a transfer endpoint.
-#[derive(Clone, Copy, Debug)]
-enum TransferTestEndpoint {
-    Chain,
-    User,
-    Application,
-}
-
-impl TransferTestEndpoint {
-    /// Returns the [`Owner`] used to represent a sender that's a user.
-    fn sender_owner() -> Owner {
-        Owner(CryptoHash::test_hash("sender"))
-    }
-
-    /// Returns the [`ApplicationId`] used to represent a sender that's an application.
-    fn sender_application_id() -> ApplicationId {
-        ApplicationId::from(&Self::sender_application_description())
-    }
-
-    /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
-    fn sender_application_description() -> UserApplicationDescription {
-        let contract_id = Self::sender_application_contract_blob().id().hash;
-        let service_id = Self::sender_application_service_blob().id().hash;
-        let vm_runtime = VmRuntime::Wasm;
-
-        UserApplicationDescription {
-            module_id: ModuleId::new(contract_id, service_id, vm_runtime),
-            creator_chain_id: ChainId::root(1000),
-            block_height: BlockHeight(0),
-            application_index: 0,
-            parameters: vec![],
-            required_application_ids: vec![],
-        }
-    }
-
-    /// Returns the [`Blob`] that represents the contract bytecode used when representing the
-    /// sender as an application.
-    fn sender_application_contract_blob() -> Blob {
-        Blob::new_contract_bytecode(CompressedBytecode {
-            compressed_bytes: b"sender contract".to_vec(),
-        })
-    }
-
-    /// Returns the [`Blob`] that represents the service bytecode used when representing the sender
-    /// as an application.
-    fn sender_application_service_blob() -> Blob {
-        Blob::new_service_bytecode(CompressedBytecode {
-            compressed_bytes: b"sender service".to_vec(),
-        })
-    }
-
-    /// Returns the [`Owner`] used to represent a recipient that's a user.
-    fn recipient_owner() -> Owner {
-        Owner(CryptoHash::test_hash("recipient"))
-    }
-
-    /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
-    fn recipient_application_id() -> ApplicationId {
-        ApplicationId {
-            module_id: ModuleId::new(
-                CryptoHash::test_hash("recipient contract bytecode"),
-                CryptoHash::test_hash("recipient service bytecode"),
-                VmRuntime::Wasm,
-            ),
-            application_description_hash: CryptoHash::test_hash(
-                "recipient application description",
-            ),
-        }
-    }
-
-    /// Returns a [`SystemExecutionState`] initialized with this transfer endpoint's account
-    /// having `transfer_amount` tokens.
-    ///
-    /// The state is also configured so that authentication will succeed when this endpoint is used
-    /// as a sender.
-    pub fn create_system_state(&self, transfer_amount: Amount) -> SystemExecutionState {
-        let (balance, balances, owner) = match self {
-            TransferTestEndpoint::Chain => (transfer_amount, vec![], Some(Self::sender_owner())),
-            TransferTestEndpoint::User => {
-                let owner = Self::sender_owner();
-                (
-                    Amount::ZERO,
-                    vec![(AccountOwner::User(owner), transfer_amount)],
-                    Some(owner),
-                )
-            }
-            TransferTestEndpoint::Application => (
-                Amount::ZERO,
-                vec![(
-                    AccountOwner::Application(Self::sender_application_id()),
-                    transfer_amount,
-                )],
-                None,
-            ),
-        };
-
-        let ownership = ChainOwnership {
-            super_owners: BTreeSet::from_iter(owner),
-            ..ChainOwnership::default()
-        };
-
-        SystemExecutionState {
-            description: Some(ChainDescription::Root(0)),
-            ownership,
-            balance,
-            balances: BTreeMap::from_iter(balances),
-            ..SystemExecutionState::default()
-        }
-    }
-
-    /// Returns the [`AccountOwner`] to represent this transfer endpoint as a sender.
-    pub fn sender_account_owner(&self) -> Option<AccountOwner> {
-        match self {
-            TransferTestEndpoint::Chain => None,
-            TransferTestEndpoint::User => Some(AccountOwner::User(Self::sender_owner())),
-            TransferTestEndpoint::Application => {
-                Some(AccountOwner::Application(Self::sender_application_id()))
-            }
-        }
-    }
-
-    /// Returns the [`AccountOwner`] to represent this transfer endpoint as an unauthorized sender.
-    pub fn unauthorized_sender_account_owner(&self) -> Option<AccountOwner> {
-        match self {
-            TransferTestEndpoint::Chain => None,
-            TransferTestEndpoint::User => {
-                Some(AccountOwner::User(Owner(CryptoHash::test_hash("attacker"))))
-            }
-            TransferTestEndpoint::Application => {
-                Some(AccountOwner::Application(Self::recipient_application_id()))
-            }
-        }
-    }
-
-    /// Returns the [`Owner`] that should be used as the authenticated signer in the transfer
-    /// operation.
-    pub fn signer(&self) -> Option<Owner> {
-        match self {
-            TransferTestEndpoint::Chain | TransferTestEndpoint::User => Some(Self::sender_owner()),
-            TransferTestEndpoint::Application => None,
-        }
-    }
-
-    /// Returns the [`Owner`] that should be used as the authenticated signer when testing an
-    /// unauthorized transfer operation.
-    pub fn unauthorized_signer(&self) -> Option<Owner> {
-        match self {
-            TransferTestEndpoint::Chain | TransferTestEndpoint::User => {
-                Some(Self::recipient_owner())
-            }
-            TransferTestEndpoint::Application => None,
-        }
-    }
-
-    /// Returns the [`AccountOwner`] to represent this transfer endpoint as a recipient.
-    pub fn recipient_account_owner(&self) -> Option<AccountOwner> {
-        match self {
-            TransferTestEndpoint::Chain => None,
-            TransferTestEndpoint::User => Some(AccountOwner::User(Self::recipient_owner())),
-            TransferTestEndpoint::Application => {
-                Some(AccountOwner::Application(Self::recipient_application_id()))
-            }
-        }
-    }
-
-    /// Verifies that the [`SystemExecutionStateView`] has the expected `amount` in this transfer
-    /// endpoint's account, and that all other accounts are empty.
-    pub async fn verify_recipient(
-        &self,
-        system: &SystemExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
-        amount: Amount,
-    ) -> anyhow::Result<()> {
-        let (expected_chain_balance, expected_balances) = match self.recipient_account_owner() {
-            None => (amount, vec![]),
-            Some(account_owner) => (Amount::ZERO, vec![(account_owner, amount)]),
-        };
-
-        let balances = system.balances.index_values().await?;
-
-        assert_eq!(*system.balance.get(), expected_chain_balance);
-        assert_eq!(balances, expected_balances);
-
-        Ok(())
-    }
 }

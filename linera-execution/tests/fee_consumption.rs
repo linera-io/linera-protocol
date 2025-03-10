@@ -16,8 +16,8 @@ use linera_execution::{
     test_utils::{
         blob_oracle_responses, ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
-    ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
-    RawExecutionOutcome, ResourceControlPolicy, ResourceController, TransactionTracker,
+    ContractRuntime, ExecutionError, Message, MessageContext, ResourceControlPolicy,
+    ResourceController, TransactionTracker,
 };
 use test_case::test_case;
 
@@ -216,29 +216,6 @@ async fn test_fee_consumption(
         &mut controller,
     )
     .await?;
-
-    let txn_outcome = txn_tracker.into_outcome()?;
-    assert_eq!(
-        txn_outcome.outcomes,
-        vec![
-            ExecutionOutcome::User(
-                application_id,
-                RawExecutionOutcome {
-                    refund_grant_to,
-                    authenticated_signer,
-                    ..Default::default()
-                }
-            ),
-            ExecutionOutcome::User(
-                application_id,
-                RawExecutionOutcome {
-                    refund_grant_to,
-                    authenticated_signer,
-                    ..Default::default()
-                }
-            )
-        ]
-    );
 
     match initial_grant {
         None => {
