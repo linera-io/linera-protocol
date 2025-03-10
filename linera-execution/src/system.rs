@@ -375,8 +375,8 @@ pub enum SystemExecutionError {
     UnauthenticatedClaimOwner,
     #[error("Admin operations are only allowed on the admin chain.")]
     AdminOperationOnNonAdminChain,
-    #[error("Failed to create new committee")]
-    InvalidCommitteeCreation,
+    #[error("Failed to create new committee: expected {expected}, but got {provided}")]
+    InvalidCommitteeEpoch { expected: Epoch, provided: Epoch },
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
     #[error("Cannot subscribe to a channel ({1}) on the same chain ({0})")]
@@ -530,10 +530,7 @@ where
                 );
                 match admin_operation {
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
-                        ensure!(
-                            epoch == self.epoch.get().expect("chain is active").try_add_one()?,
-                            SystemExecutionError::InvalidCommitteeCreation
-                        );
+                        self.check_next_epoch(epoch)?;
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
                         let committee =
                             bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
@@ -651,11 +648,7 @@ where
                 self.blob_used(Some(txn_tracker), blob_id).await?;
             }
             ProcessNewEpoch(epoch) => {
-                let chain_next_epoch = self.epoch.get().expect("chain is active").try_add_one()?;
-                ensure!(
-                    epoch == chain_next_epoch,
-                    SystemExecutionError::InvalidCommitteeCreation
-                );
+                self.check_next_epoch(epoch)?;
                 let admin_id = self
                     .admin_id
                     .get()
@@ -682,9 +675,8 @@ where
                 self.epoch.set(Some(epoch));
             }
             ProcessRemovedEpoch(epoch) => {
-                let chain_epoch = self.epoch.get().expect("chain is active");
                 ensure!(
-                    epoch < chain_epoch,
+                    self.committees.get_mut().remove(&epoch).is_some(),
                     SystemExecutionError::InvalidCommitteeRemoval
                 );
                 let admin_id = self
@@ -706,14 +698,22 @@ where
                     Some(_) => return Err(SystemExecutionError::OracleResponseMismatch),
                 };
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
-                self.committees
-                    .get_mut()
-                    .retain(|old_epoch, _| *old_epoch > epoch);
             }
         }
 
         txn_tracker.add_system_outcome(outcome)?;
         Ok(new_application)
+    }
+
+    /// Returns an error if the `provided` epoch is not exactly one higher than the chain's current
+    /// epoch.
+    fn check_next_epoch(&self, provided: Epoch) -> Result<(), SystemExecutionError> {
+        let expected = self.epoch.get().expect("chain is active").try_add_one()?;
+        ensure!(
+            provided == expected,
+            SystemExecutionError::InvalidCommitteeEpoch { provided, expected }
+        );
+        Ok(())
     }
 
     pub async fn transfer(
