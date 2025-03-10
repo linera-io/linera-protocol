@@ -2070,7 +2070,7 @@ where
     }
 
     /// Executes an operation.
-    #[instrument(level = "trace", skip(operation))]
+    #[instrument(level = "trace")]
     pub async fn execute_operation(
         &self,
         operation: Operation,
