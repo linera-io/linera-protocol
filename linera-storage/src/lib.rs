@@ -28,9 +28,8 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::SystemChannel,
-    BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode,
+    UserServiceCode, WasmRuntime,
 };
 #[cfg(with_revm)]
 use linera_execution::{
@@ -241,21 +240,6 @@ pub trait Storage: Sized {
         system_state.ownership.set(ChainOwnership::single(owner));
         system_state.balance.set(balance);
         system_state.timestamp.set(timestamp);
-
-        if id != admin_id {
-            // Add the new subscriber to the admin chain.
-            system_state.subscriptions.insert(&ChannelSubscription {
-                chain_id: admin_id,
-                name: SystemChannel::Admin.name(),
-            })?;
-            let mut admin_chain = self.load_chain(admin_id).await?;
-            let full_name = SystemChannel::Admin.full_name();
-            {
-                let mut channel = admin_chain.channels.try_load_entry_mut(&full_name).await?;
-                channel.subscribers.insert(&id)?;
-            } // Make channel go out of scope, so we can call save.
-            admin_chain.save().await?;
-        }
 
         let state_hash = chain.execution_state.crypto_hash().await?;
         chain.execution_state_hash.set(Some(state_hash));

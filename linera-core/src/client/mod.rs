@@ -28,13 +28,14 @@ use linera_base::{
     abi::Abi,
     crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Round,
+        Timestamp,
     },
     ensure,
     hashed::Hashed,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, MessageId, ModuleId,
-        Owner, UserApplicationId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId,
+        ModuleId, Owner, StreamId, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -55,8 +56,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
-        OPEN_CHAIN_MESSAGE_INDEX,
+        AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
+        OPEN_CHAIN_MESSAGE_INDEX, REMOVED_EPOCH_STREAM_NAME,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
     SystemQuery, SystemResponse,
@@ -618,6 +619,9 @@ pub enum ChainClientError {
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     },
+
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -702,6 +706,12 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         self.chain_id
     }
 
+    /// Gets the ID of the admin chain.
+    #[instrument(level = "trace", skip(self))]
+    pub fn admin_id(&self) -> ChainId {
+        self.admin_id
+    }
+
     /// Gets the hash of the latest known block.
     #[instrument(level = "trace", skip(self))]
     pub fn block_hash(&self) -> Option<CryptoHash> {
@@ -771,8 +781,17 @@ where
     /// Subscribes to notifications from this client's chain.
     #[instrument(level = "trace")]
     pub async fn subscribe(&self) -> Result<NotificationStream, LocalNodeError> {
+        self.subscribe_to(self.chain_id).await
+    }
+
+    /// Subscribes to notifications from the specified chain.
+    #[instrument(level = "trace")]
+    pub async fn subscribe_to(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<NotificationStream, LocalNodeError> {
         Ok(Box::pin(UnboundedReceiverStream::new(
-            self.client.notifier.subscribe(vec![self.chain_id]),
+            self.client.notifier.subscribe(vec![chain_id]),
         )))
     }
 
@@ -2988,9 +3007,23 @@ where
         &self,
         committee: Committee,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
+        let blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+        let blob_hash = blob.id().hash;
+        match self
+            .execute_operations(
+                vec![Operation::System(SystemOperation::PublishCommitteeBlob {
+                    blob_hash,
+                })],
+                vec![blob],
+            )
+            .await?
+        {
+            ClientOutcome::Committed(_) => {}
+            outcome @ ClientOutcome::WaitForTimeout(_) => return Ok(outcome),
+        }
         let epoch = self.epoch().await?.try_add_one()?;
         self.execute_operation(Operation::System(SystemOperation::Admin(
-            AdminOperation::CreateCommittee { epoch, committee },
+            AdminOperation::CreateCommittee { epoch, blob_hash },
         )))
         .await
     }
@@ -3020,13 +3053,16 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
+        let mut epoch_change_ops = self.collect_epoch_changes().await?.into_iter();
+
         let mut certificates = Vec::new();
         loop {
             let incoming_bundles = self.pending_message_bundles().await?;
-            if incoming_bundles.is_empty() {
+            let block_operations = epoch_change_ops.next().into_iter().collect::<Vec<_>>();
+            if incoming_bundles.is_empty() && block_operations.is_empty() {
                 return Ok((certificates, None));
             }
-            match self.execute_block(vec![], vec![]).await {
+            match self.execute_block(block_operations, vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
@@ -3037,30 +3073,60 @@ where
         }
     }
 
-    /// Starts listening to the admin chain for new committees. (This is only useful for
-    /// other genesis chains or for testing.)
-    #[instrument(level = "trace")]
-    pub async fn subscribe_to_new_committees(
-        &self,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let operation = SystemOperation::Subscribe {
-            chain_id: self.admin_id,
-            channel: SystemChannel::Admin,
+    /// Returns operations to process all pending epoch changes: first the new epochs, in order,
+    /// then the removed epochs, in order.
+    async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, ChainClientError> {
+        let (mut min_epoch, mut next_epoch) = {
+            let query = ChainInfoQuery::new(self.chain_id).with_committees();
+            let info = *self
+                .client
+                .local_node
+                .handle_chain_info_query(query)
+                .await?
+                .info;
+            let committees = info
+                .requested_committees
+                .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+            let min_epoch = *committees.keys().next().unwrap_or(&Epoch::ZERO);
+            let epoch = info.epoch.ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+            (min_epoch, epoch.try_add_one()?)
         };
-        self.execute_operation(Operation::System(operation)).await
+        let mut epoch_change_ops = Vec::new();
+        while self.has_admin_event(EPOCH_STREAM_NAME, next_epoch).await? {
+            epoch_change_ops.push(Operation::System(SystemOperation::ProcessNewEpoch(
+                next_epoch,
+            )));
+            next_epoch.try_add_assign_one()?;
+        }
+        while self
+            .has_admin_event(REMOVED_EPOCH_STREAM_NAME, min_epoch)
+            .await?
+        {
+            epoch_change_ops.push(Operation::System(SystemOperation::ProcessRemovedEpoch(
+                min_epoch,
+            )));
+            min_epoch.try_add_assign_one()?;
+        }
+        Ok(epoch_change_ops)
     }
 
-    /// Stops listening to the admin chain for new committees. (This is only useful for
-    /// testing.)
-    #[instrument(level = "trace")]
-    pub async fn unsubscribe_from_new_committees(
+    /// Returns whether the system event on the admin chain with the given stream name and key
+    /// exists in storage.
+    async fn has_admin_event(
         &self,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let operation = SystemOperation::Unsubscribe {
+        stream_name: &[u8],
+        key: impl Serialize,
+    ) -> Result<bool, ChainClientError> {
+        let event_id = EventId {
             chain_id: self.admin_id,
-            channel: SystemChannel::Admin,
+            stream_id: StreamId::system(stream_name),
+            key: bcs::to_bytes(&key).unwrap(),
         };
-        self.execute_operation(Operation::System(operation)).await
+        match self.client.storage.read_event(event_id).await {
+            Ok(_) => Ok(true),
+            Err(ViewError::EventsNotFound(_)) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
     }
 
     /// Deprecates all the configurations of voting rights but the last one (admin chains

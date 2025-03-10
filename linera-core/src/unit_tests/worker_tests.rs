@@ -23,8 +23,8 @@ use linera_base::{
     data_types::*,
     hashed::Hashed,
     identifiers::{
-        Account, AccountOwner, ChainDescription, ChainId, ChannelFullName, ChannelName,
-        Destination, GenericApplicationId, MessageId, Owner,
+        Account, AccountOwner, ChainDescription, ChainId, Destination, EventId, MessageId, Owner,
+        StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -45,11 +45,12 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
+        AdminOperation, OpenChainConfig, Recipient, SystemMessage, SystemOperation,
+        EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
-    ChannelSubscription, ExecutionError, Message, MessageKind, OutgoingMessage, Query,
-    QueryContext, QueryOutcome, QueryResponse, SystemExecutionError, SystemQuery, SystemResponse,
+    ExecutionError, Message, MessageKind, OutgoingMessage, Query, QueryContext, QueryOutcome,
+    QueryResponse, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
@@ -361,25 +362,6 @@ fn direct_outgoing_message(
         kind,
         message: Message::System(message),
     }
-}
-
-fn channel_outgoing_message(
-    name: ChannelName,
-    kind: MessageKind,
-    message: SystemMessage,
-) -> OutgoingMessage {
-    OutgoingMessage {
-        destination: Destination::Subscribers(name),
-        authenticated_signer: None,
-        grant: Amount::ZERO,
-        refund_grant_to: None,
-        kind,
-        message: Message::System(message),
-    }
-}
-
-fn channel_admin_message(message: SystemMessage) -> OutgoingMessage {
-    channel_outgoing_message(SystemChannel::Admin.name(), MessageKind::Protected, message)
 }
 
 fn system_credit_message(amount: Amount) -> Message {
@@ -1335,16 +1317,11 @@ where
     let chain_id = ChainId::from(description);
     let ownership = ChainOwnership::single(sender_key_pair.public().into());
     let committees = BTreeMap::from_iter([(epoch, committee.clone())]);
-    let subscriptions = BTreeSet::from_iter([ChannelSubscription {
-        chain_id: admin_id,
-        name: SystemChannel::Admin.name(),
-    }]);
     let balance = Amount::from_tokens(42);
     let state = SystemExecutionState {
         committees: committees.clone(),
         ownership: ownership.clone(),
         balance,
-        subscriptions,
         ..SystemExecutionState::new(epoch, description, admin_id)
     };
     let open_chain_message = IncomingBundle {
@@ -2350,9 +2327,10 @@ async fn run_test_chain_creation_with_committee_creation<B>(
 where
     B: StorageBuilder,
 {
+    let storage = storage_builder.build().await?;
     let key_pair = AccountSecretKey::generate();
     let (committee, worker) = init_worker_with_chain(
-        storage_builder.build().await?,
+        storage.clone(),
         ChainDescription::Root(0),
         key_pair.public().into(),
         Amount::from_tokens(2),
@@ -2361,15 +2339,6 @@ where
     let mut committees = BTreeMap::new();
     committees.insert(Epoch::ZERO, committee.clone());
     let admin_id = ChainId::root(0);
-    let admin_channel_subscription = ChannelSubscription {
-        chain_id: admin_id,
-        name: SystemChannel::Admin.name(),
-    };
-    let admin_channel_full_name = ChannelFullName {
-        application_id: GenericApplicationId::System,
-        name: SystemChannel::Admin.name(),
-    };
-    let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());
     // Have the admin chain create a user chain.
     let user_description = ChainDescription::Child(MessageId {
         chain_id: admin_id,
@@ -2382,28 +2351,18 @@ where
         &worker,
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
-                messages: vec![vec![
-                    direct_outgoing_message(
-                        user_id,
-                        MessageKind::Protected,
-                        SystemMessage::OpenChain(OpenChainConfig {
-                            ownership: ChainOwnership::single(key_pair.public().into()),
-                            epoch: Epoch::ZERO,
-                            committees: committees.clone(),
-                            admin_id,
-                            balance: Amount::ZERO,
-                            application_permissions: Default::default(),
-                        }),
-                    ),
-                    direct_outgoing_message(
+                messages: vec![vec![direct_outgoing_message(
+                    user_id,
+                    MessageKind::Protected,
+                    SystemMessage::OpenChain(OpenChainConfig {
+                        ownership: ChainOwnership::single(key_pair.public().into()),
+                        epoch: Epoch::ZERO,
+                        committees: committees.clone(),
                         admin_id,
-                        MessageKind::Protected,
-                        SystemMessage::Subscribe {
-                            id: user_id,
-                            subscription: admin_channel_subscription.clone(),
-                        },
-                    ),
-                ]],
+                        balance: Amount::ZERO,
+                        application_permissions: Default::default(),
+                    }),
+                )]],
                 events: vec![Vec::new()],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
@@ -2446,12 +2405,6 @@ where
             *admin_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
-        // The new chain is subscribed to the admin chain.
-        assert!(admin_chain
-            .channels
-            .indices()
-            .await?
-            .contains(&admin_channel_full_name));
     }
 
     // Create a new committee and transfer money before accepting the subscription.
@@ -2459,35 +2412,50 @@ where
         (Epoch::ZERO, committee.clone()),
         (Epoch::from(1), committee.clone()),
     ]);
+    let event_id = EventId {
+        chain_id: admin_id,
+        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+        key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+    };
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
+    // just write it directly to storage here for simplicity.
+    storage.write_blob(&committee_blob).await?;
+    let blob_hash = committee_blob.id().hash;
     let certificate1 = make_certificate(
         &committee,
         &worker,
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![
-                    vec![channel_admin_message(SystemMessage::CreateCommittee {
-                        epoch: Epoch::from(1),
-                        committee: committee.clone(),
-                    })],
+                    vec![],
                     vec![direct_credit_message(user_id, Amount::from_tokens(2))],
                 ],
-                events: vec![Vec::new(); 2],
+                events: vec![
+                    vec![Event {
+                        stream_id: event_id.stream_id.clone(),
+                        key: event_id.key.clone(),
+                        value: bcs::to_bytes(&blob_hash).unwrap(),
+                    }],
+                    Vec::new(),
+                ],
                 blobs: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair.public().into()),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new(); 2],
+                oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
             }
             .with(
                 make_child_block(&certificate0.clone().into_value())
                     .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committee: committee.clone(),
+                        blob_hash,
                     }))
                     .with_simple_transfer(user_id, Amount::from_tokens(2)),
             ),
@@ -2496,25 +2464,6 @@ where
     worker
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
-
-    {
-        // The root chain has 1 subscriber.
-        let admin_chain = worker.chain_state_view(admin_id).await?;
-        assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_bundles().await?;
-        assert_eq!(
-            admin_chain
-                .channels
-                .try_load_entry(&admin_channel_full_name)
-                .await?
-                .expect("Missing channel for admin channel in `ChainId::root(0)`")
-                .subscribers
-                .indices()
-                .await?
-                .len(),
-            1
-        );
-    }
     {
         // The child is active and has not migrated yet.
         let user_chain = worker.chain_state_view(user_id).await?;
@@ -2535,7 +2484,7 @@ where
                 .indices()
                 .await?
                 .len(),
-            1
+            0
         );
         user_chain.validate_incoming_bundles().await?;
         matches!(
@@ -2554,17 +2503,6 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        let channel_inbox = user_chain
-            .inboxes
-            .try_load_entry(&admin_channel_origin)
-            .await?
-            .expect("Missing inbox for admin channel in user chain");
-        matches!(&channel_inbox.added_bundles.read_front(10).await?[..], [bundle]
-            if matches!(bundle.messages[..], [PostedMessage {
-                message: Message::System(SystemMessage::CreateCommittee { .. }), ..
-            }])
-        );
-        assert_eq!(channel_inbox.removed_bundles.count(), 0);
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
     }
     // Make the child receive the pending messages.
@@ -2577,21 +2515,30 @@ where
                 events: vec![Vec::new(); 3],
                 blobs: vec![Vec::new(); 3],
                 state_hash: SystemExecutionState {
-                    subscriptions: [ChannelSubscription {
-                        chain_id: admin_id,
-                        name: SystemChannel::Admin.name(),
-                    }]
-                    .into_iter()
-                    .collect(),
                     // Finally the child knows about both committees and has the money.
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair.public().into()),
                     balance: Amount::from_tokens(2),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), user_description, admin_id)
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new(); 3],
+                oracle_responses: vec![
+                    vec![],
+                    vec![],
+                    vec![
+                        OracleResponse::Event(
+                            EventId {
+                                chain_id: admin_id,
+                                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                                key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                            },
+                            bcs::to_bytes(&blob_hash).unwrap(),
+                        ),
+                        OracleResponse::Blob(committee_blob.id()),
+                    ],
+                ],
             }
             .with(
                 make_first_block(user_id)
@@ -2617,21 +2564,6 @@ where
                         action: MessageAction::Accept,
                     })
                     .with_incoming_bundle(IncomingBundle {
-                        origin: admin_channel_origin.clone(),
-                        bundle: MessageBundle {
-                            certificate_hash: certificate1.hash(),
-                            height: BlockHeight::from(1),
-                            timestamp: Timestamp::from(0),
-                            transaction_index: 0,
-                            messages: vec![Message::System(SystemMessage::CreateCommittee {
-                                epoch: Epoch::from(1),
-                                committee: committee.clone(),
-                            })
-                            .to_posted(0, MessageKind::Protected)],
-                        },
-                        action: MessageAction::Accept,
-                    })
-                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
                         bundle: MessageBundle {
                             certificate_hash: certificate1.hash(),
@@ -2639,10 +2571,11 @@ where
                             timestamp: Timestamp::from(0),
                             transaction_index: 1,
                             messages: vec![system_credit_message(Amount::from_tokens(2))
-                                .to_posted(1, MessageKind::Tracked)],
+                                .to_posted(0, MessageKind::Tracked)],
                         },
                         action: MessageAction::Accept,
-                    }),
+                    })
+                    .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1))),
             ),
         )),
     );
@@ -2668,30 +2601,10 @@ where
                 .indices()
                 .await?
                 .len(),
-            1
+            0
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
         user_chain.validate_incoming_bundles().await?;
-        {
-            let inbox = user_chain
-                .inboxes
-                .try_load_entry(&Origin::chain(admin_id))
-                .await?
-                .expect("Missing inbox for admin chain in user chain");
-            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
-            assert_eq!(inbox.added_bundles.count(), 0);
-            assert_eq!(inbox.removed_bundles.count(), 0);
-        }
-        {
-            let inbox = user_chain
-                .inboxes
-                .try_load_entry(&admin_channel_origin)
-                .await?
-                .expect("Missing inbox for admin channel in user chain");
-            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
-            assert_eq!(inbox.added_bundles.count(), 0);
-            assert_eq!(inbox.removed_bundles.count(), 0);
-        }
         Ok(())
     }
 }
@@ -2707,8 +2620,9 @@ where
 {
     let owner0 = AccountSecretKey::generate().public().into();
     let owner1 = AccountSecretKey::generate().public().into();
+    let storage = storage_builder.build().await?;
     let (committee, worker) = init_worker_with_chains(
-        storage_builder.build().await?,
+        storage.clone(),
         vec![
             (ChainDescription::Root(0), owner0, Amount::ZERO),
             (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
@@ -2751,33 +2665,36 @@ where
         (Epoch::ZERO, committee.clone()),
         (Epoch::from(1), committee.clone()),
     ]);
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    let blob_hash = committee_blob.id().hash;
+    storage.write_blob(&committee_blob).await?;
     let certificate1 = make_certificate(
         &committee,
         &worker,
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
-                messages: vec![vec![channel_admin_message(
-                    SystemMessage::CreateCommittee {
-                        epoch: Epoch::from(1),
-                        committee: committee.clone(),
-                    },
-                )]],
-                events: vec![Vec::new()],
+                messages: vec![vec![]],
+                events: vec![vec![Event {
+                    stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                    key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                    value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                }]],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(owner0),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new()],
+                oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())]],
             }
             .with(
                 make_first_block(admin_id).with_operation(SystemOperation::Admin(
                     AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committee: committee.clone(),
+                        blob_hash,
                     },
                 )),
             ),
@@ -2840,8 +2757,9 @@ where
 {
     let owner0 = AccountSecretKey::generate().public().into();
     let owner1 = AccountSecretKey::generate().public().into();
+    let storage = storage_builder.build().await?;
     let (committee, worker) = init_worker_with_chains(
-        storage_builder.build().await?,
+        storage.clone(),
         vec![
             (ChainDescription::Root(0), owner0, Amount::ZERO),
             (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
@@ -2881,36 +2799,43 @@ where
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    let blob_hash = committee_blob.id().hash;
+    storage.write_blob(&committee_blob).await?;
     let certificate1 = make_certificate(
         &committee,
         &worker,
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
-                messages: vec![
-                    vec![channel_admin_message(SystemMessage::CreateCommittee {
-                        epoch: Epoch::from(1),
-                        committee: committee.clone(),
-                    })],
-                    vec![channel_admin_message(SystemMessage::RemoveCommittee {
-                        epoch: Epoch::from(0),
-                    })],
+                messages: vec![vec![]; 2],
+                events: vec![
+                    vec![Event {
+                        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                        key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                        value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
+                    }],
+                    vec![Event {
+                        value: Vec::new(),
+                        stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
+                        key: bcs::to_bytes(&Epoch::from(0)).unwrap(),
+                    }],
                 ],
-                events: vec![Vec::new(); 2],
                 blobs: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(owner0),
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new(); 2],
+                oracle_responses: vec![vec![OracleResponse::Blob(committee_blob.id())], vec![]],
             }
             .with(
                 make_first_block(admin_id)
                     .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committee: committee.clone(),
+                        blob_hash,
                     }))
                     .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
                         epoch: Epoch::ZERO,
@@ -2963,6 +2888,7 @@ where
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(owner0),
                     balance: Amount::ONE,
+                    used_blobs: BTreeSet::from([committee_blob.id()]),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
