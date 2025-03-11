@@ -4465,6 +4465,7 @@ dependencies = [
  "rand_distr",
  "serde",
  "serde_bytes",
+ "test-case",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
