@@ -55,6 +55,8 @@ pub struct ResourceTracker {
     pub message_bytes: u64,
     /// The number of HTTP requests performed.
     pub http_requests: u32,
+    /// The number of calls to services as oracles.
+    pub service_oracle_queries: u32,
     /// The time spent executing services as oracles.
     pub service_oracle_execution: Duration,
     /// The amount allocated to message grants.
@@ -288,6 +290,17 @@ where
         limit
             .checked_sub(spent_execution_time)
             .ok_or(ExecutionError::MaximumServiceOracleExecutionTimeExceeded)
+    }
+
+    /// Tracks a call to a service to run as an oracle.
+    pub(crate) fn track_service_oracle_call(&mut self) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().service_oracle_queries = self
+            .tracker
+            .as_mut()
+            .service_oracle_queries
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.service_as_oracle_query)
     }
 
     /// Tracks the time spent executing the service as an oracle.
