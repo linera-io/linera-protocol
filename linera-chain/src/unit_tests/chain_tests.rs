@@ -66,7 +66,11 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
 
-    let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, VmRuntime::Wasm);
+    let module_id = ModuleId::new(
+        contract_blob.id().hash,
+        service_blob.id().hash,
+        VmRuntime::Wasm,
+    );
     (
         UserApplicationDescription {
             module_id,

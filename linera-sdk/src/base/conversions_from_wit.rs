@@ -9,7 +9,7 @@ use linera_base::{
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
-    vm::VmRuntime,
+    vm::{EncapsulateAddress, VmRuntime},
 };
 
 use crate::{
@@ -26,6 +26,18 @@ macro_rules! impl_from_wit {
                     hash_value.part2,
                     hash_value.part3,
                     hash_value.part4,
+                ])
+            }
+        }
+
+        impl From<$wit_base_api::Address> for EncapsulateAddress {
+            fn from(value: $wit_base_api::Address) -> Self {
+                EncapsulateAddress::from([
+                    value.part1,
+                    value.part2,
+                    value.part3,
+                    value.part4,
+                    value.part5,
                 ])
             }
         }
@@ -81,7 +93,7 @@ macro_rules! impl_from_wit {
             fn from(vm_runtime: $wit_base_api::VmRuntime) -> Self {
                 match vm_runtime {
                     $wit_base_api::VmRuntime::Wasm => VmRuntime::Wasm,
-                    $wit_base_api::VmRuntime::Evm => VmRuntime::Evm,
+                    $wit_base_api::VmRuntime::Evm(address) => VmRuntime::Evm(address.into()),
                 }
             }
         }

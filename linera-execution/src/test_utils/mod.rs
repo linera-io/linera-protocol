@@ -56,7 +56,11 @@ pub fn create_dummy_user_application_description(
 
     (
         UserApplicationDescription {
-            module_id: ModuleId::new(contract_blob.id().hash, service_blob.id().hash, VmRuntime::Wasm),
+            module_id: ModuleId::new(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                VmRuntime::Wasm,
+            ),
             creator_chain_id: chain_id,
             block_height: 0.into(),
             application_index: index,

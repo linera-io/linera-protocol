@@ -82,6 +82,14 @@ interface contract-runtime-api {
         part4: u64,
     }
 
+    record address {
+        part1: u32,
+        part2: u32,
+        part3: u32,
+        part4: u32,
+        part5: u32,
+    }
+
     variant destination {
         recipient(chain-id),
         subscribers(channel-name),
@@ -139,9 +147,9 @@ interface contract-runtime-api {
 
     type u128 = tuple<u64, u64>;
 
-    enum vm-runtime {
+    variant vm-runtime {
         wasm,
-        evm,
+        evm(address),
     }
 
     variant write-operation {

@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{BlockHeight, Timestamp},
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
-    vm::VmRuntime,
+    vm::{EncapsulateAddress, VmRuntime},
 };
 
 use crate::{
@@ -27,6 +27,20 @@ macro_rules! impl_to_wit {
                     part2: parts[1],
                     part3: parts[2],
                     part4: parts[3],
+                }
+            }
+        }
+
+        impl From<EncapsulateAddress> for $wit_base_api::Address {
+            fn from(address: EncapsulateAddress) -> Self {
+                let parts = <[u32; 5]>::from(address);
+
+                $wit_base_api::Address {
+                    part1: parts[0],
+                    part2: parts[1],
+                    part3: parts[2],
+                    part4: parts[3],
+                    part5: parts[4],
                 }
             }
         }
@@ -80,7 +94,7 @@ macro_rules! impl_to_wit {
             fn from(vm_runtime: VmRuntime) -> Self {
                 match vm_runtime {
                     VmRuntime::Wasm => $wit_base_api::VmRuntime::Wasm,
-                    VmRuntime::Evm => $wit_base_api::VmRuntime::Evm,
+                    VmRuntime::Evm(address) => $wit_base_api::VmRuntime::Evm(address.into()),
                 }
             }
         }

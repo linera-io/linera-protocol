@@ -13,7 +13,7 @@ use linera_base::{
         ModuleId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
-    vm::VmRuntime,
+    vm::{EncapsulateAddress, VmRuntime},
 };
 use linera_views::batch::WriteOperation;
 
@@ -28,6 +28,20 @@ impl From<CryptoHash> for wit_contract_api::CryptoHash {
             part2: parts[1],
             part3: parts[2],
             part4: parts[3],
+        }
+    }
+}
+
+impl From<EncapsulateAddress> for wit_contract_api::Address {
+    fn from(address: EncapsulateAddress) -> Self {
+        let parts = <[u32; 5]>::from(address);
+
+        wit_contract_api::Address {
+            part1: parts[0],
+            part2: parts[1],
+            part3: parts[2],
+            part4: parts[3],
+            part5: parts[4],
         }
     }
 }
@@ -104,7 +118,7 @@ impl From<VmRuntime> for wit_contract_api::VmRuntime {
     fn from(vm_runtime: VmRuntime) -> Self {
         match vm_runtime {
             VmRuntime::Wasm => wit_contract_api::VmRuntime::Wasm,
-            VmRuntime::Evm => wit_contract_api::VmRuntime::Evm,
+            VmRuntime::Evm(address) => wit_contract_api::VmRuntime::Evm(address.into()),
         }
     }
 }

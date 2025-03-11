@@ -60,7 +60,11 @@ async fn application_message_index() -> anyhow::Result<()> {
     let service = Bytecode::new(b"service".into());
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
-    let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, VmRuntime::Wasm);
+    let module_id = ModuleId::new(
+        contract_blob.id().hash,
+        service_blob.id().hash,
+        VmRuntime::Wasm,
+    );
 
     let operation = SystemOperation::CreateApplication {
         module_id,

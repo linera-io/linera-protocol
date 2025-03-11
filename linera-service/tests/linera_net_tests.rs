@@ -340,8 +340,9 @@ impl AmmApp {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy::primitives::U256;
+    use alloy::primitives::{Address, U256};
     use alloy_sol_types::{sol, SolCall, SolValue};
+    use linera_base::vm::EncapsulateAddress;
     use linera_execution::test_utils::solidity::get_example_counter;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -381,11 +382,14 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     type Parameter = ();
     type InstantiationArgument = Vec<u8>;
 
+    let vm_runtime = VmRuntime::Evm(EncapsulateAddress {
+        address: Address::ZERO,
+    });
     let application_id = client
         .publish_and_create::<EvmAbi, Parameter, InstantiationArgument>(
             contract,
             service,
-            VmRuntime::Evm,
+            vm_runtime,
             &(),
             &instantiation_argument,
             &[],

@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight},
     identifiers::{ApplicationId, ChainId, MessageId, ModuleId, Owner},
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
-    vm::VmRuntime,
+    vm::{EncapsulateAddress, VmRuntime},
 };
 
 use super::wit::contract_runtime_api as wit_contract_api;
@@ -20,6 +20,18 @@ impl From<wit_contract_api::CryptoHash> for CryptoHash {
             crypto_hash.part2,
             crypto_hash.part3,
             crypto_hash.part4,
+        ])
+    }
+}
+
+impl From<wit_contract_api::Address> for EncapsulateAddress {
+    fn from(address: wit_contract_api::Address) -> Self {
+        EncapsulateAddress::from([
+            address.part1,
+            address.part2,
+            address.part3,
+            address.part4,
+            address.part5,
         ])
     }
 }
@@ -44,7 +56,7 @@ impl From<wit_contract_api::VmRuntime> for VmRuntime {
     fn from(vm_runtime: wit_contract_api::VmRuntime) -> Self {
         match vm_runtime {
             wit_contract_api::VmRuntime::Wasm => VmRuntime::Wasm,
-            wit_contract_api::VmRuntime::Evm => VmRuntime::Evm,
+            wit_contract_api::VmRuntime::Evm(address) => VmRuntime::Evm(address.into()),
         }
     }
 }

@@ -17,14 +17,22 @@ interface service-runtime-api {
         part4: u64,
     }
 
+    record address {
+        part1: u32,
+        part2: u32,
+        part3: u32,
+        part4: u32,
+        part5: u32,
+    }
+
     record module-id {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
         vm-runtime: vm-runtime,
     }
 
-    enum vm-runtime {
+    variant vm-runtime {
         wasm,
-        evm,
+        evm(address),
     }
 }
