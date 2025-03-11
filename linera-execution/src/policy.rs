@@ -61,6 +61,8 @@ pub struct ResourceControlPolicy {
     pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
     pub maximum_bytes_written_per_block: u64,
+    /// The maximum amount of time allowed to wait for an HTTP response.
+    pub http_request_timeout_ms: u64,
     /// The list of hosts that contracts and services can send HTTP requests to.
     pub http_request_allow_list: BTreeSet<String>,
 }
@@ -88,6 +90,7 @@ impl fmt::Display for ResourceControlPolicy {
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
             http_request_allow_list,
+            http_request_timeout_ms,
         } = self;
         write!(
             f,
@@ -111,6 +114,7 @@ impl fmt::Display for ResourceControlPolicy {
             {maximum_block_proposal_size} maximum size of a block proposal\n\
             {maximum_bytes_read_per_block} maximum number bytes read per block\n\
             {maximum_bytes_written_per_block} maximum number bytes written per block\n\
+            {http_request_timeout_ms} ms timeout for HTTP requests\n\
             HTTP hosts allowed for contracts and services: {http_request_allow_list:#?}\n",
         )?;
         Ok(())
@@ -148,6 +152,7 @@ impl ResourceControlPolicy {
             maximum_block_proposal_size: u64::MAX,
             maximum_bytes_read_per_block: u64::MAX,
             maximum_bytes_written_per_block: u64::MAX,
+            http_request_timeout_ms: u64::MAX,
             http_request_allow_list: BTreeSet::new(),
         }
     }
@@ -213,6 +218,7 @@ impl ResourceControlPolicy {
             maximum_block_proposal_size: 13_000_000,
             maximum_bytes_read_per_block: 100_000_000,
             maximum_bytes_written_per_block: 10_000_000,
+            http_request_timeout_ms: 20_000,
             http_request_allow_list: BTreeSet::new(),
         }
     }
