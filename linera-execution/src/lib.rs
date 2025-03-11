@@ -637,9 +637,6 @@ pub trait ServiceRuntime: BaseRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Fetches blob of bytes from an arbitrary URL.
-    fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError>;
-
     /// Schedules an operation to be included in the block proposed after execution.
     fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError>;
 }

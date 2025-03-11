@@ -367,11 +367,6 @@ where
                 callback.respond(Ok(create_application_result));
             }
 
-            FetchUrl { url, callback } => {
-                let bytes = reqwest::get(url).await?.bytes().await?.to_vec();
-                callback.respond(bytes);
-            }
-
             PerformHttpRequest { request, callback } => {
                 let headers = request
                     .headers
@@ -589,12 +584,6 @@ pub enum ExecutionRequest {
         txn_tracker: TransactionTracker,
         #[debug(skip)]
         callback: Sender<Result<CreateApplicationResult, ExecutionError>>,
-    },
-
-    FetchUrl {
-        url: String,
-        #[debug(skip)]
-        callback: Sender<Vec<u8>>,
     },
 
     PerformHttpRequest {
