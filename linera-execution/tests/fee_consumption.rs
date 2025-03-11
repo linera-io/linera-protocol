@@ -126,6 +126,8 @@ async fn test_fee_consumption(
     let (application_id, application, blobs) = state.register_mock_application(0).await?;
     let mut view = state.into_view().await;
 
+    let mut oracle_responses = blob_oracle_responses(blobs.iter());
+
     let signer = Owner::from(AccountPublicKey::test_key(0));
     let owner = AccountOwner::User(signer);
     view.system.balance.set(chain_balance);
@@ -178,6 +180,10 @@ async fn test_fee_consumption(
         ..ResourceController::default()
     };
 
+    for spend in &spends {
+        oracle_responses.extend(spend.expected_oracle_responses());
+    }
+
     application.expect_call(ExpectedCall::execute_message(
         move |runtime, _context, _operation| {
             for spend in spends {
@@ -203,7 +209,7 @@ async fn test_fee_consumption(
         message_id: MessageId::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter())));
+    let mut txn_tracker = TransactionTracker::new(0, 0, Some(oracle_responses));
     view.execute_message(
         context,
         Timestamp::from(0),
