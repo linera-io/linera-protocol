@@ -375,10 +375,21 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
 }
 
 /// Tests if execution fails if services executing as oracles exceed the time limit.
+#[test_case(&[120]; "single service as oracle call")]
+#[test_case(&[60, 60]; "two service as oracle calls")]
+#[test_case(&[105, 15]; "long and short service as oracle calls")]
+#[test_case(&[50, 50, 50]; "three service as oracle calls")]
+#[test_case(&[60, 60, 60]; "first two service as oracle calls exceeds limit")]
 #[tokio::test]
-async fn test_service_as_oracle_exceeding_time_limit() -> anyhow::Result<()> {
+async fn test_service_as_oracle_exceeding_time_limit(
+    service_oracle_execution_times_ms: &[u64],
+) -> anyhow::Result<()> {
     let maximum_service_oracle_execution_ms = 110;
-    let service_oracle_execution_time = Duration::from_millis(120);
+    let service_oracle_call_count = service_oracle_execution_times_ms.len();
+    let service_oracle_execution_times = service_oracle_execution_times_ms
+        .iter()
+        .copied()
+        .map(Duration::from_millis);
 
     let time = Timestamp::from(0);
     let message_id = make_admin_message_id(BlockHeight(3));
@@ -433,13 +444,19 @@ async fn test_service_as_oracle_exceeding_time_limit() -> anyhow::Result<()> {
     });
 
     application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
-        runtime.query_service(application_id, vec![])?;
+        for _ in 0..service_oracle_call_count {
+            runtime.query_service(application_id, vec![])?;
+        }
         Ok(vec![])
     }));
-    application.expect_call(ExpectedCall::handle_query(move |_, _, _| {
-        thread::sleep(service_oracle_execution_time);
-        Ok(vec![])
-    }));
+
+    for service_oracle_execution_time in service_oracle_execution_times {
+        application.expect_call(ExpectedCall::handle_query(move |_, _, _| {
+            thread::sleep(service_oracle_execution_time);
+            Ok(vec![])
+        }));
+    }
+
     application.expect_call(ExpectedCall::default_finalize());
 
     let result = chain.execute_block(&block, time, None, None).await;
