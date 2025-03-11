@@ -100,14 +100,7 @@ fn message_id_test_case() -> MessageId {
 
 /// Creates a dummy [`ApplicationId`] instance to use for the WIT roundtrip test.
 fn application_id_test_case() -> ApplicationId {
-    ApplicationId {
-        module_id: ModuleId::new(
-            CryptoHash::test_hash("contract bytecode"),
-            CryptoHash::test_hash("service bytecode"),
-            VmRuntime::Wasm,
-        ),
-        application_description_hash: CryptoHash::test_hash("application description"),
-    }
+    ApplicationId::new(CryptoHash::test_hash("application description"))
 }
 
 /// Creates a dummy [`ModuleId`] instance to use for the WIT roundtrip test.

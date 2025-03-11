@@ -14,8 +14,7 @@ use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainDescription, ModuleId},
-    vm::VmRuntime,
+    identifiers::{ApplicationId, ChainDescription},
 };
 use linera_views::batch::Batch;
 
@@ -207,14 +206,7 @@ fn create_dummy_application() -> ApplicationStatus {
 
 /// Creates a dummy [`ApplicationId`].
 fn create_dummy_application_id() -> ApplicationId {
-    ApplicationId {
-        module_id: ModuleId::new(
-            CryptoHash::test_hash("contract"),
-            CryptoHash::test_hash("service"),
-            VmRuntime::Wasm,
-        ),
-        application_description_hash: CryptoHash::test_hash("application description"),
-    }
+    ApplicationId::new(CryptoHash::test_hash("application description"))
 }
 
 /// Creates a fake application instance that's just a reference to the `runtime`.

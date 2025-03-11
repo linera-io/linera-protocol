@@ -7,7 +7,6 @@ interface service-runtime-api {
 
     record application-id {
         application-description-hash: crypto-hash,
-        module-id: module-id,
     }
 
     record crypto-hash {
@@ -15,16 +14,5 @@ interface service-runtime-api {
         part2: u64,
         part3: u64,
         part4: u64,
-    }
-
-    record module-id {
-        contract-blob-hash: crypto-hash,
-        service-blob-hash: crypto-hash,
-        vm-runtime: vm-runtime,
-    }
-
-    enum vm-runtime {
-        wasm,
-        evm,
     }
 }

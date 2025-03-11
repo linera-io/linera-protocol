@@ -41,7 +41,6 @@ interface base-runtime-api {
 
     record application-id {
         application-description-hash: crypto-hash,
-        module-id: module-id,
     }
 
     record block-height {
@@ -105,12 +104,6 @@ interface base-runtime-api {
         trace,
     }
 
-    record module-id {
-        contract-blob-hash: crypto-hash,
-        service-blob-hash: crypto-hash,
-        vm-runtime: vm-runtime,
-    }
-
     record owner {
         inner0: crypto-hash,
     }
@@ -131,9 +124,4 @@ interface base-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
-
-    enum vm-runtime {
-        wasm,
-        evm,
-    }
 }
