@@ -664,4 +664,16 @@ where
             .try_query_application(application, argument)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
+
+    /// Checks if the service has exceeded its execution time limit.
+    ///
+    /// This is called by the metering instrumentation, but the fuel consumed argument is
+    /// ignored.
+    fn check_execution_time(caller: &mut Caller, _fuel_consumed: u64) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .check_execution_time()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
 }

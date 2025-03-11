@@ -1710,6 +1710,10 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 
         Ok(())
     }
+
+    fn check_execution_time(&mut self) -> Result<(), ExecutionError> {
+        Ok(())
+    }
 }
 
 /// A request to the service runtime actor.
