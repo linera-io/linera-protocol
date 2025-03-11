@@ -1112,6 +1112,10 @@ input ResourceControlPolicy {
 	"""
 	maximumBytesWrittenPerBlock: Int!
 	"""
+	The maximum amount of time allowed to wait for an HTTP response.
+	"""
+	httpRequestTimeoutMs: Int!
+	"""
 	The list of hosts that contracts and services can send HTTP requests to.
 	"""
 	httpRequestAllowList: [String!]!
