@@ -22,9 +22,7 @@ use linera_base::{
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{
-        AdminOperation, OpenChainConfig, SystemChannel, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX,
-    },
+    system::{AdminOperation, OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
     ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
@@ -210,7 +208,7 @@ impl TestValidator {
             .await
             .expect("Should write committee blob");
 
-        let certificate = admin_chain
+        admin_chain
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::Admin(
                     AdminOperation::CreateCommittee { epoch, blob_hash },
@@ -223,7 +221,7 @@ impl TestValidator {
 
             chain
                 .add_block(|block| {
-                    block.with_system_messages_from(&certificate, SystemChannel::Admin);
+                    block.with_system_operation(SystemOperation::ProcessNewEpoch(epoch));
                 })
                 .await;
         }
