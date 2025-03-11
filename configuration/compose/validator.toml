@@ -6,7 +6,6 @@
 server_config_path = "server.json"
 host = "127.0.0.1"
 port = 19100
-metrics_host = "proxy"
 metrics_port = 21100
 internal_host = "proxy"
 internal_port = 20100
@@ -18,23 +17,19 @@ Grpc = "ClearText"
 [[shards]]
 host = "docker-shard-1"
 port = 19100
-metrics_host = "docker-shard-1"
 metrics_port = 21100
 
 [[shards]]
 host = "docker-shard-2"
 port = 19100
-metrics_host = "docker-shard-2"
 metrics_port = 21100
 
 [[shards]]
 host = "docker-shard-3"
 port = 19100
-metrics_host = "docker-shard-3"
 metrics_port = 21100
 
 [[shards]]
 host = "docker-shard-4"
 port = 19100
-metrics_host = "docker-shard-4"
 metrics_port = 21100

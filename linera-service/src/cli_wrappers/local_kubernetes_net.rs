@@ -348,7 +348,6 @@ impl LocalKubernetesNet {
                 port = {port}
                 internal_host = "proxy-internal.default.svc.cluster.local"
                 internal_port = {internal_port}
-                metrics_host = "proxy-internal.default.svc.cluster.local"
                 metrics_port = {metrics_port}
                 [external_protocol]
                 Grpc = "ClearText"
@@ -365,7 +364,6 @@ impl LocalKubernetesNet {
                 [[shards]]
                 host = "shards-{k}.shards.default.svc.cluster.local"
                 port = {shard_port}
-                metrics_host = "shards-{k}.shards.default.svc.cluster.local"
                 metrics_port = {shard_metrics_port}
                 "#
             ));

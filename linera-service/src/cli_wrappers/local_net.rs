@@ -417,7 +417,6 @@ impl LocalNet {
                 port = {port}
                 internal_host = "{internal_host}"
                 internal_port = {internal_port}
-                metrics_host = "{external_host}"
                 metrics_port = {metrics_port}
                 external_protocol = {external_protocol}
                 internal_protocol = {internal_protocol}
@@ -432,7 +431,6 @@ impl LocalNet {
                 [[shards]]
                 host = "{internal_host}"
                 port = {shard_port}
-                metrics_host = "{external_host}"
                 metrics_port = {shard_metrics_port}
                 "#
             ));
