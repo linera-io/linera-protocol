@@ -132,6 +132,21 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000));
     "with three service oracle calls"
 ))]
+#[cfg_attr(feature = "unstable-oracles", test_case(
+    vec![
+        FeeSpend::Fuel(91),
+        FeeSpend::QueryServiceOracle,
+        FeeSpend::Fuel(11),
+        FeeSpend::Read(vec![0, 1, 2], None),
+        FeeSpend::QueryServiceOracle,
+        FeeSpend::Fuel(57),
+        FeeSpend::QueryServiceOracle,
+    ],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1_000)),
+    None;
+    "with service oracle calls, fuel consumption and a read operation"
+))]
 #[test_case(
     vec![FeeSpend::HttpRequest],
     Amount::from_tokens(2),
