@@ -41,6 +41,8 @@ pub struct ResourceControlPolicy {
     pub message: Amount,
     /// The additional price for each byte in the argument of a user message.
     pub message_byte: Amount,
+    /// The price to query a service as an oracle.
+    pub service_as_oracle_query: Amount,
     /// The price for a performing an HTTP request.
     pub http_request: Amount,
 
@@ -87,6 +89,7 @@ impl fmt::Display for ResourceControlPolicy {
             operation_byte,
             message,
             message_byte,
+            service_as_oracle_query,
             http_request,
             maximum_fuel_per_block,
             maximum_service_oracle_execution_ms,
@@ -113,6 +116,7 @@ impl fmt::Display for ResourceControlPolicy {
             {byte_stored:.2} cost per byte stored\n\
             {operation:.2} per operation\n\
             {operation_byte:.2} per byte in the argument of an operation\n\
+            {service_as_oracle_query:.2} per query to a service as an oracle\n\
             {message:.2} per outgoing messages\n\
             {message_byte:.2} per byte in the argument of an outgoing messages\n\
             {http_request:.2} per HTTP request performed\n\
@@ -157,6 +161,7 @@ impl ResourceControlPolicy {
             operation_byte: Amount::default(),
             message: Amount::default(),
             message_byte: Amount::default(),
+            service_as_oracle_query: Amount::default(),
             http_request: Amount::default(),
             maximum_fuel_per_block: u64::MAX,
             maximum_service_oracle_execution_ms: u64::MAX,
@@ -227,6 +232,7 @@ impl ResourceControlPolicy {
             operation_byte: Amount::from_nanos(10),
             operation: Amount::from_micros(10),
             message: Amount::from_micros(10),
+            service_as_oracle_query: Amount::from_millis(10),
             http_request: Amount::from_micros(50),
             maximum_fuel_per_block: 100_000_000,
             maximum_service_oracle_execution_ms: 10_000,
