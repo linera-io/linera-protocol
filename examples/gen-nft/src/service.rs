@@ -18,6 +18,7 @@ use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
 use gen_nft::{NftOutput, Operation, TokenId};
 use linera_sdk::{
+    http,
     linera_base_types::{AccountOwner, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
@@ -166,9 +167,12 @@ impl QueryRoot {
     async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> String {
         let runtime = ctx.data::<Arc<ServiceRuntime<GenNftService>>>().unwrap();
         info!("prompt: {}", prompt);
-        let raw_weights = runtime.fetch_url("http://localhost:10001/model.bin");
+        let response = runtime.http_request(http::Request::get("http://localhost:10001/model.bin"));
+        let raw_weights = response.body;
         info!("got weights: {}B", raw_weights.len());
-        let tokenizer_bytes = runtime.fetch_url("http://localhost:10001/tokenizer.json");
+        let response =
+            runtime.http_request(http::Request::get("http://localhost:10001/tokenizer.json"));
+        let tokenizer_bytes = response.body;
         let model_context = ModelContext {
             model: raw_weights,
             tokenizer: tokenizer_bytes,
