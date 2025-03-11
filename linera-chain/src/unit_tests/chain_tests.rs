@@ -358,3 +358,87 @@ async fn test_service_as_oracles() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Tests if execution fails if services executing as oracles exceed the time limit.
+#[tokio::test]
+async fn test_service_as_oracle_exceeding_time_limit() -> anyhow::Result<()> {
+    let maximum_service_oracle_execution_ms = 110;
+    let service_oracle_execution_time = Duration::from_millis(120);
+
+    let time = Timestamp::from(0);
+    let message_id = make_admin_message_id(BlockHeight(3));
+    let chain_id = ChainId::child(message_id);
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    let mut config = make_open_chain_config();
+    config.committees.insert(
+        Epoch(0),
+        Committee::new(
+            BTreeMap::from([(
+                ValidatorPublicKey::test_key(1),
+                ValidatorState {
+                    network_address: ValidatorPublicKey::test_key(1).to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::test_key(1),
+                },
+            )]),
+            ResourceControlPolicy {
+                maximum_service_oracle_execution_ms,
+                ..ResourceControlPolicy::default()
+            },
+        ),
+    );
+
+    chain
+        .execute_init_message(message_id, &config, time, time)
+        .await?;
+
+    // Create a mock application.
+    let (app_description, contract_blob, service_blob) = make_app_description();
+    let application_id = ApplicationId::from(&app_description);
+    let application = MockApplication::default();
+    let extra = &chain.context().extra();
+    extra
+        .user_contracts()
+        .insert(application_id, application.clone().into());
+    extra
+        .user_services()
+        .insert(application_id, application.clone().into());
+    extra
+        .add_blobs([
+            contract_blob,
+            service_blob,
+            Blob::new_application_description(&app_description),
+        ])
+        .await?;
+
+    let block = make_first_block(chain_id).with_operation(Operation::User {
+        application_id,
+        bytes: vec![],
+    });
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        runtime.query_service(application_id, vec![])?;
+        Ok(vec![])
+    }));
+    application.expect_call(ExpectedCall::handle_query(move |_, _, _| {
+        thread::sleep(service_oracle_execution_time);
+        Ok(vec![])
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let result = chain.execute_block(&block, time, None, None).await;
+
+    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
+        result
+    else {
+        panic!("Expected a block execution error, got: {result:#?}");
+    };
+
+    assert_matches!(
+        *execution_error,
+        ExecutionError::MaximumServiceOracleExecutionTimeExceeded
+    );
+
+    Ok(())
+}
