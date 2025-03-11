@@ -110,6 +110,31 @@ impl<'de> Deserialize<'de> for CryptoHash {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use linera_base::crypto::CryptoHash;
+    fn random_cryptohash() -> CryptoHash {
+        CryptoHash::from([23323_u64, 25455543444_u64, 56563335699_u64, 67676666666_u64])
+    }
+
+    #[test]
+    fn test_cryptohash_conversion() {
+        let hash1 = random_cryptohash();
+        let array = <[u64; 4]>::from(hash1);
+        let hash2 = CryptoHash::from(array);
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_cryptohash_serialization_human_readable() {
+        let hash1 = random_cryptohash();
+	let json_str = serde_json::to_string(&hash1).unwrap();
+        let hash2 = serde_json::from_str::<CryptoHash>(&json_str).unwrap();
+        assert_eq!(hash1, hash2);
+    }
+}
+
+
 impl FromStr for CryptoHash {
     type Err = CryptoError;
 

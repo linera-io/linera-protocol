@@ -199,6 +199,15 @@ mod tests {
         let address2 = EncapsulateAddress::from(array);
         assert_eq!(address1, address2);
     }
+
+    #[test]
+    fn test_address_serialization_human_readable() {
+        let address1 = EncapsulateAddress { address: Address::random() };
+        let json_str = serde_json::to_string(&address1).unwrap();
+        let address2 = serde_json::from_str::<EncapsulateAddress>(&json_str).unwrap();
+        assert_eq!(address1, address2);
+    }
+
 }
 
 
