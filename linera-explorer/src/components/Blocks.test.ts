@@ -26,6 +26,7 @@ test('Blocks mounting', () => {
                   operationsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                   oracleResponsesHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                   blobsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
+                  operationResultsHash: "5bcd40995283e74798c60e8dc7a93e8c61059440534070673dfb973b2b66f61a",
                 },
                 body: {
                   messages: [[{
@@ -50,6 +51,7 @@ test('Blocks mounting', () => {
                   events: [[]],
                   oracleResponses: [],
                   blobs: [[]],
+                  operationResults: [],
                   incomingBundles: [{
                     origin: {
                       medium: "Direct",

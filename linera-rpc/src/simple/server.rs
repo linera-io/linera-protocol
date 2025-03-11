@@ -220,11 +220,12 @@ where
                     .wait_for_outgoing_messages
                     .then(oneshot::channel)
                     .unzip();
-                match self
-                    .server
-                    .state
-                    .handle_lite_certificate(request.certificate, sender)
-                    .await
+                match Box::pin(
+                    self.server
+                        .state
+                        .handle_lite_certificate(request.certificate, sender),
+                )
+                .await
                 {
                     Ok((info, actions)) => {
                         // Cross-shard requests

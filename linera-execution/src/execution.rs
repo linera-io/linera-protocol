@@ -240,13 +240,17 @@ where
             self.handle_request(request).await?;
         }
 
-        let (controller, txn_tracker_moved) = contract_runtime_task.join().await?;
+        let (result, controller, txn_tracker_moved) = contract_runtime_task.join().await?;
+
         *txn_tracker = txn_tracker_moved;
+        txn_tracker.add_operation_result(result);
+
         resource_controller
             .with_state_and_grant(self, grant)
             .await?
             .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
+
         Ok(())
     }
 

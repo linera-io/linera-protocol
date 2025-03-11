@@ -190,11 +190,9 @@ pub enum WorkerError {
     #[error("The block does not contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error(
-        "
-        The given outcome is not what we computed after executing the block.\n\
+        "The given outcome is not what we computed after executing the block.\n\
         Computed: {computed:#?}\n\
-        Submitted: {submitted:#?}\n
-    "
+        Submitted: {submitted:#?}"
     )]
     IncorrectOutcome {
         computed: Box<BlockExecutionOutcome>,

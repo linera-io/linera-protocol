@@ -26,6 +26,7 @@ fn test_signed_values() {
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
         blobs: vec![Vec::new()],
+        operation_results: vec![OperationResult::default()],
     }
     .with(block);
     let confirmed_value = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
@@ -87,6 +88,7 @@ fn test_hashes() {
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
         blobs: vec![Vec::new()],
+        operation_results: vec![OperationResult::default()],
     }
     .with(block);
     let confirmed_hashed = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
@@ -116,6 +118,7 @@ fn test_certificates() {
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
         blobs: vec![Vec::new()],
+        operation_results: vec![OperationResult::default()],
     }
     .with(block);
     let value = Hashed::new(ConfirmedBlock::new(executed_block));

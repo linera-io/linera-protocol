@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        Origin, PostedMessage, ProposedBlock, Target, Transaction,
+        OperationResult, Origin, PostedMessage, ProposedBlock, Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -168,7 +168,7 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 /// The BCS-serialized size of an empty [`Block`].
-const EMPTY_BLOCK_SIZE: usize = 92;
+const EMPTY_BLOCK_SIZE: usize = 93;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
@@ -773,6 +773,7 @@ where
         let mut events = Vec::new();
         let mut blobs = Vec::new();
         let mut messages = Vec::new();
+        let mut operation_results = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
@@ -887,6 +888,16 @@ where
             messages.push(txn_outcome.outgoing_messages);
             events.push(txn_outcome.events);
             blobs.push(txn_outcome.blobs);
+
+            if let Transaction::ExecuteOperation(_) = transaction {
+                resource_controller
+                    .track_block_size_of(&(&txn_outcome.operation_result))
+                    .with_execution_context(chain_execution_context)?;
+                resource_controller
+                    .track_executed_block_size_sequence_extension(operation_results.len(), 1)
+                    .with_execution_context(chain_execution_context)?;
+                operation_results.push(OperationResult(txn_outcome.operation_result));
+            }
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -917,6 +928,7 @@ where
             oracle_responses,
             events,
             blobs,
+            operation_results,
         };
         Ok(outcome)
     }
