@@ -54,10 +54,9 @@ pub fn create_dummy_user_application_description(
         compressed_bytes: service_bytes,
     });
 
-    let vm_runtime = VmRuntime::Wasm;
     (
         UserApplicationDescription {
-            module_id: ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime),
+            module_id: ModuleId::new(contract_blob.id().hash, service_blob.id().hash, VmRuntime::Wasm),
             creator_chain_id: chain_id,
             block_height: 0.into(),
             application_index: index,

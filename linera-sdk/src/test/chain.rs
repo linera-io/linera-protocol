@@ -338,9 +338,8 @@ impl ActiveChain {
         let service_blob = Blob::new_service_bytecode(service);
         let contract_blob_hash = contract_blob.id().hash;
         let service_blob_hash = service_blob.id().hash;
-        let vm_runtime = VmRuntime::Wasm;
 
-        let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
+        let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, VmRuntime::Wasm);
 
         let certificate = self
             .add_block_with_blobs(

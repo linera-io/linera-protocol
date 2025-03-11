@@ -100,7 +100,6 @@ async fn run_test_handle_certificates_to_create_application<S>(
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    let vm_runtime = VmRuntime::Wasm;
     let admin_id = ChainDescription::Root(0);
     let publisher_owner = AccountSecretKey::generate().public().into();
     let publisher_chain = ChainDescription::Root(1);
@@ -130,7 +129,7 @@ where
     let contract_blob_hash = contract_blob_id.hash;
     let service_blob_hash = service_blob_id.hash;
 
-    let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
+    let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, VmRuntime::Wasm);
     let contract = WasmContractModule::new(contract_bytecode, wasm_runtime).await?;
 
     // Publish the module.

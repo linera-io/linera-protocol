@@ -92,7 +92,6 @@ async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
-    let vm_runtime = VmRuntime::Wasm;
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
@@ -113,7 +112,7 @@ where
     let creator = builder.add_root_chain(1, Amount::ONE).await?;
 
     let (module_id, _cert) = publisher
-        .publish_module(contract_bytecode, service_bytecode, vm_runtime)
+        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
         .await
         .unwrap()
         .unwrap();
@@ -161,7 +160,7 @@ where
     let small_bytecode = Bytecode::new(vec![]);
     // Publishing bytecode that exceeds the limit fails.
     let result = publisher
-        .publish_module(large_bytecode.clone(), small_bytecode.clone(), vm_runtime)
+        .publish_module(large_bytecode.clone(), small_bytecode.clone(), VmRuntime::Wasm)
         .await;
     assert_matches!(
         result,
@@ -170,7 +169,7 @@ where
         ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
     );
     let result = publisher
-        .publish_module(small_bytecode, large_bytecode, vm_runtime)
+        .publish_module(small_bytecode, large_bytecode, VmRuntime::Wasm)
         .await;
     assert_matches!(
         result,
@@ -252,7 +251,6 @@ async fn run_test_run_application_with_dependency<B>(storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -292,7 +290,7 @@ where
             .publish_module(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
+                VmRuntime::Wasm,
             )
             .await
             .unwrap()
@@ -306,7 +304,7 @@ where
             .publish_module(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
+                VmRuntime::Wasm,
             )
             .await
             .unwrap()
@@ -524,7 +522,6 @@ async fn run_test_cross_chain_message<B>(storage_builder: B) -> anyhow::Result<(
 where
     B: StorageBuilder,
 {
-    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -541,7 +538,7 @@ where
             .publish_module(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
+                VmRuntime::Wasm,
             )
             .await
             .unwrap()
@@ -705,7 +702,6 @@ async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> anyhow::Result
 where
     B: StorageBuilder,
 {
-    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -719,7 +715,7 @@ where
             .publish_module(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
-                vm_runtime,
+                VmRuntime::Wasm,
             )
             .await
             .unwrap()
@@ -858,7 +854,6 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm;
     let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
     // Set a fuel limit that is enough to instantiate the application and do one increment
     // operation, but not ten.
@@ -878,7 +873,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .publish_module(
             Bytecode::load_from_file(contract_path).await?,
             Bytecode::load_from_file(service_path).await?,
-            vm_runtime,
+            VmRuntime::Wasm,
         )
         .await
         .unwrap()

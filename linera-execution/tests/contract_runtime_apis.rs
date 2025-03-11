@@ -731,10 +731,9 @@ impl TransferTestEndpoint {
     fn sender_application_description() -> UserApplicationDescription {
         let contract_id = Self::sender_application_contract_blob().id().hash;
         let service_id = Self::sender_application_service_blob().id().hash;
-        let vm_runtime = VmRuntime::Wasm;
 
         UserApplicationDescription {
-            module_id: ModuleId::new(contract_id, service_id, vm_runtime),
+            module_id: ModuleId::new(contract_id, service_id, VmRuntime::Wasm),
             creator_chain_id: ChainId::root(1000),
             block_height: BlockHeight(0),
             application_index: 0,
