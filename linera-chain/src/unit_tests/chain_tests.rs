@@ -26,8 +26,8 @@ use linera_execution::{
     TestExecutionRuntimeContext,
 };
 use linera_views::{
-    context::{Context as _, MemoryContext},
-    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+    context::{Context as _, MemoryContext, ViewContext},
+    memory::{MemoryStore, TEST_MEMORY_MAX_STREAM_QUERIES},
     random::generate_test_namespace,
     views::{View, ViewError},
 };
@@ -35,7 +35,7 @@ use test_case::test_case;
 
 use crate::{
     block::{Block, ConfirmedBlock},
-    data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
+    data_types::{IncomingBundle, MessageAction, MessageBundle, Origin, ProposedBlock},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -301,57 +301,8 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
         .copied()
         .map(Duration::from_millis);
 
-    let time = Timestamp::from(0);
-    let message_id = make_admin_message_id(BlockHeight(3));
-    let chain_id = ChainId::child(message_id);
-    let mut chain = ChainStateView::new(chain_id).await;
-
-    let mut config = make_open_chain_config();
-    config.committees.insert(
-        Epoch(0),
-        Committee::new(
-            BTreeMap::from([(
-                ValidatorPublicKey::test_key(1),
-                ValidatorState {
-                    network_address: ValidatorPublicKey::test_key(1).to_string(),
-                    votes: 1,
-                    account_public_key: AccountPublicKey::test_key(1),
-                },
-            )]),
-            ResourceControlPolicy {
-                maximum_service_oracle_execution_ms,
-                ..ResourceControlPolicy::default()
-            },
-        ),
-    );
-
-    chain
-        .execute_init_message(message_id, &config, time, time)
-        .await?;
-
-    // Create a mock application.
-    let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = ApplicationId::from(&app_description);
-    let application = MockApplication::default();
-    let extra = &chain.context().extra();
-    extra
-        .user_contracts()
-        .insert(application_id, application.clone().into());
-    extra
-        .user_services()
-        .insert(application_id, application.clone().into());
-    extra
-        .add_blobs([
-            contract_blob,
-            service_blob,
-            Blob::new_application_description(&app_description),
-        ])
-        .await?;
-
-    let block = make_first_block(chain_id).with_operation(Operation::User {
-        application_id,
-        bytes: vec![],
-    });
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(maximum_service_oracle_execution_ms).await?;
 
     application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
         for _ in 0..service_oracle_call_count {
@@ -391,6 +342,55 @@ async fn test_service_as_oracle_exceeding_time_limit(
         .copied()
         .map(Duration::from_millis);
 
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(maximum_service_oracle_execution_ms).await?;
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        for _ in 0..service_oracle_call_count {
+            runtime.query_service(application_id, vec![])?;
+        }
+        Ok(vec![])
+    }));
+
+    for service_oracle_execution_time in service_oracle_execution_times {
+        application.expect_call(ExpectedCall::handle_query(move |_, _, _| {
+            thread::sleep(service_oracle_execution_time);
+            Ok(vec![])
+        }));
+    }
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let result = chain.execute_block(&block, time, None, None).await;
+
+    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
+        result
+    else {
+        panic!("Expected a block execution error, got: {result:#?}");
+    };
+
+    assert_matches!(
+        *execution_error,
+        ExecutionError::MaximumServiceOracleExecutionTimeExceeded
+    );
+
+    Ok(())
+}
+
+/// Sets up a test with a dummy [`MockApplication`].
+///
+/// Creates and initializes a [`ChainStateView`] configured with the
+/// `maximum_service_oracle_execution_ms` policy. Registers the dummy application on the chain, and
+/// creates a block proposal with a dummy operation.
+async fn prepare_test_with_dummy_mock_application(
+    maximum_service_oracle_execution_ms: u64,
+) -> anyhow::Result<(
+    MockApplication,
+    ApplicationId,
+    ChainStateView<ViewContext<TestExecutionRuntimeContext, MemoryStore>>,
+    ProposedBlock,
+    Timestamp,
+)> {
     let time = Timestamp::from(0);
     let message_id = make_admin_message_id(BlockHeight(3));
     let chain_id = ChainId::child(message_id);
@@ -443,34 +443,5 @@ async fn test_service_as_oracle_exceeding_time_limit(
         bytes: vec![],
     });
 
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
-        for _ in 0..service_oracle_call_count {
-            runtime.query_service(application_id, vec![])?;
-        }
-        Ok(vec![])
-    }));
-
-    for service_oracle_execution_time in service_oracle_execution_times {
-        application.expect_call(ExpectedCall::handle_query(move |_, _, _| {
-            thread::sleep(service_oracle_execution_time);
-            Ok(vec![])
-        }));
-    }
-
-    application.expect_call(ExpectedCall::default_finalize());
-
-    let result = chain.execute_block(&block, time, None, None).await;
-
-    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
-        result
-    else {
-        panic!("Expected a block execution error, got: {result:#?}");
-    };
-
-    assert_matches!(
-        *execution_error,
-        ExecutionError::MaximumServiceOracleExecutionTimeExceeded
-    );
-
-    Ok(())
+    Ok((application, application_id, chain, block, time))
 }
