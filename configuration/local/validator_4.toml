@@ -4,6 +4,8 @@ port = 9400
 internal_host = "127.0.0.1"
 internal_port = 10400
 metrics_port = 11400
+pyroscope_host = "127.0.0.1"
+pyroscope_port = 4070
 [external_protocol]
 Grpc = "ClearText"
 [internal_protocol]
@@ -13,18 +15,26 @@ Grpc = "ClearText"
 host = "127.0.0.1"
 port = 9401
 metrics_port = 11401
+pyroscope_host = "127.0.0.1"
+pyroscope_port = 4071
 
 [[shards]]
 host = "127.0.0.1"
 port = 9402
 metrics_port = 11402
+pyroscope_host = "127.0.0.1"
+pyroscope_port = 4072
 
 [[shards]]
 host = "127.0.0.1"
 port = 9403
 metrics_port = 11403
+pyroscope_host = "127.0.0.1"
+pyroscope_port = 4073
 
 [[shards]]
 host = "127.0.0.1"
 port = 9404
 metrics_port = 11404
+pyroscope_host = "127.0.0.1"
+pyroscope_port = 4074
