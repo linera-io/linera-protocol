@@ -1120,6 +1120,10 @@ input ResourceControlPolicy {
 	"""
 	maximumBytesWrittenPerBlock: Int!
 	"""
+	The maximum size in bytes of a received HTTP response.
+	"""
+	maximumHttpResponseBytes: Int!
+	"""
 	The maximum amount of time allowed to wait for an HTTP response.
 	"""
 	httpRequestTimeoutMs: Int!
