@@ -26,9 +26,7 @@ use {
 };
 
 /// Encapsulation of address type so that we can implement WitType, WitLoad, WitStore
-#[derive(
-    Clone, Copy, Debug, Display, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize, PartialEq,
-)]
+#[derive(Clone, Copy, Debug, Display, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub struct EncapsulateAddress {
     /// The encapsulated address
     pub address: Address,
@@ -141,6 +139,40 @@ impl WitStore for EncapsulateAddress {
     }
 }
 
+impl Serialize for EncapsulateAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            serializer.serialize_newtype_struct("Address", &self.address.as_slice())
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for EncapsulateAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let address = Address::parse_checksummed(s, None).map_err(serde::de::Error::custom)?;
+            Ok(Self { address })
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "Address")]
+            struct Foo([u8; 20]);
+
+            let value = Foo::deserialize(deserializer)?;
+            let address = Address::new(value.0);
+            Ok(Self { address })
+        }
+    }
+}
+
 #[cfg(with_testing)]
 impl Arbitrary for EncapsulateAddress {
     type Parameters = ();
@@ -155,6 +187,20 @@ impl Arbitrary for EncapsulateAddress {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::Address;
+    use linera_base::vm::EncapsulateAddress;
+    #[test]
+    fn test_address_conversion() {
+        let address1 = EncapsulateAddress { address: Address::random() };
+        let array = <[u32; 5]>::from(address1);
+        let address2 = EncapsulateAddress::from(array);
+        assert_eq!(address1, address2);
+    }
+}
+
 
 #[derive(
     Clone,

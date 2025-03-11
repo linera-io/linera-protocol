@@ -90,6 +90,7 @@ zstd.workspace = true
 
 [dev-dependencies]
 bcs.workspace = true
+alloy = { workspace = true, features = ["getrandom"] }
 linera-base = { path = ".", default-features = false, features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
 test-case.workspace = true

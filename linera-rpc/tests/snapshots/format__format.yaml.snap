@@ -39,6 +39,11 @@ AccountSignature:
       Secp256k1:
         NEWTYPE:
           TYPENAME: Secp256k1Signature
+Address:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 20
 AdminOperation:
   ENUM:
     0:
@@ -1218,4 +1223,6 @@ VmRuntime:
     0:
       Wasm: UNIT
     1:
-      Evm: UNIT
+      Evm:
+        NEWTYPE:
+          TYPENAME: Address
