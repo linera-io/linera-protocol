@@ -132,6 +132,8 @@ prometheus = "0.13.3"
 prometheus-parse = "0.2.5"
 proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "0.13.2"
+pyroscope = "0.5.8"
+pyroscope_pprofrs = "0.2.8"
 quote = "1.0"
 rand = { version = "0.8.5", default-features = false }
 rand_chacha = { version = "0.3.1", default-features = false }

@@ -393,8 +393,16 @@ impl LocalNet {
         11000 + validator * 100
     }
 
+    fn proxy_pyroscope_port(validator: usize) -> usize {
+        4000 + validator * 100
+    }
+
     fn shard_metrics_port(validator: usize, shard: usize) -> usize {
         11000 + validator * 100 + shard + 1
+    }
+
+    fn shard_pyroscope_port(validator: usize, shard: usize) -> usize {
+        4000 + validator * 100 + shard + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
@@ -406,10 +414,12 @@ impl LocalNet {
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
         let metrics_port = Self::proxy_metrics_port(n);
+        let pyroscope_port = Self::proxy_pyroscope_port(n);
         let external_protocol = self.network.external.toml();
         let internal_protocol = self.network.internal.toml();
         let external_host = self.network.external.localhost();
         let internal_host = self.network.internal.localhost();
+        let pyroscope_host = self.network.internal.localhost();
         let mut content = format!(
             r#"
                 server_config_path = "server_{n}.json"
@@ -418,6 +428,8 @@ impl LocalNet {
                 internal_host = "{internal_host}"
                 internal_port = {internal_port}
                 metrics_port = {metrics_port}
+                pyroscope_port = {pyroscope_port}
+                pyroscope_host = "{pyroscope_host}"
                 external_protocol = {external_protocol}
                 internal_protocol = {internal_protocol}
             "#
@@ -425,6 +437,7 @@ impl LocalNet {
         for k in 0..self.num_shards {
             let shard_port = Self::shard_port(n, k);
             let shard_metrics_port = Self::shard_metrics_port(n, k);
+            let shard_pyroscope_port = Self::shard_pyroscope_port(n, k);
             content.push_str(&format!(
                 r#"
 
@@ -432,6 +445,8 @@ impl LocalNet {
                 host = "{internal_host}"
                 port = {shard_port}
                 metrics_port = {shard_metrics_port}
+                pyroscope_host = "{pyroscope_host}"
+                pyroscope_port = {shard_pyroscope_port}
                 "#
             ));
         }
