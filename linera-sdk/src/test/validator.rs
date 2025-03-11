@@ -197,7 +197,8 @@ impl TestValidator {
             (*epoch, committee.clone())
         };
 
-        let admin_chain = self.get_chain(&ChainId::root(0));
+        let admin_chain_id = ChainId::root(0);
+        let admin_chain = self.get_chain(&admin_chain_id);
 
         let committee_blob = Blob::new(BlobContent::new_committee(
             bcs::to_bytes(&committee).unwrap(),
@@ -219,11 +220,13 @@ impl TestValidator {
         for entry in self.chains.iter() {
             let chain = entry.value();
 
-            chain
-                .add_block(|block| {
-                    block.with_system_operation(SystemOperation::ProcessNewEpoch(epoch));
-                })
-                .await;
+            if chain.id() != admin_chain_id {
+                chain
+                    .add_block(|block| {
+                        block.with_system_operation(SystemOperation::ProcessNewEpoch(epoch));
+                    })
+                    .await;
+            }
         }
     }
 
