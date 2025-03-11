@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
@@ -286,6 +286,13 @@ pub enum FeeSpend {
 }
 
 impl FeeSpend {
+    /// Returns the [`OracleResponse`]s necessary for executing this runtime operation.
+    pub fn expected_oracle_responses(&self) -> Vec<OracleResponse> {
+        match self {
+            FeeSpend::Fuel(_) | FeeSpend::Read(_, _) => vec![],
+        }
+    }
+
     /// The fee amount required for this runtime operation.
     pub fn amount(&self, policy: &ResourceControlPolicy) -> Amount {
         match self {
