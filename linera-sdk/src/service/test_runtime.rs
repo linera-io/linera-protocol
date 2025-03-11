@@ -33,7 +33,6 @@ where
     owner_balances: Mutex<Option<HashMap<AccountOwner, Amount>>>,
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
     expected_http_requests: Mutex<VecDeque<(http::Request, http::Response)>>,
-    url_blobs: Mutex<Option<HashMap<String, Vec<u8>>>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     scheduled_operations: Mutex<Vec<Vec<u8>>>,
     key_value_store: KeyValueStore,
@@ -64,7 +63,6 @@ where
             owner_balances: Mutex::new(None),
             query_application_handler: Mutex::new(None),
             expected_http_requests: Mutex::new(VecDeque::new()),
-            url_blobs: Mutex::new(None),
             blobs: Mutex::new(None),
             scheduled_operations: Mutex::new(vec![]),
             key_value_store: KeyValueStore::mock(),
@@ -402,49 +400,6 @@ where
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
         assert_eq!(request, expected_request);
         response
-    }
-
-    /// Configures the blobs returned when fetching from URLs during the test.
-    pub fn with_url_blobs(self, url_blobs: impl IntoIterator<Item = (String, Vec<u8>)>) -> Self {
-        *self.url_blobs.lock().unwrap() = Some(url_blobs.into_iter().collect());
-        self
-    }
-
-    /// Configures the blobs returned when fetching from URLs during the test.
-    pub fn set_url_blobs(&self, url_blobs: impl IntoIterator<Item = (String, Vec<u8>)>) -> &Self {
-        *self.url_blobs.lock().unwrap() = Some(url_blobs.into_iter().collect());
-        self
-    }
-
-    /// Configures the `blob` returned when fetching from the `url` during the test.
-    pub fn with_url_blob(self, url: impl Into<String>, blob: Vec<u8>) -> Self {
-        self.set_url_blob(url, blob);
-        self
-    }
-
-    /// Configures the `blob` returned when fetching from the `url` during the test.
-    pub fn set_url_blob(&self, url: impl Into<String>, blob: Vec<u8>) -> &Self {
-        self.url_blobs
-            .lock()
-            .unwrap()
-            .get_or_insert_with(HashMap::new)
-            .insert(url.into(), blob);
-        self
-    }
-
-    /// Fetches a blob of bytes from a given URL.
-    pub fn fetch_url(&self, url: &str) -> Vec<u8> {
-        self.url_blobs
-            .lock()
-            .unwrap()
-            .as_mut()
-            .and_then(|url_blobs| url_blobs.get(url).cloned())
-            .unwrap_or_else(|| {
-                panic!(
-                    "Blob for URL {url:?} has not been mocked, \
-                    please call `MockServiceRuntime::set_url_blob` first"
-                )
-            })
     }
 
     /// Configures the `blobs` returned when fetching from hashes during the test.
