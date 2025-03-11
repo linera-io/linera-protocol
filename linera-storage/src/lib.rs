@@ -307,7 +307,7 @@ pub trait Storage: Sized {
                     }
                 }
             }
-            VmRuntime::Evm => {
+            VmRuntime::Evm(_) => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
                         let evm_runtime = EvmRuntime::Revm;
@@ -366,7 +366,7 @@ pub trait Storage: Sized {
                     }
                 }
             }
-            VmRuntime::Evm => {
+            VmRuntime::Evm(_) => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
                         let evm_runtime = EvmRuntime::Revm;

@@ -30,6 +30,7 @@ web = [
 ]
 
 [dependencies]
+alloy.workspace = true
 alloy-primitives.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true

@@ -4396,6 +4396,7 @@ dependencies = [
 name = "linera-base"
 version = "0.14.0"
 dependencies = [
+ "alloy",
  "alloy-primitives",
  "anyhow",
  "async-graphql",
