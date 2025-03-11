@@ -20,7 +20,7 @@ use candle_transformers::{
     generation::LogitsProcessor,
     models::{llama2_c, llama2_c::Llama, llama2_c_weights, quantized_llama::ModelWeights},
 };
-use linera_sdk::{linera_base_types::WithServiceAbi, Service, ServiceRuntime};
+use linera_sdk::{http, linera_base_types::WithServiceAbi, Service, ServiceRuntime};
 use log::{debug, info};
 use sha3::{Digest as _, Sha3_256};
 use tokenizers::Tokenizer;
@@ -89,8 +89,10 @@ impl Service for LlmService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         info!("Downloading model");
-        let raw_weights = runtime
-            .fetch_url("https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin");
+        let response = runtime.http_request(http::Request::get(
+            "https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin",
+        ));
+        let raw_weights = response.body;
         assert_eq!(
             Sha3_256::digest(&raw_weights).as_slice(),
             WEIGHTS_HASH,
@@ -99,9 +101,10 @@ impl Service for LlmService {
         info!("Downloaded model weights: {} bytes", raw_weights.len());
 
         info!("Downloading tokenizer");
-        let tokenizer_bytes = runtime.fetch_url(
+        let response = runtime.http_request(http::Request::get(
             "https://huggingface.co/spaces/lmz/candle-llama2/resolve/main/tokenizer.json",
-        );
+        ));
+        let tokenizer_bytes = response.body;
         assert_eq!(
             Sha3_256::digest(&tokenizer_bytes).as_slice(),
             TOKENIZER_HASH,
