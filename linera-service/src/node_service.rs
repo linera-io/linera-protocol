@@ -489,6 +489,7 @@ where
     }
 
     /// Changes the application permissions configuration on this chain.
+    #[expect(clippy::too_many_arguments)]
     async fn change_application_permissions(
         &self,
         chain_id: ChainId,
@@ -496,12 +497,14 @@ where
         execute_operations: Option<Vec<ApplicationId>>,
         mandatory_applications: Vec<ApplicationId>,
         change_application_permissions: Vec<ApplicationId>,
+        call_service_as_oracle: Vec<ApplicationId>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
             mandatory_applications,
             close_chain,
             change_application_permissions,
+            call_service_as_oracle,
         });
         self.execute_system_operation(operation, chain_id).await
     }

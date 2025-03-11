@@ -414,6 +414,11 @@ where
                 self.system.assert_blob_exists(blob_id).await?;
                 callback.respond(self.system.blob_used(None, blob_id).await?)
             }
+
+            GetApplicationPermissions { callback } => {
+                let app_permissions = self.system.application_permissions.get();
+                callback.respond(app_permissions.clone());
+            }
         }
 
         Ok(())
@@ -613,5 +618,10 @@ pub enum ExecutionRequest {
         blob_id: BlobId,
         #[debug(skip)]
         callback: Sender<bool>,
+    },
+
+    GetApplicationPermissions {
+        #[debug(skip)]
+        callback: Sender<ApplicationPermissions>,
     },
 }

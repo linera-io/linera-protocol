@@ -1450,6 +1450,10 @@ pub struct ApplicationPermissionsConfig {
     /// using the system API.
     #[arg(long)]
     pub change_application_permissions: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to call services as oracles on the current chain using the
+    /// system API.
+    #[arg(long)]
+    pub call_service_as_oracle: Option<Vec<ApplicationId>>,
 }
 
 impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
@@ -1461,6 +1465,7 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
             change_application_permissions: config
                 .change_application_permissions
                 .unwrap_or_default(),
+            call_service_as_oracle: config.call_service_as_oracle.unwrap_or_default(),
         }
     }
 }
