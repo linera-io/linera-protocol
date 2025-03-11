@@ -39,7 +39,7 @@ pub struct MockApplication {
 ///
 /// Will expect certain calls previously configured through [`MockApplication`].
 pub struct MockApplicationInstance<Runtime> {
-    expected_calls: VecDeque<ExpectedCall>,
+    expected_calls: Arc<Mutex<VecDeque<ExpectedCall>>>,
     runtime: Runtime,
     active_instances: Arc<AtomicUsize>,
 }
@@ -61,7 +61,7 @@ impl MockApplication {
         self.active_instances.fetch_add(1, Ordering::AcqRel);
 
         MockApplicationInstance {
-            expected_calls: mem::take(&mut self.expected_calls.lock().expect("Mutex is poisoned")),
+            expected_calls: self.expected_calls.clone(),
             runtime,
             active_instances: self.active_instances.clone(),
         }
@@ -115,9 +115,7 @@ impl Eq for MockApplication {}
 
 impl<Runtime> Drop for MockApplicationInstance<Runtime> {
     fn drop(&mut self) {
-        if self.expected_calls.is_empty() {
-            self.active_instances.fetch_sub(1, Ordering::AcqRel);
-        }
+        self.active_instances.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -294,7 +292,10 @@ impl UserServiceModule for MockApplication {
 impl<Runtime> MockApplicationInstance<Runtime> {
     /// Retrieves the next [`ExpectedCall`] in the queue.
     fn next_expected_call(&mut self) -> Option<ExpectedCall> {
-        self.expected_calls.pop_front()
+        self.expected_calls
+            .lock()
+            .expect("Queue of expected calls was poisoned")
+            .pop_front()
     }
 }
 
