@@ -5,6 +5,8 @@
 
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
+#[cfg(not(web))]
+use std::time::Duration;
 
 use custom_debug_derive::Debug;
 use futures::channel::mpsc;
@@ -395,12 +397,20 @@ where
                     ExecutionError::UnauthorizedHttpRequest(url)
                 );
 
-                let response = Client::new()
+                #[cfg_attr(web, allow(unused_mut))]
+                let mut request = Client::new()
                     .request(request.method.into(), url)
                     .body(request.body)
-                    .headers(headers)
-                    .send()
-                    .await?;
+                    .headers(headers);
+                #[cfg(not(web))]
+                {
+                    request = request.timeout(Duration::from_millis(
+                        committee.policy().http_request_timeout_ms,
+                    ));
+                }
+
+                let response = request.send().await?;
+
                 callback.respond(http::Response::from_reqwest(response).await?);
             }
 
