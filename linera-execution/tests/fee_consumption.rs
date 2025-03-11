@@ -322,6 +322,8 @@ pub enum FeeSpend {
     Fuel(u64),
     /// Reads from storage.
     Read(Vec<u8>, Option<Vec<u8>>),
+    /// Queries a service as an oracle.
+    QueryServiceOracle,
     /// Performs an HTTP request.
     HttpRequest,
 }
@@ -331,6 +333,9 @@ impl FeeSpend {
     pub fn expected_oracle_responses(&self) -> Vec<OracleResponse> {
         match self {
             FeeSpend::Fuel(_) | FeeSpend::Read(_, _) => vec![],
+            FeeSpend::QueryServiceOracle => {
+                vec![OracleResponse::Service(vec![])]
+            }
             FeeSpend::HttpRequest => vec![OracleResponse::Http(http::Response::ok([]))],
         }
     }
@@ -347,6 +352,7 @@ impl FeeSpend {
 
                 policy.read_operation.saturating_add(value_read_fee)
             }
+            FeeSpend::QueryServiceOracle => policy.service_as_oracle_query,
             FeeSpend::HttpRequest => policy.http_request,
         }
     }
@@ -359,6 +365,11 @@ impl FeeSpend {
                 let promise = runtime.read_value_bytes_new(key)?;
                 let response = runtime.read_value_bytes_wait(&promise)?;
                 assert_eq!(response, value);
+                Ok(())
+            }
+            FeeSpend::QueryServiceOracle => {
+                let application_id = runtime.application_id()?;
+                runtime.query_service(application_id, vec![])?;
                 Ok(())
             }
             FeeSpend::HttpRequest => {
