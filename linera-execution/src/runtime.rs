@@ -1725,6 +1725,11 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
     }
 
     fn check_execution_time(&mut self) -> Result<(), ExecutionError> {
+        if let Some(deadline) = self.inner().deadline {
+            if Instant::now() >= deadline {
+                return Err(ExecutionError::MaximumServiceOracleExecutionTimeExceeded);
+            }
+        }
         Ok(())
     }
 }
