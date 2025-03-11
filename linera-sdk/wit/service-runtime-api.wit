@@ -3,7 +3,6 @@ package linera:app;
 interface service-runtime-api {
     schedule-operation: func(operation: list<u8>);
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
-    fetch-url: func(url: string) -> list<u8>;
 
     record application-id {
         application-description-hash: crypto-hash,
