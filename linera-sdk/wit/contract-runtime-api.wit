@@ -31,6 +31,14 @@ interface contract-runtime-api {
         application(application-id),
     }
 
+    record address {
+        part1: u32,
+        part2: u32,
+        part3: u32,
+        part4: u32,
+        part5: u32,
+    }
+
     record amount {
         inner0: u128,
     }
@@ -80,14 +88,6 @@ interface contract-runtime-api {
         part2: u64,
         part3: u64,
         part4: u64,
-    }
-
-    record address {
-        part1: u32,
-        part2: u32,
-        part3: u32,
-        part4: u32,
-        part5: u32,
     }
 
     variant destination {
