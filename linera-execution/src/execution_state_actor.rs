@@ -406,7 +406,7 @@ where
 
                 let response = request.send().await?;
 
-                callback.respond(http::Response::from_reqwest(response).await?);
+                callback.respond(self.receive_http_response(response).await?);
             }
 
             ReadBlobContent { blob_id, callback } => {
@@ -427,6 +427,34 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<C> ExecutionStateView<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    /// Receives an HTTP response, returning the prepared [`http::Response`] instance.
+    async fn receive_http_response(
+        &mut self,
+        response: reqwest::Response,
+    ) -> Result<http::Response, ExecutionError> {
+        let status = response.status().as_u16();
+
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(name, value)| http::Header::new(name.to_string(), value.as_bytes()))
+            .collect::<Vec<_>>();
+
+        let body = response.bytes().await?.to_vec();
+
+        Ok(http::Response {
+            status,
+            headers,
+            body,
+        })
     }
 }
 
