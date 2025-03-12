@@ -236,6 +236,8 @@ pub enum ExecutionError {
     MaximumServiceOracleExecutionTimeExceeded,
     #[error("Serialized size of the executed block exceeds limit")]
     ExecutedBlockTooLarge,
+    #[error("HTTP response exceeds the size limit of {limit} bytes, having at least {size} bytes")]
+    HttpResponseSizeLimitExceeded { limit: u64, size: u64 },
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
     #[error("Module ID {0:?} is invalid")]
