@@ -59,8 +59,6 @@ ApplicationId:
   STRUCT:
     - application_description_hash:
         TYPENAME: CryptoHash
-    - module_id:
-        TYPENAME: ModuleId
 ApplicationPermissions:
   STRUCT:
     - execute_operations:
@@ -868,6 +866,7 @@ ResourceControlPolicy:
     - maximum_block_proposal_size: U64
     - maximum_bytes_read_per_block: U64
     - maximum_bytes_written_per_block: U64
+    - http_request_timeout_ms: U64
     - http_request_allow_list:
         SEQ: STR
 Response:

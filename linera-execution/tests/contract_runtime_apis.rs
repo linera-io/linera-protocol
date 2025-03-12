@@ -752,16 +752,7 @@ impl TransferTestEndpoint {
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
     fn recipient_application_id() -> ApplicationId {
-        ApplicationId {
-            module_id: ModuleId::new(
-                CryptoHash::test_hash("recipient contract bytecode"),
-                CryptoHash::test_hash("recipient service bytecode"),
-                VmRuntime::Wasm,
-            ),
-            application_description_hash: CryptoHash::test_hash(
-                "recipient application description",
-            ),
-        }
+        ApplicationId::new(CryptoHash::test_hash("recipient application description"))
     }
 
     /// Returns a [`SystemExecutionState`] initialized with this transfer endpoint's account

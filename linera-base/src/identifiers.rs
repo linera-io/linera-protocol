@@ -299,8 +299,9 @@ pub struct MessageId {
 pub struct ApplicationId<A = ()> {
     /// The hash of the `UserApplicationDescription` this refers to.
     pub application_description_hash: CryptoHash,
-    /// The module to use for the application.
-    pub module_id: ModuleId<A>,
+    #[witty(skip)]
+    #[debug(skip)]
+    _phantom: PhantomData<A>,
 }
 
 /// Alias for `ApplicationId`. Use this alias in the core
@@ -773,7 +774,6 @@ impl<A> Copy for ApplicationId<A> {}
 impl<A: PartialEq> PartialEq for ApplicationId<A> {
     fn eq(&self, other: &Self) -> bool {
         self.application_description_hash == other.application_description_hash
-            && self.module_id == other.module_id
     }
 }
 
@@ -781,22 +781,21 @@ impl<A: Eq> Eq for ApplicationId<A> {}
 
 impl<A: PartialOrd> PartialOrd for ApplicationId<A> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (self.application_description_hash, self.module_id)
-            .partial_cmp(&(other.application_description_hash, other.module_id))
+        self.application_description_hash
+            .partial_cmp(&other.application_description_hash)
     }
 }
 
 impl<A: Ord> Ord for ApplicationId<A> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.application_description_hash, self.module_id)
-            .cmp(&(other.application_description_hash, other.module_id))
+        self.application_description_hash
+            .cmp(&other.application_description_hash)
     }
 }
 
 impl<A> Hash for ApplicationId<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.application_description_hash.hash(state);
-        self.module_id.hash(state);
     }
 }
 
@@ -804,7 +803,6 @@ impl<A> Hash for ApplicationId<A> {
 #[serde(rename = "ApplicationId")]
 struct SerializableApplicationId {
     pub application_description_hash: CryptoHash,
-    pub module_id: ModuleId,
 }
 
 impl<A> Serialize for ApplicationId<A> {
@@ -815,7 +813,6 @@ impl<A> Serialize for ApplicationId<A> {
         if serializer.is_human_readable() {
             let bytes = bcs::to_bytes(&SerializableApplicationId {
                 application_description_hash: self.application_description_hash,
-                module_id: self.module_id.forget_abi(),
             })
             .map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
@@ -823,7 +820,6 @@ impl<A> Serialize for ApplicationId<A> {
             SerializableApplicationId::serialize(
                 &SerializableApplicationId {
                     application_description_hash: self.application_description_hash,
-                    module_id: self.module_id.forget_abi(),
                 },
                 serializer,
             )
@@ -843,13 +839,13 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
                 application_description_hash: application_id.application_description_hash,
-                module_id: application_id.module_id.with_abi(),
+                _phantom: PhantomData,
             })
         } else {
             let value = SerializableApplicationId::deserialize(deserializer)?;
             Ok(ApplicationId {
                 application_description_hash: value.application_description_hash,
-                module_id: value.module_id.with_abi(),
+                _phantom: PhantomData,
             })
         }
     }
@@ -857,10 +853,10 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
 
 impl ApplicationId {
     /// Creates an application ID from the application description hash.
-    pub fn new(application_description_hash: CryptoHash, module_id: ModuleId) -> Self {
+    pub fn new(application_description_hash: CryptoHash) -> Self {
         ApplicationId {
             application_description_hash,
-            module_id,
+            _phantom: PhantomData,
         }
     }
 
@@ -868,7 +864,7 @@ impl ApplicationId {
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            module_id: self.module_id.with_abi(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -878,7 +874,7 @@ impl<A> ApplicationId<A> {
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            module_id: self.module_id.forget_abi(),
+            _phantom: PhantomData,
         }
     }
 

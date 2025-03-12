@@ -1676,15 +1676,6 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
         Ok(response)
     }
 
-    /// Get a blob of bytes from an arbitrary URL.
-    fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError> {
-        let this = self.inner();
-        let url = url.to_string();
-        this.execution_state_sender
-            .send_request(|callback| ExecutionRequest::FetchUrl { url, callback })?
-            .recv_response()
-    }
-
     fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application_id = this.application_id()?;

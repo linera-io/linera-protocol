@@ -187,11 +187,6 @@ where
         serde_json::from_slice(&response_bytes)
             .expect("Failed to deserialize query response from application")
     }
-
-    /// Fetches a blob of bytes from a given URL.
-    pub fn fetch_url(&self, url: &str) -> Vec<u8> {
-        service_wit::fetch_url(url)
-    }
 }
 
 impl<Application> ServiceRuntime<Application>
