@@ -1341,6 +1341,18 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         );
 
         let mut this = self.inner();
+
+        let app_permissions = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::GetApplicationPermissions { callback })?
+            .recv_response()?;
+
+        let app_id = this.current_application().id;
+        ensure!(
+            app_permissions.can_call_services(&app_id),
+            ExecutionError::UnauthorizedApplication(app_id)
+        );
+
         let response =
             if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
                 match response {

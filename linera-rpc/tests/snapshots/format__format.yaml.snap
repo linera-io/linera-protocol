@@ -74,6 +74,10 @@ ApplicationPermissions:
     - change_application_permissions:
         SEQ:
           TYPENAME: ApplicationId
+    - call_service_as_oracle:
+        OPTION:
+          SEQ:
+            TYPENAME: ApplicationId
 BlobContent:
   STRUCT:
     - blob_type:

@@ -222,6 +222,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
 * `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 * `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — These applications are allowed to change the application permissions on the current chain using the system API
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — These applications are allowed to call services as oracles on the current chain using the system API
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
@@ -272,6 +273,7 @@ Changes the application permissions configuration
 * `--mandatory-applications <MANDATORY_APPLICATIONS>` — At least one operation or incoming message from each of these applications must occur in every block
 * `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 * `--change-application-permissions <CHANGE_APPLICATION_PERMISSIONS>` — These applications are allowed to change the application permissions on the current chain using the system API
+* `--call-service-as-oracle <CALL_SERVICE_AS_ORACLE>` — These applications are allowed to call services as oracles on the current chain using the system API
 
 
 
