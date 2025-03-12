@@ -33,7 +33,9 @@ use linera_execution::{
     TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
-use test_case::{test_case, test_matrix};
+#[cfg(feature = "unstable-oracles")]
+use test_case::test_case;
+use test_case::test_matrix;
 use test_strategy::proptest;
 
 /// Tests the contract system API to transfer tokens between accounts.
