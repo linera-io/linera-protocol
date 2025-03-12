@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use custom_debug_derive::Debug;
-use futures::channel::mpsc;
+use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
@@ -441,6 +441,7 @@ where
         response: reqwest::Response,
     ) -> Result<http::Response, ExecutionError> {
         let status = response.status().as_u16();
+        let maybe_content_length = response.content_length();
 
         let headers = response
             .headers()
@@ -448,7 +449,12 @@ where
             .map(|(name, value)| http::Header::new(name.to_string(), value.as_bytes()))
             .collect::<Vec<_>>();
 
-        let body = response.bytes().await?.to_vec();
+        let mut body = Vec::with_capacity(maybe_content_length.unwrap_or(0) as usize);
+        let mut body_stream = response.bytes_stream();
+
+        while let Some(bytes) = body_stream.next().await.transpose()? {
+            body.extend(&bytes);
+        }
 
         Ok(http::Response {
             status,
