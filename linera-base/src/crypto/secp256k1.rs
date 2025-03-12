@@ -67,8 +67,8 @@ impl Secp256k1PublicKey {
     pub fn test_key(seed: u8) -> Self {
         use rand::SeedableRng;
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed as u64);
-        let sk = k256::SecretKey::random(&mut rng);
-        Self(sk.public_key().into())
+        let sk = k256::ecdsa::SigningKey::random(&mut rng);
+        Self(sk.verifying_key().into())
     }
 
     /// Returns the bytes of the public key in compressed representation.
