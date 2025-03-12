@@ -169,25 +169,6 @@ impl Response {
     }
 }
 
-#[cfg(with_reqwest)]
-impl Response {
-    /// Creates a [`Response`] from a [`reqwest::Response`], waiting for it to be fully
-    /// received.
-    pub async fn from_reqwest(response: reqwest::Response) -> reqwest::Result<Self> {
-        let headers = response
-            .headers()
-            .into_iter()
-            .map(|(name, value)| Header::new(name.to_string(), value.as_bytes()))
-            .collect();
-
-        Ok(Response {
-            status: response.status().as_u16(),
-            headers,
-            body: response.bytes().await?.to_vec(),
-        })
-    }
-}
-
 /// A header for an HTTP request or response.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, WitLoad, WitStore, WitType)]
 #[witty(name = "http-header")]
