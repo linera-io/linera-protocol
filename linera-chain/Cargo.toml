@@ -39,6 +39,7 @@ anyhow.workspace = true
 assert_matches.workspace = true
 bcs.workspace = true
 linera-chain = { path = ".", default-features = false, features = ["test"] }
+test-case.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
