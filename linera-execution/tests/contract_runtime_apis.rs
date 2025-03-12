@@ -9,6 +9,8 @@ use std::{
 };
 
 use assert_matches::assert_matches;
+#[cfg(feature = "unstable-oracles")]
+use linera_base::data_types::ApplicationPermissions;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
@@ -876,4 +878,149 @@ impl TransferTestEndpoint {
 
         Ok(())
     }
+}
+
+/// Tests the contract system API to query an application service.
+#[cfg(feature = "unstable-oracles")] // # TODO: Remove once #3524 lands
+#[test_log::test(tokio::test)]
+async fn test_query_service() -> anyhow::Result<()> {
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        ownership: ChainOwnership::default(),
+        balance: Amount::ONE,
+        balances: BTreeMap::new(),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await?;
+
+    view.system
+        .application_permissions
+        .set(ApplicationPermissions::new_single(application_id));
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.query_service(application_id, vec![])?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::handle_query(|_service, _context, _query| {
+        Ok(vec![])
+    }));
+
+    let context = create_dummy_operation_context();
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        operation,
+        &mut TransactionTracker::new(
+            0,
+            0,
+            Some(vec![
+                OracleResponse::Blob(app_desc_blob_id),
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+                OracleResponse::Service(vec![]),
+            ]),
+        ),
+        &mut controller,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// Tests the contract system API to query an application service.
+#[cfg(feature = "unstable-oracles")] // TODO: remove once #3524 lands
+#[test_log::test(tokio::test)]
+async fn test_unauthorized_query_service() -> anyhow::Result<()> {
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        ownership: ChainOwnership::default(),
+        balance: Amount::ONE,
+        balances: BTreeMap::new(),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await?;
+
+    view.system
+        .application_permissions
+        .set(ApplicationPermissions {
+            call_service_as_oracle: vec![],
+            ..ApplicationPermissions::new_single(application_id)
+        });
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.query_service(application_id, vec![])?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::handle_query(|_service, _context, _query| {
+        Ok(vec![])
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context();
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    let result = view
+        .execute_operation(
+            context,
+            Timestamp::from(0),
+            operation,
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(vec![
+                    OracleResponse::Blob(app_desc_blob_id),
+                    OracleResponse::Blob(contract_blob_id),
+                    OracleResponse::Blob(service_blob_id),
+                ]),
+            ),
+            &mut controller,
+        )
+        .await;
+
+    assert_matches!(result, Err(ExecutionError::UnauthorizedApplication(_)));
+
+    Ok(())
 }
