@@ -497,7 +497,7 @@ where
         execute_operations: Option<Vec<ApplicationId>>,
         mandatory_applications: Vec<ApplicationId>,
         change_application_permissions: Vec<ApplicationId>,
-        call_service_as_oracle: Vec<ApplicationId>,
+        call_service_as_oracle: Option<Vec<ApplicationId>>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,

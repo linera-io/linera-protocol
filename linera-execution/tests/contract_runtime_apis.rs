@@ -971,7 +971,7 @@ async fn test_unauthorized_query_service() -> anyhow::Result<()> {
     view.system
         .application_permissions
         .set(ApplicationPermissions {
-            call_service_as_oracle: vec![],
+            call_service_as_oracle: Some(vec![]),
             ..ApplicationPermissions::new_single(application_id)
         });
 

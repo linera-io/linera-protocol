@@ -1465,7 +1465,7 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
             change_application_permissions: config
                 .change_application_permissions
                 .unwrap_or_default(),
-            call_service_as_oracle: config.call_service_as_oracle.unwrap_or_default(),
+            call_service_as_oracle: config.call_service_as_oracle,
         }
     }
 }

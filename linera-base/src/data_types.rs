@@ -730,8 +730,8 @@ pub struct ApplicationPermissions {
     pub change_application_permissions: Vec<ApplicationId>,
     /// These applications are allowed to perform calls to services as oracles.
     #[graphql(default)]
-    #[debug(skip_if = Vec::is_empty)]
-    pub call_service_as_oracle: Vec<ApplicationId>,
+    #[debug(skip_if = Option::is_none)]
+    pub call_service_as_oracle: Option<Vec<ApplicationId>>,
 }
 
 impl ApplicationPermissions {
@@ -743,7 +743,7 @@ impl ApplicationPermissions {
             mandatory_applications: vec![app_id],
             close_chain: vec![app_id],
             change_application_permissions: vec![app_id],
-            call_service_as_oracle: vec![app_id],
+            call_service_as_oracle: Some(vec![app_id]),
         }
     }
 
@@ -769,7 +769,10 @@ impl ApplicationPermissions {
 
     /// Returns whether the given application can call services.
     pub fn can_call_services(&self, app_id: &ApplicationId) -> bool {
-        self.call_service_as_oracle.contains(app_id)
+        self.call_service_as_oracle
+            .as_ref()
+            .map(|app_ids| app_ids.contains(app_id))
+            .unwrap_or(true)
     }
 }
 
