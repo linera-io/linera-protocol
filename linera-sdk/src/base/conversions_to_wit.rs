@@ -7,8 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
-    vm::VmRuntime,
+    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
 };
 
 use crate::{
@@ -66,32 +65,12 @@ macro_rules! impl_to_wit {
             }
         }
 
-        impl From<ModuleId> for $wit_base_api::ModuleId {
-            fn from(module_id: ModuleId) -> Self {
-                $wit_base_api::ModuleId {
-                    contract_blob_hash: module_id.contract_blob_hash.into(),
-                    service_blob_hash: module_id.service_blob_hash.into(),
-                    vm_runtime: module_id.vm_runtime.into(),
-                }
-            }
-        }
-
-        impl From<VmRuntime> for $wit_base_api::VmRuntime {
-            fn from(vm_runtime: VmRuntime) -> Self {
-                match vm_runtime {
-                    VmRuntime::Wasm => $wit_base_api::VmRuntime::Wasm,
-                    VmRuntime::Evm => $wit_base_api::VmRuntime::Evm,
-                }
-            }
-        }
-
         impl From<ApplicationId> for $wit_base_api::ApplicationId {
             fn from(application_id: ApplicationId) -> Self {
                 $wit_base_api::ApplicationId {
                     application_description_hash: application_id
                         .application_description_hash
                         .into(),
-                    module_id: application_id.module_id.into(),
                 }
             }
         }

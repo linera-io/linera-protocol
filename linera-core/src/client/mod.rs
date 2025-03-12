@@ -2993,10 +2993,7 @@ where
             let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
                 "ApplicationDescription blob not found.",
             ))?;
-            let id = ApplicationId {
-                application_description_hash: blob_id.hash,
-                module_id,
-            };
+            let id = ApplicationId::new(blob_id.hash);
             Ok((id, certificate))
         })
     }
