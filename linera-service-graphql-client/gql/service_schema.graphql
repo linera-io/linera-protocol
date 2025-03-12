@@ -50,7 +50,7 @@ input ApplicationPermissions {
 	"""
 	These applications are allowed to perform calls to services as oracles.
 	"""
-	callServiceAsOracle: [ApplicationId!]! = []
+	callServiceAsOracle: [ApplicationId!] = null
 }
 
 """
@@ -813,7 +813,7 @@ type MutationRoot {
 	"""
 	Changes the application permissions configuration on this chain.
 	"""
-	changeApplicationPermissions(chainId: ChainId!, closeChain: [ApplicationId!]!, executeOperations: [ApplicationId!], mandatoryApplications: [ApplicationId!]!, changeApplicationPermissions: [ApplicationId!]!, callServiceAsOracle: [ApplicationId!]!): CryptoHash!
+	changeApplicationPermissions(chainId: ChainId!, closeChain: [ApplicationId!]!, executeOperations: [ApplicationId!], mandatoryApplications: [ApplicationId!]!, changeApplicationPermissions: [ApplicationId!]!, callServiceAsOracle: [ApplicationId!]): CryptoHash!
 	"""
 	(admin chain only) Registers a new committee. This will notify the subscribers of
 	the admin chain so that they can migrate to the new epoch (by accepting the
