@@ -950,7 +950,7 @@ async fn test_query_service() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Tests the contract system API to query an application service.
+/// Tests the contract system API with an unauthorized attempt to query an application service.
 #[cfg(feature = "unstable-oracles")] // TODO: remove once #3524 lands
 #[test_log::test(tokio::test)]
 async fn test_unauthorized_query_service() -> anyhow::Result<()> {
