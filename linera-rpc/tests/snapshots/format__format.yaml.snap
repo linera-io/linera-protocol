@@ -57,9 +57,8 @@ AdminOperation:
 Amount:
   NEWTYPESTRUCT: U128
 ApplicationId:
-  STRUCT:
-    - application_description_hash:
-        TYPENAME: CryptoHash
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
 ApplicationPermissions:
   STRUCT:
     - execute_operations:

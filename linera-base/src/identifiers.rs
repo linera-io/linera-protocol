@@ -319,10 +319,8 @@ pub struct Application<A = ()> {
     WitType,
 )]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct ApplicationId {
-    /// The hash of the `ApplicationIdDescription` this refers to.
-    pub application_description_hash: CryptoHash,
-}
+/// The hash of the `ApplicationIdDescription` this refers to.
+pub struct ApplicationId(pub CryptoHash);
 
 /// A unique identifier for an application.
 #[derive(
@@ -888,24 +886,20 @@ impl Application {
 impl<A> Application<A> {
     /// Returns the application ID without the ABI.
     pub fn application_id(&self) -> ApplicationId {
-        ApplicationId {
-            application_description_hash: self.application_description_hash,
-        }
+        ApplicationId(self.application_description_hash)
     }
 }
 
 impl ApplicationId {
     /// Creates a user application ID from the application description hash.
     pub fn new(application_description_hash: CryptoHash) -> Self {
-        ApplicationId {
-            application_description_hash,
-        }
+        ApplicationId(application_description_hash)
     }
 
     /// Specializes a user application ID for a given ABI.
     pub fn with_abi<A>(self) -> Application<A> {
         Application {
-            application_description_hash: self.application_description_hash,
+            application_description_hash: self.0,
             _phantom: PhantomData,
         }
     }
@@ -913,10 +907,7 @@ impl ApplicationId {
     /// Converts the application ID to the ID of the blob containing the
     /// `ApplicationIdDescription`.
     pub fn description_blob_id(self) -> BlobId {
-        BlobId::new(
-            self.application_description_hash,
-            BlobType::ApplicationDescription,
-        )
+        BlobId::new(self.0, BlobType::ApplicationDescription)
     }
 }
 

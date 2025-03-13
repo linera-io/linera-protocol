@@ -12,8 +12,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, OracleResponse,
-        Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight,
+        CompressedBytecode, OracleResponse, Timestamp,
     },
     http,
     identifiers::{

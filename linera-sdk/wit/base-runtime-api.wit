@@ -41,7 +41,7 @@ interface base-runtime-api {
     }
 
     record application-id {
-        application-description-hash: crypto-hash,
+        inner0: crypto-hash,
     }
 
     record block-height {

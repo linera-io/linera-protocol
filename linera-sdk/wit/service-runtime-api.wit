@@ -6,7 +6,7 @@ interface service-runtime-api {
     check-execution-time: func(fuel-consumed: u64);
 
     record application-id {
-        application-description-hash: crypto-hash,
+        inner0: crypto-hash,
     }
 
     record crypto-hash {
