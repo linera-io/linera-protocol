@@ -152,7 +152,7 @@ async fn benchmark_with_fungible(
             let default_chain = client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
-                    AccountOwner::User(owner),
+                    AccountOwner::from(owner),
                     Amount::from_tokens(num_transactions as u128),
                 )]),
             };
@@ -193,11 +193,11 @@ async fn benchmark_with_fungible(
                     .try_add_assign(Amount::ONE)
                     .unwrap();
                 sender_app.transfer(
-                    AccountOwner::User(sender_context.owner),
+                    AccountOwner::from(sender_context.owner),
                     Amount::ONE,
                     fungible::Account {
                         chain_id: receiver_context.default_chain,
-                        owner: AccountOwner::User(receiver_context.owner),
+                        owner: AccountOwner::from(receiver_context.owner),
                     },
                 )
             })
@@ -244,7 +244,7 @@ async fn benchmark_with_fungible(
                     for i in 0.. {
                         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
                         let actual_balance =
-                            app.get_amount(&AccountOwner::User(context.owner)).await;
+                            app.get_amount(&AccountOwner::from(context.owner)).await;
                         if actual_balance == expected_balance {
                             break;
                         }
@@ -257,7 +257,7 @@ async fn benchmark_with_fungible(
                         }
                     }
                     assert_eq!(
-                        app.get_amount(&AccountOwner::User(context.owner)).await,
+                        app.get_amount(&AccountOwner::from(context.owner)).await,
                         expected_balance
                     );
                     Ok(())

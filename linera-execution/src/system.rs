@@ -430,7 +430,7 @@ where
                     .claim(
                         context.authenticated_signer,
                         None,
-                        AccountOwner::User(owner),
+                        AccountOwner::User(owner.0),
                         target_id,
                         recipient,
                         amount,
@@ -641,13 +641,13 @@ where
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
         match (source, authenticated_signer, authenticated_application_id) {
-            (AccountOwner::User(owner), Some(signer), _) => ensure!(
+            (AccountOwner::User(owner), Some(Owner(signer)), _) => ensure!(
                 signer == owner,
                 ExecutionError::UnauthenticatedTransferOwner
             ),
             (AccountOwner::Application(account_application), _, Some(authorized_application)) => {
                 ensure!(
-                    account_application == authorized_application,
+                    account_application == authorized_application.0,
                     ExecutionError::UnauthenticatedTransferOwner
                 )
             }
@@ -693,11 +693,11 @@ where
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, ExecutionError> {
         match source {
             AccountOwner::User(owner) => ensure!(
-                authenticated_signer == Some(owner),
+                authenticated_signer.map(|o| o.0) == Some(owner),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
             AccountOwner::Application(owner) => ensure!(
-                authenticated_application_id == Some(owner),
+                authenticated_application_id.map(|o| o.0) == Some(owner),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
             AccountOwner::Chain => unreachable!(),

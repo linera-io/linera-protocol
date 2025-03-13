@@ -618,10 +618,10 @@ where
     ) -> Operation {
         let target_account = fungible::Account {
             chain_id,
-            owner: AccountOwner::User(Owner::from(receiver)),
+            owner: receiver.into(),
         };
         let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-            owner: AccountOwner::User(Owner::from(sender)),
+            owner: sender.into(),
             amount,
             target_account,
         })

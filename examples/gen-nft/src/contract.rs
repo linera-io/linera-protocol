@@ -128,14 +128,14 @@ impl GenNftContract {
         match owner {
             AccountOwner::User(address) => {
                 assert_eq!(
-                    self.runtime.authenticated_signer(),
+                    self.runtime.authenticated_signer().map(|id| id.0),
                     Some(address),
                     "The requested transfer is not correctly authenticated."
                 )
             }
             AccountOwner::Application(id) => {
                 assert_eq!(
-                    self.runtime.authenticated_caller_id(),
+                    self.runtime.authenticated_caller_id().map(|id| id.0),
                     Some(id),
                     "The requested transfer is not correctly authenticated."
                 )

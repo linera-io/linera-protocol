@@ -49,7 +49,7 @@ impl Contract for FungibleTokenContract {
         if state.accounts.is_empty() {
             if let Some(owner) = self.runtime.authenticated_signer() {
                 state.accounts.insert(
-                    AccountOwner::User(owner),
+                    AccountOwner::from(owner),
                     Amount::from_str("1000000").unwrap(),
                 );
             }
@@ -131,14 +131,14 @@ impl FungibleTokenContract {
         match owner {
             AccountOwner::User(address) => {
                 assert_eq!(
-                    self.runtime.authenticated_signer(),
+                    self.runtime.authenticated_signer().map(|id| id.0),
                     Some(address),
                     "The requested transfer is not correctly authenticated."
                 )
             }
             AccountOwner::Application(id) => {
                 assert_eq!(
-                    self.runtime.authenticated_caller_id(),
+                    self.runtime.authenticated_caller_id().map(|id| id.0),
                     Some(id),
                     "The requested transfer is not correctly authenticated."
                 )

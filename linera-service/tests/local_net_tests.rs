@@ -44,7 +44,7 @@ use {
 #[cfg(feature = "benchmark")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
-    AccountOwner::User(owner)
+    AccountOwner::from(owner)
 }
 
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
@@ -177,9 +177,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = AccountOwner::User(Owner::from(
-        AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public(),
-    ));
+    let recipient = AccountOwner::User(
+        Owner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public()).0,
+    );
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),

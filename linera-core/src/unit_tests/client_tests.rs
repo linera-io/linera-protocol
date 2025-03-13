@@ -150,7 +150,7 @@ where
         .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner_identity = sender.identity().await?;
-    let owner = AccountOwner::User(owner_identity);
+    let owner = AccountOwner::from(owner_identity);
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
     let friend = receiver.identity().await?;
@@ -182,10 +182,7 @@ where
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
-        receiver
-            .local_owner_balance(AccountOwner::User(friend))
-            .await
-            .unwrap(),
+        receiver.local_owner_balance(friend.into()).await.unwrap(),
         Amount::from_millis(99)
     );
     // The received amount is not in the unprotected balance.

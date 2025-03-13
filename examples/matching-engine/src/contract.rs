@@ -154,14 +154,14 @@ impl MatchingEngineContract {
         match owner {
             AccountOwner::User(address) => {
                 assert_eq!(
-                    self.runtime.authenticated_signer(),
+                    self.runtime.authenticated_signer().map(|id| id.0),
                     Some(address),
                     "Unauthorized"
                 )
             }
             AccountOwner::Application(id) => {
                 assert_eq!(
-                    self.runtime.authenticated_caller_id(),
+                    self.runtime.authenticated_caller_id().map(|id| id.0),
                     Some(id),
                     "Unauthorized"
                 )
@@ -188,7 +188,7 @@ impl MatchingEngineContract {
     ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
+            owner: AccountOwner::from(self.runtime.application_id().forget_abi()),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -197,7 +197,7 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
-        let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        let owner_app = AccountOwner::from(self.runtime.application_id().forget_abi());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
     }
 

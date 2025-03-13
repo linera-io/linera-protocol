@@ -403,7 +403,7 @@ where
                 amount,
                 source: context
                     .authenticated_signer
-                    .map(AccountOwner::User)
+                    .map(|o| AccountOwner::User(o.0))
                     .unwrap_or(AccountOwner::Chain),
                 target: account.owner,
             },

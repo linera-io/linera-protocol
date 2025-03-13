@@ -314,14 +314,14 @@ impl AmmContract {
         match owner {
             AccountOwner::User(address) => {
                 assert_eq!(
-                    self.runtime.authenticated_signer(),
+                    self.runtime.authenticated_signer().map(|id| id.0),
                     Some(address),
                     "Unauthorized"
                 )
             }
             AccountOwner::Application(id) => {
                 assert_eq!(
-                    self.runtime.authenticated_caller_id(),
+                    self.runtime.authenticated_caller_id().map(|id| id.0),
                     Some(id),
                     "Unauthorized"
                 )
@@ -443,7 +443,7 @@ impl AmmContract {
     }
 
     fn get_amm_app_owner(&mut self) -> AccountOwner {
-        AccountOwner::Application(self.runtime.application_id().forget_abi())
+        AccountOwner::from(self.runtime.application_id().forget_abi())
     }
 
     fn get_amm_chain_id(&mut self) -> ChainId {
@@ -663,7 +663,7 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Amount {
-        let pool_owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        let pool_owner = AccountOwner::from(self.runtime.application_id().forget_abi());
         self.balance(&pool_owner, token_idx)
     }
 

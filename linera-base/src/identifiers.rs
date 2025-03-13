@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{BcsHashable, CryptoError, CryptoHash},
+    crypto::{AccountPublicKey, BcsHashable, CryptoError, CryptoHash},
     data_types::BlockHeight,
     doc_scalar, hex_debug,
     vm::VmRuntime,
@@ -35,9 +35,9 @@ pub struct Owner(pub CryptoHash);
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// An account owned by a user.
-    User(Owner),
+    User(CryptoHash),
     /// An account for an application.
-    Application(UserApplicationId),
+    Application(CryptoHash),
     /// Chain account.
     Chain,
 }
@@ -955,8 +955,8 @@ impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "AccountOwner")]
 enum SerializableAccountOwner {
-    User(Owner),
-    Application(UserApplicationId),
+    User(CryptoHash),
+    Application(CryptoHash),
     Chain,
 }
 
@@ -1006,33 +1006,44 @@ impl Display for AccountOwner {
     }
 }
 
+impl From<AccountPublicKey> for AccountOwner {
+    fn from(public_key: AccountPublicKey) -> Self {
+        match public_key {
+            AccountPublicKey::Ed25519(pk) => AccountOwner::User(Owner::from(&pk).0),
+            AccountPublicKey::Secp256k1(pk) => AccountOwner::User(Owner::from(&pk).0),
+        }
+    }
+}
+
+impl From<Owner> for AccountOwner {
+    fn from(owner: Owner) -> Self {
+        AccountOwner::User(owner.0)
+    }
+}
+
+impl From<UserApplicationId> for AccountOwner {
+    fn from(app_id: UserApplicationId) -> Self {
+        AccountOwner::Application(app_id.0)
+    }
+}
+
 impl FromStr for AccountOwner {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(owner) = s.strip_prefix("User:") {
             Ok(AccountOwner::User(
-                Owner::from_str(owner).context("Getting Owner should not fail")?,
+                CryptoHash::from_str(owner).context("Getting Owner should not fail")?,
             ))
         } else if let Some(app_id) = s.strip_prefix("Application:") {
             Ok(AccountOwner::Application(
-                UserApplicationId::from_str(app_id)
-                    .context("Getting UserApplicationId should not fail")?,
+                CryptoHash::from_str(app_id).context("Getting ApplicationId should not fail")?,
             ))
         } else if s.strip_prefix("Chain").is_some() {
             Ok(AccountOwner::Chain)
         } else {
             Err(anyhow!("Invalid enum! Enum: {}", s))
         }
-    }
-}
-
-impl<T> From<T> for AccountOwner
-where
-    T: Into<Owner>,
-{
-    fn from(owner: T) -> Self {
-        AccountOwner::User(owner.into())
     }
 }
 

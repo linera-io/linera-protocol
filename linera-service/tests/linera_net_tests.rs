@@ -85,7 +85,7 @@ fn test_iterations() -> Option<usize> {
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
-    AccountOwner::User(owner)
+    AccountOwner::User(owner.0)
 }
 
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
@@ -845,7 +845,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         let wallet = client1.load_wallet()?;
         let user_chain = wallet.get(chain2).unwrap();
         let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        AccountOwner::User(public_key.into())
+        AccountOwner::User(Owner::from(public_key).0)
     };
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
@@ -1837,7 +1837,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    let owner_amm_app = AccountOwner::Application(application_id_amm.forget_abi());
+    let owner_amm_app = AccountOwner::Application(application_id_amm.forget_abi().0);
 
     // Create AMM wrappers
     let app_amm = AmmApp(

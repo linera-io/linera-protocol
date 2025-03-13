@@ -168,7 +168,7 @@ async fn emptied_account_disappears_from_queries() {
     recipient_chain
         .add_block(|block| {
             block.with_native_token_transfer(
-                AccountOwner::User(owner),
+                AccountOwner::from(owner),
                 Recipient::Burn,
                 transfer_amount,
             );

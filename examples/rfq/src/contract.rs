@@ -142,9 +142,7 @@ impl Contract for RfqContract {
                     amount: awaiting_tokens.amount_offered,
                     target_account: Account {
                         chain_id: temp_chain_id,
-                        owner: AccountOwner::Application(
-                            self.runtime.application_id().forget_abi(),
-                        ),
+                        owner: AccountOwner::from(self.runtime.application_id().forget_abi()),
                     },
                 };
                 let token = token_pair.token_asked;
@@ -266,7 +264,7 @@ impl Contract for RfqContract {
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: AccountOwner::Application(app_id),
+                                owner: AccountOwner::from(app_id),
                                 amount: tokens.amount,
                                 target_account: tokens.owner,
                             },
@@ -280,7 +278,7 @@ impl Contract for RfqContract {
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: AccountOwner::Application(app_id),
+                                owner: AccountOwner::from(app_id),
                                 amount: tokens.amount,
                                 target_account: held_tokens.owner,
                             },
@@ -291,7 +289,7 @@ impl Contract for RfqContract {
                                 .token_id
                                 .with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: AccountOwner::Application(app_id),
+                                owner: AccountOwner::from(app_id),
                                 amount: held_tokens.amount,
                                 target_account: tokens.owner,
                             },
@@ -343,7 +341,7 @@ impl RfqContract {
             amount: quote_provided.get_amount(),
             target_account: Account {
                 chain_id: temp_chain_id,
-                owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
+                owner: AccountOwner::from(self.runtime.application_id().forget_abi()),
             },
         };
         let token = token_pair.token_offered;
@@ -382,7 +380,7 @@ impl RfqContract {
                 true,
                 tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                 &fungible::Operation::Transfer {
-                    owner: AccountOwner::Application(app_id),
+                    owner: AccountOwner::from(app_id),
                     amount: tokens.amount,
                     target_account: tokens.owner,
                 },

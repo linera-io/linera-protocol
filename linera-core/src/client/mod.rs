@@ -2344,7 +2344,7 @@ where
             previous_block_hash,
             height,
             authenticated_signer: match owner {
-                AccountOwner::User(user) => Some(user),
+                AccountOwner::User(user) => Some(Owner(user)),
                 AccountOwner::Application(_) => None,
                 AccountOwner::Chain => None, // These should be unreachable?
             },
