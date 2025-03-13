@@ -71,7 +71,7 @@ static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "proxy_request_latency",
         "Proxy request latency",
         &[],
-        linear_bucket_interval(1.0, 50.0, 500.0),
+        linear_bucket_interval(1.0, 50.0, 2000.0),
     )
 });
 
