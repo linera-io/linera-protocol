@@ -183,7 +183,7 @@ impl NonFungibleTokenContract {
         self.runtime.assert_data_blob_exists(blob_hash);
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
-            &self.runtime.application_id().forget_abi(),
+            &self.runtime.application().forget_abi(),
             &name,
             &owner,
             &blob_hash,

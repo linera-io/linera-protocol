@@ -8,7 +8,7 @@ mod state;
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, WithContractAbi},
+    linera_base_types::{AccountOwner, Amount, Application, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -28,7 +28,7 @@ impl WithContractAbi for CrowdFundingContract {
 impl Contract for CrowdFundingContract {
     type Message = Message;
     type InstantiationArgument = InstantiationArgument;
-    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
+    type Parameters = Application<fungible::FungibleTokenAbi>;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CrowdFundingState::load(runtime.root_view_storage_context())
@@ -84,7 +84,7 @@ impl Contract for CrowdFundingContract {
 }
 
 impl CrowdFundingContract {
-    fn fungible_id(&mut self) -> ApplicationId<FungibleTokenAbi> {
+    fn fungible_id(&mut self) -> Application<FungibleTokenAbi> {
         // TODO(#723): We should be able to pull the fungible ID from the
         // `required_application_ids` of the application description.
         self.runtime.application_parameters()
@@ -192,7 +192,7 @@ impl CrowdFundingContract {
 
     /// Queries the token application to determine the total amount of tokens in custody.
     fn balance(&mut self) -> Amount {
-        let owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        let owner = AccountOwner::Application(self.runtime.application().application_id());
         let fungible_id = self.fungible_id();
         let response = self.runtime.call_application(
             true,
@@ -212,7 +212,7 @@ impl CrowdFundingContract {
             owner,
         };
         let transfer = fungible::Operation::Transfer {
-            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
+            owner: AccountOwner::Application(self.runtime.application().application_id()),
             amount,
             target_account,
         };
@@ -224,7 +224,7 @@ impl CrowdFundingContract {
     fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) {
         let target_account = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
+            owner: AccountOwner::Application(self.runtime.application().application_id()),
         };
         let transfer = fungible::Operation::Transfer {
             owner,

@@ -15,11 +15,11 @@ use linera_base::crypto::AccountPublicKey;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, DecompressionError, Round,
     },
     doc_scalar,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, EventId, Owner, UserApplicationId},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, Owner},
     time::timer::{sleep, timeout},
 };
 use linera_chain::{
@@ -528,8 +528,8 @@ where
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::DescribeApplication {
                 application_id,

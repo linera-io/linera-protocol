@@ -4,7 +4,7 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use linera_sdk::{
-    linera_base_types::{ApplicationId, StreamName, WithContractAbi},
+    linera_base_types::{Application, StreamName, WithContractAbi},
     Contract, ContractRuntime, Resources,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};
@@ -16,7 +16,7 @@ pub struct MetaCounterContract {
 linera_sdk::contract!(MetaCounterContract);
 
 impl MetaCounterContract {
-    fn counter_id(&mut self) -> ApplicationId<counter::CounterAbi> {
+    fn counter_id(&mut self) -> Application<counter::CounterAbi> {
         self.runtime.application_parameters()
     }
 }
@@ -28,7 +28,7 @@ impl WithContractAbi for MetaCounterContract {
 impl Contract for MetaCounterContract {
     type Message = Message;
     type InstantiationArgument = ();
-    type Parameters = ApplicationId<counter::CounterAbi>;
+    type Parameters = Application<counter::CounterAbi>;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         MetaCounterContract { runtime }

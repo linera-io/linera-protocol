@@ -178,7 +178,7 @@ impl GenNftContract {
     async fn mint(&mut self, owner: AccountOwner, prompt: String) {
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
-            &self.runtime.application_id().forget_abi(),
+            &self.runtime.application().forget_abi(),
             &prompt,
             &owner,
             *self.state.num_minted_nfts.get(),

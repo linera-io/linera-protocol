@@ -10,8 +10,8 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName,
+        Account, AccountOwner, Application, ApplicationId, ChainId, ChannelName, Destination,
+        MessageId, ModuleId, Owner, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -24,12 +24,12 @@ use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
 ///
 /// It automatically caches read-only values received from the host.
 #[derive(Debug)]
-pub struct ContractRuntime<Application>
+pub struct ContractRuntime<A>
 where
-    Application: Contract,
+    A: Contract,
 {
-    application_parameters: Option<Application::Parameters>,
-    application_id: Option<ApplicationId<Application::Abi>>,
+    application_parameters: Option<A::Parameters>,
+    application_id: Option<Application<A::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
@@ -71,12 +71,12 @@ where
     }
 }
 
-impl<Application> ContractRuntime<Application>
+impl<A> ContractRuntime<A>
 where
-    Application: Contract,
+    A: Contract,
 {
     /// Returns the application parameters provided when the application was created.
-    pub fn application_parameters(&mut self) -> Application::Parameters {
+    pub fn application_parameters(&mut self) -> A::Parameters {
         self.application_parameters
             .get_or_insert_with(|| {
                 let bytes = base_wit::application_parameters();
@@ -87,7 +87,7 @@ where
     }
 
     /// Returns the ID of the current application.
-    pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
+    pub fn application(&mut self) -> Application<A::Abi> {
         *self
             .application_id
             .get_or_insert_with(|| ApplicationId::from(base_wit::get_application_id()).with_abi())
@@ -167,9 +167,9 @@ where
     }
 }
 
-impl<Application> ContractRuntime<Application>
+impl<A> ContractRuntime<A>
 where
-    Application: Contract,
+    A: Contract,
 {
     /// Returns the authenticated signer for this execution, if there is one.
     pub fn authenticated_signer(&mut self) -> Option<Owner> {
@@ -203,19 +203,12 @@ where
     }
 
     /// Schedules a message to be sent to this application on another chain.
-    pub fn send_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Application::Message,
-    ) {
+    pub fn send_message(&mut self, destination: impl Into<Destination>, message: A::Message) {
         self.prepare_message(message).send_to(destination)
     }
 
     /// Returns a `MessageBuilder` to prepare a message to be sent.
-    pub fn prepare_message(
-        &mut self,
-        message: Application::Message,
-    ) -> MessageBuilder<Application::Message> {
+    pub fn prepare_message(&mut self, message: A::Message) -> MessageBuilder<A::Message> {
         MessageBuilder::new(message)
     }
 
@@ -241,18 +234,18 @@ where
     }
 
     /// Calls another application.
-    pub fn call_application<A: ContractAbi + Send>(
+    pub fn call_application<A2: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
-        application: ApplicationId<A>,
-        call: &A::Operation,
-    ) -> A::Response {
+        application: Application<A2>,
+        call: &A2::Operation,
+    ) -> A2::Response {
         let call_bytes = bcs::to_bytes(call)
             .expect("Failed to serialize `Operation` type for a cross-application call");
 
         let response_bytes = contract_wit::try_call_application(
             authenticated,
-            application.forget_abi().into(),
+            application.application_id().into(),
             &call_bytes,
         );
 
@@ -272,13 +265,13 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn query_service<A: ServiceAbi + Send>(
+    pub fn query_service<A2: ServiceAbi + Send>(
         &mut self,
-        application_id: ApplicationId<A>,
-        query: A::Query,
-    ) -> A::QueryResponse {
+        application: Application<A2>,
+        query: A2::Query,
+    ) -> A2::QueryResponse {
         let query = serde_json::to_vec(&query).expect("Failed to serialize service query");
-        let response = contract_wit::query_service(application_id.forget_abi().into(), &query);
+        let response = contract_wit::query_service(application.application_id().into(), &query);
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
 
@@ -320,7 +313,7 @@ where
         parameters: &Parameters,
         argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId<Abi>
+    ) -> Application<Abi>
     where
         Abi: ContractAbi,
         Parameters: Serialize,

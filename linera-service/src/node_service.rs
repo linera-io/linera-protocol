@@ -15,10 +15,10 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner, UserApplicationId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -617,7 +617,7 @@ where
         module_id: ModuleId,
         parameters: String,
         instantiation_argument: String,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
@@ -803,15 +803,15 @@ where
 
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
-    id: UserApplicationId,
-    description: UserApplicationDescription,
+    id: ApplicationId,
+    description: ApplicationDescription,
     link: String,
 }
 
 impl ApplicationOverview {
     fn new(
-        id: UserApplicationId,
-        description: UserApplicationDescription,
+        id: ApplicationId,
+        description: ApplicationDescription,
         port: NonZeroU16,
         chain_id: ChainId,
     ) -> Self {
@@ -951,7 +951,7 @@ where
     /// Handles queries for user applications.
     async fn user_application_query(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         request: &Request,
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
@@ -973,7 +973,7 @@ where
     /// Handles mutations for user applications.
     async fn user_application_mutation(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         request: &Request,
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
@@ -1022,7 +1022,7 @@ where
     /// Queries a user application, returning the raw [`QueryOutcome`].
     async fn query_user_application(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         request: &Request,
         chain_id: ChainId,
     ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
@@ -1078,7 +1078,7 @@ where
         let operation_type = operation_type(parsed_query)?;
 
         let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
-        let application_id: UserApplicationId = application_id.parse()?;
+        let application_id: ApplicationId = application_id.parse()?;
 
         let response = match operation_type {
             OperationType::Query => {

@@ -32,7 +32,7 @@ mod types {
     pub type Operation = Value;
     pub type Origin = Value;
     pub type Target = Value;
-    pub type UserApplicationDescription = Value;
+    pub type ApplicationDescription = Value;
     pub type OperationResult = Value;
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -62,8 +62,7 @@ mod types {
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
     pub use linera_base::{
-        data_types::UserApplicationDescription, identifiers::ChannelFullName,
-        ownership::ChainOwnership,
+        data_types::ApplicationDescription, identifiers::ChannelFullName, ownership::ChainOwnership,
     };
     pub use linera_chain::{
         data_types::{MessageAction, MessageBundle, OperationResult, Origin, Target},

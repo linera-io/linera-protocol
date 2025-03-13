@@ -9,7 +9,7 @@ use linera_base::{
 };
 
 use super::{
-    ApplicationRegistry, ApplicationRegistryView, UserApplicationDescription, UserApplicationId,
+    ApplicationRegistry, ApplicationRegistryView, ApplicationIdDescription, ApplicationId,
 };
 
 fn message_id(index: u32) -> MessageId {
@@ -28,15 +28,15 @@ fn module_id() -> ModuleId {
     )
 }
 
-fn app_id(index: u32) -> UserApplicationId {
-    UserApplicationId {
+fn app_id(index: u32) -> ApplicationId {
+    ApplicationId {
         module_id: module_id(),
         creation: message_id(index),
     }
 }
 
-fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
-    UserApplicationDescription {
+fn app_description(index: u32, deps: Vec<u32>) -> ApplicationIdDescription {
+    ApplicationIdDescription {
         module_id: module_id(),
         creation: message_id(index),
         parameters: vec![],
