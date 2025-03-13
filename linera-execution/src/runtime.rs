@@ -960,11 +960,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         request: http::Request,
     ) -> Result<http::Response, ExecutionError> {
-        ensure!(
-            cfg!(feature = "unstable-oracles"),
-            ExecutionError::UnstableOracle
-        );
-
         let app_permissions = self
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::GetApplicationPermissions { callback })?
