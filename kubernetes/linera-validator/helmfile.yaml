@@ -3,6 +3,7 @@ environments:
     values:
       - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
         validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
+        pyroscopePort: {{ env "LINERA_HELMFILE_SET_PYROSCOPE_PORT" | default 4040 }}
 
 ---
 

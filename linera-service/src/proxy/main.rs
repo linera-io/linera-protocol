@@ -23,9 +23,9 @@ use linera_rpc::{
     RpcMessage,
 };
 use linera_sdk::linera_base_types::Blob;
-#[cfg(with_metrics)]
-use linera_service::prometheus_server;
 use linera_service::util;
+#[cfg(with_metrics)]
+use linera_service::{prometheus_server, pyroscope_server};
 use linera_storage::Storage;
 use linera_views::store::CommonStoreConfig;
 use tokio::task::JoinSet;
@@ -241,17 +241,24 @@ impl<S> SimpleProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
+    #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port, pyroscope_port = self.internal_config.pyroscope_port), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting simple server");
         let mut join_set = JoinSet::new();
         let address = self.get_listen_address(self.public_config.port);
 
         #[cfg(with_metrics)]
-        Self::start_metrics(
-            self.get_listen_address(self.internal_config.metrics_port),
-            shutdown_signal.clone(),
-        );
+        {
+            prometheus_server::start_metrics(
+                self.get_listen_address(self.internal_config.metrics_port),
+                shutdown_signal.clone(),
+            );
+            pyroscope_server::start_pyroscope(
+                self.get_pyroscope_address(),
+                "proxy".to_string(),
+                shutdown_signal.clone(),
+            )?;
+        }
 
         self.public_config
             .protocol
@@ -264,13 +271,18 @@ where
         Ok(())
     }
 
-    #[cfg(with_metrics)]
-    pub fn start_metrics(address: SocketAddr, shutdown_signal: CancellationToken) {
-        prometheus_server::start_metrics(address, shutdown_signal)
-    }
-
     fn get_listen_address(&self, port: u16) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], port))
+    }
+
+    #[cfg(with_metrics)]
+    fn get_pyroscope_address(&self) -> String {
+        format!(
+            "{}://{}:{}",
+            self.internal_config.protocol.scheme(),
+            self.internal_config.host,
+            self.internal_config.pyroscope_port
+        )
     }
 
     async fn try_proxy_message(

@@ -25,6 +25,11 @@ loki-stack:
       clients:
         - url: http://linera-core-loki:3100/loki/api/v1/push
 
+# Pyroscope Configuration
+pyroscope:
+  persistence:
+    enabled: true
+
 # Prometheus/Grafana
 kube-prometheus-stack:
   grafana:
