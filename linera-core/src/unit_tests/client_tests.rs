@@ -150,7 +150,7 @@ where
         .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner_identity = sender.identity().await?;
-    let owner = AccountOwner::User(owner_identity);
+    let owner = AccountOwner::from(owner_identity);
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
     let friend = receiver.identity().await?;
@@ -158,7 +158,7 @@ where
         .transfer_to_account(
             AccountOwner::Chain,
             Amount::from_tokens(3),
-            Account::owner(receiver_id, owner),
+            Account::address32(receiver_id, owner_identity.0),
         )
         .await
         .unwrap()
@@ -167,7 +167,7 @@ where
         .transfer_to_account(
             AccountOwner::Chain,
             Amount::from_millis(100),
-            Account::owner(receiver_id, friend),
+            Account::address32(receiver_id, friend.0),
         )
         .await
         .unwrap()
@@ -183,7 +183,7 @@ where
     // The friend paid to receive the message.
     assert_eq!(
         receiver
-            .local_owner_balance(AccountOwner::User(friend))
+            .local_owner_balance(AccountOwner::from(friend))
             .await
             .unwrap(),
         Amount::from_millis(99)

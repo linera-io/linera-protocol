@@ -526,7 +526,11 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
         // Then the local account, if any. Currently, any negative fee (e.g. storage
         // refund) goes preferably to this account.
         if let Some(owner) = &self.account {
-            if let Some(balance) = view.balances.get_mut(&AccountOwner::User(*owner)).await? {
+            if let Some(balance) = view
+                .balances
+                .get_mut(&AccountOwner::Address32(owner.0))
+                .await?
+            {
                 sources.push(balance);
             }
         }

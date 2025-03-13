@@ -312,17 +312,11 @@ impl AmmContract {
     /// authenticate the originator of the message
     fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
-            AccountOwner::User(address) => {
-                assert_eq!(
-                    self.runtime.authenticated_signer(),
-                    Some(address),
-                    "Unauthorized"
-                )
-            }
-            AccountOwner::Application(id) => {
-                assert_eq!(
-                    self.runtime.authenticated_caller_id(),
-                    Some(id),
+            AccountOwner::Address32(address) => {
+                assert!(
+                    self.runtime.authenticated_signer().map(|owner| owner.0) == Some(address)
+                        || self.runtime.authenticated_caller_id().map(|owner| owner.0)
+                            == Some(address),
                     "Unauthorized"
                 )
             }
@@ -443,7 +437,7 @@ impl AmmContract {
     }
 
     fn get_amm_app_owner(&mut self) -> AccountOwner {
-        AccountOwner::Application(self.runtime.application_id().forget_abi())
+        AccountOwner::from(self.runtime.application_id().forget_abi())
     }
 
     fn get_amm_chain_id(&mut self) -> ChainId {
@@ -663,7 +657,7 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Amount {
-        let pool_owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        let pool_owner = AccountOwner::from(self.runtime.application_id().forget_abi());
         self.balance(&pool_owner, token_idx)
     }
 

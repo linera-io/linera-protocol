@@ -196,7 +196,7 @@ async fn test_fee_consumption(
     let mut oracle_responses = blob_oracle_responses(blobs.iter());
 
     let signer = Owner::from(AccountPublicKey::test_key(0));
-    let owner = AccountOwner::User(signer);
+    let owner = AccountOwner::Address32(signer.0);
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
         view.system.balances.insert(&owner, owner_balance)?;
@@ -270,7 +270,7 @@ async fn test_fee_consumption(
     let refund_grant_to = authenticated_signer
         .map(|owner| Account {
             chain_id: ChainId::root(0),
-            owner: AccountOwner::User(owner),
+            owner: AccountOwner::from(owner),
         })
         .or(None);
     let context = MessageContext {

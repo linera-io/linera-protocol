@@ -2091,14 +2091,14 @@ where
     let sender = Owner::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
-        owner: AccountOwner::User(sender),
+        owner: AccountOwner::from(sender),
     };
 
     let recipient_key_pair = AccountSecretKey::generate();
     let recipient = Owner::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
-        owner: AccountOwner::User(recipient),
+        owner: AccountOwner::from(recipient),
     };
 
     let (committee, worker) = init_worker_with_chains(
@@ -2156,7 +2156,7 @@ where
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
                     source: AccountOwner::Chain,
-                    target: AccountOwner::User(sender),
+                    target: AccountOwner::from(sender),
                     amount: Amount::from_tokens(5),
                 })
                 .to_posted(0, MessageKind::Tracked)],
@@ -2165,7 +2165,7 @@ where
         }],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender.into(), Amount::from_tokens(5))]),
+        BTreeMap::from_iter([(AccountOwner::Address32(sender.0), Amount::from_tokens(5))]),
         &worker,
         Some(&certificate00),
     )
@@ -2186,13 +2186,13 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
-        AccountOwner::User(sender),
+        AccountOwner::from(sender),
         Recipient::Account(recipient_account),
         Amount::from_tokens(3),
         Vec::new(),
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender.into(), Amount::from_tokens(2))]),
+        BTreeMap::from_iter([(AccountOwner::Address32(sender.0), Amount::from_tokens(2))]),
         &worker,
         Some(&certificate01),
     )
@@ -2206,7 +2206,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
-        AccountOwner::User(sender),
+        AccountOwner::from(sender),
         Recipient::Account(recipient_account),
         Amount::from_tokens(2),
         Vec::new(),
@@ -2227,7 +2227,7 @@ where
         ChainDescription::Root(2),
         &recipient_key_pair,
         Some(recipient),
-        AccountOwner::User(recipient),
+        AccountOwner::from(recipient),
         Recipient::Burn,
         Amount::ONE,
         vec![
@@ -2239,8 +2239,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: AccountOwner::User(sender),
-                        target: AccountOwner::User(recipient),
+                        source: AccountOwner::from(sender),
+                        target: AccountOwner::from(recipient),
                         amount: Amount::from_tokens(3),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2255,8 +2255,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: AccountOwner::User(sender),
-                        target: AccountOwner::User(recipient),
+                        source: AccountOwner::from(sender),
+                        target: AccountOwner::from(recipient),
                         amount: Amount::from_tokens(2),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2266,7 +2266,7 @@ where
         ],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(recipient.into(), Amount::from_tokens(1))]),
+        BTreeMap::from_iter([(AccountOwner::Address32(recipient.0), Amount::from_tokens(1))]),
         &worker,
         None,
     )
@@ -2287,7 +2287,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
-        AccountOwner::User(sender),
+        AccountOwner::from(sender),
         Recipient::Burn,
         Amount::from_tokens(3),
         vec![IncomingBundle {
@@ -2298,8 +2298,8 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: AccountOwner::User(sender),
-                    target: AccountOwner::User(recipient),
+                    source: AccountOwner::from(sender),
+                    target: AccountOwner::from(recipient),
                     amount: Amount::from_tokens(3),
                 })
                 .to_posted(0, MessageKind::Bouncing)],
