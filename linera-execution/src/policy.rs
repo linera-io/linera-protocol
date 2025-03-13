@@ -30,6 +30,10 @@ pub struct ResourceControlPolicy {
     pub byte_read: Amount,
     /// The price of writing a byte
     pub byte_written: Amount,
+    /// The price to read a blob, per byte.
+    pub blob_byte_read: Amount,
+    /// The price to publish a blob, per byte.
+    pub blob_byte_published: Amount,
     /// The price of increasing storage by a byte.
     // TODO(#1536): This is not fully supported.
     pub byte_stored: Amount,
@@ -80,6 +84,8 @@ impl fmt::Display for ResourceControlPolicy {
             write_operation,
             byte_read,
             byte_written,
+            blob_byte_read,
+            blob_byte_published,
             byte_stored,
             operation,
             operation_byte,
@@ -107,6 +113,8 @@ impl fmt::Display for ResourceControlPolicy {
             {write_operation:.2} cost per write operation\n\
             {byte_read:.2} cost per byte read\n\
             {byte_written:.2} cost per byte written\n\
+            {blob_byte_read:.2} cost of reading blobs, per byte\n\
+            {blob_byte_published:.2} cost of publishing blobs, per byte\n\
             {byte_stored:.2} cost per byte stored\n\
             {operation:.2} per operation\n\
             {operation_byte:.2} per byte in the argument of an operation\n\
@@ -148,6 +156,8 @@ impl ResourceControlPolicy {
             write_operation: Amount::default(),
             byte_read: Amount::default(),
             byte_written: Amount::default(),
+            blob_byte_read: Amount::default(),
+            blob_byte_published: Amount::default(),
             byte_stored: Amount::default(),
             operation: Amount::default(),
             operation_byte: Amount::default(),
@@ -199,6 +209,8 @@ impl ResourceControlPolicy {
             fuel_unit: Amount::from_nanos(1),
             byte_read: Amount::from_attos(100),
             byte_written: Amount::from_attos(1_000),
+            blob_byte_read: Amount::from_attos(100),
+            blob_byte_published: Amount::from_attos(1_000),
             operation: Amount::from_attos(10),
             operation_byte: Amount::from_attos(1),
             message: Amount::from_attos(10),
@@ -214,6 +226,8 @@ impl ResourceControlPolicy {
             fuel_unit: Amount::from_nanos(10),
             byte_read: Amount::from_nanos(10),
             byte_written: Amount::from_nanos(100),
+            blob_byte_read: Amount::from_nanos(10),
+            blob_byte_published: Amount::from_nanos(100),
             read_operation: Amount::from_micros(10),
             write_operation: Amount::from_micros(20),
             byte_stored: Amount::from_nanos(10),
@@ -247,6 +261,9 @@ impl ResourceControlPolicy {
         amount.try_add_assign(self.write_operations_price(resources.write_operations)?)?;
         amount.try_add_assign(self.bytes_read_price(resources.bytes_to_read as u64)?)?;
         amount.try_add_assign(self.bytes_written_price(resources.bytes_to_write as u64)?)?;
+        amount.try_add_assign(self.blob_read_price(resources.blob_bytes_to_read as u64)?)?;
+        amount
+            .try_add_assign(self.blob_published_price(resources.blob_bytes_to_publish as u64)?)?;
         amount.try_add_assign(self.message.try_mul(resources.messages as u128)?)?;
         amount.try_add_assign(self.message_bytes_price(resources.message_size as u64)?)?;
         amount.try_add_assign(self.bytes_stored_price(resources.storage_size_delta as u64)?)?;
@@ -275,6 +292,14 @@ impl ResourceControlPolicy {
 
     pub(crate) fn bytes_written_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
         self.byte_written.try_mul(count as u128)
+    }
+
+    pub(crate) fn blob_read_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+        self.blob_byte_read.try_mul(count as u128)
+    }
+
+    pub(crate) fn blob_published_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+        self.blob_byte_published.try_mul(count as u128)
     }
 
     // TODO(#1536): This is not fully implemented.

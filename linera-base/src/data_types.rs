@@ -277,6 +277,10 @@ pub struct Resources {
     pub bytes_to_read: u32,
     /// A number of bytes to write.
     pub bytes_to_write: u32,
+    /// A number of blob bytes to read.
+    pub blob_bytes_to_read: u32,
+    /// A number of blob bytes to publish.
+    pub blob_bytes_to_publish: u32,
     /// A number of messages to be sent.
     pub messages: u32,
     /// The size of the messages to be sent.

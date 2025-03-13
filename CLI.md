@@ -454,6 +454,8 @@ View or update the resource control policy
 * `--write-operation <WRITE_OPERATION>` — Set the price per write operation
 * `--byte-read <BYTE_READ>` — Set the price per byte read
 * `--byte-written <BYTE_WRITTEN>` — Set the price per byte written
+* `--blob-byte-read <BLOB_BYTE_READ>` — Set he price to read a blob, per byte
+* `--blob-byte-published <BLOB_BYTE_PUBLISHED>` — The price to publish a blob, per byte
 * `--byte-stored <BYTE_STORED>` — Set the price per byte stored
 * `--operation <OPERATION>` — Set the base price of sending an operation from a block..
 * `--operation-byte <OPERATION_BYTE>` — Set the additional price for each byte in the argument of a user operation
@@ -503,6 +505,8 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--write-operation-price <WRITE_OPERATION_PRICE>` — Set the price per write operation. (This will overwrite value from `--policy-config`)
 * `--byte-read-price <BYTE_READ_PRICE>` — Set the price per byte read. (This will overwrite value from `--policy-config`)
 * `--byte-written-price <BYTE_WRITTEN_PRICE>` — Set the price per byte written. (This will overwrite value from `--policy-config`)
+* `--blob-byte-read-price <BLOB_BYTE_READ_PRICE>` — Set he price to read a blob, per byte. (This will overwrite value from `--policy-config`)
+* `--blob-byte-published-price <BLOB_BYTE_PUBLISHED_PRICE>` — The price to publish a blob, per byte. (This will overwrite value from `--policy-config`)
 * `--byte-stored-price <BYTE_STORED_PRICE>` — Set the price per byte stored. (This will overwrite value from `--policy-config`)
 * `--operation-price <OPERATION_PRICE>` — Set the base price of sending an operation from a block.. (This will overwrite value from `--policy-config`)
 * `--operation-byte-price <OPERATION_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user operation. (This will overwrite value from `--policy-config`)

@@ -78,7 +78,7 @@ where
             }
             None => {
                 self.system
-                    .describe_application(id, Some(txn_tracker))
+                    .describe_application(id, Some(txn_tracker), None)
                     .await?
             }
         };
@@ -106,7 +106,11 @@ where
                 let blob = description.clone();
                 bcs::from_bytes(blob.bytes())?
             }
-            None => self.system.describe_application(id, txn_tracker).await?,
+            None => {
+                self.system
+                    .describe_application(id, txn_tracker, None)
+                    .await?
+            }
         };
         let code = self
             .context()
@@ -364,6 +368,7 @@ where
                         parameters,
                         required_application_ids,
                         txn_tracker,
+                        None,
                     )
                     .await?;
                 callback.respond(Ok(create_application_result));
@@ -416,13 +421,16 @@ where
 
             ReadBlobContent { blob_id, callback } => {
                 let blob = self.system.read_blob_content(blob_id).await?;
-                let is_new = self.system.blob_used(None, blob_id).await?;
+                let is_new = self
+                    .system
+                    .blob_used(None, None, blob_id, blob.bytes().len())
+                    .await?;
                 callback.respond((blob, is_new))
             }
 
             AssertBlobExists { blob_id, callback } => {
                 self.system.assert_blob_exists(blob_id).await?;
-                callback.respond(self.system.blob_used(None, blob_id).await?)
+                callback.respond(self.system.blob_used(None, None, blob_id, 0).await?)
             }
 
             GetApplicationPermissions { callback } => {

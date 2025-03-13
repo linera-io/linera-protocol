@@ -7,7 +7,7 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, ApplicationPermissions, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner},
     ownership::TimeoutConfig,
@@ -218,11 +218,26 @@ impl BlockBuilder {
 
     /// Tries to sign the prepared block with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
-    pub(crate) async fn try_sign(self) -> anyhow::Result<ConfirmedBlockCertificate> {
+    pub(crate) async fn try_sign(
+        self,
+        blobs: &[Blob],
+    ) -> anyhow::Result<ConfirmedBlockCertificate> {
+        let published_blobs = self
+            .block
+            .published_blob_ids()
+            .into_iter()
+            .map(|blob_id| {
+                blobs
+                    .iter()
+                    .find(|blob| blob.id() == blob_id)
+                    .expect("missing published blob")
+                    .clone()
+            })
+            .collect();
         let (executed_block, _) = self
             .validator
             .worker()
-            .stage_block_execution(self.block, None)
+            .stage_block_execution(self.block, None, published_blobs)
             .await?;
 
         let value = Hashed::new(ConfirmedBlock::new(executed_block));

@@ -40,9 +40,13 @@ use crate::client::client_tests::RocksDbStorageBuilder;
 use crate::client::client_tests::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::client::client_tests::ServiceStorageBuilder;
-use crate::client::{
-    client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-    ChainClientError,
+use crate::{
+    client::{
+        client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
+        ChainClientError,
+    },
+    local_node::LocalNodeError,
+    worker::WorkerError,
 };
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
@@ -165,18 +169,22 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
-        ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
+        ) if matches!(**error, ExecutionError::BytecodeTooLarge))
     );
     let result = publisher
         .publish_module(small_bytecode, large_bytecode, vm_runtime)
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
-        ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
+        ) if matches!(**error, ExecutionError::BytecodeTooLarge))
     );
 
     Ok(())

@@ -4,7 +4,7 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -13,7 +13,8 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp, UserApplicationDescription,
+        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Timestamp,
+        UserApplicationDescription,
     },
     ensure,
     identifiers::{ChainId, ChannelFullName, Destination, MessageId, Owner, UserApplicationId},
@@ -371,7 +372,7 @@ where
     ) -> Result<UserApplicationDescription, ChainError> {
         self.execution_state
             .system
-            .describe_application(application_id, None)
+            .describe_application(application_id, None, None)
             .await
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
@@ -728,6 +729,7 @@ where
         block: &ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
+        published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
@@ -746,6 +748,14 @@ where
             tracker: ResourceTracker::default(),
             account: block.authenticated_signer,
         };
+        ensure!(
+            block.published_blob_ids()
+                == published_blobs
+                    .iter()
+                    .map(|blob| blob.id())
+                    .collect::<BTreeSet<_>>(),
+            ChainError::InternalError("published_blobs mismatch".to_string())
+        );
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
             .with_execution_context(ChainExecutionContext::Block)?;
@@ -755,6 +765,14 @@ where
         resource_controller
             .track_executed_block_size_sequence_extension(0, block.operations.len())
             .with_execution_context(ChainExecutionContext::Block)?;
+        for blob in published_blobs {
+            resource_controller
+                .with_state(&mut self.execution_state.system)
+                .await?
+                .track_blob_bytes_published(blob.content())
+                .with_execution_context(ChainExecutionContext::Block)?;
+            self.execution_state.system.used_blobs.insert(&blob.id())?;
+        }
 
         if self.is_closed() {
             ensure!(
@@ -833,7 +851,7 @@ where
                     .await
                     .with_execution_context(chain_execution_context)?;
                     resource_controller
-                        .with_state(&mut self.execution_state)
+                        .with_state(&mut self.execution_state.system)
                         .await?
                         .track_operation(operation)
                         .with_execution_context(chain_execution_context)?;
@@ -861,7 +879,7 @@ where
             ) {
                 for message_out in &txn_outcome.outgoing_messages {
                     resource_controller
-                        .with_state(&mut self.execution_state)
+                        .with_state(&mut self.execution_state.system)
                         .await?
                         .track_message(&message_out.message)
                         .with_execution_context(chain_execution_context)?;
@@ -875,6 +893,13 @@ where
                     &txn_outcome.events,
                 ))
                 .with_execution_context(chain_execution_context)?;
+            for blob in &txn_outcome.blobs {
+                resource_controller
+                    .with_state(&mut self.execution_state.system)
+                    .await?
+                    .track_blob_bytes_published(blob.content())
+                    .with_execution_context(chain_execution_context)?;
+            }
             resource_controller
                 .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
                 .with_execution_context(chain_execution_context)?;
@@ -904,7 +929,7 @@ where
         // always be able to reject incoming messages.
         if !self.is_closed() {
             resource_controller
-                .with_state(&mut self.execution_state)
+                .with_state(&mut self.execution_state.system)
                 .await?
                 .track_block()
                 .with_execution_context(ChainExecutionContext::Block)?;

@@ -121,7 +121,7 @@ where
     pub(super) async fn validate_block(
         &mut self,
         proposal: &BlockProposal,
-    ) -> Result<(), WorkerError> {
+    ) -> Result<Option<Vec<Blob>>, WorkerError> {
         let BlockProposal {
             content:
                 ProposalContent {
@@ -156,9 +156,9 @@ where
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
         if chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
-            return Ok(());
+            return Ok(None);
         }
-        let maybe_blobs = self
+        let mut maybe_blobs = self
             .state
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)
             .await?;
@@ -178,7 +178,12 @@ where
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
         }
-        Ok(())
+        let published_blobs = block
+            .published_blob_ids()
+            .iter()
+            .filter_map(|blob_id| maybe_blobs.remove(blob_id).flatten())
+            .collect::<Vec<_>>();
+        Ok(Some(published_blobs))
     }
 
     /// Votes for a block proposal for the next block for this chain.
@@ -367,7 +372,15 @@ where
             .storage
             .maybe_write_blob_states(&blob_ids, blob_state, overwrite)
             .await?;
-        blobs_result?;
+        let mut blobs = blobs_result?
+            .into_iter()
+            .map(|blob| (blob.id(), blob))
+            .collect::<BTreeMap<_, _>>();
+        let published_blobs = block
+            .published_blob_ids()
+            .iter()
+            .filter_map(|blob_id| blobs.remove(blob_id))
+            .collect::<Vec<_>>();
 
         // Execute the block and update inboxes.
         self.state
@@ -378,7 +391,7 @@ where
         let verified_outcome = self
             .state
             .chain
-            .execute_block(block, local_time, None, oracle_responses)
+            .execute_block(block, local_time, None, &published_blobs, oracle_responses)
             .await?;
         // We should always agree on the messages and state hash.
         ensure!(

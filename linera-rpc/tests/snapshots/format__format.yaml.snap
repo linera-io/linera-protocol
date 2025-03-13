@@ -849,6 +849,10 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - byte_written:
         TYPENAME: Amount
+    - blob_byte_read:
+        TYPENAME: Amount
+    - blob_byte_published:
+        TYPENAME: Amount
     - byte_stored:
         TYPENAME: Amount
     - operation:

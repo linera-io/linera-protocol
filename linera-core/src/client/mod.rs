@@ -51,7 +51,7 @@ use linera_chain::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
+    ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -1984,9 +1984,12 @@ where
         &self,
         mut block: ProposedBlock,
         round: Option<u32>,
+        published_blobs: Vec<Blob>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
-            let result = self.stage_block_execution(block.clone(), round).await;
+            let result = self
+                .stage_block_execution(block.clone(), round, published_blobs.clone())
+                .await;
             if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
             ))) = &result
@@ -2026,12 +2029,13 @@ where
         &self,
         block: ProposedBlock,
         round: Option<u32>,
+        published_blobs: Vec<Blob>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .client
                 .local_node
-                .stage_block_execution(block.clone(), round)
+                .stage_block_execution(block.clone(), round, published_blobs.clone())
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 self.receive_certificates_for_blobs(blob_ids.clone())
@@ -2170,26 +2174,17 @@ where
         // Using the round number during execution counts as an oracle.
         // Accessing the round number in single-leader rounds where we are not the leader
         // is not currently supported.
-        let published_blob_ids = block.published_blob_ids();
         let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
         let (executed_block, _) = self
-            .stage_block_execution_and_discard_failing_messages(block, round)
+            .stage_block_execution_and_discard_failing_messages(block, round, blobs.clone())
             .await?;
         let block = &executed_block.block;
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
         block.check_proposal_size(max_size)?;
-        for blob in &blobs {
-            if published_blob_ids.contains(&blob.id()) {
-                committee
-                    .policy()
-                    .check_blob_size(blob.content())
-                    .with_execution_context(ChainExecutionContext::Block)?;
-            }
-        }
         self.state_mut().set_pending_proposal(block.clone(), blobs);
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
@@ -2350,7 +2345,7 @@ where
             timestamp,
         };
         match self
-            .stage_block_execution_and_discard_failing_messages(block, None)
+            .stage_block_execution_and_discard_failing_messages(block, None, Vec::new())
             .await
         {
             Ok((_, response)) => Ok((
@@ -2493,21 +2488,33 @@ where
         // Otherwise we have to re-propose the highest validated block, if there is one.
         let pending_proposal = self.state().pending_proposal().clone();
         let (executed_block, blobs) = if let Some(locking) = &info.manager.requested_locking {
-            let (executed_block, blob_ids) = match &**locking {
-                LockingBlock::Regular(certificate) => (
-                    certificate.block().clone().into(),
-                    certificate.block().required_blob_ids(),
-                ),
+            let (executed_block, blobs) = match &**locking {
+                LockingBlock::Regular(certificate) => {
+                    let blob_ids = certificate.block().required_blob_ids();
+                    let blobs = local_node
+                        .get_locking_blobs(&blob_ids, self.chain_id)
+                        .await?
+                        .ok_or_else(|| {
+                            ChainClientError::InternalError("Missing local locking blobs")
+                        })?;
+                    (certificate.block().clone().into(), blobs)
+                }
                 LockingBlock::Fast(proposal) => {
                     let block = proposal.content.block.clone();
                     let blob_ids = block.published_blob_ids();
-                    (self.stage_block_execution(block, None).await?.0, blob_ids)
+                    let blobs = local_node
+                        .get_locking_blobs(&blob_ids, self.chain_id)
+                        .await?
+                        .ok_or_else(|| {
+                            ChainClientError::InternalError("Missing local locking blobs")
+                        })?;
+                    let executed_block = self
+                        .stage_block_execution(block, None, blobs.clone())
+                        .await?
+                        .0;
+                    (executed_block, blobs)
                 }
             };
-            let blobs = local_node
-                .get_locking_blobs(&blob_ids, self.chain_id)
-                .await?
-                .ok_or_else(|| ChainClientError::InternalError("Missing local locking blobs"))?;
             (executed_block, blobs)
         } else if let Some(pending_proposal) = pending_proposal {
             // Otherwise we are free to propose our own pending block.
@@ -2518,7 +2525,9 @@ where
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
-            let executed_block = self.stage_block_execution(block, round).await?.0;
+            let (executed_block, _) = self
+                .stage_block_execution(block, round, pending_proposal.blobs.clone())
+                .await?;
             (executed_block, pending_proposal.blobs)
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.

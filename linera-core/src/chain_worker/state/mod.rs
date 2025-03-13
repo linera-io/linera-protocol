@@ -181,10 +181,11 @@ where
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
+        published_blobs: &[Blob],
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
-            .stage_block_execution(block, round)
+            .stage_block_execution(block, round, published_blobs)
             .await
     }
 
@@ -210,13 +211,18 @@ where
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
         proposal.check_signature()?;
-        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+        let Some(published_blobs) = ChainWorkerStateWithAttemptedChanges::new(&mut *self)
             .await
             .validate_block(&proposal)
-            .await?;
+            .await?
+        else {
+            // Skipping: We already voted for this block.
+            let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
+            return Ok((info, NetworkActions::default()));
+        };
         let validation_outcome = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
-            .validate_proposal_content(&proposal.content)
+            .validate_proposal_content(&proposal.content, &published_blobs)
             .await?;
 
         let actions = if let Some((outcome, local_time)) = validation_outcome {

@@ -609,6 +609,8 @@ impl Runnable for Job {
                                     write_operation,
                                     byte_read,
                                     byte_written,
+                                    blob_byte_read,
+                                    blob_byte_published,
                                     byte_stored,
                                     operation,
                                     operation_byte,
@@ -640,6 +642,12 @@ impl Runnable for Job {
                                     }
                                     if let Some(byte_written) = byte_written {
                                         policy.byte_written = byte_written;
+                                    }
+                                    if let Some(blob_byte_read) = blob_byte_read {
+                                        policy.blob_byte_read = blob_byte_read;
+                                    }
+                                    if let Some(blob_byte_published) = blob_byte_published {
+                                        policy.blob_byte_published = blob_byte_published;
                                     }
                                     if let Some(byte_stored) = byte_stored {
                                         policy.byte_stored = byte_stored;
@@ -1404,6 +1412,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             byte_read_price,
             byte_written_price,
             byte_stored_price,
+            blob_byte_read_price,
+            blob_byte_published_price,
             operation_price,
             operation_byte_price,
             message_price,
@@ -1441,6 +1451,12 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             }
             if let Some(byte_written_price) = byte_written_price {
                 policy.byte_written = *byte_written_price;
+            }
+            if let Some(blob_byte_read_price) = blob_byte_read_price {
+                policy.blob_byte_read = *blob_byte_read_price;
+            }
+            if let Some(blob_byte_published_price) = blob_byte_published_price {
+                policy.blob_byte_published = *blob_byte_published_price;
             }
             if let Some(byte_stored_price) = byte_stored_price {
                 policy.byte_stored = *byte_stored_price;

@@ -17,6 +17,7 @@ use linera_base::{
         Amount, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
         UserApplicationDescription,
     },
+    ensure,
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
     ownership::ChainOwnership,
@@ -429,8 +430,18 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
-        self.storage.read_blob(blob_id).await
+    async fn get_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Blob>, ViewError> {
+        let maybe_blobs = self.storage.read_blobs(blob_ids).await?;
+        let mut missing = Vec::new();
+        let mut blobs = Vec::new();
+        for (blob_id, maybe_blob) in blob_ids.iter().zip(maybe_blobs) {
+            match maybe_blob {
+                None => missing.push(*blob_id),
+                Some(blob) => blobs.push(blob),
+            }
+        }
+        ensure!(missing.is_empty(), ViewError::BlobsNotFound(missing));
+        Ok(blobs)
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {

@@ -52,6 +52,8 @@ fn resources_test_case() -> Resources {
     Resources {
         bytes_to_read: 1_474_560,
         bytes_to_write: 571,
+        blob_bytes_to_read: 67,
+        blob_bytes_to_publish: 71,
         fuel: 1_000,
         message_size: 4,
         messages: 93,
@@ -67,16 +69,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
         authenticated: true,
         is_tracked: false,
         destination: Destination::Subscribers(b"channel".to_vec().into()),
-        grant: Resources {
-            bytes_to_read: 200,
-            bytes_to_write: 0,
-            fuel: 8,
-            message_size: 1,
-            messages: 0,
-            read_operations: 1,
-            write_operations: 0,
-            storage_size_delta: 0,
-        },
+        grant: resources_test_case(),
         message: (0..=255).cycle().take(2_000).collect(),
     }
 }

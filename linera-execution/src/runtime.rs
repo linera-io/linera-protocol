@@ -1001,6 +1001,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             self.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
+        self.resource_controller
+            .track_blob_bytes_read(blob_content.bytes().len() as u64)?;
         Ok(blob_content.into_bytes().into_vec())
     }
 

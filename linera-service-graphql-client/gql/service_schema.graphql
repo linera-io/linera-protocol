@@ -1063,6 +1063,14 @@ input ResourceControlPolicy {
 	"""
 	byteWritten: Amount!
 	"""
+	The price to read a blob, per byte.
+	"""
+	blobByteRead: Amount!
+	"""
+	The price to publish a blob, per byte.
+	"""
+	blobBytePublished: Amount!
+	"""
 	The price of increasing storage by a byte.
 	"""
 	byteStored: Amount!

@@ -203,7 +203,7 @@ where
     ) -> Result<(), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
-            .with_state_and_grant(self, cloned_grant.as_mut())
+            .with_state_and_grant(&mut self.system, cloned_grant.as_mut())
             .await?
             .balance()?;
         let controller = ResourceController {
@@ -246,7 +246,7 @@ where
         txn_tracker.add_operation_result(result);
 
         resource_controller
-            .with_state_and_grant(self, grant)
+            .with_state_and_grant(&mut self.system, grant)
             .await?
             .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
@@ -267,7 +267,7 @@ where
             Operation::System(op) => {
                 let new_application = self
                     .system
-                    .execute_operation(context, op, txn_tracker)
+                    .execute_operation(context, op, txn_tracker, resource_controller)
                     .await?;
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
