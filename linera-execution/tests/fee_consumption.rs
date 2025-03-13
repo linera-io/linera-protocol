@@ -119,6 +119,17 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000));
     "with one HTTP request"
 ))]
+#[cfg_attr(feature = "unstable-oracles", test_case(
+    vec![
+        FeeSpend::HttpRequest,
+        FeeSpend::HttpRequest,
+        FeeSpend::HttpRequest,
+    ],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1)),
+    Some(Amount::from_tokens(1_000));
+    "with three HTTP requests"
+))]
 // TODO(#1601): Add more test cases
 #[tokio::test]
 async fn test_fee_consumption(
