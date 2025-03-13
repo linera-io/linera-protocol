@@ -323,7 +323,9 @@ where
                 account.chain_id,
                 MessageKind::Tracked,
                 SystemMessage::Credit {
-                    source: source.map(AccountOwner::User),
+                    source: source
+                        .map(AccountOwner::User)
+                        .unwrap_or(AccountOwner::Chain),
                     target: account.owner,
                     amount,
                 },
@@ -371,16 +373,16 @@ fn direct_outgoing_message(
 
 fn system_credit_message(amount: Amount) -> Message {
     Message::System(SystemMessage::Credit {
-        source: None,
-        target: None,
+        source: AccountOwner::Chain,
+        target: AccountOwner::Chain,
         amount,
     })
 }
 
 fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage {
     let message = SystemMessage::Credit {
-        source: None,
-        target: None,
+        source: AccountOwner::Chain,
+        target: AccountOwner::Chain,
         amount,
     };
     direct_outgoing_message(recipient, MessageKind::Tracked, message)
@@ -2090,14 +2092,14 @@ where
     let sender = Owner::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
-        owner: Some(AccountOwner::User(sender)),
+        owner: AccountOwner::User(sender),
     };
 
     let recipient_key_pair = AccountSecretKey::generate();
     let recipient = Owner::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
-        owner: Some(AccountOwner::User(recipient)),
+        owner: AccountOwner::User(recipient),
     };
 
     let (committee, worker) = init_worker_with_chains(
@@ -2152,8 +2154,8 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: None,
-                    target: Some(AccountOwner::User(sender)),
+                    source: AccountOwner::Chain,
+                    target: AccountOwner::User(sender),
                     amount: Amount::from_tokens(5),
                 })
                 .to_posted(0, MessageKind::Tracked)],
@@ -2233,8 +2235,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: Some(AccountOwner::User(sender)),
-                        target: Some(AccountOwner::User(recipient)),
+                        source: AccountOwner::User(sender),
+                        target: AccountOwner::User(recipient),
                         amount: Amount::from_tokens(3),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2249,8 +2251,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: Some(AccountOwner::User(sender)),
-                        target: Some(AccountOwner::User(recipient)),
+                        source: AccountOwner::User(sender),
+                        target: AccountOwner::User(recipient),
                         amount: Amount::from_tokens(2),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2291,8 +2293,8 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: Some(AccountOwner::User(sender)),
-                    target: Some(AccountOwner::User(recipient)),
+                    source: AccountOwner::User(sender),
+                    target: AccountOwner::User(recipient),
                     amount: Amount::from_tokens(3),
                 })
                 .to_posted(0, MessageKind::Bouncing)],

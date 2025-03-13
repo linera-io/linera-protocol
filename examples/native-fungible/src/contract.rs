@@ -38,9 +38,9 @@ impl Contract for NativeFungibleTokenContract {
         for (owner, amount) in state.accounts {
             let account = Account {
                 chain_id: self.runtime.chain_id(),
-                owner: Some(owner),
+                owner,
             };
-            self.runtime.transfer(None, account, amount);
+            self.runtime.transfer(AccountOwner::Chain, account, amount);
         }
     }
 
@@ -63,7 +63,7 @@ impl Contract for NativeFungibleTokenContract {
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
 
-                self.runtime.transfer(Some(owner), target_account, amount);
+                self.runtime.transfer(owner, target_account, amount);
 
                 self.transfer(fungible_target_account.chain_id);
                 FungibleResponse::Ok
@@ -129,7 +129,7 @@ impl NativeFungibleTokenContract {
     fn normalize_account(&self, account: fungible::Account) -> Account {
         Account {
             chain_id: account.chain_id,
-            owner: Some(account.owner),
+            owner: account.owner,
         }
     }
 
@@ -144,6 +144,9 @@ impl NativeFungibleTokenContract {
                 );
             }
             AccountOwner::Application(_) => panic!("Applications not supported yet"),
+            AccountOwner::Chain => {
+                panic!("Chains cannot be used to authenticate")
+            }
         }
     }
 }

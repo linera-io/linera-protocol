@@ -196,14 +196,13 @@ where
                 application_id,
                 callback,
             } => {
-                let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
                 let mut execution_outcome = RawExecutionOutcome::default();
                 let message = self
                     .system
                     .claim(
                         signer,
                         Some(application_id),
-                        owner,
+                        source.owner,
                         source.chain_id,
                         Recipient::Account(destination),
                         amount,
@@ -551,8 +550,7 @@ pub enum ExecutionRequest {
     },
 
     Transfer {
-        #[debug(skip_if = Option::is_none)]
-        source: Option<AccountOwner>,
+        source: AccountOwner,
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]

@@ -711,7 +711,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
-        source: Option<AccountOwner>,
+        source: AccountOwner,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;
@@ -1029,9 +1029,13 @@ impl<Message> RawOutgoingMessage<Message, Resources> {
 
 impl OperationContext {
     fn refund_grant_to(&self) -> Option<Account> {
+        // TODO: return `Account` instead.
         Some(Account {
             chain_id: self.chain_id,
-            owner: self.authenticated_signer.map(AccountOwner::User),
+            owner: self
+                .authenticated_signer
+                .map(AccountOwner::User)
+                .unwrap_or(AccountOwner::Chain),
         })
     }
 

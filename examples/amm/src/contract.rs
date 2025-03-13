@@ -326,6 +326,9 @@ impl AmmContract {
                     "Unauthorized"
                 )
             }
+            AccountOwner::Chain => {
+                unreachable!("Chains cannot be used to authenticate")
+            }
         }
     }
 

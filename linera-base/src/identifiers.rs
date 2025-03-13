@@ -38,6 +38,8 @@ pub enum AccountOwner {
     User(Owner),
     /// An account for an application.
     Application(ApplicationId),
+    /// Chain account.
+    Chain,
 }
 
 /// A system account.
@@ -48,8 +50,7 @@ pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
     /// The owner of the account, or `None` for the chain balance.
-    #[debug(skip_if = Option::is_none)]
-    pub owner: Option<AccountOwner>,
+    pub owner: AccountOwner,
 }
 
 impl Account {
@@ -57,7 +58,7 @@ impl Account {
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
-            owner: None,
+            owner: AccountOwner::Chain,
         }
     }
 
@@ -65,17 +66,14 @@ impl Account {
     pub fn owner(chain_id: ChainId, owner: impl Into<AccountOwner>) -> Self {
         Account {
             chain_id,
-            owner: Some(owner.into()),
+            owner: owner.into(),
         }
     }
 }
 
 impl Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.owner {
-            Some(owner) => write!(f, "{}:{}", self.chain_id, owner),
-            None => write!(f, "{}", self.chain_id),
-        }
+        write!(f, "{}:{}", self.chain_id, self.owner)
     }
 }
 
@@ -951,6 +949,7 @@ impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
 enum SerializableAccountOwner {
     User(Owner),
     Application(ApplicationId),
+    Chain,
 }
 
 impl Serialize for AccountOwner {
@@ -961,6 +960,7 @@ impl Serialize for AccountOwner {
             match self {
                 AccountOwner::Application(app_id) => SerializableAccountOwner::Application(*app_id),
                 AccountOwner::User(owner) => SerializableAccountOwner::User(*owner),
+                AccountOwner::Chain => SerializableAccountOwner::Chain,
             }
             .serialize(serializer)
         }
@@ -980,6 +980,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
                     Ok(AccountOwner::Application(app_id))
                 }
                 SerializableAccountOwner::User(owner) => Ok(AccountOwner::User(owner)),
+                SerializableAccountOwner::Chain => Ok(AccountOwner::Chain),
             }
         }
     }
@@ -990,6 +991,7 @@ impl Display for AccountOwner {
         match self {
             AccountOwner::User(owner) => write!(f, "User:{}", owner)?,
             AccountOwner::Application(app_id) => write!(f, "Application:{}", app_id)?,
+            AccountOwner::Chain => write!(f, "Chain")?,
         };
 
         Ok(())
@@ -1008,6 +1010,8 @@ impl FromStr for AccountOwner {
             Ok(AccountOwner::Application(
                 ApplicationId::from_str(app_id).context("Getting ApplicationId should not fail")?,
             ))
+        } else if s.strip_prefix("Chain").is_some() {
+            Ok(AccountOwner::Chain)
         } else {
             Err(anyhow!("Invalid enum! Enum: {}", s))
         }

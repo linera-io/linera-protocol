@@ -140,6 +140,9 @@ impl GenNftContract {
                     "The requested transfer is not correctly authenticated."
                 )
             }
+            AccountOwner::Chain => {
+                unreachable!("Chains cannot be used to authenticate")
+            }
         }
     }
 

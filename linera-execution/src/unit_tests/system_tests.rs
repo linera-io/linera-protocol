@@ -129,7 +129,7 @@ async fn empty_accounts_are_removed() -> anyhow::Result<()> {
     .into_view()
     .await;
 
-    view.system.debit(Some(&owner), amount).await?;
+    view.system.debit(&owner, amount).await?;
 
     assert!(view.system.balances.indices().await?.is_empty());
 

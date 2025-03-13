@@ -2294,7 +2294,7 @@ where
     /// block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.query_balances_with_owner(None).await?;
+        let (balance, _) = self.query_balances_with_owner(AccountOwner::Chain).await?;
         Ok(balance)
     }
 
@@ -2310,7 +2310,7 @@ where
         owner: AccountOwner,
     ) -> Result<Amount, ChainClientError> {
         Ok(self
-            .query_balances_with_owner(Some(owner))
+            .query_balances_with_owner(owner)
             .await?
             .1
             .unwrap_or(Amount::ZERO))
@@ -2325,7 +2325,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn query_balances_with_owner(
         &self,
-        owner: Option<AccountOwner>,
+        owner: AccountOwner,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
         let (previous_block_hash, height, timestamp) = {
@@ -2343,10 +2343,11 @@ where
             operations: Vec::new(),
             previous_block_hash,
             height,
-            authenticated_signer: owner.and_then(|owner| match owner {
+            authenticated_signer: match owner {
                 AccountOwner::User(user) => Some(user),
                 AccountOwner::Application(_) => None,
-            }),
+                AccountOwner::Chain => None, // These should be unreachable?
+            },
             timestamp,
         };
         match self
@@ -2382,7 +2383,7 @@ where
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace")]
     pub async fn local_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.local_balances_with_owner(None).await?;
+        let (balance, _) = self.local_balances_with_owner(AccountOwner::Chain).await?;
         Ok(balance)
     }
 
@@ -2395,7 +2396,7 @@ where
         owner: AccountOwner,
     ) -> Result<Amount, ChainClientError> {
         Ok(self
-            .local_balances_with_owner(Some(owner))
+            .local_balances_with_owner(owner)
             .await?
             .1
             .unwrap_or(Amount::ZERO))
@@ -2407,7 +2408,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn local_balances_with_owner(
         &self,
-        owner: Option<AccountOwner>,
+        owner: AccountOwner,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let next_block_height = self.next_block_height();
         ensure!(

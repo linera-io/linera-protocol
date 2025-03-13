@@ -166,6 +166,9 @@ impl MatchingEngineContract {
                     "Unauthorized"
                 )
             }
+            AccountOwner::Chain => {
+                unreachable!("Chains cannot be used to authenticate")
+            }
         }
     }
 
