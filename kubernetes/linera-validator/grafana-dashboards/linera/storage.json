@@ -17,7 +17,7 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 2,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -115,14 +115,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_view_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_view_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load view latency p99 (2m)",
+      "title": "Load view latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -206,14 +210,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_view_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_view_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load view latency p50 (2m)",
+      "title": "Load view latency p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -297,14 +305,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_chain_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_chain_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load chain latency p99 (2m)",
+      "title": "Load chain latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -388,14 +400,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_chain_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_chain_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load chain latency p50 (2m)",
+      "title": "Load chain latency p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -479,14 +495,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_contract_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_contract_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load contract latency p99 (2m)",
+      "title": "Load contract latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -570,14 +590,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_contract_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_contract_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load contract latency p50 (2m)",
+      "title": "Load contract latency p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -661,14 +685,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_service_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_service_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load service latency p99 (2m)",
+      "title": "Load service latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -752,14 +780,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_service_latency_bucket[2m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_service_latency_bucket[1m])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load service latency p50 (2m)",
+      "title": "Load service latency p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -786,13 +818,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -823,7 +853,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -857,14 +888,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_contains_blobs[2m])",
+          "expr": "rate(linera_contains_blobs[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Contains blobs per second (averaged for the past 2m)",
+      "title": "Contains blobs per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -878,13 +913,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -915,7 +948,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -949,14 +983,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_contains_blob_state[2m])",
+          "expr": "rate(linera_contains_blob_state[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Contains blob state per second (averaged for the past 2m)",
+      "title": "Contains blob state per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -970,13 +1008,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1007,7 +1043,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1041,14 +1078,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_write_event[2m])",
+          "expr": "rate(linera_write_event[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Write event per second (averaged for the past 2m)",
+      "title": "Write event per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1062,13 +1103,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1099,7 +1138,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1133,14 +1173,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_read_event[2m])",
+          "expr": "rate(linera_read_event[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Read event per second (averaged for the past 2m)",
+      "title": "Read event per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1154,13 +1198,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1191,7 +1233,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1225,14 +1268,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_read_certificates[2m])",
+          "expr": "sum(rate(linera_read_certificates[1m])) by (pod)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Read certificates per second (averaged for the past 2m)",
+      "title": "Read certificates per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1246,13 +1293,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1283,7 +1328,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1317,14 +1363,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_read_certificate[2m])",
+          "expr": "rate(linera_read_certificate[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Read certificate per second (averaged for the past 2m)",
+      "title": "Read certificate per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1338,13 +1388,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1375,7 +1423,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1409,14 +1458,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_read_blob_states[2m])",
+          "expr": "rate(linera_read_blob_states[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Read blob states per second (averaged for the past 2m)",
+      "title": "Read blob states per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1430,13 +1483,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1467,7 +1518,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1501,14 +1553,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_read_blob_state[2m])",
+          "expr": "rate(linera_read_blob_state[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Read blob state per second (averaged for the past 2m)",
+      "title": "Read blob state per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1522,13 +1578,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1559,7 +1613,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1593,14 +1648,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_write_blob[2m])",
+          "expr": "rate(linera_write_blob[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Write blob per second (averaged for the last 2m)",
+      "title": "Write blob per second (averaged for the last minute)",
       "type": "timeseries"
     },
     {
@@ -1614,13 +1673,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1651,7 +1708,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1685,14 +1743,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_read_blob[2m])",
+          "expr": "rate(linera_read_blob[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Read blob per second (averaged for the past 2m)",
+      "title": "Read blob per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1706,13 +1768,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1743,7 +1803,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1777,14 +1838,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_write_certificate[2m])",
+          "expr": "sum(rate(linera_write_certificate[1m])) by (pod)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Write certificate per second (averaged for the past 2m)",
+      "title": "Write certificate per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1798,13 +1863,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1835,7 +1898,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1869,14 +1933,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_read_hashed_confirmed_block[2m])",
+          "expr": "rate(linera_read_hashed_confirmed_block[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Read hashed confirmed block per second (averaged for the past 2m)",
+      "title": "Read hashed confirmed block per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1890,13 +1958,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1927,7 +1993,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1966,13 +2033,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_contains_blob[2m])",
+          "expr": "rate(linera_contains_blob[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Contains Blob per second (averaged for the past 2m)",
+      "title": "Contains Blob per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1986,13 +2053,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2023,7 +2088,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -2057,14 +2123,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_contains_certificate[2m])",
+          "expr": "rate(linera_contains_certificate[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Contains certificate per second (averaged for the past 2m)",
+      "title": "Contains certificate per second (averaged for the past minute)",
       "type": "timeseries"
     }
   ],

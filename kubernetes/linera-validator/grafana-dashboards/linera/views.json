@@ -17,7 +17,7 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 2,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -102,14 +102,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_save_view[2m])",
+          "expr": "sum(rate(linera_save_view[1m])) by (pod)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Save view per second (averaged for the past 2m)",
+      "title": "Save view per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -193,14 +197,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_load_view[2m])",
+          "expr": "sum(rate(linera_load_view[1m])) by (pod)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Load view per second (averaged for the past 2m)",
+      "title": "Load view per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -289,13 +297,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(rate(linera_num_cache_success[2m]) / (rate(linera_num_cache_success[2m]) + rate(linera_num_cache_fault[2m]))) * 100",
+          "expr": "(sum(rate(linera_num_cache_success[1m])) by (pod) / (sum(rate(linera_num_cache_success[1m])) by (pod) + sum(rate(linera_num_cache_fault[1m])) by (pod))) * 100",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Cache hit ratio (2m)",
+      "title": "Cache hit ratio (1m)",
       "type": "timeseries"
     }
   ],

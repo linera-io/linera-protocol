@@ -17,7 +17,7 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 2,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -122,7 +122,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_block_execution_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_block_execution_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -133,7 +133,7 @@
           "useBackend": false
         }
       ],
-      "title": "Block Execution Latency p99 ms (2m)",
+      "title": "Block Execution Latency p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -217,14 +217,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_block_execution_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_block_execution_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Block Execution Latency p50 ms (2m)",
+      "title": "Block Execution Latency p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -315,7 +319,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_operation_execution_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_operation_execution_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -325,7 +329,7 @@
           "useBackend": false
         }
       ],
-      "title": "Operation Execution Latency p99 ms (2m)",
+      "title": "Operation Execution Latency p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -416,7 +420,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.50, sum(rate(linera_operation_execution_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_operation_execution_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -426,7 +430,7 @@
           "useBackend": false
         }
       ],
-      "title": "Operation Execution Latency p50 ms (2m)",
+      "title": "Operation Execution Latency p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -517,7 +521,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_message_execution_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_message_execution_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -527,7 +531,7 @@
           "useBackend": false
         }
       ],
-      "title": "Message Execution Latency p99 ms (2m)",
+      "title": "Message Execution Latency p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -618,7 +622,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.50, sum(rate(linera_message_execution_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_message_execution_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -628,7 +632,7 @@
           "useBackend": false
         }
       ],
-      "title": "Message Execution Latency p50 ms (2m)",
+      "title": "Message Execution Latency p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -712,14 +716,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_bytecode_decompression_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_bytecode_decompression_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Bytecode decompression latency p99 (2m)",
+      "title": "Bytecode decompression latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -803,14 +811,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_bytecode_decompression_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_bytecode_decompression_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Bytecode decompression latency p50 (2m)",
+      "title": "Bytecode decompression latency p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -894,14 +906,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_state_hash_computation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_state_hash_computation_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "State hash computation latency p99 (2m)",
+      "title": "State hash computation latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -985,14 +1001,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_state_hash_computation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_state_hash_computation_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "State hash computation latency p50 (2m)",
+      "title": "State hash computation latency p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -1094,14 +1114,14 @@
             "uid": "P8E80F9AEF21F6940"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_open_chain_count[2m])) by (pod)",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(linera_open_chain_count[1m]))",
+          "legendFormat": "Total",
           "queryType": "range",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Chains opened per second (averaged for the past 2m)",
+      "title": "Total chains opened per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1168,7 +1188,7 @@
         "x": 12,
         "y": 42
       },
-      "id": 7,
+      "id": 56,
       "options": {
         "legend": {
           "calcs": [],
@@ -1186,17 +1206,18 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks_executed[2m])) by (pod)",
+          "expr": "sum(rate(linera_open_chain_count[1m])) by (pod)",
           "legendFormat": "__auto",
+          "queryType": "range",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Blocks executed per second (averaged for the past 2m)",
+      "title": "Chains opened per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1286,16 +1307,16 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks[2m])) by (pod)",
+          "expr": "sum(rate(linera_num_blocks[1m]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
-          "legendFormat": "__auto",
+          "legendFormat": "Total",
           "range": true,
           "refId": "A",
           "useBackend": false
         }
       ],
-      "title": "Blocks added to chains per second (averaged for the past 2m)",
+      "title": "Total blocks added to chains per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1362,6 +1383,295 @@
         "x": 12,
         "y": 50
       },
+      "id": 57,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0-83314",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "disableTextWrap": false,
+          "editorMode": "code",
+          "expr": "sum(rate(linera_num_blocks[1m])) by (pod)",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        }
+      ],
+      "title": "Blocks added to chains per second (averaged for the past minute)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 58
+      },
+      "id": 58,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0-83314",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_num_blocks_executed[1m]))",
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Blocks executed per second (averaged for the past minute)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0-83314",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_num_blocks_executed[1m])) by (pod)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Blocks executed per second (averaged for the past minute)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 66
+      },
       "id": 8,
       "options": {
         "legend": {
@@ -1384,13 +1694,108 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_transaction_count[2m])) by (pod)",
+          "expr": "sum(rate(linera_transaction_count[1m]))",
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Transactions per second (averaged for the past minute)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 66
+      },
+      "id": 59,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0-83314",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_transaction_count[1m])) by (pod)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Transactions per second (averaged for the past 2m)",
+      "title": "Transactions per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1455,7 +1860,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 74
       },
       "id": 55,
       "options": {
@@ -1474,9 +1879,13 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(linera_notification_channel_full[2m])",
+          "expr": "rate(linera_notification_channel_full[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -1485,7 +1894,7 @@
           "useBackend": false
         }
       ],
-      "title": "Notification channel full per second (averaged for the past 2m)",
+      "title": "Notification channel full per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1550,7 +1959,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 74
       },
       "id": 54,
       "options": {
@@ -1569,14 +1978,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "rate(linera_cross_chain_message_channel_full[2m])",
+          "expr": "rate(linera_cross_chain_message_channel_full[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Cross chain message channel full per second (averaged for the past 2m)",
+      "title": "Cross chain message channel full per second (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1641,7 +2054,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 82
       },
       "id": 9,
       "options": {
@@ -1660,14 +2073,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "sum(rate(linera_certificates_signed[2m])) by (validator_name)",
+          "expr": "sum(rate(linera_certificates_signed[1m])) by (validator_name)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Certificates signed per second per validator (averaged for the past 2m)",
+      "title": "Certificates signed per second per validator (averaged for the past minute)",
       "type": "timeseries"
     },
     {
@@ -1732,7 +2149,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 66
+        "y": 82
       },
       "id": 14,
       "options": {
@@ -1751,8 +2168,12 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "((\n  sum(rate(linera_value_cache_hit[2m])) by (key_type, value_type)\n)\n/\n(\n  sum(rate(linera_value_cache_hit[2m])) by (key_type, value_type)\n  +\n  sum(rate(linera_value_cache_miss[2m])) by (key_type, value_type)\n)) * 100",
+          "expr": "((\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type)\n)\n/\n(\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type)\n  +\n  sum(rate(linera_value_cache_miss[1m])) by (key_type, value_type)\n)) * 100",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1767,7 +2188,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 90
       },
       "id": 13,
       "panels": [],
@@ -1836,7 +2257,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 91
       },
       "id": 40,
       "options": {
@@ -1862,7 +2283,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_rounds_in_certificate_bucket[2m])) by (le, certificate_value, round_type))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_num_rounds_in_certificate_bucket[1m])) by (le, certificate_value, round_type))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -1872,7 +2293,7 @@
           "useBackend": false
         }
       ],
-      "title": "Rounds in certificate p99 ms (2m)",
+      "title": "Rounds in certificate p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -1937,7 +2358,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 75
+        "y": 91
       },
       "id": 41,
       "options": {
@@ -1956,14 +2377,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_rounds_in_certificate_bucket[2m])) by (le, certificate_value, round_type))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_num_rounds_in_certificate_bucket[1m])) by (le, certificate_value, round_type))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Rounds in certificate p50 ms (2m)",
+      "title": "Rounds in certificate p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2028,7 +2453,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 99
       },
       "id": 44,
       "options": {
@@ -2054,7 +2479,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_inboxes_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_num_inboxes_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -2064,7 +2489,7 @@
           "useBackend": false
         }
       ],
-      "title": "Number of inboxes p99 ms (2m)",
+      "title": "Number of inboxes p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2129,7 +2554,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 99
       },
       "id": 45,
       "options": {
@@ -2148,14 +2573,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_inboxes_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_num_inboxes_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Number of inboxes p50 ms (2m)",
+      "title": "Number of inboxes p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2220,7 +2649,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 107
       },
       "id": 46,
       "options": {
@@ -2246,7 +2675,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_outboxes_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_num_outboxes_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -2256,7 +2685,7 @@
           "useBackend": false
         }
       ],
-      "title": "Number of outboxes p99 ms (2m)",
+      "title": "Number of outboxes p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2321,7 +2750,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 91
+        "y": 107
       },
       "id": 47,
       "options": {
@@ -2340,14 +2769,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_outboxes_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_num_outboxes_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Number of outboxes p50 ms (2m)",
+      "title": "Number of outboxes p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2412,7 +2845,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 99
+        "y": 115
       },
       "id": 48,
       "options": {
@@ -2438,7 +2871,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_inbox_size_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_inbox_size_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -2448,7 +2881,7 @@
           "useBackend": false
         }
       ],
-      "title": "Inbox size p99 ms (2m)",
+      "title": "Inbox size p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2513,7 +2946,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 99
+        "y": 115
       },
       "id": 49,
       "options": {
@@ -2532,14 +2965,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_inbox_size_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_inbox_size_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Inbox size p50 ms (2m)",
+      "title": "Inbox size p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2604,7 +3041,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 107
+        "y": 123
       },
       "id": 52,
       "options": {
@@ -2630,7 +3067,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_outbox_size_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_outbox_size_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -2640,7 +3077,7 @@
           "useBackend": false
         }
       ],
-      "title": "Outbox size p99 ms (2m)",
+      "title": "Outbox size p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2705,7 +3142,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 107
+        "y": 123
       },
       "id": 53,
       "options": {
@@ -2724,14 +3161,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_outbox_size_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_outbox_size_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Outbox size p50 ms (2m)",
+      "title": "Outbox size p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2796,7 +3237,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 115
+        "y": 131
       },
       "id": 50,
       "options": {
@@ -2822,7 +3263,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_removed_bundles_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_removed_bundles_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -2832,7 +3273,7 @@
           "useBackend": false
         }
       ],
-      "title": "Removed bundles p99 ms (2m)",
+      "title": "Removed bundles p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2897,7 +3338,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 115
+        "y": 131
       },
       "id": 51,
       "options": {
@@ -2916,14 +3357,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_removed_bundles_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_removed_bundles_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Removed bundles p50 ms (2m)",
+      "title": "Removed bundles p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -2988,7 +3433,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 123
+        "y": 139
       },
       "id": 42,
       "options": {
@@ -3014,7 +3459,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_rounds_in_block_proposal_bucket[2m])) by (le, round_type))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_num_rounds_in_block_proposal_bucket[1m])) by (le, round_type))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -3024,7 +3469,7 @@
           "useBackend": false
         }
       ],
-      "title": "Rounds in block proposal p99 ms (2m)",
+      "title": "Rounds in block proposal p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -3089,7 +3534,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 123
+        "y": 139
       },
       "id": 43,
       "options": {
@@ -3108,14 +3553,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_rounds_in_block_proposal_bucket[2m])) by (le, round_type))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_num_rounds_in_block_proposal_bucket[1m])) by (le, round_type))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Rounds in block proposal p50 ms (2m)",
+      "title": "Rounds in block proposal p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -3156,7 +3605,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 131
+        "y": 147
       },
       "id": 10,
       "options": {
@@ -3199,7 +3648,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 139
+        "y": 155
       },
       "id": 25,
       "panels": [],
@@ -3268,7 +3717,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 140
+        "y": 156
       },
       "id": 36,
       "options": {
@@ -3294,7 +3743,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_contract_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_contract_instantiation_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -3304,7 +3753,7 @@
           "useBackend": false
         }
       ],
-      "title": "Wasm Contract Instantiation Latency p99 ms (2m)",
+      "title": "Wasm Contract Instantiation Latency p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -3369,7 +3818,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 140
+        "y": 156
       },
       "id": 37,
       "options": {
@@ -3395,7 +3844,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_contract_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_contract_instantiation_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -3405,7 +3854,7 @@
           "useBackend": false
         }
       ],
-      "title": "Wasm Contract Instantiation Latency p50 ms (2m)",
+      "title": "Wasm Contract Instantiation Latency p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -3470,7 +3919,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 148
+        "y": 164
       },
       "id": 38,
       "options": {
@@ -3496,7 +3945,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_service_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_service_instantiation_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -3506,7 +3955,7 @@
           "useBackend": false
         }
       ],
-      "title": "Wasm Service Instantiation Latency p99 ms (2m)",
+      "title": "Wasm Service Instantiation Latency p99 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -3571,7 +4020,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 148
+        "y": 164
       },
       "id": 39,
       "options": {
@@ -3597,7 +4046,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_service_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_service_instantiation_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -3607,7 +4056,7 @@
           "useBackend": false
         }
       ],
-      "title": "Wasm Service Instantiation Latency p50 ms (2m)",
+      "title": "Wasm Service Instantiation Latency p50 ms (1m)",
       "type": "timeseries"
     },
     {
@@ -3672,7 +4121,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 156
+        "y": 172
       },
       "id": 26,
       "options": {
@@ -3691,14 +4140,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_fuel_used_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_fuel_used_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm fuel used per block p99 (2m)",
+      "title": "Wasm fuel used per block p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -3763,7 +4216,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 156
+        "y": 172
       },
       "id": 27,
       "options": {
@@ -3782,14 +4235,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_fuel_used_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_fuel_used_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm fuel used per block p50 (2m)",
+      "title": "Wasm fuel used per block p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -3854,7 +4311,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 164
+        "y": 180
       },
       "id": 28,
       "options": {
@@ -3873,14 +4330,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_num_reads_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_num_reads_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm num reads per block p99 (2m)",
+      "title": "Wasm num reads per block p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -3945,7 +4406,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 164
+        "y": 180
       },
       "id": 29,
       "options": {
@@ -3964,14 +4425,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_num_reads_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_num_reads_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm num reads per block p50 (2m)",
+      "title": "Wasm num reads per block p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -4036,7 +4501,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 172
+        "y": 188
       },
       "id": 30,
       "options": {
@@ -4055,14 +4520,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytes_read_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytes_read_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm bytes read per block p99 (2m)",
+      "title": "Wasm bytes read per block p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -4127,7 +4596,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 172
+        "y": 188
       },
       "id": 31,
       "options": {
@@ -4146,14 +4615,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytes_read_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytes_read_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm bytes read per block p50 (2m)",
+      "title": "Wasm bytes read per block p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -4218,7 +4691,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 180
+        "y": 196
       },
       "id": 32,
       "options": {
@@ -4237,14 +4710,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytes_written_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytes_written_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm bytes written per block p99 (2m)",
+      "title": "Wasm bytes written per block p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -4309,7 +4786,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 180
+        "y": 196
       },
       "id": 33,
       "options": {
@@ -4328,14 +4805,18 @@
       "pluginVersion": "11.6.0-83314",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytes_written_per_block_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytes_written_per_block_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wasm bytes written per block p50 (2m)",
+      "title": "Wasm bytes written per block p50 (1m)",
       "type": "timeseries"
     }
   ],
