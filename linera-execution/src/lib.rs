@@ -676,6 +676,9 @@ pub trait ServiceRuntime: BaseRuntime {
 
     /// Schedules an operation to be included in the block proposed after execution.
     fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError>;
+
+    /// Checks if the service has exceeded its execution time limit.
+    fn check_execution_time(&mut self) -> Result<(), ExecutionError>;
 }
 
 pub trait ContractRuntime: BaseRuntime {
