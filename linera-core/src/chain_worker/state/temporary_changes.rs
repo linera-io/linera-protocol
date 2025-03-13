@@ -6,9 +6,9 @@
 use std::collections::HashMap;
 
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
+    data_types::{ApplicationDescription, ArithmeticError, Timestamp},
     ensure,
-    identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, UserApplicationId},
+    identifiers::{AccountOwner, ApplicationId, ChannelFullName, GenericApplicationId},
 };
 use linera_chain::data_types::{
     BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
@@ -110,8 +110,8 @@ where
     /// Returns an application's description.
     pub(super) async fn describe_application(
         &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, WorkerError> {
         self.0.ensure_is_active()?;
         let response = self.0.chain.describe_application(application_id).await?;
         Ok(response)

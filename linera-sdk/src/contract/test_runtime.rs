@@ -15,8 +15,8 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName,
+        Account, AccountOwner, Application, ApplicationId, ChainId, ChannelName, Destination,
+        MessageId, ModuleId, Owner, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -28,17 +28,17 @@ struct ExpectedCreateApplicationCall {
     module_id: ModuleId,
     parameters: Vec<u8>,
     argument: Vec<u8>,
-    required_application_ids: Vec<ApplicationId>,
-    application_id: ApplicationId,
+    required_application_ids: Vec<Application>,
+    application_id: Application,
 }
 
 /// A mock of the common runtime to interface with the host executing the contract.
-pub struct MockContractRuntime<Application>
+pub struct MockContractRuntime<A>
 where
-    Application: Contract,
+    A: Contract,
 {
-    application_parameters: Option<Application::Parameters>,
-    application_id: Option<ApplicationId<Application::Abi>>,
+    application_parameters: Option<A::Parameters>,
+    application: Option<Application<A::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
@@ -54,13 +54,13 @@ where
     can_close_chain: Option<bool>,
     can_change_application_permissions: Option<bool>,
     call_application_handler: Option<CallApplicationHandler>,
-    send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
+    send_message_requests: Arc<Mutex<Vec<SendMessageRequest<A::Message>>>>,
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
     events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
-    expected_service_queries: VecDeque<(ApplicationId, String, String)>,
+    expected_service_queries: VecDeque<(Application, String, String)>,
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
@@ -79,15 +79,15 @@ where
     }
 }
 
-impl<Application> MockContractRuntime<Application>
+impl<A> MockContractRuntime<A>
 where
-    Application: Contract,
+    A: Contract,
 {
     /// Creates a new [`MockContractRuntime`] instance for a contract.
     pub fn new() -> Self {
         MockContractRuntime {
             application_parameters: None,
-            application_id: None,
+            application: None,
             application_creator_chain_id: None,
             chain_id: None,
             authenticated_signer: None,
@@ -130,10 +130,7 @@ where
     }
 
     /// Configures the application parameters to return during the test.
-    pub fn with_application_parameters(
-        mut self,
-        application_parameters: Application::Parameters,
-    ) -> Self {
+    pub fn with_application_parameters(mut self, application_parameters: A::Parameters) -> Self {
         self.application_parameters = Some(application_parameters);
         self
     }
@@ -141,14 +138,14 @@ where
     /// Configures the application parameters to return during the test.
     pub fn set_application_parameters(
         &mut self,
-        application_parameters: Application::Parameters,
+        application_parameters: A::Parameters,
     ) -> &mut Self {
         self.application_parameters = Some(application_parameters);
         self
     }
 
     /// Returns the application parameters provided when the application was created.
-    pub fn application_parameters(&mut self) -> Application::Parameters {
+    pub fn application_parameters(&mut self) -> A::Parameters {
         self.application_parameters.clone().expect(
             "Application parameters have not been mocked, \
             please call `MockContractRuntime::set_application_parameters` first",
@@ -156,24 +153,21 @@ where
     }
 
     /// Configures the application ID to return during the test.
-    pub fn with_application_id(mut self, application_id: ApplicationId<Application::Abi>) -> Self {
-        self.application_id = Some(application_id);
+    pub fn with_application_id(mut self, application: Application<A::Abi>) -> Self {
+        self.application = Some(application);
         self
     }
 
     /// Configures the application ID to return during the test.
-    pub fn set_application_id(
-        &mut self,
-        application_id: ApplicationId<Application::Abi>,
-    ) -> &mut Self {
-        self.application_id = Some(application_id);
+    pub fn set_application_id(&mut self, application_id: Application<A::Abi>) -> &mut Self {
+        self.application = Some(application_id);
         self
     }
 
     /// Returns the ID of the current application.
-    pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
-        self.application_id.expect(
-            "Application ID has not been mocked, \
+    pub fn application(&mut self) -> Application<A::Abi> {
+        self.application.expect(
+            "Application has not been mocked, \
             please call `MockContractRuntime::set_application_id` first",
         )
     }
@@ -452,26 +446,19 @@ where
     }
 
     /// Schedules a message to be sent to this application on another chain.
-    pub fn send_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Application::Message,
-    ) {
+    pub fn send_message(&mut self, destination: impl Into<Destination>, message: A::Message) {
         self.prepare_message(message).send_to(destination)
     }
 
     /// Returns a `MessageBuilder` to prepare a message to be sent.
-    pub fn prepare_message(
-        &mut self,
-        message: Application::Message,
-    ) -> MessageBuilder<Application::Message> {
+    pub fn prepare_message(&mut self, message: A::Message) -> MessageBuilder<A::Message> {
         MessageBuilder::new(message, self.send_message_requests.clone())
     }
 
     /// Returns the list of [`SendMessageRequest`]s created so far during the test.
     pub fn created_send_message_requests(
         &self,
-    ) -> MutexGuard<'_, Vec<SendMessageRequest<Application::Message>>> {
+    ) -> MutexGuard<'_, Vec<SendMessageRequest<A::Message>>> {
         self.send_message_requests
             .try_lock()
             .expect("Unit test should be single-threaded")
@@ -647,9 +634,9 @@ where
 
         if authorized {
             let application_id = self
-                .application_id
+                .application
                 .expect("The application doesn't have an ID!")
-                .forget_abi();
+                .application_id();
             self.can_close_chain = Some(application_permissions.can_close_chain(&application_id));
             self.can_change_application_permissions =
                 Some(application_permissions.can_change_application_permissions(&application_id));
@@ -700,8 +687,8 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<ApplicationId>,
-        application_id: ApplicationId,
+        required_application_ids: Vec<Application>,
+        application_id: Application,
     ) where
         Parameters: Serialize,
         InstantiationArgument: Serialize,
@@ -727,8 +714,8 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId<Abi>
+        required_application_ids: Vec<Application>,
+    ) -> Application<Abi>
     where
         Abi: ContractAbi,
         Parameters: Serialize,
@@ -759,7 +746,7 @@ where
     /// Configures the handler for cross-application calls made during the test.
     pub fn with_call_application_handler(
         mut self,
-        handler: impl FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8> + 'static,
+        handler: impl FnMut(bool, Application, Vec<u8>) -> Vec<u8> + 'static,
     ) -> Self {
         self.call_application_handler = Some(Box::new(handler));
         self
@@ -768,19 +755,19 @@ where
     /// Configures the handler for cross-application calls made during the test.
     pub fn set_call_application_handler(
         &mut self,
-        handler: impl FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8> + 'static,
+        handler: impl FnMut(bool, Application, Vec<u8>) -> Vec<u8> + 'static,
     ) -> &mut Self {
         self.call_application_handler = Some(Box::new(handler));
         self
     }
 
     /// Calls another application.
-    pub fn call_application<A: ContractAbi + Send>(
+    pub fn call_application<A2: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
-        application: ApplicationId<A>,
-        call: &A::Operation,
-    ) -> A::Response {
+        application: Application<A2>,
+        call: &A2::Operation,
+    ) -> A2::Response {
         let call_bytes = bcs::to_bytes(call)
             .expect("Failed to serialize `Operation` type for a cross-application call");
 
@@ -800,11 +787,11 @@ where
     }
 
     /// Adds an expected `query_service` call`, and the response it should return in the test.
-    pub fn add_expected_service_query<A: ServiceAbi + Send>(
+    pub fn add_expected_service_query<A2: ServiceAbi + Send>(
         &mut self,
-        application_id: ApplicationId<A>,
-        query: A::Query,
-        response: A::QueryResponse,
+        application_id: Application<A>,
+        query: A2::Query,
+        response: A2::QueryResponse,
     ) {
         let query = serde_json::to_string(&query).expect("Failed to serialize query");
         let response = serde_json::to_string(&response).expect("Failed to serialize response");
@@ -840,11 +827,11 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn query_service<A: ServiceAbi + Send>(
+    pub fn query_service<A2: ServiceAbi + Send>(
         &mut self,
-        application_id: ApplicationId<A>,
-        query: A::Query,
-    ) -> A::QueryResponse {
+        application_id: Application<A2>,
+        query: A2::Query,
+    ) -> A2::QueryResponse {
         let maybe_query = self.expected_service_queries.pop_front();
         let (expected_id, expected_query, response) =
             maybe_query.expect("Unexpected service query");
@@ -901,7 +888,7 @@ where
 }
 
 /// A type alias for the handler for cross-application calls.
-pub type CallApplicationHandler = Box<dyn FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8>>;
+pub type CallApplicationHandler = Box<dyn FnMut(bool, Application, Vec<u8>) -> Vec<u8>>;
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then
 /// sends the message once it is dropped.

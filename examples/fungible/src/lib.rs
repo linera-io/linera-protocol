@@ -11,7 +11,7 @@ use {
     async_graphql::InputType,
     futures::{stream, StreamExt},
     linera_sdk::{
-        linera_base_types::{ApplicationId, ModuleId},
+        linera_base_types::{Application, ModuleId},
         test::{ActiveChain, QueryOutcome, TestValidator},
     },
 };
@@ -49,7 +49,7 @@ pub async fn create_with_accounts(
     module_id: ModuleId<FungibleTokenAbi, Parameters, InitialState>,
     initial_amounts: impl IntoIterator<Item = Amount>,
 ) -> (
-    ApplicationId<FungibleTokenAbi>,
+    Application<FungibleTokenAbi>,
     Vec<(ActiveChain, AccountOwner, Amount)>,
 ) {
     let mut token_chain = validator.new_chain().await;
@@ -117,7 +117,7 @@ pub async fn create_with_accounts(
 /// Queries the balance of an account owned by `account_owner` on a specific `chain`.
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 pub async fn query_account(
-    application_id: ApplicationId<FungibleTokenAbi>,
+    application_id: Application<FungibleTokenAbi>,
     chain: &ActiveChain,
     account_owner: AccountOwner,
 ) -> Option<Amount> {

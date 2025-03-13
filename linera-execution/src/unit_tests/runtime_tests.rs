@@ -205,7 +205,7 @@ fn create_dummy_application() -> ApplicationStatus {
     }
 }
 
-/// Creates a dummy [`ApplicationId`].
+/// Creates a dummy [`Application`].
 fn create_dummy_application_id() -> ApplicationId {
     ApplicationId::new(CryptoHash::test_hash("application description"))
 }

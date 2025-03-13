@@ -37,7 +37,7 @@ pub enum AccountOwner {
     /// An account owned by a user.
     User(Owner),
     /// An account for an application.
-    Application(UserApplicationId),
+    Application(ApplicationId),
     /// Chain account.
     Chain,
 }
@@ -291,20 +291,38 @@ pub struct MessageId {
     pub index: u32,
 }
 
-/// A unique identifier for a user application from a blob.
+/// An application with its ABI in the type.
 #[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct ApplicationId<A = ()> {
-    /// The hash of the `UserApplicationDescription` this refers to.
+pub struct Application<A = ()> {
+    /// The hash of the `ApplicationIdDescription` this refers to.
     pub application_description_hash: CryptoHash,
     #[witty(skip)]
     #[debug(skip)]
     _phantom: PhantomData<A>,
 }
 
-/// Alias for `ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-pub type UserApplicationId = ApplicationId<()>;
+/// A unique identifier for a user application from a blob.
+#[derive(
+    Debug,
+    PartialOrd,
+    Ord,
+    Copy,
+    Clone,
+    Hash,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    WitLoad,
+    WitStore,
+    WitType,
+)]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
+pub struct ApplicationId {
+    /// The hash of the `ApplicationIdDescription` this refers to.
+    pub application_description_hash: CryptoHash,
+}
 
 /// A unique identifier for an application.
 #[derive(
@@ -326,11 +344,11 @@ pub enum GenericApplicationId {
     /// The system application.
     System,
     /// A user application.
-    User(UserApplicationId),
+    User(ApplicationId),
 }
 
 impl GenericApplicationId {
-    /// Returns the `ApplicationId`, or `None` if it is `System`.
+    /// Returns the `Application`, or `None` if it is `System`.
     pub fn user_application_id(&self) -> Option<&ApplicationId> {
         if let GenericApplicationId::User(app_id) = self {
             Some(app_id)
@@ -761,62 +779,62 @@ impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, Instantia
 }
 
 // Cannot use #[derive(Clone)] because it requires `A: Clone`.
-impl<A> Clone for ApplicationId<A> {
+impl<A> Clone for Application<A> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A> Copy for ApplicationId<A> {}
+impl<A> Copy for Application<A> {}
 
-impl<A: PartialEq> PartialEq for ApplicationId<A> {
+impl<A: PartialEq> PartialEq for Application<A> {
     fn eq(&self, other: &Self) -> bool {
         self.application_description_hash == other.application_description_hash
     }
 }
 
-impl<A: Eq> Eq for ApplicationId<A> {}
+impl<A: Eq> Eq for Application<A> {}
 
-impl<A: PartialOrd> PartialOrd for ApplicationId<A> {
+impl<A: PartialOrd> PartialOrd for Application<A> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.application_description_hash
             .partial_cmp(&other.application_description_hash)
     }
 }
 
-impl<A: Ord> Ord for ApplicationId<A> {
+impl<A: Ord> Ord for Application<A> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.application_description_hash
             .cmp(&other.application_description_hash)
     }
 }
 
-impl<A> Hash for ApplicationId<A> {
+impl<A> Hash for Application<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.application_description_hash.hash(state);
     }
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename = "ApplicationId")]
-struct SerializableApplicationId {
+#[serde(rename = "Application")]
+struct SerializableApplication {
     pub application_description_hash: CryptoHash,
 }
 
-impl<A> Serialize for ApplicationId<A> {
+impl<A> Serialize for Application<A> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
         if serializer.is_human_readable() {
-            let bytes = bcs::to_bytes(&SerializableApplicationId {
+            let bytes = bcs::to_bytes(&SerializableApplication {
                 application_description_hash: self.application_description_hash,
             })
             .map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
         } else {
-            SerializableApplicationId::serialize(
-                &SerializableApplicationId {
+            SerializableApplication::serialize(
+                &SerializableApplication {
                     application_description_hash: self.application_description_hash,
                 },
                 serializer,
@@ -825,7 +843,7 @@ impl<A> Serialize for ApplicationId<A> {
     }
 }
 
-impl<'de, A> Deserialize<'de> for ApplicationId<A> {
+impl<'de, A> Deserialize<'de> for Application<A> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -833,15 +851,15 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
             let application_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let application_id: SerializableApplicationId =
+            let application_id: SerializableApplication =
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
-            Ok(ApplicationId {
+            Ok(Application {
                 application_description_hash: application_id.application_description_hash,
                 _phantom: PhantomData,
             })
         } else {
-            let value = SerializableApplicationId::deserialize(deserializer)?;
-            Ok(ApplicationId {
+            let value = SerializableApplication::deserialize(deserializer)?;
+            Ok(Application {
                 application_description_hash: value.application_description_hash,
                 _phantom: PhantomData,
             })
@@ -849,40 +867,66 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
     }
 }
 
-impl ApplicationId {
+impl Application {
     /// Creates an application ID from the application description hash.
     pub fn new(application_description_hash: CryptoHash) -> Self {
-        ApplicationId {
+        Application {
             application_description_hash,
             _phantom: PhantomData,
         }
     }
 
     /// Specializes an application ID for a given ABI.
-    pub fn with_abi<A>(self) -> ApplicationId<A> {
-        ApplicationId {
+    pub fn with_abi<A>(self) -> Application<A> {
+        Application {
             application_description_hash: self.application_description_hash,
             _phantom: PhantomData,
         }
     }
 }
 
-impl<A> ApplicationId<A> {
-    /// Forgets the ABI of a module ID (if any).
-    pub fn forget_abi(self) -> ApplicationId {
+impl<A> Application<A> {
+    /// Returns the application ID without the ABI.
+    pub fn application_id(&self) -> ApplicationId {
         ApplicationId {
+            application_description_hash: self.application_description_hash,
+        }
+    }
+}
+
+impl ApplicationId {
+    /// Creates a user application ID from the application description hash.
+    pub fn new(application_description_hash: CryptoHash) -> Self {
+        ApplicationId {
+            application_description_hash,
+        }
+    }
+
+    /// Specializes a user application ID for a given ABI.
+    pub fn with_abi<A>(self) -> Application<A> {
+        Application {
             application_description_hash: self.application_description_hash,
             _phantom: PhantomData,
         }
     }
 
     /// Converts the application ID to the ID of the blob containing the
-    /// `UserApplicationDescription`.
+    /// `ApplicationIdDescription`.
     pub fn description_blob_id(self) -> BlobId {
         BlobId::new(
             self.application_description_hash,
             BlobType::ApplicationDescription,
         )
+    }
+}
+
+impl<A> Application<A> {
+    /// Forgets the ABI of a module ID (if any).
+    pub fn forget_abi(self) -> Application {
+        Application {
+            application_description_hash: self.application_description_hash,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -1075,7 +1119,9 @@ impl ChainId {
 
 impl<'de> BcsHashable<'de> for ChainDescription {}
 
+bcs_scalar!(Application, "A unique identifier for a user application");
 bcs_scalar!(ApplicationId, "A unique identifier for a user application");
+
 doc_scalar!(
     GenericApplicationId,
     "A unique identifier for a user application or for the system application"

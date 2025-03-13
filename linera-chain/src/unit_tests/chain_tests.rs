@@ -13,8 +13,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
-        UserApplicationDescription,
+        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
+        Timestamp,
     },
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
@@ -66,7 +66,7 @@ where
     }
 }
 
-fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
+fn make_app_description() -> (ApplicationDescription, Blob, Blob) {
     let contract = Bytecode::new(b"contract".into());
     let service = Bytecode::new(b"service".into());
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
@@ -75,7 +75,7 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
 
     let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
     (
-        UserApplicationDescription {
+        ApplicationDescription {
             module_id,
             creator_chain_id: admin_id(),
             block_height: BlockHeight(2),

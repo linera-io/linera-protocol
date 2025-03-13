@@ -7,7 +7,7 @@
 
 use async_graphql::InputType;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
+    linera_base_types::{AccountOwner, Amount, Application, ApplicationPermissions},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
 use matching_engine::{
@@ -15,7 +15,7 @@ use matching_engine::{
 };
 
 pub async fn get_orders(
-    application_id: ApplicationId<MatchingEngineAbi>,
+    application_id: Application<MatchingEngineAbi>,
     chain: &ActiveChain,
     account_owner: AccountOwner,
 ) -> Option<Vec<OrderId>> {
@@ -132,7 +132,7 @@ async fn single_transaction() {
             module_id,
             matching_parameter,
             (),
-            vec![token_id_a.forget_abi(), token_id_b.forget_abi()],
+            vec![token_id_a.application_id(), token_id_b.application_id()],
         )
         .await;
 
@@ -265,7 +265,7 @@ async fn single_transaction() {
         .await;
     user_chain_a.handle_received_messages().await;
 
-    let permissions = ApplicationPermissions::new_single(matching_id.forget_abi());
+    let permissions = ApplicationPermissions::new_single(matching_id.application_id());
     matching_chain
         .add_block(|block| {
             block.with_change_application_permissions(permissions);

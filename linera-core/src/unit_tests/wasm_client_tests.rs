@@ -20,7 +20,7 @@ use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, Bytecode, Event, OracleResponse},
-    identifiers::{AccountOwner, ApplicationId, Owner, StreamId, StreamName},
+    identifiers::{AccountOwner, Application, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -313,7 +313,7 @@ where
             .unwrap()
     };
     let module_id2 =
-        module_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
+        module_id2.with_abi::<meta_counter::MetaCounterAbi, Application<CounterAbi>, ()>();
 
     // Creator receives the bytecode files then creates the app.
     creator.synchronize_from_validators().await.unwrap();
@@ -328,7 +328,7 @@ where
             module_id2,
             &application_id1,
             &(),
-            vec![application_id1.forget_abi()],
+            vec![application_id1.application_id()],
         )
         .await
         .unwrap()
@@ -337,7 +337,7 @@ where
         certificate.block().body.events,
         vec![vec![Event {
             stream_id: StreamId {
-                application_id: application_id2.forget_abi().into(),
+                application_id: application_id2.application_id().into(),
                 stream_name: StreamName(b"announcements".to_vec()),
             },
             key: b"updates".to_vec(),

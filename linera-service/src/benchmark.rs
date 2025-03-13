@@ -9,7 +9,7 @@ use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{Account, AccountOwner, Application, ChainId, Owner},
     time::timer::Instant,
 };
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
@@ -140,7 +140,7 @@ async fn benchmark_with_fungible(
         .await?;
 
     struct BenchmarkContext {
-        application_id: ApplicationId<FungibleTokenAbi>,
+        application_id: Application<FungibleTokenAbi>,
         owner: Owner,
         default_chain: ChainId,
     }

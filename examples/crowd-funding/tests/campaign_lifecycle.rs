@@ -11,8 +11,8 @@ use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
     linera_base_types::{
-        AccountOwner, AccountSecretKey, Amount, ApplicationId, Ed25519SecretKey,
-        Secp256k1SecretKey, Timestamp,
+        AccountOwner, AccountSecretKey, Amount, Application, Ed25519SecretKey, Secp256k1SecretKey,
+        Timestamp,
     },
     test::TestValidator,
 };
@@ -30,7 +30,7 @@ async fn collect_pledges() {
 
     let (validator, module_id) = TestValidator::with_current_module::<
         CrowdFundingAbi,
-        ApplicationId<FungibleTokenAbi>,
+        Application<FungibleTokenAbi>,
         InstantiationArgument,
     >()
     .await;
@@ -62,7 +62,7 @@ async fn collect_pledges() {
             module_id,
             token_id,
             campaign_state,
-            vec![token_id.forget_abi()],
+            vec![token_id.application_id()],
         )
         .await;
 
@@ -134,7 +134,7 @@ async fn cancel_successful_campaign() {
 
     let (validator, module_id) = TestValidator::with_current_module::<
         CrowdFundingAbi,
-        ApplicationId<FungibleTokenAbi>,
+        Application<FungibleTokenAbi>,
         InstantiationArgument,
     >()
     .await;
@@ -164,7 +164,7 @@ async fn cancel_successful_campaign() {
             module_id,
             token_id,
             campaign_state,
-            vec![token_id.forget_abi()],
+            vec![token_id.application_id()],
         )
         .await;
 

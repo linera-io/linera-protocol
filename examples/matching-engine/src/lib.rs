@@ -7,7 +7,7 @@ use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ContractAbi, ServiceAbi},
+    linera_base_types::{AccountOwner, Amount, Application, ContractAbi, ServiceAbi},
     views::{CustomSerialize, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -168,7 +168,7 @@ scalar!(Order);
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Parameters {
     /// The token0 and token1 used for the matching engine
-    pub tokens: [ApplicationId<FungibleTokenAbi>; 2],
+    pub tokens: [Application<FungibleTokenAbi>; 2],
 }
 
 scalar!(Parameters);

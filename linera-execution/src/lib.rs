@@ -37,13 +37,13 @@ use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
-        Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        DecompressionError, Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, Owner, StreamName, UserApplicationId,
+        Account, AccountOwner, Application, ApplicationId, BlobId, BlobType, ChainId, ChannelName,
+        Destination, EventId, GenericApplicationId, MessageId, ModuleId, Owner, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -206,22 +206,22 @@ pub enum ExecutionError {
     InvalidPromise,
 
     #[error("Attempted to perform a reentrant call to application {0}")]
-    ReentrantCall(UserApplicationId),
+    ReentrantCall(ApplicationId),
     #[error(
         "Application {caller_id} attempted to perform a cross-application to {callee_id} call \
         from `finalize`"
     )]
     CrossApplicationCallInFinalize {
-        caller_id: Box<UserApplicationId>,
-        callee_id: Box<UserApplicationId>,
+        caller_id: Box<ApplicationId>,
+        callee_id: Box<ApplicationId>,
     },
     #[error("Attempt to write to storage from a contract")]
     ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
-    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+    ApplicationBytecodeNotFound(Box<ApplicationDescription>),
     // TODO(#2927): support dynamic loading of modules on the Web
     #[error("Unsupported dynamic application load: {0:?}")]
-    UnsupportedDynamicApplicationLoad(Box<UserApplicationId>),
+    UnsupportedDynamicApplicationLoad(Box<ApplicationId>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -242,7 +242,7 @@ pub enum ExecutionError {
     #[error("Owner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
-    UnauthorizedApplication(UserApplicationId),
+    UnauthorizedApplication(ApplicationId),
     #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered I/O error: {0}")]
@@ -330,7 +330,7 @@ pub enum ExecutionError {
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<UserApplicationId>),
+    UnknownApplication(Box<ApplicationId>),
     #[error("Chain is not active yet.")]
     InactiveChain,
     #[error("No recorded response for oracle query")]
@@ -396,18 +396,18 @@ pub trait ExecutionRuntimeContext {
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
-    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>>;
+    fn user_contracts(&self) -> &Arc<DashMap<ApplicationId, UserContractCode>>;
 
-    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>>;
+    fn user_services(&self) -> &Arc<DashMap<ApplicationId, UserServiceCode>>;
 
     async fn get_user_contract(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError>;
 
     async fn get_user_service(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
@@ -439,7 +439,7 @@ pub struct OperationContext {
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_caller_id: Option<UserApplicationId>,
+    pub authenticated_caller_id: Option<ApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -511,7 +511,7 @@ pub trait BaseRuntime {
     fn block_height(&mut self) -> Result<BlockHeight, ExecutionError>;
 
     /// The current application ID.
-    fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
+    fn application_id(&mut self) -> Result<ApplicationId, ExecutionError>;
 
     /// The current application creator's chain ID.
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError>;
@@ -670,7 +670,7 @@ pub trait ServiceRuntime: BaseRuntime {
     /// Queries another application.
     fn try_query_application(
         &mut self,
-        queried_id: UserApplicationId,
+        queried_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -694,7 +694,7 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.
-    fn authenticated_caller_id(&mut self) -> Result<Option<UserApplicationId>, ExecutionError>;
+    fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError>;
 
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
@@ -732,7 +732,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn try_call_application(
         &mut self,
         authenticated: bool,
-        callee_id: UserApplicationId,
+        callee_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -774,8 +774,8 @@ pub trait ContractRuntime: BaseRuntime {
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<UserApplicationId, ExecutionError>;
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ApplicationId, ExecutionError>;
 
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
@@ -791,7 +791,7 @@ pub enum Operation {
     System(SystemOperation),
     /// A user operation (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -807,7 +807,7 @@ pub enum Message {
     System(SystemMessage),
     /// A user message (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -821,7 +821,7 @@ pub enum Query {
     System(SystemQuery),
     /// A user query (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1054,8 +1054,8 @@ impl OperationContext {
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
-    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, Blob>>,
     events: Arc<DashMap<EventId, Vec<u8>>>,
 }
@@ -1086,17 +1086,17 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &Arc<DashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &Arc<DashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
     async fn get_user_contract(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
         Ok(self
@@ -1110,7 +1110,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn get_user_service(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let application_id = description.into();
         Ok(self
@@ -1181,17 +1181,17 @@ impl Operation {
     /// Creates a new user application operation following the `application_id`'s [`Abi`].
     #[cfg(with_testing)]
     pub fn user<A: Abi>(
-        application_id: ApplicationId<A>,
+        application_id: Application<A>,
         operation: &A::Operation,
     ) -> Result<Self, bcs::Error> {
-        Self::user_without_abi(application_id.forget_abi(), operation)
+        Self::user_without_abi(application_id.application_id(), operation)
     }
 
     /// Creates a new user application operation assuming that the `operation` is valid for the
     /// `application_id`.
     #[cfg(with_testing)]
     pub fn user_without_abi(
-        application_id: ApplicationId<()>,
+        application_id: ApplicationId,
         operation: &impl Serialize,
     ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
@@ -1239,10 +1239,10 @@ impl Message {
     /// Creates a new user application message assuming that the `message` is valid for the
     /// `application_id`.
     pub fn user<A, M: Serialize>(
-        application_id: ApplicationId<A>,
+        application: Application<A>,
         message: &M,
     ) -> Result<Self, bcs::Error> {
-        let application_id = application_id.forget_abi();
+        let application_id = application.application_id();
         let bytes = bcs::to_bytes(&message)?;
         Ok(Message::User {
             application_id,
@@ -1304,16 +1304,19 @@ impl Query {
 
     /// Creates a new user application query following the `application_id`'s [`Abi`].
     pub fn user<A: Abi>(
-        application_id: ApplicationId<A>,
+        application_id: Application<A>,
         query: &A::Query,
     ) -> Result<Self, serde_json::Error> {
-        Self::user_without_abi(application_id.forget_abi(), query)
+        Self::user_without_abi(
+            ApplicationId::new(application_id.application_description_hash),
+            query,
+        )
     }
 
     /// Creates a new user application query assuming that the `query` is valid for the
     /// `application_id`.
     pub fn user_without_abi(
-        application_id: ApplicationId<()>,
+        application_id: ApplicationId,
         query: &impl Serialize,
     ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {

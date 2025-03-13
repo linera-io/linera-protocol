@@ -29,7 +29,7 @@ use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, Application, ChainId},
     vm::VmRuntime,
 };
 use linera_chain::data_types::{Medium, Origin};
@@ -177,7 +177,7 @@ struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 impl NonFungibleApp {
     pub fn create_token_id(
         chain_id: &ChainId,
-        application_id: &ApplicationId,
+        application_id: &Application,
         name: &String,
         minter: &AccountOwner,
         hash: &DataBlobHash,
@@ -1284,7 +1284,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     };
     let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await?;
     let application_id_crowd = client1
-        .publish_and_create::<CrowdFundingAbi, ApplicationId<FungibleTokenAbi>, InstantiationArgument>(
+        .publish_and_create::<CrowdFundingAbi, Application<FungibleTokenAbi>, InstantiationArgument>(
             contract_crowd,
             service_crowd,
             VmRuntime::Wasm,
@@ -1837,7 +1837,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    let owner_amm_app = AccountOwner::Application(application_id_amm.forget_abi());
+    let owner_amm_app = AccountOwner::Application(application_id_amm.application_id());
 
     // Create AMM wrappers
     let app_amm = AmmApp(

@@ -16,7 +16,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::{
-        Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
+        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp,
     },
     hashed::Hashed,
     identifiers::{ChainDescription, ChainId, ModuleId},
@@ -197,7 +197,7 @@ where
         instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
-    let application_description = UserApplicationDescription {
+    let application_description = ApplicationDescription {
         module_id,
         creator_chain_id: creator_chain.into(),
         block_height: BlockHeight::from(0),

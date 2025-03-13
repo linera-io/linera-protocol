@@ -15,10 +15,8 @@ use std::{
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{
-        Amount, Blob, BlockHeight, Bytecode, CompressedBytecode, UserApplicationDescription,
-    },
-    identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
+    data_types::{Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, CompressedBytecode},
+    identifiers::{AccountOwner, Application, ApplicationId, ChainDescription, ChainId, ModuleId},
     vm::VmRuntime,
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -467,7 +465,7 @@ impl ActiveChain {
 
     /// Creates an application on this microchain, using the module referenced by `module_id`.
     ///
-    /// Returns the [`ApplicationId`] of the created application.
+    /// Returns the [`Application`] of the created application.
     ///
     /// If necessary, this microchain will subscribe to the microchain that published the
     /// module to use, and fetch it.
@@ -481,7 +479,7 @@ impl ActiveChain {
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId<Abi>
+    ) -> Application<Abi>
     where
         Abi: ContractAbi,
         Parameters: Serialize,
@@ -505,7 +503,7 @@ impl ActiveChain {
         assert_eq!(block.messages().len(), 1);
         assert!(block.messages()[0].is_empty());
 
-        let description = UserApplicationDescription {
+        let description = ApplicationDescription {
             module_id: module_id.forget_abi(),
             creator_chain_id: block.header.chain_id,
             block_height: block.header.height,
@@ -514,7 +512,7 @@ impl ActiveChain {
             required_application_ids,
         };
 
-        ApplicationId::<()>::from(&description).with_abi()
+        Application::from(&description).with_abi()
     }
 
     /// Returns whether this chain has been closed.
@@ -532,7 +530,7 @@ impl ActiveChain {
     /// Returns the deserialized response from the `application`.
     pub async fn query<Abi>(
         &self,
-        application_id: ApplicationId<Abi>,
+        application_id: Application<Abi>,
         query: Abi::Query,
     ) -> QueryOutcome<Abi::QueryResponse>
     where
@@ -549,7 +547,7 @@ impl ActiveChain {
             .query_application(
                 self.id(),
                 Query::User {
-                    application_id: application_id.forget_abi(),
+                    application_id: application_id.application_id(),
                     bytes: query_bytes,
                 },
             )
@@ -576,7 +574,7 @@ impl ActiveChain {
     /// Returns the deserialized GraphQL JSON response from the `application`.
     pub async fn graphql_query<Abi>(
         &self,
-        application_id: ApplicationId<Abi>,
+        application_id: Application<Abi>,
         query: impl Into<async_graphql::Request>,
     ) -> QueryOutcome<serde_json::Value>
     where
@@ -611,7 +609,7 @@ impl ActiveChain {
     /// Returns the certificate of the new block.
     pub async fn graphql_mutation<Abi>(
         &self,
-        application_id: ApplicationId<Abi>,
+        application_id: Application<Abi>,
         query: impl Into<async_graphql::Request>,
     ) -> ConfirmedBlockCertificate
     where

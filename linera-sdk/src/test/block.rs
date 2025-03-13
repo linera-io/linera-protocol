@@ -10,7 +10,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{
-        AccountOwner, ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner,
+        AccountOwner, Application, ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner,
     },
     ownership::TimeoutConfig,
 };
@@ -140,14 +140,14 @@ impl BlockBuilder {
     /// `application`.
     pub fn with_operation<Abi>(
         &mut self,
-        application_id: ApplicationId<Abi>,
+        application: Application<Abi>,
         operation: Abi::Operation,
     ) -> &mut Self
     where
         Abi: ContractAbi,
     {
         self.with_raw_operation(
-            application_id.forget_abi(),
+            application.application_id(),
             operation
                 .to_bcs_bytes()
                 .expect("Failed to serialize operation"),

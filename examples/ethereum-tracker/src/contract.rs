@@ -80,7 +80,7 @@ impl EthereumTrackerContract {
     async fn read_initial(&mut self) {
         let request = async_graphql::Request::new("query { readInitialEvent }");
 
-        let application_id = self.runtime.application_id();
+        let application_id = self.runtime.application();
         let response = self.runtime.query_service(application_id, request);
 
         let async_graphql::Value::Object(data_object) = response.data else {
@@ -113,7 +113,7 @@ impl EthereumTrackerContract {
             r#"query {{ readTransferEvents(endBlock: {end_block}) }}"#
         ));
 
-        let application_id = self.runtime.application_id();
+        let application_id = self.runtime.application();
         let response = self.runtime.query_service(application_id, request);
 
         let async_graphql::Value::Object(data_object) = response.data else {

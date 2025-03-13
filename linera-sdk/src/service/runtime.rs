@@ -9,7 +9,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, Application, ApplicationId, ChainId},
 };
 use serde::Serialize;
 
@@ -17,12 +17,12 @@ use super::wit::{base_runtime_api as base_wit, service_runtime_api as service_wi
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
-pub struct ServiceRuntime<Application>
+pub struct ServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
-    application_parameters: Mutex<Option<Application::Parameters>>,
-    application_id: Mutex<Option<ApplicationId<Application::Abi>>>,
+    application_parameters: Mutex<Option<A::Parameters>>,
+    application_id: Mutex<Option<Application<A::Abi>>>,
     chain_id: Mutex<Option<ChainId>>,
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
@@ -31,9 +31,9 @@ where
     balance_owners: Mutex<Option<Vec<AccountOwner>>>,
 }
 
-impl<Application> ServiceRuntime<Application>
+impl<A> ServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
     /// Creates a new [`ServiceRuntime`] instance for a service.
     pub(crate) fn new() -> Self {
@@ -60,12 +60,12 @@ where
     }
 }
 
-impl<Application> ServiceRuntime<Application>
+impl<A> ServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
     /// Returns the application parameters provided when the application was created.
-    pub fn application_parameters(&self) -> Application::Parameters {
+    pub fn application_parameters(&self) -> A::Parameters {
         Self::fetch_value_through_cache(&self.application_parameters, || {
             let bytes = base_wit::application_parameters();
             serde_json::from_slice(&bytes).expect("Application parameters must be deserializable")
@@ -73,7 +73,7 @@ where
     }
 
     /// Returns the ID of the current application.
-    pub fn application_id(&self) -> ApplicationId<Application::Abi> {
+    pub fn application(&self) -> Application<A::Abi> {
         Self::fetch_value_through_cache(&self.application_id, || {
             ApplicationId::from(base_wit::get_application_id()).with_abi()
         })
@@ -152,9 +152,9 @@ where
     }
 }
 
-impl<Application> ServiceRuntime<Application>
+impl<A> ServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
     /// Schedules an operation to be included in the block being built.
     ///
@@ -173,25 +173,25 @@ where
     }
 
     /// Queries another application.
-    pub fn query_application<A: ServiceAbi>(
+    pub fn query_application<A2: ServiceAbi>(
         &self,
-        application: ApplicationId<A>,
-        query: &A::Query,
-    ) -> A::QueryResponse {
+        application: Application<A2>,
+        query: &A2::Query,
+    ) -> A2::QueryResponse {
         let query_bytes =
             serde_json::to_vec(&query).expect("Failed to serialize query to another application");
 
         let response_bytes =
-            service_wit::try_query_application(application.forget_abi().into(), &query_bytes);
+            service_wit::try_query_application(application.application_id().into(), &query_bytes);
 
         serde_json::from_slice(&response_bytes)
             .expect("Failed to deserialize query response from application")
     }
 }
 
-impl<Application> ServiceRuntime<Application>
+impl<A> ServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
     /// Loads a value from the `slot` cache or fetches it and stores it in the cache.
     fn fetch_value_through_cache<T>(slot: &Mutex<Option<T>>, fetch: impl FnOnce() -> T) -> T

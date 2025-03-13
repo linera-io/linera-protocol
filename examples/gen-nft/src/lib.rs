@@ -9,7 +9,7 @@ use async_graphql::{InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, ApplicationId, ChainId, ContractAbi, ServiceAbi},
+    linera_base_types::{AccountOwner, Application, ChainId, ContractAbi, ServiceAbi},
     ToBcsBytes,
 };
 use serde::{Deserialize, Serialize};
@@ -122,7 +122,7 @@ impl Display for TokenId {
 impl Nft {
     pub fn create_token_id(
         chain_id: &ChainId,
-        application_id: &ApplicationId,
+        application_id: &Application,
         prompt: &String,
         minter: &AccountOwner,
         num_minted_nfts: u64,

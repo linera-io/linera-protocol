@@ -16,7 +16,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
     data_types::{Amount, ApplicationPermissions, Blob, BlobContent, Timestamp},
-    identifiers::{ApplicationId, ChainDescription, ChainId, MessageId, ModuleId, Owner},
+    identifiers::{Application, ChainDescription, ChainId, MessageId, ModuleId, Owner},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
@@ -129,12 +129,12 @@ impl TestValidator {
     /// The bytecode is first published on one microchain, then the application is created on
     /// another microchain.
     ///
-    /// Returns the new [`TestValidator`], the [`ApplicationId`] of the created application, and
+    /// Returns the new [`TestValidator`], the [`Application`] of the created application, and
     /// the chain on which it was created.
     pub async fn with_current_application<Abi, Parameters, InstantiationArgument>(
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
-    ) -> (TestValidator, ApplicationId<Abi>, ActiveChain)
+    ) -> (TestValidator, Application<Abi>, ActiveChain)
     where
         Abi: ContractAbi,
         Parameters: Serialize,
