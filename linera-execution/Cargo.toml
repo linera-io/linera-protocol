@@ -120,3 +120,4 @@ ignored = ["serde_bytes"]
 [[bin]]
 name = "wit-generator"
 path = "src/bin/wit_generator.rs"
+required-features = ["wasmer"]
