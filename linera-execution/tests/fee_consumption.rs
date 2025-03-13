@@ -10,6 +10,7 @@ use std::{collections::BTreeSet, sync::Arc, vec};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
+    http,
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
@@ -289,6 +290,8 @@ pub enum FeeSpend {
     Fuel(u64),
     /// Reads from storage.
     Read(Vec<u8>, Option<Vec<u8>>),
+    /// Performs an HTTP request.
+    HttpRequest,
 }
 
 impl FeeSpend {
@@ -296,6 +299,7 @@ impl FeeSpend {
     pub fn expected_oracle_responses(&self) -> Vec<OracleResponse> {
         match self {
             FeeSpend::Fuel(_) | FeeSpend::Read(_, _) => vec![],
+            FeeSpend::HttpRequest => vec![OracleResponse::Http(http::Response::ok([]))],
         }
     }
 
@@ -311,6 +315,7 @@ impl FeeSpend {
 
                 policy.read_operation.saturating_add(value_read_fee)
             }
+            FeeSpend::HttpRequest => policy.http_request,
         }
     }
 
@@ -322,6 +327,10 @@ impl FeeSpend {
                 let promise = runtime.read_value_bytes_new(key)?;
                 let response = runtime.read_value_bytes_wait(&promise)?;
                 assert_eq!(response, value);
+                Ok(())
+            }
+            FeeSpend::HttpRequest => {
+                runtime.perform_http_request(http::Request::get("http://dummy.url"))?;
                 Ok(())
             }
         }
