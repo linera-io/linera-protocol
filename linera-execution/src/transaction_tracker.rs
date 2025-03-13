@@ -12,7 +12,7 @@ use linera_base::{
 
 use crate::{
     ExecutionError, Message, OutgoingMessage, RawExecutionOutcome, RawOutgoingMessage,
-    SystemExecutionError, SystemMessage,
+    SystemMessage,
 };
 
 /// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
@@ -186,11 +186,11 @@ impl TransactionTracker {
     pub fn replay_oracle_response(
         &mut self,
         oracle_response: OracleResponse,
-    ) -> Result<bool, SystemExecutionError> {
+    ) -> Result<bool, ExecutionError> {
         let replaying = if let Some(recorded_response) = self.next_replayed_oracle_response()? {
             ensure!(
                 recorded_response == oracle_response,
-                SystemExecutionError::OracleResponseMismatch
+                ExecutionError::OracleResponseMismatch
             );
             true
         } else {
@@ -209,13 +209,13 @@ impl TransactionTracker {
     /// `add_oracle_response`.
     pub fn next_replayed_oracle_response(
         &mut self,
-    ) -> Result<Option<OracleResponse>, SystemExecutionError> {
+    ) -> Result<Option<OracleResponse>, ExecutionError> {
         let Some(responses) = &mut self.replaying_oracle_responses else {
             return Ok(None); // Not in replay mode.
         };
         let response = responses
             .next()
-            .ok_or_else(|| SystemExecutionError::MissingOracleResponse)?;
+            .ok_or_else(|| ExecutionError::MissingOracleResponse)?;
         Ok(Some(response))
     }
 

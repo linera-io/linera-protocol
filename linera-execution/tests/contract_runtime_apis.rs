@@ -29,8 +29,8 @@ use linera_execution::{
         test_accounts_strategy, ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, Message, MessageContext, Operation,
-    OperationContext, ResourceController, SystemExecutionError, SystemExecutionStateView,
-    TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
+    OperationContext, ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext,
+    TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
 #[cfg(feature = "unstable-oracles")]
@@ -202,12 +202,7 @@ async fn test_unauthorized_transfer_system_api(
         )
         .await;
 
-    assert_matches!(
-        result,
-        Err(ExecutionError::SystemError(
-            SystemExecutionError::UnauthenticatedTransferOwner
-        ))
-    );
+    assert_matches!(result, Err(ExecutionError::UnauthenticatedTransferOwner));
 
     Ok(())
 }
@@ -455,12 +450,7 @@ async fn test_unauthorized_claims(
         )
         .await;
 
-    assert_matches!(
-        result,
-        Err(ExecutionError::SystemError(
-            SystemExecutionError::UnauthenticatedClaimOwner
-        ))
-    );
+    assert_matches!(result, Err(ExecutionError::UnauthenticatedClaimOwner));
 
     Ok(())
 }
