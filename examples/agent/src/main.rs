@@ -244,7 +244,7 @@ pub async fn chat(chatbot: impl Chat) {
     let mut stdout = io::stdout();
     let mut chat_log = vec![];
 
-    println!("I'm the Linera agent. How can I help! (Type 'exit' to quit.)");
+    println!("I'm the Linera agent. How can I help? (Type 'exit' to quit.)");
     loop {
         print!("> ");
         // Flush stdout to ensure the prompt appears before input
