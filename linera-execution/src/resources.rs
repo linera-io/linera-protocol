@@ -53,6 +53,8 @@ pub struct ResourceTracker {
     pub messages: u32,
     /// The total size of the arguments of outgoing user messages.
     pub message_bytes: u64,
+    /// The number of HTTP requests performed.
+    pub http_requests: u32,
     /// The time spent executing services as oracles.
     pub service_oracle_execution: Duration,
     /// The amount allocated to message grants.
@@ -182,6 +184,17 @@ where
                 Ok(())
             }
         }
+    }
+
+    /// Tracks the execution of an HTTP request.
+    pub fn track_http_request(&mut self) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().http_requests = self
+            .tracker
+            .as_ref()
+            .http_requests
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.http_request)
     }
 
     /// Tracks a number of fuel units used.

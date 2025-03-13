@@ -976,6 +976,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             ExecutionError::UnauthorizedApplication(app_id)
         );
 
+        self.resource_controller.track_http_request()?;
+
         let response =
             if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
