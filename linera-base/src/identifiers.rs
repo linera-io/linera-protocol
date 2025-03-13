@@ -35,9 +35,9 @@ pub struct Owner(pub CryptoHash);
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// An account owned by a user.
-    User(Owner),
+    User(CryptoHash),
     /// An account for an application.
-    Application(ApplicationId),
+    Application(CryptoHash),
     /// Chain account.
     Chain,
 }
@@ -982,8 +982,8 @@ impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "AccountOwner")]
 enum SerializableAccountOwner {
-    User(Owner),
-    Application(ApplicationId),
+    User(CryptoHash),
+    Application(CryptoHash),
     Chain,
 }
 
@@ -1039,26 +1039,17 @@ impl FromStr for AccountOwner {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(owner) = s.strip_prefix("User:") {
             Ok(AccountOwner::User(
-                Owner::from_str(owner).context("Getting Owner should not fail")?,
+                CryptoHash::from_str(owner).context("Getting Owner should not fail")?,
             ))
         } else if let Some(app_id) = s.strip_prefix("Application:") {
             Ok(AccountOwner::Application(
-                ApplicationId::from_str(app_id).context("Getting ApplicationId should not fail")?,
+                CryptoHash::from_str(app_id).context("Getting ApplicationId should not fail")?,
             ))
         } else if s.strip_prefix("Chain").is_some() {
             Ok(AccountOwner::Chain)
         } else {
             Err(anyhow!("Invalid enum! Enum: {}", s))
         }
-    }
-}
-
-impl<T> From<T> for AccountOwner
-where
-    T: Into<Owner>,
-{
-    fn from(owner: T) -> Self {
-        AccountOwner::User(owner.into())
     }
 }
 

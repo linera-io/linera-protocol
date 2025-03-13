@@ -13,11 +13,11 @@ AccountOwner:
     0:
       User:
         NEWTYPE:
-          TYPENAME: Owner
+          TYPENAME: CryptoHash
     1:
       Application:
         NEWTYPE:
-          TYPENAME: ApplicationId
+          TYPENAME: CryptoHash
     2:
       Chain: UNIT
 AccountPublicKey:

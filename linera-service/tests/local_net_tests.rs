@@ -177,9 +177,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = AccountOwner::User(Owner::from(
-        AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public(),
-    ));
+    let recipient = AccountOwner::User(
+        Owner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public()).0,
+    );
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),

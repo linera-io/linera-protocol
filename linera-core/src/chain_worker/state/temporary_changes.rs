@@ -138,7 +138,7 @@ where
                 .execution_state
                 .system
                 .balances
-                .get(&AccountOwner::User(signer))
+                .get(&AccountOwner::User(signer.0))
                 .await?;
         }
 
