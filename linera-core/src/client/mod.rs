@@ -2260,7 +2260,7 @@ where
     #[instrument(level = "trace", skip(application_id, query))]
     pub async fn query_user_application<A: Abi>(
         &self,
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<QueryOutcome<A::QueryResponse>, ChainClientError> {
         let query = Query::user(application_id, query)?;
@@ -2937,7 +2937,7 @@ where
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<ClientOutcome<(UserApplicationId<A>, ConfirmedBlockCertificate)>, ChainClientError>
+    ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, ChainClientError>
     {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
