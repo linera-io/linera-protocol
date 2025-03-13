@@ -4929,7 +4929,6 @@ dependencies = [
  "bcs",
  "cargo_toml",
  "cfg_aliases",
- "clap",
  "dashmap 5.5.3",
  "futures",
  "linera-base",
@@ -4941,14 +4940,12 @@ dependencies = [
  "linera-sdk-derive",
  "linera-storage",
  "linera-views",
- "linera-witty",
  "log",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
  "tokio-test",
- "wasmtime",
  "wit-bindgen 0.24.0",
 ]
 

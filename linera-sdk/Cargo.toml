@@ -33,13 +33,11 @@ wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
     "linera-storage/wasmer",
-    "linera-witty/wasmer",
 ]
 wasmtime = [
     "linera-core/wasmtime",
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",
-    "linera-witty/wasmtime",
 ]
 test = [
     "linera-base/test",
@@ -68,20 +66,15 @@ thiserror.workspace = true
 wit-bindgen.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-graphql.workspace = true
 anyhow.workspace = true
 cargo_toml.workspace = true
-clap.workspace = true
 dashmap.workspace = true
 linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["metrics", "wasmer"] }
 linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
 linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
-linera-witty.workspace = true
-serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-wasmtime.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { path = ".", default-features = false, features = ["test"] }
@@ -89,7 +82,3 @@ tokio-test.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
-
-[[bin]]
-name = "wit-generator"
-path = "src/bin/wit_generator.rs"

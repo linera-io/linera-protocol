@@ -116,3 +116,8 @@ cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]
+
+[[bin]]
+name = "wit-generator"
+path = "src/bin/wit_generator.rs"
+required-features = ["wasmer"]
