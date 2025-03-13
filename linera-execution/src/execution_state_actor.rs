@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use custom_debug_derive::Debug;
-use futures::channel::mpsc;
+use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
@@ -406,7 +406,12 @@ where
 
                 let response = request.send().await?;
 
-                callback.respond(http::Response::from_reqwest(response).await?);
+                let response_size_limit = committee.policy().maximum_http_response_bytes;
+
+                callback.respond(
+                    self.receive_http_response(response, response_size_limit)
+                        .await?,
+                );
             }
 
             ReadBlobContent { blob_id, callback } => {
@@ -427,6 +432,71 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<C> ExecutionStateView<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    /// Receives an HTTP response, returning the prepared [`http::Response`] instance.
+    ///
+    /// Ensures that the response does not exceed the provided `size_limit`.
+    async fn receive_http_response(
+        &mut self,
+        response: reqwest::Response,
+        size_limit: u64,
+    ) -> Result<http::Response, ExecutionError> {
+        let status = response.status().as_u16();
+        let maybe_content_length = response.content_length();
+
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(name, value)| http::Header::new(name.to_string(), value.as_bytes()))
+            .collect::<Vec<_>>();
+
+        let total_header_size = headers
+            .iter()
+            .map(|header| (header.name.as_bytes().len() + header.value.len()) as u64)
+            .sum();
+
+        let mut remaining_bytes = size_limit.checked_sub(total_header_size).ok_or(
+            ExecutionError::HttpResponseSizeLimitExceeded {
+                limit: size_limit,
+                size: total_header_size,
+            },
+        )?;
+
+        if let Some(content_length) = maybe_content_length {
+            if content_length > remaining_bytes {
+                return Err(ExecutionError::HttpResponseSizeLimitExceeded {
+                    limit: size_limit,
+                    size: content_length + total_header_size,
+                });
+            }
+        }
+
+        let mut body = Vec::with_capacity(maybe_content_length.unwrap_or(0) as usize);
+        let mut body_stream = response.bytes_stream();
+
+        while let Some(bytes) = body_stream.next().await.transpose()? {
+            remaining_bytes = remaining_bytes.checked_sub(bytes.len() as u64).ok_or(
+                ExecutionError::HttpResponseSizeLimitExceeded {
+                    limit: size_limit,
+                    size: bytes.len() as u64 + (size_limit - remaining_bytes),
+                },
+            )?;
+
+            body.extend(&bytes);
+        }
+
+        Ok(http::Response {
+            status,
+            headers,
+            body,
+        })
     }
 }
 

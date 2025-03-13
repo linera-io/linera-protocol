@@ -63,6 +63,8 @@ pub struct ResourceControlPolicy {
     pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
     pub maximum_bytes_written_per_block: u64,
+    /// The maximum size in bytes of a received HTTP response.
+    pub maximum_http_response_bytes: u64,
     /// The maximum amount of time allowed to wait for an HTTP response.
     pub http_request_timeout_ms: u64,
     /// The list of hosts that contracts and services can send HTTP requests to.
@@ -92,6 +94,7 @@ impl fmt::Display for ResourceControlPolicy {
             maximum_block_proposal_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
+            maximum_http_response_bytes,
             http_request_allow_list,
             http_request_timeout_ms,
         } = self;
@@ -119,6 +122,7 @@ impl fmt::Display for ResourceControlPolicy {
             {maximum_block_proposal_size} maximum size of a block proposal\n\
             {maximum_bytes_read_per_block} maximum number bytes read per block\n\
             {maximum_bytes_written_per_block} maximum number bytes written per block\n\
+            {maximum_http_response_bytes} maximum number of bytes of an HTTP response\n\
             {http_request_timeout_ms} ms timeout for HTTP requests\n\
             HTTP hosts allowed for contracts and services: {http_request_allow_list:#?}\n",
         )?;
@@ -158,6 +162,7 @@ impl ResourceControlPolicy {
             maximum_block_proposal_size: u64::MAX,
             maximum_bytes_read_per_block: u64::MAX,
             maximum_bytes_written_per_block: u64::MAX,
+            maximum_http_response_bytes: u64::MAX,
             http_request_timeout_ms: u64::MAX,
             http_request_allow_list: BTreeSet::new(),
         }
@@ -225,6 +230,7 @@ impl ResourceControlPolicy {
             maximum_block_proposal_size: 13_000_000,
             maximum_bytes_read_per_block: 100_000_000,
             maximum_bytes_written_per_block: 10_000_000,
+            maximum_http_response_bytes: 10_000,
             http_request_timeout_ms: 20_000,
             http_request_allow_list: BTreeSet::new(),
         }

@@ -154,7 +154,8 @@ async fn test_fee_consumption(
         maximum_block_proposal_size: 59,
         maximum_bytes_read_per_block: 61,
         maximum_bytes_written_per_block: 67,
-        http_request_timeout_ms: 71,
+        maximum_http_response_bytes: 71,
+        http_request_timeout_ms: 73,
         http_request_allow_list: BTreeSet::new(),
     };
 
