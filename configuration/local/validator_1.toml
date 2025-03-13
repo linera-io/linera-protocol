@@ -1,7 +1,6 @@
 server_config_path = "server_1.json"
 host = "127.0.0.1"
 port = 19100
-metrics_host = "127.0.0.1"
 metrics_port = 21100
 internal_host = "127.0.0.1"
 internal_port = 20100
@@ -13,23 +12,19 @@ Grpc = "ClearText"
 [[shards]]
 host = "127.0.0.1"
 port = 19101
-metrics_host = "127.0.0.1"
 metrics_port = 21101
 
 [[shards]]
 host = "127.0.0.1"
 port = 19102
-metrics_host = "127.0.0.1"
 metrics_port = 21102
 
 [[shards]]
 host = "127.0.0.1"
 port = 19103
-metrics_host = "127.0.0.1"
 metrics_port = 21103
 
 [[shards]]
 host = "127.0.0.1"
 port = 19104
-metrics_host = "127.0.0.1"
 metrics_port = 21104

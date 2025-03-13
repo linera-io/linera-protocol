@@ -263,9 +263,6 @@ struct ValidatorOptions {
     /// The port of the validator
     port: u16,
 
-    /// The host for the metrics endpoint
-    metrics_host: String,
-
     /// The port for the metrics endpoint
     metrics_port: u16,
 
@@ -304,7 +301,6 @@ fn make_server_config<R: CryptoRng>(
         shards: options.shards,
         host: options.internal_host,
         port: options.internal_port,
-        metrics_host: options.metrics_host,
         metrics_port: options.metrics_port,
     };
     let validator = ValidatorConfig {
@@ -441,11 +437,6 @@ enum ServerCommand {
         /// number.
         #[arg(long)]
         port: String,
-
-        /// The host for the metrics endpoint, possibly containing `%` for digits of the
-        /// shard number.
-        #[arg(long)]
-        metrics_host: String,
 
         /// The port for the metrics endpoint, possibly containing `%` for digits of the
         /// shard number.
@@ -627,13 +618,12 @@ async fn run(options: ServerOptions) {
             num_shards,
             host,
             port,
-            metrics_host,
             metrics_port,
         } => {
             let mut server_config =
                 persistent::File::<ValidatorServerConfig>::read(&server_config_path)
                     .expect("Failed to read server config");
-            let shards = generate_shard_configs(num_shards, host, port, metrics_host, metrics_port)
+            let shards = generate_shard_configs(num_shards, host, port, metrics_port)
                 .expect("Failed to generate shard configs");
             server_config.internal_network.shards = shards;
             Persist::persist(&mut server_config)
@@ -647,7 +637,6 @@ fn generate_shard_configs(
     num_shards: String,
     host: String,
     port: String,
-    metrics_host: String,
     metrics_port: Option<String>,
 ) -> anyhow::Result<Vec<ShardConfig>> {
     let mut shards = Vec::new();
@@ -664,7 +653,6 @@ fn generate_shard_configs(
             .replacen(&pattern, &index, 1)
             .parse()
             .context("Failed to decode port into an integers")?;
-        let metrics_host = metrics_host.replacen(&pattern, &index, 1);
         let metrics_port = metrics_port
             .as_ref()
             .map(|port| {
@@ -676,7 +664,6 @@ fn generate_shard_configs(
         let shard = ShardConfig {
             host,
             port,
-            metrics_host,
             metrics_port,
         };
         shards.push(shard);
@@ -698,7 +685,6 @@ mod test {
             port = 9000
             internal_host = "internal_host"
             internal_port = 10000
-            metrics_host = "metrics_host"
             metrics_port = 5000
             external_protocol = { Simple = "Tcp" }
             internal_protocol = { Simple = "Udp" }
@@ -706,13 +692,11 @@ mod test {
             [[shards]]
             host = "host1"
             port = 9001
-            metrics_host = "metrics_host1"
             metrics_port = 5001
 
             [[shards]]
             host = "host2"
             port = 9002
-            metrics_host = "metrics_host2"
             metrics_port = 5002
         "#;
         let options: ValidatorOptions = toml::from_str(toml_str).unwrap();
@@ -726,19 +710,16 @@ mod test {
                 port: 9000,
                 internal_host: "internal_host".into(),
                 internal_port: 10000,
-                metrics_host: "metrics_host".into(),
                 metrics_port: 5000,
                 shards: vec![
                     ShardConfig {
                         host: "host1".into(),
                         port: 9001,
-                        metrics_host: "metrics_host1".into(),
                         metrics_port: Some(5001),
                     },
                     ShardConfig {
                         host: "host2".into(),
                         port: 9002,
-                        metrics_host: "metrics_host2".into(),
                         metrics_port: Some(5002),
                     },
                 ],
@@ -753,7 +734,6 @@ mod test {
                 "02".into(),
                 "host%%".into(),
                 "10%%".into(),
-                "metrics_host%%".into(),
                 Some("11%%".into())
             )
             .unwrap(),
@@ -761,13 +741,11 @@ mod test {
                 ShardConfig {
                     host: "host01".into(),
                     port: 1001,
-                    metrics_host: "metrics_host01".into(),
                     metrics_port: Some(1101),
                 },
                 ShardConfig {
                     host: "host02".into(),
                     port: 1002,
-                    metrics_host: "metrics_host02".into(),
                     metrics_port: Some(1102),
                 },
             ],
@@ -777,7 +755,6 @@ mod test {
             "2".into(),
             "host%%".into(),
             "10%%".into(),
-            "metrics_host%%".into(),
             Some("11%%".into())
         )
         .is_err());

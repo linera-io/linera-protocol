@@ -50,8 +50,6 @@ pub struct ShardConfig {
     pub host: String,
     /// The port.
     pub port: u16,
-    /// The host on which metrics are served.
-    pub metrics_host: String,
     /// The port on which metrics are served.
     pub metrics_port: Option<u16>,
 }
@@ -113,8 +111,6 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     pub host: String,
     /// The port the proxy listens on the internal network.
     pub port: u16,
-    /// The host name of the proxy's metrics endpoint.
-    pub metrics_host: String,
     /// The port of the proxy's metrics endpoint.
     pub metrics_port: u16,
 }
@@ -127,7 +123,6 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
             shards: self.shards.clone(),
             host: self.host.clone(),
             port: self.port,
-            metrics_host: self.metrics_host.clone(),
             metrics_port: self.metrics_port,
         }
     }

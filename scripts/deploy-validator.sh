@@ -67,7 +67,6 @@ cat > $VALIDATOR_CONFIG <<EOL
 server_config_path = "server.json"
 host = "$HOST"
 port = $PORT
-metrics_host = "proxy"
 metrics_port = $METRICS_PORT
 internal_host = "proxy"
 internal_port = 20100
@@ -79,25 +78,21 @@ Grpc = "ClearText"
 [[shards]]
 host = "docker-shard-1"
 port = $PORT
-metrics_host = "docker-shard-1"
 metrics_port = $METRICS_PORT
 
 [[shards]]
 host = "docker-shard-2"
 port = $PORT
-metrics_host = "docker-shard-2"
 metrics_port = $METRICS_PORT
 
 [[shards]]
 host = "docker-shard-3"
 port = $PORT
-metrics_host = "docker-shard-3"
 metrics_port = $METRICS_PORT
 
 [[shards]]
 host = "docker-shard-4"
 port = $PORT
-metrics_host = "docker-shard-4"
 metrics_port = $METRICS_PORT
 EOL
 
