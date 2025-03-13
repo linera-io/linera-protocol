@@ -112,6 +112,13 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000));
     "with execution and an empty read and with owner account and grant"
 )]
+#[cfg_attr(feature = "unstable-oracles", test_case(
+    vec![FeeSpend::HttpRequest],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1)),
+    Some(Amount::from_tokens(1_000));
+    "with one HTTP request"
+))]
 // TODO(#1601): Add more test cases
 #[tokio::test]
 async fn test_fee_consumption(
