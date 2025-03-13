@@ -5,7 +5,7 @@ interface service-runtime-api {
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
 
     record application-id {
-        application-description-hash: crypto-hash,
+        inner0: crypto-hash,
     }
 
     record crypto-hash {

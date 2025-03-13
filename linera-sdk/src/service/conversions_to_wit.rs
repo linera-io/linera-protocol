@@ -23,7 +23,7 @@ impl From<CryptoHash> for wit_service_api::CryptoHash {
 impl From<ApplicationId> for wit_service_api::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit_service_api::ApplicationId {
-            application_description_hash: application_id.application_description_hash.into(),
+            inner0: application_id.0.into(),
         }
     }
 }
