@@ -216,6 +216,7 @@ impl From<ApplicationPermissions> for wit_contract_api::ApplicationPermissions {
             close_chain,
             change_application_permissions,
             call_service_as_oracle,
+            make_http_requests,
         } = permissions;
         Self {
             execute_operations: execute_operations
@@ -228,6 +229,7 @@ impl From<ApplicationPermissions> for wit_contract_api::ApplicationPermissions {
                 .collect(),
             call_service_as_oracle: call_service_as_oracle
                 .map(|app_ids| app_ids.into_iter().map(Into::into).collect()),
+            make_http_requests: make_http_requests.into_iter().map(Into::into).collect(),
         }
     }
 }

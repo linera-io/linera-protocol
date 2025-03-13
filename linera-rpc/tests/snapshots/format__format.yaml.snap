@@ -78,6 +78,9 @@ ApplicationPermissions:
         OPTION:
           SEQ:
             TYPENAME: ApplicationId
+    - make_http_requests:
+        SEQ:
+          TYPENAME: ApplicationId
 BlobContent:
   STRUCT:
     - blob_type:

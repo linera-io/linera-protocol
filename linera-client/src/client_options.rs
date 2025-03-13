@@ -1454,6 +1454,10 @@ pub struct ApplicationPermissionsConfig {
     /// system API.
     #[arg(long)]
     pub call_service_as_oracle: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to make HTTP requests on the current chain using the system
+    /// API.
+    #[arg(long)]
+    pub make_http_requests: Option<Vec<ApplicationId>>,
 }
 
 impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
@@ -1466,6 +1470,7 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
                 .change_application_permissions
                 .unwrap_or_default(),
             call_service_as_oracle: config.call_service_as_oracle,
+            make_http_requests: config.make_http_requests.unwrap_or_default(),
         }
     }
 }
