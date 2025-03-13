@@ -907,7 +907,7 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
         .expect("should register mock application");
 
     let call_service_as_oracle =
-        authorized_apps.map(|apps| apps.into_iter().map(|_| application_id).collect());
+        authorized_apps.map(|apps| apps.into_iter().map(|()| application_id).collect());
 
     view.system
         .application_permissions
@@ -987,7 +987,7 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
         .expect("should register mock application");
 
     let make_http_requests =
-        authorized_apps.map(|apps| apps.into_iter().map(|_| application_id).collect());
+        authorized_apps.map(|apps| apps.into_iter().map(|()| application_id).collect());
 
     view.system
         .application_permissions
