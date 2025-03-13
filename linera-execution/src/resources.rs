@@ -14,10 +14,7 @@ use linera_base::{
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
 
-use crate::{
-    system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,
-    ResourceControlPolicy,
-};
+use crate::{ExecutionError, ExecutionStateView, Message, Operation, ResourceControlPolicy};
 
 #[derive(Clone, Debug, Default)]
 pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
@@ -89,7 +86,7 @@ where
         if other <= initial {
             self.account
                 .try_sub_assign(initial.try_sub(other).expect("other <= initial"))
-                .map_err(|_| SystemExecutionError::InsufficientFundingForFees {
+                .map_err(|_| ExecutionError::InsufficientFundingForFees {
                     balance: self.balance().unwrap_or(Amount::MAX),
                 })?;
         } else {
@@ -102,7 +99,7 @@ where
     /// Subtracts an amount from a balance and reports an error if that is impossible.
     fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
         self.account.try_sub_assign(fees).map_err(|_| {
-            SystemExecutionError::InsufficientFundingForFees {
+            ExecutionError::InsufficientFundingForFees {
                 balance: self.balance().unwrap_or(Amount::MAX),
             }
         })?;

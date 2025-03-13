@@ -19,8 +19,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        OracleResponse, Timestamp,
+        Amount, ApplicationPermissions, Blob, BlobContent, BlockHeight, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -37,7 +36,6 @@ use linera_views::{
     views::{ClonableView, HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 #[cfg(with_metrics)]
 use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
@@ -45,8 +43,8 @@ use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCoun
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ChannelName, ChannelSubscription, Destination, ExecutionRuntimeContext, MessageContext,
-    MessageKind, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome,
+    ChannelName, ChannelSubscription, Destination, ExecutionError, ExecutionRuntimeContext,
+    MessageContext, MessageKind, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome,
     RawOutgoingMessage, TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
@@ -346,79 +344,6 @@ pub struct CreateApplicationResult {
     pub txn_tracker: TransactionTracker,
 }
 
-#[derive(Error, Debug)]
-pub enum SystemExecutionError {
-    #[error(transparent)]
-    ArithmeticError(#[from] ArithmeticError),
-    #[error(transparent)]
-    ViewError(ViewError),
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
-
-    #[error("Invalid admin ID in new chain: {0}")]
-    InvalidNewChainAdminId(ChainId),
-    #[error("Invalid committees")]
-    InvalidCommittees,
-    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
-    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
-    #[error("Transfer must have positive amount")]
-    IncorrectTransferAmount,
-    #[error("Transfer from owned account must be authenticated by the right signer")]
-    UnauthenticatedTransferOwner,
-    #[error("The transferred amount must not exceed the current chain balance: {balance}")]
-    InsufficientFunding { balance: Amount },
-    #[error("Required execution fees exceeded the total funding available: {balance}")]
-    InsufficientFundingForFees { balance: Amount },
-    #[error("Claim must have positive amount")]
-    IncorrectClaimAmount,
-    #[error("Claim must be authenticated by the right signer")]
-    UnauthenticatedClaimOwner,
-    #[error("Admin operations are only allowed on the admin chain.")]
-    AdminOperationOnNonAdminChain,
-    #[error("Failed to create new committee: expected {expected}, but got {provided}")]
-    InvalidCommitteeEpoch { expected: Epoch, provided: Epoch },
-    #[error("Failed to remove committee")]
-    InvalidCommitteeRemoval,
-    #[error("Cannot subscribe to a channel ({1}) on the same chain ({0})")]
-    SelfSubscription(ChainId, SystemChannel),
-    #[error("Chain {0} tried to subscribe to channel {1} but it is already subscribed")]
-    AlreadySubscribedToChannel(ChainId, SystemChannel),
-    #[error("Invalid unsubscription request to channel {1} on chain {0}")]
-    InvalidUnsubscription(ChainId, SystemChannel),
-    #[error("Amount overflow")]
-    AmountOverflow,
-    #[error("Amount underflow")]
-    AmountUnderflow,
-    #[error("Chain balance overflow")]
-    BalanceOverflow,
-    #[error("Chain balance underflow")]
-    BalanceUnderflow,
-    #[error("Cannot set epoch to a lower value")]
-    CannotRewindEpoch,
-    #[error("Cannot decrease the chain's timestamp")]
-    TicksOutOfOrder,
-    #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<UserApplicationId>),
-    #[error("Chain is not active yet.")]
-    InactiveChain,
-
-    #[error("Blobs not found: {0:?}")]
-    BlobsNotFound(Vec<BlobId>),
-    #[error("Oracle response mismatch")]
-    OracleResponseMismatch,
-    #[error("No recorded response for oracle query")]
-    MissingOracleResponse,
-}
-
-impl From<ViewError> for SystemExecutionError {
-    fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => SystemExecutionError::BlobsNotFound(blob_ids),
-            error => SystemExecutionError::ViewError(error),
-        }
-    }
-}
-
 impl<C> SystemExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
@@ -446,7 +371,7 @@ where
         context: OperationContext,
         operation: SystemOperation,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<Option<(UserApplicationId, Vec<u8>)>, SystemExecutionError> {
+    ) -> Result<Option<(UserApplicationId, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut outcome = RawExecutionOutcome {
             authenticated_signer: context.authenticated_signer,
@@ -526,7 +451,7 @@ where
             Admin(admin_operation) => {
                 ensure!(
                     *self.admin_id.get() == Some(context.chain_id),
-                    SystemExecutionError::AdminOperationOnNonAdminChain
+                    ExecutionError::AdminOperationOnNonAdminChain
                 );
                 match admin_operation {
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
@@ -546,7 +471,7 @@ where
                     AdminOperation::RemoveCommittee { epoch } => {
                         ensure!(
                             self.committees.get_mut().remove(&epoch).is_some(),
-                            SystemExecutionError::InvalidCommitteeRemoval
+                            ExecutionError::InvalidCommitteeRemoval
                         );
                         txn_tracker.add_event(
                             StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -559,7 +484,7 @@ where
             Subscribe { chain_id, channel } => {
                 ensure!(
                     context.chain_id != chain_id,
-                    SystemExecutionError::SelfSubscription(context.chain_id, channel)
+                    ExecutionError::SelfSubscription(context.chain_id, channel)
                 );
                 let subscription = ChannelSubscription {
                     chain_id,
@@ -567,7 +492,7 @@ where
                 };
                 ensure!(
                     !self.subscriptions.contains(&subscription).await?,
-                    SystemExecutionError::AlreadySubscribedToChannel(context.chain_id, channel)
+                    ExecutionError::AlreadySubscribedToChannel(context.chain_id, channel)
                 );
                 self.subscriptions.insert(&subscription)?;
                 let message = RawOutgoingMessage {
@@ -589,7 +514,7 @@ where
                 };
                 ensure!(
                     self.subscriptions.contains(&subscription).await?,
-                    SystemExecutionError::InvalidUnsubscription(context.chain_id, channel)
+                    ExecutionError::InvalidUnsubscription(context.chain_id, channel)
                 );
                 self.subscriptions.remove(&subscription)?;
                 let message = RawOutgoingMessage {
@@ -652,7 +577,7 @@ where
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| SystemExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain)?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
@@ -665,7 +590,7 @@ where
                     {
                         bytes
                     }
-                    Some(_) => return Err(SystemExecutionError::OracleResponseMismatch),
+                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 };
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
@@ -677,12 +602,12 @@ where
             ProcessRemovedEpoch(epoch) => {
                 ensure!(
                     self.committees.get_mut().remove(&epoch).is_some(),
-                    SystemExecutionError::InvalidCommitteeRemoval
+                    ExecutionError::InvalidCommitteeRemoval
                 );
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| SystemExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain)?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -695,7 +620,7 @@ where
                     {
                         bytes
                     }
-                    Some(_) => return Err(SystemExecutionError::OracleResponseMismatch),
+                    Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 };
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
             }
@@ -707,11 +632,11 @@ where
 
     /// Returns an error if the `provided` epoch is not exactly one higher than the chain's current
     /// epoch.
-    fn check_next_epoch(&self, provided: Epoch) -> Result<(), SystemExecutionError> {
+    fn check_next_epoch(&self, provided: Epoch) -> Result<(), ExecutionError> {
         let expected = self.epoch.get().expect("chain is active").try_add_one()?;
         ensure!(
             provided == expected,
-            SystemExecutionError::InvalidCommitteeEpoch { provided, expected }
+            ExecutionError::InvalidCommitteeEpoch { provided, expected }
         );
         Ok(())
     }
@@ -723,11 +648,11 @@ where
         source: Option<AccountOwner>,
         recipient: Recipient,
         amount: Amount,
-    ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
+    ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
         match (source, authenticated_signer, authenticated_application_id) {
             (Some(AccountOwner::User(owner)), Some(signer), _) => ensure!(
                 signer == owner,
-                SystemExecutionError::UnauthenticatedTransferOwner
+                ExecutionError::UnauthenticatedTransferOwner
             ),
             (
                 Some(AccountOwner::Application(account_application)),
@@ -735,17 +660,17 @@ where
                 Some(authorized_application),
             ) => ensure!(
                 account_application == authorized_application,
-                SystemExecutionError::UnauthenticatedTransferOwner
+                ExecutionError::UnauthenticatedTransferOwner
             ),
             (None, Some(signer), _) => ensure!(
                 self.ownership.get().verify_owner(&signer),
-                SystemExecutionError::UnauthenticatedTransferOwner
+                ExecutionError::UnauthenticatedTransferOwner
             ),
-            (_, _, _) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
+            (_, _, _) => return Err(ExecutionError::UnauthenticatedTransferOwner),
         }
         ensure!(
             amount > Amount::ZERO,
-            SystemExecutionError::IncorrectTransferAmount
+            ExecutionError::IncorrectTransferAmount
         );
         self.debit(source.as_ref(), amount).await?;
         match recipient {
@@ -776,21 +701,18 @@ where
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-    ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
+    ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, ExecutionError> {
         match source {
             AccountOwner::User(owner) => ensure!(
                 authenticated_signer == Some(owner),
-                SystemExecutionError::UnauthenticatedClaimOwner
+                ExecutionError::UnauthenticatedClaimOwner
             ),
             AccountOwner::Application(owner) => ensure!(
                 authenticated_application_id == Some(owner),
-                SystemExecutionError::UnauthenticatedClaimOwner
+                ExecutionError::UnauthenticatedClaimOwner
             ),
         }
-        ensure!(
-            amount > Amount::ZERO,
-            SystemExecutionError::IncorrectClaimAmount
-        );
+        ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
         Ok(RawOutgoingMessage {
             destination: Destination::Recipient(target_id),
@@ -810,10 +732,10 @@ where
         &mut self,
         account: Option<&AccountOwner>,
         amount: Amount,
-    ) -> Result<(), SystemExecutionError> {
+    ) -> Result<(), ExecutionError> {
         let balance = if let Some(owner) = account {
             self.balances.get_mut(owner).await?.ok_or_else(|| {
-                SystemExecutionError::InsufficientFunding {
+                ExecutionError::InsufficientFunding {
                     balance: Amount::ZERO,
                 }
             })?
@@ -823,7 +745,7 @@ where
 
         balance
             .try_sub_assign(amount)
-            .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
+            .map_err(|_| ExecutionError::InsufficientFunding { balance: *balance })?;
 
         if let Some(owner) = account {
             if balance.is_zero() {
@@ -839,7 +761,7 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-    ) -> Result<RawExecutionOutcome<SystemMessage>, SystemExecutionError> {
+    ) -> Result<RawExecutionOutcome<SystemMessage>, ExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
         match message {
@@ -926,7 +848,7 @@ where
         &mut self,
         context: QueryContext,
         _query: SystemQuery,
-    ) -> Result<QueryOutcome<SystemResponse>, SystemExecutionError> {
+    ) -> Result<QueryOutcome<SystemResponse>, ExecutionError> {
         let response = SystemResponse {
             chain_id: context.chain_id,
             balance: *self.balance.get(),
@@ -943,19 +865,19 @@ where
         &mut self,
         config: OpenChainConfig,
         next_message_id: MessageId,
-    ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
+    ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, ExecutionError> {
         let child_id = ChainId::child(next_message_id);
         ensure!(
             self.admin_id.get().as_ref() == Some(&config.admin_id),
-            SystemExecutionError::InvalidNewChainAdminId(child_id)
+            ExecutionError::InvalidNewChainAdminId(child_id)
         );
         ensure!(
             self.committees.get() == &config.committees,
-            SystemExecutionError::InvalidCommittees
+            ExecutionError::InvalidCommittees
         );
         ensure!(
             self.epoch.get().as_ref() == Some(&config.epoch),
-            SystemExecutionError::InvalidEpoch {
+            ExecutionError::InvalidEpoch {
                 chain_id: child_id,
                 epoch: config.epoch,
             }
@@ -974,7 +896,7 @@ where
     pub async fn close_chain(
         &mut self,
         id: ChainId,
-    ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
+    ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
         let mut messages = Vec::new();
         // Unsubscribe from all channels.
         self.subscriptions
@@ -1003,7 +925,7 @@ where
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
         mut txn_tracker: TransactionTracker,
-    ) -> Result<CreateApplicationResult, SystemExecutionError> {
+    ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
 
         let (contract_bytecode_blob_id, service_bytecode_blob_id) =
@@ -1038,7 +960,7 @@ where
         &mut self,
         application_description: &UserApplicationDescription,
         mut txn_tracker: Option<&mut TransactionTracker>,
-    ) -> Result<(), SystemExecutionError> {
+    ) -> Result<(), ExecutionError> {
         // Make sure that referenced applications IDs have been registered.
         for required_id in &application_description.required_application_ids {
             Box::pin(self.describe_application(*required_id, txn_tracker.as_deref_mut())).await?;
@@ -1051,7 +973,7 @@ where
         &mut self,
         id: UserApplicationId,
         mut txn_tracker: Option<&mut TransactionTracker>,
-    ) -> Result<UserApplicationDescription, SystemExecutionError> {
+    ) -> Result<UserApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
         let blob_content = match txn_tracker
             .as_ref()
@@ -1083,7 +1005,7 @@ where
         &mut self,
         mut stack: Vec<UserApplicationId>,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<UserApplicationId>, SystemExecutionError> {
+    ) -> Result<Vec<UserApplicationId>, ExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
         // The entries already inserted in `result`.
@@ -1123,7 +1045,7 @@ where
         &mut self,
         maybe_txn_tracker: Option<&mut TransactionTracker>,
         blob_id: BlobId,
-    ) -> Result<bool, SystemExecutionError> {
+    ) -> Result<bool, ExecutionError> {
         if self.used_blobs.contains(&blob_id).await? {
             return Ok(false); // Nothing to do.
         }
@@ -1136,39 +1058,31 @@ where
 
     /// Records a blob that is published in this block. This does not create an oracle entry, and
     /// the blob can be used without using an oracle in the future on this chain.
-    fn blob_published(&mut self, blob_id: &BlobId) -> Result<(), SystemExecutionError> {
+    fn blob_published(&mut self, blob_id: &BlobId) -> Result<(), ExecutionError> {
         self.used_blobs.insert(blob_id)?;
         Ok(())
     }
 
-    pub async fn read_blob_content(
-        &self,
-        blob_id: BlobId,
-    ) -> Result<BlobContent, SystemExecutionError> {
+    pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
             Ok(blob) => Ok(blob.into()),
-            Err(ViewError::BlobsNotFound(_)) => {
-                Err(SystemExecutionError::BlobsNotFound(vec![blob_id]))
-            }
+            Err(ViewError::BlobsNotFound(_)) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error.into()),
         }
     }
 
-    pub async fn assert_blob_exists(
-        &mut self,
-        blob_id: BlobId,
-    ) -> Result<(), SystemExecutionError> {
+    pub async fn assert_blob_exists(&mut self, blob_id: BlobId) -> Result<(), ExecutionError> {
         if self.context().extra().contains_blob(blob_id).await? {
             Ok(())
         } else {
-            Err(SystemExecutionError::BlobsNotFound(vec![blob_id]))
+            Err(ExecutionError::BlobsNotFound(vec![blob_id]))
         }
     }
 
     async fn check_bytecode_blobs(
         &mut self,
         module_id: &ModuleId,
-    ) -> Result<(BlobId, BlobId), SystemExecutionError> {
+    ) -> Result<(BlobId, BlobId), ExecutionError> {
         let contract_bytecode_blob_id =
             BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode);
 
@@ -1195,7 +1109,7 @@ where
 
         ensure!(
             missing_blobs.is_empty(),
-            SystemExecutionError::BlobsNotFound(missing_blobs)
+            ExecutionError::BlobsNotFound(missing_blobs)
         );
 
         Ok((contract_bytecode_blob_id, service_bytecode_blob_id))

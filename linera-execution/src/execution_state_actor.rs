@@ -30,8 +30,8 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, RawExecutionOutcome,
-    RawOutgoingMessage, SystemExecutionError, SystemMessage, TransactionTracker,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    RawOutgoingMessage, SystemMessage, TransactionTracker, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -303,7 +303,7 @@ where
                 application_permissions,
                 callback,
             } => {
-                let inactive_err = || SystemExecutionError::InactiveChain;
+                let inactive_err = || ExecutionError::InactiveChain;
                 let config = OpenChainConfig {
                     ownership,
                     admin_id: self.system.admin_id.get().ok_or_else(inactive_err)?,

@@ -50,7 +50,7 @@ use linera_execution::{
     },
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
     ExecutionError, Message, MessageKind, OutgoingMessage, Query, QueryContext, QueryOutcome,
-    QueryResponse, SystemExecutionError, SystemQuery, SystemResponse,
+    QueryResponse, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
@@ -494,9 +494,7 @@ where
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
             execution_error, ChainExecutionContext::Operation(_)
-        ) if matches!(**execution_error, ExecutionError::SystemError(
-            SystemExecutionError::IncorrectTransferAmount
-        )))
+        ) if matches!(**execution_error, ExecutionError::IncorrectTransferAmount))
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -905,9 +903,7 @@ where
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
                     execution_error, ChainExecutionContext::Operation(_)
-                ) if matches!(**execution_error, ExecutionError::SystemError(
-                    SystemExecutionError::InsufficientFunding { .. }
-                )))
+                ) if matches!(**execution_error, ExecutionError::InsufficientFunding { .. }))
         );
     }
     {
@@ -1151,9 +1147,7 @@ where
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
                 execution_error, ChainExecutionContext::Operation(_)
-        ) if matches!(**execution_error, ExecutionError::SystemError(
-            SystemExecutionError::InsufficientFunding { .. }
-        )))
+        ) if matches!(**execution_error, ExecutionError::InsufficientFunding { .. }))
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -3515,8 +3509,8 @@ where
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
         ChainError::ExecutionError(error, _) if matches!(&**error,
-        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner
-    ))));
+        ExecutionError::UnauthenticatedTransferOwner
+    )));
 
     // Without the transfer, a random key pair can propose a block.
     let proposal = make_child_block(&change_ownership_value)

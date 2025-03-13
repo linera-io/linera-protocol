@@ -59,8 +59,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
         OPEN_CHAIN_MESSAGE_INDEX, REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
-    SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -2365,9 +2364,10 @@ where
                 ChainError::ExecutionError(
                     execution_error,
                     ChainExecutionContext::Block
-                ) if matches!(**execution_error, ExecutionError::SystemError(
-                    SystemExecutionError::InsufficientFundingForFees { .. }
-                ))
+                ) if matches!(
+                    **execution_error,
+                    ExecutionError::InsufficientFundingForFees { .. }
+                )
             ) =>
             {
                 // We can't even pay for the execution of one empty block. Let's return zero.

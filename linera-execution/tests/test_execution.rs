@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{SystemExecutionError, SystemMessage},
+    system::SystemMessage,
     test_utils::{
         blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,
         create_dummy_user_application_registrations, ExpectedCall, RegisterMockApplication,
@@ -1458,30 +1458,22 @@ async fn test_close_chain() -> anyhow::Result<()> {
 )]
 #[test_case(
     Some(AccountPublicKey::test_key(1).into()), Some(AccountPublicKey::test_key(2).into())
-    => matches Ok(Err(
-        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
-    ));
+    => matches Ok(Err(ExecutionError::UnauthenticatedTransferOwner));
     "fails if sender is not a receiving chain owner"
 )]
 #[test_case(
     Some(AccountPublicKey::test_key(1).into()), None
-    => matches Ok(Err(
-        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
-    ));
+    => matches Ok(Err(ExecutionError::UnauthenticatedTransferOwner));
     "fails if unauthenticated"
 )]
 #[test_case(
     None, None
-    => matches Ok(Err(
-        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
-    ));
+    => matches Ok(Err(ExecutionError::UnauthenticatedTransferOwner));
     "fails if unauthenticated and receiving chain has no owners"
 )]
 #[test_case(
     None, Some(AccountPublicKey::test_key(1).into())
-    => matches Ok(Err(
-        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
-    ));
+    => matches Ok(Err(ExecutionError::UnauthenticatedTransferOwner));
     "fails if receiving chain has no owners"
 )]
 #[tokio::test]

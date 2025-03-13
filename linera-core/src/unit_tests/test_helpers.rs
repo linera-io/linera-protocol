@@ -3,7 +3,7 @@
 
 use assert_matches::assert_matches;
 use linera_chain::{ChainError, ChainExecutionContext};
-use linera_execution::{ExecutionError, SystemExecutionError};
+use linera_execution::ExecutionError;
 
 use crate::{client::ChainClientError, local_node::LocalNodeError, worker::WorkerError};
 
@@ -31,8 +31,8 @@ pub fn assert_insufficient_funding_during_operation<T>(
 
     assert_matches!(
         *execution_error,
-        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
-        "Expected ExecutionError::SystemError::InsufficientFunding, found: {execution_error:#?}"
+        ExecutionError::InsufficientFunding { .. },
+        "Expected ExecutionError::InsufficientFunding, found: {execution_error:#?}"
     );
 }
 
@@ -55,8 +55,8 @@ pub fn assert_insufficient_funding_fees<T>(obtained_error: Result<T, ChainClient
 
     assert_matches!(
         *execution_error,
-        ExecutionError::SystemError(SystemExecutionError::InsufficientFundingForFees { .. }),
-        "Expected ExecutionError::SystemError::InsufficientFundingForFees, found: {execution_error:#?}"
+        ExecutionError::InsufficientFundingForFees { .. },
+        "Expected ExecutionError::InsufficientFundingForFees, found: {execution_error:#?}"
     );
 }
 
@@ -82,7 +82,7 @@ pub fn assert_insufficient_funding<T>(
 
     assert_matches!(
         *execution_error,
-        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
-        "Expected ExecutionError::SystemError::InsufficientFunding, found: {execution_error:#?}"
+        ExecutionError::InsufficientFunding { .. },
+        "Expected ExecutionError::InsufficientFunding, found: {execution_error:#?}"
     );
 }

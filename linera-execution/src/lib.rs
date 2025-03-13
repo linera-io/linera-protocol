@@ -50,7 +50,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use system::OpenChainConfig;
+use system::{OpenChainConfig, SystemChannel};
 use thiserror::Error;
 
 #[cfg(with_revm)]
@@ -73,8 +73,7 @@ pub use crate::{
         ServiceSyncRuntimeHandle,
     },
     system::{
-        SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
-        SystemQuery, SystemResponse,
+        SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery, SystemResponse,
     },
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
@@ -193,8 +192,6 @@ pub enum ExecutionError {
     ViewError(ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
-    #[error(transparent)]
-    SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
     #[cfg(with_wasm_runtime)]
@@ -289,6 +286,53 @@ pub enum ExecutionError {
     InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
     #[error("Invalid HTTP header value used for HTTP request")]
     InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
+
+    #[error("Invalid admin ID in new chain: {0}")]
+    InvalidNewChainAdminId(ChainId),
+    #[error("Invalid committees")]
+    InvalidCommittees,
+    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
+    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
+    #[error("Transfer must have positive amount")]
+    IncorrectTransferAmount,
+    #[error("Transfer from owned account must be authenticated by the right signer")]
+    UnauthenticatedTransferOwner,
+    #[error("The transferred amount must not exceed the current chain balance: {balance}")]
+    InsufficientFunding { balance: Amount },
+    #[error("Required execution fees exceeded the total funding available: {balance}")]
+    InsufficientFundingForFees { balance: Amount },
+    #[error("Claim must have positive amount")]
+    IncorrectClaimAmount,
+    #[error("Claim must be authenticated by the right signer")]
+    UnauthenticatedClaimOwner,
+    #[error("Admin operations are only allowed on the admin chain.")]
+    AdminOperationOnNonAdminChain,
+    #[error("Failed to create new committee: expected {expected}, but got {provided}")]
+    InvalidCommitteeEpoch { expected: Epoch, provided: Epoch },
+    #[error("Failed to remove committee")]
+    InvalidCommitteeRemoval,
+    #[error("Cannot subscribe to a channel ({1}) on the same chain ({0})")]
+    SelfSubscription(ChainId, SystemChannel),
+    #[error("Chain {0} tried to subscribe to channel {1} but it is already subscribed")]
+    AlreadySubscribedToChannel(ChainId, SystemChannel),
+    #[error("Invalid unsubscription request to channel {1} on chain {0}")]
+    InvalidUnsubscription(ChainId, SystemChannel),
+    #[error("Amount overflow")]
+    AmountOverflow,
+    #[error("Amount underflow")]
+    AmountUnderflow,
+    #[error("Chain balance overflow")]
+    BalanceOverflow,
+    #[error("Chain balance underflow")]
+    BalanceUnderflow,
+    #[error("Cannot decrease the chain's timestamp")]
+    TicksOutOfOrder,
+    #[error("Application {0:?} is not registered by the chain")]
+    UnknownApplicationId(Box<UserApplicationId>),
+    #[error("Chain is not active yet.")]
+    InactiveChain,
+    #[error("No recorded response for oracle query")]
+    MissingOracleResponse,
 }
 
 impl From<ViewError> for ExecutionError {
@@ -296,17 +340,6 @@ impl From<ViewError> for ExecutionError {
         match error {
             ViewError::BlobsNotFound(blob_ids) => ExecutionError::BlobsNotFound(blob_ids),
             error => ExecutionError::ViewError(error),
-        }
-    }
-}
-
-impl From<SystemExecutionError> for ExecutionError {
-    fn from(error: SystemExecutionError) -> Self {
-        match error {
-            SystemExecutionError::BlobsNotFound(blob_ids) => {
-                ExecutionError::BlobsNotFound(blob_ids)
-            }
-            error => ExecutionError::SystemError(error),
         }
     }
 }
