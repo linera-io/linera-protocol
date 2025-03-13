@@ -127,7 +127,7 @@ async fn test_fee_consumption(
     let mut view = state.into_view().await;
 
     let signer = Owner::from(AccountPublicKey::test_key(0));
-    let owner = AccountOwner::User(signer.0);
+    let owner = AccountOwner::Address32(signer.0);
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
         view.system.balances.insert(&owner, owner_balance)?;
@@ -190,7 +190,7 @@ async fn test_fee_consumption(
     let refund_grant_to = Some(Account {
         chain_id: ChainId::root(0),
         owner: authenticated_signer
-            .map(|o| AccountOwner::User(o.0))
+            .map(|o| AccountOwner::Address32(o.0))
             .unwrap_or(AccountOwner::Chain),
     });
     let context = MessageContext {

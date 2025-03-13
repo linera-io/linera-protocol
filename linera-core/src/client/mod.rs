@@ -2344,8 +2344,7 @@ where
             previous_block_hash,
             height,
             authenticated_signer: match owner {
-                AccountOwner::User(user) => Some(Owner(user)),
-                AccountOwner::Application(_) => None,
+                AccountOwner::Address32(user) => Some(Owner(user)),
                 AccountOwner::Chain => None, // These should be unreachable?
             },
             timestamp,
@@ -2432,11 +2431,11 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account(
         &self,
-        owner: AccountOwner,
+        from: AccountOwner,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer(owner, amount, Recipient::Account(account))
+        self.transfer(from, amount, Recipient::Account(account))
             .await
     }
 

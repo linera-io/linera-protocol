@@ -31,8 +31,7 @@ interface base-runtime-api {
     find-key-values-wait: func(promise-id: u32) -> list<tuple<list<u8>, list<u8>>>;
 
     variant account-owner {
-        user(crypto-hash),
-        application(crypto-hash),
+        address32(crypto-hash),
         chain,
     }
 

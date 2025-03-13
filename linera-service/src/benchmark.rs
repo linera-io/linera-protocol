@@ -152,7 +152,7 @@ async fn benchmark_with_fungible(
             let default_chain = client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
-                    AccountOwner::User(owner),
+                    AccountOwner::Address32(owner.0),
                     Amount::from_tokens(num_transactions as u128),
                 )]),
             };
@@ -193,11 +193,11 @@ async fn benchmark_with_fungible(
                     .try_add_assign(Amount::ONE)
                     .unwrap();
                 sender_app.transfer(
-                    AccountOwner::User(sender_context.owner),
+                    AccountOwner::Address32(sender_context.owner.0),
                     Amount::ONE,
                     fungible::Account {
                         chain_id: receiver_context.default_chain,
-                        owner: AccountOwner::User(receiver_context.owner),
+                        owner: AccountOwner::Address32(receiver_context.owner.0),
                     },
                 )
             })
@@ -243,8 +243,9 @@ async fn benchmark_with_fungible(
                     );
                     for i in 0.. {
                         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-                        let actual_balance =
-                            app.get_amount(&AccountOwner::User(context.owner)).await;
+                        let actual_balance = app
+                            .get_amount(&AccountOwner::Address32(context.owner.0))
+                            .await;
                         if actual_balance == expected_balance {
                             break;
                         }
@@ -257,7 +258,8 @@ async fn benchmark_with_fungible(
                         }
                     }
                     assert_eq!(
-                        app.get_amount(&AccountOwner::User(context.owner)).await,
+                        app.get_amount(&AccountOwner::Address32(context.owner.0))
+                            .await,
                         expected_balance
                     );
                     Ok(())
