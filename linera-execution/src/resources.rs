@@ -472,7 +472,7 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
             if let Some(balance) = view
                 .system
                 .balances
-                .get_mut(&AccountOwner::User(owner.0))
+                .get_mut(&AccountOwner::Address32(owner.0))
                 .await?
             {
                 sources.push(balance);

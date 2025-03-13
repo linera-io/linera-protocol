@@ -410,7 +410,6 @@ where
                 owner,
                 amount,
                 recipient,
-                ..
             } => {
                 let message = self
                     .transfer(context.authenticated_signer, None, owner, recipient, amount)
@@ -430,7 +429,7 @@ where
                     .claim(
                         context.authenticated_signer,
                         None,
-                        AccountOwner::User(owner.0),
+                        AccountOwner::Address32(owner.0),
                         target_id,
                         recipient,
                         amount,
@@ -641,11 +640,11 @@ where
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
         match (source, authenticated_signer, authenticated_application_id) {
-            (AccountOwner::User(owner), Some(Owner(signer)), _) => ensure!(
-                signer == owner,
+            (AccountOwner::Address32(source), Some(Owner(signer)), _) => ensure!(
+                signer == source,
                 ExecutionError::UnauthenticatedTransferOwner
             ),
-            (AccountOwner::Application(account_application), _, Some(authorized_application)) => {
+            (AccountOwner::Address32(account_application), _, Some(authorized_application)) => {
                 ensure!(
                     account_application == authorized_application.0,
                     ExecutionError::UnauthenticatedTransferOwner
@@ -692,12 +691,9 @@ where
         amount: Amount,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, ExecutionError> {
         match source {
-            AccountOwner::User(owner) => ensure!(
-                authenticated_signer.map(|o| o.0) == Some(owner),
-                ExecutionError::UnauthenticatedClaimOwner
-            ),
-            AccountOwner::Application(owner) => ensure!(
-                authenticated_application_id.map(|o| o.0) == Some(owner),
+            AccountOwner::Address32(owner) => ensure!(
+                authenticated_signer.map(|o| o.0) == Some(owner)
+                    || authenticated_application_id.map(|o| o.0) == Some(owner),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
             AccountOwner::Chain => unreachable!(),

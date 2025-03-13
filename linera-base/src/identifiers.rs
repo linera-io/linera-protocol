@@ -34,10 +34,8 @@ pub struct Owner(pub CryptoHash);
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
-    /// An account owned by a user.
-    User(CryptoHash),
-    /// An account for an application.
-    Application(CryptoHash),
+    /// 32-byte account address.
+    Address32(CryptoHash),
     /// Chain account.
     Chain,
 }
@@ -54,6 +52,11 @@ pub struct Account {
 }
 
 impl Account {
+    /// Creates a new [`Account`] with the given chain ID and owner.
+    pub fn new(chain_id: ChainId, owner: AccountOwner) -> Self {
+        Self { chain_id, owner }
+    }
+
     /// Creates an [`Account`] representing the balance shared by a chain's owners.
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
@@ -63,10 +66,10 @@ impl Account {
     }
 
     /// Creates an [`Account`] for a specific [`Owner`] on a chain.
-    pub fn owner(chain_id: ChainId, owner: impl Into<AccountOwner>) -> Self {
+    pub fn address32(chain_id: ChainId, owner: CryptoHash) -> Self {
         Account {
             chain_id,
-            owner: owner.into(),
+            owner: AccountOwner::Address32(owner),
         }
     }
 }
@@ -92,10 +95,28 @@ impl FromStr for Account {
 
         if let Some(owner_string) = parts.next() {
             let owner = owner_string.parse::<AccountOwner>()?;
-            Ok(Account::owner(chain_id, owner))
+            Ok(Account::new(chain_id, owner))
         } else {
             Ok(Account::chain(chain_id))
         }
+    }
+}
+
+impl From<AccountPublicKey> for AccountOwner {
+    fn from(public_key: AccountPublicKey) -> Self {
+        AccountOwner::Address32(Owner::from(public_key).0)
+    }
+}
+
+impl From<Owner> for AccountOwner {
+    fn from(owner: Owner) -> Self {
+        AccountOwner::Address32(owner.0)
+    }
+}
+
+impl From<UserApplicationId> for AccountOwner {
+    fn from(application_id: UserApplicationId) -> Self {
+        AccountOwner::Address32(application_id.0)
     }
 }
 
@@ -955,8 +976,7 @@ impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "AccountOwner")]
 enum SerializableAccountOwner {
-    User(CryptoHash),
-    Application(CryptoHash),
+    Address32(CryptoHash),
     Chain,
 }
 
@@ -966,8 +986,7 @@ impl Serialize for AccountOwner {
             serializer.serialize_str(&self.to_string())
         } else {
             match self {
-                AccountOwner::Application(app_id) => SerializableAccountOwner::Application(*app_id),
-                AccountOwner::User(owner) => SerializableAccountOwner::User(*owner),
+                AccountOwner::Address32(app_id) => SerializableAccountOwner::Address32(*app_id),
                 AccountOwner::Chain => SerializableAccountOwner::Chain,
             }
             .serialize(serializer)
@@ -984,10 +1003,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
         } else {
             let value = SerializableAccountOwner::deserialize(deserializer)?;
             match value {
-                SerializableAccountOwner::Application(app_id) => {
-                    Ok(AccountOwner::Application(app_id))
-                }
-                SerializableAccountOwner::User(owner) => Ok(AccountOwner::User(owner)),
+                SerializableAccountOwner::Address32(app_id) => Ok(AccountOwner::Address32(app_id)),
                 SerializableAccountOwner::Chain => Ok(AccountOwner::Chain),
             }
         }
@@ -997,8 +1013,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
 impl Display for AccountOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccountOwner::User(owner) => write!(f, "User:{}", owner)?,
-            AccountOwner::Application(app_id) => write!(f, "Application:{}", app_id)?,
+            AccountOwner::Address32(owner) => write!(f, "Address32:{}", owner)?,
             AccountOwner::Chain => write!(f, "Chain")?,
         };
 
@@ -1006,38 +1021,13 @@ impl Display for AccountOwner {
     }
 }
 
-impl From<AccountPublicKey> for AccountOwner {
-    fn from(public_key: AccountPublicKey) -> Self {
-        match public_key {
-            AccountPublicKey::Ed25519(pk) => AccountOwner::User(Owner::from(&pk).0),
-            AccountPublicKey::Secp256k1(pk) => AccountOwner::User(Owner::from(&pk).0),
-        }
-    }
-}
-
-impl From<Owner> for AccountOwner {
-    fn from(owner: Owner) -> Self {
-        AccountOwner::User(owner.0)
-    }
-}
-
-impl From<UserApplicationId> for AccountOwner {
-    fn from(app_id: UserApplicationId) -> Self {
-        AccountOwner::Application(app_id.0)
-    }
-}
-
 impl FromStr for AccountOwner {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(owner) = s.strip_prefix("User:") {
-            Ok(AccountOwner::User(
+        if let Some(owner) = s.strip_prefix("Address32:") {
+            Ok(AccountOwner::Address32(
                 CryptoHash::from_str(owner).context("Getting Owner should not fail")?,
-            ))
-        } else if let Some(app_id) = s.strip_prefix("Application:") {
-            Ok(AccountOwner::Application(
-                CryptoHash::from_str(app_id).context("Getting ApplicationId should not fail")?,
             ))
         } else if s.strip_prefix("Chain").is_some() {
             Ok(AccountOwner::Chain)

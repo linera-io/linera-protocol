@@ -27,8 +27,7 @@ interface contract-runtime-api {
     }
 
     variant account-owner {
-        user(crypto-hash),
-        application(crypto-hash),
+        address32(crypto-hash),
         chain,
     }
 

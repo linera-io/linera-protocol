@@ -38,9 +38,8 @@ macro_rules! impl_from_wit {
         impl From<$wit_base_api::AccountOwner> for AccountOwner {
             fn from(account_owner: $wit_base_api::AccountOwner) -> Self {
                 match account_owner {
-                    $wit_base_api::AccountOwner::User(owner) => AccountOwner::User(owner.into()),
-                    $wit_base_api::AccountOwner::Application(owner) => {
-                        AccountOwner::Application(owner.into())
+                    $wit_base_api::AccountOwner::Address32(owner) => {
+                        AccountOwner::Address32(owner.into())
                     }
                     $wit_base_api::AccountOwner::Chain => AccountOwner::Chain,
                 }

@@ -158,7 +158,7 @@ where
         .transfer_to_account(
             AccountOwner::Chain,
             Amount::from_tokens(3),
-            Account::owner(receiver_id, owner),
+            Account::address32(receiver_id, owner_identity.0),
         )
         .await
         .unwrap()
@@ -167,7 +167,7 @@ where
         .transfer_to_account(
             AccountOwner::Chain,
             Amount::from_millis(100),
-            Account::owner(receiver_id, friend),
+            Account::address32(receiver_id, friend.0),
         )
         .await
         .unwrap()
@@ -182,7 +182,10 @@ where
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
-        receiver.local_owner_balance(friend.into()).await.unwrap(),
+        receiver
+            .local_owner_balance(AccountOwner::from(friend))
+            .await
+            .unwrap(),
         Amount::from_millis(99)
     );
     // The received amount is not in the unprotected balance.

@@ -516,7 +516,7 @@ where
     /// chain's balance).
     fn debit(&mut self, source: AccountOwner, amount: Amount) {
         let source_balance = match source {
-            AccountOwner::Application(_) | AccountOwner::User(_) => self.owner_balance_mut(source),
+            AccountOwner::Address32(_) => self.owner_balance_mut(source),
             AccountOwner::Chain => self.chain_balance_mut(),
         };
 
@@ -529,9 +529,7 @@ where
     /// current chain's balance).
     fn credit(&mut self, destination: AccountOwner, amount: Amount) {
         let destination_balance = match destination {
-            owner @ AccountOwner::Application(_) | owner @ AccountOwner::User(_) => {
-                self.owner_balance_mut(owner)
-            }
+            owner @ AccountOwner::Address32(_) => self.owner_balance_mut(owner),
             AccountOwner::Chain => self.chain_balance_mut(),
         };
 

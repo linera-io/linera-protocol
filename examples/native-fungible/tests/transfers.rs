@@ -64,7 +64,7 @@ async fn transfer_to_owner() {
     let transfer_amount = Amount::from_tokens(2);
     let funding_chain = validator.get_chain(&ChainId::root(0));
     let owner = Owner(CryptoHash::test_hash("owner"));
-    let account = Account::owner(recipient_chain.id(), owner);
+    let account = Account::address32(recipient_chain.id(), owner.0);
     let recipient = Recipient::Account(account);
 
     let transfer_certificate = funding_chain
@@ -108,7 +108,7 @@ async fn transfer_to_multiple_owners() {
     let recipients = account_owners
         .iter()
         .copied()
-        .map(|account_owner| Account::owner(recipient_chain.id(), account_owner))
+        .map(|account_owner| Account::new(recipient_chain.id(), account_owner))
         .map(Recipient::Account);
 
     let transfer_certificate = funding_chain
@@ -150,8 +150,7 @@ async fn emptied_account_disappears_from_queries() {
     let funding_chain = validator.get_chain(&ChainId::root(0));
 
     let owner = Owner::from(recipient_chain.public_key());
-    let account_owner = AccountOwner::from(owner);
-    let recipient = Recipient::Account(Account::owner(recipient_chain.id(), account_owner));
+    let recipient = Recipient::Account(Account::address32(recipient_chain.id(), owner.0));
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
@@ -175,7 +174,12 @@ async fn emptied_account_disappears_from_queries() {
         })
         .await;
 
-    assert_eq!(recipient_chain.owner_balance(&account_owner).await, None);
+    assert_eq!(
+        recipient_chain
+            .owner_balance(&AccountOwner::from(owner))
+            .await,
+        None
+    );
     assert_balances(&recipient_chain, []).await;
 }
 

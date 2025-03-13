@@ -2091,14 +2091,14 @@ where
     let sender = Owner::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
-        owner: sender.into(),
+        owner: AccountOwner::from(sender),
     };
 
     let recipient_key_pair = AccountSecretKey::generate();
     let recipient = Owner::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
-        owner: recipient.into(),
+        owner: AccountOwner::from(recipient),
     };
 
     let (committee, worker) = init_worker_with_chains(
@@ -2165,7 +2165,7 @@ where
         }],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender.into(), Amount::from_tokens(5))]),
+        BTreeMap::from_iter([(AccountOwner::Address32(sender.0), Amount::from_tokens(5))]),
         &worker,
         Some(&certificate00),
     )
@@ -2192,7 +2192,7 @@ where
         Vec::new(),
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender.into(), Amount::from_tokens(2))]),
+        BTreeMap::from_iter([(AccountOwner::Address32(sender.0), Amount::from_tokens(2))]),
         &worker,
         Some(&certificate01),
     )
@@ -2266,7 +2266,7 @@ where
         ],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(recipient.into(), Amount::from_tokens(1))]),
+        BTreeMap::from_iter([(AccountOwner::Address32(recipient.0), Amount::from_tokens(1))]),
         &worker,
         None,
     )

@@ -66,9 +66,8 @@ impl From<Account> for wit_contract_api::Account {
 impl From<AccountOwner> for wit_contract_api::AccountOwner {
     fn from(account_owner: AccountOwner) -> Self {
         match account_owner {
-            AccountOwner::User(owner) => wit_contract_api::AccountOwner::User(owner.into()),
-            AccountOwner::Application(application_id) => {
-                wit_contract_api::AccountOwner::Application(application_id.into())
+            AccountOwner::Address32(owner) => {
+                wit_contract_api::AccountOwner::Address32(owner.into())
             }
             AccountOwner::Chain => wit_contract_api::AccountOwner::Chain,
         }

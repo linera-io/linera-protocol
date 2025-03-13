@@ -138,7 +138,7 @@ where
                 .execution_state
                 .system
                 .balances
-                .get(&AccountOwner::User(signer.0))
+                .get(&AccountOwner::Address32(signer.0))
                 .await?;
         }
 
@@ -220,7 +220,7 @@ where
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
         match query.request_owner_balance {
-            owner @ AccountOwner::Application(_) | owner @ AccountOwner::User(_) => {
+            owner @ AccountOwner::Address32(_) => {
                 info.requested_owner_balance =
                     chain.execution_state.system.balances.get(&owner).await?;
             }
