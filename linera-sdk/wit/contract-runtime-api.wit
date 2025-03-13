@@ -45,6 +45,7 @@ interface contract-runtime-api {
         close-chain: list<application-id>,
         change-application-permissions: list<application-id>,
         call-service-as-oracle: option<list<application-id>>,
+        make-http-requests: option<list<application-id>>,
     }
 
     record block-height {

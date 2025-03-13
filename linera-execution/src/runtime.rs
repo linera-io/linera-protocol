@@ -964,6 +964,18 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             cfg!(feature = "unstable-oracles"),
             ExecutionError::UnstableOracle
         );
+
+        let app_permissions = self
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::GetApplicationPermissions { callback })?
+            .recv_response()?;
+
+        let app_id = self.current_application().id;
+        ensure!(
+            app_permissions.can_make_http_requests(&app_id),
+            ExecutionError::UnauthorizedApplication(app_id)
+        );
+
         let response =
             if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
                 match response {

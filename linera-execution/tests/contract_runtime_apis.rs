@@ -11,6 +11,8 @@ use std::{
 use assert_matches::assert_matches;
 #[cfg(feature = "unstable-oracles")]
 use linera_base::data_types::ApplicationPermissions;
+#[cfg(feature = "unstable-oracles")]
+use linera_base::http;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
@@ -895,7 +897,7 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
         .expect("should register mock application");
 
     let call_service_as_oracle =
-        authorized_apps.map(|apps| apps.into_iter().map(|_| application_id).collect());
+        authorized_apps.map(|apps| apps.into_iter().map(|()| application_id).collect());
 
     view.system
         .application_permissions
@@ -934,6 +936,83 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
                 OracleResponse::Blob(contract_blob_id),
                 OracleResponse::Blob(service_blob_id),
                 OracleResponse::Service(vec![]),
+            ]),
+        ),
+        &mut controller,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// Tests the contract system API to make HTTP requests.
+#[cfg(feature = "unstable-oracles")] // # TODO: Remove once #3524 lands
+#[test_case(None => matches Ok(_); "when all authorized")]
+#[test_case(Some(vec![()]) => matches Ok(_); "when single app authorized")]
+#[test_case(Some(vec![]) => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
+#[test_log::test(tokio::test)]
+async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(), ExecutionError> {
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        ownership: ChainOwnership::default(),
+        balance: Amount::ONE,
+        balances: BTreeMap::new(),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await
+        .expect("should register mock application");
+
+    let make_http_requests =
+        authorized_apps.map(|apps| apps.into_iter().map(|()| application_id).collect());
+
+    view.system
+        .application_permissions
+        .set(ApplicationPermissions {
+            make_http_requests,
+            ..ApplicationPermissions::new_single(application_id)
+        });
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.perform_http_request(http::Request::get("http://localhost"))?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context();
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        operation,
+        &mut TransactionTracker::new(
+            0,
+            0,
+            Some(vec![
+                OracleResponse::Blob(app_desc_blob_id),
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+                OracleResponse::Http(http::Response::ok(vec![])),
             ]),
         ),
         &mut controller,

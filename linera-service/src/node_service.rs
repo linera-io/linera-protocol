@@ -498,6 +498,7 @@ where
         mandatory_applications: Vec<ApplicationId>,
         change_application_permissions: Vec<ApplicationId>,
         call_service_as_oracle: Option<Vec<ApplicationId>>,
+        make_http_requests: Option<Vec<ApplicationId>>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
@@ -505,6 +506,7 @@ where
             close_chain,
             change_application_permissions,
             call_service_as_oracle,
+            make_http_requests,
         });
         self.execute_system_operation(operation, chain_id).await
     }
