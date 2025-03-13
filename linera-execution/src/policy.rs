@@ -257,6 +257,7 @@ impl ResourceControlPolicy {
         amount.try_add_assign(self.message.try_mul(resources.messages as u128)?)?;
         amount.try_add_assign(self.message_bytes_price(resources.message_size as u64)?)?;
         amount.try_add_assign(self.bytes_stored_price(resources.storage_size_delta as u64)?)?;
+        amount.try_add_assign(self.http_requests_price(resources.http_requests)?)?;
         Ok(amount)
     }
 
@@ -288,6 +289,10 @@ impl ResourceControlPolicy {
     #[allow(dead_code)]
     pub(crate) fn bytes_stored_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
         self.byte_stored.try_mul(count as u128)
+    }
+
+    pub(crate) fn http_requests_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
+        self.http_request.try_mul(count as u128)
     }
 
     pub(crate) fn fuel_price(&self, fuel: u64) -> Result<Amount, ArithmeticError> {

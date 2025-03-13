@@ -284,6 +284,8 @@ pub struct Resources {
     pub message_size: u32,
     /// An increase in the amount of storage space.
     pub storage_size_delta: u32,
+    /// A number of HTTP requests to be performed.
+    pub http_requests: u32,
     // TODO(#1532): Account for the system calls that we plan on calling.
     // TODO(#1533): Allow declaring calls to other applications instead of having to count them here.
 }

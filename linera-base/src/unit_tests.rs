@@ -58,6 +58,7 @@ fn resources_test_case() -> Resources {
         read_operations: 12,
         write_operations: 2,
         storage_size_delta: 700_000_000,
+        http_requests: 3,
     }
 }
 
@@ -76,6 +77,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
             read_operations: 1,
             write_operations: 0,
             storage_size_delta: 0,
+            http_requests: 0,
         },
         message: (0..=255).cycle().take(2_000).collect(),
     }
