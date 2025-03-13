@@ -1470,7 +1470,7 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
                 .change_application_permissions
                 .unwrap_or_default(),
             call_service_as_oracle: config.call_service_as_oracle,
-            make_http_requests: config.make_http_requests.unwrap_or_default(),
+            make_http_requests: config.make_http_requests,
         }
     }
 }

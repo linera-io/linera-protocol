@@ -957,10 +957,11 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
 
 /// Tests the contract system API to make HTTP requests.
 #[cfg(feature = "unstable-oracles")] // # TODO: Remove once #3524 lands
-#[test_case(vec![()] => matches Ok(_); "when authorized")]
-#[test_case(vec![] => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
+#[test_case(None => matches Ok(_); "when all authorized")]
+#[test_case(Some(vec![()]) => matches Ok(_); "when single app authorized")]
+#[test_case(Some(vec![]) => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
 #[test_log::test(tokio::test)]
-async fn test_perform_http_request(authorized_apps: Vec<()>) -> Result<(), ExecutionError> {
+async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(), ExecutionError> {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         ownership: ChainOwnership::default(),
@@ -985,10 +986,8 @@ async fn test_perform_http_request(authorized_apps: Vec<()>) -> Result<(), Execu
         .await
         .expect("should register mock application");
 
-    let make_http_requests = authorized_apps
-        .into_iter()
-        .map(|_| application_id)
-        .collect();
+    let make_http_requests =
+        authorized_apps.map(|apps| apps.into_iter().map(|_| application_id).collect());
 
     view.system
         .application_permissions
