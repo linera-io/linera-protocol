@@ -1087,6 +1087,10 @@ input ResourceControlPolicy {
 	"""
 	messageByte: Amount!
 	"""
+	The price for a performing an HTTP request.
+	"""
+	httpRequest: Amount!
+	"""
 	The maximum amount of fuel a block can consume.
 	"""
 	maximumFuelPerBlock: Int!

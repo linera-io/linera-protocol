@@ -41,6 +41,8 @@ pub struct ResourceControlPolicy {
     pub message: Amount,
     /// The additional price for each byte in the argument of a user message.
     pub message_byte: Amount,
+    /// The price for a performing an HTTP request.
+    pub http_request: Amount,
 
     // TODO(#1538): Cap the number of transactions per block and the total size of their
     // arguments.
@@ -85,6 +87,7 @@ impl fmt::Display for ResourceControlPolicy {
             operation_byte,
             message,
             message_byte,
+            http_request,
             maximum_fuel_per_block,
             maximum_service_oracle_execution_ms,
             maximum_executed_block_size,
@@ -112,6 +115,7 @@ impl fmt::Display for ResourceControlPolicy {
             {operation_byte:.2} per byte in the argument of an operation\n\
             {message:.2} per outgoing messages\n\
             {message_byte:.2} per byte in the argument of an outgoing messages\n\
+            {http_request:.2} per HTTP request performed\n\
             {maximum_fuel_per_block} maximum fuel per block\n\
             {maximum_service_oracle_execution_ms} ms maximum service-as-oracle execution time per \
                 block\n\
@@ -153,6 +157,7 @@ impl ResourceControlPolicy {
             operation_byte: Amount::default(),
             message: Amount::default(),
             message_byte: Amount::default(),
+            http_request: Amount::default(),
             maximum_fuel_per_block: u64::MAX,
             maximum_service_oracle_execution_ms: u64::MAX,
             maximum_executed_block_size: u64::MAX,
@@ -203,6 +208,7 @@ impl ResourceControlPolicy {
             operation_byte: Amount::from_attos(1),
             message: Amount::from_attos(10),
             message_byte: Amount::from_attos(1),
+            http_request: Amount::from_micros(1),
             ..Self::no_fees()
         }
     }
@@ -221,6 +227,7 @@ impl ResourceControlPolicy {
             operation_byte: Amount::from_nanos(10),
             operation: Amount::from_micros(10),
             message: Amount::from_micros(10),
+            http_request: Amount::from_micros(50),
             maximum_fuel_per_block: 100_000_000,
             maximum_service_oracle_execution_ms: 10_000,
             maximum_executed_block_size: 1_000_000,
