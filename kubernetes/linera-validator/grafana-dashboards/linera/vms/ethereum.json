@@ -17,7 +17,7 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 2,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -107,13 +107,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_evm_contract_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_evm_contract_instantiation_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "EVM Contract Instantiation Latency p99 (2m)",
+      "title": "EVM Contract Instantiation Latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -202,13 +202,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_evm_contract_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_evm_contract_instantiation_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "EVM Contract Instantiation Latency p50 (2m)",
+      "title": "EVM Contract Instantiation Latency p50 (1m)",
       "type": "timeseries"
     },
     {
@@ -297,13 +297,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_evm_service_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_evm_service_instantiation_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "EVM Service Instantiation Latency p99 (2m)",
+      "title": "EVM Service Instantiation Latency p99 (1m)",
       "type": "timeseries"
     },
     {
@@ -392,13 +392,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_evm_service_instantiation_latency_bucket[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_evm_service_instantiation_latency_bucket[1m])) by (le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "EVM Service Instantiation Latency p50 (2m)",
+      "title": "EVM Service Instantiation Latency p50 (1m)",
       "type": "timeseries"
     }
   ],
@@ -410,7 +410,7 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
