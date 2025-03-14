@@ -1633,6 +1633,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *initial_amount,
                     *validators,
                     *shards,
+                    1,
                     *testing_prng_seed,
                     *policy_config,
                     path,

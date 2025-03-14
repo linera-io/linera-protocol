@@ -11,7 +11,7 @@ use std::{
 };
 
 use futures::{
-    channel::mpsc::{self, Receiver},
+    channel::mpsc::self,
     future::BoxFuture,
     FutureExt as _, StreamExt,
 };
@@ -55,7 +55,7 @@ use crate::{
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
-type NotificationSender = mpsc::Sender<Notification>;
+type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 
 #[cfg(with_metrics)]
 static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -211,8 +211,8 @@ where
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
 
-        let (notification_sender, notification_receiver) =
-            mpsc::channel(notification_config.notification_queue_size);
+        let (notification_sender, _) =
+            tokio::sync::broadcast::channel(notification_config.notification_queue_size);
 
         join_set.spawn_task({
             info!(
@@ -232,17 +232,20 @@ where
             )
         });
 
-        join_set.spawn_task({
-            info!(
+        for proxy in &internal_network.proxies {
+            let receiver = notification_sender.subscribe();
+            join_set.spawn_task({
+                info!(
                 nickname = state.nickname(),
                 "spawning notifications thread on {} for shard {}", host, shard_id
             );
-            Self::forward_notifications(
-                state.nickname().to_string(),
-                internal_network.proxy_address(),
-                notification_receiver,
-            )
-        });
+                Self::forward_notifications(
+                    state.nickname().to_string(),
+                    proxy.address(&internal_network.protocol),
+                    receiver,
+                )
+            });
+        }
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -293,7 +296,7 @@ where
     async fn forward_notifications(
         nickname: String,
         proxy_address: String,
-        mut receiver: Receiver<Notification>,
+        mut receiver: tokio::sync::broadcast::Receiver<Notification>,
     ) {
         let channel = tonic::transport::Channel::from_shared(proxy_address.clone())
             .expect("Proxy URI should be valid")
@@ -302,7 +305,7 @@ where
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
-        while let Some(notification) = receiver.next().await {
+        while let Ok(notification) = receiver.recv().await {
             let notification: api::Notification = match notification.clone().try_into() {
                 Ok(notification) => notification,
                 Err(error) => {
@@ -324,7 +327,7 @@ where
 
     fn handle_network_actions(&self, actions: NetworkActions) {
         let mut cross_chain_sender = self.cross_chain_sender.clone();
-        let mut notification_sender = self.notification_sender.clone();
+        let notification_sender = self.notification_sender.clone();
 
         for request in actions.cross_chain_requests {
             let shard_id = self.network.get_shard_id(request.target_chain_id());
@@ -348,12 +351,12 @@ where
 
         for notification in actions.notifications {
             trace!("Scheduling notification query");
-            if let Err(error) = notification_sender.try_send(notification) {
+            if let Err(error) = notification_sender.send(notification) {
                 error!(%error, "dropping notification");
-                #[cfg(with_metrics)]
-                if error.is_full() {
-                    NOTIFICATION_CHANNEL_FULL.with_label_values(&[]).inc();
-                }
+                // #[cfg(with_metrics)]
+                // if error() {
+                //     NOTIFICATION_CHANNEL_FULL.with_label_values(&[]).inc();
+                // }
                 break;
             }
         }
