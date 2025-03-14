@@ -263,6 +263,9 @@ impl ResourceControlPolicy {
         amount.try_add_assign(self.message.try_mul(resources.messages as u128)?)?;
         amount.try_add_assign(self.message_bytes_price(resources.message_size as u64)?)?;
         amount.try_add_assign(self.bytes_stored_price(resources.storage_size_delta as u64)?)?;
+        amount.try_add_assign(
+            self.service_as_oracle_queries_price(resources.service_as_oracle_queries)?,
+        )?;
         amount.try_add_assign(self.http_requests_price(resources.http_requests)?)?;
         Ok(amount)
     }
@@ -295,6 +298,14 @@ impl ResourceControlPolicy {
     #[allow(dead_code)]
     pub(crate) fn bytes_stored_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
         self.byte_stored.try_mul(count as u128)
+    }
+
+    /// Returns how much it would cost to perform `count` queries to services running as oracles.
+    pub(crate) fn service_as_oracle_queries_price(
+        &self,
+        count: u32,
+    ) -> Result<Amount, ArithmeticError> {
+        self.service_as_oracle_query.try_mul(count as u128)
     }
 
     pub(crate) fn http_requests_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
