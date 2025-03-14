@@ -64,9 +64,7 @@ mod implementation {
         }
 
         fn reap_finished_tasks(&mut self) {
-            for mut done in self.0.drain(..) {
-                while done.try_recv() == Ok(None) {}
-            }
+            self.0.retain_mut(|task| task.try_recv() == Ok(None));
         }
     }
 }
