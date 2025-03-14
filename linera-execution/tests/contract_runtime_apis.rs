@@ -14,8 +14,8 @@ use linera_base::data_types::ApplicationPermissions;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp,
-        UserApplicationDescription,
+        Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, OracleResponse,
+        Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, Owner,
@@ -700,18 +700,18 @@ impl TransferTestEndpoint {
         Owner(CryptoHash::test_hash("sender"))
     }
 
-    /// Returns the [`ApplicationId`] used to represent a sender that's an application.
+    /// Returns the [`Application`] used to represent a sender that's an application.
     fn sender_application_id() -> ApplicationId {
         ApplicationId::from(&Self::sender_application_description())
     }
 
-    /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
-    fn sender_application_description() -> UserApplicationDescription {
+    /// Returns the [`ApplicationIdDescription`] used to represent a sender that's an application.
+    fn sender_application_description() -> ApplicationDescription {
         let contract_id = Self::sender_application_contract_blob().id().hash;
         let service_id = Self::sender_application_service_blob().id().hash;
         let vm_runtime = VmRuntime::Wasm;
 
-        UserApplicationDescription {
+        ApplicationDescription {
             module_id: ModuleId::new(contract_id, service_id, vm_runtime),
             creator_chain_id: ChainId::root(1000),
             block_height: BlockHeight(0),
@@ -742,7 +742,7 @@ impl TransferTestEndpoint {
         Owner(CryptoHash::test_hash("recipient"))
     }
 
-    /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
+    /// Returns the [`Application`] used to represent a recipient that's an application.
     fn recipient_application_id() -> ApplicationId {
         ApplicationId::new(CryptoHash::test_hash("recipient application description"))
     }

@@ -12,9 +12,9 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
+    data_types::{ApplicationDescription, Blob, BlockHeight, Timestamp},
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{BlockProposal, ExecutedBlock, MessageBundle, Origin, ProposedBlock, Target},
@@ -76,9 +76,9 @@ where
 
     /// Describe an application.
     DescribeApplication {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<UserApplicationDescription, WorkerError>>,
+        callback: oneshot::Sender<Result<ApplicationDescription, WorkerError>>,
     },
 
     /// Execute a block but discard any changes to the chain state.

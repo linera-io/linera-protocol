@@ -123,7 +123,7 @@ impl From<MessageId> for wit_contract_api::MessageId {
 impl From<ApplicationId> for wit_contract_api::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit_contract_api::ApplicationId {
-            application_description_hash: application_id.application_description_hash.into(),
+            inner0: application_id.0.into(),
         }
     }
 }

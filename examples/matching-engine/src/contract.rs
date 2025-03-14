@@ -8,7 +8,7 @@ use std::cmp::min;
 
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    linera_base_types::{AccountOwner, Amount, Application, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -174,7 +174,7 @@ impl MatchingEngineContract {
 
     /// The application engine is trading between two tokens. Those tokens are the parameters of the
     /// construction of the exchange and are accessed by index in the system.
-    fn fungible_id(&mut self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {
+    fn fungible_id(&mut self, token_idx: u32) -> Application<FungibleTokenAbi> {
         self.runtime.application_parameters().tokens[token_idx as usize]
     }
 
@@ -188,7 +188,7 @@ impl MatchingEngineContract {
     ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
+            owner: AccountOwner::Application(self.runtime.application().application_id()),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -197,7 +197,7 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
-        let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        let owner_app = AccountOwner::Application(self.runtime.application().application_id());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
     }
 

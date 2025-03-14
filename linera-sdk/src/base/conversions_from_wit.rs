@@ -69,7 +69,7 @@ macro_rules! impl_from_wit {
 
         impl From<$wit_base_api::ApplicationId> for ApplicationId {
             fn from(application_id: $wit_base_api::ApplicationId) -> Self {
-                ApplicationId::new(application_id.application_description_hash.into())
+                ApplicationId::new(application_id.inner0.into())
             }
         }
 

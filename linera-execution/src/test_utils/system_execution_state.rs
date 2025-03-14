@@ -11,7 +11,9 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, Owner},
+    identifiers::{
+        AccountOwner, Application, ApplicationId, BlobId, ChainDescription, ChainId, Owner,
+    },
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -26,9 +28,9 @@ use crate::{
     committee::{Committee, Epoch},
     execution::UserAction,
     system::SystemChannel,
-    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
-    ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
+    ApplicationDescription, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, ExecutionStateView, OperationContext, ResourceControlPolicy,
+    ResourceController, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.
@@ -163,7 +165,7 @@ impl RegisterMockApplication for SystemExecutionState {
 
     async fn register_mock_application_with(
         &mut self,
-        description: UserApplicationDescription,
+        description: ApplicationDescription,
         contract: Blob,
         service: Blob,
     ) -> anyhow::Result<(ApplicationId, MockApplication)> {

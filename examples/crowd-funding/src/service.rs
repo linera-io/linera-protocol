@@ -11,7 +11,7 @@ use async_graphql::{EmptySubscription, Request, Response, Schema};
 use crowd_funding::Operation;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{ApplicationId, WithServiceAbi},
+    linera_base_types::{Application, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
 };
@@ -29,7 +29,7 @@ impl WithServiceAbi for CrowdFundingService {
 }
 
 impl Service for CrowdFundingService {
-    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
+    type Parameters = Application<fungible::FungibleTokenAbi>;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = CrowdFundingState::load(runtime.root_view_storage_context())

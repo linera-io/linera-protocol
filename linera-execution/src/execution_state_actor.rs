@@ -29,9 +29,9 @@ use reqwest::{header::HeaderMap, Client, Url};
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, RawExecutionOutcome,
-    RawOutgoingMessage, SystemMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
+    ExecutionStateView, ModuleId, RawExecutionOutcome, RawOutgoingMessage, SystemMessage,
+    TransactionTracker, UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -65,9 +65,9 @@ where
 {
     pub(crate) async fn load_contract(
         &mut self,
-        id: UserApplicationId,
+        id: ApplicationId,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
+    ) -> Result<(UserContractCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
@@ -92,9 +92,9 @@ where
 
     pub(crate) async fn load_service(
         &mut self,
-        id: UserApplicationId,
+        id: ApplicationId,
         txn_tracker: Option<&mut TransactionTracker>,
-    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
+    ) -> Result<(UserServiceCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
@@ -504,26 +504,18 @@ where
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {
-        id: UserApplicationId,
+        id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(
-            UserContractCode,
-            UserApplicationDescription,
-            TransactionTracker,
-        )>,
+        callback: Sender<(UserContractCode, ApplicationDescription, TransactionTracker)>,
         #[debug(skip)]
         txn_tracker: TransactionTracker,
     },
 
     #[cfg(not(web))]
     LoadService {
-        id: UserApplicationId,
+        id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(
-            UserServiceCode,
-            UserApplicationDescription,
-            TransactionTracker,
-        )>,
+        callback: Sender<(UserServiceCode, ApplicationDescription, TransactionTracker)>,
         #[debug(skip)]
         txn_tracker: TransactionTracker,
     },
@@ -555,7 +547,7 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
@@ -566,7 +558,7 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
@@ -582,7 +574,7 @@ pub enum ExecutionRequest {
     },
 
     ReadValueBytes {
-        id: UserApplicationId,
+        id: ApplicationId,
         #[debug(with = hex_debug)]
         key: Vec<u8>,
         #[debug(skip)]
@@ -590,21 +582,21 @@ pub enum ExecutionRequest {
     },
 
     ContainsKey {
-        id: UserApplicationId,
+        id: ApplicationId,
         key: Vec<u8>,
         #[debug(skip)]
         callback: Sender<bool>,
     },
 
     ContainsKeys {
-        id: UserApplicationId,
+        id: ApplicationId,
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         callback: Sender<Vec<bool>>,
     },
 
     ReadMultiValuesBytes {
-        id: UserApplicationId,
+        id: ApplicationId,
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         #[debug(skip)]
@@ -612,7 +604,7 @@ pub enum ExecutionRequest {
     },
 
     FindKeysByPrefix {
-        id: UserApplicationId,
+        id: ApplicationId,
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
@@ -620,7 +612,7 @@ pub enum ExecutionRequest {
     },
 
     FindKeyValuesByPrefix {
-        id: UserApplicationId,
+        id: ApplicationId,
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
@@ -628,7 +620,7 @@ pub enum ExecutionRequest {
     },
 
     WriteBatch {
-        id: UserApplicationId,
+        id: ApplicationId,
         batch: Batch,
         #[debug(skip)]
         callback: Sender<()>,
@@ -645,13 +637,13 @@ pub enum ExecutionRequest {
     },
 
     CloseChain {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
     },
 
     ChangeApplicationPermissions {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         application_permissions: ApplicationPermissions,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
@@ -662,7 +654,7 @@ pub enum ExecutionRequest {
         block_height: BlockHeight,
         module_id: ModuleId,
         parameters: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<ApplicationId>,
         #[debug(skip)]
         txn_tracker: TransactionTracker,
         #[debug(skip)]

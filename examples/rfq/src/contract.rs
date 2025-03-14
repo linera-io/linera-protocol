@@ -143,7 +143,7 @@ impl Contract for RfqContract {
                     target_account: Account {
                         chain_id: temp_chain_id,
                         owner: AccountOwner::Application(
-                            self.runtime.application_id().forget_abi(),
+                            self.runtime.application().application_id(),
                         ),
                     },
                 };
@@ -261,7 +261,7 @@ impl Contract for RfqContract {
                     None => {
                         // This should never really happen, but if it does, return the
                         // sent tokens
-                        let app_id = self.runtime.application_id().forget_abi();
+                        let app_id = self.runtime.application().application_id();
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
@@ -275,7 +275,7 @@ impl Contract for RfqContract {
                     Some(held_tokens) => {
                         // we have tokens from both parties now: return them to the
                         // correct parties
-                        let app_id = self.runtime.application_id().forget_abi();
+                        let app_id = self.runtime.application().application_id();
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
@@ -333,8 +333,8 @@ impl RfqContract {
             100,
             TimeoutConfig::default(),
         );
-        let app_id = self.runtime.application_id();
-        let permissions = ApplicationPermissions::new_single(app_id.forget_abi());
+        let app_id = self.runtime.application();
+        let permissions = ApplicationPermissions::new_single(app_id.application_id());
         let (_, temp_chain_id) = self.runtime.open_chain(ownership, permissions, fee_budget);
 
         // transfer tokens to the new chain
@@ -343,7 +343,7 @@ impl RfqContract {
             amount: quote_provided.get_amount(),
             target_account: Account {
                 chain_id: temp_chain_id,
-                owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
+                owner: AccountOwner::Application(self.runtime.application().application_id()),
             },
         };
         let token = token_pair.token_offered;
@@ -377,7 +377,7 @@ impl RfqContract {
         // we're executing on the temporary chain
         // if we hold some tokens, we return them before closing
         if let Some(tokens) = self.state.temp_chain_held_tokens() {
-            let app_id = self.runtime.application_id().forget_abi();
+            let app_id = self.runtime.application().application_id();
             self.runtime.call_application(
                 true,
                 tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),

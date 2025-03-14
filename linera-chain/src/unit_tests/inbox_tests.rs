@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use assert_matches::assert_matches;
-use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::UserApplicationId};
+use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ApplicationId};
 use linera_execution::{Message, MessageKind};
 
 use super::*;
@@ -16,7 +16,7 @@ fn make_bundle(
     message: impl Into<Vec<u8>>,
 ) -> MessageBundle {
     let message = Message::User {
-        application_id: UserApplicationId::default(),
+        application_id: ApplicationId::default(),
         bytes: message.into(),
     };
     MessageBundle {

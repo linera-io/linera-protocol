@@ -7,7 +7,7 @@ use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi},
+    linera_base_types::{Amount, Application, ChainId, ContractAbi, Owner, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,8 +26,8 @@ impl ServiceAbi for RfqAbi {
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
 #[graphql(input_name = "TokenPairInput")]
 pub struct TokenPair {
-    pub token_offered: ApplicationId,
-    pub token_asked: ApplicationId,
+    pub token_offered: Application,
+    pub token_asked: Application,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
@@ -70,7 +70,7 @@ impl RequestId {
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
 #[graphql(input_name = "TokensInput")]
 pub struct Tokens {
-    pub token_id: ApplicationId,
+    pub token_id: Application,
     pub owner: Account,
     pub amount: Amount,
 }

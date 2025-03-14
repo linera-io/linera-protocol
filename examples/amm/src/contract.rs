@@ -8,7 +8,7 @@ mod state;
 use amm::{AmmAbi, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    linera_base_types::{AccountOwner, Amount, Application, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -443,7 +443,7 @@ impl AmmContract {
     }
 
     fn get_amm_app_owner(&mut self) -> AccountOwner {
-        AccountOwner::Application(self.runtime.application_id().forget_abi())
+        AccountOwner::Application(self.runtime.application().application_id())
     }
 
     fn get_amm_chain_id(&mut self) -> ChainId {
@@ -663,11 +663,11 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Amount {
-        let pool_owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
+        let pool_owner = AccountOwner::Application(self.runtime.application().application_id());
         self.balance(&pool_owner, token_idx)
     }
 
-    fn fungible_id(&mut self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {
+    fn fungible_id(&mut self, token_idx: u32) -> Application<FungibleTokenAbi> {
         self.runtime.application_parameters().tokens[token_idx as usize]
     }
 

@@ -13,19 +13,19 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     hex, http,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, Application, ChainId},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
-pub struct MockServiceRuntime<Application>
+pub struct MockServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
-    application_parameters: Mutex<Option<Application::Parameters>>,
-    application_id: Mutex<Option<ApplicationId<Application::Abi>>>,
+    application_parameters: Mutex<Option<A::Parameters>>,
+    application_id: Mutex<Option<Application<A::Abi>>>,
     chain_id: Mutex<Option<ChainId>>,
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
@@ -38,18 +38,18 @@ where
     key_value_store: KeyValueStore,
 }
 
-impl<Application> Default for MockServiceRuntime<Application>
+impl<A> Default for MockServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
     fn default() -> Self {
         MockServiceRuntime::new()
     }
 }
 
-impl<Application> MockServiceRuntime<Application>
+impl<A> MockServiceRuntime<A>
 where
-    Application: Service,
+    A: Service,
 {
     /// Creates a new [`MockServiceRuntime`] instance for a service.
     pub fn new() -> Self {
@@ -80,25 +80,19 @@ where
     }
 
     /// Configures the application parameters to return during the test.
-    pub fn with_application_parameters(
-        self,
-        application_parameters: Application::Parameters,
-    ) -> Self {
+    pub fn with_application_parameters(self, application_parameters: A::Parameters) -> Self {
         *self.application_parameters.lock().unwrap() = Some(application_parameters);
         self
     }
 
     /// Configures the application parameters to return during the test.
-    pub fn set_application_parameters(
-        &self,
-        application_parameters: Application::Parameters,
-    ) -> &Self {
+    pub fn set_application_parameters(&self, application_parameters: A::Parameters) -> &Self {
         *self.application_parameters.lock().unwrap() = Some(application_parameters);
         self
     }
 
     /// Returns the application parameters provided when the application was created.
-    pub fn application_parameters(&self) -> Application::Parameters {
+    pub fn application_parameters(&self) -> A::Parameters {
         Self::fetch_mocked_value(
             &self.application_parameters,
             "Application parameters have not been mocked, \
@@ -107,19 +101,19 @@ where
     }
 
     /// Configures the application ID to return during the test.
-    pub fn with_application_id(self, application_id: ApplicationId<Application::Abi>) -> Self {
+    pub fn with_application_id(self, application_id: Application<A::Abi>) -> Self {
         *self.application_id.lock().unwrap() = Some(application_id);
         self
     }
 
     /// Configures the application ID to return during the test.
-    pub fn set_application_id(&self, application_id: ApplicationId<Application::Abi>) -> &Self {
+    pub fn set_application_id(&self, application_id: Application<A::Abi>) -> &Self {
         *self.application_id.lock().unwrap() = Some(application_id);
         self
     }
 
     /// Returns the ID of the current application.
-    pub fn application_id(&self) -> ApplicationId<Application::Abi> {
+    pub fn application(&self) -> Application<A::Abi> {
         Self::fetch_mocked_value(
             &self.application_id,
             "Application ID has not been mocked, \
@@ -344,7 +338,7 @@ where
     /// Configures the handler for application queries made during the test.
     pub fn with_query_application_handler(
         self,
-        handler: impl FnMut(ApplicationId, Vec<u8>) -> Vec<u8> + Send + 'static,
+        handler: impl FnMut(Application, Vec<u8>) -> Vec<u8> + Send + 'static,
     ) -> Self {
         *self.query_application_handler.lock().unwrap() = Some(Box::new(handler));
         self
@@ -353,18 +347,18 @@ where
     /// Configures the handler for application queries made during the test.
     pub fn set_query_application_handler(
         &self,
-        handler: impl FnMut(ApplicationId, Vec<u8>) -> Vec<u8> + Send + 'static,
+        handler: impl FnMut(Application, Vec<u8>) -> Vec<u8> + Send + 'static,
     ) -> &Self {
         *self.query_application_handler.lock().unwrap() = Some(Box::new(handler));
         self
     }
 
     /// Queries another application.
-    pub fn query_application<A: ServiceAbi>(
+    pub fn query_application<A2: ServiceAbi>(
         &self,
-        application: ApplicationId<A>,
-        query: &A::Query,
-    ) -> A::QueryResponse {
+        application: Application<A2>,
+        query: &A2::Query,
+    ) -> A2::QueryResponse {
         let query_bytes =
             serde_json::to_vec(&query).expect("Failed to serialize query to another application");
 
@@ -470,4 +464,4 @@ where
 }
 
 /// A type alias for the handler for application queries.
-pub type QueryApplicationHandler = Box<dyn FnMut(ApplicationId, Vec<u8>) -> Vec<u8> + Send>;
+pub type QueryApplicationHandler = Box<dyn FnMut(Application, Vec<u8>) -> Vec<u8> + Send>;
