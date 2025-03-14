@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_free","is_free_tcp","is_free_udp","random_free_port","random_free_tcp_port","random_free_udp_port","select_free_port","select_from_given_port"],"mod":["take_up"],"struct":["Selector"],"type":["Port"]};

@@ -1,0 +1,83 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Apply attributes to all fields with matching types"><title>apply in serde_with_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_with_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_with_macros/index.html">serde_with_macros</a><span class="version">3.12.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">serde_with_macros</a>::<wbr><a class="attr" href="#">apply</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_with_macros/lib.rs.html#1369-1371">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[apply]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Apply attributes to all fields with matching types</p>
+<p>Whenever you experience the need to apply the same attributes to multiple fields, you can use
+this macro. It allows you to specify a list of types and a list of attributes.
+Each field with a “matching” type will then get the attributes applied.
+The <code>apply</code> attribute must be placed <em>before</em> any consuming attributes, such as <code>derive</code> or
+<code>serde_as</code>, because Rust expands all attributes in order.</p>
+<p>For example, if your struct or enum contains many <code>Option&lt;T&gt;</code> fields, but you do not want to
+serialize <code>None</code> values, you can use this macro to apply the <code>#[serde(skip_serializing_if = "Option::is_none")]</code> attribute to all fields of type <code>Option&lt;T&gt;</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[serde_with::apply(
+    <span class="prelude-ty">Option </span>=&gt; <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]</span>,
+)]
+<span class="attr">#[derive(serde::Serialize)]
+</span><span class="kw">struct </span>Data {
+    a: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    b: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    c: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    d: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+}</code></pre></div>
+<p>Each rule starts with a type pattern, specifying which fields to match and a list of attributes
+to apply. Multiple rules can be provided in a single <code>apply</code> attribute.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[serde_with::apply(
+    <span class="prelude-ty">Option </span>=&gt; <span class="attr">#[serde(default)] #[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]</span>,
+    <span class="prelude-ty">Option</span>&lt;bool&gt; =&gt; <span class="attr">#[serde(rename = <span class="string">"bool"</span>)]</span>,
+)]</code></pre></div>
+<h3 id="type-patterns"><a class="doc-anchor" href="#type-patterns">§</a>Type Patterns</h3>
+<p>The type pattern left of the <code>=&gt;</code> specifies which fields to match.</p>
+<div><table><thead><tr><th style="text-align: left">Type Pattern</th><th style="text-align: right">Matching Types</th><th style="text-align: left">Notes</th></tr></thead><tbody>
+<tr><td style="text-align: left"><code>_</code></td><td style="text-align: right"><code>Option&lt;bool&gt;</code><br><code>BTreeMap&lt;&amp;'static str, Vec&lt;u32&gt;&gt;</code></td><td style="text-align: left"><code>_</code> matches all fields.</td></tr>
+<tr><td style="text-align: left"><code>Option</code></td><td style="text-align: right"><code>Option&lt;bool&gt;</code><br><code>Option&lt;String&gt;</code></td><td style="text-align: left">A missing generic is compatible with any generic arguments.</td></tr>
+<tr><td style="text-align: left"><code>Option&lt;bool&gt;</code></td><td style="text-align: right"><code>Option&lt;bool&gt;</code></td><td style="text-align: left">A fully specified type only matches exactly.</td></tr>
+<tr><td style="text-align: left"><code>BTreeMap&lt;String, u32&gt;</code></td><td style="text-align: right"><code>BTreeMap&lt;String, u32&gt;</code></td><td style="text-align: left">A fully specified type only matches exactly.</td></tr>
+<tr><td style="text-align: left"><code>BTreeMap&lt;String, _&gt;</code></td><td style="text-align: right"><code>BTreeMap&lt;String, u32&gt;</code><br><code>BTreeMap&lt;String, bool&gt;</code></td><td style="text-align: left">Any <code>String</code> key <code>BTreeMap</code> matches, as the value is using the <code>_</code> placeholder.</td></tr>
+<tr><td style="text-align: left"><code>[u8; _]</code></td><td style="text-align: right"><code>[u8; 1]</code><br><code>[u8; N]</code></td><td style="text-align: left"><code>_</code> also works as a placeholder for any array length.</td></tr>
+</tbody></table>
+</div><h3 id="opt-out-for-individual-fields"><a class="doc-anchor" href="#opt-out-for-individual-fields">§</a>Opt-out for Individual Fields</h3>
+<p>The <code>apply</code> attribute will find all fields with a compatible type.
+This can be overly eager and a different set of attributes might be required for a specific
+field. You can opt-out of the <code>apply</code> attribute by adding the <code>#[serde_with(skip_apply)]</code>
+attribute to the field. This will prevent any <code>apply</code> to apply to this field.
+If two rules apply to the same field, it is impossible to opt-out of only a single one.
+In this case the attributes must be applied to the field manually.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[serde_with::apply(
+    <span class="prelude-ty">Option </span>=&gt; <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]</span>,
+)]
+<span class="attr">#[derive(serde::Serialize)]
+</span><span class="kw">struct </span>Data {
+    a: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="attr">#[serde_with(skip_apply)]
+    </span>always_serialize_this_field: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    c: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    d: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+}
+
+<span class="kw">let </span>data = Data {
+    a: <span class="prelude-val">None</span>,
+    always_serialize_this_field: <span class="prelude-val">None</span>,
+    c: <span class="prelude-val">None</span>,
+    d: <span class="prelude-val">None</span>,
+};
+
+<span class="comment">// serializes into this JSON:
+</span>{
+    <span class="string">"always_serialize_this_field"</span>: null
+}</code></pre></div>
+<h2 id="alternative-path-to-serde_with-crate"><a class="doc-anchor" href="#alternative-path-to-serde_with-crate">§</a>Alternative path to <code>serde_with</code> crate</h2>
+<p>If <code>serde_with</code> is not available at the default path, its path should be specified with the
+<code>crate</code> argument. See [re-exporting <code>serde_as</code>] for more use case information.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[serde_with::apply(
+    <span class="kw">crate </span>= <span class="string">"::some_other_lib::serde_with"
+    </span><span class="prelude-ty">Option </span>=&gt; <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]</span>,
+)]
+<span class="attr">#[derive(serde::Serialize)]
+</span><span class="kw">struct </span>Data {
+    a: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    b: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    c: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    d: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+}</code></pre></div>
+</div></details></section></div></main></body></html>

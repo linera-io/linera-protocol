@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Alarm signal scheduling."><title>nix::unistd::alarm - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nix" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../nix/index.html">nix</a><span class="version">0.27.1</span></h2></div><h2 class="location"><a href="#">Module alarm</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In nix::unistd</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">nix</a>::<wbr><a href="../index.html">unistd</a>::<wbr><a class="mod" href="#">alarm</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/nix/unistd.rs.html#1817">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Alarm signal scheduling.</p>
+<p>Scheduling an alarm will trigger a <code>SIGALRM</code> signal when the time has
+elapsed, which has to be caught, because the default action for the
+signal is to terminate the program. This signal also can’t be ignored
+because the system calls like <code>pause</code> will not be interrupted, see the
+second example below.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Canceling an alarm:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nix::unistd::alarm;
+
+<span class="comment">// Set an alarm for 60 seconds from now.
+</span>alarm::set(<span class="number">60</span>);
+
+<span class="comment">// Cancel the above set alarm, which returns the number of seconds left
+// of the previously set alarm.
+</span><span class="macro">assert_eq!</span>(alarm::cancel(), <span class="prelude-val">Some</span>(<span class="number">60</span>));</code></pre></div>
+<p>Scheduling an alarm and waiting for the signal:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::time::{Duration, Instant};
+
+<span class="kw">use </span>nix::unistd::{alarm, pause};
+<span class="kw">use </span>nix::sys::signal::<span class="kw-2">*</span>;
+
+<span class="comment">// We need to setup an empty signal handler to catch the alarm signal,
+// otherwise the program will be terminated once the signal is delivered.
+</span><span class="kw">extern fn </span>signal_handler(<span class="kw">_</span>: nix::libc::c_int) { }
+<span class="kw">let </span>sa = SigAction::new(
+    SigHandler::Handler(signal_handler),
+    SaFlags::SA_RESTART,
+    SigSet::empty()
+);
+<span class="kw">unsafe </span>{
+    sigaction(Signal::SIGALRM, <span class="kw-2">&amp;</span>sa);
+}
+
+<span class="kw">let </span>start = Instant::now();
+
+<span class="comment">// Set an alarm for 1 second from now.
+</span>alarm::set(<span class="number">1</span>);
+
+<span class="comment">// Pause the process until the alarm signal is received.
+</span><span class="kw">let </span><span class="kw-2">mut </span>sigset = SigSet::empty();
+sigset.add(Signal::SIGALRM);
+sigset.wait();
+
+<span class="macro">assert!</span>(start.elapsed() &gt;= Duration::from_secs(<span class="number">1</span>));</code></pre></div>
+<h2 id="references"><a class="doc-anchor" href="#references">§</a>References</h2>
+<p>See also <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/alarm.html">alarm(2)</a>.</p>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.cancel.html" title="fn nix::unistd::alarm::cancel">cancel</a></div><div class="desc docblock-short">Cancel an previously set alarm signal.</div></li><li><div class="item-name"><a class="fn" href="fn.set.html" title="fn nix::unistd::alarm::set">set</a></div><div class="desc docblock-short">Schedule an alarm signal.</div></li></ul></section></div></main></body></html>

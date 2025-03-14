@@ -1,0 +1,467 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/pyroscope-0.5.8/src/encode/profiles.rs`."><title>profiles.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="pyroscope" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+</pre></div><pre class="rust"><code><span class="comment">// @generated
+</span><span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Profile {
+    <span class="doccomment">///  A description of the samples associated with each Sample.value.
+    ///  For a cpu profile this might be:
+    ///    \[["cpu","nanoseconds"]\] or \[["wall","seconds"]\] or \[["syscall","count"]\]
+    ///  For a heap profile, this might be:
+    ///    \[["allocations","count"\], \["space","bytes"]\],
+    ///  If one of the values represents the number of events represented
+    ///  by the sample, by convention it should be at index 0 and use
+    ///  sample_type.unit == "count".
+    </span><span class="attr">#[prost(message, repeated, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>sample_type: ::prost::alloc::vec::Vec&lt;ValueType&gt;,
+    <span class="doccomment">///  The set of samples recorded in this profile.
+    </span><span class="attr">#[prost(message, repeated, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>sample: ::prost::alloc::vec::Vec&lt;Sample&gt;,
+    <span class="doccomment">///  Mapping from address ranges to the image/binary/library mapped
+    ///  into that address range.  mapping\[0\] will be the main binary.
+    </span><span class="attr">#[prost(message, repeated, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>mapping: ::prost::alloc::vec::Vec&lt;Mapping&gt;,
+    <span class="doccomment">///  Useful program location
+    </span><span class="attr">#[prost(message, repeated, tag = <span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>location: ::prost::alloc::vec::Vec&lt;Location&gt;,
+    <span class="doccomment">///  Functions referenced by locations
+    </span><span class="attr">#[prost(message, repeated, tag = <span class="string">"5"</span>)]
+    </span><span class="kw">pub </span>function: ::prost::alloc::vec::Vec&lt;Function&gt;,
+    <span class="doccomment">///  A common table for strings referenced by various messages.
+    ///  string_table\[0\] must always be "".
+    </span><span class="attr">#[prost(string, repeated, tag = <span class="string">"6"</span>)]
+    </span><span class="kw">pub </span>string_table: ::prost::alloc::vec::Vec&lt;::prost::alloc::string::String&gt;,
+    <span class="doccomment">///  frames with Function.function_name fully matching the following
+    ///  regexp will be dropped from the samples, along with their successors.
+    ///
+    ///  Index into string table.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"7"</span>)]
+    </span><span class="kw">pub </span>drop_frames: i64,
+    <span class="doccomment">///  frames with Function.function_name fully matching the following
+    ///  regexp will be kept, even if it matches drop_frames.
+    ///
+    ///  Index into string table.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"8"</span>)]
+    </span><span class="kw">pub </span>keep_frames: i64,
+    <span class="comment">//  The following fields are informational, do not affect
+    //  interpretation of results.
+    </span><span class="doccomment">///  Time of collection (UTC) represented as nanoseconds past the epoch.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"9"</span>)]
+    </span><span class="kw">pub </span>time_nanos: i64,
+    <span class="doccomment">///  Duration of the profile, if a duration makes sense.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"10"</span>)]
+    </span><span class="kw">pub </span>duration_nanos: i64,
+    <span class="doccomment">///  The kind of events between sampled ocurrences.
+    ///  e.g [ "cpu","cycles" ] or [ "heap","bytes" ]
+    </span><span class="attr">#[prost(message, optional, tag = <span class="string">"11"</span>)]
+    </span><span class="kw">pub </span>period_type: ::core::option::Option&lt;ValueType&gt;,
+    <span class="doccomment">///  The number of events between sampled occurrences.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"12"</span>)]
+    </span><span class="kw">pub </span>period: i64,
+    <span class="doccomment">///  Freeform text associated to the profile.
+    ///
+    ///  Indices into string table.
+    </span><span class="attr">#[prost(int64, repeated, tag = <span class="string">"13"</span>)]
+    </span><span class="kw">pub </span>comment: ::prost::alloc::vec::Vec&lt;i64&gt;,
+    <span class="doccomment">///  Index into the string table of the type of the preferred sample
+    ///  value. If unset, clients should default to the last sample value.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"14"</span>)]
+    </span><span class="kw">pub </span>default_sample_type: i64,
+}
+<span class="doccomment">///  ValueType describes the semantics and measurement units of a value.
+</span><span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>ValueType {
+    <span class="doccomment">///  Index into string table.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>r#type: i64,
+    <span class="doccomment">///  Index into string table.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>unit: i64,
+}
+<span class="doccomment">///  Each Sample records values encountered in some program
+///  context. The program context is typically a stack trace, perhaps
+///  augmented with auxiliary information like the thread-id, some
+///  indicator of a higher level request being handled etc.
+</span><span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Sample {
+    <span class="doccomment">///  The ids recorded here correspond to a Profile.location.id.
+    ///  The leaf is at location_id\[0\].
+    </span><span class="attr">#[prost(uint64, repeated, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>location_id: ::prost::alloc::vec::Vec&lt;u64&gt;,
+    <span class="doccomment">///  The type and unit of each value is defined by the corresponding
+    ///  entry in Profile.sample_type. All samples must have the same
+    ///  number of values, the same as the length of Profile.sample_type.
+    ///  When aggregating multiple samples into a single sample, the
+    ///  result has a list of values that is the element-wise sum of the
+    ///  lists of the originals.
+    </span><span class="attr">#[prost(int64, repeated, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>value: ::prost::alloc::vec::Vec&lt;i64&gt;,
+    <span class="doccomment">///  label includes additional context for this sample. It can include
+    ///  things like a thread id, allocation size, etc
+    </span><span class="attr">#[prost(message, repeated, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>label: ::prost::alloc::vec::Vec&lt;Label&gt;,
+}
+<span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Label {
+    <span class="doccomment">///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>key: i64,
+    <span class="doccomment">///  At most one of the following must be present
+    ///
+    ///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>str: i64,
+    <span class="attr">#[prost(int64, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>num: i64,
+    <span class="doccomment">///  Should only be present when num is present.
+    ///  Specifies the units of num.
+    ///  Use arbitrary string (for example, "requests") as a custom count unit.
+    ///  If no unit is specified, consumer may apply heuristic to deduce the unit.
+    ///  Consumers may also  interpret units like "bytes" and "kilobytes" as memory
+    ///  units and units like "seconds" and "nanoseconds" as time units,
+    ///  and apply appropriate unit conversions to these.
+    ///
+    ///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>num_unit: i64,
+}
+<span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Mapping {
+    <span class="doccomment">///  Unique nonzero id for the mapping.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>id: u64,
+    <span class="doccomment">///  Address at which the binary (or DLL) is loaded into memory.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>memory_start: u64,
+    <span class="doccomment">///  The limit of the address range occupied by this mapping.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>memory_limit: u64,
+    <span class="doccomment">///  Offset in the binary that corresponds to the first mapped address.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>file_offset: u64,
+    <span class="doccomment">///  The object this entry is loaded from.  This can be a filename on
+    ///  disk for the main binary and shared libraries, or virtual
+    ///  abstractions like "\[vdso\]".
+    ///
+    ///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"5"</span>)]
+    </span><span class="kw">pub </span>filename: i64,
+    <span class="doccomment">///  A string that uniquely identifies a particular program version
+    ///  with high probability. E.g., for binaries generated by GNU tools,
+    ///  it could be the contents of the .note.gnu.build-id field.
+    ///
+    ///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"6"</span>)]
+    </span><span class="kw">pub </span>build_id: i64,
+    <span class="doccomment">///  The following fields indicate the resolution of symbolic info.
+    </span><span class="attr">#[prost(bool, tag = <span class="string">"7"</span>)]
+    </span><span class="kw">pub </span>has_functions: bool,
+    <span class="attr">#[prost(bool, tag = <span class="string">"8"</span>)]
+    </span><span class="kw">pub </span>has_filenames: bool,
+    <span class="attr">#[prost(bool, tag = <span class="string">"9"</span>)]
+    </span><span class="kw">pub </span>has_line_numbers: bool,
+    <span class="attr">#[prost(bool, tag = <span class="string">"10"</span>)]
+    </span><span class="kw">pub </span>has_inline_frames: bool,
+}
+<span class="doccomment">///  Describes function and line table debug information.
+</span><span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Location {
+    <span class="doccomment">///  Unique nonzero id for the location.  A profile could use
+    ///  instruction addresses or any integer sequence as ids.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>id: u64,
+    <span class="doccomment">///  The id of the corresponding profile.Mapping for this location.
+    ///  It can be unset if the mapping is unknown or not applicable for
+    ///  this profile type.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>mapping_id: u64,
+    <span class="doccomment">///  The instruction address for this location, if available.  It
+    ///  should be within \[Mapping.memory_start...Mapping.memory_limit\]
+    ///  for the corresponding mapping. A non-leaf address may be in the
+    ///  middle of a call instruction. It is up to display tools to find
+    ///  the beginning of the instruction if necessary.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>address: u64,
+    <span class="doccomment">///  Multiple line indicates this location has inlined functions,
+    ///  where the last entry represents the caller into which the
+    ///  preceding entries were inlined.
+    ///
+    ///  E.g., if memcpy() is inlined into printf:
+    ///     line\[0\].function_name == "memcpy"
+    ///     line\[1\].function_name == "printf"
+    </span><span class="attr">#[prost(message, repeated, tag = <span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>line: ::prost::alloc::vec::Vec&lt;Line&gt;,
+    <span class="doccomment">///  Provides an indication that multiple symbols map to this location's
+    ///  address, for example due to identical code folding by the linker. In that
+    ///  case the line information above represents one of the multiple
+    ///  symbols. This field must be recomputed when the symbolization state of the
+    ///  profile changes.
+    </span><span class="attr">#[prost(bool, tag = <span class="string">"5"</span>)]
+    </span><span class="kw">pub </span>is_folded: bool,
+}
+<span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Line {
+    <span class="doccomment">///  The id of the corresponding profile.Function for this line.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>function_id: u64,
+    <span class="doccomment">///  Line number in source code.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>line: i64,
+}
+<span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Function {
+    <span class="doccomment">///  Unique nonzero id for the function.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>id: u64,
+    <span class="doccomment">///  Name of the function, in human-readable form if available.
+    ///
+    ///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>name: i64,
+    <span class="doccomment">///  Name of the function, as identified by the system.
+    ///  For instance, it can be a C++ mangled name.
+    ///
+    ///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>system_name: i64,
+    <span class="doccomment">///  Source file containing the function.
+    ///
+    ///  Index into string table
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>filename: i64,
+    <span class="doccomment">///  Line number in source file.
+    </span><span class="attr">#[prost(int64, tag = <span class="string">"5"</span>)]
+    </span><span class="kw">pub </span>start_line: i64,
+}
+<span class="comment">// @@protoc_insertion_point(module)
+</span></code></pre></div></section></main></body></html>

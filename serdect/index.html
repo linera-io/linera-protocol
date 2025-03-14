@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: Constant-Time Serde Helpers"><title>serdect - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serdect" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../serdect/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../serdect/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../serdect/index.html">serdect</a><span class="version">0.2.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">serdect</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serdect/lib.rs.html#1-156">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-constant-time-serde-helpers"><a class="doc-anchor" href="#rustcrypto-constant-time-serde-helpers">§</a><a href="https://github.com/RustCrypto">RustCrypto</a>: Constant-Time Serde Helpers</h2>
+<p><a href="https://crates.io/crates/serdect"><img src="https://buildstats.info/crate/serdect" alt="Crate" /></a>
+<a href="https://docs.rs/serdect/"><img src="https://docs.rs/serdect/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/formats/actions/workflows/serdect.yml"><img src="https://github.com/RustCrypto/formats/actions/workflows/serdect.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache 2.0/MIT Licensed" />
+<img src="https://img.shields.io/badge/rustc-1.60+-blue.svg" alt="MSRV" /></p>
+<p>Constant-time serde serializer/deserializer helpers for data that potentially
+contains secrets (e.g. cryptographic keys)</p>
+<p><a href="https://docs.rs/serdect/">Documentation</a></p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p><a href="https://arxiv.org/pdf/2108.04600.pdf">Serialization is a potential sidechannel for leaking sensitive secrets</a>
+such as cryptographic keys.</p>
+<p>This crate provides “best effort” constant-time helper methods for reducing
+the amount of timing variability involved in serializing/deserializing data
+when using <code>serde</code>, Rust’s standard serialization framework.</p>
+<p>These helper methods conditionally serialize data as hexadecimal using the
+constant-time <a href="https://github.com/RustCrypto/formats/tree/master/base16ct"><code>base16ct</code></a> crate when using human-readable formats such as
+JSON or TOML. When using a binary format, the data is serialized as-is into
+binary.</p>
+<p>While this crate can’t ensure that format implementations don’t perform
+other kinds of data-dependent branching on the contents of the serialized data,
+using a constant-time hex serialization with human-readable formats should
+help reduce the overall timing variability.</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>Rust <strong>1.60</strong> or newer.</p>
+<p>In the future, we reserve the right to change MSRV (i.e. MSRV is out-of-scope
+for this crate’s SemVer guarantees), however when we do it will be accompanied by
+a minor version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3><h4 id="implementing-deserialize-and-serialize-for-arrays"><a class="doc-anchor" href="#implementing-deserialize-and-serialize-for-arrays">§</a>Implementing <code>Deserialize</code> and <code>Serialize</code> for arrays.</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>SecretData([u8; <span class="number">32</span>]);
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>SecretData {
+   <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+   <span class="kw">where
+       </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+   {
+       <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">32</span>];
+       serdect::array::deserialize_hex_or_bin(<span class="kw-2">&amp;mut </span>buffer, deserializer)<span class="question-mark">?</span>;
+       <span class="prelude-val">Ok</span>(<span class="self">Self</span>(buffer))
+   }
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>SecretData {
+   <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+   <span class="kw">where
+       </span>S: Serializer,
+   {
+       serdect::array::serialize_hex_lower_or_bin(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, serializer)
+   }
+}
+
+<span class="kw">let </span>data = SecretData([<span class="number">42</span>; <span class="number">32</span>]);
+
+<span class="kw">let </span>serialized = bincode::serialize(<span class="kw-2">&amp;</span>data).unwrap();
+<span class="comment">// bincode, a binary serialization format, is serialized into bytes.
+</span><span class="macro">assert_eq!</span>(serialized.as_slice(), [<span class="number">42</span>; <span class="number">32</span>]);
+
+<span class="kw">let </span>serialized = serde_json::to_string(<span class="kw-2">&amp;</span>data).unwrap();
+<span class="comment">// JSON, a human-readable serialization format, is serialized into lower-case HEX.
+</span><span class="macro">assert_eq!</span>(
+   serialized,
+   <span class="string">"\"2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a\""
+</span>);</code></pre></div>
+<h4 id="implementing-deserialize-and-serialize-for-slices"><a class="doc-anchor" href="#implementing-deserialize-and-serialize-for-slices">§</a>Implementing <code>Deserialize</code> and <code>Serialize</code> for slices.</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>SecretData(Vec&lt;u8&gt;);
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>SecretData {
+   <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+   <span class="kw">where
+       </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+   {
+       serdect::slice::deserialize_hex_or_bin_vec(deserializer).map(<span class="self">Self</span>)
+   }
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>SecretData {
+   <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+   <span class="kw">where
+       </span>S: Serializer,
+   {
+       serdect::slice::serialize_hex_lower_or_bin(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, serializer)
+   }
+}
+
+<span class="kw">let </span>data = SecretData(<span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">32</span>]);
+
+<span class="kw">let </span>serialized = bincode::serialize(<span class="kw-2">&amp;</span>data).unwrap();
+<span class="comment">// bincode, a binary serialization format is serialized into bytes.
+</span><span class="macro">assert_eq!</span>(
+   serialized.as_slice(),
+   [
+       <span class="comment">// Not fixed-size, so a size will be encoded.
+       </span><span class="number">32</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+       <span class="comment">// Actual data.
+       </span><span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>,
+       <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>,
+   ]
+);
+
+<span class="kw">let </span>serialized = serde_json::to_string(<span class="kw-2">&amp;</span>data).unwrap();
+<span class="comment">// JSON, a human-readable serialization format is serialized into lower-case HEX.
+</span><span class="macro">assert_eq!</span>(
+   serialized,
+   <span class="string">"\"2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a\""
+</span>);</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.serde"><code>pub use <a class="mod" href="../serde/index.html" title="mod serde">serde</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="array/index.html" title="mod serdect::array">array</a></div><div class="desc docblock-short">Serialization primitives for arrays.</div></li><li><div class="item-name"><a class="mod" href="slice/index.html" title="mod serdect::slice">slice</a></div><div class="desc docblock-short">Serialization primitives for slices.</div></li></ul></section></div></main></body></html>

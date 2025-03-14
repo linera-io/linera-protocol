@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Inspects the current call-stack, passing all active frames into the closure provided to calculate a stack trace."><title>trace in backtrace - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="backtrace" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../backtrace/index.html">backtrace</a><span class="version">0.3.74</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">backtrace</a>::<wbr><a class="fn" href="#">trace</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/backtrace/backtrace/mod.rs.html#51-54">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn trace&lt;F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="struct.Frame.html" title="struct backtrace::Frame">Frame</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;(cb: F)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Inspects the current call-stack, passing all active frames into the closure
+provided to calculate a stack trace.</p>
+<p>This function is the workhorse of this library in calculating the stack
+traces for a program. The given closure <code>cb</code> is yielded instances of a
+<code>Frame</code> which represent information about that call frame on the stack. The
+closure is yielded frames in a top-down fashion (most recently called
+functions first).</p>
+<p>The closure’s return value is an indication of whether the backtrace should
+continue. A return value of <code>false</code> will terminate the backtrace and return
+immediately.</p>
+<p>Once a <code>Frame</code> is acquired you will likely want to call <code>backtrace::resolve</code>
+to convert the <code>ip</code> (instruction pointer) or symbol address to a <code>Symbol</code>
+through which the name and/or filename/line number can be learned.</p>
+<p>Note that this is a relatively low-level function and if you’d like to, for
+example, capture a backtrace to be inspected later, then the <code>Backtrace</code>
+type may be more appropriate.</p>
+<h2 id="required-features"><a class="doc-anchor" href="#required-features">§</a>Required features</h2>
+<p>This function requires the <code>std</code> feature of the <code>backtrace</code> crate to be
+enabled, and the <code>std</code> feature is enabled by default.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This function strives to never panic, but if the <code>cb</code> provided panics then
+some platforms will force a double panic to abort the process. Some
+platforms use a C library which internally uses callbacks which cannot be
+unwound through, so panicking from <code>cb</code> may trigger a process abort.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>backtrace;
+
+<span class="kw">fn </span>main() {
+    backtrace::trace(|frame| {
+        <span class="comment">// ...
+
+        </span><span class="bool-val">true </span><span class="comment">// continue the backtrace
+    </span>});
+}</code></pre></div>
+</div></details></section></div></main></body></html>

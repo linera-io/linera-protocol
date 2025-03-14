@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Allocates one or more pages of memory, with a defined protection."><title>alloc in region - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="region" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../region/index.html">region</a><span class="version">3.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">region</a>::<wbr><a class="fn" href="#">alloc</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/region/alloc.rs.html#116-127">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn alloc(size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, protection: <a class="struct" href="struct.Protection.html" title="struct region::Protection">Protection</a>) -&gt; <a class="type" href="type.Result.html" title="type region::Result">Result</a>&lt;<a class="struct" href="struct.Allocation.html" title="struct region::Allocation">Allocation</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Allocates one or more pages of memory, with a defined protection.</p>
+<p>This function provides a very simple interface for allocating anonymous
+virtual pages. The allocation address will be decided by the operating
+system.</p>
+<h2 id="parameters"><a class="doc-anchor" href="#parameters">§</a>Parameters</h2>
+<ul>
+<li>The size may not be zero.</li>
+<li>The size is rounded up to the closest page boundary.</li>
+</ul>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<ul>
+<li>If an interaction with the underlying operating system fails, an error
+will be returned.</li>
+<li>If size is zero, <a href="enum.Error.html#variant.InvalidParameter" title="variant region::Error::InvalidParameter"><code>Error::InvalidParameter</code></a> will be returned.</li>
+</ul>
+<h2 id="os-specific-behavior"><a class="doc-anchor" href="#os-specific-behavior">§</a>OS-Specific Behavior</h2>
+<p>On NetBSD pages will be allocated without PaX memory protection restrictions
+(i.e. pages will be allowed to be modified to any combination of <code>RWX</code>).</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>region::Protection;
+<span class="kw">let </span>ret5 = [<span class="number">0xB8</span>, <span class="number">0x05</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0xC3u8</span>];
+
+<span class="kw">let </span>memory = region::alloc(<span class="number">100</span>, Protection::READ_WRITE_EXECUTE)<span class="question-mark">?</span>;
+<span class="kw">let </span>slice = <span class="kw">unsafe </span>{
+  std::slice::from_raw_parts_mut(memory.as_ptr::&lt;u8&gt;() <span class="kw">as </span><span class="kw-2">*mut </span>u8, memory.len())
+};
+
+slice[..<span class="number">6</span>].copy_from_slice(<span class="kw-2">&amp;</span>ret5);
+<span class="kw">let </span>x: <span class="kw">extern </span><span class="string">"C" </span><span class="kw">fn</span>() -&gt; i32 = <span class="kw">unsafe </span>{ std::mem::transmute(slice.as_ptr()) };
+
+<span class="macro">assert_eq!</span>(x(), <span class="number">5</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

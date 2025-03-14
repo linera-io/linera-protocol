@@ -1,0 +1,1 @@
+searchState.loadedDescShard("rle_decode_fast", 0, "rle-decode-helper\nFast decoding of run length encoded data")

@@ -1,0 +1,521 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides two procedural macros, `#[derive(Arbitrary)]` and `#[proptest]`."><title>test_strategy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="test_strategy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../test_strategy/index.html">test_strategy</a><span class="version">0.3.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#attributes">Attribute Macros</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">test_strategy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/test_strategy/lib.rs.html#2-698">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides two procedural macros, <code>#[derive(Arbitrary)]</code> and <code>#[proptest]</code>.</p>
+<p>Each of these macros is an alternative to the following proptest’s official macros.</p>
+<div><table><thead><tr><th><a href="https://crates.io/crates/test-strategy">test-strategy</a></th><th><a href="https://crates.io/crates/proptest">proptest</a></th><th><a href="https://crates.io/crates/proptest-derive">proptest-derive</a></th></tr></thead><tbody>
+<tr><td><a href="#derivearbitrary"><code>#[derive(Arbitrary)]</code></a></td><td></td><td><a href="https://altsysrq.github.io/proptest-book/proptest-derive/modifiers.html"><code>#[derive(Arbitrary)]</code></a></td></tr>
+<tr><td><a href="#proptest"><code>#[proptest]</code></a></td><td><a href="https://altsysrq.github.io/rustdoc/proptest/latest/proptest/macro.proptest.html"><code>proptest ! { }</code></a></td><td></td></tr>
+</tbody></table>
+</div>
+<p>The macros provided by this crate have the following advantages over the proptest’s official macros.</p>
+<ul>
+<li>Supports higher-order strategies. (<code>#[derive(Arbitrary)]</code> and <code>#[proptest]</code>)</li>
+<li>Code formatting is not disabled. (<code>#[proptest]</code>)</li>
+</ul>
+<p>However, the syntax of this crate’s macros are not compatible with the syntax of the official macros.</p>
+<h3 id="install"><a class="doc-anchor" href="#install">§</a>Install</h3>
+<p>Add this to your Cargo.toml:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+test-strategy = &quot;0.3.1&quot;
+proptest = &quot;1.0.0&quot;
+</code></pre></div><h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>You can use <code>#[derive(Arbitrary)]</code> to automatically implement proptest’s <code>Arbitrary</code> trait.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInputStruct {
+    x: u32,
+
+    <span class="attr">#[strategy(<span class="number">1</span>..<span class="number">10u32</span>)]
+    </span>y: u32,
+
+    <span class="attr">#[strategy(<span class="number">0</span>..#y)]
+    </span>z: u32,
+}
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">enum </span>TestInputEnum {
+    A,
+    B,
+    <span class="attr">#[weight(<span class="number">3</span>)]
+    </span>C,
+    X(u32),
+    Y(<span class="attr">#[strategy(<span class="number">0</span>..<span class="number">10u32</span>)] </span>u32),
+}</code></pre></div>
+<p>You can define a property test by adding <code>#[proptest]</code> to the function.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::proptest;
+
+<span class="attr">#[proptest]
+</span><span class="kw">fn </span>my_test(_x: u32, <span class="attr">#[strategy(<span class="number">1</span>..<span class="number">10u32</span>)] </span>y: u32, <span class="attr">#[strategy(<span class="number">0</span>..#y)] </span>z: u32) {
+    <span class="macro">assert!</span>(<span class="number">1 </span>&lt;= y &amp;&amp; y &lt; <span class="number">10</span>);
+    <span class="macro">assert!</span>(z &lt;= y);
+}</code></pre></div>
+<h3 id="attributes"><a class="doc-anchor" href="#attributes">§</a>Attributes</h3>
+<p>Attributes can be written in the following positions.</p>
+<div><table><thead><tr><th>attribute</th><th>function</th><th>struct</th><th>enum</th><th>variant</th><th>field</th><th>function parameter</th></tr></thead><tbody>
+<tr><td><a href="#strategy"><code>#[strategy]</code></a></td><td></td><td></td><td></td><td></td><td>✔</td><td>✔</td></tr>
+<tr><td><a href="#any"><code>#[any]</code></a></td><td></td><td></td><td></td><td></td><td>✔</td><td>✔</td></tr>
+<tr><td><a href="#weight"><code>#[weight]</code></a></td><td></td><td></td><td></td><td>✔</td><td></td><td></td></tr>
+<tr><td><a href="#map"><code>#[map]</code></a></td><td></td><td></td><td></td><td></td><td>✔</td><td>✔</td></tr>
+<tr><td><a href="#filter"><code>#[filter]</code></a></td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+<tr><td><a href="#by_ref"><code>#[by_ref]</code></a></td><td></td><td></td><td></td><td></td><td>✔</td><td>✔</td></tr>
+<tr><td><a href="#arbitraryargs--t"><code>#[arbitrary(args = T)]</code></a></td><td></td><td>✔</td><td>✔</td><td></td><td></td><td></td></tr>
+<tr><td><a href="#arbitraryboundt1-t2-"><code>#[arbitrary(bound(...))]</code></a></td><td></td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td></td></tr>
+<tr><td><a href="#arbitrarydump"><code>#[arbitrary(dump)]</code></a></td><td></td><td>✔</td><td>✔</td><td></td><td></td><td></td></tr>
+<tr><td><a href="#proptest"><code>#[proptest]</code></a></td><td>✔</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td><a href="#proptestasync--"><code>#[proptest(async = ...)]</code></a></td><td>✔</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td><a href="#proptestdump"><code>#[proptest(dump)]</code></a></td><td>✔</td><td></td><td></td><td></td><td></td><td></td></tr>
+</tbody></table>
+</div><h3 id="derivearbitrary"><a class="doc-anchor" href="#derivearbitrary">§</a><code>#[derive(Arbitrary)]</code></h3>
+<p>You can implement <code>proptest::arbitrary::Arbitrary</code> automatically by adding <code>#[derive(Arbitrary)]</code> to struct or enum declaration.</p>
+<p>By default, all fields are set using the strategy obtained by <code>proptest::arbitrary::any()</code>.</p>
+<p>So the following two codes are equivalent.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput {
+    x: u32,
+    y: u32,
+}</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::{
+    arbitrary::{any, Arbitrary},
+    strategy::{BoxedStrategy, Strategy},
+};
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>TestInput {
+    x: u32,
+    y: u32,
+}
+<span class="kw">impl </span>Arbitrary <span class="kw">for </span>TestInput {
+    <span class="kw">type </span>Parameters = ();
+    <span class="kw">type </span>Strategy = BoxedStrategy&lt;<span class="self">Self</span>&gt;;
+
+    <span class="kw">fn </span>arbitrary_with(_args: <span class="self">Self</span>::Parameters) -&gt; <span class="self">Self</span>::Strategy {
+        <span class="kw">let </span>x = any::&lt;u32&gt;();
+        <span class="kw">let </span>y = any::&lt;u32&gt;();
+        (x, y).prop_map(|(x, y)| <span class="self">Self </span>{ x, y }).boxed()
+    }
+}</code></pre></div>
+<h3 id="strategy"><a class="doc-anchor" href="#strategy">§</a><code>#[strategy]</code></h3>
+<p>You can specify a strategy to generate values for the field by adding <code>#[strategy(...)]</code> to the field.</p>
+<p>In the following example, the value of field <code>x</code> will be less than 20.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput {
+    <span class="attr">#[strategy(<span class="number">0</span>..<span class="number">20u32</span>)]
+    </span>x: u32,
+}</code></pre></div>
+<p>In <code>#[strategy]</code>, the values of other fields can be used by following <code>#</code> to the name of the field.</p>
+<p>In the following example, the value of <code>y</code> is less than or equal to <code>x</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput {
+    x: u32,
+    <span class="attr">#[strategy(<span class="number">0</span>..=#x)]
+    </span>y: u32,
+}</code></pre></div>
+<h3 id="any"><a class="doc-anchor" href="#any">§</a><code>#[any]</code></h3>
+<p>Instead of writing <code>#[strategy(any_with::&lt;Type&gt;(expr))]</code>, you can write <code>#[any(expr)]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::collection::size_range;
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug, PartialEq)]
+</span><span class="kw">struct </span>TestInput {
+    <span class="attr">#[any(size_range(<span class="number">0</span>..<span class="number">16</span>).lift())]
+    </span>x: Vec&lt;u16&gt;,
+}</code></pre></div>
+<p>Instead of writing an expression to be passed to <code>any_with</code>, you can write only the value of the field to be changed from the default value.</p>
+<p>Therefore, the following <code>TestInputA</code>, <code>TestInputB</code> and <code>TestInputC</code> are equivalent.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInputA {
+    <span class="attr">#[any(InnerArgs { upper : <span class="number">20</span>, ..InnerArgs::default() })]
+    </span>a: Inner,
+}
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInputB {
+    <span class="attr">#[any(InnerArgs::default(), upper = <span class="number">20</span>)]
+    </span>a: Inner,
+}
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInputC {
+    <span class="attr">#[any(upper = <span class="number">20</span>)]
+    </span>a: Inner,
+}
+
+<span class="attr">#[derive(Default)]
+</span><span class="kw">struct </span>InnerArgs {
+    lower: i32,
+    upper: i32,
+}
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+#[arbitrary(args = InnerArgs)]
+</span><span class="kw">struct </span>Inner {
+    <span class="attr">#[strategy(args.lower..args.upper)]
+    </span>x: i32,
+}</code></pre></div>
+<h3 id="weight"><a class="doc-anchor" href="#weight">§</a><code>#[weight]</code></h3>
+<p>By default, all variants appear with equal probability.</p>
+<p>You can add <code>#[weight]</code> to the variant to change the probability of the variant appearing.</p>
+<p>In the following example, <code>TestInput::B</code> is twice as likely to appear as <code>TestInput::A</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">enum </span>TestInput {
+    A,
+
+    <span class="attr">#[weight(<span class="number">2</span>)]
+    </span>B,
+}</code></pre></div>
+<p>If you add <code>#[weight(0)]</code> to a variant, the variant does not appear, so you can use a type in that variant that cannot be used as <code>Arbitrary</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>NotArbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">enum </span>TestInput {
+    A,
+
+    <span class="attr">#[allow(dead_code)]
+    #[weight(<span class="number">0</span>)] </span><span class="comment">// Removing this `#[weight(0)]` will cause a compile error.
+    </span>B(NotArbitrary),
+}</code></pre></div>
+<h3 id="map"><a class="doc-anchor" href="#map">§</a><code>#[map]</code></h3>
+<p>Instead of using <code>prop_map</code> in <code>#[strategy(...)]</code>, <code>#[map(...)]</code> can be used.</p>
+<p>The following codes mean the same thing.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::arbitrary::any;
+<span class="kw">use </span>proptest::strategy::Strategy;
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput1 {
+    <span class="attr">#[strategy(any::&lt;u32&gt;().prop_map(|x| x + <span class="number">1</span>))]
+    </span>x: u32,
+}
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput2 {
+    <span class="attr">#[strategy(any::&lt;u32&gt;())]
+    #[map(|x| x + <span class="number">1</span>)]
+    </span>x: u32,
+}
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput3 {
+    <span class="attr">#[map(|x: u32| x + <span class="number">1</span>)]
+    </span>x: u32,
+}</code></pre></div>
+<p>References to other fields in the function applied to <code>prop_map</code> or <code>#[map(...)]</code> will generate different strategies.</p>
+<p>Referencing another field in <code>#[strategy(...)]</code> will expand it to <code>prop_flat_map</code>, even if it is in <code>prop_map</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::arbitrary::any;
+<span class="kw">use </span>proptest::strategy::{Just, Strategy};
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>T1 {
+    x: u32,
+
+    <span class="attr">#[strategy(any::&lt;u32&gt;().prop_map(<span class="kw">move </span>|y| #x + y))]
+    </span>y: u32,
+}
+<span class="comment">// The code above generates the following strategy.
+</span><span class="kw">let </span>t1 = any::&lt;u32&gt;()
+    .prop_flat_map(|x| (Just(x), any::&lt;u32&gt;().prop_map(<span class="kw">move </span>|y| x + y)))
+    .prop_map(|(x, y)| T1 { x, y });</code></pre></div>
+<p>On the other hand, if you refer to another field in <code>#[map]</code>, it will expand to <code>prop_map</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::arbitrary::any;
+<span class="kw">use </span>proptest::strategy::Strategy;
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>T2 {
+    x: u32,
+
+    <span class="attr">#[map(|y: u32| #x + y)]
+    </span>y: u32,
+}
+<span class="comment">// The code above generates the following strategy.
+</span><span class="kw">let </span>t2 = (any::&lt;u32&gt;(), any::&lt;u32&gt;()).prop_map(|(x, y)| T2 { x, y });</code></pre></div>
+<p>If the input and output types of the function specified in <code>#[map]</code> are different, the value type of the strategy set in <code>#[strategy]</code> is the type of the function’s input, not the type of the field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::arbitrary::any;
+<span class="kw">use </span>proptest::sample::Index;
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>T1 {
+    <span class="attr">#[strategy(any::&lt;Index&gt;())]
+    #[map(|i: Index| i.index(<span class="number">10</span>))]
+    </span>x: usize,
+}
+
+<span class="comment">// `#[strategy(any::&lt;Index&gt;())]` can be omitted.
+</span><span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>T2 {
+    <span class="attr">#[map(|i: Index| i.index(<span class="number">10</span>))]
+    </span>x: usize,
+}</code></pre></div>
+<h3 id="filter"><a class="doc-anchor" href="#filter">§</a><code>#[filter]</code></h3>
+<p>By adding <code>#[filter]</code> , you can limit the values generated.</p>
+<p>In the following examples, x is an even number.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput {
+    <span class="attr">#[filter(#x % <span class="number">2 </span>== <span class="number">0</span>)]
+    </span>x: u32,
+}</code></pre></div>
+<p>You can also use multiple variables in a predicate.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+#[filter((#x + #y) % <span class="number">2 </span>== <span class="number">0</span>)]
+</span><span class="kw">struct </span>T1 {
+    x: u32,
+    y: u32,
+}
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>T2 {
+    x: u32,
+    <span class="attr">#[filter((#x + #y) % <span class="number">2 </span>== <span class="number">0</span>)]
+    </span>y: u32,
+}</code></pre></div>
+<p>You can use the value of a structure or enum in the filter by using <code>#self</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+#[filter((#<span class="self">self</span>.x + #<span class="self">self</span>.y) % <span class="number">2 </span>== <span class="number">0</span>)]
+</span><span class="kw">struct </span>TestInput {
+    x: u32,
+    y: u32,
+}</code></pre></div>
+<p>If the expression specified for <code>#[filter]</code> does not contain a variable named by appending # to its own field name, the expression is treated as a predicate function, rather than an expression that returns a bool.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput {
+    <span class="attr">#[filter(is_even)]
+    </span>x: u32,
+}
+<span class="kw">fn </span>is_even(x: <span class="kw-2">&amp;</span>u32) -&gt; bool {
+    x % <span class="number">2 </span>== <span class="number">0
+</span>}
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>T2 {
+    a: u32,
+
+    <span class="comment">// Since `#a` exists but `#b` does not, it is treated as a predicate function.
+    </span><span class="attr">#[filter(|<span class="kw-2">&amp;</span>x| x &gt; #a)]
+    </span>b: u32,
+}</code></pre></div>
+<p>Similarly, an expression that does not contain <code>#self</code> in the <code>#[filter(...)]</code> that it attaches to a type is treated as a predicate function.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+#[filter(is_even)]
+</span><span class="kw">struct </span>T {
+    x: u32,
+}
+<span class="kw">fn </span>is_even(t: <span class="kw-2">&amp;</span>T) -&gt; bool {
+    t.x % <span class="number">2 </span>== <span class="number">0
+</span>}</code></pre></div>
+<p>You can specify a filter name by passing two arguments to <code>#[filter]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput {
+    <span class="attr">#[filter(<span class="string">"x is even"</span>, #x % <span class="number">2 </span>== <span class="number">0</span>)]
+    </span>x: u32,
+}</code></pre></div>
+<h3 id="by_ref"><a class="doc-anchor" href="#by_ref">§</a><code>#[by_ref]</code></h3>
+<p>By default, if you use a variable with <code>#[strategy]</code>, <code>#[any]</code>, <code>#[map]</code> or <code>#[filter]</code> with <code>#</code> attached to it, the cloned value is set.</p>
+<p>Adding <code>#[by_ref]</code> to the field makes it use the reference instead of the cloned value.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInput {
+    <span class="attr">#[by_ref]
+    #[strategy(<span class="number">1</span>..<span class="number">10u32</span>)]
+    </span>x: u32,
+
+    <span class="attr">#[strategy(<span class="number">0</span>..<span class="kw-2">*</span>#x)]
+    </span>y: u32,
+}</code></pre></div>
+<h3 id="arbitrary"><a class="doc-anchor" href="#arbitrary">§</a><code>#[arbitrary]</code></h3><h4 id="arbitraryargs--t"><a class="doc-anchor" href="#arbitraryargs--t">§</a><code>#[arbitrary(args = T)]</code></h4>
+<p>Specifies the type of <code>Arbitrary::Parameters</code>.</p>
+<p>You can use the <code>Rc</code> value of this type in <code>#[strategy]</code>, <code>#[any]</code>, or <code>#[filter]</code> with the variable name <code>args</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Debug, Default)]
+</span><span class="kw">struct </span>TestInputArgs {
+    x_max: u32,
+}
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+#[arbitrary(args = TestInputArgs)]
+</span><span class="kw">struct </span>TestInput {
+    <span class="attr">#[strategy(<span class="number">0</span>..=args.x_max)]
+    </span>x: u32,
+}</code></pre></div>
+<h4 id="arbitraryboundt1-t2-"><a class="doc-anchor" href="#arbitraryboundt1-t2-">§</a><code>#[arbitrary(bound(T1, T2, ..))]</code></h4>
+<p>By default, if the type of field for which <code>#[strategy]</code> is not specified contains a generic parameter, that type is set to trait bounds.</p>
+<p>Therefore, the following <code>TestInputA</code> and <code>TestInputB</code> are equivalent.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::{
+    arbitrary::any, arbitrary::Arbitrary, strategy::BoxedStrategy, strategy::Strategy,
+};
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug)]
+</span><span class="kw">struct </span>TestInputA&lt;T&gt; {
+    x: T,
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>TestInputB&lt;T&gt; {
+    x: T,
+}
+<span class="kw">impl</span>&lt;T: Arbitrary + <span class="lifetime">'static</span>&gt; Arbitrary <span class="kw">for </span>TestInputB&lt;T&gt; {
+    <span class="kw">type </span>Parameters = ();
+    <span class="kw">type </span>Strategy = BoxedStrategy&lt;<span class="self">Self</span>&gt;;
+
+    <span class="kw">fn </span>arbitrary_with(_args: <span class="self">Self</span>::Parameters) -&gt; <span class="self">Self</span>::Strategy {
+        any::&lt;T&gt;().prop_map(|x| <span class="self">Self </span>{ x }).boxed()
+    }
+}</code></pre></div>
+<p>Types of fields with <code>#[strategy]</code> do not set trait bounds automatically, so you need to set trait bound manually with <code>#[arbitrary(bound(T))]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::arbitrary::any_with;
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug, PartialEq)]
+#[arbitrary(bound(T))]
+</span><span class="kw">struct </span>TestInput&lt;T&gt; {
+    <span class="attr">#[strategy(any_with::&lt;T&gt;(Default::default()))]
+    </span>x: T,
+}</code></pre></div>
+<p>You can also specify where predicate instead of type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::arbitrary::{any_with, Arbitrary};
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug, PartialEq)]
+#[arbitrary(bound(T : Arbitrary + <span class="lifetime">'static</span>))]
+</span><span class="kw">struct </span>TestInput&lt;T&gt; {
+    <span class="attr">#[strategy(any_with::&lt;T&gt;(Default::default()))]
+    </span>x: T,
+}</code></pre></div>
+<p><code>..</code> means automatically generated trait bounds.</p>
+<p>The following example uses a manually specified trait bounds in addition to the automatically generated trait bounds.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::arbitrary::any_with;
+<span class="kw">use </span>test_strategy::Arbitrary;
+
+<span class="attr">#[derive(Arbitrary, Debug, PartialEq)]
+#[arbitrary(bound(T1, ..))]
+</span><span class="kw">struct </span>TestInput&lt;T1, T2&gt; {
+    <span class="attr">#[strategy(any_with::&lt;T1&gt;(Default::default()))]
+    </span>x: T1,
+
+    y: T2,
+}</code></pre></div>
+<h4 id="arbitrarydump"><a class="doc-anchor" href="#arbitrarydump">§</a><code>#[arbitrary(dump)]</code></h4>
+<p>Causes a compile error and outputs the code generated by <code>#[derive(Arbitrary)]</code> as an error message.</p>
+<h3 id="proptest"><a class="doc-anchor" href="#proptest">§</a><code>#[proptest]</code></h3>
+<p><code>#[proptest]</code> is the attribute used instead of <code>#[test]</code> when defining a property test.</p>
+<p>The following example defines a test that takes a variety of integers as input.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::proptest;
+
+<span class="attr">#[proptest]
+</span><span class="kw">fn </span>my_test(_input: i32) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>You can add <code>#[strategy]</code>, <code>#[any]</code>, <code>#[filter]</code>, <code>#[by_ref]</code> to the parameter of the function with <code># [proptest]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::proptest;
+
+<span class="attr">#[proptest]
+</span><span class="kw">fn </span>my_test2(<span class="attr">#[strategy(<span class="number">10</span>..<span class="number">20</span>)] </span>_input: i32) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>You can change the configuration of a property test by setting the argument of <code>#[proptest]</code> attribute to a value of <code>proptest::prelude::ProptestConfig</code> type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::ProptestConfig;
+<span class="kw">use </span>test_strategy::proptest;
+
+
+<span class="attr">#[proptest(ProptestConfig { cases : <span class="number">1000</span>, ..ProptestConfig::default() })]
+</span><span class="kw">fn </span>my_test_with_config(_input: i32) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>As with <code>#[any]</code>, you can also set only the value of the field to be changed from the default value.</p>
+<p>The example below is equivalent to the one above.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::ProptestConfig;
+<span class="kw">use </span>test_strategy::proptest;
+
+<span class="attr">#[proptest(ProptestConfig::default(), cases = <span class="number">1000</span>)]
+</span><span class="kw">fn </span>my_test_with_config_2(_input: i32) {
+    <span class="comment">// ...
+</span>}
+
+<span class="attr">#[proptest(cases = <span class="number">1000</span>)]
+</span><span class="kw">fn </span>my_test_with_config_3(_input: i32) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<h4 id="proptestasync--"><a class="doc-anchor" href="#proptestasync--">§</a><code>#[proptest(async = ...)]</code></h4>
+<p>Async functions can be tested by setting <code>async = ...</code> to the argument of <code>#[proptest]</code>.</p>
+<p>The following values are allowed after <code>async =</code>.
+The value specifies the asynchronous runtime used for the test.</p>
+<ul>
+<li>“tokio”</li>
+</ul>
+<div class="example-wrap"><pre class="language-toml"><code>[dev-dependencies]
+test-strategy = &quot;0.3&quot;
+proptest = &quot;1.1.0&quot;
+tokio = { version = &quot;1.28.1&quot;, features = [&quot;rt-multi-thread&quot;] }
+</code></pre></div>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>test_strategy::proptest;
+<span class="kw">use </span>proptest::prop_assert;
+
+<span class="attr">#[proptest(<span class="kw">async </span>= <span class="string">"tokio"</span>)]
+</span><span class="kw">async fn </span>my_test_async() {
+    <span class="kw">async </span>{ }.<span class="kw">await</span>;
+    <span class="macro">prop_assert!</span>(<span class="bool-val">true</span>);
+}</code></pre></div>
+<h4 id="proptestdump"><a class="doc-anchor" href="#proptestdump">§</a><code>#[proptest(dump)]</code></h4>
+<p>You can use <code>#[proptest(dump)]</code> and output the code generated by <code>#[proptest]</code> as an compile error message.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[proptest(dump)]
+</span><span class="kw">fn </span>my_test(_input: i32) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+</div></details><h2 id="attributes-1" class="section-header">Attribute Macros<a href="#attributes-1" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.proptest.html" title="attr test_strategy::proptest">proptest</a></div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Arbitrary.html" title="derive test_strategy::Arbitrary">Arbitrary</a></div></li></ul></section></div></main></body></html>

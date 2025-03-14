@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"alloy_chains":[["impl <a class=\"trait\" href=\"strum/trait.VariantArray.html\" title=\"trait strum::VariantArray\">VariantArray</a> for <a class=\"enum\" href=\"alloy_chains/enum.NamedChain.html\" title=\"enum alloy_chains::NamedChain\">NamedChain</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

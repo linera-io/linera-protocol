@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate a corresponding `VarULE` type and the relevant `EncodeAsVarULE`/`zerofrom::ZeroFrom` implementations for this type"><title>make_varule in zerovec - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerovec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerovec/index.html">zerovec</a><span class="version">0.10.4</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">zerovec</a>::<wbr><a class="attr" href="#">make_varule</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zerovec_derive/lib.rs.html#39">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[make_varule]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate a corresponding <a href="ule/trait.VarULE.html" title="trait zerovec::ule::VarULE"><code>VarULE</code></a> type and the relevant <a href="ule/trait.EncodeAsVarULE.html" title="trait zerovec::ule::EncodeAsVarULE"><code>EncodeAsVarULE</code></a>/<a href="../zerofrom/zero_from/trait.ZeroFrom.html" title="trait zerofrom::zero_from::ZeroFrom"><code>zerofrom::ZeroFrom</code></a>
+implementations for this type</p>
+<p>This can be attached to structs containing only <a href="ule/trait.AsULE.html" title="trait zerovec::ule::AsULE"><code>AsULE</code></a> types with the last fields being
+<a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow"><code>Cow&lt;'a, str&gt;</code></a>, <a href="struct.ZeroSlice.html" title="struct zerovec::ZeroSlice"><code>ZeroSlice</code></a>, or <a href="struct.VarZeroSlice.html" title="struct zerovec::VarZeroSlice"><code>VarZeroSlice</code></a>. If there is more than one such field, it will be represented
+using <a href="ule/struct.MultiFieldsULE.html" title="struct zerovec::ule::MultiFieldsULE"><code>MultiFieldsULE</code></a> and getters will be generated. Other VarULE fields will be detected if they are
+tagged with <code>#[zerovec::varule(NameOfVarULETy)]</code>.</p>
+<p>The type must be <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a> and <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq"><code>Eq</code></a>.</p>
+<p><a href="ule/trait.EncodeAsVarULE.html" title="trait zerovec::ule::EncodeAsVarULE"><code>EncodeAsVarULE</code></a> and <a href="../zerofrom/zero_from/trait.ZeroFrom.html" title="trait zerofrom::zero_from::ZeroFrom"><code>zerofrom::ZeroFrom</code></a> are useful for avoiding the need to deal with
+the <a href="ule/trait.VarULE.html" title="trait zerovec::ule::VarULE"><code>VarULE</code></a> type directly. In particular, it is recommended to use <a href="../zerofrom/zero_from/trait.ZeroFrom.html" title="trait zerofrom::zero_from::ZeroFrom"><code>zerofrom::ZeroFrom</code></a>
+to convert the <a href="ule/trait.VarULE.html" title="trait zerovec::ule::VarULE"><code>VarULE</code></a> type back to this type in a cheap, zero-copy way (see the example below
+for more details).</p>
+<p><code>#[make_varule]</code> will automatically derive the following traits on the <a href="ule/trait.VarULE.html" title="trait zerovec::ule::VarULE"><code>VarULE</code></a> type:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> and <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a></li>
+<li><a href="maps/trait.ZeroMapKV.html" title="trait zerovec::maps::ZeroMapKV"><code>ZeroMapKV</code></a></li>
+</ul>
+<p>To disable one of the automatic derives, use <code>#[zerovec::skip_derive(...)]</code> like so: <code>#[zerovec::skip_derive(ZeroMapKV)]</code>.
+<code>Ord</code> and <code>PartialOrd</code> are implemented as a unit and can only be disabled as a group with <code>#[zerovec::skip_derive(Ord)]</code>.</p>
+<p>The following traits are available to derive, but not automatic:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/fmt/macros/derive.Debug.html" title="derive core::fmt::macros::Debug"><code>Debug</code></a></li>
+<li><a href="serde::Serialize"><code>Serialize</code></a></li>
+<li><a href="serde::Deserialize"><code>Deserialize</code></a></li>
+</ul>
+<p>To enable one of these additional derives, use <code>#[zerovec::derive(...)]</code> like so: <code>#[zerovec::derive(Debug)]</code>.</p>
+<p>In most cases these derives will defer to the impl of the same trait on the current type, so such impls must exist.</p>
+<p>This implementation will also by default autogenerate <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> and <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a> on the <a href="ule/trait.VarULE.html" title="trait zerovec::ule::VarULE"><code>VarULE</code></a> type based on
+the implementation on <code>Self</code>. You can opt out of this with <code>#[zerovec::skip_derive(Ord)]</code></p>
+<p>Note that this implementation will autogenerate <a href="ule/trait.EncodeAsVarULE.html" title="trait zerovec::ule::EncodeAsVarULE"><code>EncodeAsVarULE</code></a> impls for <em>both</em> <code>Self</code> and <code>&amp;Self</code>
+for convenience. This allows for a little more flexibility encoding slices.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>zerofrom::ZeroFrom;
+<span class="kw">use </span>zerovec::ule::encode_varule_to_box;
+<span class="kw">use </span>zerovec::{VarZeroVec, ZeroMap, ZeroVec};
+
+<span class="comment">// custom fixed-size ULE type for ZeroVec
+</span><span class="attr">#[zerovec::make_ule(DateULE)]
+#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+</span><span class="kw">struct </span>Date {
+    y: u64,
+    m: u8,
+    d: u8,
+}
+
+<span class="comment">// custom variable sized VarULE type for VarZeroVec
+</span><span class="attr">#[zerovec::make_varule(PersonULE)]
+#[zerovec::derive(Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+</span><span class="kw">struct </span>Person&lt;<span class="lifetime">'a</span>&gt; {
+    birthday: Date,
+    favorite_character: char,
+    <span class="attr">#[serde(borrow)]
+    </span>name: Cow&lt;<span class="lifetime">'a</span>, str&gt;,
+}
+
+<span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
+</span><span class="kw">struct </span>Data&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="comment">// note: VarZeroVec always must reference the ULE type directly
+    </span><span class="attr">#[serde(borrow)]
+    </span>important_people: VarZeroVec&lt;<span class="lifetime">'a</span>, PersonULE&gt;,
+}
+
+<span class="kw">let </span>person1 = Person {
+    birthday: Date {
+        y: <span class="number">1990</span>,
+        m: <span class="number">9</span>,
+        d: <span class="number">7</span>,
+    },
+    favorite_character: <span class="string">'π'</span>,
+    name: Cow::from(<span class="string">"Kate"</span>),
+};
+<span class="kw">let </span>person2 = Person {
+    birthday: Date {
+        y: <span class="number">1960</span>,
+        m: <span class="number">5</span>,
+        d: <span class="number">25</span>,
+    },
+    favorite_character: <span class="string">'冇'</span>,
+    name: Cow::from(<span class="string">"Jesse"</span>),
+};
+
+<span class="kw">let </span>important_people = VarZeroVec::from(<span class="kw-2">&amp;</span>[person1, person2]);
+<span class="kw">let </span>data = Data { important_people };
+
+<span class="kw">let </span>bincode_bytes = bincode::serialize(<span class="kw-2">&amp;</span>data).expect(<span class="string">"Serialization should be successful"</span>);
+
+<span class="comment">// Will deserialize without allocations
+</span><span class="kw">let </span>deserialized: Data =
+    bincode::deserialize(<span class="kw-2">&amp;</span>bincode_bytes).expect(<span class="string">"Deserialization should be successful"</span>);
+
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>deserialized.important_people.get(<span class="number">1</span>).unwrap().name, <span class="string">"Jesse"</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>deserialized.important_people.get(<span class="number">0</span>).unwrap().name, <span class="string">"Kate"</span>);
+
+<span class="comment">// Since VarZeroVec produces PersonULE types, it's convenient to use ZeroFrom
+// to recoup Person values in a zero-copy way
+</span><span class="kw">let </span>person_converted: Person =
+    ZeroFrom::zero_from(deserialized.important_people.get(<span class="number">1</span>).unwrap());
+<span class="macro">assert_eq!</span>(person_converted.name, <span class="string">"Jesse"</span>);
+<span class="macro">assert_eq!</span>(person_converted.birthday.y, <span class="number">1960</span>);</code></pre></div>
+<p>Full docs for this proc macro can be found on the <a href="docs.rs/zerovec"><code>zerovec</code></a> crate.</p>
+</div></details></section></div></main></body></html>

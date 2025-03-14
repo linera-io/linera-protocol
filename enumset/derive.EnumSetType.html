@@ -1,0 +1,83 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The procedural macro used to derive `EnumSetType`, and allow enums to be used with `EnumSet`."><title>EnumSetType in enumset - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="enumset" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../enumset/index.html">enumset</a><span class="version">1.1.5</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">enumset</a>::<wbr><a class="derive" href="#">EnumSetType</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/enumset_derive/lib.rs.html#974">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(EnumSetType)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[enumset]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The procedural macro used to derive <a href="trait.EnumSetType.html" title="trait enumset::EnumSetType"><code>EnumSetType</code></a>, and allow enums to be used with
+<a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a>.</p>
+<h2 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h2>
+<p>Currently, the following limitations apply to what kinds of enums this macro may be used with:</p>
+<ul>
+<li>The enum must have no data fields in any variant.</li>
+<li>Variant discriminators must be zero or positive.</li>
+<li>No variant discriminator may be larger than <code>0xFFFFFFBF</code>. This is chosen to limit problems
+involving overflow and similar edge cases.</li>
+<li>Variant discriminators must be defined with integer literals. Expressions like <code>V = 1 + 1</code>
+are not currently supported.</li>
+</ul>
+<h2 id="additional-impls"><a class="doc-anchor" href="#additional-impls">§</a>Additional Impls</h2>
+<p>In addition to the implementation of <code>EnumSetType</code>, this procedural macro creates multiple
+other impls that are either required for the macro to work, or make the procedural macro more
+ergonomic to use.</p>
+<p>A full list of traits implemented as is follows:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Copy.html" title="trait core::marker::Copy"><code>Copy</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq"><code>Eq</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a> implementations are created to allow <code>EnumSet</code>
+to function properly. These automatic implementations may be suppressed using
+<code>#[enumset(no_super_impls)]</code>, but these traits must still be implemented in another way.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/ops/arith/trait.Sub.html" title="trait core::ops::arith::Sub"><code>Sub</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/ops/bit/trait.BitAnd.html" title="trait core::ops::bit::BitAnd"><code>BitAnd</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/ops/bit/trait.BitOr.html" title="trait core::ops::bit::BitOr"><code>BitOr</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/ops/bit/trait.BitXor.html" title="trait core::ops::bit::BitXor"><code>BitXor</code></a>, and <a href="https://doc.rust-lang.org/1.81.0/core/ops/bit/trait.Not.html" title="trait core::ops::bit::Not"><code>Not</code></a> implementations are
+created to allow the crate to be used more ergonomically in expressions. These automatic
+implementations may be suppressed using <code>#[enumset(no_ops)]</code>.</li>
+</ul>
+<h2 id="options"><a class="doc-anchor" href="#options">§</a>Options</h2>
+<p>Options are given with <code>#[enumset(foo)]</code> annotations attached to the same enum as the derive.
+Multiple options may be given in the same annotation using the <code>#[enumset(foo, bar)]</code> syntax.</p>
+<p>A full list of options is as follows:</p>
+<ul>
+<li><code>#[enumset(no_super_impls)]</code> prevents the derive from creating implementations required for
+<a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a> to function. When this attribute is specified, implementations of <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Copy.html" title="trait core::marker::Copy"><code>Copy</code></a>,
+<a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq"><code>Eq</code></a>, and <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a>. This can be useful if you are using a code generator
+that already derives these traits. These impls should function identically to the
+automatically derived versions, or unintentional behavior may be a result.</li>
+<li><code>#[enumset(no_ops)</code> prevents the derive from implementing any operator traits.</li>
+<li><code>#[enumset(crate_name = "enumset2")]</code> may be used to change the name of the <code>enumset</code> crate
+used in the generated code. When the <code>std</code> feature is enabled, enumset parses <code>Cargo.toml</code>
+to determine the name of the crate, and this flag is unnecessary.</li>
+<li><code>#[enumset(repr = "u8")]</code> may be used to specify the in-memory representation of <code>EnumSet</code>s
+of this enum type. The effects of this are described in <a href="struct.EnumSet.html#ffi-safety-and-repr" title="struct enumset::EnumSet">the <code>EnumSet</code> documentation under
+“FFI, Safety and <code>repr</code>”</a>. Allowed types are <code>u8</code>, <code>u16</code>, <code>u32</code>,
+<code>u64</code> and <code>u128</code>. If this is not used, then the derive macro will choose a type to best fit
+the enum, but there are no guarantees about which type will be chosen.</li>
+<li><code>#[enumset(repr = "array")]</code> forces the <code>EnumSet</code> of this type to be backed with an array,
+even if all the variants could fit into a primitive numeric type.</li>
+</ul>
+<p>When the <code>serde</code> feature is used, the following features may also be specified. These options
+may be used (with no effect) when building without the feature enabled:</p>
+<ul>
+<li><code>#[enumset(serialize_repr = "…")]</code> may be used to override the way the <code>EnumSet</code> is
+serialized. Valid options are <code>u8</code>, <code>u16</code>, <code>u32</code>, <code>u64</code>, <code>list</code>, <code>map</code> and <code>array</code>. For more
+information, see the
+<a href="struct.EnumSet.html#serialization" title="struct enumset::EnumSet">“Serialization” section of the <code>EnumSet</code> documentation</a>.</li>
+<li><code>#[enumset(serialize_deny_unknown)]</code> causes the generated deserializer to return an error
+for unknown bits instead of silently ignoring them.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Deriving a plain EnumSetType:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(EnumSetType)]
+</span><span class="kw">pub enum </span>Enum {
+   A, B, C, D, E, F, G,
+}</code></pre></div>
+<p>Deriving a sparse EnumSetType:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(EnumSetType)]
+</span><span class="kw">pub enum </span>SparseEnum {
+   A = <span class="number">10</span>, B = <span class="number">20</span>, C = <span class="number">30</span>, D = <span class="number">127</span>,
+}</code></pre></div>
+<p>Deriving an EnumSetType without adding ops:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(EnumSetType)]
+#[enumset(no_ops)]
+</span><span class="kw">pub enum </span>NoOpsEnum {
+   A, B, C, D, E, F, G,
+}</code></pre></div>
+</div></details></section></div></main></body></html>

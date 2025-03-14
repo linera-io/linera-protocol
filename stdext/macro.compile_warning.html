@@ -1,0 +1,23 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`compile_warning` macro is a brother of `std::compile_error`, which emits a compile-time warning with a provided message."><title>compile_warning in stdext - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="stdext" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../stdext/index.html">stdext</a><span class="version">0.3.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">stdext</a>::<wbr><a class="macro" href="#">compile_warning</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/stdext/macros.rs.html#37-42">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> compile_warning {
+    (<span class="macro-nonterminal">$expr</span>:expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>compile_warning</code> macro is a brother of <a href="https://doc.rust-lang.org/std/macro.compile_error.html"><code>std::compile_error</code></a>,
+which emits a compile-time warning with a provided message.</p>
+<p>This implemented through an existing <code>dead_code</code> warning, thus the
+output for the following example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">compile_warning!</span>(<span class="string">"Sample user-defined warning!"</span>);</code></pre></div>
+<p>may look as follows:</p>
+<div class="example-wrap"><pre class="language-text"><code>warning: constant item is never used: `WARNING`
+  --&gt; src/lib.rs:7:9
+  |
+7 |         const WARNING: &amp;str = $expr;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+11 | compile_warning!(&quot;Sample user-defined warning!&quot;);
+   | ------------------------------------------------- in this macro invocation
+</code></pre></div>
+<p>Once <a href="https://github.com/rust-lang/rust/issues/54140"><code>proc_macro_diagnostics</code></a> feature is stabilized, this macro will be replaced
+with a proper proc-macro-based implementation.</p>
+<p>This macro is intended to be used in the development process, as an alternative to the
+<a href="https://doc.rust-lang.org/std/macro.unimplemented.html"><code>unimplemented</code></a> macro which doesn’t cause code to panic.</p>
+</div></details></section></div></main></body></html>

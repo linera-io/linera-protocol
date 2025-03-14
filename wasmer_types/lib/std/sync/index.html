@@ -1,0 +1,162 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Useful synchronization primitives."><title>wasmer_types::lib::std::sync - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><h2 class="location"><a href="#">Module sync</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In wasmer_types::lib::std</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a class="mod" href="#">sync</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/lib.rs.html#595">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Useful synchronization primitives.</p>
+<h3 id="the-need-for-synchronization"><a class="doc-anchor" href="#the-need-for-synchronization">§</a>The need for synchronization</h3>
+<p>Conceptually, a Rust program is a series of operations which will
+be executed on a computer. The timeline of events happening in the
+program is consistent with the order of the operations in the code.</p>
+<p>Consider the following code, operating on some global static variables:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">static </span><span class="kw-2">mut </span>A: u32 = <span class="number">0</span>;
+<span class="kw">static </span><span class="kw-2">mut </span>B: u32 = <span class="number">0</span>;
+<span class="kw">static </span><span class="kw-2">mut </span>C: u32 = <span class="number">0</span>;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">unsafe </span>{
+        A = <span class="number">3</span>;
+        B = <span class="number">4</span>;
+        A = A + B;
+        C = B;
+        <span class="macro">println!</span>(<span class="string">"{A} {B} {C}"</span>);
+        C = A;
+    }
+}</code></pre></div>
+<p>It appears as if some variables stored in memory are changed, an addition
+is performed, result is stored in <code>A</code> and the variable <code>C</code> is
+modified twice.</p>
+<p>When only a single thread is involved, the results are as expected:
+the line <code>7 4 4</code> gets printed.</p>
+<p>As for what happens behind the scenes, when optimizations are enabled the
+final generated machine code might look very different from the code:</p>
+<ul>
+<li>
+<p>The first store to <code>C</code> might be moved before the store to <code>A</code> or <code>B</code>,
+<em>as if</em> we had written <code>C = 4; A = 3; B = 4</code>.</p>
+</li>
+<li>
+<p>Assignment of <code>A + B</code> to <code>A</code> might be removed, since the sum can be stored
+in a temporary location until it gets printed, with the global variable
+never getting updated.</p>
+</li>
+<li>
+<p>The final result could be determined just by looking at the code
+at compile time, so <a href="https://en.wikipedia.org/wiki/Constant_folding">constant folding</a> might turn the whole
+block into a simple <code>println!("7 4 4")</code>.</p>
+</li>
+</ul>
+<p>The compiler is allowed to perform any combination of these
+optimizations, as long as the final optimized code, when executed,
+produces the same results as the one without optimizations.</p>
+<p>Due to the <a href="https://en.wikipedia.org/wiki/Concurrency_(computer_science)">concurrency</a> involved in modern computers, assumptions
+about the program’s execution order are often wrong. Access to
+global variables can lead to nondeterministic results, <strong>even if</strong>
+compiler optimizations are disabled, and it is <strong>still possible</strong>
+to introduce synchronization bugs.</p>
+<p>Note that thanks to Rust’s safety guarantees, accessing global (static)
+variables requires <code>unsafe</code> code, assuming we don’t use any of the
+synchronization primitives in this module.</p>
+<h3 id="out-of-order-execution"><a class="doc-anchor" href="#out-of-order-execution">§</a>Out-of-order execution</h3>
+<p>Instructions can execute in a different order from the one we define, due to
+various reasons:</p>
+<ul>
+<li>
+<p>The <strong>compiler</strong> reordering instructions: If the compiler can issue an
+instruction at an earlier point, it will try to do so. For example, it
+might hoist memory loads at the top of a code block, so that the CPU can
+start <a href="https://en.wikipedia.org/wiki/Cache_prefetching">prefetching</a> the values from memory.</p>
+<p>In single-threaded scenarios, this can cause issues when writing
+signal handlers or certain kinds of low-level code.
+Use <a href="atomic/fn.compiler_fence.html" title="fn wasmer_types::lib::std::sync::atomic::compiler_fence">compiler fences</a> to prevent this reordering.</p>
+</li>
+<li>
+<p>A <strong>single processor</strong> executing instructions <a href="https://en.wikipedia.org/wiki/Out-of-order_execution">out-of-order</a>:
+Modern CPUs are capable of <a href="https://en.wikipedia.org/wiki/Superscalar_processor">superscalar</a> execution,
+i.e., multiple instructions might be executing at the same time,
+even though the machine code describes a sequential process.</p>
+<p>This kind of reordering is handled transparently by the CPU.</p>
+</li>
+<li>
+<p>A <strong>multiprocessor</strong> system executing multiple hardware threads
+at the same time: In multi-threaded scenarios, you can use two
+kinds of primitives to deal with synchronization:</p>
+<ul>
+<li><a href="atomic/fn.fence.html" title="fn wasmer_types::lib::std::sync::atomic::fence">memory fences</a> to ensure memory accesses are made visible to
+other CPUs in the right order.</li>
+<li><a href="atomic/index.html" title="mod wasmer_types::lib::std::sync::atomic">atomic operations</a> to ensure simultaneous access to the same
+memory location doesn’t lead to undefined behavior.</li>
+</ul>
+</li>
+</ul>
+<h3 id="higher-level-synchronization-objects"><a class="doc-anchor" href="#higher-level-synchronization-objects">§</a>Higher-level synchronization objects</h3>
+<p>Most of the low-level synchronization primitives are quite error-prone and
+inconvenient to use, which is why the standard library also exposes some
+higher-level synchronization objects.</p>
+<p>These abstractions can be built out of lower-level primitives.
+For efficiency, the sync objects in the standard library are usually
+implemented with help from the operating system’s kernel, which is
+able to reschedule the threads while they are blocked on acquiring
+a lock.</p>
+<p>The following is an overview of the available synchronization
+objects:</p>
+<ul>
+<li>
+<p><a href="struct.Arc.html" title="struct wasmer_types::lib::std::sync::Arc"><code>Arc</code></a>: Atomically Reference-Counted pointer, which can be used
+in multithreaded environments to prolong the lifetime of some
+data until all the threads have finished using it.</p>
+</li>
+<li>
+<p><a href="struct.Barrier.html" title="struct wasmer_types::lib::std::sync::Barrier"><code>Barrier</code></a>: Ensures multiple threads will wait for each other
+to reach a point in the program, before continuing execution all
+together.</p>
+</li>
+<li>
+<p><a href="struct.Condvar.html" title="struct wasmer_types::lib::std::sync::Condvar"><code>Condvar</code></a>: Condition Variable, providing the ability to block
+a thread while waiting for an event to occur.</p>
+</li>
+<li>
+<p><a href="mpsc/index.html" title="mod wasmer_types::lib::std::sync::mpsc"><code>mpsc</code></a>: Multi-producer, single-consumer queues, used for
+message-based communication. Can provide a lightweight
+inter-thread synchronisation mechanism, at the cost of some
+extra memory.</p>
+</li>
+<li>
+<p><a href="struct.Mutex.html" title="struct wasmer_types::lib::std::sync::Mutex"><code>Mutex</code></a>: Mutual Exclusion mechanism, which ensures that at
+most one thread at a time is able to access some data.</p>
+</li>
+<li>
+<p><a href="struct.Once.html" title="struct wasmer_types::lib::std::sync::Once"><code>Once</code></a>: Used for a thread-safe, one-time global initialization routine.
+Mostly useful for implementing other types like <code>OnceLock</code>.</p>
+</li>
+<li>
+<p><a href="struct.OnceLock.html" title="struct wasmer_types::lib::std::sync::OnceLock"><code>OnceLock</code></a>: Used for thread-safe, one-time initialization of a
+variable, with potentially different initializers based on the caller.</p>
+</li>
+<li>
+<p><a href="struct.LazyLock.html" title="struct wasmer_types::lib::std::sync::LazyLock"><code>LazyLock</code></a>: Used for thread-safe, one-time initialization of a
+variable, using one nullary initializer function provided at creation.</p>
+</li>
+<li>
+<p><a href="struct.RwLock.html" title="struct wasmer_types::lib::std::sync::RwLock"><code>RwLock</code></a>: Provides a mutual exclusion mechanism which allows
+multiple readers at the same time, while allowing only one
+writer at a time. In some cases, this can be more efficient than
+a mutex.</p>
+</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="atomic/index.html" title="mod wasmer_types::lib::std::sync::atomic">atomic</a></div><div class="desc docblock-short">Atomic types</div></li><li><div class="item-name"><a class="mod" href="mpsc/index.html" title="mod wasmer_types::lib::std::sync::mpsc">mpsc</a></div><div class="desc docblock-short">Multi-producer, single-consumer FIFO queue communication primitives.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Arc.html" title="struct wasmer_types::lib::std::sync::Arc">Arc</a></div><div class="desc docblock-short">A thread-safe reference-counting pointer. ‘Arc’ stands for ‘Atomically
+Reference Counted’.</div></li><li><div class="item-name"><a class="struct" href="struct.Barrier.html" title="struct wasmer_types::lib::std::sync::Barrier">Barrier</a></div><div class="desc docblock-short">A barrier enables multiple threads to synchronize the beginning
+of some computation.</div></li><li><div class="item-name"><a class="struct" href="struct.BarrierWaitResult.html" title="struct wasmer_types::lib::std::sync::BarrierWaitResult">BarrierWaitResult</a></div><div class="desc docblock-short">A <code>BarrierWaitResult</code> is returned by <a href="struct.Barrier.html#method.wait" title="method wasmer_types::lib::std::sync::Barrier::wait"><code>Barrier::wait()</code></a> when all threads
+in the <a href="struct.Barrier.html" title="struct wasmer_types::lib::std::sync::Barrier"><code>Barrier</code></a> have rendezvoused.</div></li><li><div class="item-name"><a class="struct" href="struct.Condvar.html" title="struct wasmer_types::lib::std::sync::Condvar">Condvar</a></div><div class="desc docblock-short">A Condition Variable</div></li><li><div class="item-name"><a class="struct" href="struct.LazyLock.html" title="struct wasmer_types::lib::std::sync::LazyLock">LazyLock</a></div><div class="desc docblock-short">A value which is initialized on the first access.</div></li><li><div class="item-name"><a class="struct" href="struct.Mutex.html" title="struct wasmer_types::lib::std::sync::Mutex">Mutex</a></div><div class="desc docblock-short">A mutual exclusion primitive useful for protecting shared data</div></li><li><div class="item-name"><a class="struct" href="struct.MutexGuard.html" title="struct wasmer_types::lib::std::sync::MutexGuard">MutexGuard</a></div><div class="desc docblock-short">An RAII implementation of a “scoped lock” of a mutex. When this structure is
+dropped (falls out of scope), the lock will be unlocked.</div></li><li><div class="item-name"><a class="struct" href="struct.Once.html" title="struct wasmer_types::lib::std::sync::Once">Once</a></div><div class="desc docblock-short">A low-level synchronization primitive for one-time global execution.</div></li><li><div class="item-name"><a class="struct" href="struct.OnceLock.html" title="struct wasmer_types::lib::std::sync::OnceLock">OnceLock</a></div><div class="desc docblock-short">A synchronization primitive which can nominally be written to only once.</div></li><li><div class="item-name"><a class="struct" href="struct.OnceState.html" title="struct wasmer_types::lib::std::sync::OnceState">OnceState</a></div><div class="desc docblock-short">State yielded to <a href="struct.Once.html#method.call_once_force" title="method wasmer_types::lib::std::sync::Once::call_once_force"><code>Once::call_once_force()</code></a>’s closure parameter. The state
+can be used to query the poison status of the <a href="struct.Once.html" title="struct wasmer_types::lib::std::sync::Once"><code>Once</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.PoisonError.html" title="struct wasmer_types::lib::std::sync::PoisonError">PoisonError</a></div><div class="desc docblock-short">A type of error which can be returned whenever a lock is acquired.</div></li><li><div class="item-name"><a class="struct" href="struct.RwLock.html" title="struct wasmer_types::lib::std::sync::RwLock">RwLock</a></div><div class="desc docblock-short">A reader-writer lock</div></li><li><div class="item-name"><a class="struct" href="struct.RwLockReadGuard.html" title="struct wasmer_types::lib::std::sync::RwLockReadGuard">RwLockReadGuard</a></div><div class="desc docblock-short">RAII structure used to release the shared read access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.RwLockWriteGuard.html" title="struct wasmer_types::lib::std::sync::RwLockWriteGuard">RwLockWriteGuard</a></div><div class="desc docblock-short">RAII structure used to release the exclusive write access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.WaitTimeoutResult.html" title="struct wasmer_types::lib::std::sync::WaitTimeoutResult">WaitTimeoutResult</a></div><div class="desc docblock-short">A type indicating whether a timed wait on a condition variable returned
+due to a time out or not.</div></li><li><div class="item-name"><a class="struct" href="struct.Weak.html" title="struct wasmer_types::lib::std::sync::Weak">Weak</a></div><div class="desc docblock-short"><code>Weak</code> is a version of <a href="struct.Arc.html" title="struct wasmer_types::lib::std::sync::Arc"><code>Arc</code></a> that holds a non-owning reference to the
+managed allocation. The allocation is accessed by calling <a href="struct.Weak.html#method.upgrade" title="method wasmer_types::lib::std::sync::Weak::upgrade"><code>upgrade</code></a> on the <code>Weak</code>
+pointer, which returns an <code><a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a href="struct.Arc.html" title="struct wasmer_types::lib::std::sync::Arc">Arc</a>&lt;T&gt;&gt;</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Exclusive.html" title="struct wasmer_types::lib::std::sync::Exclusive">Exclusive</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short"><code>Exclusive</code> provides only <em>mutable</em> access, also referred to as <em>exclusive</em>
+access to the underlying value. It provides no <em>immutable</em>, or <em>shared</em>
+access to the underlying value.</div></li><li><div class="item-name"><a class="struct" href="struct.MappedMutexGuard.html" title="struct wasmer_types::lib::std::sync::MappedMutexGuard">MappedMutexGuard</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">An RAII mutex guard returned by <code>MutexGuard::map</code>, which can point to a
+subfield of the protected data. When this structure is dropped (falls out
+of scope), the lock will be unlocked.</div></li><li><div class="item-name"><a class="struct" href="struct.MappedRwLockReadGuard.html" title="struct wasmer_types::lib::std::sync::MappedRwLockReadGuard">MappedRwLockReadGuard</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">RAII structure used to release the shared read access of a lock when
+dropped, which can point to a subfield of the protected data.</div></li><li><div class="item-name"><a class="struct" href="struct.MappedRwLockWriteGuard.html" title="struct wasmer_types::lib::std::sync::MappedRwLockWriteGuard">MappedRwLockWriteGuard</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">RAII structure used to release the exclusive write access of a lock when
+dropped, which can point to a subfield of the protected data.</div></li><li><div class="item-name"><a class="struct" href="struct.ReentrantLock.html" title="struct wasmer_types::lib::std::sync::ReentrantLock">ReentrantLock</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">A re-entrant mutual exclusion lock</div></li><li><div class="item-name"><a class="struct" href="struct.ReentrantLockGuard.html" title="struct wasmer_types::lib::std::sync::ReentrantLockGuard">ReentrantLockGuard</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">An RAII implementation of a “scoped lock” of a re-entrant lock. When this
+structure is dropped (falls out of scope), the lock will be unlocked.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.TryLockError.html" title="enum wasmer_types::lib::std::sync::TryLockError">TryLockError</a></div><div class="desc docblock-short">An enumeration of possible errors associated with a <a href="type.TryLockResult.html" title="type wasmer_types::lib::std::sync::TryLockResult"><code>TryLockResult</code></a> which
+can occur while trying to acquire a lock, from the <a href="struct.Mutex.html#method.try_lock" title="method wasmer_types::lib::std::sync::Mutex::try_lock"><code>try_lock</code></a> method on a
+<a href="struct.Mutex.html" title="struct wasmer_types::lib::std::sync::Mutex"><code>Mutex</code></a> or the <a href="struct.RwLock.html#method.try_read" title="method wasmer_types::lib::std::sync::RwLock::try_read"><code>try_read</code></a> and <a href="struct.RwLock.html#method.try_write" title="method wasmer_types::lib::std::sync::RwLock::try_write"><code>try_write</code></a> methods on an <a href="struct.RwLock.html" title="struct wasmer_types::lib::std::sync::RwLock"><code>RwLock</code></a>.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.ONCE_INIT.html" title="constant wasmer_types::lib::std::sync::ONCE_INIT">ONCE_INIT</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Initialization value for static <a href="struct.Once.html" title="struct wasmer_types::lib::std::sync::Once"><code>Once</code></a> values.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.LockResult.html" title="type wasmer_types::lib::std::sync::LockResult">LockResult</a></div><div class="desc docblock-short">A type alias for the result of a lock method which can be poisoned.</div></li><li><div class="item-name"><a class="type" href="type.TryLockResult.html" title="type wasmer_types::lib::std::sync::TryLockResult">TryLockResult</a></div><div class="desc docblock-short">A type alias for the result of a nonblocking locking method.</div></li></ul></section></div></main></body></html>

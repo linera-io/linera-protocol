@@ -1,0 +1,76 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="grpc-web protocol translation for `tonic` services."><title>tonic_web - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tonic_web" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tonic_web/index.html">tonic_web</a><span class="version">0.12.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">tonic_web</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tonic_web/lib.rs.html#1-207">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>grpc-web protocol translation for <a href="https://github.com/hyperium/tonic"><code>tonic</code></a> services.</p>
+<p><a href="https://github.com/hyperium/tonic"><code>tonic_web</code></a> enables tonic servers to handle requests from <a href="https://github.com/grpc/grpc-web">grpc-web</a> clients directly,
+without the need of an external proxy. It achieves this by wrapping individual tonic services
+with a <a href="https://github.com/tower-rs/tower">tower</a> service that performs the translation between protocols and handles <code>cors</code>
+requests.</p>
+<h3 id="enabling-tonic-services"><a class="doc-anchor" href="#enabling-tonic-services">§</a>Enabling tonic services</h3>
+<p>The easiest way to get started, is to call the <a href="fn.enable.html" title="fn tonic_web::enable"><code>enable</code></a> function with your tonic service
+and allow the tonic server to accept HTTP/1.1 requests:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="kw">let </span>addr = <span class="string">"[::1]:50051"</span>.parse().unwrap();
+    <span class="kw">let </span>greeter = GreeterServer::new(MyGreeter::default());
+
+    Server::builder()
+       .accept_http1(<span class="bool-val">true</span>)
+       .add_service(tonic_web::enable(greeter))
+       .serve(addr)
+       .<span class="kw">await</span><span class="question-mark">?</span>;
+
+   <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>This will apply a default configuration that works well with grpc-web clients out of the box.</p>
+<p>You can customize the CORS configuration composing the <a href="struct.GrpcWebLayer.html" title="struct tonic_web::GrpcWebLayer"><code>GrpcWebLayer</code></a> with the cors layer of your choice.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="kw">let </span>addr = <span class="string">"[::1]:50051"</span>.parse().unwrap();
+    <span class="kw">let </span>greeter = GreeterServer::new(MyGreeter::default());
+
+    Server::builder()
+       .accept_http1(<span class="bool-val">true</span>)
+       <span class="comment">// This will apply the gRPC-Web translation layer
+       </span>.layer(GrpcWebLayer::new())
+       .add_service(greeter)
+       .serve(addr)
+       .<span class="kw">await</span><span class="question-mark">?</span>;
+
+   <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Alternatively, if you have a tls enabled server, you could skip setting <code>accept_http1</code> to <code>true</code>.
+This works because the browser will handle <code>ALPN</code>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="kw">let </span>cert = tokio::fs::read(<span class="string">"server.pem"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>key = tokio::fs::read(<span class="string">"server.key"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>identity = Identity::from_pem(cert, key);
+
+    <span class="kw">let </span>addr = <span class="string">"[::1]:50051"</span>.parse().unwrap();
+    <span class="kw">let </span>greeter = GreeterServer::new(MyGreeter::default());
+
+    <span class="comment">// No need to enable HTTP/1
+    </span>Server::builder()
+       .tls_config(ServerTlsConfig::new().identity(identity))<span class="question-mark">?
+       </span>.add_service(tonic_web::enable(greeter))
+       .serve(addr)
+       .<span class="kw">await</span><span class="question-mark">?</span>;
+
+   <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h3 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h3>
+<ul>
+<li><code>tonic_web</code> is designed to work with grpc-web-compliant clients only. It is not expected to
+handle arbitrary HTTP/x.x requests or bespoke protocols.</li>
+<li>Similarly, the cors support implemented  by this crate will <em>only</em> handle grpc-web and
+grpc-web preflight requests.</li>
+<li>Currently, grpc-web clients can only perform <code>unary</code> and <code>server-streaming</code> calls. These
+are the only requests this crate is designed to handle. Support for client and bi-directional
+streaming will be officially supported when clients do.</li>
+<li>There is no support for web socket transports.</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CorsGrpcWeb.html" title="struct tonic_web::CorsGrpcWeb">CorsGrpcWeb</a></div><div class="desc docblock-short">A newtype wrapper around <a href="struct.GrpcWebLayer.html" title="struct tonic_web::GrpcWebLayer"><code>GrpcWebLayer</code></a> and [<code>tower_http::cors::CorsLayer</code>] to allow
+<code>tonic_web::enable</code> to implement the <a href="../tonic/server/trait.NamedService.html" title="trait tonic::server::NamedService"><code>NamedService</code></a> trait.</div></li><li><div class="item-name"><a class="struct" href="struct.GrpcWebCall.html" title="struct tonic_web::GrpcWebCall">GrpcWebCall</a></div><div class="desc docblock-short">HttpBody adapter for the grpc web based services.</div></li><li><div class="item-name"><a class="struct" href="struct.GrpcWebClientLayer.html" title="struct tonic_web::GrpcWebClientLayer">GrpcWebClientLayer</a></div><div class="desc docblock-short">Layer implementing the grpc-web protocol for clients.</div></li><li><div class="item-name"><a class="struct" href="struct.GrpcWebClientService.html" title="struct tonic_web::GrpcWebClientService">GrpcWebClientService</a></div><div class="desc docblock-short">A <a href="../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a> that wraps some inner http service that will
+coerce requests coming from <a href="../tonic/client/grpc/struct.Grpc.html" title="struct tonic::client::grpc::Grpc"><code>tonic::client::Grpc</code></a> into proper
+<code>grpc-web</code> requests.</div></li><li><div class="item-name"><a class="struct" href="struct.GrpcWebLayer.html" title="struct tonic_web::GrpcWebLayer">GrpcWebLayer</a></div><div class="desc docblock-short">Layer implementing the grpc-web protocol.</div></li><li><div class="item-name"><a class="struct" href="struct.GrpcWebService.html" title="struct tonic_web::GrpcWebService">GrpcWebService</a></div><div class="desc docblock-short">Service implementing the grpc-web protocol.</div></li><li><div class="item-name"><a class="struct" href="struct.ResponseFuture.html" title="struct tonic_web::ResponseFuture">ResponseFuture</a></div><div class="desc docblock-short">Response future for the <a href="struct.GrpcWebService.html" title="struct tonic_web::GrpcWebService"><code>GrpcWebService</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.enable.html" title="fn tonic_web::enable">enable</a></div><div class="desc docblock-short">Enable a tonic service to handle grpc-web requests with the default configuration.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ClientCommand","DatabaseToolCommand","Error","NetCommand","ProjectCommand","ResourceControlPolicyConfig","WalletCommand"],"static":["DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS","DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS"],"struct":["ApplicationPermissionsConfig","ChainOwnershipConfig","ClientOptions"]};

@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Add `skip_serializing_if` annotations to [`Option`] fields."><title>skip_serializing_none in serde_with - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_with" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_with/index.html">serde_with</a><span class="version">3.12.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">serde_with</a>::<wbr><a class="attr" href="#">skip_serializing_none</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_with_macros/lib.rs.html#315">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[skip_serializing_none]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Add <code>skip_serializing_if</code> annotations to [<code>Option</code>] fields.</p>
+<p>The attribute can be added to structs and enums.
+The <code>#[skip_serializing_none]</code> attribute must be placed <em>before</em> the <code>#[derive]</code> attribute.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>JSON APIs sometimes have many optional values.
+Missing values should not be serialized, to keep the serialized format smaller.
+Such a data type might look like:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>Data {
+    <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span>a: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span>b: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span>c: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span>d: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+}</code></pre></div>
+<p>The <code>skip_serializing_if</code> annotation is repetitive and harms readability.
+Instead, the same struct can be written as:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[skip_serializing_none]
+#[derive(Serialize)]
+</span><span class="kw">struct </span>Data {
+    a: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    b: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    c: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="comment">// Always serialize field d even if None
+    </span><span class="attr">#[serialize_always]
+    </span>d: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+}</code></pre></div>
+<p>Existing <code>skip_serializing_if</code> annotations will not be altered.</p>
+<p>If some values should always be serialized, then <code>serialize_always</code> can be used.</p>
+<h2 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h2>
+<p>The <code>serialize_always</code> cannot be used together with a manual <code>skip_serializing_if</code> annotations,
+as these conflict in their meaning. A compile error will be generated if this occurs.</p>
+<p>The <code>skip_serializing_none</code> only works if the type is called <code>Option</code>,
+<code>std::option::Option</code>, or <code>core::option::Option</code>. Type aliasing an [<code>Option</code>] and giving it
+another name, will cause this field to be ignored. This cannot be supported, as proc-macros run
+before type checking, thus it is not possible to determine if a type alias refers to an
+[<code>Option</code>].</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">type </span>MyOption&lt;T&gt; = <span class="prelude-ty">Option</span>&lt;T&gt;;
+
+<span class="attr">#[skip_serializing_none]
+#[derive(Serialize)]
+</span><span class="kw">struct </span>Data {
+    a: MyOption&lt;String&gt;, <span class="comment">// This field will not be skipped
+</span>}</code></pre></div>
+<p>Likewise, if you import a type and name it <code>Option</code>, the <code>skip_serializing_if</code> attributes will
+be added and compile errors will occur, if <code>Option::is_none</code> is not a valid function.
+Here the function <code>Vec::is_none</code> does not exist, and therefore the example fails to compile.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::vec::Vec <span class="kw">as </span><span class="prelude-ty">Option</span>;
+
+<span class="attr">#[skip_serializing_none]
+#[derive(Serialize)]
+</span><span class="kw">struct </span>Data {
+    a: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}</code></pre></div>
+</div></details></section></div></main></body></html>

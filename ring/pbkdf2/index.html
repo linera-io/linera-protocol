@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="PBKDF2 derivation and verification."><title>ring::pbkdf2 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ring" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../ring/index.html">ring</a><span class="version">0.17.8</span></h2></div><h2 class="location"><a href="#">Module pbkdf2</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#statics">Statics</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate ring</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">ring</a>::<wbr><a class="mod" href="#">pbkdf2</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/ring/pbkdf2.rs.html#15-271">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>PBKDF2 derivation and verification.</p>
+<p>Use <code>derive</code> to derive PBKDF2 outputs. Use <code>verify</code> to verify secret
+against previously-derived outputs.</p>
+<p>PBKDF2 is specified in <a href="https://tools.ietf.org/html/rfc2898#section-5.2">RFC 2898 Section 5.2</a> with test vectors given in
+<a href="https://tools.ietf.org/html/rfc6070">RFC 6070</a>. See also <a href="http://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-132.pdf">NIST Special Publication 800-132</a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="password-database-example"><a class="doc-anchor" href="#password-database-example">§</a>Password Database Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ring::{digest, pbkdf2};
+<span class="kw">use </span>std::{collections::HashMap, num::NonZeroU32};
+
+<span class="kw">static </span>PBKDF2_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA256;
+<span class="kw">const </span>CREDENTIAL_LEN: usize = digest::SHA256_OUTPUT_LEN;
+<span class="kw">pub type </span>Credential = [u8; CREDENTIAL_LEN];
+
+<span class="kw">enum </span>Error {
+    WrongUsernameOrPassword
+}
+
+<span class="kw">struct </span>PasswordDatabase {
+    pbkdf2_iterations: NonZeroU32,
+    db_salt_component: [u8; <span class="number">16</span>],
+
+    <span class="comment">// Normally this would be a persistent database.
+    </span>storage: HashMap&lt;String, Credential&gt;,
+}
+
+<span class="kw">impl </span>PasswordDatabase {
+    <span class="kw">pub fn </span>store_password(<span class="kw-2">&amp;mut </span><span class="self">self</span>, username: <span class="kw-2">&amp;</span>str, password: <span class="kw-2">&amp;</span>str) {
+        <span class="kw">let </span>salt = <span class="self">self</span>.salt(username);
+        <span class="kw">let </span><span class="kw-2">mut </span>to_store: Credential = [<span class="number">0u8</span>; CREDENTIAL_LEN];
+        pbkdf2::derive(PBKDF2_ALG, <span class="self">self</span>.pbkdf2_iterations, <span class="kw-2">&amp;</span>salt,
+                       password.as_bytes(), <span class="kw-2">&amp;mut </span>to_store);
+        <span class="self">self</span>.storage.insert(String::from(username), to_store);
+    }
+
+    <span class="kw">pub fn </span>verify_password(<span class="kw-2">&amp;</span><span class="self">self</span>, username: <span class="kw-2">&amp;</span>str, attempted_password: <span class="kw-2">&amp;</span>str)
+                           -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="kw">match </span><span class="self">self</span>.storage.get(username) {
+           <span class="prelude-val">Some</span>(actual_password) =&gt; {
+               <span class="kw">let </span>salt = <span class="self">self</span>.salt(username);
+               pbkdf2::verify(PBKDF2_ALG, <span class="self">self</span>.pbkdf2_iterations, <span class="kw-2">&amp;</span>salt,
+                              attempted_password.as_bytes(),
+                              actual_password)
+                    .map_err(|<span class="kw">_</span>| Error::WrongUsernameOrPassword)
+           },
+
+           <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(Error::WrongUsernameOrPassword)
+        }
+    }
+
+    <span class="comment">// The salt should have a user-specific component so that an attacker
+    // cannot crack one password for multiple users in the database. It
+    // should have a database-unique component so that an attacker cannot
+    // crack the same user's password across databases in the unfortunate
+    // but common case that the user has used the same password for
+    // multiple systems.
+    </span><span class="kw">fn </span>salt(<span class="kw-2">&amp;</span><span class="self">self</span>, username: <span class="kw-2">&amp;</span>str) -&gt; Vec&lt;u8&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>salt = Vec::with_capacity(<span class="self">self</span>.db_salt_component.len() +
+                                          username.as_bytes().len());
+        salt.extend(<span class="self">self</span>.db_salt_component.as_ref());
+        salt.extend(username.as_bytes());
+        salt
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="comment">// Normally these parameters would be loaded from a configuration file.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>db = PasswordDatabase {
+        pbkdf2_iterations: NonZeroU32::new(<span class="number">100_000</span>).unwrap(),
+        db_salt_component: [
+            <span class="comment">// This value was generated from a secure PRNG.
+            </span><span class="number">0xd6</span>, <span class="number">0x26</span>, <span class="number">0x98</span>, <span class="number">0xda</span>, <span class="number">0xf4</span>, <span class="number">0xdc</span>, <span class="number">0x50</span>, <span class="number">0x52</span>,
+            <span class="number">0x24</span>, <span class="number">0xf2</span>, <span class="number">0x27</span>, <span class="number">0xd1</span>, <span class="number">0xfe</span>, <span class="number">0x39</span>, <span class="number">0x01</span>, <span class="number">0x8a
+        </span>],
+        storage: HashMap::new(),
+    };
+
+    db.store_password(<span class="string">"alice"</span>, <span class="string">"@74d7]404j|W}6u"</span>);
+
+    <span class="comment">// An attempt to log in with the wrong password fails.
+    </span><span class="macro">assert!</span>(db.verify_password(<span class="string">"alice"</span>, <span class="string">"wrong password"</span>).is_err());
+
+    <span class="comment">// Normally there should be an expoentially-increasing delay between
+    // attempts to further protect against online attacks.
+
+    // An attempt to log in with the right password succeeds.
+    </span><span class="macro">assert!</span>(db.verify_password(<span class="string">"alice"</span>, <span class="string">"@74d7]404j|W}6u"</span>).is_ok());
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Algorithm.html" title="struct ring::pbkdf2::Algorithm">Algorithm</a></div><div class="desc docblock-short">A PBKDF2 algorithm.</div></li></ul><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="static" href="static.PBKDF2_HMAC_SHA1.html" title="static ring::pbkdf2::PBKDF2_HMAC_SHA1">PBKDF2_HMAC_SHA1</a></div><div class="desc docblock-short">PBKDF2 using HMAC-SHA1.</div></li><li><div class="item-name"><a class="static" href="static.PBKDF2_HMAC_SHA256.html" title="static ring::pbkdf2::PBKDF2_HMAC_SHA256">PBKDF2_HMAC_SHA256</a></div><div class="desc docblock-short">PBKDF2 using HMAC-SHA256.</div></li><li><div class="item-name"><a class="static" href="static.PBKDF2_HMAC_SHA384.html" title="static ring::pbkdf2::PBKDF2_HMAC_SHA384">PBKDF2_HMAC_SHA384</a></div><div class="desc docblock-short">PBKDF2 using HMAC-SHA384.</div></li><li><div class="item-name"><a class="static" href="static.PBKDF2_HMAC_SHA512.html" title="static ring::pbkdf2::PBKDF2_HMAC_SHA512">PBKDF2_HMAC_SHA512</a></div><div class="desc docblock-short">PBKDF2 using HMAC-SHA512.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.derive.html" title="fn ring::pbkdf2::derive">derive</a></div><div class="desc docblock-short">Fills <code>out</code> with the key derived using PBKDF2 with the given inputs.</div></li><li><div class="item-name"><a class="fn" href="fn.verify.html" title="fn ring::pbkdf2::verify">verify</a></div><div class="desc docblock-short">Verifies that a previously-derived (e.g., using <code>derive</code>) PBKDF2 value
+matches the PBKDF2 value derived from the other inputs.</div></li></ul></section></div></main></body></html>

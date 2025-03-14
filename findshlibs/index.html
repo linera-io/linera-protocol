@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`findshlibs`"><title>findshlibs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="findshlibs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../findshlibs/index.html">findshlibs</a><span class="version">0.10.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">findshlibs</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/findshlibs/lib.rs.html#1-494">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="findshlibs"><a class="doc-anchor" href="#findshlibs">§</a><code>findshlibs</code></h2>
+<p>Find the set of shared libraries currently loaded in this process with a
+cross platform API.</p>
+<p>The API entry point is the <code>TargetSharedLibrary</code> type and its
+<code>SharedLibrary::each</code> trait method implementation.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>Here is an example program that prints out each shared library that is
+loaded in the process and the addresses where each of its segments are
+mapped into memory.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>findshlibs;
+<span class="kw">use </span>findshlibs::{Segment, SharedLibrary, TargetSharedLibrary};
+
+<span class="kw">fn </span>main() {
+    TargetSharedLibrary::each(|shlib| {
+        <span class="macro">println!</span>(<span class="string">"{}"</span>, shlib.name().to_string_lossy());
+
+        <span class="kw">for </span>seg <span class="kw">in </span>shlib.segments() {
+            <span class="macro">println!</span>(<span class="string">"    {}: segment {}"</span>,
+                     seg.actual_virtual_memory_address(shlib),
+                     seg.name());
+        }
+    });
+}</code></pre></div>
+<h3 id="supported-oses"><a class="doc-anchor" href="#supported-oses">§</a>Supported OSes</h3>
+<p>These are the OSes that <code>findshlibs</code> currently supports:</p>
+<ul>
+<li>Linux</li>
+<li>macOS</li>
+<li>Windows</li>
+<li>Android</li>
+<li>iOS</li>
+</ul>
+<p>If a platform is not supported then a fallback implementation is used that
+does nothing.  To see if your platform does something at runtime the
+<code>TARGET_SUPPORTED</code> constant can be used.</p>
+<p>Is your OS missing here? Send us a pull request!</p>
+<h3 id="addresses"><a class="doc-anchor" href="#addresses">§</a>Addresses</h3>
+<p>Shared libraries’ addresses can be confusing. They are loaded somewhere in
+physical memory, but we generally don’t care about physical memory
+addresses, because only the OS can see that address and in userspace we can
+only access memory through its virtual memory address. But even “virtual
+memory address” is ambiguous because it isn’t clear whether this is the
+address before or after the loader maps the shared library into memory and
+performs relocation.</p>
+<p>To clarify between these different kinds of addresses, we borrow some
+terminology from <a href="https://searchfox.org/mozilla-central/rev/13148faaa91a1c823a7d68563d9995480e714979/tools/profiler/lul/LulMain.h#17-51">LUL</a>:</p>
+<blockquote>
+<ul>
+<li>
+<p><strong>SVMA</strong> (“Stated Virtual Memory Address”): this is an address of a
+symbol (etc) as it is stated in the symbol table, or other
+metadata, of an object.  Such values are typically small and
+start from zero or thereabouts, unless the object has been
+prelinked.</p>
+</li>
+<li>
+<p><strong>AVMA</strong> (“Actual Virtual Memory Address”): this is the address of a
+symbol (etc) in a running process, that is, once the associated
+object has been mapped into a process.  Such values are typically
+much larger than SVMAs, since objects can get mapped arbitrarily
+far along the address space.</p>
+</li>
+<li>
+<p><strong>“Bias”</strong>: the difference between AVMA and SVMA for a given symbol
+(specifically, AVMA - SVMA).  The bias is always an integral
+number of pages.  Once we know the bias for a given object’s
+text section (for example), we can compute the AVMAs of all of
+its text symbols by adding the bias to their SVMAs.</p>
+</li>
+</ul>
+</blockquote>
+<h3 id="names-and-ids"><a class="doc-anchor" href="#names-and-ids">§</a>Names and IDs</h3>
+<p><code>findshlibs</code> also gives access to module names and IDs.  Since this is also
+not consistent across operating systems the following general rules apply:</p>
+<blockquote>
+<ul>
+<li><code>id</code> refers to the ID of the object file itself.  This is generally
+available on all platforms however it might still not be compiled into
+the binary in all case.  For instance on Linux the <code>gnu.build-id</code> note
+needs to be compiled in (which Rust does automatically).</li>
+<li><code>debug_id</code> refers to the ID of the debug file.  This only plays a role
+on Windows where the executable and the debug file (PDB) have a different
+ID.</li>
+<li><code>name</code> is the name of the executable.  On most operating systems (and
+all systems implemented currently) this is not just the name but in fact
+the entire path to the executable.</li>
+<li><code>debug_name</code> is the name of the debug file if known.  This is again
+the case on windows where this will be the path to the PDB file.</li>
+</ul>
+</blockquote>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="linux/index.html" title="mod findshlibs::linux">linux</a></div><div class="desc docblock-short">Linux-specific implementation of the <code>SharedLibrary</code> trait.</div></li><li><div class="item-name"><a class="mod" href="unsupported/index.html" title="mod findshlibs::unsupported">unsupported</a></div><div class="desc docblock-short">The fallback implementation of the <a href="../trait.SharedLibrary.html">SharedLibrary
+trait</a> that does nothing.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Avma.html" title="struct findshlibs::Avma">Avma</a></div><div class="desc docblock-short">Actual virtual memory address.</div></li><li><div class="item-name"><a class="struct" href="struct.Bias.html" title="struct findshlibs::Bias">Bias</a></div><div class="desc docblock-short">Virtual memory bias.</div></li><li><div class="item-name"><a class="struct" href="struct.Svma.html" title="struct findshlibs::Svma">Svma</a></div><div class="desc docblock-short">Stated virtual memory address.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.IterationControl.html" title="enum findshlibs::IterationControl">IterationControl</a></div><div class="desc docblock-short">Control whether iteration over shared libraries should continue or stop.</div></li><li><div class="item-name"><a class="enum" href="enum.SharedLibraryId.html" title="enum findshlibs::SharedLibraryId">SharedLibraryId</a></div><div class="desc docblock-short">Represents an ID for a shared library.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.TARGET_SUPPORTED.html" title="constant findshlibs::TARGET_SUPPORTED">TARGET_SUPPORTED</a></div><div class="desc docblock-short">An indicator if this platform is supported.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Segment.html" title="trait findshlibs::Segment">Segment</a></div><div class="desc docblock-short">A mapped segment in a shared library.</div></li><li><div class="item-name"><a class="trait" href="trait.SharedLibrary.html" title="trait findshlibs::SharedLibrary">SharedLibrary</a></div><div class="desc docblock-short">A trait representing a shared library that is loaded in this process.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.TargetSharedLibrary.html" title="type findshlibs::TargetSharedLibrary">TargetSharedLibrary</a></div><div class="desc docblock-short">The <a href="./trait.SharedLibrary.html"><code>SharedLibrary</code> trait</a>
+implementation for the target operating system.</div></li></ul></section></div></main></body></html>

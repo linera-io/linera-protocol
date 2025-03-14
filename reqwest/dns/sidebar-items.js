@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Name"],"trait":["Resolve"],"type":["Addrs","Resolving"]};

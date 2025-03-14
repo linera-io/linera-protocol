@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BackendBare","BackendConfig","BackendImpl","BackendReady","BackendUninitialized"],"trait":["Backend","BackendAccessible","BackendState"]};

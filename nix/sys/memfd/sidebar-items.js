@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["memfd_create"],"struct":["MemFdCreateFlag"]};

@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Module for holding Validated logic"><title>frunk::validated - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="frunk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../frunk/index.html">frunk</a><span class="version">0.4.3</span></h2></div><h2 class="location"><a href="#">Module validated</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate frunk</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">frunk</a>::<wbr><a class="mod" href="#">validated</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/frunk/validated.rs.html#1-360">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Module for holding Validated logic</p>
+<p><code>Validated</code> is a way of running a bunch of operations that can go wrong (for example,
+functions returning <code>Result&lt;T, E&gt;</code>) and, in the case of one or more things going wrong,
+having all the errors returned to you all at once. In the case that everything went well, you get
+an <code>HList</code> of all your results.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frunk::Validated;
+<span class="kw">use </span>frunk::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>frunk_core::{HList, hlist_pat};
+
+<span class="attr">#[derive(PartialEq, Eq, Debug)]
+</span><span class="kw">struct </span>Person {
+    age: i32,
+    name: String,
+}
+
+<span class="kw">fn </span>get_name() -&gt; <span class="prelude-ty">Result</span>&lt;String, String&gt; {
+    <span class="prelude-val">Ok</span>(<span class="string">"James"</span>.to_owned())
+}
+
+<span class="kw">fn </span>get_age() -&gt; <span class="prelude-ty">Result</span>&lt;i32, String&gt; {
+    <span class="prelude-val">Ok</span>(<span class="number">32</span>)
+}
+
+<span class="kw">let </span>v: Validated&lt;<span class="macro">HList!</span>(String, i32), String&gt; = get_name().into_validated() + get_age();
+<span class="kw">let </span>person = v.into_result()
+               .map(|<span class="macro">hlist_pat!</span>(name, age)| {
+                    Person {
+                        name,
+                        age,
+                    }
+                });
+
+ <span class="macro">assert_eq!</span>(person.unwrap(),
+            Person {
+                name: <span class="string">"James"</span>.to_owned(),
+                age: <span class="number">32</span>,
+            });</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A%23%5Ballow(unused_extern_crates)%5D%0Aextern+crate+r%23frunk;%0Afn+main()+%7B%0Ause+frunk::Validated;%0Ause+frunk::prelude::*;%0Ause+frunk_core::%7BHList,+hlist_pat%7D;%0A%0A%23%5Bderive(PartialEq,+Eq,+Debug)%5D%0Astruct+Person+%7B%0A++++age:+i32,%0A++++name:+String,%0A%7D%0A%0Afn+get_name()+-%3E+Result%3CString,+String%3E+%7B%0A++++Ok(%22James%22.to_owned())%0A%7D%0A%0Afn+get_age()+-%3E+Result%3Ci32,+String%3E+%7B%0A++++Ok(32)%0A%7D%0A%0Alet+v:+Validated%3CHList!(String,+i32),+String%3E+=+get_name().into_validated()+%2B+get_age();%0Alet+person+=+v.into_result()%0A+++++++++++++++.map(%7Chlist_pat!(name,+age)%7C+%7B%0A++++++++++++++++++++Person+%7B%0A++++++++++++++++++++++++name,%0A++++++++++++++++++++++++age,%0A++++++++++++++++++++%7D%0A++++++++++++++++%7D);%0A%0A+assert_eq!(person.unwrap(),%0A++++++++++++Person+%7B%0A++++++++++++++++name:+%22James%22.to_owned(),%0A++++++++++++++++age:+32,%0A++++++++++++%7D);%0A%7D&amp;edition=2021">Run</a></div>
+</div></details><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Validated.html" title="enum frunk::validated::Validated">Validated</a></div><div class="desc docblock-short">A Validated is either an Ok holding an HList or an Err, holding a vector
+of collected errors.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.IntoValidated.html" title="trait frunk::validated::IntoValidated">IntoValidated</a></div><div class="desc docblock-short">Trait for “lifting” a given type into a Validated</div></li></ul></section></div></main></body></html>

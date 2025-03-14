@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["EncodedReport","Metadata","Report","StackBuffer","StackFrame","StackTrace","Tag"]};

@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Definition of `SmartDisplay` and its related items."><title>powerfmt::smart_display - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="powerfmt" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../powerfmt/index.html">powerfmt</a><span class="version">0.2.0</span></h2></div><h2 class="location"><a href="#">Module smart_display</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate powerfmt</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">powerfmt</a>::<wbr><a class="mod" href="#">smart_display</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/powerfmt/smart_display.rs.html#1-695">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Definition of <a href="trait.SmartDisplay.html" title="trait powerfmt::smart_display::SmartDisplay"><code>SmartDisplay</code></a> and its related items.</p>
+<p><a href="trait.SmartDisplay.html" title="trait powerfmt::smart_display::SmartDisplay"><code>SmartDisplay</code></a> is a trait that allows authors to provide additional information to both the
+formatter and other users. This information is provided in the form of a metadata type. The only
+required piece of metadata is the width of the value. This is <em>before</em> it is passed to the
+formatter (i.e. it does not include any padding added by the formatter). Other information
+can be stored in a custom metadata type as needed. This information may be made available to
+downstream users, but it is not required.</p>
+<p>This module contains the <a href="trait.SmartDisplay.html" title="trait powerfmt::smart_display::SmartDisplay"><code>SmartDisplay</code></a> and associated items.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt;
+
+<span class="kw">use </span>powerfmt::ext::FormatterExt <span class="kw">as _</span>;
+<span class="kw">use </span>powerfmt::smart_display::{<span class="self">self</span>, FormatterOptions, Metadata, SmartDisplay};
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>User {
+    id: usize,
+}
+
+<span class="comment">// If you try to use `UserMetadata` in the `SmartDisplay` implementation, you will get a
+// compiler error about a private type being used publicly. To avoid this, use this attribute to
+// declare a private metadata type. You shouldn't need to worry about how this works, but be
+// aware that any public fields or methods remain usable by downstream users.
+</span><span class="attr">#[smart_display::private_metadata]
+</span><span class="kw">struct </span>UserMetadata {
+    username: String,
+    legal_name: String,
+}
+
+<span class="comment">// This attribute can be applied to `SmartDisplay` implementations. It will generate an
+// implementation of `Display` that delegates to `SmartDisplay`, avoiding the need to write
+// boilerplate.
+</span><span class="attr">#[smart_display::delegate]
+</span><span class="kw">impl </span>SmartDisplay <span class="kw">for </span>User {
+    <span class="kw">type </span>Metadata = UserMetadata;
+
+    <span class="kw">fn </span>metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: FormatterOptions) -&gt; Metadata&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt; {
+        <span class="comment">// This could be obtained from a database, for example.
+        </span><span class="kw">let </span>legal_name = <span class="string">"John Doe"</span>.to_owned();
+        <span class="kw">let </span>username = <span class="string">"jdoe"</span>.to_owned();
+
+        <span class="comment">// Note that this must be kept in sync with the implementation of `fmt_with_metadata`.
+        </span><span class="kw">let </span>width = <span class="macro">smart_display::padded_width_of!</span>(username, <span class="string">" ("</span>, legal_name, <span class="string">")"</span>,);
+
+        Metadata::new(
+            width,
+            <span class="self">self</span>,
+            UserMetadata {
+                username,
+                legal_name,
+            },
+        )
+    }
+
+    <span class="comment">// Use the now-generated metadata to format the value. Here we use the `pad_with_width`
+    // method to use the alignment and desired width from the formatter.
+    </span><span class="kw">fn </span>fmt_with_metadata(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;,
+        metadata: Metadata&lt;<span class="self">Self</span>&gt;,
+    ) -&gt; fmt::Result {
+        f.pad_with_width(
+            metadata.unpadded_width(),
+            <span class="macro">format_args!</span>(<span class="string">"{} ({})"</span>, metadata.username, metadata.legal_name),
+        )
+    }
+}
+
+<span class="kw">let </span>user = User { id: <span class="number">42 </span>};
+<span class="macro">assert_eq!</span>(user.to_string(), <span class="string">"jdoe (John Doe)"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{user:&gt;20}"</span>), <span class="string">"     jdoe (John Doe)"</span>);</code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.padded_width_of.html" title="macro powerfmt::smart_display::padded_width_of">padded_width_of</a></div><div class="desc docblock-short">Compute the width of multiple items while optionally declaring the options for each item.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FormatterOptions.html" title="struct powerfmt::smart_display::FormatterOptions">FormatterOptions</a></div><div class="desc docblock-short">Configuration for formatting.</div></li><li><div class="item-name"><a class="struct" href="struct.Metadata.html" title="struct powerfmt::smart_display::Metadata">Metadata</a></div><div class="desc docblock-short">Information used to format a value. This is returned by <a href="trait.SmartDisplay.html#tymethod.metadata" title="method powerfmt::smart_display::SmartDisplay::metadata"><code>SmartDisplay::metadata</code></a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.SmartDisplay.html" title="trait powerfmt::smart_display::SmartDisplay">SmartDisplay</a></div><div class="desc docblock-short">Format trait that allows authors to provide additional information.</div></li></ul></section></div></main></body></html>

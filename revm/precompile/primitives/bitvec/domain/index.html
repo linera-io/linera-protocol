@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Memory Region Description"><title>revm::precompile::primitives::bitvec::domain - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="revm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../../revm/index.html">revm</a><span class="version">19.4.0</span></h2></div><h2 class="location"><a href="#">Module domain</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In revm::precompile::primitives::bitvec</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../../../index.html">revm</a>::<wbr><a href="../../../index.html">precompile</a>::<wbr><a href="../../index.html">primitives</a>::<wbr><a href="../index.html">bitvec</a>::<wbr><a class="mod" href="#">domain</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../../src/bitvec/lib.rs.html#30">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="memory-region-description"><a class="doc-anchor" href="#memory-region-description">§</a>Memory Region Description</h2>
+<p>This module bridges the abstract <a href="../prelude/struct.BitSlice.html" title="struct revm::precompile::primitives::bitvec::prelude::BitSlice"><code>BitSlice</code></a> region to real memory by
+segmenting any bit-slice along its maybe-aliased and known-unaliased boundaries.
+This segmentation applies to both bit-slice and ordinary-element views of
+memory, and can be used to selectively remove alias restrictions or to enable
+access to the underlying memory with ordinary types.</p>
+<p>The four enums in this module all intentionally have the same variants by name
+and shape, in order to maintain textual consistency.</p>
+<h3 id="memory-layout-model"><a class="doc-anchor" href="#memory-layout-model">§</a>Memory Layout Model</h3>
+<p>Any bit-slice resident in memory has one of two major kinds, which the enums in
+this module refer to as <code>Enclave</code> and <code>Region</code></p>
+<h4 id="enclave"><a class="doc-anchor" href="#enclave">§</a>Enclave</h4>
+<p>An <code>Enclave</code> layout occurs when a bit-slice is contained entirely within a
+single memory element, and does not include either the initial or final semantic
+index in its span.</p>
+<div class="example-wrap"><pre class="language-text"><code>[ 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 ]
+[     ^^^^^^^^^^^^^^^^^^^^^     ]
+</code></pre></div>
+<p>In an 8-bit element, a bit-slice is considered to be an <code>Enclave</code> if it is
+contained entirely in the marked interior bits, and touches <em>neither</em> bit 7 nor
+bit 0. Wider elements may touch interior byte boundaries, and only restrict bits
+0 and <code>width - 1</code>.</p>
+<h4 id="region"><a class="doc-anchor" href="#region">§</a>Region</h4>
+<p>A <code>Region</code> layout occurs when a bit-slice consists of:</p>
+<ul>
+<li>zero or one half-spanned head element (excludes bit 0, includes <code>width - 1</code>)</li>
+<li>zero or more fully-spanned elements body (includes both 0 and <code>width - 1</code>)</li>
+<li>zero or one half-spanned tail element (includes bit 0, excludes <code>width - 1</code>)</li>
+</ul>
+<p>Each of these three sections is optionally present independently of the other
+two. That is, in the following three bytes, all of the following bit-slices have
+the <code>Region</code> layout:</p>
+<div class="example-wrap"><pre class="language-text"><code>[ 7 6 5 4 3 2 1 0 ] [ 7 6 5 4 3 2 1 0 ] [ 7 6 5 4 3 2 1 0 ]
+[                                                         ]
+
+[         h h h h                                         ]
+[                     b b b b b b b b                     ]
+[                                         t t t t         ]
+
+[         h h h h     t t t t                             ]
+
+[         h h h h     b b b b b b b b                     ]
+[                     b b b b b b b b     t t t t         ]
+[         h h h h     b b b b b b b b     t t t t         ]
+</code></pre></div>
+<ol>
+<li>The empty bit-slice is a region with all of its segments blank.</li>
+<li>A bit-slice with one element that touches <code>width - 1</code> but not 0 has a head,
+but no body or tail.</li>
+<li>A bit-slice that touches both <code>0</code> and <code>width - 1</code> of any number of elements
+has a body, but no head or tail.</li>
+<li>A bit-slice with one element that touches 0 but not <code>width - 1</code> has a tail,
+but no head or body.</li>
+<li>A bit-slice with two elements, that touches neither 0 of the first nor
+<code>width - 1</code> of the second (but by definition <code>width - 1</code> of the first and 0
+of the second; bit-slices are contiguous) has a head and tail, but no body.</li>
+</ol>
+<p>The final three rows show how the individual segments can be composed to
+describe all possible bit-slices.</p>
+<h3 id="aliasing-awareness"><a class="doc-anchor" href="#aliasing-awareness">§</a>Aliasing Awareness</h3>
+<p>The contiguity property of <code>BitSlice</code> combines with the <code>&amp;</code>/<code>&amp;mut</code> exclusion
+rules of the Rust language to provide additional information about the state of
+the program that allows a given bit-slice to exist.</p>
+<p>Specifically, any well-formed Rust program knows that <em>if</em> a bit-slice is able
+to produce a <code>Region.body</code> segment, <em>then</em> that body is not aliased by <code>bitvec</code>,
+and can safely transition to the <code>T::Unalias</code> state. Alias-permitting types like
+<code>Cell</code> and the atomics will never change their types (because <code>bitvec</code> cannot
+know that there are no views to a region other than what it has been given), but
+a tainted <code>BitSlice&lt;O, u8::Alias&gt;</code> bit-slice can revert its interior body back
+to <code>u8</code> and no longer require the alias tainting.</p>
+<p>The head and tail segments do not retain their history, and cannot tell whether
+they have been created by splitting or by shrinking, so they do not change their
+types at all.</p>
+<h3 id="raw-memory-access"><a class="doc-anchor" href="#raw-memory-access">§</a>Raw Memory Access</h3>
+<p>The <a href="enum.BitDomain.html" title="enum revm::precompile::primitives::bitvec::domain::BitDomain"><code>BitDomain</code></a> enum only splits a bit-slice along these boundaries, and
+allows a bit-slice view to safely shed aliasing protection added to it by
+<a href="../prelude/struct.BitSlice.html#method.split_at_mut" title="method revm::precompile::primitives::bitvec::prelude::BitSlice::split_at_mut"><code>.split_at_mut()</code></a>.</p>
+<p>The <a href="enum.Domain.html" title="enum revm::precompile::primitives::bitvec::domain::Domain"><code>Domain</code></a> enum completely sheds its bit-precision views, and reverts to
+ordinary element accesses. The body segment is an ordinary Rust slice with no
+additional information or restriction; it can be freely used without regard for
+any of <code>bitvec</code>’s constraints.</p>
+<p>In order to preserve the rules that any given bit-slice can never be used to
+affect bits outside of its own view of memory, the underlying memory of the head
+and tail segments is only made accessible through a <a href="struct.PartialElement.html" title="struct revm::precompile::primitives::bitvec::domain::PartialElement"><code>PartialElement</code></a> reference
+guard. This guard is an opaque proxy to the memory location, and holds both a
+reference and the bit-mask required to prevent reading from or writing to the
+bits outside the scope of the originating bit-slice.</p>
+<h3 id="generics"><a class="doc-anchor" href="#generics">§</a>Generics</h3>
+<p>This module, and the contents of <a href="../ptr/index.html" title="mod revm::precompile::primitives::bitvec::ptr"><code>ptr</code></a>, make extensive use of a trait-level
+mutability and reference tracking system in order to reduce code duplication and
+provide a more powerful development environment than would be achieved with
+macros.</p>
+<p>As such, the trait bounds on types in this module are more intense than the
+standard <code>&lt;T, O&gt;</code> fare in the crate’s main data structures. However, they are
+only ever instantiated with shared or exclusive references, and all of the
+bounds are a much more verbose way of saying “a reference, that is maybe-mut and
+maybe-slice, of <code>T</code>”.</p>
+<p>User code does not need to be aware of any of this: the <code>BitSlice</code> APIs that
+call into this module always result in structures where the complex bounds are
+reduced to ordinary slice references.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.PartialElement.html" title="struct revm::precompile::primitives::bitvec::domain::PartialElement">PartialElement</a></div><div class="desc docblock-short">Partially-Owned Memory Element</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BitDomain.html" title="enum revm::precompile::primitives::bitvec::domain::BitDomain">BitDomain</a></div><div class="desc docblock-short">Bit-Slice Partitioning</div></li><li><div class="item-name"><a class="enum" href="enum.Domain.html" title="enum revm::precompile::primitives::bitvec::domain::Domain">Domain</a></div><div class="desc docblock-short">Bit-Slice Element Partitioning</div></li></ul></section></div></main></body></html>

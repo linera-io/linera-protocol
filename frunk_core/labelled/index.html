@@ -1,0 +1,134 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This module holds the machinery behind LabelledGeneric."><title>frunk_core::labelled - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="frunk_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../frunk_core/index.html">frunk_core</a><span class="version">0.4.3</span></h2></div><h2 class="location"><a href="#">Module labelled</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate frunk_core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">frunk_core</a>::<wbr><a class="mod" href="#">labelled</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/frunk_core/labelled.rs.html#1-1213">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This module holds the machinery behind LabelledGeneric.</p>
+<p>A <code>LabelledGeneric</code> instance is pretty much exactly the same as a <code>Generic</code>
+instance, except that the generic representation should contain information
+about field names.</p>
+<p>Having a separate trait for <code>LabelledGeneric</code>s gives us the freedom to
+derive both labelled and non-labelled generic trait instances for our types.</p>
+<p>Aside from the main <code>LabelledGeneric</code> trait, this module holds helper
+methods that allow users to use <code>LabelledGeneric</code> without using universal
+function call syntax.</p>
+<p>In addition, this module holds macro-generated enums that map to letters
+in field names (identifiers).</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frunk::labelled::chars::<span class="kw-2">*</span>;
+<span class="kw">use </span>frunk_core::field;
+
+<span class="comment">// Optionally alias our tuple that represents our type-level string
+</span><span class="kw">type </span>name = (n, a, m, e);
+<span class="kw">let </span>labelled = <span class="macro">field!</span>[name, <span class="string">"Lloyd"</span>];
+<span class="macro">assert_eq!</span>(labelled.name, <span class="string">"name"</span>);
+<span class="macro">assert_eq!</span>(labelled.value, <span class="string">"Lloyd"</span>)</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A%23%5Ballow(unused_extern_crates)%5D%0Aextern+crate+r%23frunk_core;%0Afn+main()+%7B%0Ause+frunk::labelled::chars::*;%0Ause+frunk_core::field;%0A%0A//+Optionally+alias+our+tuple+that+represents+our+type-level+string%0Atype+name+=+(n,+a,+m,+e);%0Alet+labelled+=+field!%5Bname,+%22Lloyd%22%5D;%0Aassert_eq!(labelled.name,+%22name%22);%0Aassert_eq!(labelled.value,+%22Lloyd%22)%0A%7D&amp;edition=2021">Run</a></div>
+<p>A more common usage is to use <code>LabelledGeneric</code> to transform structs that
+have mismatched fields!</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// required when using custom derives
+</span><span class="kw">use </span>frunk::LabelledGeneric;
+
+<span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>NewUser&lt;<span class="lifetime">'a</span>&gt; {
+    first_name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    last_name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    age: usize,
+}
+
+<span class="comment">// Notice that the fields are mismatched in terms of ordering
+// *and* also in terms of the number of fields.
+</span><span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>ShortUser&lt;<span class="lifetime">'a</span>&gt; {
+    last_name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    first_name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+}
+
+<span class="kw">let </span>n_user = NewUser {
+    first_name: <span class="string">"Joe"</span>,
+    last_name: <span class="string">"Blow"</span>,
+    age: <span class="number">30</span>,
+};
+
+<span class="comment">// transform_from automagically sculpts the labelled generic
+// representation of the source object to that of the target type
+</span><span class="kw">let </span>s_user: ShortUser = frunk::transform_from(n_user); <span class="comment">// done</span></code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A//+required+when+using+custom+derives%0Ause+frunk::LabelledGeneric;%0A%0Afn+main()+%7B%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+NewUser%3C'a%3E+%7B%0A++++first_name:+%26'a+str,%0A++++last_name:+%26'a+str,%0A++++age:+usize,%0A%7D%0A%0A//+Notice+that+the+fields+are+mismatched+in+terms+of+ordering%0A//+*and*+also+in+terms+of+the+number+of+fields.%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+ShortUser%3C'a%3E+%7B%0A++++last_name:+%26'a+str,%0A++++first_name:+%26'a+str,%0A%7D%0A%0Alet+n_user+=+NewUser+%7B%0A++++first_name:+%22Joe%22,%0A++++last_name:+%22Blow%22,%0A++++age:+30,%0A%7D;%0A%0A//+transform_from+automagically+sculpts+the+labelled+generic%0A//+representation+of+the+source+object+to+that+of+the+target+type%0Alet+s_user:+ShortUser+=+frunk::transform_from(n_user);+//+done%0A%7D&amp;edition=2021">Run</a></div>
+<p>If you have the need to transform types that are similarly-shaped recursively, then
+use the Transmogrifier trait.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// required when using custom derives
+</span><span class="kw">use </span>frunk::labelled::Transmogrifier;
+<span class="kw">use </span>frunk::LabelledGeneric;
+
+<span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>InternalPhoneNumber {
+    emergency: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+    main: usize,
+    secondary: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+}
+
+<span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>InternalAddress&lt;<span class="lifetime">'a</span>&gt; {
+    is_whitelisted: bool,
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    phone: InternalPhoneNumber,
+}
+
+<span class="attr">#[derive(LabelledGeneric)]
+</span><span class="kw">struct </span>InternalUser&lt;<span class="lifetime">'a</span>&gt; {
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    age: usize,
+    address: InternalAddress&lt;<span class="lifetime">'a</span>&gt;,
+    is_banned: bool,
+}
+
+<span class="attr">#[derive(LabelledGeneric, PartialEq, Debug)]
+</span><span class="kw">struct </span>ExternalPhoneNumber {
+    main: usize,
+}
+
+<span class="attr">#[derive(LabelledGeneric, PartialEq, Debug)]
+</span><span class="kw">struct </span>ExternalAddress&lt;<span class="lifetime">'a</span>&gt; {
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    phone: ExternalPhoneNumber,
+}
+
+<span class="attr">#[derive(LabelledGeneric, PartialEq, Debug)]
+</span><span class="kw">struct </span>ExternalUser&lt;<span class="lifetime">'a</span>&gt; {
+    age: usize,
+    address: ExternalAddress&lt;<span class="lifetime">'a</span>&gt;,
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+}
+
+<span class="kw">let </span>internal_user = InternalUser {
+    name: <span class="string">"John"</span>,
+    age: <span class="number">10</span>,
+    address: InternalAddress {
+        is_whitelisted: <span class="bool-val">true</span>,
+        name: <span class="string">"somewhere out there"</span>,
+        phone: InternalPhoneNumber {
+            main: <span class="number">1234</span>,
+            secondary: <span class="prelude-val">None</span>,
+            emergency: <span class="prelude-val">Some</span>(<span class="number">5678</span>),
+        },
+    },
+    is_banned: <span class="bool-val">true</span>,
+};
+
+<span class="doccomment">/// Boilerplate-free conversion of a top-level InternalUser into an
+/// ExternalUser, taking care of subfield conversions as well.
+</span><span class="kw">let </span>external_user: ExternalUser = internal_user.transmogrify();
+
+<span class="kw">let </span>expected_external_user = ExternalUser {
+    name: <span class="string">"John"</span>,
+    age: <span class="number">10</span>,
+    address: ExternalAddress {
+        name: <span class="string">"somewhere out there"</span>,
+        phone: ExternalPhoneNumber {
+            main: <span class="number">1234</span>,
+        },
+    }
+};
+
+<span class="macro">assert_eq!</span>(external_user, expected_external_user);</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A//+required+when+using+custom+derives%0Afn+main()+%7B%0Ause+frunk::labelled::Transmogrifier;%0Ause+frunk::LabelledGeneric;%0A%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+InternalPhoneNumber+%7B%0A++++emergency:+Option%3Cusize%3E,%0A++++main:+usize,%0A++++secondary:+Option%3Cusize%3E,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+InternalAddress%3C'a%3E+%7B%0A++++is_whitelisted:+bool,%0A++++name:+%26'a+str,%0A++++phone:+InternalPhoneNumber,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric)%5D%0Astruct+InternalUser%3C'a%3E+%7B%0A++++name:+%26'a+str,%0A++++age:+usize,%0A++++address:+InternalAddress%3C'a%3E,%0A++++is_banned:+bool,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric,+PartialEq,+Debug)%5D%0Astruct+ExternalPhoneNumber+%7B%0A++++main:+usize,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric,+PartialEq,+Debug)%5D%0Astruct+ExternalAddress%3C'a%3E+%7B%0A++++name:+%26'a+str,%0A++++phone:+ExternalPhoneNumber,%0A%7D%0A%0A%23%5Bderive(LabelledGeneric,+PartialEq,+Debug)%5D%0Astruct+ExternalUser%3C'a%3E+%7B%0A++++age:+usize,%0A++++address:+ExternalAddress%3C'a%3E,%0A++++name:+%26'a+str,%0A%7D%0A%0Alet+internal_user+=+InternalUser+%7B%0A++++name:+%22John%22,%0A++++age:+10,%0A++++address:+InternalAddress+%7B%0A++++++++is_whitelisted:+true,%0A++++++++name:+%22somewhere+out+there%22,%0A++++++++phone:+InternalPhoneNumber+%7B%0A++++++++++++main:+1234,%0A++++++++++++secondary:+None,%0A++++++++++++emergency:+Some(5678),%0A++++++++%7D,%0A++++%7D,%0A++++is_banned:+true,%0A%7D;%0A%0A///+Boilerplate-free+conversion+of+a+top-level+InternalUser+into+an%0A///+ExternalUser,+taking+care+of+subfield+conversions+as+well.%0Alet+external_user:+ExternalUser+=+internal_user.transmogrify();%0A%0Alet+expected_external_user+=+ExternalUser+%7B%0A++++name:+%22John%22,%0A++++age:+10,%0A++++address:+ExternalAddress+%7B%0A++++++++name:+%22somewhere+out+there%22,%0A++++++++phone:+ExternalPhoneNumber+%7B%0A++++++++++++main:+1234,%0A++++++++%7D,%0A++++%7D%0A%7D;%0A%0Aassert_eq!(external_user,+expected_external_user);%0A%7D&amp;edition=2021">Run</a></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="chars/index.html" title="mod frunk_core::labelled::chars">chars</a></div><div class="desc docblock-short">Types for building type-level labels from character sequences.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Field.html" title="struct frunk_core::labelled::Field">Field</a></div><div class="desc docblock-short">A Label contains a type-level Name, a runtime value, and
+a reference to a <code>&amp;'static str</code> name.</div></li><li><div class="item-name"><a class="struct" href="struct.ValueField.html" title="struct frunk_core::labelled::ValueField">ValueField</a></div><div class="desc docblock-short">A version of Field that doesn’t have a type-level label, just a
+value-level one</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ByNameFieldPlucker.html" title="trait frunk_core::labelled::ByNameFieldPlucker">ByNameFieldPlucker</a></div><div class="desc docblock-short">Trait for plucking out a <code>Field</code> from a type by type-level <code>TargetKey</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.IntoLabelledGeneric.html" title="trait frunk_core::labelled::IntoLabelledGeneric">IntoLabelledGeneric</a></div></li><li><div class="item-name"><a class="trait" href="trait.IntoUnlabelled.html" title="trait frunk_core::labelled::IntoUnlabelled">IntoUnlabelled</a></div><div class="desc docblock-short">Trait for turning a Field HList into an un-labelled HList</div></li><li><div class="item-name"><a class="trait" href="trait.IntoValueLabelled.html" title="trait frunk_core::labelled::IntoValueLabelled">IntoValueLabelled</a></div><div class="desc docblock-short">A trait that strips type-level strings from the labels</div></li><li><div class="item-name"><a class="trait" href="trait.LabelledGeneric.html" title="trait frunk_core::labelled::LabelledGeneric">LabelledGeneric</a></div><div class="desc docblock-short">A trait that converts from a type to a labelled generic representation.</div></li><li><div class="item-name"><a class="trait" href="trait.Transmogrifier.html" title="trait frunk_core::labelled::Transmogrifier">Transmogrifier</a></div><div class="desc docblock-short">Trait for transmogrifying a <code>Source</code> type into a <code>Target</code> type.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.field_with_name.html" title="fn frunk_core::labelled::field_with_name">field_with_name</a></div><div class="desc docblock-short">Returns a new Field for a given value and custom name.</div></li><li><div class="item-name"><a class="fn" href="fn.from_labelled_generic.html" title="fn frunk_core::labelled::from_labelled_generic">from_labelled_generic</a></div><div class="desc docblock-short">Given a labelled generic representation of a <code>Dst</code>, returns <code>Dst</code></div></li><li><div class="item-name"><a class="fn" href="fn.into_labelled_generic.html" title="fn frunk_core::labelled::into_labelled_generic">into_labelled_generic</a></div><div class="desc docblock-short">Given a <code>Src</code>, returns its labelled generic representation.</div></li><li><div class="item-name"><a class="fn" href="fn.labelled_convert_from.html" title="fn frunk_core::labelled::labelled_convert_from">labelled_convert_from</a></div><div class="desc docblock-short">Converts one type into another assuming they have the same labelled generic
+representation.</div></li><li><div class="item-name"><a class="fn" href="fn.sculpted_convert_from.html" title="fn frunk_core::labelled::sculpted_convert_from">sculpted_convert_from</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Converts from one type into another assuming that their labelled generic representations
+can be sculpted into each other.</div></li><li><div class="item-name"><a class="fn" href="fn.transform_from.html" title="fn frunk_core::labelled::transform_from">transform_from</a></div><div class="desc docblock-short">Converts from one type into another assuming that their labelled generic representations
+can be sculpted into each other.</div></li></ul></section></div></main></body></html>

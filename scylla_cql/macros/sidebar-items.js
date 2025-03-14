@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["DeserializeRow","DeserializeValue","FromRow","FromUserType","IntoUserType","SerializeRow","SerializeValue","ValueList"],"macro":["impl_from_cql_value_from_method","impl_serialize_row_via_value_list","impl_serialize_value_via_value"],"struct":["Bytes","BytesMut"],"trait":["BufMut"]};

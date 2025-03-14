@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This module provides an implementation of ElligatorSwift as well as a version of x-only ECDH using it (including compatibility with BIP324)."><title>secp256k1::ellswift - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="secp256k1" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../secp256k1/index.html">secp256k1</a><span class="version">0.29.1</span></h2></div><h2 class="location"><a href="#">Module ellswift</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate secp256k1</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">secp256k1</a>::<wbr><a class="mod" href="#">ellswift</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/secp256k1/ellswift.rs.html#3-717">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This module provides an implementation of ElligatorSwift as well as a
+version of x-only ECDH using it (including compatibility with BIP324).</p>
+<p><code>ElligatorSwift</code> is described in <code>https://eprint.iacr.org/2022/759</code> by
+Chavez-Saab, Rodriguez-Henriquez, and Tibouchi. It permits encoding
+uniformly chosen public keys as 64-byte arrays which are indistinguishable
+from uniformly random arrays.</p>
+<p>Let f be the function from pairs of field elements to point X coordinates,
+defined as follows (all operations modulo p = 2^256 - 2^32 - 977)
+f(u,t):</p>
+<ul>
+<li>Let C = 0xa2d2ba93507f1df233770c2a797962cc61f6d15da14ecd47d8d27ae1cd5f852,
+a square root of -3.</li>
+<li>If u=0, set u=1 instead.</li>
+<li>If t=0, set t=1 instead.</li>
+<li>If u^3 + t^2 + 7 = 0, multiply t by 2.</li>
+<li>Let X = (u^3 + 7 - t^2) / (2 * t)</li>
+<li>Let Y = (X + t) / (C * u)</li>
+<li>Return the first in [u + 4 * Y^2, (-X/Y - u) / 2, (X/Y - u) / 2] that is an
+X coordinate on the curve (at least one of them is, for any u and t).</li>
+</ul>
+<p>Then an <code>ElligatorSwift</code> encoding of x consists of the 32-byte big-endian
+encodings of field elements u and t concatenated, where f(u,t) = x.
+The encoding algorithm is described in the paper, and effectively picks a
+uniformly random pair (u,t) among those which encode x.</p>
+<p>If the Y coordinate is relevant, it is given the same parity as t.</p>
+<p>Changes w.r.t. the paper:</p>
+<ul>
+<li>The u=0, t=0, and u^3+t^2+7=0 conditions result in decoding to the point
+at infinity in the paper. Here they are remapped to finite points.</li>
+<li>The paper uses an additional encoding bit for the parity of y. Here the
+parity of t is used (negating t does not affect the decoded x coordinate,
+so this is possible).</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ElligatorSwift.html" title="struct secp256k1::ellswift::ElligatorSwift">ElligatorSwift</a></div><div class="desc docblock-short"><code>ElligatorSwift</code> is an encoding of a uniformly chosen point on the curve
+as a 64-byte array that is indistinguishable from a uniformly random array.
+This object holds two field elements u and t, which are the inputs to
+the <code>ElligatorSwift</code> encoding function.</div></li><li><div class="item-name"><a class="struct" href="struct.ElligatorSwiftSharedSecret.html" title="struct secp256k1::ellswift::ElligatorSwiftSharedSecret">ElligatorSwiftSharedSecret</a></div><div class="desc docblock-short">The result of <code>ElligatorSwift::shared_secret</code>, which is a shared secret
+computed from the x-only ECDH using both parties’ public keys (<code>ElligatorSwift</code> encoded) and our own
+private key.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ElligatorSwiftParty.html" title="enum secp256k1::ellswift::ElligatorSwiftParty">ElligatorSwiftParty</a></div><div class="desc docblock-short">Represents which party we are in the ECDH, A is the initiator, B is the responder.
+This is important because the hash of the shared secret is different depending on which party
+we are. In this context, “we” means the party that is using this library, and possesses the
+secret key passed to <code>ElligatorSwift::shared_secret</code>.</div></li></ul></section></div></main></body></html>

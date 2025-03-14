@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Single-Bit Volatile Write"><title>write_volatile in revm::primitives::bitvec::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="revm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../revm/index.html">revm</a><span class="version">19.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In revm::primitives::bitvec::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">revm</a>::<wbr><a href="../../index.html">primitives</a>::<wbr><a href="../index.html">bitvec</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="fn" href="#">write_volatile</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../src/bitvec/ptr.rs.html#301-304">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn write_volatile&lt;T, O&gt;(dst: <a class="struct" href="../../../precompile/primitives/bitvec/prelude/struct.BitPtr.html" title="struct revm::precompile::primitives::bitvec::prelude::BitPtr">BitPtr</a>&lt;<a class="struct" href="../../../precompile/primitives/bitvec/ptr/struct.Mut.html" title="struct revm::precompile::primitives::bitvec::ptr::Mut">Mut</a>, T, O&gt;, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)<div class="where">where
+    T: <a class="trait" href="../../../precompile/primitives/bitvec/prelude/trait.BitStore.html" title="trait revm::precompile::primitives::bitvec::prelude::BitStore">BitStore</a>,
+    O: <a class="trait" href="../../../precompile/primitives/bitvec/prelude/trait.BitOrder.html" title="trait revm::precompile::primitives::bitvec::prelude::BitOrder">BitOrder</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="single-bit-volatile-write"><a class="doc-anchor" href="#single-bit-volatile-write">§</a>Single-Bit Volatile Write</h2>
+<p>This writes a bit into <code>dst</code> directly, using a volatile I/O intrinsic to
+prevent compiler reördering or removal.</p>
+<p>You should not use <code>bitvec</code> to perform any volatile I/O operations. You should
+instead do volatile I/O work on integer values directly, or use a crate like
+<a href="https://docs.rs/voladdress/latest/voladdress"><code>voladdress</code></a> to perform I/O transactions, and use <code>bitvec</code> only on stack
+locals that have no additional memory semantics.</p>
+<h3 id="original"><a class="doc-anchor" href="#original">§</a>Original</h3>
+<p><a href="https://doc.rust-lang.org/1.81.0/core/ptr/fn.write_volatile.html" title="fn core::ptr::write_volatile">`ptr::write_volatile</a></p>
+<h3 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h3>
+<p>Because this performs a dereference of memory, it inherits the original
+<code>ptr::write_volatile</code>’s requirements:</p>
+<ul>
+<li><code>dst</code> must be valid to write</li>
+<li><code>dst</code> must be properly aligned. This is an invariant of the <code>BitPtr</code> type as
+well as of the memory access.</li>
+</ul>
+<p>Additionally, <code>dst</code> must point to an initialized value of <code>T</code>. Integers cannot
+be initialized one bit at a time.</p>
+<h3 id="behavior"><a class="doc-anchor" href="#behavior">§</a>Behavior</h3>
+<p>This is required to perform a read/modify/write cycle on the memory location.
+LLVM <em>may or may not</em> emit a bit-write instruction on targets that have them in
+the ISA, but this is not specified in any way.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>bitvec::ptr <span class="kw">as </span>bv_ptr;
+
+<span class="kw">let </span><span class="kw-2">mut </span>data = <span class="number">0u8</span>;
+<span class="kw">let </span>ptr = BitPtr::&lt;<span class="kw">_</span>, <span class="kw">_</span>, Lsb0&gt;::from_mut(<span class="kw-2">&amp;mut </span>data);
+<span class="kw">unsafe </span>{ bv_ptr::write_volatile(ptr.add(<span class="number">2</span>), <span class="bool-val">true</span>); }
+<span class="macro">assert_eq!</span>(data, <span class="number">4</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

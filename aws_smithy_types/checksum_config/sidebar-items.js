@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RequestChecksumCalculation","ResponseChecksumValidation"],"struct":["UnknownRequestChecksumCalculationError","UnknownResponseChecksumValidationError"]};
