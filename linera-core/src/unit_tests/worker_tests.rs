@@ -310,22 +310,24 @@ where
         })
         .collect::<Vec<_>>();
 
+    let account_owner = source
+        .map(AccountOwner::User)
+        .unwrap_or(AccountOwner::Chain);
+
     let block = ProposedBlock {
         epoch,
         incoming_bundles,
         authenticated_signer,
         ..block_template
     }
-    .with_transfer(source, recipient, amount);
+    .with_transfer(account_owner, recipient, amount);
     match recipient {
         Recipient::Account(account) => {
             messages.push(vec![direct_outgoing_message(
                 account.chain_id,
                 MessageKind::Tracked,
                 SystemMessage::Credit {
-                    source: source
-                        .map(AccountOwner::User)
-                        .unwrap_or(AccountOwner::Chain),
+                    source: account_owner,
                     target: account.owner,
                     amount,
                 },
@@ -3506,7 +3508,7 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(None, Recipient::Burn, Amount::from_tokens(1))
+        .with_transfer(AccountOwner::Chain, Recipient::Burn, Amount::from_tokens(1))
         .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,

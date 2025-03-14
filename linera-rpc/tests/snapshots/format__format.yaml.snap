@@ -1082,8 +1082,7 @@ SystemOperation:
       Transfer:
         STRUCT:
           - owner:
-              OPTION:
-                TYPENAME: Owner
+              TYPENAME: AccountOwner
           - recipient:
               TYPENAME: Recipient
           - amount:

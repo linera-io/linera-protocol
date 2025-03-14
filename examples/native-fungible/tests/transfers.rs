@@ -33,7 +33,7 @@ async fn chain_balance_transfers() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(None, recipient, transfer_amount);
+            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
         })
         .await;
 
@@ -69,7 +69,7 @@ async fn transfer_to_owner() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(None, recipient, transfer_amount);
+            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
         })
         .await;
 
@@ -114,7 +114,7 @@ async fn transfer_to_multiple_owners() {
     let transfer_certificate = funding_chain
         .add_block(|block| {
             for (recipient, transfer_amount) in recipients.zip(transfer_amounts.clone()) {
-                block.with_native_token_transfer(None, recipient, transfer_amount);
+                block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
             }
         })
         .await;
@@ -155,7 +155,7 @@ async fn emptied_account_disappears_from_queries() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(None, recipient, transfer_amount);
+            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
         })
         .await;
 
@@ -167,7 +167,11 @@ async fn emptied_account_disappears_from_queries() {
 
     recipient_chain
         .add_block(|block| {
-            block.with_native_token_transfer(Some(owner), Recipient::Burn, transfer_amount);
+            block.with_native_token_transfer(
+                AccountOwner::User(owner),
+                Recipient::Burn,
+                transfer_amount,
+            );
         })
         .await;
 

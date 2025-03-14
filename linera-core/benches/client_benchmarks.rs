@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
-use linera_base::{data_types::Amount, identifiers::Account, time::Duration};
+use linera_base::{
+    data_types::Amount,
+    identifiers::{Account, AccountOwner},
+    time::Duration,
+};
 use linera_core::{
     client,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
@@ -55,7 +59,7 @@ where
 
     let account = Account::owner(chain2.chain_id(), owner1);
     let cert = chain1
-        .transfer_to_account(None, amt, account)
+        .transfer_to_account(AccountOwner::Chain, amt, account)
         .await
         .unwrap()
         .unwrap();

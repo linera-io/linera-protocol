@@ -114,8 +114,7 @@ pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
-        #[debug(skip_if = Option::is_none)]
-        owner: Option<Owner>,
+        owner: AccountOwner,
         recipient: Recipient,
         amount: Amount,
     },
@@ -414,13 +413,7 @@ where
                 ..
             } => {
                 let message = self
-                    .transfer(
-                        context.authenticated_signer,
-                        None,
-                        owner.map(AccountOwner::User).unwrap_or(AccountOwner::Chain),
-                        recipient,
-                        amount,
-                    )
+                    .transfer(context.authenticated_signer, None, owner, recipient, amount)
                     .await?;
 
                 if let Some(message) = message {

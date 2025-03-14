@@ -9,7 +9,10 @@ use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner},
+    identifiers::{
+        AccountOwner, ApplicationId, ChainId, ChannelFullName, GenericApplicationId,
+        Owner,
+    },
     ownership::TimeoutConfig,
 };
 use linera_chain::{
@@ -89,7 +92,7 @@ impl BlockBuilder {
     /// Adds a native token transfer to this block.
     pub fn with_native_token_transfer(
         &mut self,
-        sender: Option<Owner>,
+        sender: AccountOwner,
         recipient: Recipient,
         amount: Amount,
     ) -> &mut Self {
