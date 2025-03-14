@@ -358,6 +358,6 @@ subscription Notifications($chainId: ChainId!) {
   notifications(chainId: $chainId)
 }
 
-mutation Transfer($chainId: ChainId!, $recipient_chain: ChainId!, $recipient_account: AccountOwner!, $amount: Amount!) {
-  transfer(chainId: $chainId, recipient: { Account: { chain_id: $recipient_chain, owner: $recipient_account } }, amount: $amount)
+mutation Transfer($chainId: ChainId!, $owner: AccountOwner!, $recipient_chain: ChainId!, $recipient_account: AccountOwner!, $amount: Amount!) {
+  transfer(chainId: $chainId, owner: $owner, recipient: { Account: { chain_id: $recipient_chain, owner: $recipient_account } }, amount: $amount)
 }

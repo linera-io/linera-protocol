@@ -9,7 +9,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountSecretKey, Ed25519SecretKey, Secp256k1SecretKey},
     data_types::Amount,
-    identifiers::{Account, ChainId, Owner},
+    identifiers::{Account, AccountOwner, ChainId},
     time::{Duration, Instant},
 };
 use linera_execution::system::Recipient;
@@ -88,7 +88,7 @@ async fn setup_native_token_balances(
         admin_chain
             .add_block(|block| {
                 block.with_native_token_transfer(
-                    None,
+                    AccountOwner::Chain,
                     recipient,
                     Amount::from_tokens(initial_balance),
                 );
@@ -119,7 +119,7 @@ fn prepare_transfers(
         .enumerate()
         .map(|(index, chain)| {
             let chain_id = chain.id();
-            let sender = Some(Owner::from(chain.public_key()));
+            let sender = AccountOwner::from(chain.public_key());
 
             let transfers = accounts
                 .iter()

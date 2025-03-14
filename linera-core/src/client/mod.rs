@@ -1610,7 +1610,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer(
         &self,
-        owner: Option<Owner>,
+        owner: AccountOwner,
         amount: Amount,
         recipient: Recipient,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
@@ -2432,7 +2432,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account(
         &self,
-        owner: Option<Owner>,
+        owner: AccountOwner,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
@@ -2444,7 +2444,7 @@ where
     #[instrument(level = "trace")]
     pub async fn burn(
         &self,
-        owner: Option<Owner>,
+        owner: AccountOwner,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.transfer(owner, amount, Recipient::Burn).await
@@ -3159,7 +3159,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
-        owner: Option<Owner>,
+        owner: AccountOwner,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
