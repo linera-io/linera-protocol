@@ -73,7 +73,7 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "block_execution_latency",
         "Block execution latency",
         &[],
-        exponential_bucket_latencies(100.0),
+        exponential_bucket_latencies(1000.0),
     )
 });
 
