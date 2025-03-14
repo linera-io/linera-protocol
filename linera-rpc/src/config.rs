@@ -93,6 +93,25 @@ impl ShardConfig {
     }
 }
 
+/// The network configuration of a proxy.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProxyConfig {
+    /// The host name (e.g., an IP address).
+    pub host: String,
+    /// The port.
+    pub port: u16,
+    /// The host on which metrics are served.
+    pub metrics_host: String,
+    /// The port on which metrics are served.
+    pub metrics_port: u16,
+}
+
+impl ProxyConfig {
+    pub fn address(&self, protocol: &NetworkProtocol) -> String {
+        format!("{}://{}:{}", protocol.scheme(), self.host, self.port)
+    }
+}
+
 /// The network protocol.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkProtocol {
@@ -131,21 +150,17 @@ pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<NetworkP
 pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The public key of the validator.
     pub public_key: ValidatorPublicKey,
-    /// The network protocol to use for all shards.
+    /// The network protocol to internally.
     pub protocol: P,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
     pub shards: Vec<ShardConfig>,
-    /// The host name of the proxy on the internal network (IP or hostname).
-    pub host: String,
-    /// The port the proxy listens on the internal network.
-    pub port: u16,
     /// The server configurations for the linera-exporter.
     /// They can be used as optional locations to forward notifications to destinations other than
     /// the proxy, by the workers.
     pub block_exporters: Vec<ExporterServiceConfig>,
-    /// The port of the proxy's metrics endpoint.
-    pub metrics_port: u16,
+    /// The available proxies.
+    pub proxies: Vec<ProxyConfig>,
 }
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
@@ -154,19 +169,13 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
             public_key: self.public_key,
             protocol,
             shards: self.shards.clone(),
-            host: self.host.clone(),
-            port: self.port,
             block_exporters: self.block_exporters.clone(),
-            metrics_port: self.metrics_port,
+            proxies: self.proxies.clone(),
         }
     }
 }
 
 impl ValidatorInternalNetworkConfig {
-    pub fn proxy_address(&self) -> String {
-        format!("{}://{}:{}", self.protocol.scheme(), self.host, self.port)
-    }
-
     pub fn exporter_addresses(&self) -> Vec<String> {
         self.block_exporters
             .iter()
