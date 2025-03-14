@@ -594,7 +594,7 @@ where
                     amount,
                 ),
                 None => Operation::System(SystemOperation::Transfer {
-                    owner: None,
+                    owner: AccountOwner::Chain,
                     recipient: Recipient::chain(previous_chain_id),
                     amount,
                 }),

@@ -203,7 +203,7 @@ where
         chain_description,
         key_pair,
         Some(key_pair.public().into()),
-        None,
+        AccountOwner::Chain,
         Recipient::chain(target_id),
         amount,
         incoming_bundles,
@@ -221,7 +221,8 @@ where
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &AccountSecretKey,
-    source: Option<Owner>,
+    authenticated_signer: Option<Owner>,
+    source: AccountOwner,
     recipient: Recipient,
     amount: Amount,
     incoming_bundles: Vec<IncomingBundle>,
@@ -237,7 +238,7 @@ where
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
-        source.or_else(|| Some(key_pair.public().into())),
+        authenticated_signer,
         source,
         recipient,
         amount,
@@ -257,7 +258,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &AccountSecretKey,
     authenticated_signer: Option<Owner>,
-    source: Option<Owner>,
+    source: AccountOwner,
     recipient: Recipient,
     amount: Amount,
     incoming_bundles: Vec<IncomingBundle>,
@@ -310,24 +311,20 @@ where
         })
         .collect::<Vec<_>>();
 
-    let account_owner = source
-        .map(AccountOwner::User)
-        .unwrap_or(AccountOwner::Chain);
-
     let block = ProposedBlock {
         epoch,
         incoming_bundles,
         authenticated_signer,
         ..block_template
     }
-    .with_transfer(account_owner, recipient, amount);
+    .with_transfer(source, recipient, amount);
     match recipient {
         Recipient::Account(account) => {
             messages.push(vec![direct_outgoing_message(
                 account.chain_id,
                 MessageKind::Tracked,
                 SystemMessage::Credit {
-                    source: account_owner,
+                    source,
                     target: account.owner,
                     amount,
                 },
@@ -1393,7 +1390,7 @@ where
         ChainDescription::Root(2),
         &sender_key_pair,
         Some(chain_key_pair.public().into()),
-        None,
+        AccountOwner::Chain,
         Recipient::chain(ChainId::root(2)),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2126,7 +2123,8 @@ where
     let certificate00 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        None,
+        Some(Owner::from(sender_key_pair.public())),
+        AccountOwner::Chain,
         Recipient::Account(sender_account),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2145,7 +2143,8 @@ where
     let certificate01 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        None,
+        Some(Owner::from(sender_key_pair.public())),
+        AccountOwner::Chain,
         Recipient::Burn,
         Amount::ONE,
         vec![IncomingBundle {
@@ -2187,6 +2186,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
+        AccountOwner::User(sender),
         Recipient::Account(recipient_account),
         Amount::from_tokens(3),
         Vec::new(),
@@ -2206,6 +2206,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
+        AccountOwner::User(sender),
         Recipient::Account(recipient_account),
         Amount::from_tokens(2),
         Vec::new(),
@@ -2226,6 +2227,7 @@ where
         ChainDescription::Root(2),
         &recipient_key_pair,
         Some(recipient),
+        AccountOwner::User(recipient),
         Recipient::Burn,
         Amount::ONE,
         vec![
@@ -2285,6 +2287,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
+        AccountOwner::User(sender),
         Recipient::Burn,
         Amount::from_tokens(3),
         vec![IncomingBundle {
@@ -2980,7 +2983,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        None,
+        AccountOwner::Chain,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -2996,7 +2999,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        None,
+        AccountOwner::Chain,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3012,7 +3015,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        None,
+        AccountOwner::Chain,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3029,7 +3032,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        None,
+        AccountOwner::Chain,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),

@@ -10,8 +10,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{
-        AccountOwner, ApplicationId, ChainId, ChannelFullName, GenericApplicationId,
-        Owner,
+        AccountOwner, ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner,
     },
     ownership::TimeoutConfig,
 };
