@@ -9,16 +9,13 @@ use std::{
 };
 
 use assert_matches::assert_matches;
-#[cfg(feature = "unstable-oracles")]
-use linera_base::data_types::ApplicationPermissions;
-#[cfg(feature = "unstable-oracles")]
-use linera_base::http;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp,
-        UserApplicationDescription,
+        Amount, ApplicationPermissions, Blob, BlockHeight, CompressedBytecode, OracleResponse,
+        Timestamp, UserApplicationDescription,
     },
+    http,
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, Owner,
     },
@@ -35,9 +32,7 @@ use linera_execution::{
     TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
-#[cfg(feature = "unstable-oracles")]
-use test_case::test_case;
-use test_case::test_matrix;
+use test_case::{test_case, test_matrix};
 use test_strategy::proptest;
 
 /// Tests the contract system API to transfer tokens between accounts.
@@ -946,7 +941,6 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
 }
 
 /// Tests the contract system API to make HTTP requests.
-#[cfg(feature = "unstable-oracles")] // # TODO: Remove once #3524 lands
 #[test_case(None => matches Ok(_); "when all authorized")]
 #[test_case(Some(vec![()]) => matches Ok(_); "when single app authorized")]
 #[test_case(Some(vec![]) => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
