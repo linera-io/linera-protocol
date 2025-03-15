@@ -145,7 +145,7 @@ impl NativeFungibleTokenContract {
             }
             AccountOwner::Application(_) => panic!("Applications not supported yet"),
             AccountOwner::Chain => {
-                panic!("Chains cannot be used to authenticate")
+                panic!("Chain accounts are not supported")
             }
         }
     }

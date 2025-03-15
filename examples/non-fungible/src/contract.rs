@@ -145,7 +145,7 @@ impl NonFungibleTokenContract {
                 )
             }
             AccountOwner::Chain => {
-                unreachable!("Chains cannot be used to authenticate")
+                panic!("Chain account is not supported")
             }
         }
     }

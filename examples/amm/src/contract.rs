@@ -327,7 +327,7 @@ impl AmmContract {
                 )
             }
             AccountOwner::Chain => {
-                unreachable!("Chains cannot be used to authenticate")
+                panic!("Using chain balance is not authorized")
             }
         }
     }
