@@ -41,7 +41,7 @@ pub struct ResourceControlPolicy {
     pub message: Amount,
     /// The additional price for each byte in the argument of a user message.
     pub message_byte: Amount,
-    /// The price to query a service as an oracle.
+    /// The price per query to a service as an oracle.
     pub service_as_oracle_query: Amount,
     /// The price for a performing an HTTP request.
     pub http_request: Amount,
