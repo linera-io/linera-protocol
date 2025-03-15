@@ -1028,14 +1028,13 @@ impl<Message> RawOutgoingMessage<Message, Resources> {
 }
 
 impl OperationContext {
-    fn refund_grant_to(&self) -> Account {
-        Account {
+    /// Returns an account for the refund.
+    /// Returns `None` if there is no authenticated signer of the [`OperationContext`].
+    fn refund_grant_to(&self) -> Option<Account> {
+        self.authenticated_signer.map(|owner| Account {
             chain_id: self.chain_id,
-            owner: self
-                .authenticated_signer
-                .map(AccountOwner::User)
-                .unwrap_or(AccountOwner::Chain),
-        }
+            owner: AccountOwner::User(owner),
+        })
     }
 
     fn next_message_id(&self, next_message_index: u32) -> MessageId {
