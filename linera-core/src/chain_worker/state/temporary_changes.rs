@@ -224,7 +224,9 @@ where
                 info.requested_owner_balance =
                     chain.execution_state.system.balances.get(&owner).await?;
             }
-            _ => {}
+            AccountOwner::Chain => {
+                info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
+            }
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
