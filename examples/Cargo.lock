@@ -1521,7 +1521,6 @@ dependencies = [
  "assert_matches",
  "futures",
  "linera-sdk",
- "serde_json",
  "tokio",
 ]
 

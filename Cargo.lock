@@ -2086,7 +2086,6 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "linera-sdk",
- "serde_json",
 ]
 
 [[package]]
