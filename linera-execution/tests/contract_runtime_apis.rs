@@ -759,14 +759,14 @@ impl TransferTestEndpoint {
                 let owner = Self::sender_owner();
                 (
                     Amount::ZERO,
-                    vec![(AccountOwner::User(owner), transfer_amount)],
+                    vec![(AccountOwner::Address32(owner.0), transfer_amount)],
                     Some(owner),
                 )
             }
             TransferTestEndpoint::Application => (
                 Amount::ZERO,
                 vec![(
-                    AccountOwner::Application(Self::sender_application_id()),
+                    AccountOwner::Address32(Self::sender_application_id().0),
                     transfer_amount,
                 )],
                 None,
@@ -791,9 +791,9 @@ impl TransferTestEndpoint {
     pub fn sender_account_owner(&self) -> AccountOwner {
         match self {
             TransferTestEndpoint::Chain => AccountOwner::Chain,
-            TransferTestEndpoint::User => AccountOwner::User(Self::sender_owner()),
+            TransferTestEndpoint::User => AccountOwner::Address32(Self::sender_owner().0),
             TransferTestEndpoint::Application => {
-                AccountOwner::Application(Self::sender_application_id())
+                AccountOwner::Address32(Self::sender_application_id().0)
             }
         }
     }
@@ -803,10 +803,10 @@ impl TransferTestEndpoint {
         match self {
             TransferTestEndpoint::Chain => AccountOwner::Chain,
             TransferTestEndpoint::User => {
-                AccountOwner::User(Owner(CryptoHash::test_hash("attacker")))
+                AccountOwner::Address32(CryptoHash::test_hash("attacker"))
             }
             TransferTestEndpoint::Application => {
-                AccountOwner::Application(Self::recipient_application_id())
+                AccountOwner::Address32(Self::recipient_application_id().0)
             }
         }
     }
@@ -835,9 +835,9 @@ impl TransferTestEndpoint {
     pub fn recipient_account_owner(&self) -> AccountOwner {
         match self {
             TransferTestEndpoint::Chain => AccountOwner::Chain,
-            TransferTestEndpoint::User => AccountOwner::User(Self::recipient_owner()),
+            TransferTestEndpoint::User => AccountOwner::Address32(Self::recipient_owner().0),
             TransferTestEndpoint::Application => {
-                AccountOwner::Application(Self::recipient_application_id())
+                AccountOwner::Address32(Self::recipient_application_id().0)
             }
         }
     }

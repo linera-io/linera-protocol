@@ -152,18 +152,11 @@ impl MatchingEngineContract {
     /// authenticate the originator of the message
     fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
-            AccountOwner::User(address) => {
-                assert_eq!(
-                    self.runtime.authenticated_signer(),
-                    Some(address),
-                    "Unauthorized"
-                )
-            }
-            AccountOwner::Application(id) => {
-                assert_eq!(
-                    self.runtime.authenticated_caller_id(),
-                    Some(id),
-                    "Unauthorized"
+            AccountOwner::Address32(address) => {
+                assert!(
+                    self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
+                        || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
+                    "Unauthorized."
                 )
             }
             AccountOwner::Chain => {
@@ -188,7 +181,7 @@ impl MatchingEngineContract {
     ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application().application_id()),
+            owner: AccountOwner::Address32(self.runtime.application().application_id().0),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -197,7 +190,7 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
-        let owner_app = AccountOwner::Application(self.runtime.application().application_id());
+        let owner_app = AccountOwner::Address32(self.runtime.application().application_id().0);
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
     }
 

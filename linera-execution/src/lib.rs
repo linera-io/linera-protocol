@@ -1034,7 +1034,7 @@ impl OperationContext {
             chain_id: self.chain_id,
             owner: self
                 .authenticated_signer
-                .map(AccountOwner::User)
+                .map(|o| AccountOwner::Address32(o.0))
                 .unwrap_or(AccountOwner::Chain),
         })
     }

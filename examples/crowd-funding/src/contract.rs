@@ -192,7 +192,7 @@ impl CrowdFundingContract {
 
     /// Queries the token application to determine the total amount of tokens in custody.
     fn balance(&mut self) -> Amount {
-        let owner = AccountOwner::Application(self.runtime.application().application_id());
+        let owner = AccountOwner::Address32(self.runtime.application().application_id().0);
         let fungible_id = self.fungible_id();
         let response = self.runtime.call_application(
             true,
@@ -212,7 +212,7 @@ impl CrowdFundingContract {
             owner,
         };
         let transfer = fungible::Operation::Transfer {
-            owner: AccountOwner::Application(self.runtime.application().application_id()),
+            owner: AccountOwner::Address32(self.runtime.application().application_id().0),
             amount,
             target_account,
         };
@@ -224,7 +224,7 @@ impl CrowdFundingContract {
     fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) {
         let target_account = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application().application_id()),
+            owner: AccountOwner::Address32(self.runtime.application().application_id().0),
         };
         let transfer = fungible::Operation::Transfer {
             owner,
