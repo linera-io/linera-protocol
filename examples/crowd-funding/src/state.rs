@@ -15,7 +15,7 @@ pub enum Status {
     /// The campaign is active and can receive pledges.
     #[default]
     Active,
-    /// The campaign has ended successfully and still receive additional pledges.
+    /// The campaign has ended successfully and can still receive additional pledges.
     Complete,
     /// The campaign was cancelled, all pledges have been returned and no more pledges can be made.
     Cancelled,
