@@ -1087,7 +1087,7 @@ input ResourceControlPolicy {
 	"""
 	messageByte: Amount!
 	"""
-	The price to query a service as an oracle.
+	The price per query to a service as an oracle.
 	"""
 	serviceAsOracleQuery: Amount!
 	"""
