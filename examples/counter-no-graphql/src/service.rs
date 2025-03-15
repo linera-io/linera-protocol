@@ -26,9 +26,7 @@ impl Service for CounterService {
         let state = CounterState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        CounterService {
-            state,
-        }
+        CounterService { state }
     }
 
     async fn handle_query(&self, _request: ()) -> u64 {
@@ -42,7 +40,6 @@ mod tests {
 
     use futures::FutureExt as _;
     use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
-    use serde_json::json;
 
     use super::{CounterService, CounterState};
 
@@ -55,7 +52,7 @@ mod tests {
             .expect("Failed to read from mock key value store");
         state.value.set(value);
 
-        let service = CounterService { state, runtime };
+        let service = CounterService { state };
         let request = ();
 
         let response = service
