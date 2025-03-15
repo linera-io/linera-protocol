@@ -100,6 +100,8 @@ enum NodeServiceError {
     InvalidChainId(CryptoError),
     #[error("unexpected application operations added during non-mutation query")]
     UnexpectedOperationsFromQuery,
+    #[error("round timeout error")]
+    RoundTimeout,
 }
 
 impl From<ServerError> for NodeServiceError {
@@ -144,6 +146,9 @@ impl IntoResponse for NodeServiceError {
                 StatusCode::BAD_REQUEST,
                 vec!["invalid chain ID".to_string()],
             ),
+            NodeServiceError::RoundTimeout => {
+                (StatusCode::BAD_REQUEST, vec!["round timeout".to_string()])
+            }
         };
         let tuple = (tuple.0, json!({"error": tuple.1}).to_string());
         tuple.into_response()
@@ -923,12 +928,18 @@ where
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
             axum::routing::get(util::graphiql).post(Self::application_handler);
+        let raw_application_handler =
+            axum::routing::get(util::graphiql).post(Self::raw_application_handler);
 
         let app = Router::new()
             .route("/", index_handler)
             .route(
                 "/chains/:chain_id/applications/:application_id",
                 application_handler,
+            )
+            .route(
+                "/chains/:chain_id/raw_applications/:application_id",
+                raw_application_handler,
             )
             .route("/ready", axum::routing::get(|| async { "ready!" }))
             .route_service("/ws", GraphQLSubscription::new(self.schema()))
@@ -1093,6 +1104,120 @@ where
                 service
                     .0
                     .user_application_mutation(application_id, &request, chain_id)
+                    .await?
+            }
+            OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
+        };
+
+        Ok(response.into())
+    }
+
+    fn decompose_query(argument: &str) -> (OperationType, Vec<u8>) {
+        if let Some(residual) = argument.strip_prefix("query { ") {
+            tracing::info!("decompose_query: residual={}", residual);
+            let operation = &residual[0..residual.len() - 2];
+            tracing::info!(
+                "decompose_query: operation={} |operation|={}",
+                operation,
+                operation.len()
+            );
+            let operation = hex::decode(operation).unwrap();
+            tracing::info!("decompose_query: operation={:?}", operation);
+            return (OperationType::Query, operation);
+        }
+        if let Some(residual) = argument.strip_prefix("mutation { ") {
+            let operation = &residual[0..residual.len() - 2];
+            let operation = hex::decode(operation).unwrap();
+            return (OperationType::Mutation, operation);
+        }
+        panic!("Failed to find a matching entry for argument={argument}");
+    }
+
+    /// Queries a user application, returning the raw [`QueryOutcome`].
+    async fn raw_query_user_application(
+        &self,
+        application_id: UserApplicationId,
+        bytes: Vec<u8>,
+        chain_id: ChainId,
+    ) -> Result<async_graphql::Response, NodeServiceError> {
+        let query = Query::User {
+            application_id,
+            bytes,
+        };
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            })?;
+        let QueryOutcome {
+            response,
+            operations: _,
+        } = client.query_application(query).await?;
+        match response {
+            QueryResponse::System(_) => {
+                unreachable!("cannot get a system response for a user query")
+            }
+            QueryResponse::User(user_response_bytes) => {
+                Ok(async_graphql::Response::new(user_response_bytes))
+            }
+        }
+    }
+
+    /// Queries a user application, returning the raw [`QueryOutcome`].
+    async fn raw_execute_operation(
+        &self,
+        application_id: UserApplicationId,
+        bytes: Vec<u8>,
+        chain_id: ChainId,
+    ) -> Result<async_graphql::Response, NodeServiceError> {
+        let operation = Operation::User {
+            application_id,
+            bytes,
+        };
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            })?;
+        let client_outcome = client.execute_operation(operation).await?;
+        let ClientOutcome::Committed(outcome) = client_outcome else {
+            return Err(NodeServiceError::RoundTimeout);
+        };
+        let hash = outcome.value().hash();
+        Ok(async_graphql::Response::new(hash.to_value()))
+    }
+
+    /// Executes a query or an operation against an application.
+    /// The query/operation are not GraphQL but they are handled
+    async fn raw_application_handler(
+        Path((chain_id, application_id)): Path<(String, String)>,
+        service: Extension<Self>,
+        request: GraphQLRequest,
+    ) -> Result<GraphQLResponse, NodeServiceError> {
+        let request = request.into_inner();
+        let query = request.query;
+        let (operation_type, request) = Self::decompose_query(&query);
+
+        let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
+        let application_id: UserApplicationId = application_id.parse()?;
+
+        let response = match operation_type {
+            OperationType::Query => {
+                service
+                    .0
+                    .raw_query_user_application(application_id, request, chain_id)
+                    .await?
+            }
+            OperationType::Mutation => {
+                service
+                    .0
+                    .raw_execute_operation(application_id, request, chain_id)
                     .await?
             }
             OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
