@@ -6,7 +6,6 @@
 use std::{
     ffi::OsString,
     fmt::Display,
-    ops::{Bound, Bound::Excluded},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -268,7 +267,7 @@ pub struct RocksDbStoreInternal {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
-    path_with_guard: PathWithGuard,
+    pub path_with_guard: PathWithGuard,
     /// The chosen spawn mode
     spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store
@@ -556,6 +555,10 @@ impl TestKeyValueStore for RocksDbStoreInternal {
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
+    /// Already existing storage
+    #[error("Already existing storag")]
+    AlreadyExist,
+
     /// Tokio join error in RocksDB.
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),

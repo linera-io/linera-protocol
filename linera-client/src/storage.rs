@@ -754,6 +754,11 @@ impl StoreConfig {
                 let store = ScyllaDbStore::maybe_create_and_connect(&config, &namespace).await?;
                 list_all_blob_ids(&store).await
             }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+                let store = DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::maybe_create_and_connect(&config, &namespace).await?;
+                list_all_blob_ids(&store).await
+            }
         }
     }
 
@@ -779,6 +784,10 @@ impl StoreConfig {
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
                 Ok(list_all_chain_ids::<ScyllaDbStore>(&config, &namespace).await?)
+            }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+                Ok(list_all_chain_ids::<DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>>(&config, &namespace).await?)
             }
         }
     }
