@@ -1412,6 +1412,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             ExecutionError::UnauthorizedApplication(app_id)
         );
 
+        this.resource_controller.track_service_oracle_call()?;
         let response =
             if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
