@@ -195,10 +195,7 @@ where
         Amount::from_tokens(3)
     );
     assert_eq!(
-        receiver
-            .local_balances_with_owner(Some(owner))
-            .await
-            .unwrap(),
+        receiver.local_balances_with_owner(owner).await.unwrap(),
         (Amount::ZERO, Some(Amount::from_tokens(3)))
     );
     assert_eq!(receiver.query_balance().await.unwrap(), Amount::ZERO);
@@ -207,10 +204,7 @@ where
         Amount::from_millis(2999)
     );
     assert_eq!(
-        receiver
-            .query_balances_with_owner(Some(owner))
-            .await
-            .unwrap(),
+        receiver.query_balances_with_owner(owner).await.unwrap(),
         (Amount::ZERO, Some(Amount::from_millis(2999)))
     );
 

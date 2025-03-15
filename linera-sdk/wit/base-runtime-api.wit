@@ -33,6 +33,7 @@ interface base-runtime-api {
     variant account-owner {
         user(owner),
         application(application-id),
+        chain,
     }
 
     record amount {

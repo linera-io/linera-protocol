@@ -10,7 +10,11 @@
 use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 
 use fungible::{FungibleTokenAbi, InitialState};
-use linera_base::{data_types::Amount, identifiers::ChainId, vm::VmRuntime};
+use linera_base::{
+    data_types::Amount,
+    identifiers::{Account, ChainId},
+    vm::VmRuntime,
+};
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
@@ -31,10 +35,11 @@ fn reqwest_client() -> reqwest::Client {
         .unwrap()
 }
 
-async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainId, amount: &str) {
+async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: Account, amount: &str) {
     let variables = transfer::Variables {
         chain_id: from,
-        recipient: to,
+        recipient_chain: to.chain_id,
+        recipient_account: to.owner,
         amount: Amount::from_str(amount).unwrap(),
     };
     request::<Transfer, _>(client, url, variables)
@@ -86,7 +91,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
 
     // sending a few transfers
     let chain0 = ChainId::root(0);
-    let chain1 = ChainId::root(1);
+    let chain1 = Account::chain(ChainId::root(1));
     for _ in 0..10 {
         transfer(req_client, url, chain0, chain1, "0.1").await;
     }

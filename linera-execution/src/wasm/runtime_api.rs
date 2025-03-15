@@ -471,7 +471,7 @@ where
     /// balance) to `destination`.
     fn transfer(
         caller: &mut Caller,
-        source: Option<AccountOwner>,
+        source: AccountOwner,
         destination: Account,
         amount: Amount,
     ) -> Result<(), RuntimeError> {

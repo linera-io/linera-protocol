@@ -9,7 +9,11 @@
 
 use std::{str::FromStr, sync::LazyLock, time::Duration};
 
-use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId};
+use linera_base::{
+    command::resolve_binary,
+    data_types::Amount,
+    identifiers::{Account, ChainId},
+};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
     operations::{get_operation, GetOperation, OperationKey},
@@ -69,10 +73,11 @@ fn indexer_running(child: &mut Child) {
     }
 }
 
-async fn transfer(client: &reqwest::Client, from: ChainId, to: ChainId, amount: &str) {
+async fn transfer(client: &reqwest::Client, from: ChainId, to: Account, amount: &str) {
     let variables = transfer::Variables {
         chain_id: from,
-        recipient: to,
+        recipient_chain: to.chain_id,
+        recipient_account: to.owner,
         amount: Amount::from_str(amount).unwrap(),
     };
     request::<Transfer, _>(client, "http://localhost:8080", variables)
@@ -115,7 +120,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
 
     // making a few transfers
     let chain0 = ChainId::root(0);
-    let chain1 = ChainId::root(1);
+    let chain1 = Account::chain(ChainId::root(1));
     for _ in 0..10 {
         transfer(&req_client, chain0, chain1, "0.1").await;
         linera_base::time::timer::sleep(Duration::from_millis(TRANSFER_DELAY_MILLIS)).await;

@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -66,8 +66,8 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
-        target: None,
-        source: None,
+        target: AccountOwner::Chain,
+        source: AccountOwner::Chain,
     };
     let context = MessageContext {
         chain_id: ChainId::root(0),

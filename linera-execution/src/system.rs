@@ -210,11 +210,9 @@ pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
     Credit {
-        #[debug(skip_if = Option::is_none)]
-        target: Option<AccountOwner>,
+        target: AccountOwner,
         amount: Amount,
-        #[debug(skip_if = Option::is_none)]
-        source: Option<AccountOwner>,
+        source: AccountOwner,
     },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
     /// the recipient. The message must be properly authenticated. Receiver chains may
@@ -419,7 +417,7 @@ where
                     .transfer(
                         context.authenticated_signer,
                         None,
-                        owner.map(AccountOwner::User),
+                        owner.map(AccountOwner::User).unwrap_or(AccountOwner::Chain),
                         recipient,
                         amount,
                     )
@@ -645,24 +643,22 @@ where
         &mut self,
         authenticated_signer: Option<Owner>,
         authenticated_application_id: Option<UserApplicationId>,
-        source: Option<AccountOwner>,
+        source: AccountOwner,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
         match (source, authenticated_signer, authenticated_application_id) {
-            (Some(AccountOwner::User(owner)), Some(signer), _) => ensure!(
+            (AccountOwner::User(owner), Some(signer), _) => ensure!(
                 signer == owner,
                 ExecutionError::UnauthenticatedTransferOwner
             ),
-            (
-                Some(AccountOwner::Application(account_application)),
-                _,
-                Some(authorized_application),
-            ) => ensure!(
-                account_application == authorized_application,
-                ExecutionError::UnauthenticatedTransferOwner
-            ),
-            (None, Some(signer), _) => ensure!(
+            (AccountOwner::Application(account_application), _, Some(authorized_application)) => {
+                ensure!(
+                    account_application == authorized_application,
+                    ExecutionError::UnauthenticatedTransferOwner
+                )
+            }
+            (AccountOwner::Chain, Some(signer), _) => ensure!(
                 self.ownership.get().verify_owner(&signer),
                 ExecutionError::UnauthenticatedTransferOwner
             ),
@@ -672,7 +668,7 @@ where
             amount > Amount::ZERO,
             ExecutionError::IncorrectTransferAmount
         );
-        self.debit(source.as_ref(), amount).await?;
+        self.debit(&source, amount).await?;
         match recipient {
             Recipient::Account(account) => {
                 let message = RawOutgoingMessage {
@@ -711,6 +707,7 @@ where
                 authenticated_application_id == Some(owner),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
+            AccountOwner::Chain => unreachable!(),
         }
         ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
@@ -730,26 +727,28 @@ where
     /// Debits an [`Amount`] of tokens from an account's balance.
     async fn debit(
         &mut self,
-        account: Option<&AccountOwner>,
+        account: &AccountOwner,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let balance = if let Some(owner) = account {
-            self.balances.get_mut(owner).await?.ok_or_else(|| {
+        let balance = match account {
+            AccountOwner::Chain => self.balance.get_mut(),
+            other => self.balances.get_mut(other).await?.ok_or_else(|| {
                 ExecutionError::InsufficientFunding {
                     balance: Amount::ZERO,
                 }
-            })?
-        } else {
-            self.balance.get_mut()
+            })?,
         };
 
         balance
             .try_sub_assign(amount)
             .map_err(|_| ExecutionError::InsufficientFunding { balance: *balance })?;
 
-        if let Some(owner) = account {
-            if balance.is_zero() {
-                self.balances.remove(owner)?;
+        match account {
+            AccountOwner::Chain => {}
+            other => {
+                if balance.is_zero() {
+                    self.balances.remove(other)?;
+                }
             }
         }
 
@@ -772,12 +771,12 @@ where
             } => {
                 let receiver = if context.is_bouncing { source } else { target };
                 match receiver {
-                    None => {
+                    AccountOwner::Chain => {
                         let new_balance = self.balance.get().saturating_add(amount);
                         self.balance.set(new_balance);
                     }
-                    Some(owner) => {
-                        let balance = self.balances.get_mut_or_default(&owner).await?;
+                    other => {
+                        let balance = self.balances.get_mut_or_default(&other).await?;
                         *balance = balance.saturating_add(amount);
                     }
                 }
@@ -787,7 +786,7 @@ where
                 owner,
                 recipient,
             } => {
-                self.debit(Some(&owner), amount).await?;
+                self.debit(&owner, amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
                         let message = RawOutgoingMessage {
@@ -797,7 +796,7 @@ where
                             kind: MessageKind::Tracked,
                             message: SystemMessage::Credit {
                                 amount,
-                                source: Some(owner),
+                                source: owner,
                                 target: account.owner,
                             },
                         };
@@ -882,7 +881,7 @@ where
                 epoch: config.epoch,
             }
         );
-        self.debit(None, config.balance).await?;
+        self.debit(&AccountOwner::Chain, config.balance).await?;
         let open_chain_message = RawOutgoingMessage {
             destination: Destination::Recipient(child_id),
             authenticated: false,

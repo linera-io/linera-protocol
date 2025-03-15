@@ -71,8 +71,7 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Option::is_none)]
     pub test_next_block_height: Option<BlockHeight>,
     /// Request the balance of a given [`AccountOwner`].
-    #[debug(skip_if = Option::is_none)]
-    pub request_owner_balance: Option<AccountOwner>,
+    pub request_owner_balance: AccountOwner,
     /// Query the current committees.
     #[debug(skip_if = Not::not)]
     pub request_committees: bool,
@@ -102,7 +101,7 @@ impl ChainInfoQuery {
             chain_id,
             test_next_block_height: None,
             request_committees: false,
-            request_owner_balance: None,
+            request_owner_balance: AccountOwner::Chain,
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_n: None,
@@ -123,7 +122,7 @@ impl ChainInfoQuery {
     }
 
     pub fn with_owner_balance(mut self, owner: AccountOwner) -> Self {
-        self.request_owner_balance = Some(owner);
+        self.request_owner_balance = owner;
         self
     }
 

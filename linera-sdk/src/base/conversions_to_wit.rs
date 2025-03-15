@@ -45,6 +45,7 @@ macro_rules! impl_to_wit {
                     AccountOwner::Application(application_id) => {
                         $wit_base_api::AccountOwner::Application(application_id.into())
                     }
+                    AccountOwner::Chain => $wit_base_api::AccountOwner::Chain,
                 }
             }
         }

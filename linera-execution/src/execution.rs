@@ -401,7 +401,10 @@ where
             kind: MessageKind::Tracked,
             message: SystemMessage::Credit {
                 amount,
-                source: context.authenticated_signer.map(AccountOwner::User),
+                source: context
+                    .authenticated_signer
+                    .map(AccountOwner::User)
+                    .unwrap_or(AccountOwner::Chain),
                 target: account.owner,
             },
         };

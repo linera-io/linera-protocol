@@ -714,7 +714,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
-        source: Option<AccountOwner>,
+        source: AccountOwner,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;
@@ -1031,11 +1031,16 @@ impl<Message> RawOutgoingMessage<Message, Resources> {
 }
 
 impl OperationContext {
+    /// Returns an account for the refund.
+    /// Returns `None` if there is no authenticated signer of the [`OperationContext`].
     fn refund_grant_to(&self) -> Option<Account> {
-        Some(Account {
-            chain_id: self.chain_id,
-            owner: self.authenticated_signer.map(AccountOwner::User),
-        })
+        match self.authenticated_signer {
+            Some(owner) => Some(Account {
+                chain_id: self.chain_id,
+                owner: AccountOwner::User(owner),
+            }),
+            _ => None,
+        }
     }
 
     fn next_message_id(&self, next_message_index: u32) -> MessageId {
@@ -1179,7 +1184,7 @@ impl Operation {
     /// Creates a new user application operation following the `application_id`'s [`Abi`].
     #[cfg(with_testing)]
     pub fn user<A: Abi>(
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         operation: &A::Operation,
     ) -> Result<Self, bcs::Error> {
         Self::user_without_abi(application_id.forget_abi(), operation)
@@ -1189,7 +1194,7 @@ impl Operation {
     /// `application_id`.
     #[cfg(with_testing)]
     pub fn user_without_abi(
-        application_id: UserApplicationId<()>,
+        application_id: ApplicationId<()>,
         operation: &impl Serialize,
     ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
@@ -1237,7 +1242,7 @@ impl Message {
     /// Creates a new user application message assuming that the `message` is valid for the
     /// `application_id`.
     pub fn user<A, M: Serialize>(
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         message: &M,
     ) -> Result<Self, bcs::Error> {
         let application_id = application_id.forget_abi();
@@ -1302,7 +1307,7 @@ impl Query {
 
     /// Creates a new user application query following the `application_id`'s [`Abi`].
     pub fn user<A: Abi>(
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<Self, serde_json::Error> {
         Self::user_without_abi(application_id.forget_abi(), query)
@@ -1311,7 +1316,7 @@ impl Query {
     /// Creates a new user application query assuming that the `query` is valid for the
     /// `application_id`.
     pub fn user_without_abi(
-        application_id: UserApplicationId<()>,
+        application_id: ApplicationId<()>,
         query: &impl Serialize,
     ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {

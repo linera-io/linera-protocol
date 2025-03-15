@@ -58,7 +58,7 @@ impl From<Account> for wit_contract_api::Account {
     fn from(account: Account) -> Self {
         wit_contract_api::Account {
             chain_id: account.chain_id.into(),
-            owner: account.owner.map(|owner| owner.into()),
+            owner: account.owner.into(),
         }
     }
 }
@@ -70,6 +70,7 @@ impl From<AccountOwner> for wit_contract_api::AccountOwner {
             AccountOwner::Application(application_id) => {
                 wit_contract_api::AccountOwner::Application(application_id.into())
             }
+            AccountOwner::Chain => wit_contract_api::AccountOwner::Chain,
         }
     }
 }

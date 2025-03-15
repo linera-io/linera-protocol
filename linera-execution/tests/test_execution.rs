@@ -12,7 +12,9 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlockHeight, OracleResponse, Resources,
         SendMessageRequest, Timestamp,
     },
-    identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
+    identifiers::{
+        Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
+    },
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -627,7 +629,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: None,
+        owner: AccountOwner::Chain,
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -925,7 +927,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: None,
+        owner: AccountOwner::Chain,
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1008,7 +1010,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: None,
+        owner: AccountOwner::Chain,
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1102,7 +1104,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: None,
+        owner: AccountOwner::Chain,
     };
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
@@ -1235,7 +1237,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: None,
+        owner: AccountOwner::Chain,
     };
 
     // Return to checking the user application outcomes
@@ -1301,7 +1303,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership()?, ownership);
             let destination = Account::chain(ChainId::root(2));
-            runtime.transfer(None, destination, Amount::ONE)?;
+            runtime.transfer(AccountOwner::Chain, destination, Amount::ONE)?;
             let id = runtime.application_id()?;
             let application_permissions = ApplicationPermissions::new_single(id);
             let (actual_message_id, chain_id) =
@@ -1498,11 +1500,11 @@ async fn test_message_receipt_spending_chain_balance(
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
-    let receiver_chain_account = None;
+    let receiver_chain_account = AccountOwner::Chain;
     let sender_chain_id = ChainId::root(2);
     let recipient = Account {
         chain_id: sender_chain_id,
-        owner: None,
+        owner: AccountOwner::Chain,
     };
 
     application.expect_call(ExpectedCall::execute_message(
