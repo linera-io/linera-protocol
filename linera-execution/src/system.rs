@@ -373,7 +373,7 @@ where
         use SystemOperation::*;
         let mut outcome = RawExecutionOutcome {
             authenticated_signer: context.authenticated_signer,
-            refund_grant_to: Some(context.refund_grant_to()),
+            refund_grant_to: context.refund_grant_to(),
             ..RawExecutionOutcome::default()
         };
         let mut new_application = None;
