@@ -112,6 +112,41 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000));
     "with execution and an empty read and with owner account and grant"
 )]
+#[cfg_attr(feature = "unstable-oracles", test_case(
+    vec![
+        FeeSpend::QueryServiceOracle,
+    ],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1)),
+    Some(Amount::from_tokens(1_000));
+    "with only a service oracle call"
+))]
+#[cfg_attr(feature = "unstable-oracles", test_case(
+    vec![
+        FeeSpend::QueryServiceOracle,
+        FeeSpend::QueryServiceOracle,
+        FeeSpend::QueryServiceOracle,
+    ],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1)),
+    Some(Amount::from_tokens(1_000));
+    "with three service oracle calls"
+))]
+#[cfg_attr(feature = "unstable-oracles", test_case(
+    vec![
+        FeeSpend::Fuel(91),
+        FeeSpend::QueryServiceOracle,
+        FeeSpend::Fuel(11),
+        FeeSpend::Read(vec![0, 1, 2], None),
+        FeeSpend::QueryServiceOracle,
+        FeeSpend::Fuel(57),
+        FeeSpend::QueryServiceOracle,
+    ],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1_000)),
+    None;
+    "with service oracle calls, fuel consumption and a read operation"
+))]
 #[test_case(
     vec![FeeSpend::HttpRequest],
     Amount::from_tokens(2),
@@ -179,18 +214,19 @@ async fn test_fee_consumption(
         operation_byte: Amount::from_tokens(23),
         message: Amount::from_tokens(29),
         message_byte: Amount::from_tokens(31),
-        http_request: Amount::from_tokens(37),
+        service_as_oracle_query: Amount::from_millis(37),
+        http_request: Amount::from_tokens(41),
         maximum_fuel_per_block: 4_868_145_137,
-        maximum_executed_block_size: 41,
-        maximum_service_oracle_execution_ms: 43,
-        maximum_blob_size: 47,
-        maximum_published_blobs: 53,
-        maximum_bytecode_size: 59,
-        maximum_block_proposal_size: 61,
-        maximum_bytes_read_per_block: 67,
-        maximum_bytes_written_per_block: 71,
-        maximum_http_response_bytes: 73,
-        http_request_timeout_ms: 79,
+        maximum_executed_block_size: 43,
+        maximum_service_oracle_execution_ms: 47,
+        maximum_blob_size: 53,
+        maximum_published_blobs: 59,
+        maximum_bytecode_size: 61,
+        maximum_block_proposal_size: 67,
+        maximum_bytes_read_per_block: 71,
+        maximum_bytes_written_per_block: 73,
+        maximum_http_response_bytes: 79,
+        http_request_timeout_ms: 83,
         http_request_allow_list: BTreeSet::new(),
     };
 
@@ -321,6 +357,8 @@ pub enum FeeSpend {
     Fuel(u64),
     /// Reads from storage.
     Read(Vec<u8>, Option<Vec<u8>>),
+    /// Queries a service as an oracle.
+    QueryServiceOracle,
     /// Performs an HTTP request.
     HttpRequest,
 }
@@ -330,6 +368,9 @@ impl FeeSpend {
     pub fn expected_oracle_responses(&self) -> Vec<OracleResponse> {
         match self {
             FeeSpend::Fuel(_) | FeeSpend::Read(_, _) => vec![],
+            FeeSpend::QueryServiceOracle => {
+                vec![OracleResponse::Service(vec![])]
+            }
             FeeSpend::HttpRequest => vec![OracleResponse::Http(http::Response::ok([]))],
         }
     }
@@ -346,6 +387,7 @@ impl FeeSpend {
 
                 policy.read_operation.saturating_add(value_read_fee)
             }
+            FeeSpend::QueryServiceOracle => policy.service_as_oracle_query,
             FeeSpend::HttpRequest => policy.http_request,
         }
     }
@@ -358,6 +400,11 @@ impl FeeSpend {
                 let promise = runtime.read_value_bytes_new(key)?;
                 let response = runtime.read_value_bytes_wait(&promise)?;
                 assert_eq!(response, value);
+                Ok(())
+            }
+            FeeSpend::QueryServiceOracle => {
+                let application_id = runtime.application_id()?;
+                runtime.query_service(application_id, vec![])?;
                 Ok(())
             }
             FeeSpend::HttpRequest => {

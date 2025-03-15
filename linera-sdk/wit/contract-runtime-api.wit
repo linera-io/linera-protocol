@@ -113,6 +113,7 @@ interface contract-runtime-api {
         messages: u32,
         message-size: u32,
         storage-size-delta: u32,
+        service-as-oracle-queries: u32,
         http-requests: u32,
     }
 

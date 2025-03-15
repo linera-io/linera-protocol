@@ -863,6 +863,8 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - message_byte:
         TYPENAME: Amount
+    - service_as_oracle_query:
+        TYPENAME: Amount
     - http_request:
         TYPENAME: Amount
     - maximum_fuel_per_block: U64

@@ -138,6 +138,7 @@ impl From<Resources> for wit_contract_api::Resources {
             messages: resources.messages,
             message_size: resources.message_size,
             storage_size_delta: resources.storage_size_delta,
+            service_as_oracle_queries: resources.service_as_oracle_queries,
             http_requests: resources.http_requests,
         }
     }
