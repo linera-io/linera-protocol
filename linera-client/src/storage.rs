@@ -787,7 +787,10 @@ impl StoreConfig {
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-                Ok(list_all_chain_ids::<DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>>(&config, &namespace).await?)
+                Ok(list_all_chain_ids::<
+                    DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
+                >(&config, &namespace)
+                .await?)
             }
         }
     }
@@ -819,11 +822,8 @@ where
     match config {
         StoreConfig::Memory(config, namespace) => {
             let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
-            let mut storage = DbStorage::<MemoryStore, _>::new(
-                store_config,
-                &namespace,
-                wasm_runtime
-            ).await?;
+            let mut storage =
+                DbStorage::<MemoryStore, _>::new(store_config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await?;
             Ok(job.run(storage).await)
         }
@@ -856,7 +856,8 @@ where
             let storage = DbStorage::<
                 DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
                 _,
-            >::new(config, &namespace, wasm_runtime).await?;
+            >::new(config, &namespace, wasm_runtime)
+            .await?;
             Ok(job.run(storage).await)
         }
     }
@@ -906,7 +907,8 @@ pub async fn full_initialize_storage(
             let mut storage = DbStorage::<
                 DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
                 _,
-            >::initialize(config, &namespace, wasm_runtime).await?;
+            >::initialize(config, &namespace, wasm_runtime)
+            .await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
     }
