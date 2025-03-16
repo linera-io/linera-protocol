@@ -12,7 +12,7 @@ use std::{str::FromStr, sync::LazyLock, time::Duration};
 use linera_base::{
     command::resolve_binary,
     data_types::Amount,
-    identifiers::{Account, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
@@ -76,6 +76,7 @@ fn indexer_running(child: &mut Child) {
 async fn transfer(client: &reqwest::Client, from: ChainId, to: Account, amount: &str) {
     let variables = transfer::Variables {
         chain_id: from,
+        owner: AccountOwner::Chain,
         recipient_chain: to.chain_id,
         recipient_account: to.owner,
         amount: Amount::from_str(amount).unwrap(),

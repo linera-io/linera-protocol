@@ -101,12 +101,8 @@ impl Runnable for Job {
                 amount,
             } => {
                 let chain_client = context.make_chain_client(sender.chain_id)?;
-                let owner = match sender.owner {
-                    AccountOwner::User(owner) => Some(owner),
-                    AccountOwner::Application(_) => {
-                        bail!("Can't transfer from an application account")
-                    }
-                    AccountOwner::Chain => None,
+                if let AccountOwner::Application(_) = sender.owner {
+                    bail!("Can't transfer from an application account")
                 };
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
@@ -118,7 +114,7 @@ impl Runnable for Job {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
-                                .transfer_to_account(owner, amount, recipient)
+                                .transfer_to_account(sender.owner, amount, recipient)
                                 .await
                         }
                     })
