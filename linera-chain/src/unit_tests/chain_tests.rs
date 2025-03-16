@@ -31,8 +31,7 @@ use linera_execution::{
 };
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
-    memory::{MemoryStore, TEST_MEMORY_MAX_STREAM_QUERIES},
-    random::generate_test_namespace,
+    memory::MemoryStore,
     views::{View, ViewError},
 };
 use test_case::test_case;

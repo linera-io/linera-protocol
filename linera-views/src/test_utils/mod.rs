@@ -824,10 +824,7 @@ pub async fn root_key_admin_test<S: TestKeyValueStore>() {
 /// * Store 1 deletes a key and mark it as missing in its cache.
 /// * Store 2 writes the key (it should not be doing it)
 /// * Store 1 reads the key, see it as missing.
-pub async fn exclusive_access_admin_test<S: TestKeyValueStore>(exclusive_access: bool)
-where
-    S::Error: Debug,
-{
+pub async fn exclusive_access_admin_test<S: TestKeyValueStore>(exclusive_access: bool) {
     let config = S::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     S::create(&config, &namespace).await.expect("creation");
@@ -853,10 +850,7 @@ where
 }
 
 /// Both checks together.
-pub async fn access_admin_test<S: TestKeyValueStore>()
-where
-    S::Error: Debug,
-{
+pub async fn access_admin_test<S: TestKeyValueStore>() {
     exclusive_access_admin_test::<S>(true).await;
     exclusive_access_admin_test::<S>(false).await;
 }
