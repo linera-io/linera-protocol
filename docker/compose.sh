@@ -19,7 +19,7 @@ cleanup() {
     rm wallet.json
     SCYLLA_VOLUME=docker_linera-scylla-data
     SHARED_VOLUME=docker_linera-shared
-    docker rm -f $(docker ps -a -q --filter volume=$SCYLLA_VOLUME)
+    docker ps -a -q --filter "volume=$SCYLLA_VOLUME" | xargs docker rm -f
     docker volume rm $SCYLLA_VOLUME
     docker rm -f $(docker ps -a -q --filter volume=$SHARED_VOLUME)
     docker volume rm $SHARED_VOLUME
