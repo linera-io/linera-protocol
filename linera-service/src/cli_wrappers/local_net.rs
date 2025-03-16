@@ -385,7 +385,7 @@ impl LocalNet {
     }
 
     pub fn proxy_port(validator: usize, proxy_id: usize) -> usize {
-        9000 + validator * 100 + proxy_id + 1
+        10000 + validator * 100 + proxy_id + 1
     }
 
     fn shard_port(validator: usize, shard: usize) -> usize {
@@ -393,11 +393,11 @@ impl LocalNet {
     }
 
     fn proxy_metrics_port(validator: usize, proxy_id: usize) -> usize {
-        11000 + validator * 100 + proxy_id + 1
+        12000 + validator * 100 + proxy_id + 1
     }
 
     fn proxy_pyroscope_port(validator: usize, proxy_id: usize) -> usize {
-        4000 + validator * 100 + proxy_id + 1
+        5000 + validator * 100 + proxy_id + 1
     }
 
     fn shard_metrics_port(validator: usize, shard: usize) -> usize {
@@ -430,7 +430,7 @@ impl LocalNet {
             "#
         );
 
-        for k in 0..self.num_proxies {
+        for k in 1..=self.num_proxies {
             let internal_port = Self::proxy_port(n, k);
             let metrics_port = Self::proxy_metrics_port(n, k);
             let pyroscope_port = Self::proxy_pyroscope_port(n, k);
@@ -462,6 +462,7 @@ impl LocalNet {
                 "#
             ));
         }
+        println!("{content}");
         fs_err::write(&path, content)?;
         path.into_os_string().into_string().map_err(|error| {
             anyhow!(

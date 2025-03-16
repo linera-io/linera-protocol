@@ -6,6 +6,7 @@ Grpc = "ClearText"
 [internal_protocol]
 Grpc = "ClearText"
 
+# TODO is this `proxy-0` or something
 [[proxies]]
 host = "proxy-internal.default.svc.cluster.local"
 port = 20100

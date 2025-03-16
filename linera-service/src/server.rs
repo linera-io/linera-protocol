@@ -771,11 +771,15 @@ mod test {
                 internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
-                internal_host: "internal_host".into(),
-                internal_port: 10000,
-                metrics_port: 5000,
-                pyroscope_host: "pyroscope_host".into(),
-                pyroscope_port: 4000,
+                proxies: vec![
+                    ProxyConfig {
+                        host: "internal_host".into(),
+                        port: 10000,
+                        metrics_port: 5000,
+                        pyroscope_host: "pyroscope_host".into(),
+                        pyroscope_port: 4000,
+                    }
+                ],
                 shards: vec![
                     ShardConfig {
                         host: "host1".into(),
