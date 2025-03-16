@@ -4,11 +4,8 @@
 use std::{borrow::Cow, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
-    futures_util::Stream,
-    parser::types::{DocumentOperations, ExecutableDocument, OperationType},
-    resolver_utils::ContainerType,
-    Error, MergedObject, OutputType, Request, ScalarType, Schema, ServerError, SimpleObject,
-    Subscription,
+    futures_util::Stream, resolver_utils::ContainerType, Error, MergedObject, OutputType, Request,
+    ScalarType, Schema, ServerError, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
@@ -16,7 +13,6 @@ use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
-    ensure,
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -84,12 +80,6 @@ enum NodeServiceError {
     BcsError(#[from] bcs::Error),
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
-    #[error("missing GraphQL operation")]
-    MissingOperation,
-    #[error("unsupported query type: subscription")]
-    UnsupportedQueryType,
-    #[error("GraphQL operations of different types submitted")]
-    HeterogeneousOperations,
     #[error("failed to parse GraphQL query: {error}")]
     GraphQLParseError { error: String },
     #[error("application service error: {errors:?}")]
@@ -98,8 +88,6 @@ enum NodeServiceError {
     UnknownChainId { chain_id: String },
     #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
-    #[error("unexpected application operations added during non-mutation query")]
-    UnexpectedOperationsFromQuery,
 }
 
 impl From<ServerError> for NodeServiceError {
@@ -123,14 +111,6 @@ impl IntoResponse for NodeServiceError {
             }
             NodeServiceError::JsonError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
-            }
-            NodeServiceError::UnexpectedOperationsFromQuery => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
-            }
-            NodeServiceError::MissingOperation
-            | NodeServiceError::HeterogeneousOperations
-            | NodeServiceError::UnsupportedQueryType => {
-                (StatusCode::BAD_REQUEST, vec![self.to_string()])
             }
             NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, vec![error]),
             NodeServiceError::ApplicationServiceError { errors } => {
@@ -830,26 +810,6 @@ impl ApplicationOverview {
     }
 }
 
-/// Given a parsed GraphQL query (or `ExecutableDocument`), returns the `OperationType`.
-///
-/// Errors:
-///
-/// If we have no `OperationType`s or the `OperationTypes` are heterogeneous, i.e. a query
-/// was submitted with a `mutation` and `subscription`.
-fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeServiceError> {
-    match &document.operations {
-        DocumentOperations::Single(op) => Ok(op.node.ty),
-        DocumentOperations::Multiple(ops) => {
-            let mut op_types = ops.values().map(|v| v.node.ty);
-            let first = op_types.next().ok_or(NodeServiceError::MissingOperation)?;
-            op_types
-                .all(|x| x == first)
-                .then_some(first)
-                .ok_or(NodeServiceError::HeterogeneousOperations)
-        }
-    }
-}
-
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
@@ -950,30 +910,8 @@ where
         Ok(())
     }
 
-    /// Handles queries for user applications.
-    async fn user_application_query(
-        &self,
-        application_id: UserApplicationId,
-        request: &Request,
-        chain_id: ChainId,
-    ) -> Result<async_graphql::Response, NodeServiceError> {
-        let QueryOutcome {
-            response: user_response_bytes,
-            operations,
-        } = self
-            .query_user_application(application_id, request, chain_id)
-            .await?;
-
-        ensure!(
-            operations.is_empty(),
-            NodeServiceError::UnexpectedOperationsFromQuery
-        );
-
-        Ok(serde_json::from_slice(&user_response_bytes)?)
-    }
-
-    /// Handles mutations for user applications.
-    async fn user_application_mutation(
+    /// Handles service queries for user applications (including mutations).
+    async fn handle_service_request(
         &self,
         application_id: UserApplicationId,
         request: &Request,
@@ -995,8 +933,11 @@ where
                 .collect();
             return Err(NodeServiceError::ApplicationServiceError { errors });
         }
-        trace!("Operations: {operations:?}");
+        if operations.is_empty() {
+            return Ok(serde_json::from_slice(&response)?);
+        }
 
+        trace!("Query requested a new block with operations: {operations:?}");
         let client = self
             .context
             .lock()
@@ -1074,29 +1015,15 @@ where
         service: Extension<Self>,
         request: GraphQLRequest,
     ) -> Result<GraphQLResponse, NodeServiceError> {
-        let mut request = request.into_inner();
-
-        let parsed_query = request.parsed_query()?;
-        let operation_type = operation_type(parsed_query)?;
+        let request = request.into_inner();
 
         let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
         let application_id: UserApplicationId = application_id.parse()?;
 
-        let response = match operation_type {
-            OperationType::Query => {
-                service
-                    .0
-                    .user_application_query(application_id, &request, chain_id)
-                    .await?
-            }
-            OperationType::Mutation => {
-                service
-                    .0
-                    .user_application_mutation(application_id, &request, chain_id)
-                    .await?
-            }
-            OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
-        };
+        let response = service
+            .0
+            .handle_service_request(application_id, &request, chain_id)
+            .await?;
 
         Ok(response.into())
     }
