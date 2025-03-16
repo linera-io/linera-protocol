@@ -166,6 +166,9 @@ impl MatchingEngineContract {
                     "Unauthorized"
                 )
             }
+            AccountOwner::Chain => {
+                panic!("Chain account is not supported")
+            }
         }
     }
 

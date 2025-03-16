@@ -262,10 +262,12 @@ async fn test_fee_consumption(
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let refund_grant_to = Some(Account {
-        chain_id: ChainId::root(0),
-        owner: authenticated_signer.map(AccountOwner::User),
-    });
+    let refund_grant_to = authenticated_signer
+        .map(|owner| Account {
+            chain_id: ChainId::root(0),
+            owner: AccountOwner::User(owner),
+        })
+        .or(None);
     let context = MessageContext {
         chain_id: ChainId::root(0),
         is_bouncing: false,

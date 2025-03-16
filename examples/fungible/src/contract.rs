@@ -143,6 +143,9 @@ impl FungibleTokenContract {
                     "The requested transfer is not correctly authenticated."
                 )
             }
+            AccountOwner::Chain => {
+                panic!("Chain account is not supported")
+            }
         }
     }
 

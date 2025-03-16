@@ -7,8 +7,7 @@ Account:
     - chain_id:
         TYPENAME: ChainId
     - owner:
-        OPTION:
-          TYPENAME: AccountOwner
+        TYPENAME: AccountOwner
 AccountOwner:
   ENUM:
     0:
@@ -19,6 +18,8 @@ AccountOwner:
       Application:
         NEWTYPE:
           TYPENAME: ApplicationId
+    2:
+      Chain: UNIT
 AccountPublicKey:
   ENUM:
     0:
@@ -290,8 +291,7 @@ ChainInfoQuery:
         OPTION:
           TYPENAME: BlockHeight
     - request_owner_balance:
-        OPTION:
-          TYPENAME: AccountOwner
+        TYPENAME: AccountOwner
     - request_committees: BOOL
     - request_pending_message_bundles: BOOL
     - request_sent_certificate_hashes_in_range:
@@ -1050,13 +1050,11 @@ SystemMessage:
       Credit:
         STRUCT:
           - target:
-              OPTION:
-                TYPENAME: AccountOwner
+              TYPENAME: AccountOwner
           - amount:
               TYPENAME: Amount
           - source:
-              OPTION:
-                TYPENAME: AccountOwner
+              TYPENAME: AccountOwner
     1:
       Withdraw:
         STRUCT:

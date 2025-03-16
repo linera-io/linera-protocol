@@ -785,25 +785,25 @@ impl TransferTestEndpoint {
     }
 
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as a sender.
-    pub fn sender_account_owner(&self) -> Option<AccountOwner> {
+    pub fn sender_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => None,
-            TransferTestEndpoint::User => Some(AccountOwner::User(Self::sender_owner())),
+            TransferTestEndpoint::Chain => AccountOwner::Chain,
+            TransferTestEndpoint::User => AccountOwner::User(Self::sender_owner()),
             TransferTestEndpoint::Application => {
-                Some(AccountOwner::Application(Self::sender_application_id()))
+                AccountOwner::Application(Self::sender_application_id())
             }
         }
     }
 
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as an unauthorized sender.
-    pub fn unauthorized_sender_account_owner(&self) -> Option<AccountOwner> {
+    pub fn unauthorized_sender_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => None,
+            TransferTestEndpoint::Chain => AccountOwner::Chain,
             TransferTestEndpoint::User => {
-                Some(AccountOwner::User(Owner(CryptoHash::test_hash("attacker"))))
+                AccountOwner::User(Owner(CryptoHash::test_hash("attacker")))
             }
             TransferTestEndpoint::Application => {
-                Some(AccountOwner::Application(Self::recipient_application_id()))
+                AccountOwner::Application(Self::recipient_application_id())
             }
         }
     }
@@ -829,12 +829,12 @@ impl TransferTestEndpoint {
     }
 
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as a recipient.
-    pub fn recipient_account_owner(&self) -> Option<AccountOwner> {
+    pub fn recipient_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => None,
-            TransferTestEndpoint::User => Some(AccountOwner::User(Self::recipient_owner())),
+            TransferTestEndpoint::Chain => AccountOwner::Chain,
+            TransferTestEndpoint::User => AccountOwner::User(Self::recipient_owner()),
             TransferTestEndpoint::Application => {
-                Some(AccountOwner::Application(Self::recipient_application_id()))
+                AccountOwner::Application(Self::recipient_application_id())
             }
         }
     }
@@ -847,8 +847,8 @@ impl TransferTestEndpoint {
         amount: Amount,
     ) -> anyhow::Result<()> {
         let (expected_chain_balance, expected_balances) = match self.recipient_account_owner() {
-            None => (amount, vec![]),
-            Some(account_owner) => (Amount::ZERO, vec![(account_owner, amount)]),
+            AccountOwner::Chain => (amount, vec![]),
+            account_owner => (Amount::ZERO, vec![(account_owner, amount)]),
         };
 
         let balances = system.balances.index_values().await?;

@@ -326,6 +326,9 @@ impl AmmContract {
                     "Unauthorized"
                 )
             }
+            AccountOwner::Chain => {
+                panic!("Using chain balance is not authorized")
+            }
         }
     }
 
