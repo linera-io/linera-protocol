@@ -4,8 +4,8 @@
 use std::{borrow::Cow, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
-    futures_util::Stream, resolver_utils::ContainerType, Error, MergedObject, OutputType, Request,
-    ScalarType, Schema, ServerError, SimpleObject, Subscription,
+    futures_util::Stream, resolver_utils::ContainerType, Error, MergedObject, OutputType,
+    ScalarType, Schema, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
@@ -74,47 +74,23 @@ enum NodeServiceError {
     ChainClientError(#[from] ChainClientError),
     #[error(transparent)]
     BcsHexError(#[from] BcsHexParseError),
-    #[error("could not decode query string: {0}")]
-    QueryStringError(#[from] hex::FromHexError),
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
-    #[error("failed to parse GraphQL query: {error}")]
-    GraphQLParseError { error: String },
-    #[error("application service error: {errors:?}")]
-    ApplicationServiceError { errors: Vec<String> },
     #[error("chain ID not found: {chain_id}")]
     UnknownChainId { chain_id: String },
     #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
 }
 
-impl From<ServerError> for NodeServiceError {
-    fn from(value: ServerError) -> Self {
-        NodeServiceError::GraphQLParseError {
-            error: value.to_string(),
-        }
-    }
-}
-
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
         let tuple = match self {
             NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
-            NodeServiceError::QueryStringError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
             NodeServiceError::ChainClientError(e) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
-            }
-            NodeServiceError::BcsError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
             NodeServiceError::JsonError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
-            }
-            NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, vec![error]),
-            NodeServiceError::ApplicationServiceError { errors } => {
-                (StatusCode::BAD_REQUEST, errors)
             }
             NodeServiceError::UnknownChainId { chain_id } => (
                 StatusCode::NOT_FOUND,
@@ -914,27 +890,17 @@ where
     async fn handle_service_request(
         &self,
         application_id: UserApplicationId,
-        request: &Request,
+        request: Vec<u8>,
         chain_id: ChainId,
-    ) -> Result<async_graphql::Response, NodeServiceError> {
-        debug!("Request: {:?}", &request);
+    ) -> Result<Vec<u8>, NodeServiceError> {
         let QueryOutcome {
             response,
             operations,
         } = self
             .query_user_application(application_id, request, chain_id)
             .await?;
-        let graphql_response = serde_json::from_slice::<async_graphql::Response>(&response)?;
-        if graphql_response.is_err() {
-            let errors = graphql_response
-                .errors
-                .iter()
-                .map(|e| e.to_string())
-                .collect();
-            return Err(NodeServiceError::ApplicationServiceError { errors });
-        }
         if operations.is_empty() {
-            return Ok(serde_json::from_slice(&response)?);
+            return Ok(response);
         }
 
         trace!("Query requested a new block with operations: {operations:?}");
@@ -959,17 +925,17 @@ where
             })?;
             util::wait_for_next_round(&mut stream, timeout).await;
         };
-        Ok(async_graphql::Response::new(hash.to_value()))
+        let response = async_graphql::Response::new(hash.to_value());
+        Ok(serde_json::to_vec(&response)?)
     }
 
     /// Queries a user application, returning the raw [`QueryOutcome`].
     async fn query_user_application(
         &self,
         application_id: UserApplicationId,
-        request: &Request,
+        bytes: Vec<u8>,
         chain_id: ChainId,
     ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
-        let bytes = serde_json::to_vec(&request)?;
         let query = Query::User {
             application_id,
             bytes,
@@ -1013,18 +979,20 @@ where
     async fn application_handler(
         Path((chain_id, application_id)): Path<(String, String)>,
         service: Extension<Self>,
-        request: GraphQLRequest,
-    ) -> Result<GraphQLResponse, NodeServiceError> {
-        let request = request.into_inner();
-
+        request: String,
+    ) -> Result<Vec<u8>, NodeServiceError> {
         let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
         let application_id: UserApplicationId = application_id.parse()?;
 
+        debug!(
+            "Processing request for application {application_id} on chain {chain_id}:\n{:?}",
+            &request
+        );
         let response = service
             .0
-            .handle_service_request(application_id, &request, chain_id)
+            .handle_service_request(application_id, request.into_bytes(), chain_id)
             .await?;
 
-        Ok(response.into())
+        Ok(response)
     }
 }
