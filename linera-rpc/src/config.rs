@@ -100,8 +100,6 @@ pub struct ProxyConfig {
     pub host: String,
     /// The port.
     pub port: u16,
-    /// The host on which metrics are served.
-    pub metrics_host: String,
     /// The port on which metrics are served.
     pub metrics_port: u16,
 }

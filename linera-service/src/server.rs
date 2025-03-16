@@ -761,9 +761,8 @@ mod test {
                 proxies: vec![ProxyConfig {
                     host: "proxy".into(),
                     port: 20100,
-                    metrics_host: "proxy".into(),
                     metrics_port: 21100,
-                }]
+                }],
                 block_exporters: vec![ExporterServiceConfig {
                     host: "exporter".into(),
                     port: 12000
