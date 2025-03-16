@@ -181,17 +181,6 @@ query { applications(
 
 The response will have two entries, one for each application.
 
-If you do the same with the other chain ID in http://localhost:8081, the node service for the
-other wallet, it will have no entries at all, because the applications haven't been registered
-there yet. Request `crowd-funding` from the other chain. As an application ID, use `$APP_ID_1`:
-
-```gql,uri=http://localhost:8081
-mutation { requestApplication(
-  chainId: "$CHAIN_1"
-  applicationId: "$APP_ID_1"
-) }
-```
-
 If you enter the `applications` query again, both entries will appear in the second wallet as
 well now. `$APP_ID_0` has been registered, too, because it is a dependency of the other
 application.

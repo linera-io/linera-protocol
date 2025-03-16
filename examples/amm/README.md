@@ -178,20 +178,6 @@ mutation {
 ```
 
 All operations can only be from a remote chain i.e. other than the chain on which `AMM` is deployed to.
-We can do it from GraphiQL by performing the `requestApplication` mutation so that we can perform the
-operation from the chain.
-
-```gql,uri=http://localhost:8080
-mutation {
-  requestApplication (
-    chainId:"$CHAIN_1",
-    applicationId: "$AMM_APPLICATION_ID",
-    targetChainId: "$CHAIN_AMM"
-  )
-}
-```
-
-Note: The above mutation has to be performed from `http://localhost:8080`.
 
 Before performing any operation we need to provide liquidity to it, so we will use the `AddLiquidity` operation,
 navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"`.
@@ -207,18 +193,6 @@ mutation {
   )
 }
 ```
-
-```gql,uri=http://localhost:8080
-mutation {
-  requestApplication (
-    chainId:"$CHAIN_2",
-    applicationId: "$AMM_APPLICATION_ID",
-    targetChainId: "$CHAIN_AMM"
-  )
-}
-```
-
-Note: The above mutation has to be performed from `http://localhost:8080`.
 
 To perform the `Swap` operation, navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID"` and
 perform the following mutation:
