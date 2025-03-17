@@ -92,35 +92,6 @@ linera --with-wallet 1 service --port 8081 &
 sleep 2
 ```
 
-Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
-
-Point your browser to http://localhost:8081. This is the wallet that didn't create the
-application, so we have to request it from the creator chain. As the chain ID specifies the
-one of the chain where it isn't registered yet:
-
-```gql,uri=http://localhost:8081
-mutation {
-  requestApplication(
-    chainId: "$CHAIN_1",
-    applicationId: "$APP_ID"
-  )
-}
-```
-
-Now in both http://localhost:8080 and http://localhost:8081, this should list the
-application and provide a link to its GraphQL API. Remember to use each wallet's chain ID:
-
-```gql,uri=http://localhost:8081
-query {
-  applications(
-    chainId: "$CHAIN_1"
-  ) {
-    id
-    link
-  }
-}
-```
-
 Open both URLs under the entry `link`. Now you can use the application on each chain.
 For the 8081 tab, you can run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID"`
 to print the URL to navigate to, then subscribe to the other chain using the following query:

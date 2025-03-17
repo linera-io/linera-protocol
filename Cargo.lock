@@ -4974,7 +4974,6 @@ dependencies = [
  "async-tungstenite",
  "axum",
  "base64 0.22.1",
- "bcs",
  "cargo_toml",
  "cfg_aliases",
  "chrono",

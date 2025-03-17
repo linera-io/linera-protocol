@@ -85,7 +85,6 @@ async-lock.workspace = true
 async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
-bcs.workspace = true
 cargo_toml.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
