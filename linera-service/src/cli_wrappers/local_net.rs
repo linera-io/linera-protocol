@@ -506,7 +506,7 @@ impl LocalNet {
     }
 
     async fn run_proxy(&mut self, validator: usize) -> Result<Child> {
-        let storage = self.get_storage_proxy(validator);
+        let storage = self.initialize_shared_storage(validator).await?;
         let child = self
             .command_for_binary("linera-proxy")
             .await?
@@ -568,16 +568,6 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
-    fn get_storage_proxy(&mut self, validator: usize) -> String {
-        let namespace = format!("{}_server_{}_db", self.namespace, validator);
-        let storage_config = self.storage_config.get_main_storage();
-        StorageConfigNamespace {
-            storage_config,
-            namespace,
-        }
-        .to_string()
-    }
-
     async fn initialize_storage_internal(&mut self, storage: &str, genesis: &str) -> Result<()> {
         let max_try = 4;
         let mut i_try = 0;
@@ -608,26 +598,31 @@ impl LocalNet {
         }
     }
 
-    async fn initialize_storage(&mut self, validator: usize, shard: usize) -> Result<String> {
+    async fn initialize_shared_storage(&mut self, validator: usize) -> Result<String> {
         let namespace = format!("{}_server_{}_db", self.namespace, validator);
-        let mut storage_config = self.storage_config.clone();
+        let storage_config = self.storage_config.get_shared_storage();
+        let storage = StorageConfigNamespace {
+            storage_config,
+            namespace,
+        }
+        .to_string();
+        if !self
+            .validators_with_initialized_storage
+            .contains(&validator)
+        {
+            self.initialize_storage_internal(&storage, "genesis.json")
+                .await?;
+            self.validators_with_initialized_storage.insert(validator);
+        }
+        Ok(storage)
+    }
 
-        if storage_config.are_chains_shared() {
-            let storage = StorageConfigNamespace {
-                storage_config,
-                namespace,
-            }
-            .to_string();
-            if !self
-                .validators_with_initialized_storage
-                .contains(&validator)
-            {
-                self.initialize_storage_internal(&storage, "genesis.json")
-                    .await?;
-                self.validators_with_initialized_storage.insert(validator);
-            }
-            Ok(storage)
+    async fn initialize_storage(&mut self, validator: usize, shard: usize) -> Result<String> {
+        if self.storage_config.are_chains_shared() {
+            self.initialize_shared_storage(validator).await
         } else {
+            let namespace = format!("{}_server_{}_db", self.namespace, validator);
+            let mut storage_config = self.storage_config.clone();
             let shard_str = format!("shard_{}", shard);
             storage_config.append_shard_str(&shard_str);
             let storage = StorageConfigNamespace {

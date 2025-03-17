@@ -650,6 +650,13 @@ async fn run(options: ServerOptions) {
                 .add_common_config(common_config)
                 .await
                 .unwrap();
+            tracing::info!(
+                "server::ServerCommand::Initialize, storage_config={:?}",
+                storage_config
+            );
+            tracing::info!(
+                "server::ServerCommand::Initialize, call full_initialize_storage, step 1"
+            );
             full_initialize_storage(full_storage_config, &genesis_config)
                 .await
                 .unwrap();

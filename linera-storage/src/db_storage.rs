@@ -44,7 +44,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage, DEFAULT_ROOT_KEY};
+use crate::{ChainRuntimeContext, Clock, Storage};
 
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
@@ -354,7 +354,7 @@ pub struct ChainStatesFirstAssignment;
 
 impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
     fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error> {
-        if root_key == DEFAULT_ROOT_KEY {
+        if root_key.is_empty() {
             return Ok(StoreInUse::Second);
         }
         let store = match bcs::from_bytes(root_key)? {

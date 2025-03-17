@@ -56,9 +56,6 @@ pub use crate::db_storage::{
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "table_linera";
 
-/// The `root_key` used at startup before the `clone_with_root_key`.
-pub const DEFAULT_ROOT_KEY: &[u8] = &[0];
-
 /// Communicate with a persistent storage using the "views" abstraction.
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
