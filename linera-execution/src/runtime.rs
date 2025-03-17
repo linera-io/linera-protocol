@@ -586,225 +586,91 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     type FindKeyValuesByPrefix = u32;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        self.inner().chain_id()
+        Ok(self.inner().chain_id)
     }
 
     fn block_height(&mut self) -> Result<BlockHeight, ExecutionError> {
-        self.inner().block_height()
+        Ok(self.inner().height)
     }
 
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
-        self.inner().application_id()
+        Ok(self.inner().current_application().id)
     }
 
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        self.inner().application_creator_chain_id()
+        Ok(self
+            .inner()
+            .current_application()
+            .description
+            .creator_chain_id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().application_parameters()
+        Ok(self
+            .inner()
+            .current_application()
+            .description
+            .parameters
+            .clone())
     }
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.inner().read_system_timestamp()
-    }
-
-    fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
-        self.inner().read_chain_balance()
-    }
-
-    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
-        self.inner().read_owner_balance(owner)
-    }
-
-    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
-        self.inner().read_owner_balances()
-    }
-
-    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
-        self.inner().read_balance_owners()
-    }
-
-    fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
-        self.inner().chain_ownership()
-    }
-
-    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
-        self.inner().contains_key_new(key)
-    }
-
-    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
-        self.inner().contains_key_wait(promise)
-    }
-
-    fn contains_keys_new(
-        &mut self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Self::ContainsKeys, ExecutionError> {
-        self.inner().contains_keys_new(keys)
-    }
-
-    fn contains_keys_wait(
-        &mut self,
-        promise: &Self::ContainsKeys,
-    ) -> Result<Vec<bool>, ExecutionError> {
-        self.inner().contains_keys_wait(promise)
-    }
-
-    fn read_multi_values_bytes_new(
-        &mut self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
-        self.inner().read_multi_values_bytes_new(keys)
-    }
-
-    fn read_multi_values_bytes_wait(
-        &mut self,
-        promise: &Self::ReadMultiValuesBytes,
-    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
-        self.inner().read_multi_values_bytes_wait(promise)
-    }
-
-    fn read_value_bytes_new(
-        &mut self,
-        key: Vec<u8>,
-    ) -> Result<Self::ReadValueBytes, ExecutionError> {
-        self.inner().read_value_bytes_new(key)
-    }
-
-    fn read_value_bytes_wait(
-        &mut self,
-        promise: &Self::ReadValueBytes,
-    ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        self.inner().read_value_bytes_wait(promise)
-    }
-
-    fn find_keys_by_prefix_new(
-        &mut self,
-        key_prefix: Vec<u8>,
-    ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
-        self.inner().find_keys_by_prefix_new(key_prefix)
-    }
-
-    fn find_keys_by_prefix_wait(
-        &mut self,
-        promise: &Self::FindKeysByPrefix,
-    ) -> Result<Vec<Vec<u8>>, ExecutionError> {
-        self.inner().find_keys_by_prefix_wait(promise)
-    }
-
-    fn find_key_values_by_prefix_new(
-        &mut self,
-        key_prefix: Vec<u8>,
-    ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
-        self.inner().find_key_values_by_prefix_new(key_prefix)
-    }
-
-    fn find_key_values_by_prefix_wait(
-        &mut self,
-        promise: &Self::FindKeyValuesByPrefix,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
-        self.inner().find_key_values_by_prefix_wait(promise)
-    }
-
-    fn perform_http_request(
-        &mut self,
-        request: http::Request,
-    ) -> Result<http::Response, ExecutionError> {
-        self.inner().perform_http_request(request)
-    }
-
-    fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
-        self.inner().assert_before(timestamp)
-    }
-
-    fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().read_data_blob(hash)
-    }
-
-    fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
-        self.inner().assert_data_blob_exists(hash)
-    }
-}
-
-impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
-    type Read = ();
-    type ReadValueBytes = u32;
-    type ContainsKey = u32;
-    type ContainsKeys = u32;
-    type ReadMultiValuesBytes = u32;
-    type FindKeysByPrefix = u32;
-    type FindKeyValuesByPrefix = u32;
-
-    fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        Ok(self.chain_id)
-    }
-
-    fn block_height(&mut self) -> Result<BlockHeight, ExecutionError> {
-        Ok(self.height)
-    }
-
-    fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
-        Ok(self.current_application().id)
-    }
-
-    fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        Ok(self.current_application().description.creator_chain_id)
-    }
-
-    fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        Ok(self.current_application().description.parameters.clone())
-    }
-
-    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.execution_state_sender
+        self.inner()
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::SystemTimestamp { callback })?
             .recv_response()
     }
 
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
-        self.execution_state_sender
+        self.inner()
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::ChainBalance { callback })?
             .recv_response()
     }
 
     fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
-        self.execution_state_sender
+        self.inner()
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
             .recv_response()
     }
 
     fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
-        self.execution_state_sender
+        self.inner()
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
             .recv_response()
     }
 
     fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
-        self.execution_state_sender
+        self.inner()
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
             .recv_response()
     }
 
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
-        self.execution_state_sender
+        self.inner()
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::ChainOwnership { callback })?
             .recv_response()
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
-        let id = self.current_application().id;
-        self.resource_controller.track_read_operations(1)?;
-        let receiver = self
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operations(1)?;
+        let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKey { id, key, callback })?;
-        let state = self.view_user_states.entry(id).or_default();
+        let state = this.view_user_states.entry(id).or_default();
         state.contains_key_queries.register(receiver)
     }
 
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
-        let id = self.current_application().id;
-        let state = self.view_user_states.entry(id).or_default();
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        let state = this.view_user_states.entry(id).or_default();
         let value = state.contains_key_queries.wait(*promise)?;
         Ok(value)
     }
@@ -813,12 +679,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ContainsKeys, ExecutionError> {
-        let id = self.current_application().id;
-        self.resource_controller.track_read_operations(1)?;
-        let receiver = self
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operations(1)?;
+        let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKeys { id, keys, callback })?;
-        let state = self.view_user_states.entry(id).or_default();
+        let state = this.view_user_states.entry(id).or_default();
         state.contains_keys_queries.register(receiver)
     }
 
@@ -826,8 +693,9 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::ContainsKeys,
     ) -> Result<Vec<bool>, ExecutionError> {
-        let id = self.current_application().id;
-        let state = self.view_user_states.entry(id).or_default();
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        let state = this.view_user_states.entry(id).or_default();
         let value = state.contains_keys_queries.wait(*promise)?;
         Ok(value)
     }
@@ -836,12 +704,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
-        let id = self.current_application().id;
-        self.resource_controller.track_read_operations(1)?;
-        let receiver = self.execution_state_sender.send_request(move |callback| {
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operations(1)?;
+        let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::ReadMultiValuesBytes { id, keys, callback }
         })?;
-        let state = self.view_user_states.entry(id).or_default();
+        let state = this.view_user_states.entry(id).or_default();
         state.read_multi_values_queries.register(receiver)
     }
 
@@ -849,12 +718,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::ReadMultiValuesBytes,
     ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
-        let id = self.current_application().id;
-        let state = self.view_user_states.entry(id).or_default();
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        let state = this.view_user_states.entry(id).or_default();
         let values = state.read_multi_values_queries.wait(*promise)?;
         for value in &values {
             if let Some(value) = &value {
-                self.resource_controller
+                this.resource_controller
                     .track_bytes_read(value.len() as u64)?;
             }
         }
@@ -865,12 +735,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         key: Vec<u8>,
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
-        let id = self.current_application().id;
-        self.resource_controller.track_read_operations(1)?;
-        let receiver = self
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operations(1)?;
+        let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ReadValueBytes { id, key, callback })?;
-        let state = self.view_user_states.entry(id).or_default();
+        let state = this.view_user_states.entry(id).or_default();
         state.read_value_queries.register(receiver)
     }
 
@@ -878,13 +749,14 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::ReadValueBytes,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        let id = self.current_application().id;
+        let mut this = self.inner();
+        let id = this.current_application().id;
         let value = {
-            let state = self.view_user_states.entry(id).or_default();
+            let state = this.view_user_states.entry(id).or_default();
             state.read_value_queries.wait(*promise)?
         };
         if let Some(value) = &value {
-            self.resource_controller
+            this.resource_controller
                 .track_bytes_read(value.len() as u64)?;
         }
         Ok(value)
@@ -894,16 +766,17 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
-        let id = self.current_application().id;
-        self.resource_controller.track_read_operations(1)?;
-        let receiver = self.execution_state_sender.send_request(move |callback| {
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operations(1)?;
+        let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeysByPrefix {
                 id,
                 key_prefix,
                 callback,
             }
         })?;
-        let state = self.view_user_states.entry(id).or_default();
+        let state = this.view_user_states.entry(id).or_default();
         state.find_keys_queries.register(receiver)
     }
 
@@ -911,16 +784,17 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
-        let id = self.current_application().id;
+        let mut this = self.inner();
+        let id = this.current_application().id;
         let keys = {
-            let state = self.view_user_states.entry(id).or_default();
+            let state = this.view_user_states.entry(id).or_default();
             state.find_keys_queries.wait(*promise)?
         };
         let mut read_size = 0;
         for key in &keys {
             read_size += key.len();
         }
-        self.resource_controller
+        this.resource_controller
             .track_bytes_read(read_size as u64)?;
         Ok(keys)
     }
@@ -929,16 +803,17 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
-        let id = self.current_application().id;
-        self.resource_controller.track_read_operations(1)?;
-        let receiver = self.execution_state_sender.send_request(move |callback| {
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operations(1)?;
+        let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeyValuesByPrefix {
                 id,
                 key_prefix,
                 callback,
             }
         })?;
-        let state = self.view_user_states.entry(id).or_default();
+        let state = this.view_user_states.entry(id).or_default();
         state.find_key_values_queries.register(receiver)
     }
 
@@ -946,14 +821,15 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
-        let id = self.current_application().id;
-        let state = self.view_user_states.entry(id).or_default();
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        let state = this.view_user_states.entry(id).or_default();
         let key_values = state.find_key_values_queries.wait(*promise)?;
         let mut read_size = 0;
         for (key, value) in &key_values {
             read_size += key.len() + value.len();
         }
-        self.resource_controller
+        this.resource_controller
             .track_bytes_read(read_size as u64)?;
         Ok(key_values)
     }
@@ -962,49 +838,51 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         request: http::Request,
     ) -> Result<http::Response, ExecutionError> {
-        let app_permissions = self
+        let mut this = self.inner();
+        let app_permissions = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::GetApplicationPermissions { callback })?
             .recv_response()?;
 
-        let app_id = self.current_application().id;
+        let app_id = this.current_application().id;
         ensure!(
             app_permissions.can_make_http_requests(&app_id),
             ExecutionError::UnauthorizedApplication(app_id)
         );
 
-        self.resource_controller.track_http_request()?;
+        this.resource_controller.track_http_request()?;
 
         let response =
-            if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+            if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
                     OracleResponse::Http(response) => response,
                     _ => return Err(ExecutionError::OracleResponseMismatch),
                 }
             } else {
-                self.execution_state_sender
+                this.execution_state_sender
                     .send_request(|callback| ExecutionRequest::PerformHttpRequest {
                         request,
                         callback,
                     })?
                     .recv_response()?
             };
-        self.transaction_tracker
+        this.transaction_tracker
             .add_oracle_response(OracleResponse::Http(response.clone()));
         Ok(response)
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
-        if !self
+        let mut this = self.inner();
+        if !this
             .transaction_tracker
             .replay_oracle_response(OracleResponse::Assert)?
         {
             // There are no recorded oracle responses, so we check the local time.
             ensure!(
-                self.local_time < timestamp,
+                this.local_time < timestamp,
                 ExecutionError::AssertBefore {
                     timestamp,
-                    local_time: self.local_time,
+                    local_time: this.local_time,
                 }
             );
         }
@@ -1012,26 +890,28 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
+        let mut this = self.inner();
         let blob_id = BlobId::new(*hash, BlobType::Data);
-        let (blob_content, is_new) = self
+        let (blob_content, is_new) = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
         if is_new {
-            self.transaction_tracker
+            this.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
         Ok(blob_content.into_bytes().into_vec())
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
         let blob_id = BlobId::new(*hash, BlobType::Data);
-        let is_new = self
+        let is_new = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()?;
         if is_new {
-            self.transaction_tracker
+            this.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
         Ok(())
