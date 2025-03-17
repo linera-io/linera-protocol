@@ -16,7 +16,7 @@ use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
     identifiers::{
-        AccountOwner, BlobId, BlobType, ChainId, MessageId, ModuleId, Owner, UserApplicationId,
+        BlobId, BlobType, ChainId, MessageId, ModuleId, MultiAddress, Owner, UserApplicationId,
     },
     vm::VmRuntime,
 };
@@ -243,11 +243,11 @@ impl QueryContext {
     }
 }
 
-/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`AccountOwner`]s with an initial
+/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`MultiAddress`]s with an initial
 /// non-zero [`Amount`] of tokens.
-pub fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<AccountOwner, Amount>> {
+pub fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<MultiAddress, Amount>> {
     proptest::collection::btree_map(
-        any::<AccountOwner>(),
+        any::<MultiAddress>(),
         (1_u128..).prop_map(Amount::from_tokens),
         0..5,
     )

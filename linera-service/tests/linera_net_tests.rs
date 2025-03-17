@@ -29,7 +29,7 @@ use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, UserApplicationId},
+    identifiers::{Account, ApplicationId, ChainId, MultiAddress, UserApplicationId},
     vm::VmRuntime,
 };
 use linera_chain::data_types::{Medium, Origin};
@@ -83,15 +83,15 @@ fn test_iterations() -> Option<usize> {
     }
 }
 
-fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+fn get_fungible_account_owner(client: &ClientWrapper) -> MultiAddress {
     let owner = client.get_owner().unwrap();
-    AccountOwner::Address32(owner.0)
+    MultiAddress::Address32(owner.0)
 }
 
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
-    async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
+    async fn get_amount(&self, account_owner: &MultiAddress) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
             account_owner.to_value()
@@ -105,7 +105,7 @@ impl FungibleApp {
         amount_option.unwrap_or(Amount::ZERO)
     }
 
-    async fn assert_balances(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
+    async fn assert_balances(&self, accounts: impl IntoIterator<Item = (MultiAddress, Amount)>) {
         for (account_owner, amount) in accounts {
             let value = self.get_amount(&account_owner).await;
             assert_eq!(value, amount);
@@ -118,8 +118,8 @@ impl FungibleApp {
         serde_json::from_value(response_body["accounts"]["entries"].clone()).unwrap()
     }
 
-    async fn assert_entries(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
-        let entries: std::collections::BTreeMap<AccountOwner, Amount> = self
+    async fn assert_entries(&self, accounts: impl IntoIterator<Item = (MultiAddress, Amount)>) {
+        let entries: std::collections::BTreeMap<MultiAddress, Amount> = self
             .entries()
             .await
             .into_iter()
@@ -131,13 +131,13 @@ impl FungibleApp {
         }
     }
 
-    async fn keys(&self) -> Vec<AccountOwner> {
+    async fn keys(&self) -> Vec<MultiAddress> {
         let query = "accounts { keys }";
         let response_body = self.0.query(&query).await.unwrap();
         serde_json::from_value(response_body["accounts"]["keys"].clone()).unwrap()
     }
 
-    async fn assert_keys(&self, accounts: impl IntoIterator<Item = AccountOwner>) {
+    async fn assert_keys(&self, accounts: impl IntoIterator<Item = MultiAddress>) {
         let keys = self.keys().await;
         for account_owner in accounts {
             assert!(keys.contains(&account_owner));
@@ -146,7 +146,7 @@ impl FungibleApp {
 
     async fn transfer(
         &self,
-        account_owner: &AccountOwner,
+        account_owner: &MultiAddress,
         amount_transfer: Amount,
         destination: fungible::Account,
     ) -> Value {
@@ -179,7 +179,7 @@ impl NonFungibleApp {
         chain_id: &ChainId,
         application_id: &UserApplicationId,
         name: &String,
-        minter: &AccountOwner,
+        minter: &MultiAddress,
         hash: &DataBlobHash,
         num_minted_nfts: u64,
     ) -> String {
@@ -205,7 +205,7 @@ impl NonFungibleApp {
         Ok(serde_json::from_value(response_body["nft"].clone())?)
     }
 
-    async fn get_owned_nfts(&self, owner: &AccountOwner) -> Result<Vec<String>> {
+    async fn get_owned_nfts(&self, owner: &MultiAddress) -> Result<Vec<String>> {
         let query = format!("ownedTokenIdsByOwner(owner: {})", owner.to_value());
         let response_body = self.0.query(&query).await?;
         Ok(serde_json::from_value(
@@ -213,7 +213,7 @@ impl NonFungibleApp {
         )?)
     }
 
-    async fn mint(&self, minter: &AccountOwner, name: &String, blob_hash: &DataBlobHash) -> Value {
+    async fn mint(&self, minter: &MultiAddress, name: &String, blob_hash: &DataBlobHash) -> Value {
         let mutation = format!(
             "mint(minter: {}, name: {}, blobHash: {})",
             minter.to_value(),
@@ -225,7 +225,7 @@ impl NonFungibleApp {
 
     async fn transfer(
         &self,
-        source_owner: &AccountOwner,
+        source_owner: &MultiAddress,
         token_id: &String,
         target_account: &fungible::Account,
     ) -> Value {
@@ -261,7 +261,7 @@ struct MatchingEngineApp(ApplicationWrapper<matching_engine::MatchingEngineAbi>)
 impl MatchingEngineApp {
     async fn get_account_info(
         &self,
-        account_owner: &AccountOwner,
+        account_owner: &MultiAddress,
     ) -> Vec<matching_engine::OrderId> {
         let query = format!(
             "accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }}",
@@ -283,7 +283,7 @@ struct AmmApp(ApplicationWrapper<amm::AmmAbi>);
 impl AmmApp {
     async fn swap(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
         input_token_idx: u32,
         input_amount: Amount,
     ) -> Result<Value> {
@@ -298,7 +298,7 @@ impl AmmApp {
 
     async fn add_liquidity(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     ) -> Result<Value> {
@@ -313,7 +313,7 @@ impl AmmApp {
 
     async fn remove_liquidity(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     ) -> Result<Value> {
@@ -326,7 +326,7 @@ impl AmmApp {
         self.0.mutate(mutation).await
     }
 
-    async fn remove_all_added_liquidity(&self, owner: AccountOwner) -> Result<Value> {
+    async fn remove_all_added_liquidity(&self, owner: MultiAddress) -> Result<Value> {
         let mutation = format!("removeAllAddedLiquidity(owner: {})", owner.to_value(),);
         self.0.mutate(mutation).await
     }
@@ -905,7 +905,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         let wallet = client1.load_wallet()?;
         let user_chain = wallet.get(chain2).unwrap();
         let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        AccountOwner::from(public_key)
+        MultiAddress::from(public_key)
     };
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
@@ -1898,7 +1898,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    let owner_amm_app = AccountOwner::from(application_id_amm.forget_abi());
+    let owner_amm_app = MultiAddress::from(application_id_amm.forget_abi());
 
     // Create AMM wrappers
     let app_amm = AmmApp(

@@ -9,7 +9,7 @@ use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, MultiAddress, Owner},
     time::timer::Instant,
 };
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
@@ -152,7 +152,7 @@ async fn benchmark_with_fungible(
             let default_chain = client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
-                    AccountOwner::from(owner),
+                    MultiAddress::from(owner),
                     Amount::from_tokens(num_transactions as u128),
                 )]),
             };
@@ -193,11 +193,11 @@ async fn benchmark_with_fungible(
                     .try_add_assign(Amount::ONE)
                     .unwrap();
                 sender_app.transfer(
-                    AccountOwner::from(sender_context.owner),
+                    MultiAddress::from(sender_context.owner),
                     Amount::ONE,
                     fungible::Account {
                         chain_id: receiver_context.default_chain,
-                        owner: AccountOwner::from(receiver_context.owner),
+                        owner: MultiAddress::from(receiver_context.owner),
                     },
                 )
             })
@@ -244,7 +244,7 @@ async fn benchmark_with_fungible(
                     for i in 0.. {
                         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
                         let actual_balance =
-                            app.get_amount(&AccountOwner::from(context.owner)).await;
+                            app.get_amount(&MultiAddress::from(context.owner)).await;
                         if actual_balance == expected_balance {
                             break;
                         }
@@ -257,7 +257,7 @@ async fn benchmark_with_fungible(
                         }
                     }
                     assert_eq!(
-                        app.get_amount(&AccountOwner::from(context.owner)).await,
+                        app.get_amount(&MultiAddress::from(context.owner)).await,
                         expected_balance
                     );
                     Ok(())
@@ -273,7 +273,7 @@ async fn benchmark_with_fungible(
 struct FungibleApp(ApplicationWrapper<FungibleTokenAbi>);
 
 impl FungibleApp {
-    async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
+    async fn get_amount(&self, account_owner: &MultiAddress) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
             account_owner.to_value()
@@ -285,7 +285,7 @@ impl FungibleApp {
 
     async fn transfer(
         &self,
-        account_owner: AccountOwner,
+        account_owner: MultiAddress,
         amount_transfer: Amount,
         destination: fungible::Account,
     ) -> Result<Value> {

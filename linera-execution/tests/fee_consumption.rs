@@ -11,7 +11,7 @@ use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     http,
-    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{Account, ChainDescription, ChainId, MessageId, MultiAddress, Owner},
 };
 use linera_execution::{
     test_utils::{
@@ -196,7 +196,7 @@ async fn test_fee_consumption(
     let mut oracle_responses = blob_oracle_responses(blobs.iter());
 
     let signer = Owner::from(AccountPublicKey::test_key(0));
-    let owner = AccountOwner::Address32(signer.0);
+    let owner = MultiAddress::Address32(signer.0);
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
         view.system.balances.insert(&owner, owner_balance)?;
@@ -270,7 +270,7 @@ async fn test_fee_consumption(
     let refund_grant_to = authenticated_signer
         .map(|owner| Account {
             chain_id: ChainId::root(0),
-            owner: AccountOwner::from(owner),
+            owner: MultiAddress::from(owner),
         })
         .or(None);
     let context = MessageContext {

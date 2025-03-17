@@ -34,8 +34,8 @@ use linera_base::{
     ensure,
     hashed::Hashed,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId,
-        ModuleId, Owner, StreamId, UserApplicationId,
+        Account, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId, ModuleId,
+        MultiAddress, Owner, StreamId, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -1610,7 +1610,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
         amount: Amount,
         recipient: Recipient,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
@@ -2289,7 +2289,7 @@ where
     /// block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.query_balances_with_owner(AccountOwner::Chain).await?;
+        let (balance, _) = self.query_balances_with_owner(MultiAddress::Chain).await?;
         Ok(balance)
     }
 
@@ -2302,7 +2302,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     pub async fn query_owner_balance(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
     ) -> Result<Amount, ChainClientError> {
         Ok(self
             .query_balances_with_owner(owner)
@@ -2320,7 +2320,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn query_balances_with_owner(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
         let (previous_block_hash, height, timestamp) = {
@@ -2339,8 +2339,8 @@ where
             previous_block_hash,
             height,
             authenticated_signer: match owner {
-                AccountOwner::Address32(user) => Some(Owner(user)),
-                AccountOwner::Chain => None, // These should be unreachable?
+                MultiAddress::Address32(user) => Some(Owner(user)),
+                MultiAddress::Chain => None, // These should be unreachable?
             },
             timestamp,
         };
@@ -2377,7 +2377,7 @@ where
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace")]
     pub async fn local_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.local_balances_with_owner(AccountOwner::Chain).await?;
+        let (balance, _) = self.local_balances_with_owner(MultiAddress::Chain).await?;
         Ok(balance)
     }
 
@@ -2387,7 +2387,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     pub async fn local_owner_balance(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
     ) -> Result<Amount, ChainClientError> {
         Ok(self
             .local_balances_with_owner(owner)
@@ -2402,7 +2402,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn local_balances_with_owner(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let next_block_height = self.next_block_height();
         ensure!(
@@ -2426,7 +2426,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account(
         &self,
-        from: AccountOwner,
+        from: MultiAddress,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
@@ -2438,7 +2438,7 @@ where
     #[instrument(level = "trace")]
     pub async fn burn(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.transfer(owner, amount, Recipient::Burn).await
@@ -3167,7 +3167,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
-        owner: AccountOwner,
+        owner: MultiAddress,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {

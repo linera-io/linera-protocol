@@ -18,7 +18,7 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId,
+        Account, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId, MultiAddress,
         Owner, StreamId, StreamName,
     },
     ownership::ChainOwnership,
@@ -634,21 +634,21 @@ where
             .recv_response()
     }
 
-    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: MultiAddress) -> Result<Amount, ExecutionError> {
         self.inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
             .recv_response()
     }
 
-    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
+    fn read_owner_balances(&mut self) -> Result<Vec<(MultiAddress, Amount)>, ExecutionError> {
         self.inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
             .recv_response()
     }
 
-    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
+    fn read_balance_owners(&mut self) -> Result<Vec<MultiAddress>, ExecutionError> {
         self.inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
@@ -1217,7 +1217,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn transfer(
         &mut self,
-        source: AccountOwner,
+        source: MultiAddress,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {

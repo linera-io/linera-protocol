@@ -12,7 +12,7 @@ use crate::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
-        Account, AccountOwner, ChainId, ChannelName, Destination, MessageId, ModuleId, Owner,
+        Account, ChainId, ChannelName, Destination, MessageId, ModuleId, MultiAddress, Owner,
         UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
@@ -97,7 +97,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
 fn account_test_case() -> Account {
     Account {
         chain_id: ChainId::root(10),
-        owner: AccountOwner::Address32(CryptoHash::test_hash("account")),
+        owner: MultiAddress::Address32(CryptoHash::test_hash("account")),
     }
 }
 

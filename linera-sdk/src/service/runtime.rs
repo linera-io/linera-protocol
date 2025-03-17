@@ -9,7 +9,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, UserApplicationId},
+    identifiers::{ApplicationId, ChainId, MultiAddress, UserApplicationId},
 };
 use serde::Serialize;
 
@@ -27,8 +27,8 @@ where
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
     chain_balance: Mutex<Option<Amount>>,
-    owner_balances: Mutex<Option<Vec<(AccountOwner, Amount)>>>,
-    balance_owners: Mutex<Option<Vec<AccountOwner>>>,
+    owner_balances: Mutex<Option<Vec<(MultiAddress, Amount)>>>,
+    balance_owners: Mutex<Option<Vec<MultiAddress>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -106,12 +106,12 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: AccountOwner) -> Amount {
+    pub fn owner_balance(&self, owner: MultiAddress) -> Amount {
         base_wit::read_owner_balance(owner.into()).into()
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(AccountOwner, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(MultiAddress, Amount)> {
         Self::fetch_value_through_cache(&self.owner_balances, || {
             base_wit::read_owner_balances()
                 .into_iter()
@@ -121,11 +121,11 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<AccountOwner> {
+    pub fn balance_owners(&self) -> Vec<MultiAddress> {
         Self::fetch_value_through_cache(&self.balance_owners, || {
             base_wit::read_balance_owners()
                 .into_iter()
-                .map(AccountOwner::from)
+                .map(MultiAddress::from)
                 .collect()
         })
     }

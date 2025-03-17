@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use fungible::Account;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{Amount, MultiAddress},
     views::{
         linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
         ViewStorageContext,
@@ -77,5 +77,5 @@ pub struct MatchingEngineState {
     pub orders: MapView<OrderId, KeyBook>,
     /// The map giving for each account owner the set of order_id
     /// owned by that owner.
-    pub account_info: MapView<AccountOwner, AccountInfo>,
+    pub account_info: MapView<MultiAddress, AccountInfo>,
 }

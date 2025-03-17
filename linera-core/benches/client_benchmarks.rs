@@ -4,7 +4,7 @@
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
 use linera_base::{
     data_types::Amount,
-    identifiers::{Account, AccountOwner},
+    identifiers::{Account, MultiAddress},
     time::Duration,
 };
 use linera_core::{
@@ -59,7 +59,7 @@ where
 
     let account = Account::address32(chain2.chain_id(), owner1.0);
     let cert = chain1
-        .transfer_to_account(AccountOwner::Chain, amt, account)
+        .transfer_to_account(MultiAddress::Chain, amt, account)
         .await
         .unwrap()
         .unwrap();
