@@ -294,7 +294,7 @@ pub struct MessageId {
 /// A unique identifier for a user application from a blob.
 #[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct ApplicationId<A = ()> {
+pub struct ApplicationId<A> {
     /// The hash of the `UserApplicationDescription` this refers to.
     pub application_description_hash: CryptoHash,
     #[witty(skip)]
@@ -302,9 +302,47 @@ pub struct ApplicationId<A = ()> {
     _phantom: PhantomData<A>,
 }
 
-/// Alias for `ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-pub type UserApplicationId = ApplicationId<()>;
+/// Use this type in the core protocol where the distinction
+/// with the more general enum `GenericApplicationId` matters.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    WitLoad,
+    WitStore,
+    WitType,
+    Serialize,
+    Deserialize,
+)]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
+pub struct UserApplicationId(pub CryptoHash);
+
+impl<A> From<ApplicationId<A>> for UserApplicationId {
+    fn from(app_id: ApplicationId<A>) -> Self {
+        UserApplicationId(app_id.application_description_hash)
+    }
+}
+
+impl UserApplicationId {
+    /// Converts the application ID to the ID of the blob containing the
+    /// `UserApplicationDescription`.
+    pub fn description_blob_id(self) -> BlobId {
+        BlobId::new(self.0, BlobType::ApplicationDescription)
+    }
+
+    /// Specializes an application ID for a given ABI.
+    pub fn with_abi<A>(self) -> ApplicationId<A> {
+        ApplicationId {
+            application_description_hash: self.0,
+            _phantom: PhantomData,
+        }
+    }
+}
 
 /// A unique identifier for an application.
 #[derive(
@@ -331,7 +369,7 @@ pub enum GenericApplicationId {
 
 impl GenericApplicationId {
     /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&ApplicationId> {
+    pub fn user_application_id(&self) -> Option<&UserApplicationId> {
         if let GenericApplicationId::User(app_id) = self {
             Some(app_id)
         } else {
@@ -340,8 +378,8 @@ impl GenericApplicationId {
     }
 }
 
-impl From<ApplicationId> for GenericApplicationId {
-    fn from(user_application_id: ApplicationId) -> Self {
+impl From<UserApplicationId> for GenericApplicationId {
+    fn from(user_application_id: UserApplicationId) -> Self {
         GenericApplicationId::User(user_application_id)
     }
 }
@@ -411,7 +449,7 @@ impl ChannelFullName {
     }
 
     /// Creates a full user channel name.
-    pub fn user(name: ChannelName, application_id: ApplicationId) -> Self {
+    pub fn user(name: ChannelName, application_id: UserApplicationId) -> Self {
         Self {
             application_id: application_id.into(),
             name,
@@ -849,40 +887,10 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
     }
 }
 
-impl ApplicationId {
-    /// Creates an application ID from the application description hash.
-    pub fn new(application_description_hash: CryptoHash) -> Self {
-        ApplicationId {
-            application_description_hash,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Specializes an application ID for a given ABI.
-    pub fn with_abi<A>(self) -> ApplicationId<A> {
-        ApplicationId {
-            application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
-        }
-    }
-}
-
 impl<A> ApplicationId<A> {
     /// Forgets the ABI of a module ID (if any).
-    pub fn forget_abi(self) -> ApplicationId {
-        ApplicationId {
-            application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Converts the application ID to the ID of the blob containing the
-    /// `UserApplicationDescription`.
-    pub fn description_blob_id(self) -> BlobId {
-        BlobId::new(
-            self.application_description_hash,
-            BlobType::ApplicationDescription,
-        )
+    pub fn forget_abi(self) -> UserApplicationId {
+        UserApplicationId(self.application_description_hash)
     }
 }
 
@@ -948,7 +956,7 @@ impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
 #[serde(rename = "AccountOwner")]
 enum SerializableAccountOwner {
     User(Owner),
-    Application(ApplicationId),
+    Application(UserApplicationId),
     Chain,
 }
 
@@ -1008,7 +1016,8 @@ impl FromStr for AccountOwner {
             ))
         } else if let Some(app_id) = s.strip_prefix("Application:") {
             Ok(AccountOwner::Application(
-                ApplicationId::from_str(app_id).context("Getting ApplicationId should not fail")?,
+                UserApplicationId::from_str(app_id)
+                    .context("Getting UserApplicationId should not fail")?,
             ))
         } else if s.strip_prefix("Chain").is_some() {
             Ok(AccountOwner::Chain)
@@ -1075,7 +1084,10 @@ impl ChainId {
 
 impl<'de> BcsHashable<'de> for ChainDescription {}
 
-bcs_scalar!(ApplicationId, "A unique identifier for a user application");
+bcs_scalar!(
+    UserApplicationId,
+    "A unique identifier for a user application"
+);
 doc_scalar!(
     GenericApplicationId,
     "A unique identifier for a user application or for the system application"

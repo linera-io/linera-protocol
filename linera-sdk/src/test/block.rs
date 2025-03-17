@@ -11,6 +11,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{
         AccountOwner, ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner,
+        UserApplicationId,
     },
     ownership::TimeoutConfig,
 };
@@ -157,7 +158,7 @@ impl BlockBuilder {
     /// Adds an already serialized user `operation` to this block.
     pub fn with_raw_operation(
         &mut self,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         operation: impl Into<Vec<u8>>,
     ) -> &mut Self {
         self.block.operations.push(Operation::User {

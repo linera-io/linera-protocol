@@ -8,7 +8,8 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
+        Account, AccountOwner, ChainId, ChannelName, MessageId, Owner, StreamName,
+        UserApplicationId,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -102,7 +103,7 @@ where
     }
 
     /// Returns the ID of the current application.
-    fn get_application_id(caller: &mut Caller) -> Result<ApplicationId, RuntimeError> {
+    fn get_application_id(caller: &mut Caller) -> Result<UserApplicationId, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -421,7 +422,9 @@ where
     }
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context.
-    fn authenticated_caller_id(caller: &mut Caller) -> Result<Option<ApplicationId>, RuntimeError> {
+    fn authenticated_caller_id(
+        caller: &mut Caller,
+    ) -> Result<Option<UserApplicationId>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -549,8 +552,8 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<ApplicationId>,
-    ) -> Result<ApplicationId, RuntimeError> {
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<UserApplicationId, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -562,7 +565,7 @@ where
     fn try_call_application(
         caller: &mut Caller,
         authenticated: bool,
-        callee_id: ApplicationId,
+        callee_id: UserApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
@@ -589,7 +592,7 @@ where
     /// Queries a service and returns the response.
     fn query_service(
         caller: &mut Caller,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
@@ -655,7 +658,7 @@ where
     /// Queries another application.
     fn try_query_application(
         caller: &mut Caller,
-        application: ApplicationId,
+        application: UserApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller

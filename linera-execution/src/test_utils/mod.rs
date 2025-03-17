@@ -16,7 +16,7 @@ use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
     identifiers::{
-        AccountOwner, ApplicationId, BlobId, BlobType, ChainId, MessageId, ModuleId, Owner,
+        AccountOwner, BlobId, BlobType, ChainId, MessageId, ModuleId, Owner, UserApplicationId,
     },
     vm::VmRuntime,
 };
@@ -35,7 +35,7 @@ use crate::{
     ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView, MessageContext,
     OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
     ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId,
+    UserApplicationDescription,
 };
 
 /// Creates a dummy [`UserApplicationDescription`] for use in tests.
@@ -113,7 +113,7 @@ pub fn create_dummy_query_context() -> QueryContext {
 pub trait RegisterMockApplication {
     /// Returns the chain to use for the creation of the application.
     ///
-    /// This is included in the mocked [`ApplicationId`].
+    /// This is included in the mocked [`UserApplicationId`].
     fn creator_chain_id(&self) -> ChainId;
 
     /// Registers a new [`MockApplication`] and returns it with the [`UserApplicationId`] that was
