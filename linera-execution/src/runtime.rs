@@ -795,7 +795,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
@@ -805,7 +805,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         let state = self.view_user_states.entry(id).or_default();
         let value = state.contains_key_queries.wait(*promise)?;
         Ok(value)
@@ -815,7 +815,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ContainsKeys, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
@@ -828,7 +828,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::ContainsKeys,
     ) -> Result<Vec<bool>, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         let state = self.view_user_states.entry(id).or_default();
         let value = state.contains_keys_queries.wait(*promise)?;
         Ok(value)
@@ -838,7 +838,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::ReadMultiValuesBytes { id, keys, callback }
@@ -851,7 +851,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::ReadMultiValuesBytes,
     ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         let state = self.view_user_states.entry(id).or_default();
         let values = state.read_multi_values_queries.wait(*promise)?;
         for value in &values {
@@ -867,7 +867,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         key: Vec<u8>,
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
@@ -880,7 +880,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::ReadValueBytes,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         let value = {
             let state = self.view_user_states.entry(id).or_default();
             state.read_value_queries.wait(*promise)?
@@ -896,7 +896,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeysByPrefix {
@@ -913,7 +913,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         let keys = {
             let state = self.view_user_states.entry(id).or_default();
             state.find_keys_queries.wait(*promise)?
@@ -931,7 +931,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeyValuesByPrefix {
@@ -948,7 +948,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
-        let id = self.application_id()?;
+        let id = self.current_application().id;
         let state = self.view_user_states.entry(id).or_default();
         let key_values = state.find_key_values_queries.wait(*promise)?;
         let mut read_size = 0;
@@ -1548,7 +1548,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let id = this.application_id()?;
+        let id = this.current_application().id;
         let state = this.view_user_states.entry(id).or_default();
         state.force_all_pending_queries()?;
         this.resource_controller.track_write_operations(
@@ -1728,7 +1728,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 
     fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let application_id = this.application_id()?;
+        let application_id = this.current_application().id;
 
         this.scheduled_operations.push(Operation::User {
             application_id,
