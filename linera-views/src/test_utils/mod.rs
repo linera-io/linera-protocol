@@ -7,10 +7,7 @@ pub mod test_views;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod performance;
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    fmt::Debug,
-};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use rand::{seq::SliceRandom, Rng};
 
@@ -367,6 +364,25 @@ fn realize_batch(batch: &Batch) -> BTreeMap<Vec<u8>, Vec<u8>> {
     kv_state
 }
 
+async fn read_keys_prefix<C: LocalRestrictedKeyValueStore>(
+    key_value_store: &C,
+    key_prefix: &[u8],
+) -> BTreeSet<Vec<u8>> {
+    let mut keys = BTreeSet::new();
+    for key in key_value_store
+        .find_keys_by_prefix(key_prefix)
+        .await
+        .unwrap()
+        .iterator()
+    {
+        let key_suffix = key.unwrap();
+        let mut key = key_prefix.to_vec();
+        key.extend(key_suffix);
+        keys.insert(key);
+    }
+    keys
+}
+
 async fn read_key_values_prefix<C: LocalRestrictedKeyValueStore>(
     key_value_store: &C,
     key_prefix: &[u8],
@@ -459,6 +475,8 @@ pub async fn big_read_multi_values<C: LocalKeyValueStore>(
 /// selection, Scylla is forced to introduce around 100000 tombstones
 /// which triggers the crash with the default settings.
 pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_value_store: C) {
+    use std::time::Instant;
+    let t1 = Instant::now();
     let mut rng = make_deterministic_rng();
     let value_size = 100;
     let n_entry = 200000;
@@ -467,6 +485,7 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
     let key_prefix = vec![0];
     let mut batch_delete = Batch::new();
     let mut remaining_key_values = BTreeMap::new();
+    let mut remaining_keys = BTreeSet::new();
     for i in 0..n_entry {
         let mut key = key_prefix.clone();
         bcs::serialize_into(&mut key, &i).unwrap();
@@ -476,15 +495,41 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
         if to_delete {
             batch_delete.delete_key(key);
         } else {
+            remaining_keys.insert(key.clone());
             remaining_key_values.insert(key, value);
         }
     }
+    tracing::info!("Set up in {} ms", t1.elapsed().as_millis());
+
+    let t1 = Instant::now();
     run_test_batch_from_blank(&key_value_store, key_prefix.clone(), batch_insert).await;
+    tracing::info!("run_test_batch in {} ms", t1.elapsed().as_millis());
+
     // Deleting them all
+    let t1 = Instant::now();
     key_value_store.write_batch(batch_delete).await.unwrap();
-    // Reading everything and seeing that it is now cleaned.
-    let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
-    assert_eq!(key_values, remaining_key_values);
+    tracing::info!("batch_delete in {} ms", t1.elapsed().as_millis());
+
+    for iter in 0..5 {
+        // Reading everything and seeing that it is now cleaned.
+        let t1 = Instant::now();
+        let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
+        assert_eq!(key_values, remaining_key_values);
+        tracing::info!(
+            "iter={} read_key_values_prefix in {} ms",
+            iter,
+            t1.elapsed().as_millis()
+        );
+
+        let t1 = Instant::now();
+        let keys = read_keys_prefix(&key_value_store, &key_prefix).await;
+        assert_eq!(keys, remaining_keys);
+        tracing::info!(
+            "iter={} read_keys_prefix after {} ms",
+            iter,
+            t1.elapsed().as_millis()
+        );
+    }
 }
 
 /// DynamoDB has limits at 1 MB (for pagination), 4 MB (for write)
@@ -632,10 +677,7 @@ pub async fn run_writes_from_state<C: LocalRestrictedKeyValueStore>(key_value_st
 async fn namespaces_with_prefix<S: LocalKeyValueStore>(
     config: &S::Config,
     prefix: &str,
-) -> BTreeSet<String>
-where
-    S::Error: Debug,
-{
+) -> BTreeSet<String> {
     let namespaces = S::list_all(config).await.expect("namespaces");
     namespaces
         .into_iter()
@@ -646,10 +688,7 @@ where
 /// Exercises the namespace functionalities of the `AdminKeyValueStore`.
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
-pub async fn namespace_admin_test<S: TestKeyValueStore>()
-where
-    S::Error: Debug,
-{
+pub async fn namespace_admin_test<S: TestKeyValueStore>() {
     let config = S::new_test_config().await.expect("config");
     let prefix = generate_test_namespace();
     let namespaces = namespaces_with_prefix::<S>(&config, &prefix).await;
@@ -709,10 +748,7 @@ where
 }
 
 /// Tests listing the root keys.
-pub async fn root_key_admin_test<S: TestKeyValueStore>()
-where
-    S::Error: Debug,
-{
+pub async fn root_key_admin_test<S: TestKeyValueStore>() {
     let config = S::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     let mut root_keys = Vec::new();
@@ -788,10 +824,7 @@ where
 /// * Store 1 deletes a key and mark it as missing in its cache.
 /// * Store 2 writes the key (it should not be doing it)
 /// * Store 1 reads the key, see it as missing.
-pub async fn exclusive_access_admin_test<S: TestKeyValueStore>(exclusive_access: bool)
-where
-    S::Error: Debug,
-{
+pub async fn exclusive_access_admin_test<S: TestKeyValueStore>(exclusive_access: bool) {
     let config = S::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     S::create(&config, &namespace).await.expect("creation");
@@ -817,10 +850,7 @@ where
 }
 
 /// Both checks together.
-pub async fn access_admin_test<S: TestKeyValueStore>()
-where
-    S::Error: Debug,
-{
+pub async fn access_admin_test<S: TestKeyValueStore>() {
     exclusive_access_admin_test::<S>(true).await;
     exclusive_access_admin_test::<S>(false).await;
 }
