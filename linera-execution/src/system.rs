@@ -1066,8 +1066,8 @@ where
         blob_id: BlobId,
         size: usize,
     ) -> Result<bool, ExecutionError> {
-        // Charge fees only for data and committee blobs.
-        if matches!(blob_id.blob_type, BlobType::Data | BlobType::Committee) {
+        // Charge fees only for data blobs.
+        if blob_id.blob_type == BlobType::Data {
             resource_controller
                 .with_state(self)
                 .await?

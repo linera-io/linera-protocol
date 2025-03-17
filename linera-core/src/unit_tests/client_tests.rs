@@ -1133,18 +1133,11 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let admin = builder.add_root_chain(0, Amount::from_tokens(4)).await?;
-    let user = builder.add_root_chain(1, Amount::from_tokens(1)).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let user = builder.add_root_chain(1, Amount::ZERO).await?;
     let validators = builder.initial_committee.validators().clone();
 
-    let policy = ResourceControlPolicy {
-        blob_read: Amount::from_micros(1),
-        blob_published: Amount::from_micros(10),
-        blob_byte_published: Amount::from_nanos(1),
-        blob_byte_read: Amount::from_attos(1),
-        ..ResourceControlPolicy::default()
-    };
-    let committee = Committee::new(validators.clone(), policy.clone());
+    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
     admin.finalize_committee().await.unwrap();
 
@@ -1154,17 +1147,8 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
     // Create a new committee.
-    let committee = Committee::new(validators, policy.clone());
-    let balance = admin.local_balance().await?;
-    let committee_size = bcs::serialized_size(&committee)? as u128;
+    let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(
-        admin.local_balance().await?,
-        balance
-            - (policy.blob_byte_published + policy.blob_byte_read) * committee_size
-            - policy.blob_published
-            - policy.blob_read
-    );
     assert_eq!(admin.next_block_height(), BlockHeight::from(5));
     assert!(admin.pending_proposal().is_none());
     assert!(admin.key_pair().await.is_ok());
@@ -1199,14 +1183,7 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
     user.synchronize_from_validators().await.unwrap();
 
-    let balance = user.local_balance().await?;
     user.process_inbox().await.unwrap();
-    assert_eq!(
-        user.local_balance().await?,
-        balance + Amount::from_tokens(3)
-            - policy.blob_byte_read * committee_size
-            - policy.blob_read
-    );
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
 
     // Have the admin chain deprecate the previous epoch.
@@ -1228,7 +1205,6 @@ where
         .unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
 
-    let balance = admin.local_balance().await?;
     // Try again to make a transfer back to the admin chain.
     let cert = user
         .transfer_to_account(
@@ -1245,10 +1221,7 @@ where
         .unwrap();
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
-    assert_eq!(
-        admin.local_balance().await.unwrap(),
-        balance + Amount::from_tokens(3)
-    );
+    assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
     Ok(())
 }
 
@@ -2368,5 +2341,44 @@ where
         ) if matches!(**error, ExecutionError::BlobTooLarge))
     );
 
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_blob_fees<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let policy = ResourceControlPolicy {
+        blob_read: Amount::from_nanos(10_000),
+        blob_published: Amount::from_attos(1_000_000),
+        blob_byte_read: Amount::from_nanos(1),
+        blob_byte_published: Amount::from_attos(100),
+        ..ResourceControlPolicy::default()
+    };
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+        .await?
+        .with_policy(policy.clone());
+    let mut expected_balance = Amount::ONE;
+    let client = builder.add_root_chain(0, expected_balance).await?;
+    let bytes: &[u8] = b"twelve bytes";
+    let blob = Blob::new(BlobContent::new_data(bytes));
+    let blob_id = blob.id();
+    client
+        .publish_data_blob(bytes.to_vec())
+        .await
+        .unwrap()
+        .unwrap();
+    expected_balance = expected_balance
+        - policy.blob_published
+        - policy.blob_byte_published * (blob.bytes().len() as u128);
+    assert_eq!(client.local_balance().await.unwrap(), expected_balance);
+
+    client.read_data_blob(blob_id.hash).await.unwrap().unwrap();
+    expected_balance =
+        expected_balance - policy.blob_read - policy.blob_byte_read * (blob.bytes().len() as u128);
+    assert_eq!(client.local_balance().await.unwrap(), expected_balance);
     Ok(())
 }
