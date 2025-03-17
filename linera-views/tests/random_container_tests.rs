@@ -7,7 +7,7 @@ use anyhow::Result;
 use linera_views::{
     bucket_queue_view::HashedBucketQueueView,
     collection_view::HashedCollectionView,
-    context::{create_test_memory_context, Context},
+    context::{Context, MemoryContext},
     key_value_store_view::{KeyValueStoreView, SizeData},
     map_view::HashedByteMapView,
     queue_view::HashedQueueView,
@@ -42,7 +42,7 @@ where
 
 #[tokio::test]
 async fn classic_collection_view_check() -> Result<()> {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     let mut rng = make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;
@@ -156,7 +156,7 @@ fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> SizeData {
 
 #[tokio::test]
 async fn key_value_store_view_mutability() -> Result<()> {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     let mut rng = make_deterministic_rng();
     let mut state_map = BTreeMap::new();
     let n = 40;
@@ -255,7 +255,7 @@ pub struct ByteMapStateView<C> {
 }
 
 async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     let mut state_map = BTreeMap::new();
     let mut all_keys = BTreeSet::new();
     let n = 10;
@@ -410,7 +410,7 @@ pub struct BucketQueueStateView<C> {
 
 #[tokio::test]
 async fn bucket_queue_view_mutability_check() -> Result<()> {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     let mut rng = make_deterministic_rng();
     let mut vector = Vec::new();
     let n = 200;
@@ -516,7 +516,7 @@ pub struct QueueStateView<C> {
 
 #[tokio::test]
 async fn queue_view_mutability_check() -> Result<()> {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     let mut rng = make_deterministic_rng();
     let mut vector = Vec::new();
     let n = 20;
@@ -625,7 +625,7 @@ where
 
 #[tokio::test]
 async fn reentrant_collection_view_check() -> Result<()> {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     let mut rng = make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;

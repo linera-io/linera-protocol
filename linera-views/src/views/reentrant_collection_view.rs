@@ -324,11 +324,11 @@ where
     /// can be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// let subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
@@ -352,11 +352,11 @@ where
     /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// {
@@ -383,11 +383,11 @@ where
     /// Returns `true` if the collection contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// let _subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
@@ -414,11 +414,11 @@ where
     /// Removes an entry. If absent then nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// let mut subview = view.try_load_entry_mut(&[0, 1]).await.unwrap();
@@ -442,11 +442,11 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// {
@@ -489,11 +489,11 @@ where
     /// The entries in `short_keys` have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// {
@@ -578,11 +578,11 @@ where
     /// The entries in `short_keys` have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// {
@@ -665,11 +665,11 @@ where
     /// Loads all the entries for reading at once.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// {
@@ -741,11 +741,11 @@ where
     /// Loads all the entries for writing at once.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// {
@@ -820,11 +820,11 @@ where
     /// Returns the list of indices in the collection in lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&[0, 1]).await.unwrap();
@@ -846,11 +846,11 @@ where
     /// Returns the number of indices of the collection.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&[0, 1]).await.unwrap();
@@ -873,11 +873,11 @@ where
     /// ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&[0, 1]).await.unwrap();
@@ -940,11 +940,11 @@ where
     /// lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
     ///     ReentrantByteCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&[0, 1]).await.unwrap();
@@ -1137,11 +1137,11 @@ where
     /// then be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// let subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1165,11 +1165,11 @@ where
     /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// {
@@ -1195,11 +1195,11 @@ where
     /// Returns `true` if the collection contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// let _subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1219,11 +1219,11 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// let mut subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1247,11 +1247,11 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// {
@@ -1291,11 +1291,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// let indices = vec![23, 42];
@@ -1325,11 +1325,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// {
@@ -1361,11 +1361,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// {
@@ -1396,11 +1396,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// {
@@ -1439,11 +1439,11 @@ where
     /// by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
@@ -1465,11 +1465,11 @@ where
     /// Returns the number of indices in the collection.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
@@ -1486,11 +1486,11 @@ where
     /// the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
@@ -1522,11 +1522,11 @@ where
     /// determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
     ///     ReentrantCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
@@ -1655,11 +1655,11 @@ where
     /// is absent then a default entry is put in the collection on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// let subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1683,11 +1683,11 @@ where
     /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// {
@@ -1713,11 +1713,11 @@ where
     /// Returns `true` if the collection contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// let _subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1737,11 +1737,11 @@ where
     /// Removes an entry. If absent then nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// let mut subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1765,11 +1765,11 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// {
@@ -1811,11 +1811,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// let indices = vec![23, 42];
@@ -1845,11 +1845,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// {
@@ -1881,11 +1881,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// {
@@ -1916,11 +1916,11 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// {
@@ -1957,11 +1957,11 @@ where
     /// the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
@@ -1983,11 +1983,11 @@ where
     /// Returns the number of entries in the collection.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&23).await.unwrap();
@@ -2004,11 +2004,11 @@ where
     /// then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&28).await.unwrap();
@@ -2041,11 +2041,11 @@ where
     /// determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
     ///     ReentrantCustomCollectionView::load(context).await.unwrap();
     /// view.try_load_entry_mut(&28).await.unwrap();

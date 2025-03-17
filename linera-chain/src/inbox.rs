@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 #[cfg(with_testing)]
-use linera_views::context::{create_test_memory_context, MemoryContext};
+use linera_views::context::MemoryContext;
 use linera_views::{
     context::Context,
     queue_view::QueueView,
@@ -329,7 +329,7 @@ where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,
 {
     pub async fn new() -> Self {
-        let context = create_test_memory_context();
+        let context = MemoryContext::new_for_testing(());
         Self::load(context)
             .await
             .expect("Loading from memory should work")

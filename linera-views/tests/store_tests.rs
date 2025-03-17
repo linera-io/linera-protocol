@@ -3,7 +3,7 @@
 
 use linera_views::{
     batch::Batch,
-    context::{create_test_memory_context, Context as _},
+    context::{Context as _, MemoryContext},
     key_value_store_view::ViewContainer,
     memory::MemoryStore,
     random::make_deterministic_rng,
@@ -126,7 +126,7 @@ async fn test_reads_indexed_db() {
 #[tokio::test]
 async fn test_reads_key_value_store_view_memory() {
     for scenario in get_random_test_scenarios() {
-        let context = create_test_memory_context();
+        let context = MemoryContext::new_for_testing(());
         let key_value_store = ViewContainer::new(context).await.unwrap();
         run_reads(key_value_store, scenario).await;
     }
@@ -158,7 +158,7 @@ async fn test_memory_writes_from_blank() {
 
 #[tokio::test]
 async fn test_key_value_store_view_memory_writes_from_blank() {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     let key_value_store = ViewContainer::new(context).await.unwrap();
     run_writes_from_blank(&key_value_store).await;
 }
@@ -200,7 +200,7 @@ async fn test_indexed_db_writes_from_blank() {
 #[tokio::test]
 async fn test_big_value_read_write() {
     use rand::{distributions::Alphanumeric, Rng};
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     for count in [50, 1024] {
         let rng = make_deterministic_rng();
         let test_string = rng
