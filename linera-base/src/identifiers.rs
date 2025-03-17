@@ -40,6 +40,16 @@ pub enum MultiAddress {
     Chain,
 }
 
+impl MultiAddress {
+    /// Returns the address, if any, as [`CryptoHash`].
+    pub fn as_address(&self) -> Option<CryptoHash> {
+        match self {
+            MultiAddress::Address32(address) => Some(*address),
+            MultiAddress::Chain => None,
+        }
+    }
+}
+
 /// A system account.
 #[derive(
     Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize, WitLoad, WitStore, WitType,
@@ -111,12 +121,6 @@ impl From<AccountPublicKey> for MultiAddress {
 impl From<Owner> for MultiAddress {
     fn from(owner: Owner) -> Self {
         MultiAddress::Address32(owner.0)
-    }
-}
-
-impl From<UserApplicationId> for MultiAddress {
-    fn from(application_id: UserApplicationId) -> Self {
-        MultiAddress::Address32(application_id.0)
     }
 }
 
@@ -323,43 +327,23 @@ pub struct ApplicationId<A> {
     _phantom: PhantomData<A>,
 }
 
-/// Use this type in the core protocol where the distinction
-/// with the more general enum `GenericApplicationId` matters.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    WitLoad,
-    WitStore,
-    WitType,
-    Serialize,
-    Deserialize,
-)]
-#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct UserApplicationId(pub CryptoHash);
-
-impl<A> From<ApplicationId<A>> for UserApplicationId {
+impl<A> From<ApplicationId<A>> for MultiAddress {
     fn from(app_id: ApplicationId<A>) -> Self {
-        UserApplicationId(app_id.application_description_hash)
+        MultiAddress::Address32(app_id.application_description_hash)
     }
 }
 
-impl UserApplicationId {
+impl MultiAddress {
     /// Converts the application ID to the ID of the blob containing the
     /// `UserApplicationDescription`.
     pub fn description_blob_id(self) -> BlobId {
-        BlobId::new(self.0, BlobType::ApplicationDescription)
+        BlobId::new(self.as_address().unwrap(), BlobType::ApplicationDescription)
     }
 
     /// Specializes an application ID for a given ABI.
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
-            application_description_hash: self.0,
+            application_description_hash: self.as_address().unwrap(),
             _phantom: PhantomData,
         }
     }
@@ -385,12 +369,12 @@ pub enum GenericApplicationId {
     /// The system application.
     System,
     /// A user application.
-    User(UserApplicationId),
+    User(MultiAddress),
 }
 
 impl GenericApplicationId {
     /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&UserApplicationId> {
+    pub fn user_application_id(&self) -> Option<&MultiAddress> {
         if let GenericApplicationId::User(app_id) = self {
             Some(app_id)
         } else {
@@ -399,8 +383,8 @@ impl GenericApplicationId {
     }
 }
 
-impl From<UserApplicationId> for GenericApplicationId {
-    fn from(user_application_id: UserApplicationId) -> Self {
+impl From<MultiAddress> for GenericApplicationId {
+    fn from(user_application_id: MultiAddress) -> Self {
         GenericApplicationId::User(user_application_id)
     }
 }
@@ -470,7 +454,7 @@ impl ChannelFullName {
     }
 
     /// Creates a full user channel name.
-    pub fn user(name: ChannelName, application_id: UserApplicationId) -> Self {
+    pub fn user(name: ChannelName, application_id: MultiAddress) -> Self {
         Self {
             application_id: application_id.into(),
             name,
@@ -910,8 +894,8 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
 
 impl<A> ApplicationId<A> {
     /// Forgets the ABI of a module ID (if any).
-    pub fn forget_abi(self) -> UserApplicationId {
-        UserApplicationId(self.application_description_hash)
+    pub fn forget_abi(self) -> MultiAddress {
+        MultiAddress::Address32(self.application_description_hash)
     }
 }
 
@@ -1085,10 +1069,6 @@ impl ChainId {
 
 impl<'de> BcsHashable<'de> for ChainDescription {}
 
-bcs_scalar!(
-    UserApplicationId,
-    "A unique identifier for a user application"
-);
 doc_scalar!(
     GenericApplicationId,
     "A unique identifier for a user application or for the system application"

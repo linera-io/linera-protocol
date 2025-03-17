@@ -29,7 +29,7 @@ use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
     data_types::Amount,
-    identifiers::{Account, ApplicationId, ChainId, MultiAddress, UserApplicationId},
+    identifiers::{Account, ApplicationId, ChainId, MultiAddress},
     vm::VmRuntime,
 };
 use linera_chain::data_types::{Medium, Origin};
@@ -177,7 +177,7 @@ struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 impl NonFungibleApp {
     pub fn create_token_id(
         chain_id: &ChainId,
-        application_id: &UserApplicationId,
+        application_id: &MultiAddress,
         name: &String,
         minter: &MultiAddress,
         hash: &DataBlobHash,
@@ -1898,7 +1898,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    let owner_amm_app = MultiAddress::from(application_id_amm.forget_abi());
+    let owner_amm_app = application_id_amm.forget_abi();
 
     // Create AMM wrappers
     let app_amm = AmmApp(

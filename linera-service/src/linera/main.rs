@@ -939,7 +939,7 @@ impl Runnable for Job {
                 json_parameters_path,
                 json_argument,
                 json_argument_path,
-                required_application_ids,
+                required_applications,
             } => {
                 let start_time = Instant::now();
                 let creator = creator.unwrap_or_else(|| context.default_chain());
@@ -957,14 +957,14 @@ impl Runnable for Job {
                         let parameters = parameters.clone();
                         let argument = argument.clone();
                         let chain_client = chain_client.clone();
-                        let required_application_ids = required_application_ids.clone();
+                        let required_applications = required_applications.clone();
                         async move {
                             chain_client
                                 .create_application_untyped(
                                     module_id,
                                     parameters,
                                     argument,
-                                    required_application_ids.unwrap_or_default(),
+                                    required_applications.unwrap_or_default(),
                                 )
                                 .await
                         }
@@ -988,7 +988,7 @@ impl Runnable for Job {
                 json_parameters_path,
                 json_argument,
                 json_argument_path,
-                required_application_ids,
+                required_applications,
             } => {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
@@ -1005,14 +1005,14 @@ impl Runnable for Job {
                         let parameters = parameters.clone();
                         let argument = argument.clone();
                         let chain_client = chain_client.clone();
-                        let required_application_ids = required_application_ids.clone();
+                        let required_applications = required_applications.clone();
                         async move {
                             chain_client
                                 .create_application_untyped(
                                     module_id,
                                     parameters,
                                     argument,
-                                    required_application_ids.unwrap_or_default(),
+                                    required_applications.unwrap_or_default(),
                                 )
                                 .await
                         }
@@ -1055,7 +1055,7 @@ impl Runnable for Job {
                     json_parameters_path,
                     json_argument,
                     json_argument_path,
-                    required_application_ids,
+                    required_applications,
                 } => {
                     let start_time = Instant::now();
                     let publisher = publisher.unwrap_or_else(|| context.default_chain());
@@ -1078,14 +1078,14 @@ impl Runnable for Job {
                             let parameters = parameters.clone();
                             let argument = argument.clone();
                             let chain_client = chain_client.clone();
-                            let required_application_ids = required_application_ids.clone();
+                            let required_applications = required_applications.clone();
                             async move {
                                 chain_client
                                     .create_application_untyped(
                                         module_id,
                                         parameters,
                                         argument,
-                                        required_application_ids.unwrap_or_default(),
+                                        required_applications.unwrap_or_default(),
                                     )
                                     .await
                             }

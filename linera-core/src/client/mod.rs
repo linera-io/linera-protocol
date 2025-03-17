@@ -35,7 +35,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId, ModuleId,
-        MultiAddress, Owner, StreamId, UserApplicationId,
+        MultiAddress, Owner, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -2933,7 +2933,7 @@ where
     /// Creates an application by instantiating some bytecode.
     #[instrument(
         level = "trace",
-        skip(self, parameters, instantiation_argument, required_application_ids)
+        skip(self, parameters, instantiation_argument, required_applications)
     )]
     pub async fn create_application<
         A: Abi,
@@ -2944,7 +2944,7 @@ where
         module_id: ModuleId<A, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
-        required_application_ids: Vec<UserApplicationId>,
+        required_applications: Vec<MultiAddress>,
     ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, ChainClientError>
     {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
@@ -2954,7 +2954,7 @@ where
                 module_id.forget_abi(),
                 parameters,
                 instantiation_argument,
-                required_application_ids,
+                required_applications,
             )
             .await?
             .map(|(app_id, cert)| (app_id.with_abi(), cert)))
@@ -2968,7 +2968,7 @@ where
             module_id,
             parameters,
             instantiation_argument,
-            required_application_ids
+            required_applications
         )
     )]
     pub async fn create_application_untyped(
@@ -2976,14 +2976,13 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<ClientOutcome<(UserApplicationId, ConfirmedBlockCertificate)>, ChainClientError>
-    {
+        required_applications: Vec<MultiAddress>,
+    ) -> Result<ClientOutcome<(MultiAddress, ConfirmedBlockCertificate)>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             module_id,
             parameters,
             instantiation_argument,
-            required_application_ids,
+            required_applications,
         }))
         .await?
         .try_map(|certificate| {
@@ -3002,7 +3001,7 @@ where
             let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
                 "ApplicationDescription blob not found.",
             ))?;
-            let id = UserApplicationId(blob_id.hash);
+            let id = MultiAddress::Address32(blob_id.hash);
             Ok((id, certificate))
         })
     }

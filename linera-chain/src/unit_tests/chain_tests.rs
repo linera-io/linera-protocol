@@ -19,7 +19,7 @@ use linera_base::{
     },
     hashed::Hashed,
     http,
-    identifiers::{ChainId, MessageId, ModuleId, MultiAddress, UserApplicationId},
+    identifiers::{ChainId, MessageId, ModuleId, MultiAddress},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -78,7 +78,7 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
             creator_chain_id: admin_id(),
             block_height: BlockHeight(2),
             application_index: 0,
-            required_application_ids: vec![],
+            required_applications: vec![],
             parameters: vec![],
         },
         contract_blob,
@@ -204,7 +204,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
 
     // Create a mock application.
     let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = UserApplicationId::from(&app_description);
+    let application_id = MultiAddress::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
     extra
@@ -621,7 +621,7 @@ async fn prepare_test_with_dummy_mock_application(
     policy: ResourceControlPolicy,
 ) -> anyhow::Result<(
     MockApplication,
-    UserApplicationId,
+    MultiAddress,
     ChainStateView<ViewContext<TestExecutionRuntimeContext, MemoryStore>>,
     ProposedBlock,
     Timestamp,
@@ -653,7 +653,7 @@ async fn prepare_test_with_dummy_mock_application(
 
     // Create a mock application.
     let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = UserApplicationId::from(&app_description);
+    let application_id = MultiAddress::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
     extra

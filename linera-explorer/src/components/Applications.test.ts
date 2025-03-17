@@ -21,7 +21,7 @@ test('Applications mounting', () => {
               index: 0,
             },
             parameters: [ 110, 117, 108, 108 ],
-            required_application_ids: [],
+            required_applications: [],
           } } ]
       },
     })

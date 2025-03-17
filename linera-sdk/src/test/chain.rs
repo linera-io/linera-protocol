@@ -18,9 +18,7 @@ use linera_base::{
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, CompressedBytecode, UserApplicationDescription,
     },
-    identifiers::{
-        ApplicationId, ChainDescription, ChainId, ModuleId, MultiAddress, UserApplicationId,
-    },
+    identifiers::{ApplicationId, ChainDescription, ChainId, ModuleId, MultiAddress},
     vm::VmRuntime,
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -476,13 +474,13 @@ impl ActiveChain {
     ///
     /// The application is instantiated using the instantiation parameters, which consist of the
     /// global static `parameters`, the one time `instantiation_argument` and the
-    /// `required_application_ids` of the applications that the new application will depend on.
+    /// `required_applications` of the applications that the new application will depend on.
     pub async fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         module_id: ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
-        required_application_ids: Vec<UserApplicationId>,
+        required_applications: Vec<MultiAddress>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
@@ -498,7 +496,7 @@ impl ActiveChain {
                     module_id: module_id.forget_abi(),
                     parameters: parameters.clone(),
                     instantiation_argument,
-                    required_application_ids: required_application_ids.clone(),
+                    required_applications: required_applications.clone(),
                 });
             })
             .await;
@@ -513,10 +511,10 @@ impl ActiveChain {
             block_height: block.header.height,
             application_index: 0,
             parameters,
-            required_application_ids,
+            required_applications,
         };
 
-        UserApplicationId::from(&description).with_abi()
+        MultiAddress::from(&description).with_abi()
     }
 
     /// Returns whether this chain has been closed.

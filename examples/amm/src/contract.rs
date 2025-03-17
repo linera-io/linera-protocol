@@ -88,7 +88,7 @@ impl Contract for AmmContract {
                 let amm_account = self.get_amm_account();
                 self.transfer(owner, input_amount, amm_account, input_token_idx);
 
-                let amm_app_owner = self.get_amm_app_owner();
+                let amm_app_owner = self.get_amm_app_address();
                 let message_origin_account = self.get_message_origin_account(owner);
                 self.transfer(
                     amm_app_owner,
@@ -310,13 +310,12 @@ impl Contract for AmmContract {
 
 impl AmmContract {
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: MultiAddress) {
-        match owner {
+    fn check_account_authentication(&mut self, origin: MultiAddress) {
+        match origin {
             MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|owner| owner.0) == Some(address)
-                        || self.runtime.authenticated_caller_id().map(|owner| owner.0)
-                            == Some(address),
+                        || self.runtime.authenticated_caller_id() == Some(origin),
                     "Unauthorized"
                 )
             }
@@ -345,7 +344,7 @@ impl AmmContract {
         token_to_remove_amount: Amount,
         other_token_to_remove_amount: Amount,
     ) {
-        let amm_app_owner = self.get_amm_app_owner();
+        let amm_app_owner = self.get_amm_app_address();
         self.transfer(
             amm_app_owner,
             token_to_remove_amount,
@@ -436,8 +435,8 @@ impl AmmContract {
         )
     }
 
-    fn get_amm_app_owner(&mut self) -> MultiAddress {
-        MultiAddress::from(self.runtime.application_id().forget_abi())
+    fn get_amm_app_address(&mut self) -> MultiAddress {
+        self.runtime.application_id().forget_abi()
     }
 
     fn get_amm_chain_id(&mut self) -> ChainId {
@@ -447,7 +446,7 @@ impl AmmContract {
     fn get_amm_account(&mut self) -> Account {
         Account {
             chain_id: self.get_amm_chain_id(),
-            owner: self.get_amm_app_owner(),
+            owner: self.get_amm_app_address(),
         }
     }
 
@@ -657,8 +656,8 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Amount {
-        let pool_owner = MultiAddress::from(self.runtime.application_id().forget_abi());
-        self.balance(&pool_owner, token_idx)
+        let pool_address = self.runtime.application_id().forget_abi();
+        self.balance(&pool_address, token_idx)
     }
 
     fn fungible_id(&mut self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {

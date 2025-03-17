@@ -150,13 +150,12 @@ impl MatchingEngineContract {
     }
 
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: MultiAddress) {
-        match owner {
+    fn check_account_authentication(&mut self, origin: MultiAddress) {
+        match origin {
             MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|owner| owner.0) == Some(address)
-                        || self.runtime.authenticated_caller_id().map(|owner| owner.0)
-                            == Some(address),
+                        || self.runtime.authenticated_caller_id() == Some(origin),
                     "Unauthorized."
                 )
             }
@@ -182,7 +181,7 @@ impl MatchingEngineContract {
     ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: MultiAddress::from(self.runtime.application_id().forget_abi()),
+            owner: self.runtime.application_id().forget_abi(),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -191,8 +190,13 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
-        let owner_app = MultiAddress::from(self.runtime.application_id().forget_abi());
-        self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
+        let app_address = self.runtime.application_id().forget_abi();
+        self.transfer(
+            app_address,
+            transfer.amount,
+            destination,
+            transfer.token_idx,
+        );
     }
 
     /// Transfers tokens from the owner to the destination

@@ -45,7 +45,7 @@ use crate::{
     committee::{Committee, Epoch},
     ChannelName, ChannelSubscription, ExecutionError, ExecutionRuntimeContext, MessageContext,
     MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, ResourceController,
-    TransactionTracker, UserApplicationDescription, UserApplicationId,
+    TransactionTracker, UserApplicationDescription,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -178,7 +178,7 @@ pub enum SystemOperation {
         #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
         instantiation_argument: Vec<u8>,
         #[debug(skip_if = Vec::is_empty)]
-        required_application_ids: Vec<UserApplicationId>,
+        required_applications: Vec<MultiAddress>,
     },
     /// Operations that are only allowed on the admin chain.
     Admin(AdminOperation),
@@ -337,7 +337,7 @@ impl UserData {
 
 #[derive(Debug)]
 pub struct CreateApplicationResult {
-    pub app_id: UserApplicationId,
+    pub app_id: MultiAddress,
     pub txn_tracker: TransactionTracker,
 }
 
@@ -369,7 +369,7 @@ where
         operation: SystemOperation,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Option<(UserApplicationId, Vec<u8>)>, ExecutionError> {
+    ) -> Result<Option<(MultiAddress, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut new_application = None;
         match operation {
@@ -520,7 +520,7 @@ where
                 module_id,
                 parameters,
                 instantiation_argument,
-                required_application_ids,
+                required_applications,
             } => {
                 let txn_tracker_moved = mem::take(txn_tracker);
                 let CreateApplicationResult {
@@ -532,7 +532,7 @@ where
                         context.height,
                         module_id,
                         parameters,
-                        required_application_ids,
+                        required_applications,
                         txn_tracker_moved,
                     )
                     .await?;
@@ -623,7 +623,7 @@ where
     pub async fn transfer(
         &mut self,
         authenticated_signer: Option<Owner>,
-        authenticated_application_id: Option<UserApplicationId>,
+        authenticated_application_id: Option<MultiAddress>,
         source: MultiAddress,
         recipient: Recipient,
         amount: Amount,
@@ -635,7 +635,7 @@ where
             ),
             (MultiAddress::Address32(account_application), _, Some(authorized_application)) => {
                 ensure!(
-                    account_application == authorized_application.0,
+                    account_application == authorized_application.as_address().unwrap(),
                     ExecutionError::UnauthenticatedTransferOwner
                 )
             }
@@ -668,7 +668,7 @@ where
     pub async fn claim(
         &self,
         authenticated_signer: Option<Owner>,
-        authenticated_application_id: Option<UserApplicationId>,
+        authenticated_application_id: Option<MultiAddress>,
         source: MultiAddress,
         target_id: ChainId,
         recipient: Recipient,
@@ -677,7 +677,7 @@ where
         match source {
             MultiAddress::Address32(owner) => ensure!(
                 authenticated_signer.map(|owner| owner.0) == Some(owner)
-                    || authenticated_application_id.map(|owner| owner.0) == Some(owner),
+                    || authenticated_application_id == Some(source),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
             MultiAddress::Chain => unreachable!(),
@@ -883,7 +883,7 @@ where
         block_height: BlockHeight,
         module_id: ModuleId,
         parameters: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
+        required_applications: Vec<MultiAddress>,
         mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
@@ -903,7 +903,7 @@ where
             block_height,
             application_index,
             parameters,
-            required_application_ids,
+            required_applications,
         };
         self.check_required_applications(&application_description, Some(&mut txn_tracker))
             .await?;
@@ -911,7 +911,7 @@ where
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
 
         Ok(CreateApplicationResult {
-            app_id: UserApplicationId::from(&application_description),
+            app_id: MultiAddress::from(&application_description),
             txn_tracker,
         })
     }
@@ -922,7 +922,7 @@ where
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(), ExecutionError> {
         // Make sure that referenced applications IDs have been registered.
-        for required_id in &application_description.required_application_ids {
+        for required_id in &application_description.required_applications {
             Box::pin(self.describe_application(*required_id, txn_tracker.as_deref_mut())).await?;
         }
         Ok(())
@@ -931,7 +931,7 @@ where
     /// Retrieves an application's description.
     pub async fn describe_application(
         &mut self,
-        id: UserApplicationId,
+        id: MultiAddress,
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<UserApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
@@ -963,9 +963,9 @@ where
     /// Retrieves the recursive dependencies of applications and applies a topological sort.
     pub async fn find_dependencies(
         &mut self,
-        mut stack: Vec<UserApplicationId>,
+        mut stack: Vec<MultiAddress>,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<UserApplicationId>, ExecutionError> {
+    ) -> Result<Vec<MultiAddress>, ExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
         // The entries already inserted in `result`.
@@ -990,7 +990,7 @@ where
             // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
             stack.push(id);
             let app = self.describe_application(id, Some(txn_tracker)).await?;
-            for child in app.required_application_ids.iter().rev() {
+            for child in app.required_applications.iter().rev() {
                 if !seen.contains(child) {
                     stack.push(*child);
                 }

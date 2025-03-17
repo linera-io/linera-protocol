@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     hashed::Hashed,
-    identifiers::{ChainId, ModuleId, MultiAddress, Owner, UserApplicationId},
+    identifiers::{ChainId, ModuleId, MultiAddress, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -80,12 +80,15 @@ enum NodeServiceError {
     UnknownChainId { chain_id: String },
     #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
+    #[error("malformed address: {0}")]
+    MalformedAddress(String),
 }
 
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
         let tuple = match self {
             NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
+            NodeServiceError::MalformedAddress(e) => (StatusCode::BAD_REQUEST, vec![e]),
             NodeServiceError::ChainClientError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
@@ -449,12 +452,12 @@ where
     async fn change_application_permissions(
         &self,
         chain_id: ChainId,
-        close_chain: Vec<UserApplicationId>,
-        execute_operations: Option<Vec<UserApplicationId>>,
-        mandatory_applications: Vec<UserApplicationId>,
-        change_application_permissions: Vec<UserApplicationId>,
-        call_service_as_oracle: Option<Vec<UserApplicationId>>,
-        make_http_requests: Option<Vec<UserApplicationId>>,
+        close_chain: Vec<MultiAddress>,
+        execute_operations: Option<Vec<MultiAddress>>,
+        mandatory_applications: Vec<MultiAddress>,
+        change_application_permissions: Vec<MultiAddress>,
+        call_service_as_oracle: Option<Vec<MultiAddress>>,
+        make_http_requests: Option<Vec<MultiAddress>>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
@@ -575,19 +578,19 @@ where
         module_id: ModuleId,
         parameters: String,
         instantiation_argument: String,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<UserApplicationId, Error> {
+        required_applications: Vec<MultiAddress>,
+    ) -> Result<MultiAddress, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
             let instantiation_argument = instantiation_argument.as_bytes().to_vec();
-            let required_application_ids = required_application_ids.clone();
+            let required_applications = required_applications.clone();
             async move {
                 let result = client
                     .create_application_untyped(
                         module_id,
                         parameters,
                         instantiation_argument,
-                        required_application_ids,
+                        required_applications,
                     )
                     .await
                     .map_err(Error::from)
@@ -761,14 +764,14 @@ where
 
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
-    id: UserApplicationId,
+    id: MultiAddress,
     description: UserApplicationDescription,
     link: String,
 }
 
 impl ApplicationOverview {
     fn new(
-        id: UserApplicationId,
+        id: MultiAddress,
         description: UserApplicationDescription,
         port: NonZeroU16,
         chain_id: ChainId,
@@ -889,7 +892,7 @@ where
     /// Handles service queries for user applications (including mutations).
     async fn handle_service_request(
         &self,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         request: Vec<u8>,
         chain_id: ChainId,
     ) -> Result<Vec<u8>, NodeServiceError> {
@@ -932,7 +935,7 @@ where
     /// Queries a user application, returning the raw [`QueryOutcome`].
     async fn query_user_application(
         &self,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         bytes: Vec<u8>,
         chain_id: ChainId,
     ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
@@ -982,7 +985,9 @@ where
         request: String,
     ) -> Result<Vec<u8>, NodeServiceError> {
         let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
-        let application_id: UserApplicationId = application_id.parse()?;
+        let application_id: MultiAddress = application_id
+            .parse()
+            .map_err(|err: anyhow::Error| NodeServiceError::MalformedAddress(err.to_string()))?;
 
         debug!(
             "Processing request for application {application_id} on chain {chain_id}:\n{:?}",
