@@ -8,7 +8,7 @@ mod state;
 use amm::{AmmAbi, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    linera_base_types::{Amount, ApplicationId, ChainId, MultiAddress, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -310,16 +310,16 @@ impl Contract for AmmContract {
 
 impl AmmContract {
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
+    fn check_account_authentication(&mut self, owner: MultiAddress) {
         match owner {
-            AccountOwner::Address32(address) => {
+            MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
                         || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
                     "Unauthorized"
                 )
             }
-            AccountOwner::Chain => {
+            MultiAddress::Chain => {
                 panic!("Using chain balance is not authorized")
             }
         }
@@ -435,8 +435,8 @@ impl AmmContract {
         )
     }
 
-    fn get_amm_app_owner(&mut self) -> AccountOwner {
-        AccountOwner::from(self.runtime.application_id().forget_abi())
+    fn get_amm_app_owner(&mut self) -> MultiAddress {
+        MultiAddress::from(self.runtime.application_id().forget_abi())
     }
 
     fn get_amm_chain_id(&mut self) -> ChainId {
@@ -457,14 +457,14 @@ impl AmmContract {
             .chain_id
     }
 
-    fn get_message_origin_account(&mut self, owner: AccountOwner) -> Account {
+    fn get_message_origin_account(&mut self, owner: MultiAddress) -> Account {
         Account {
             chain_id: self.get_message_creation_chain_id(),
             owner,
         }
     }
 
-    fn get_account_on_amm_chain(&mut self, owner: AccountOwner) -> Account {
+    fn get_account_on_amm_chain(&mut self, owner: MultiAddress) -> Account {
         Account {
             chain_id: self.get_amm_chain_id(),
             owner,
@@ -656,7 +656,7 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Amount {
-        let pool_owner = AccountOwner::from(self.runtime.application_id().forget_abi());
+        let pool_owner = MultiAddress::from(self.runtime.application_id().forget_abi());
         self.balance(&pool_owner, token_idx)
     }
 
@@ -666,7 +666,7 @@ impl AmmContract {
 
     fn transfer(
         &mut self,
-        source_owner: AccountOwner,
+        source_owner: MultiAddress,
         amount: Amount,
         target_account: Account,
         token_idx: u32,
@@ -681,7 +681,7 @@ impl AmmContract {
         self.runtime.call_application(true, token, &operation);
     }
 
-    fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Amount {
+    fn balance(&mut self, owner: &MultiAddress, token_idx: u32) -> Amount {
         let balance = fungible::Operation::Balance { owner: *owner };
         let token = self.fungible_id(token_idx);
         match self.runtime.call_application(true, token, &balance) {

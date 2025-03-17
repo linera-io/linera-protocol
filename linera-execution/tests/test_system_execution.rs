@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{ChainDescription, ChainId, MessageId, MultiAddress, Owner},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -30,7 +30,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     };
     let mut view = state.into_view().await;
     let operation = SystemOperation::Transfer {
-        owner: AccountOwner::Chain,
+        owner: MultiAddress::Chain,
         amount: Amount::from_tokens(4),
         recipient: Recipient::Burn,
     };
@@ -66,8 +66,8 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
-        target: AccountOwner::Chain,
-        source: AccountOwner::Chain,
+        target: MultiAddress::Chain,
+        source: MultiAddress::Chain,
     };
     let context = MessageContext {
         chain_id: ChainId::root(0),

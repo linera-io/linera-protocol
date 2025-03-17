@@ -3,7 +3,7 @@
 
 use fungible::InitialState;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{Amount, MultiAddress},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 
@@ -11,7 +11,7 @@ use linera_sdk::{
 #[derive(RootView)]
 #[view(context = "ViewStorageContext")]
 pub struct FungibleTokenState {
-    pub accounts: MapView<AccountOwner, Amount>,
+    pub accounts: MapView<MultiAddress, Amount>,
 }
 
 #[allow(dead_code)]
@@ -28,7 +28,7 @@ impl FungibleTokenState {
     }
 
     /// Obtains the balance for an `account`, returning None if there's no entry for the account.
-    pub(crate) async fn balance(&self, account: &AccountOwner) -> Option<Amount> {
+    pub(crate) async fn balance(&self, account: &MultiAddress) -> Option<Amount> {
         self.accounts
             .get(account)
             .await
@@ -36,12 +36,12 @@ impl FungibleTokenState {
     }
 
     /// Obtains the balance for an `account`.
-    pub(crate) async fn balance_or_default(&self, account: &AccountOwner) -> Amount {
+    pub(crate) async fn balance_or_default(&self, account: &MultiAddress) -> Amount {
         self.balance(account).await.unwrap_or_default()
     }
 
     /// Credits an `account` with the provided `amount`.
-    pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
+    pub(crate) async fn credit(&mut self, account: MultiAddress, amount: Amount) {
         if amount == Amount::ZERO {
             return;
         }
@@ -53,7 +53,7 @@ impl FungibleTokenState {
     }
 
     /// Tries to debit the requested `amount` from an `account`.
-    pub(crate) async fn debit(&mut self, account: AccountOwner, amount: Amount) {
+    pub(crate) async fn debit(&mut self, account: MultiAddress, amount: Amount) {
         if amount == Amount::ZERO {
             return;
         }

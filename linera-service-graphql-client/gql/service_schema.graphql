@@ -4,11 +4,6 @@ An account
 scalar Account
 
 """
-An owner of an account.
-"""
-scalar AccountOwner
-
-"""
 A non-negative amount of tokens.
 """
 scalar Amount
@@ -455,14 +450,6 @@ scalar Destination
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_AccountOwner_Amount_aaf96548 {
-	key: AccountOwner!
-	value: Amount
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
 type Entry_BlobId_Blob_50b95aa1 {
 	key: BlobId!
 	value: Blob
@@ -482,6 +469,14 @@ A GraphQL-visible map item, complete with key.
 type Entry_ChannelFullName_ChannelStateView_bd1de7ae {
 	key: ChannelFullName!
 	value: ChannelStateView!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_MultiAddress_Amount_f77e45dd {
+	key: MultiAddress!
+	value: Amount
 }
 
 """
@@ -617,16 +612,16 @@ type LogView_CryptoHash_87fbb60c {
 	entries(start: Int, end: Int): [CryptoHash!]!
 }
 
-input MapFilters_AccountOwner_d6668c53 {
-	keys: [AccountOwner!]
-}
-
 input MapFilters_BlobId_4d2a0555 {
 	keys: [BlobId!]
 }
 
 input MapFilters_ChannelFullName_7b67e184 {
 	keys: [ChannelFullName!]
+}
+
+input MapFilters_MultiAddress_d72add63 {
+	keys: [MultiAddress!]
 }
 
 input MapFilters_Origin_742d451b {
@@ -641,16 +636,16 @@ input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
 }
 
-input MapInput_AccountOwner_d6668c53 {
-	filters: MapFilters_AccountOwner_d6668c53
-}
-
 input MapInput_BlobId_4d2a0555 {
 	filters: MapFilters_BlobId_4d2a0555
 }
 
 input MapInput_ChannelFullName_7b67e184 {
 	filters: MapFilters_ChannelFullName_7b67e184
+}
+
+input MapInput_MultiAddress_d72add63 {
+	filters: MapFilters_MultiAddress_d72add63
 }
 
 input MapInput_Origin_742d451b {
@@ -665,12 +660,6 @@ input MapInput_Target_7aac1e1c {
 	filters: MapFilters_Target_7aac1e1c
 }
 
-type MapView_AccountOwner_Amount_11ef1379 {
-	keys(count: Int): [AccountOwner!]!
-	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
-	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
-}
-
 type MapView_BlobId_Blob_3711e760 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_9f0b41f3!
@@ -681,6 +670,12 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
+}
+
+type MapView_MultiAddress_Amount_d2aadac8 {
+	keys(count: Int): [MultiAddress!]!
+	entry(key: MultiAddress!): Entry_MultiAddress_Amount_f77e45dd!
+	entries(input: MapInput_MultiAddress_d72add63): [Entry_MultiAddress_Amount_f77e45dd!]!
 }
 
 """
@@ -729,6 +724,11 @@ A unique identifier for an application module
 """
 scalar ModuleId
 
+"""
+An owner of an account.
+"""
+scalar MultiAddress
+
 type MutationRoot {
 	"""
 	Processes the inbox and returns the lists of certificate hashes that were created, if any.
@@ -742,7 +742,7 @@ type MutationRoot {
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the chain account.
 	"""
-	transfer(chainId: ChainId!, owner: AccountOwner!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	transfer(chainId: ChainId!, owner: MultiAddress!, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Claims `amount` units of value from the given owner's account in the remote
 	`target` chain. Depending on its configuration, the `target` chain may refuse to
@@ -1190,7 +1190,7 @@ type SystemExecutionStateView {
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!
-	balances: MapView_AccountOwner_Amount_11ef1379!
+	balances: MapView_MultiAddress_Amount_d2aadac8!
 	timestamp: Timestamp!
 }
 

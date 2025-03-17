@@ -13,9 +13,9 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  * Therefore it is highly recommended to use the babel or swc plugin for production.
  */
 const documents = {
-    "\n  query Accounts($owner: AccountOwner!) {\n    accounts {\n      entry(key: $owner) {\n        value\n      }\n    }\n  }\n": types.AccountsDocument,
+    "\n  query Accounts($owner: MultiAddress!) {\n    accounts {\n      entry(key: $owner) {\n        value\n      }\n    }\n  }\n": types.AccountsDocument,
     "\n  query TickerSymbol {\n    tickerSymbol\n  }\n": types.TickerSymbolDocument,
-    "\n  mutation Transfer($owner: AccountOwner!, $amount: Amount!, $targetAccount: FungibleAccount!) {\n    transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)\n  }\n": types.TransferDocument,
+    "\n  mutation Transfer($owner: MultiAddress!, $amount: Amount!, $targetAccount: FungibleAccount!) {\n    transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)\n  }\n": types.TransferDocument,
 };
 
 /**
@@ -35,7 +35,7 @@ export function graphql(source: string): unknown;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Accounts($owner: AccountOwner!) {\n    accounts {\n      entry(key: $owner) {\n        value\n      }\n    }\n  }\n"): (typeof documents)["\n  query Accounts($owner: AccountOwner!) {\n    accounts {\n      entry(key: $owner) {\n        value\n      }\n    }\n  }\n"];
+export function graphql(source: "\n  query Accounts($owner: MultiAddress!) {\n    accounts {\n      entry(key: $owner) {\n        value\n      }\n    }\n  }\n"): (typeof documents)["\n  query Accounts($owner: MultiAddress!) {\n    accounts {\n      entry(key: $owner) {\n        value\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -43,7 +43,7 @@ export function graphql(source: "\n  query TickerSymbol {\n    tickerSymbol\n  }
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation Transfer($owner: AccountOwner!, $amount: Amount!, $targetAccount: FungibleAccount!) {\n    transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)\n  }\n"): (typeof documents)["\n  mutation Transfer($owner: AccountOwner!, $amount: Amount!, $targetAccount: FungibleAccount!) {\n    transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)\n  }\n"];
+export function graphql(source: "\n  mutation Transfer($owner: MultiAddress!, $amount: Amount!, $targetAccount: FungibleAccount!) {\n    transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)\n  }\n"): (typeof documents)["\n  mutation Transfer($owner: MultiAddress!, $amount: Amount!, $targetAccount: FungibleAccount!) {\n    transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

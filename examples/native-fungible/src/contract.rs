@@ -5,7 +5,7 @@
 
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
-    linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi},
+    linera_base_types::{Account, ChainId, MultiAddress, WithContractAbi},
     Contract, ContractRuntime,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
@@ -40,7 +40,7 @@ impl Contract for NativeFungibleTokenContract {
                 chain_id: self.runtime.chain_id(),
                 owner,
             };
-            self.runtime.transfer(AccountOwner::Chain, account, amount);
+            self.runtime.transfer(MultiAddress::Chain, account, amount);
         }
     }
 
@@ -134,16 +134,16 @@ impl NativeFungibleTokenContract {
     }
 
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
+    fn check_account_authentication(&mut self, owner: MultiAddress) {
         match owner {
-            AccountOwner::Address32(address) => {
+            MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
                         || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
                     "The requested transfer is not correctly authenticated."
                 )
             }
-            AccountOwner::Chain => {
+            MultiAddress::Chain => {
                 panic!("Chain accounts are not supported")
             }
         }

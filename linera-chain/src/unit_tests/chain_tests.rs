@@ -17,7 +17,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     hashed::Hashed,
-    identifiers::{AccountOwner, ChainId, MessageId, ModuleId, UserApplicationId},
+    identifiers::{ChainId, MessageId, ModuleId, MultiAddress, UserApplicationId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -168,7 +168,7 @@ async fn test_block_size_limit() {
     let invalid_block = valid_block
         .clone()
         .with_operation(SystemOperation::Transfer {
-            owner: AccountOwner::Chain,
+            owner: MultiAddress::Chain,
             recipient: Recipient::root(0),
             amount: Amount::ONE,
         });

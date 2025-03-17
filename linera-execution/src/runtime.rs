@@ -18,7 +18,7 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId,
+        Account, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId, MultiAddress,
         Owner, StreamId, StreamName,
     },
     ownership::ChainOwnership,
@@ -615,15 +615,15 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().read_chain_balance()
     }
 
-    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: MultiAddress) -> Result<Amount, ExecutionError> {
         self.inner().read_owner_balance(owner)
     }
 
-    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
+    fn read_owner_balances(&mut self) -> Result<Vec<(MultiAddress, Amount)>, ExecutionError> {
         self.inner().read_owner_balances()
     }
 
-    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
+    fn read_balance_owners(&mut self) -> Result<Vec<MultiAddress>, ExecutionError> {
         self.inner().read_balance_owners()
     }
 
@@ -770,19 +770,19 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             .recv_response()
     }
 
-    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: MultiAddress) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
             .recv_response()
     }
 
-    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
+    fn read_owner_balances(&mut self) -> Result<Vec<(MultiAddress, Amount)>, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
             .recv_response()
     }
 
-    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
+    fn read_balance_owners(&mut self) -> Result<Vec<MultiAddress>, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
             .recv_response()
@@ -1291,7 +1291,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn transfer(
         &mut self,
-        source: AccountOwner,
+        source: MultiAddress,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {

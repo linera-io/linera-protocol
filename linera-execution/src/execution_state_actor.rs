@@ -17,7 +17,7 @@ use linera_base::prometheus_util::{
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, Owner},
+    identifiers::{Account, BlobId, ChainId, MessageId, MultiAddress, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -534,23 +534,23 @@ pub enum ExecutionRequest {
     },
 
     OwnerBalance {
-        owner: AccountOwner,
+        owner: MultiAddress,
         #[debug(skip)]
         callback: Sender<Amount>,
     },
 
     OwnerBalances {
         #[debug(skip)]
-        callback: Sender<Vec<(AccountOwner, Amount)>>,
+        callback: Sender<Vec<(MultiAddress, Amount)>>,
     },
 
     BalanceOwners {
         #[debug(skip)]
-        callback: Sender<Vec<AccountOwner>>,
+        callback: Sender<Vec<MultiAddress>>,
     },
 
     Transfer {
-        source: AccountOwner,
+        source: MultiAddress,
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]

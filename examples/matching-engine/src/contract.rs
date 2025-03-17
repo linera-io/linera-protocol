@@ -8,7 +8,7 @@ use std::cmp::min;
 
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    linera_base_types::{Amount, ApplicationId, ChainId, MultiAddress, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -132,7 +132,7 @@ impl Contract for MatchingEngineContract {
 
 impl MatchingEngineContract {
     /// Get the owner from the order
-    fn get_owner(order: &Order) -> AccountOwner {
+    fn get_owner(order: &Order) -> MultiAddress {
         match order {
             Order::Insert {
                 owner,
@@ -150,16 +150,16 @@ impl MatchingEngineContract {
     }
 
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
+    fn check_account_authentication(&mut self, owner: MultiAddress) {
         match owner {
-            AccountOwner::Address32(address) => {
+            MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
                         || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
                     "Unauthorized."
                 )
             }
-            AccountOwner::Chain => {
+            MultiAddress::Chain => {
                 panic!("Chain account is not supported")
             }
         }
@@ -174,14 +174,14 @@ impl MatchingEngineContract {
     /// Calls into the Fungible Token application to receive tokens from the given account.
     fn receive_from_account(
         &mut self,
-        owner: &AccountOwner,
+        owner: &MultiAddress,
         amount: &Amount,
         nature: &OrderNature,
         price: &Price,
     ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::from(self.runtime.application_id().forget_abi()),
+            owner: MultiAddress::from(self.runtime.application_id().forget_abi()),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -190,14 +190,14 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
-        let owner_app = AccountOwner::from(self.runtime.application_id().forget_abi());
+        let owner_app = MultiAddress::from(self.runtime.application_id().forget_abi());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
     }
 
     /// Transfers tokens from the owner to the destination
     fn transfer(
         &mut self,
-        owner: AccountOwner,
+        owner: MultiAddress,
         amount: Amount,
         target_account: Account,
         token_idx: u32,
@@ -295,7 +295,7 @@ impl MatchingEngineContract {
     }
 
     /// Checks that the order exists and has been issued by the claimed owner.
-    async fn check_order_id(&self, order_id: &OrderId, owner: &AccountOwner) {
+    async fn check_order_id(&self, order_id: &OrderId, owner: &MultiAddress) {
         let value = self
             .state
             .orders
@@ -321,7 +321,7 @@ impl MatchingEngineContract {
         &mut self,
         order_id: OrderId,
         cancel_amount: ModifyAmount,
-        owner: &AccountOwner,
+        owner: &MultiAddress,
     ) {
         self.check_order_id(&order_id, owner).await;
         let transfer = self
@@ -542,7 +542,7 @@ impl MatchingEngineContract {
         nature: &OrderNature,
         price_level: Price,
         price_insert: Price,
-    ) -> Vec<(AccountOwner, OrderId)> {
+    ) -> Vec<(MultiAddress, OrderId)> {
         let mut remove_order = Vec::new();
         let orders = view
             .queue
@@ -605,7 +605,7 @@ impl MatchingEngineContract {
     /// Removes one single (owner, order_id) from the database
     /// * This is done for the info by owners
     /// * And the symbolic information of orders
-    async fn remove_order_id(&mut self, entry: (AccountOwner, OrderId)) {
+    async fn remove_order_id(&mut self, entry: (MultiAddress, OrderId)) {
         let (owner, order_id) = entry;
         let account_info = self
             .state
@@ -618,7 +618,7 @@ impl MatchingEngineContract {
     }
 
     /// Removes a bunch of order_id
-    async fn remove_order_ids(&mut self, entries: Vec<(AccountOwner, OrderId)>) {
+    async fn remove_order_ids(&mut self, entries: Vec<(MultiAddress, OrderId)>) {
         for entry in entries {
             self.remove_order_id(entry).await;
         }

@@ -9,7 +9,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError},
     ensure,
-    identifiers::{AccountOwner, Owner},
+    identifiers::{MultiAddress, Owner},
 };
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
@@ -472,7 +472,7 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
             if let Some(balance) = view
                 .system
                 .balances
-                .get_mut(&AccountOwner::Address32(owner.0))
+                .get_mut(&MultiAddress::Address32(owner.0))
                 .await?
             {
                 sources.push(balance);

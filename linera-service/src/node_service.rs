@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ChainId, ModuleId, Owner, UserApplicationId},
+    identifiers::{ChainId, ModuleId, MultiAddress, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -267,7 +267,7 @@ where
     async fn transfer(
         &self,
         chain_id: ChainId,
-        owner: AccountOwner,
+        owner: MultiAddress,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<CryptoHash, Error> {

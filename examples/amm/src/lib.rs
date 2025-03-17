@@ -6,7 +6,7 @@
 use async_graphql::{scalar, Request, Response};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi},
+    linera_base_types::{Amount, ContractAbi, MultiAddress, ServiceAbi},
 };
 pub use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ pub enum Operation {
     /// calculated based on the current AMM ratio
     /// Owner here is the user executing the Swap
     Swap {
-        owner: AccountOwner,
+        owner: MultiAddress,
         input_token_idx: u32,
         input_amount: Amount,
     },
@@ -45,7 +45,7 @@ pub enum Operation {
     /// Owner here is the user adding liquidity, which currently can only
     /// be a chain owner
     AddLiquidity {
-        owner: AccountOwner,
+        owner: MultiAddress,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     },
@@ -58,7 +58,7 @@ pub enum Operation {
     /// Owner here is the user removing liquidity, which currently can only
     /// be a chain owner
     RemoveLiquidity {
-        owner: AccountOwner,
+        owner: MultiAddress,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     },
@@ -66,7 +66,7 @@ pub enum Operation {
     /// Remove all the liquidity added by the given user, that is remaining in the AMM.
     /// Owner here is the user removing liquidity, which currently can only
     /// be a chain owner
-    RemoveAllAddedLiquidity { owner: AccountOwner },
+    RemoveAllAddedLiquidity { owner: MultiAddress },
     /// Close this chain, and remove all added liquidity
     /// Requires that this application is authorized to close the chain.
     CloseChain,
@@ -77,21 +77,21 @@ scalar!(Operation);
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     Swap {
-        owner: AccountOwner,
+        owner: MultiAddress,
         input_token_idx: u32,
         input_amount: Amount,
     },
     AddLiquidity {
-        owner: AccountOwner,
+        owner: MultiAddress,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     },
     RemoveLiquidity {
-        owner: AccountOwner,
+        owner: MultiAddress,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     },
     RemoveAllAddedLiquidity {
-        owner: AccountOwner,
+        owner: MultiAddress,
     },
 }

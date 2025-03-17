@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 
 use fungible::Account;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, WithContractAbi},
+    linera_base_types::{MultiAddress, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime, DataBlobHash,
 };
@@ -128,16 +128,16 @@ impl Contract for NonFungibleTokenContract {
 
 impl NonFungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
+    fn check_account_authentication(&mut self, owner: MultiAddress) {
         match owner {
-            AccountOwner::Address32(address) => {
+            MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
                         || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
                     "The requested transfer is not correctly authenticated."
                 )
             }
-            AccountOwner::Chain => {
+            MultiAddress::Chain => {
                 panic!("Chain account is not supported")
             }
         }
@@ -172,7 +172,7 @@ impl NonFungibleTokenContract {
             .expect("NFT not found")
     }
 
-    async fn mint(&mut self, owner: AccountOwner, name: String, blob_hash: DataBlobHash) {
+    async fn mint(&mut self, owner: MultiAddress, name: String, blob_hash: DataBlobHash) {
         self.runtime.assert_data_blob_exists(blob_hash);
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),

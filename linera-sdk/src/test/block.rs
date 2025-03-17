@@ -10,7 +10,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{
-        AccountOwner, ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner,
+        ApplicationId, ChainId, ChannelFullName, GenericApplicationId, MultiAddress, Owner,
         UserApplicationId,
     },
     ownership::TimeoutConfig,
@@ -92,7 +92,7 @@ impl BlockBuilder {
     /// Adds a native token transfer to this block.
     pub fn with_native_token_transfer(
         &mut self,
-        sender: AccountOwner,
+        sender: MultiAddress,
         recipient: Recipient,
         amount: Amount,
     ) -> &mut Self {

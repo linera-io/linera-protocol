@@ -4,7 +4,7 @@
 /* ABI of the Fungible Token Example Application */
 
 pub use linera_sdk::abis::fungible::*;
-use linera_sdk::linera_base_types::{AccountOwner, Amount};
+use linera_sdk::linera_base_types::{Amount, MultiAddress};
 use serde::{Deserialize, Serialize};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
@@ -23,17 +23,17 @@ pub enum Message {
     /// `source` is credited instead.
     Credit {
         /// Target account to credit amount to
-        target: AccountOwner,
+        target: MultiAddress,
         /// Amount to be credited
         amount: Amount,
         /// Source account to remove amount from
-        source: AccountOwner,
+        source: MultiAddress,
     },
 
     /// Withdraws from the given account and starts a transfer to the target account.
     Withdraw {
         /// Account to withdraw from
-        owner: AccountOwner,
+        owner: MultiAddress,
         /// Amount to be withdrawn
         amount: Amount,
         /// Target account to transfer amount to
@@ -50,7 +50,7 @@ pub async fn create_with_accounts(
     initial_amounts: impl IntoIterator<Item = Amount>,
 ) -> (
     ApplicationId<FungibleTokenAbi>,
-    Vec<(ActiveChain, AccountOwner, Amount)>,
+    Vec<(ActiveChain, MultiAddress, Amount)>,
 ) {
     let mut token_chain = validator.new_chain().await;
     let mut initial_state = InitialStateBuilder::default();
@@ -58,7 +58,7 @@ pub async fn create_with_accounts(
     let accounts = stream::iter(initial_amounts)
         .then(|initial_amount| async move {
             let chain = validator.new_chain().await;
-            let account = AccountOwner::from(chain.public_key());
+            let account = MultiAddress::from(chain.public_key());
 
             (chain, account, initial_amount)
         })
@@ -119,7 +119,7 @@ pub async fn create_with_accounts(
 pub async fn query_account(
     application_id: ApplicationId<FungibleTokenAbi>,
     chain: &ActiveChain,
-    account_owner: AccountOwner,
+    account_owner: MultiAddress,
 ) -> Option<Amount> {
     let query = format!(
         "query {{ accounts {{ entry(key: {}) {{ value }} }} }}",

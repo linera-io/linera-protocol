@@ -7,15 +7,7 @@ Account:
     - chain_id:
         TYPENAME: ChainId
     - owner:
-        TYPENAME: AccountOwner
-AccountOwner:
-  ENUM:
-    0:
-      Address32:
-        NEWTYPE:
-          TYPENAME: CryptoHash
-    1:
-      Chain: UNIT
+        TYPENAME: MultiAddress
 AccountPublicKey:
   ENUM:
     0:
@@ -283,7 +275,7 @@ ChainInfoQuery:
         OPTION:
           TYPENAME: BlockHeight
     - request_owner_balance:
-        TYPENAME: AccountOwner
+        TYPENAME: MultiAddress
     - request_committees: BOOL
     - request_pending_message_bundles: BOOL
     - request_sent_certificate_hashes_in_range:
@@ -601,6 +593,14 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+MultiAddress:
+  ENUM:
+    0:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    1:
+      Chain: UNIT
 NodeError:
   ENUM:
     0:
@@ -1042,16 +1042,16 @@ SystemMessage:
       Credit:
         STRUCT:
           - target:
-              TYPENAME: AccountOwner
+              TYPENAME: MultiAddress
           - amount:
               TYPENAME: Amount
           - source:
-              TYPENAME: AccountOwner
+              TYPENAME: MultiAddress
     1:
       Withdraw:
         STRUCT:
           - owner:
-              TYPENAME: AccountOwner
+              TYPENAME: MultiAddress
           - amount:
               TYPENAME: Amount
           - recipient:
@@ -1082,7 +1082,7 @@ SystemOperation:
       Transfer:
         STRUCT:
           - owner:
-              TYPENAME: AccountOwner
+              TYPENAME: MultiAddress
           - recipient:
               TYPENAME: Recipient
           - amount:

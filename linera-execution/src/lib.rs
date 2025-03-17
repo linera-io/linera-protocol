@@ -42,8 +42,9 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, Owner, StreamName, UserApplicationId,
+        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination, EventId,
+        GenericApplicationId, MessageId, ModuleId, MultiAddress, Owner, StreamName,
+        UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -526,13 +527,13 @@ pub trait BaseRuntime {
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the owner balance.
-    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError>;
+    fn read_owner_balance(&mut self, owner: MultiAddress) -> Result<Amount, ExecutionError>;
 
     /// Reads the balances from all owners.
-    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError>;
+    fn read_owner_balances(&mut self) -> Result<Vec<(MultiAddress, Amount)>, ExecutionError>;
 
     /// Reads balance owners.
-    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError>;
+    fn read_balance_owners(&mut self) -> Result<Vec<MultiAddress>, ExecutionError>;
 
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
@@ -714,7 +715,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
-        source: AccountOwner,
+        source: MultiAddress,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;
@@ -1036,7 +1037,7 @@ impl OperationContext {
     fn refund_grant_to(&self) -> Option<Account> {
         self.authenticated_signer.map(|owner| Account {
             chain_id: self.chain_id,
-            owner: AccountOwner::from(owner),
+            owner: MultiAddress::from(owner),
         })
     }
 

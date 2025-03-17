@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, UserApplicationId},
+    identifiers::{ChannelFullName, GenericApplicationId, MultiAddress, UserApplicationId},
 };
 use linera_chain::data_types::{
     BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
@@ -138,7 +138,7 @@ where
                 .execution_state
                 .system
                 .balances
-                .get(&AccountOwner::Address32(signer.0))
+                .get(&MultiAddress::Address32(signer.0))
                 .await?;
         }
 
@@ -220,11 +220,11 @@ where
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
         match query.request_owner_balance {
-            owner @ AccountOwner::Address32(_) => {
+            owner @ MultiAddress::Address32(_) => {
                 info.requested_owner_balance =
                     chain.execution_state.system.balances.get(&owner).await?;
             }
-            AccountOwner::Chain => {
+            MultiAddress::Chain => {
                 info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
             }
         }

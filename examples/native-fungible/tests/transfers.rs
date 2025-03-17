@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Account, AccountOwner, Amount, ChainId, CryptoHash, Owner},
+    linera_base_types::{Account, Amount, ChainId, CryptoHash, MultiAddress, Owner},
     test::{ActiveChain, Recipient, TestValidator},
 };
 
@@ -33,7 +33,7 @@ async fn chain_balance_transfers() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+            block.with_native_token_transfer(MultiAddress::Chain, recipient, transfer_amount);
         })
         .await;
 
@@ -69,7 +69,7 @@ async fn transfer_to_owner() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+            block.with_native_token_transfer(MultiAddress::Chain, recipient, transfer_amount);
         })
         .await;
 
@@ -102,7 +102,7 @@ async fn transfer_to_multiple_owners() {
 
     let account_owners = (1..=number_of_owners)
         .map(|index| Owner(CryptoHash::test_hash(format!("owner{index}"))))
-        .map(AccountOwner::from)
+        .map(MultiAddress::from)
         .collect::<Vec<_>>();
 
     let recipients = account_owners
@@ -114,7 +114,7 @@ async fn transfer_to_multiple_owners() {
     let transfer_certificate = funding_chain
         .add_block(|block| {
             for (recipient, transfer_amount) in recipients.zip(transfer_amounts.clone()) {
-                block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+                block.with_native_token_transfer(MultiAddress::Chain, recipient, transfer_amount);
             }
         })
         .await;
@@ -154,7 +154,7 @@ async fn emptied_account_disappears_from_queries() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+            block.with_native_token_transfer(MultiAddress::Chain, recipient, transfer_amount);
         })
         .await;
 
@@ -167,7 +167,7 @@ async fn emptied_account_disappears_from_queries() {
     recipient_chain
         .add_block(|block| {
             block.with_native_token_transfer(
-                AccountOwner::from(owner),
+                MultiAddress::from(owner),
                 Recipient::Burn,
                 transfer_amount,
             );
@@ -176,7 +176,7 @@ async fn emptied_account_disappears_from_queries() {
 
     assert_eq!(
         recipient_chain
-            .owner_balance(&AccountOwner::from(owner))
+            .owner_balance(&MultiAddress::from(owner))
             .await,
         None
     );
@@ -186,7 +186,7 @@ async fn emptied_account_disappears_from_queries() {
 /// Asserts that all the accounts in the [`ActiveChain`] have the `expected_balances`.
 async fn assert_balances(
     chain: &ActiveChain,
-    expected_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
+    expected_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
 ) {
     let expected_balances = expected_balances.into_iter().collect::<BTreeMap<_, _>>();
     let accounts = expected_balances.keys().copied().collect::<Vec<_>>();
@@ -197,7 +197,7 @@ async fn assert_balances(
         .into_iter()
         .map(CryptoHash::test_hash)
         .map(Owner)
-        .map(AccountOwner::from)
+        .map(MultiAddress::from)
         .collect::<Vec<_>>();
 
     let accounts_to_query = accounts
