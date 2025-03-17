@@ -16,7 +16,7 @@ use linera_base::{
     http,
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName,
+        ModuleId, Owner, StreamName, UserApplicationId,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -28,8 +28,8 @@ struct ExpectedCreateApplicationCall {
     module_id: ModuleId,
     parameters: Vec<u8>,
     argument: Vec<u8>,
-    required_application_ids: Vec<ApplicationId>,
-    application_id: ApplicationId,
+    required_application_ids: Vec<UserApplicationId>,
+    application_id: UserApplicationId,
 }
 
 /// A mock of the common runtime to interface with the host executing the contract.
@@ -46,7 +46,7 @@ where
     round: Option<u32>,
     message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
-    authenticated_caller_id: Option<Option<ApplicationId>>,
+    authenticated_caller_id: Option<Option<UserApplicationId>>,
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
     owner_balances: Option<HashMap<AccountOwner, Amount>>,
@@ -60,7 +60,7 @@ where
     outgoing_transfers: HashMap<Account, Amount>,
     events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
-    expected_service_queries: VecDeque<(ApplicationId, String, String)>,
+    expected_service_queries: VecDeque<(UserApplicationId, String, String)>,
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
@@ -327,7 +327,7 @@ where
     /// Configures the authenticated caller ID to return during the test.
     pub fn with_authenticated_caller_id(
         mut self,
-        authenticated_caller_id: impl Into<Option<ApplicationId>>,
+        authenticated_caller_id: impl Into<Option<UserApplicationId>>,
     ) -> Self {
         self.authenticated_caller_id = Some(authenticated_caller_id.into());
         self
@@ -336,7 +336,7 @@ where
     /// Configures the authenticated caller ID to return during the test.
     pub fn set_authenticated_caller_id(
         &mut self,
-        authenticated_caller_id: impl Into<Option<ApplicationId>>,
+        authenticated_caller_id: impl Into<Option<UserApplicationId>>,
     ) -> &mut Self {
         self.authenticated_caller_id = Some(authenticated_caller_id.into());
         self
@@ -344,7 +344,7 @@ where
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
-    pub fn authenticated_caller_id(&mut self) -> Option<ApplicationId> {
+    pub fn authenticated_caller_id(&mut self) -> Option<UserApplicationId> {
         self.authenticated_caller_id.expect(
             "Authenticated caller ID has not been mocked, \
             please call `MockContractRuntime::set_authenticated_caller_id` first",
@@ -700,8 +700,8 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<ApplicationId>,
-        application_id: ApplicationId,
+        required_application_ids: Vec<UserApplicationId>,
+        application_id: UserApplicationId,
     ) where
         Parameters: Serialize,
         InstantiationArgument: Serialize,
@@ -727,7 +727,7 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<ApplicationId>,
+        required_application_ids: Vec<UserApplicationId>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
@@ -759,7 +759,7 @@ where
     /// Configures the handler for cross-application calls made during the test.
     pub fn with_call_application_handler(
         mut self,
-        handler: impl FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8> + 'static,
+        handler: impl FnMut(bool, UserApplicationId, Vec<u8>) -> Vec<u8> + 'static,
     ) -> Self {
         self.call_application_handler = Some(Box::new(handler));
         self
@@ -768,7 +768,7 @@ where
     /// Configures the handler for cross-application calls made during the test.
     pub fn set_call_application_handler(
         &mut self,
-        handler: impl FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8> + 'static,
+        handler: impl FnMut(bool, UserApplicationId, Vec<u8>) -> Vec<u8> + 'static,
     ) -> &mut Self {
         self.call_application_handler = Some(Box::new(handler));
         self
@@ -901,7 +901,7 @@ where
 }
 
 /// A type alias for the handler for cross-application calls.
-pub type CallApplicationHandler = Box<dyn FnMut(bool, ApplicationId, Vec<u8>) -> Vec<u8>>;
+pub type CallApplicationHandler = Box<dyn FnMut(bool, UserApplicationId, Vec<u8>) -> Vec<u8>>;
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then
 /// sends the message once it is dropped.

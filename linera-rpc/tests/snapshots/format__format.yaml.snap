@@ -17,7 +17,7 @@ AccountOwner:
     1:
       Application:
         NEWTYPE:
-          TYPENAME: ApplicationId
+          TYPENAME: UserApplicationId
     2:
       Chain: UNIT
 AccountPublicKey:
@@ -56,33 +56,29 @@ AdminOperation:
               TYPENAME: Epoch
 Amount:
   NEWTYPESTRUCT: U128
-ApplicationId:
-  STRUCT:
-    - application_description_hash:
-        TYPENAME: CryptoHash
 ApplicationPermissions:
   STRUCT:
     - execute_operations:
         OPTION:
           SEQ:
-            TYPENAME: ApplicationId
+            TYPENAME: UserApplicationId
     - mandatory_applications:
         SEQ:
-          TYPENAME: ApplicationId
+          TYPENAME: UserApplicationId
     - close_chain:
         SEQ:
-          TYPENAME: ApplicationId
+          TYPENAME: UserApplicationId
     - change_application_permissions:
         SEQ:
-          TYPENAME: ApplicationId
+          TYPENAME: UserApplicationId
     - call_service_as_oracle:
         OPTION:
           SEQ:
-            TYPENAME: ApplicationId
+            TYPENAME: UserApplicationId
     - make_http_requests:
         OPTION:
           SEQ:
-            TYPENAME: ApplicationId
+            TYPENAME: UserApplicationId
 BlobContent:
   STRUCT:
     - blob_type:
@@ -476,7 +472,7 @@ GenericApplicationId:
     1:
       User:
         NEWTYPE:
-          TYPENAME: ApplicationId
+          TYPENAME: UserApplicationId
 HandleConfirmedCertificateRequest:
   STRUCT:
     - certificate:
@@ -564,7 +560,7 @@ Message:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: ApplicationId
+              TYPENAME: UserApplicationId
           - bytes: BYTES
 MessageAction:
   ENUM:
@@ -732,7 +728,7 @@ Operation:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: ApplicationId
+              TYPENAME: UserApplicationId
           - bytes: BYTES
 OperationResult:
   NEWTYPESTRUCT: BYTES
@@ -1174,7 +1170,7 @@ SystemOperation:
           - instantiation_argument: BYTES
           - required_application_ids:
               SEQ:
-                TYPENAME: ApplicationId
+                TYPENAME: UserApplicationId
     13:
       Admin:
         NEWTYPE:
@@ -1221,6 +1217,9 @@ TimeoutConfig:
         TYPENAME: TimeDelta
 Timestamp:
   NEWTYPESTRUCT: U64
+UserApplicationId:
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
 ValidatedBlockCertificate:
   STRUCT:
     - value:

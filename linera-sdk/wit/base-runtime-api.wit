@@ -3,7 +3,7 @@ package linera:app;
 interface base-runtime-api {
     get-chain-id: func() -> chain-id;
     get-block-height: func() -> block-height;
-    get-application-id: func() -> application-id;
+    get-application-id: func() -> user-application-id;
     get-application-creator-chain-id: func() -> chain-id;
     application-parameters: func() -> list<u8>;
     get-chain-ownership: func() -> chain-ownership;
@@ -32,16 +32,12 @@ interface base-runtime-api {
 
     variant account-owner {
         user(owner),
-        application(application-id),
+        application(user-application-id),
         chain,
     }
 
     record amount {
         inner0: u128,
-    }
-
-    record application-id {
-        application-description-hash: crypto-hash,
     }
 
     record block-height {
@@ -125,4 +121,8 @@ interface base-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
+
+    record user-application-id {
+        inner0: crypto-hash,
+    }
 }

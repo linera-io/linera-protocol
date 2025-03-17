@@ -18,7 +18,9 @@ use linera_base::{
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, CompressedBytecode, UserApplicationDescription,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
+    identifiers::{
+        AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, UserApplicationId,
+    },
     vm::VmRuntime,
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -480,7 +482,7 @@ impl ActiveChain {
         module_id: ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
-        required_application_ids: Vec<ApplicationId>,
+        required_application_ids: Vec<UserApplicationId>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
@@ -514,7 +516,7 @@ impl ActiveChain {
             required_application_ids,
         };
 
-        ApplicationId::<()>::from(&description).with_abi()
+        UserApplicationId::from(&description).with_abi()
     }
 
     /// Returns whether this chain has been closed.

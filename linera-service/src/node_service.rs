@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner, UserApplicationId},
+    identifiers::{AccountOwner, ChainId, ModuleId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -493,12 +493,12 @@ where
     async fn change_application_permissions(
         &self,
         chain_id: ChainId,
-        close_chain: Vec<ApplicationId>,
-        execute_operations: Option<Vec<ApplicationId>>,
-        mandatory_applications: Vec<ApplicationId>,
-        change_application_permissions: Vec<ApplicationId>,
-        call_service_as_oracle: Option<Vec<ApplicationId>>,
-        make_http_requests: Option<Vec<ApplicationId>>,
+        close_chain: Vec<UserApplicationId>,
+        execute_operations: Option<Vec<UserApplicationId>>,
+        mandatory_applications: Vec<UserApplicationId>,
+        change_application_permissions: Vec<UserApplicationId>,
+        call_service_as_oracle: Option<Vec<UserApplicationId>>,
+        make_http_requests: Option<Vec<UserApplicationId>>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
@@ -620,7 +620,7 @@ where
         parameters: String,
         instantiation_argument: String,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<ApplicationId, Error> {
+    ) -> Result<UserApplicationId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
             let instantiation_argument = instantiation_argument.as_bytes().to_vec();

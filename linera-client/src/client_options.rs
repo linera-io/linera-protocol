@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
-    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner, UserApplicationId},
+    identifiers::{Account, ChainId, MessageId, ModuleId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
     vm::VmRuntime,
@@ -604,7 +604,7 @@ pub enum ClientCommand {
         /// The application ID of a fungible token on the wallet's default chain.
         /// If none is specified, the benchmark uses the native token.
         #[arg(long)]
-        fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
+        fungible_application_id: Option<linera_base::identifiers::UserApplicationId>,
 
         /// If provided, will be long running, and block proposals will be sent at the
         /// provided fixed BPS rate.
@@ -1438,26 +1438,26 @@ pub struct ApplicationPermissionsConfig {
     /// If present, only operations from the specified applications are allowed, and
     /// no system operations. Otherwise all operations are allowed.
     #[arg(long)]
-    pub execute_operations: Option<Vec<ApplicationId>>,
+    pub execute_operations: Option<Vec<UserApplicationId>>,
     /// At least one operation or incoming message from each of these applications must occur in
     /// every block.
     #[arg(long)]
-    pub mandatory_applications: Option<Vec<ApplicationId>>,
+    pub mandatory_applications: Option<Vec<UserApplicationId>>,
     /// These applications are allowed to close the current chain using the system API.
     #[arg(long)]
-    pub close_chain: Option<Vec<ApplicationId>>,
+    pub close_chain: Option<Vec<UserApplicationId>>,
     /// These applications are allowed to change the application permissions on the current chain
     /// using the system API.
     #[arg(long)]
-    pub change_application_permissions: Option<Vec<ApplicationId>>,
+    pub change_application_permissions: Option<Vec<UserApplicationId>>,
     /// These applications are allowed to call services as oracles on the current chain using the
     /// system API.
     #[arg(long)]
-    pub call_service_as_oracle: Option<Vec<ApplicationId>>,
+    pub call_service_as_oracle: Option<Vec<UserApplicationId>>,
     /// These applications are allowed to make HTTP requests on the current chain using the system
     /// API.
     #[arg(long)]
-    pub make_http_requests: Option<Vec<ApplicationId>>,
+    pub make_http_requests: Option<Vec<UserApplicationId>>,
 }
 
 impl From<ApplicationPermissionsConfig> for ApplicationPermissions {

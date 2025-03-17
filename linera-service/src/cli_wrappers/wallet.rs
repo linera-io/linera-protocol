@@ -23,7 +23,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::CryptoHash,
     data_types::{Amount, Bytecode},
-    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner, UserApplicationId},
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
@@ -357,7 +357,7 @@ impl ClientWrapper {
         vm_runtime: VmRuntime,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[ApplicationId],
+        required_application_ids: &[UserApplicationId],
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<A>> {
         let json_parameters = serde_json::to_string(parameters)?;
@@ -376,11 +376,11 @@ impl ClientWrapper {
             command.args(
                 required_application_ids
                     .iter()
-                    .map(ApplicationId::to_string),
+                    .map(UserApplicationId::to_string),
             );
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
+        Ok(stdout.trim().parse::<UserApplicationId>()?.with_abi())
     }
 
     /// Runs `linera publish-module`.
@@ -412,7 +412,7 @@ impl ClientWrapper {
         module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[ApplicationId],
+        required_application_ids: &[UserApplicationId],
         creator: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<Abi>> {
         let json_parameters = serde_json::to_string(parameters)?;
@@ -429,11 +429,11 @@ impl ClientWrapper {
             command.args(
                 required_application_ids
                     .iter()
-                    .map(ApplicationId::to_string),
+                    .map(UserApplicationId::to_string),
             );
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
+        Ok(stdout.trim().parse::<UserApplicationId>()?.with_abi())
     }
 
     /// Runs `linera service`.
@@ -1222,12 +1222,12 @@ impl NodeService {
         module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[ApplicationId],
+        required_application_ids: &[UserApplicationId],
     ) -> Result<ApplicationId<Abi>> {
         let module_id = module_id.forget_abi();
         let json_required_applications_ids = required_application_ids
             .iter()
-            .map(ApplicationId::to_string)
+            .map(UserApplicationId::to_string)
             .collect::<Vec<_>>()
             .to_value();
         // Convert to `serde_json::Value` then `async_graphql::Value` via the trait `InputType`.
@@ -1252,7 +1252,7 @@ impl NodeService {
             .context("missing createApplication string in response")?
             .trim();
         Ok(app_id_str
-            .parse::<ApplicationId>()
+            .parse::<UserApplicationId>()
             .context("invalid application ID")?
             .with_abi())
     }

@@ -7,7 +7,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError, Blob, Event, OracleResponse},
     ensure,
-    identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
+    identifiers::{BlobId, ChainId, ChannelFullName, StreamId, UserApplicationId},
 };
 
 use crate::{
@@ -98,7 +98,7 @@ impl TransactionTracker {
 
     pub fn add_user_outcome(
         &mut self,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         outcome: RawExecutionOutcome<Vec<u8>>,
     ) -> Result<(), ArithmeticError> {
         self.add_outcome(

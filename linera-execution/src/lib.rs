@@ -747,7 +747,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Queries a service.
     fn query_service(
         &mut self,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -1191,7 +1191,7 @@ impl Operation {
     /// `application_id`.
     #[cfg(with_testing)]
     pub fn user_without_abi(
-        application_id: ApplicationId<()>,
+        application_id: UserApplicationId,
         operation: &impl Serialize,
     ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
@@ -1313,7 +1313,7 @@ impl Query {
     /// Creates a new user application query assuming that the `query` is valid for the
     /// `application_id`.
     pub fn user_without_abi(
-        application_id: ApplicationId<()>,
+        application_id: UserApplicationId,
         query: &impl Serialize,
     ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {
