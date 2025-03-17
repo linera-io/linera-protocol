@@ -495,15 +495,15 @@ impl StorageConfigNamespace {
                 spawn_mode,
                 uri,
             } => {
-                let first_config = RocksDbStoreConfig::new(
+                let exclusive_config = RocksDbStoreConfig::new(
                     *spawn_mode,
                     path_with_guard.clone(),
                     common_config.clone(),
                 );
-                let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let shared_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
                 let config = DualStoreConfig {
-                    first_config,
-                    second_config,
+                    exclusive_config,
+                    shared_config,
                 };
                 Ok(StoreConfig::DualRocksDbScyllaDb(config, namespace))
             }

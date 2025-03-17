@@ -355,11 +355,11 @@ pub struct ChainStatesFirstAssignment;
 impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
     fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error> {
         if root_key.is_empty() {
-            return Ok(StoreInUse::Second);
+            return Ok(StoreInUse::Shared);
         }
         let store = match bcs::from_bytes(root_key)? {
-            BaseKey::ChainState(_) => StoreInUse::First,
-            _ => StoreInUse::Second,
+            BaseKey::ChainState(_) => StoreInUse::Exclusive,
+            _ => StoreInUse::Shared,
         };
         Ok(store)
     }
