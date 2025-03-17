@@ -577,15 +577,13 @@ impl<UserInstance> SyncRuntimeHandle<UserInstance> {
 }
 
 impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
-    type Read = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::Read;
-    type ReadValueBytes = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadValueBytes;
-    type ContainsKey = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKey;
-    type ContainsKeys = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKeys;
-    type ReadMultiValuesBytes =
-        <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadMultiValuesBytes;
-    type FindKeysByPrefix = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeysByPrefix;
-    type FindKeyValuesByPrefix =
-        <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeyValuesByPrefix;
+    type Read = ();
+    type ReadValueBytes = u32;
+    type ContainsKey = u32;
+    type ContainsKeys = u32;
+    type ReadMultiValuesBytes = u32;
+    type FindKeysByPrefix = u32;
+    type FindKeyValuesByPrefix = u32;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
         self.inner().chain_id()
