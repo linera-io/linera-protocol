@@ -49,24 +49,24 @@ ApplicationPermissions:
     - execute_operations:
         OPTION:
           SEQ:
-            TYPENAME: UserApplicationId
+            TYPENAME: MultiAddress
     - mandatory_applications:
         SEQ:
-          TYPENAME: UserApplicationId
+          TYPENAME: MultiAddress
     - close_chain:
         SEQ:
-          TYPENAME: UserApplicationId
+          TYPENAME: MultiAddress
     - change_application_permissions:
         SEQ:
-          TYPENAME: UserApplicationId
+          TYPENAME: MultiAddress
     - call_service_as_oracle:
         OPTION:
           SEQ:
-            TYPENAME: UserApplicationId
+            TYPENAME: MultiAddress
     - make_http_requests:
         OPTION:
           SEQ:
-            TYPENAME: UserApplicationId
+            TYPENAME: MultiAddress
 BlobContent:
   STRUCT:
     - blob_type:
@@ -460,7 +460,7 @@ GenericApplicationId:
     1:
       User:
         NEWTYPE:
-          TYPENAME: UserApplicationId
+          TYPENAME: MultiAddress
 HandleConfirmedCertificateRequest:
   STRUCT:
     - certificate:
@@ -548,7 +548,7 @@ Message:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: MultiAddress
           - bytes: BYTES
 MessageAction:
   ENUM:
@@ -724,7 +724,7 @@ Operation:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: MultiAddress
           - bytes: BYTES
 OperationResult:
   NEWTYPESTRUCT: BYTES
@@ -1166,7 +1166,7 @@ SystemOperation:
           - instantiation_argument: BYTES
           - required_application_ids:
               SEQ:
-                TYPENAME: UserApplicationId
+                TYPENAME: MultiAddress
     13:
       Admin:
         NEWTYPE:
@@ -1213,9 +1213,6 @@ TimeoutConfig:
         TYPENAME: TimeDelta
 Timestamp:
   NEWTYPESTRUCT: U64
-UserApplicationId:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
 ValidatedBlockCertificate:
   STRUCT:
     - value:

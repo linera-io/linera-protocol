@@ -155,7 +155,7 @@ impl MatchingEngineContract {
             MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
-                        || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
+                        || self.runtime.authenticated_caller_id() == Some(owner),
                     "Unauthorized."
                 )
             }
@@ -181,7 +181,7 @@ impl MatchingEngineContract {
     ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: MultiAddress::from(self.runtime.application_id().forget_abi()),
+            owner: self.runtime.application_id().forget_abi(),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -190,7 +190,7 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
-        let owner_app = MultiAddress::from(self.runtime.application_id().forget_abi());
+        let owner_app = self.runtime.application_id().forget_abi();
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
     }
 

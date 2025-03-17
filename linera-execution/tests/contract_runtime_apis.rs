@@ -741,7 +741,7 @@ impl TransferTestEndpoint {
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
     fn recipient_application_id() -> UserApplicationId {
-        UserApplicationId(CryptoHash::test_hash("recipient application description"))
+        UserApplicationId::new(CryptoHash::test_hash("recipient application description"))
     }
 
     /// Returns a [`SystemExecutionState`] initialized with this transfer endpoint's account
@@ -763,7 +763,7 @@ impl TransferTestEndpoint {
             TransferTestEndpoint::Application => (
                 Amount::ZERO,
                 vec![(
-                    MultiAddress::Address32(Self::sender_application_id().0),
+                    MultiAddress::Address32(Self::sender_application_id().as_address().unwrap()),
                     transfer_amount,
                 )],
                 None,
@@ -789,9 +789,7 @@ impl TransferTestEndpoint {
         match self {
             TransferTestEndpoint::Chain => MultiAddress::Chain,
             TransferTestEndpoint::User => MultiAddress::Address32(Self::sender_owner().0),
-            TransferTestEndpoint::Application => {
-                MultiAddress::Address32(Self::sender_application_id().0)
-            }
+            TransferTestEndpoint::Application => Self::sender_application_id(),
         }
     }
 
@@ -799,12 +797,8 @@ impl TransferTestEndpoint {
     pub fn unauthorized_sender_account_owner(&self) -> MultiAddress {
         match self {
             TransferTestEndpoint::Chain => MultiAddress::Chain,
-            TransferTestEndpoint::User => {
-                MultiAddress::Address32(CryptoHash::test_hash("attacker"))
-            }
-            TransferTestEndpoint::Application => {
-                MultiAddress::Address32(Self::recipient_application_id().0)
-            }
+            TransferTestEndpoint::User => MultiAddress::Address32(CryptoHash::test_hash("attacker")),
+            TransferTestEndpoint::Application => Self::recipient_application_id(),
         }
     }
 
@@ -833,9 +827,7 @@ impl TransferTestEndpoint {
         match self {
             TransferTestEndpoint::Chain => MultiAddress::Chain,
             TransferTestEndpoint::User => MultiAddress::Address32(Self::recipient_owner().0),
-            TransferTestEndpoint::Application => {
-                MultiAddress::Address32(Self::recipient_application_id().0)
-            }
+            TransferTestEndpoint::Application => Self::recipient_application_id(),
         }
     }
 

@@ -646,7 +646,7 @@ where
             ),
             (MultiAddress::Address32(account_application), _, Some(authorized_application)) => {
                 ensure!(
-                    account_application == authorized_application.0,
+                    account_application == authorized_application.as_address().unwrap(),
                     ExecutionError::UnauthenticatedTransferOwner
                 )
             }
@@ -693,7 +693,7 @@ where
         match source {
             MultiAddress::Address32(owner) => ensure!(
                 authenticated_signer.map(|o| o.0) == Some(owner)
-                    || authenticated_application_id.map(|o| o.0) == Some(owner),
+                    || authenticated_application_id.map(|o| o.as_address().unwrap()) == Some(owner),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
             MultiAddress::Chain => unreachable!(),

@@ -100,6 +100,8 @@ enum NodeServiceError {
     InvalidChainId(CryptoError),
     #[error("unexpected application operations added during non-mutation query")]
     UnexpectedOperationsFromQuery,
+    #[error("malformed address: {0}")]
+    MalformedAddress(String),
 }
 
 impl From<ServerError> for NodeServiceError {
@@ -115,6 +117,7 @@ impl IntoResponse for NodeServiceError {
         let tuple = match self {
             NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
             NodeServiceError::QueryStringError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
+            NodeServiceError::MalformedAddress(e) => (StatusCode::BAD_REQUEST, vec![e]),
             NodeServiceError::ChainClientError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
@@ -1080,7 +1083,9 @@ where
         let operation_type = operation_type(parsed_query)?;
 
         let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
-        let application_id: UserApplicationId = application_id.parse()?;
+        let application_id: MultiAddress = application_id
+            .parse()
+            .map_err(|err: anyhow::Error| NodeServiceError::MalformedAddress(err.to_string()))?;
 
         let response = match operation_type {
             OperationType::Query => {

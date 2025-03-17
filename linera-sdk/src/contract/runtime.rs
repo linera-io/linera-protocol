@@ -197,9 +197,9 @@ where
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
     pub fn authenticated_caller_id(&mut self) -> Option<UserApplicationId> {
-        *self.authenticated_caller_id.get_or_insert_with(|| {
-            contract_wit::authenticated_caller_id().map(UserApplicationId::from)
-        })
+        *self
+            .authenticated_caller_id
+            .get_or_insert_with(|| contract_wit::authenticated_caller_id())
     }
 
     /// Schedules a message to be sent to this application on another chain.
@@ -341,7 +341,7 @@ where
             &argument,
             &converted_application_ids,
         );
-        UserApplicationId::from(application_id).with_abi::<Abi>()
+        UserApplicationId::new(application_id).with_abi::<Abi>()
     }
 
     /// Returns the round in which this block was validated.

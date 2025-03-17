@@ -40,6 +40,16 @@ pub enum MultiAddress {
     Chain,
 }
 
+impl MultiAddress {
+    /// Returns the address, if any, as [`CryptoHash`].
+    pub fn as_address(&self) -> Option<CryptoHash> {
+        match self {
+            MultiAddress::Address32(address) => Some(*address),
+            MultiAddress::Chain => None,
+        }
+    }
+}
+
 /// A system account.
 #[derive(
     Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize, WitLoad, WitStore, WitType,
@@ -111,12 +121,6 @@ impl From<AccountPublicKey> for MultiAddress {
 impl From<Owner> for MultiAddress {
     fn from(owner: Owner) -> Self {
         MultiAddress::Address32(owner.0)
-    }
-}
-
-impl From<UserApplicationId> for MultiAddress {
-    fn from(application_id: UserApplicationId) -> Self {
-        MultiAddress::Address32(application_id.0)
     }
 }
 
@@ -325,41 +329,30 @@ pub struct ApplicationId<A> {
 
 /// Alias for `ApplicationId`. Use this alias in the core
 /// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    WitLoad,
-    WitStore,
-    WitType,
-    Serialize,
-    Deserialize,
-)]
-#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct UserApplicationId(pub CryptoHash);
+pub type UserApplicationId = MultiAddress;
 
 impl<A> From<ApplicationId<A>> for UserApplicationId {
     fn from(app_id: ApplicationId<A>) -> Self {
-        UserApplicationId(app_id.application_description_hash)
+        UserApplicationId::new(app_id.application_description_hash)
     }
 }
 
 impl UserApplicationId {
+    /// TODO
+    pub fn new(hash: CryptoHash) -> Self {
+        MultiAddress::Address32(hash)
+    }
+
     /// Converts the application ID to the ID of the blob containing the
     /// `UserApplicationDescription`.
     pub fn description_blob_id(self) -> BlobId {
-        BlobId::new(self.0, BlobType::ApplicationDescription)
+        BlobId::new(self.as_address().unwrap(), BlobType::ApplicationDescription)
     }
 
     /// Specializes an application ID for a given ABI.
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
-            application_description_hash: self.0,
+            application_description_hash: self.as_address().unwrap(),
             _phantom: PhantomData,
         }
     }
@@ -911,7 +904,7 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
 impl<A> ApplicationId<A> {
     /// Forgets the ABI of a module ID (if any).
     pub fn forget_abi(self) -> UserApplicationId {
-        UserApplicationId(self.application_description_hash)
+        UserApplicationId::new(self.application_description_hash)
     }
 }
 
@@ -1085,10 +1078,6 @@ impl ChainId {
 
 impl<'de> BcsHashable<'de> for ChainDescription {}
 
-bcs_scalar!(
-    UserApplicationId,
-    "A unique identifier for a user application"
-);
 // bcs_scalar!(UserApplicationId, "A unique identifier for a user application");
 doc_scalar!(
     GenericApplicationId,

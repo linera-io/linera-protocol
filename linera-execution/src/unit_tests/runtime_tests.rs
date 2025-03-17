@@ -207,7 +207,7 @@ fn create_dummy_application() -> ApplicationStatus {
 
 /// Creates a dummy [`ApplicationId`].
 fn create_dummy_application_id() -> UserApplicationId {
-    UserApplicationId(CryptoHash::test_hash("application description"))
+    UserApplicationId::new(CryptoHash::test_hash("application description"))
 }
 
 /// Creates a fake application instance that's just a reference to the `runtime`.

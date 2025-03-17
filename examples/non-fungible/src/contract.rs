@@ -133,7 +133,7 @@ impl NonFungibleTokenContract {
             MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
-                        || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
+                        || self.runtime.authenticated_caller_id() == Some(owner),
                     "The requested transfer is not correctly authenticated."
                 )
             }

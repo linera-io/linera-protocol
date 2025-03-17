@@ -4,7 +4,7 @@ interface contract-runtime-api {
     authenticated-signer: func() -> option<owner>;
     get-message-id: func() -> option<message-id>;
     message-is-bouncing: func() -> option<bool>;
-    authenticated-caller-id: func() -> option<user-application-id>;
+    authenticated-caller-id: func() -> option<multi-address>;
     send-message: func(message: send-message-request);
     subscribe: func(chain: chain-id, channel: channel-name);
     unsubscribe: func(chain: chain-id, channel: channel-name);
@@ -13,10 +13,10 @@ interface contract-runtime-api {
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
-    create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<user-application-id>) -> user-application-id;
-    try-call-application: func(authenticated: bool, callee-id: user-application-id, argument: list<u8>) -> list<u8>;
+    create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<multi-address>) -> multi-address;
+    try-call-application: func(authenticated: bool, callee-id: multi-address, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, key: list<u8>, value: list<u8>);
-    query-service: func(application-id: user-application-id, query: list<u8>) -> list<u8>;
+    query-service: func(application-id: multi-address, query: list<u8>) -> list<u8>;
     consume-fuel: func(fuel: u64);
     validation-round: func() -> option<u32>;
     write-batch: func(operations: list<write-operation>);
@@ -31,12 +31,12 @@ interface contract-runtime-api {
     }
 
     record application-permissions {
-        execute-operations: option<list<user-application-id>>,
-        mandatory-applications: list<user-application-id>,
-        close-chain: list<user-application-id>,
-        change-application-permissions: list<user-application-id>,
-        call-service-as-oracle: option<list<user-application-id>>,
-        make-http-requests: option<list<user-application-id>>,
+        execute-operations: option<list<multi-address>>,
+        mandatory-applications: list<multi-address>,
+        close-chain: list<multi-address>,
+        change-application-permissions: list<multi-address>,
+        call-service-as-oracle: option<list<multi-address>>,
+        make-http-requests: option<list<multi-address>>,
     }
 
     record block-height {
@@ -137,10 +137,6 @@ interface contract-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
-
-    record user-application-id {
-        inner0: crypto-hash,
-    }
 
     enum vm-runtime {
         wasm,

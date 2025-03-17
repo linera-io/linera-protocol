@@ -837,7 +837,7 @@ pub struct UserApplicationDescription {
 
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId(CryptoHash::new(&BlobContent::new_application_description(
+        UserApplicationId::Address32(CryptoHash::new(&BlobContent::new_application_description(
             description,
         )))
     }

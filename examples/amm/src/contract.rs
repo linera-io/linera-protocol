@@ -315,7 +315,7 @@ impl AmmContract {
             MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
-                        || self.runtime.authenticated_caller_id().map(|o| o.0) == Some(address),
+                        || self.runtime.authenticated_caller_id() == Some(owner),
                     "Unauthorized"
                 )
             }
@@ -436,7 +436,7 @@ impl AmmContract {
     }
 
     fn get_amm_app_owner(&mut self) -> MultiAddress {
-        MultiAddress::from(self.runtime.application_id().forget_abi())
+        self.runtime.application_id().forget_abi()
     }
 
     fn get_amm_chain_id(&mut self) -> ChainId {
@@ -656,7 +656,7 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Amount {
-        let pool_owner = MultiAddress::from(self.runtime.application_id().forget_abi());
+        let pool_owner = self.runtime.application_id().forget_abi();
         self.balance(&pool_owner, token_idx)
     }
 

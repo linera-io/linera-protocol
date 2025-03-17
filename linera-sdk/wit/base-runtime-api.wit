@@ -3,7 +3,7 @@ package linera:app;
 interface base-runtime-api {
     get-chain-id: func() -> chain-id;
     get-block-height: func() -> block-height;
-    get-application-id: func() -> user-application-id;
+    get-application-id: func() -> multi-address;
     get-application-creator-chain-id: func() -> chain-id;
     application-parameters: func() -> list<u8>;
     get-chain-ownership: func() -> chain-ownership;
@@ -120,8 +120,4 @@ interface base-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
-
-    record user-application-id {
-        inner0: crypto-hash,
-    }
 }
