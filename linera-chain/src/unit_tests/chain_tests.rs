@@ -3,9 +3,10 @@
 
 #![allow(clippy::large_futures)]
 
+use std::{collections::BTreeMap, iter};
+#[cfg(feature = "unstable-oracles")]
 use std::{
-    collections::BTreeMap,
-    iter, thread,
+    thread,
     time::{Duration, Instant},
 };
 
@@ -25,20 +26,25 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
-    ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageKind, Operation, ResourceControlPolicy, ServiceRuntime, SystemMessage, SystemOperation,
-    TestExecutionRuntimeContext,
+    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
+    Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
 };
+#[cfg(feature = "unstable-oracles")]
+use linera_execution::{ContractRuntime, ServiceRuntime};
+#[cfg(feature = "unstable-oracles")]
+use linera_views::{context::ViewContext, memory::MemoryStore};
 use linera_views::{
-    context::{Context as _, MemoryContext, ViewContext},
-    memory::MemoryStore,
+    context::{Context as _, MemoryContext},
     views::{View, ViewError},
 };
+#[cfg(feature = "unstable-oracles")]
 use test_case::test_case;
 
+#[cfg(feature = "unstable-oracles")]
+use crate::data_types::ProposedBlock;
 use crate::{
     block::{Block, ConfirmedBlock},
-    data_types::{IncomingBundle, MessageAction, MessageBundle, Origin, ProposedBlock},
+    data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -286,6 +292,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
 }
 
 /// Tests if services can execute as oracles if the total execution time is less than the limit.
+#[cfg(feature = "unstable-oracles")]
 #[test_case(&[100]; "single service as oracle call")]
 #[test_case(&[50, 50]; "two service as oracle calls")]
 #[test_case(&[90, 10]; "long and short service as oracle calls")]
@@ -324,6 +331,7 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
 }
 
 /// Tests if execution fails if services executing as oracles exceed the time limit.
+#[cfg(feature = "unstable-oracles")]
 #[test_case(&[120]; "single service as oracle call")]
 #[test_case(&[60, 60]; "two service as oracle calls")]
 #[test_case(&[105, 15]; "long and short service as oracle calls")]
@@ -380,6 +388,7 @@ async fn test_service_as_oracle_exceeding_time_limit(
 /// Creates and initializes a [`ChainStateView`] configured with the
 /// `maximum_service_oracle_execution_ms` policy. Registers the dummy application on the chain, and
 /// creates a block proposal with a dummy operation.
+#[cfg(feature = "unstable-oracles")]
 async fn prepare_test_with_dummy_mock_application(
     maximum_service_oracle_execution_ms: u64,
 ) -> anyhow::Result<(
@@ -445,6 +454,7 @@ async fn prepare_test_with_dummy_mock_application(
 }
 
 /// Tests if execution fails early if services call `check_execution_time`.
+#[cfg(feature = "unstable-oracles")]
 #[test_case(&[120]; "single service as oracle call")]
 #[test_case(&[60, 60]; "two service as oracle calls")]
 #[test_case(&[105, 15]; "long and short service as oracle calls")]
