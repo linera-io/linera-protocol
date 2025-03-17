@@ -11,7 +11,7 @@ env:
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
 
     steps:
