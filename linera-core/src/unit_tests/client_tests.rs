@@ -2334,9 +2334,11 @@ where
 
     assert_matches!(
         client1.publish_data_blob(large_blob_bytes).await,
-        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
-        ))) if matches!(*error, ExecutionError::BlobTooLarge)
+        ) if matches!(**error, ExecutionError::BlobTooLarge))
     );
 
     Ok(())

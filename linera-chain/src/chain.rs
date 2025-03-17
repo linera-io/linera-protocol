@@ -4,7 +4,7 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -13,7 +13,8 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp, UserApplicationDescription,
+        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Timestamp,
+        UserApplicationDescription,
     },
     ensure,
     identifiers::{ChainId, ChannelFullName, Destination, MessageId, Owner, UserApplicationId},
@@ -728,6 +729,7 @@ where
         block: &ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
+        published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
@@ -746,6 +748,14 @@ where
             tracker: ResourceTracker::default(),
             account: block.authenticated_signer,
         };
+        ensure!(
+            block.published_blob_ids()
+                == published_blobs
+                    .iter()
+                    .map(|blob| blob.id())
+                    .collect::<BTreeSet<_>>(),
+            ChainError::InternalError("published_blobs mismatch".to_string())
+        );
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
             .with_execution_context(ChainExecutionContext::Block)?;
@@ -755,6 +765,12 @@ where
         resource_controller
             .track_executed_block_size_sequence_extension(0, block.operations.len())
             .with_execution_context(ChainExecutionContext::Block)?;
+        for blob in published_blobs {
+            committee
+                .policy()
+                .check_blob_size(blob.content())
+                .with_execution_context(ChainExecutionContext::Block)?;
+        }
 
         if self.is_closed() {
             ensure!(

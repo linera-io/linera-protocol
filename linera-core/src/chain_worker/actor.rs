@@ -85,6 +85,7 @@ where
     StageBlockExecution {
         block: ProposedBlock,
         round: Option<u32>,
+        published_blobs: Vec<Blob>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
     },
@@ -345,9 +346,14 @@ where
             ChainWorkerRequest::StageBlockExecution {
                 block,
                 round,
+                published_blobs,
                 callback,
             } => callback
-                .send(self.worker.stage_block_execution(block, round).await)
+                .send(
+                    self.worker
+                        .stage_block_execution(block, round, &published_blobs)
+                        .await,
+                )
                 .is_ok(),
             ChainWorkerRequest::ProcessTimeout {
                 certificate,

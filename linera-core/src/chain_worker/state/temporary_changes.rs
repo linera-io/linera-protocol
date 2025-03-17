@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
+    data_types::{ArithmeticError, Blob, Timestamp, UserApplicationDescription},
     ensure,
     identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, UserApplicationId},
 };
@@ -122,11 +122,17 @@ where
         &mut self,
         block: ProposedBlock,
         round: Option<u32>,
+        published_blobs: &[Blob],
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
-        let executed_block = Box::pin(self.0.chain.execute_block(&block, local_time, round, None))
+        let executed_block =
+            Box::pin(
+                self.0
+                    .chain
+                    .execute_block(&block, local_time, round, published_blobs, None),
+            )
             .await?
             .with(block);
 
@@ -149,6 +155,7 @@ where
     pub(super) async fn validate_proposal_content(
         &mut self,
         content: &ProposalContent,
+        published_blobs: &[Blob],
     ) -> Result<Option<(BlockExecutionOutcome, Timestamp)>, WorkerError> {
         let ProposalContent {
             block,
@@ -171,7 +178,14 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            Box::pin(chain.execute_block(block, local_time, round.multi_leader(), None)).await?
+            Box::pin(chain.execute_block(
+                block,
+                local_time,
+                round.multi_leader(),
+                published_blobs,
+                None,
+            ))
+            .await?
         };
 
         // Verify that no event values are overwritten.

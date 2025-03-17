@@ -500,11 +500,13 @@ where
         &self,
         block: ProposedBlock,
         round: Option<u32>,
+        published_blobs: Vec<Blob>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution {
                 block,
                 round,
+                published_blobs,
                 callback,
             }
         })
