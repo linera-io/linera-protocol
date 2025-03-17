@@ -796,11 +796,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKey { id, key, callback })?;
+        let state = self.view_user_states.entry(id).or_default();
         state.contains_key_queries.register(receiver)
     }
 
@@ -816,11 +816,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ContainsKeys, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKeys { id, keys, callback })?;
+        let state = self.view_user_states.entry(id).or_default();
         state.contains_keys_queries.register(receiver)
     }
 
@@ -839,11 +839,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::ReadMultiValuesBytes { id, keys, callback }
         })?;
+        let state = self.view_user_states.entry(id).or_default();
         state.read_multi_values_queries.register(receiver)
     }
 
@@ -868,11 +868,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         key: Vec<u8>,
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ReadValueBytes { id, key, callback })?;
+        let state = self.view_user_states.entry(id).or_default();
         state.read_value_queries.register(receiver)
     }
 
@@ -881,8 +881,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         promise: &Self::ReadValueBytes,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
-        let value = state.read_value_queries.wait(*promise)?;
+        let value = {
+            let state = self.view_user_states.entry(id).or_default();
+            state.read_value_queries.wait(*promise)?
+        };
         if let Some(value) = &value {
             self.resource_controller
                 .track_bytes_read(value.len() as u64)?;
@@ -895,7 +897,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeysByPrefix {
@@ -904,6 +905,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 callback,
             }
         })?;
+        let state = self.view_user_states.entry(id).or_default();
         state.find_keys_queries.register(receiver)
     }
 
@@ -912,8 +914,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
-        let keys = state.find_keys_queries.wait(*promise)?;
+        let keys = {
+            let state = self.view_user_states.entry(id).or_default();
+            state.find_keys_queries.wait(*promise)?
+        };
         let mut read_size = 0;
         for key in &keys {
             read_size += key.len();
@@ -928,7 +932,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
         let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
         self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeyValuesByPrefix {
@@ -937,6 +940,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 callback,
             }
         })?;
+        let state = self.view_user_states.entry(id).or_default();
         state.find_key_values_queries.register(receiver)
     }
 
