@@ -19,19 +19,19 @@ use crate::{
 /// The initial configuration of the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DualStoreConfig<C1, C2> {
-    /// The exclusive access config.
-    pub exclusive_config: C1,
-    /// The shared config.
-    pub shared_config: C2,
+    /// The first config.
+    pub first_config: C1,
+    /// The second config.
+    pub second_config: C2,
 }
 
 /// The store in use.
 #[derive(Clone, Copy, Debug)]
 pub enum StoreInUse {
-    /// The exclusive store.
-    Exclusive,
-    /// The shared store.
-    Shared,
+    /// The first store.
+    First,
+    /// The second store.
+    Second,
 }
 
 /// The trait for a (static) root key assignment.
@@ -43,10 +43,10 @@ pub trait DualStoreRootKeyAssignment {
 /// A store made of two existing stores.
 #[derive(Clone)]
 pub struct DualStore<S1, S2, A> {
-    /// The exclusive underlying store.
-    exclusive_store: S1,
-    /// The shared underlying store.
-    shared_store: S2,
+    /// The first underlying store.
+    first_store: S1,
+    /// The second underlying store.
+    second_store: S2,
     /// Which store is currently in use given the root key. (The root key in the other store will be set arbitrarily.)
     store_in_use: StoreInUse,
     /// Marker for the static root key assignment.
@@ -79,55 +79,55 @@ where
 
     fn max_stream_queries(&self) -> usize {
         match self.store_in_use {
-            StoreInUse::Exclusive => self.exclusive_store.max_stream_queries(),
-            StoreInUse::Shared => self.shared_store.max_stream_queries(),
+            StoreInUse::First => self.first_store.max_stream_queries(),
+            StoreInUse::Second => self.second_store.max_stream_queries(),
         }
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::Exclusive => self
-                .exclusive_store
+            StoreInUse::First => self
+                .first_store
                 .read_value_bytes(key)
                 .await
-                .map_err(DualStoreError::Exclusive)?,
-            StoreInUse::Shared => self
-                .shared_store
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
                 .read_value_bytes(key)
                 .await
-                .map_err(DualStoreError::Shared)?,
+                .map_err(DualStoreError::Second)?,
         };
         Ok(result)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::Exclusive => self
-                .exclusive_store
+            StoreInUse::First => self
+                .first_store
                 .contains_key(key)
                 .await
-                .map_err(DualStoreError::Exclusive)?,
-            StoreInUse::Shared => self
-                .shared_store
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
                 .contains_key(key)
                 .await
-                .map_err(DualStoreError::Shared)?,
+                .map_err(DualStoreError::Second)?,
         };
         Ok(result)
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::Exclusive => self
-                .exclusive_store
+            StoreInUse::First => self
+                .first_store
                 .contains_keys(keys)
                 .await
-                .map_err(DualStoreError::Exclusive)?,
-            StoreInUse::Shared => self
-                .shared_store
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
                 .contains_keys(keys)
                 .await
-                .map_err(DualStoreError::Shared)?,
+                .map_err(DualStoreError::Second)?,
         };
         Ok(result)
     }
@@ -137,33 +137,33 @@ where
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::Exclusive => self
-                .exclusive_store
+            StoreInUse::First => self
+                .first_store
                 .read_multi_values_bytes(keys)
                 .await
-                .map_err(DualStoreError::Exclusive)?,
-            StoreInUse::Shared => self
-                .shared_store
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
                 .read_multi_values_bytes(keys)
                 .await
-                .map_err(DualStoreError::Shared)?,
+                .map_err(DualStoreError::Second)?,
         };
         Ok(result)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::Exclusive => DualStoreKeys::Exclusive(
-                self.exclusive_store
+            StoreInUse::First => DualStoreKeys::First(
+                self.first_store
                     .find_keys_by_prefix(key_prefix)
                     .await
-                    .map_err(DualStoreError::Exclusive)?,
+                    .map_err(DualStoreError::First)?,
             ),
-            StoreInUse::Shared => DualStoreKeys::Shared(
-                self.shared_store
+            StoreInUse::Second => DualStoreKeys::Second(
+                self.second_store
                     .find_keys_by_prefix(key_prefix)
                     .await
-                    .map_err(DualStoreError::Shared)?,
+                    .map_err(DualStoreError::Second)?,
             ),
         };
         Ok(result)
@@ -174,17 +174,17 @@ where
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
         let result = match self.store_in_use {
-            StoreInUse::Exclusive => DualStoreKeyValues::Exclusive(
-                self.exclusive_store
+            StoreInUse::First => DualStoreKeyValues::First(
+                self.first_store
                     .find_key_values_by_prefix(key_prefix)
                     .await
-                    .map_err(DualStoreError::Exclusive)?,
+                    .map_err(DualStoreError::First)?,
             ),
-            StoreInUse::Shared => DualStoreKeyValues::Shared(
-                self.shared_store
+            StoreInUse::Second => DualStoreKeyValues::Second(
+                self.second_store
                     .find_key_values_by_prefix(key_prefix)
                     .await
-                    .map_err(DualStoreError::Shared)?,
+                    .map_err(DualStoreError::Second)?,
             ),
         };
         Ok(result)
@@ -201,32 +201,32 @@ where
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
         match self.store_in_use {
-            StoreInUse::Exclusive => self
-                .exclusive_store
+            StoreInUse::First => self
+                .first_store
                 .write_batch(batch)
                 .await
-                .map_err(DualStoreError::Exclusive)?,
-            StoreInUse::Shared => self
-                .shared_store
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
                 .write_batch(batch)
                 .await
-                .map_err(DualStoreError::Shared)?,
+                .map_err(DualStoreError::Second)?,
         }
         Ok(())
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
         match self.store_in_use {
-            StoreInUse::Exclusive => self
-                .exclusive_store
+            StoreInUse::First => self
+                .first_store
                 .clear_journal()
                 .await
-                .map_err(DualStoreError::Exclusive)?,
-            StoreInUse::Shared => self
-                .shared_store
+                .map_err(DualStoreError::First)?,
+            StoreInUse::Second => self
+                .second_store
                 .clear_journal()
                 .await
-                .map_err(DualStoreError::Shared)?,
+                .map_err(DualStoreError::Second)?,
         }
         Ok(())
     }
@@ -245,52 +245,52 @@ where
     }
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
-        let exclusive_store = S1::connect(&config.exclusive_config, namespace)
+        let first_store = S1::connect(&config.first_config, namespace)
             .await
-            .map_err(DualStoreError::Exclusive)?;
-        let shared_store = S2::connect(&config.shared_config, namespace)
+            .map_err(DualStoreError::First)?;
+        let second_store = S2::connect(&config.second_config, namespace)
             .await
-            .map_err(DualStoreError::Shared)?;
+            .map_err(DualStoreError::Second)?;
         let store_in_use = A::assigned_store(&[])?;
         Ok(Self {
-            exclusive_store,
-            shared_store,
+            first_store,
+            second_store,
             store_in_use,
             _marker: std::marker::PhantomData,
         })
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let exclusive_store = self
-            .exclusive_store
+        let first_store = self
+            .first_store
             .clone_with_root_key(root_key)
-            .map_err(DualStoreError::Exclusive)?;
-        let shared_store = self
-            .shared_store
+            .map_err(DualStoreError::First)?;
+        let second_store = self
+            .second_store
             .clone_with_root_key(root_key)
-            .map_err(DualStoreError::Shared)?;
+            .map_err(DualStoreError::Second)?;
         let store_in_use = A::assigned_store(root_key)?;
         Ok(Self {
-            exclusive_store,
-            shared_store,
+            first_store,
+            second_store,
             store_in_use,
             _marker: std::marker::PhantomData,
         })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
-        let namespaces1 = S1::list_all(&config.exclusive_config)
+        let namespaces1 = S1::list_all(&config.first_config)
             .await
-            .map_err(DualStoreError::Exclusive)?;
+            .map_err(DualStoreError::First)?;
         let mut namespaces = Vec::new();
         for namespace in namespaces1 {
-            if S2::exists(&config.shared_config, &namespace)
+            if S2::exists(&config.second_config, &namespace)
                 .await
-                .map_err(DualStoreError::Shared)?
+                .map_err(DualStoreError::Second)?
             {
                 namespaces.push(namespace);
             } else {
-                tracing::warn!("Namespace {} only exists in the exclusive store", namespace);
+                tracing::warn!("Namespace {} only exists in the first store", namespace);
             }
         }
         Ok(namespaces)
@@ -300,56 +300,56 @@ where
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut root_keys = S1::list_root_keys(&config.exclusive_config, namespace)
+        let mut root_keys = S1::list_root_keys(&config.first_config, namespace)
             .await
-            .map_err(DualStoreError::Exclusive)?;
+            .map_err(DualStoreError::First)?;
         root_keys.extend(
-            S2::list_root_keys(&config.shared_config, namespace)
+            S2::list_root_keys(&config.second_config, namespace)
                 .await
-                .map_err(DualStoreError::Shared)?,
+                .map_err(DualStoreError::Second)?,
         );
         Ok(root_keys)
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
-        Ok(S1::exists(&config.exclusive_config, namespace)
+        Ok(S1::exists(&config.first_config, namespace)
             .await
-            .map_err(DualStoreError::Exclusive)?
-            && S2::exists(&config.shared_config, namespace)
+            .map_err(DualStoreError::First)?
+            && S2::exists(&config.second_config, namespace)
                 .await
-                .map_err(DualStoreError::Shared)?)
+                .map_err(DualStoreError::Second)?)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        let test1 = S1::exists(&config.exclusive_config, namespace)
+        let test1 = S1::exists(&config.first_config, namespace)
             .await
-            .map_err(DualStoreError::Exclusive)?;
-        let test2 = S2::exists(&config.shared_config, namespace)
+            .map_err(DualStoreError::First)?;
+        let test2 = S2::exists(&config.second_config, namespace)
             .await
-            .map_err(DualStoreError::Shared)?;
+            .map_err(DualStoreError::Second)?;
         if test1 && test2 {
             return Err(DualStoreError::AlreadyExist);
         }
         if !test1 {
-            S1::create(&config.exclusive_config, namespace)
+            S1::create(&config.first_config, namespace)
                 .await
-                .map_err(DualStoreError::Exclusive)?;
+                .map_err(DualStoreError::First)?;
         }
         if !test2 {
-            S2::create(&config.shared_config, namespace)
+            S2::create(&config.second_config, namespace)
                 .await
-                .map_err(DualStoreError::Shared)?;
+                .map_err(DualStoreError::Second)?;
         }
         Ok(())
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        S1::delete(&config.exclusive_config, namespace)
+        S1::delete(&config.first_config, namespace)
             .await
-            .map_err(DualStoreError::Exclusive)?;
-        S2::delete(&config.shared_config, namespace)
+            .map_err(DualStoreError::First)?;
+        S2::delete(&config.second_config, namespace)
             .await
-            .map_err(DualStoreError::Shared)?;
+            .map_err(DualStoreError::Second)?;
         Ok(())
     }
 }
@@ -362,15 +362,13 @@ where
     A: DualStoreRootKeyAssignment + Send + Sync,
 {
     async fn new_test_config() -> Result<Self::Config, Self::Error> {
-        let exclusive_config = S1::new_test_config()
+        let first_config = S1::new_test_config().await.map_err(DualStoreError::First)?;
+        let second_config = S2::new_test_config()
             .await
-            .map_err(DualStoreError::Exclusive)?;
-        let shared_config = S2::new_test_config()
-            .await
-            .map_err(DualStoreError::Shared)?;
+            .map_err(DualStoreError::Second)?;
         Ok(DualStoreConfig {
-            exclusive_config,
-            shared_config,
+            first_config,
+            second_config,
         })
     }
 }
@@ -386,13 +384,13 @@ pub enum DualStoreError<E1, E2> {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// Exclusive store.
-    #[error("Error in exclusive store: {0}")]
-    Exclusive(E1),
+    /// First store.
+    #[error("Error in first store: {0}")]
+    First(E1),
 
-    /// Shared store.
-    #[error("Error in shared store: {0}")]
-    Shared(E2),
+    /// Second store.
+    #[error("Error in second store: {0}")]
+    Second(E2),
 }
 
 impl<E1, E2> KeyValueStoreError for DualStoreError<E1, E2>
@@ -405,42 +403,42 @@ where
 
 /// A set of keys returned by [`DualStore::find_keys_by_prefix`].
 pub enum DualStoreKeys<K1, K2> {
-    /// A set of keys from the exclusive store.
-    Exclusive(K1),
-    /// A set of Keys from the shared store.
-    Shared(K2),
+    /// A set of keys from the first store.
+    First(K1),
+    /// A set of Keys from the second store.
+    Second(K2),
 }
 
 /// An iterator over the keys in [`DualStoreKeys`].
 pub enum DualStoreKeyIterator<I1, I2> {
-    /// Iterating over keys from the exclusive store.
-    Exclusive(I1),
-    /// Iterating over keys from the shared store.
-    Shared(I2),
+    /// Iterating over keys from the first store.
+    First(I1),
+    /// Iterating over keys from the second store.
+    Second(I2),
 }
 
 /// A set of key-values returned by [`DualStore::find_key_values_by_prefix`].
 pub enum DualStoreKeyValues<K1, K2> {
-    /// A set of key-values from the exclusive store.
-    Exclusive(K1),
-    /// A set of key-values from the shared store.
-    Shared(K2),
+    /// A set of key-values from the first store.
+    First(K1),
+    /// A set of key-values from the second store.
+    Second(K2),
 }
 
 /// An iterator over the key-values in [`DualStoreKeyValues`].
 pub enum DualStoreKeyValueIterator<I1, I2> {
-    /// Iterating over key-values from the exclusive store.
-    Exclusive(I1),
-    /// Iterating over key-values from the shared store.
-    Shared(I2),
+    /// Iterating over key-values from the first store.
+    First(I1),
+    /// Iterating over key-values from the second store.
+    Second(I2),
 }
 
 /// An owning iterator over the key-values in [`DualStoreKeyValues`].
 pub enum DualStoreKeyValueIteratorOwned<I1, I2> {
-    /// Iterating over key-values from the exclusive store.
-    Exclusive(I1),
-    /// Iterating over key-values from the shared store.
-    Shared(I2),
+    /// Iterating over key-values from the first store.
+    First(I1),
+    /// Iterating over key-values from the second store.
+    Second(I2),
 }
 
 impl<E1, E2, K1, K2> KeyIterable<DualStoreError<E1, E2>> for DualStoreKeys<K1, K2>
@@ -456,8 +454,8 @@ where
 
     fn iterator(&self) -> Self::Iterator<'_> {
         match self {
-            Self::Exclusive(keys) => DualStoreKeyIterator::Exclusive(keys.iterator()),
-            Self::Shared(keys) => DualStoreKeyIterator::Shared(keys.iterator()),
+            Self::First(keys) => DualStoreKeyIterator::First(keys.iterator()),
+            Self::Second(keys) => DualStoreKeyIterator::Second(keys.iterator()),
         }
     }
 }
@@ -471,12 +469,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::Exclusive(iter) => iter
+            Self::First(iter) => iter
                 .next()
-                .map(|result| result.map_err(DualStoreError::Exclusive)),
-            Self::Shared(iter) => iter
+                .map(|result| result.map_err(DualStoreError::First)),
+            Self::Second(iter) => iter
                 .next()
-                .map(|result| result.map_err(DualStoreError::Shared)),
+                .map(|result| result.map_err(DualStoreError::Second)),
         }
     }
 }
@@ -495,18 +493,16 @@ where
 
     fn iterator(&self) -> Self::Iterator<'_> {
         match self {
-            Self::Exclusive(keys) => DualStoreKeyValueIterator::Exclusive(keys.iterator()),
-            Self::Shared(keys) => DualStoreKeyValueIterator::Shared(keys.iterator()),
+            Self::First(keys) => DualStoreKeyValueIterator::First(keys.iterator()),
+            Self::Second(keys) => DualStoreKeyValueIterator::Second(keys.iterator()),
         }
     }
 
     fn into_iterator_owned(self) -> Self::IteratorOwned {
         match self {
-            Self::Exclusive(keys) => {
-                DualStoreKeyValueIteratorOwned::Exclusive(keys.into_iterator_owned())
-            }
-            Self::Shared(keys) => {
-                DualStoreKeyValueIteratorOwned::Shared(keys.into_iterator_owned())
+            Self::First(keys) => DualStoreKeyValueIteratorOwned::First(keys.into_iterator_owned()),
+            Self::Second(keys) => {
+                DualStoreKeyValueIteratorOwned::Second(keys.into_iterator_owned())
             }
         }
     }
@@ -521,12 +517,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::Exclusive(iter) => iter
+            Self::First(iter) => iter
                 .next()
-                .map(|result| result.map_err(DualStoreError::Exclusive)),
-            Self::Shared(iter) => iter
+                .map(|result| result.map_err(DualStoreError::First)),
+            Self::Second(iter) => iter
                 .next()
-                .map(|result| result.map_err(DualStoreError::Shared)),
+                .map(|result| result.map_err(DualStoreError::Second)),
         }
     }
 }
@@ -540,12 +536,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::Exclusive(iter) => iter
+            Self::First(iter) => iter
                 .next()
-                .map(|result| result.map_err(DualStoreError::Exclusive)),
-            Self::Shared(iter) => iter
+                .map(|result| result.map_err(DualStoreError::First)),
+            Self::Second(iter) => iter
                 .next()
-                .map(|result| result.map_err(DualStoreError::Shared)),
+                .map(|result| result.map_err(DualStoreError::Second)),
         }
     }
 }
