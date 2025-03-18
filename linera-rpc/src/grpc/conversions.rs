@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, MultiAddress, Owner},
+    identifiers::{BlobId, ChainId, MultiAddress},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -199,7 +199,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
             public_key: Some(block_proposal.public_key.into()),
-            owner: Some(Owner::from(block_proposal.public_key).into()),
+            owner: Some(MultiAddress::from(block_proposal.public_key).try_into()?),
             signature: Some(block_proposal.signature.into()),
             validated_block_certificate: block_proposal
                 .validated_block_certificate
@@ -796,22 +796,6 @@ impl TryFrom<api::MultiAddress> for MultiAddress {
     }
 }
 
-impl From<Owner> for api::Owner {
-    fn from(owner: Owner) -> Self {
-        Self {
-            bytes: owner.0.as_bytes().to_vec(),
-        }
-    }
-}
-
-impl TryFrom<api::Owner> for Owner {
-    type Error = GrpcProtoConversionError;
-
-    fn try_from(owner: api::Owner) -> Result<Self, Self::Error> {
-        Ok(Self(CryptoHash::try_from(owner.bytes.as_slice())?))
-    }
-}
-
 impl TryFrom<api::BlobId> for BlobId {
     type Error = GrpcProtoConversionError;
 
@@ -1040,8 +1024,8 @@ pub mod tests {
     #[test]
     pub fn test_owner() {
         let key_pair = AccountSecretKey::generate();
-        let owner = Owner::from(key_pair.public());
-        round_trip_check::<_, api::Owner>(owner);
+        let owner = MultiAddress::from(key_pair.public());
+        round_trip_check::<_, api::MultiAddress>(owner);
     }
 
     #[test]

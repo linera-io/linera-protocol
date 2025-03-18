@@ -8,7 +8,7 @@ mod state;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{
-        Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, TimeoutConfig,
+        Amount, ApplicationPermissions, ChainId, ChainOwnership, MultiAddress, TimeoutConfig,
         WithContractAbi,
     },
     views::{RootView, View},
@@ -324,7 +324,7 @@ impl RfqContract {
         quote_provided: QuoteProvided,
         token_pair: TokenPair,
         fee_budget: Amount,
-        owner: Owner,
+        owner: MultiAddress,
     ) -> ChainId {
         let ownership = ChainOwnership::multiple(
             [(owner, 100), (quote_provided.get_quoter_owner(), 100)],
@@ -337,7 +337,7 @@ impl RfqContract {
 
         // transfer tokens to the new chain
         let transfer = fungible::Operation::Transfer {
-            owner: owner.into(),
+            owner,
             amount: quote_provided.get_amount(),
             target_account: Account {
                 chain_id: temp_chain_id,
@@ -358,7 +358,7 @@ impl RfqContract {
                 token_id: token,
                 owner: Account {
                     chain_id: self.runtime.chain_id(),
-                    owner: owner.into(),
+                    owner,
                 },
                 amount: quote_provided.get_amount(),
             }),

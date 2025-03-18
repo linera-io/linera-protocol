@@ -57,7 +57,7 @@ where
     let owner1 = chain1.identity().await.unwrap();
     let amt = Amount::ONE;
 
-    let account = Account::address32(chain2.chain_id(), owner1.0);
+    let account = Account::address32(chain2.chain_id(), owner1);
     let cert = chain1
         .transfer_to_account(MultiAddress::chain(), amt, account)
         .await

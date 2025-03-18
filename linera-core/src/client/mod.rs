@@ -35,7 +35,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId, ModuleId,
-        MultiAddress, Owner, StreamId,
+        MultiAddress, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -977,7 +977,7 @@ where
     /// Obtains the identity of the current owner of the chain. Returns an error if we have the
     /// private key for more than one identity.
     #[instrument(level = "trace")]
-    pub async fn identity(&self) -> Result<Owner, ChainClientError> {
+    pub async fn identity(&self) -> Result<MultiAddress, ChainClientError> {
         let manager = self.chain_info().await?.manager;
         ensure!(
             manager.ownership.is_active(),
@@ -1642,7 +1642,7 @@ where
     #[instrument(level = "trace")]
     pub async fn claim(
         &self,
-        owner: Owner,
+        owner: MultiAddress,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -1808,7 +1808,7 @@ where
             }
         }
         for proposal in proposals {
-            let owner: Owner = proposal.public_key.into();
+            let owner: MultiAddress = proposal.public_key.into();
             if let Err(mut err) = self
                 .client
                 .local_node
@@ -2139,7 +2139,7 @@ where
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
-        identity: Owner,
+        identity: MultiAddress,
     ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
@@ -2340,9 +2340,10 @@ where
             operations: Vec::new(),
             previous_block_hash,
             height,
-            authenticated_signer: match owner {
-                MultiAddress::Address32(_) if owner == MultiAddress::chain() => None,
-                MultiAddress::Address32(other) => Some(Owner(other)),
+            authenticated_signer: if owner == MultiAddress::chain() {
+                None
+            } else {
+                Some(owner)
             },
             timestamp,
         };
@@ -2645,7 +2646,7 @@ where
     /// Returns a round in which we can propose a new block or the given one, if possible.
     fn round_for_new_proposal(
         info: &ChainInfo,
-        identity: &Owner,
+        identity: &MultiAddress,
         block: &ProposedBlock,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
@@ -2733,7 +2734,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_ownership(
         &self,
-        new_owner: Owner,
+        new_owner: MultiAddress,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
@@ -2749,7 +2750,7 @@ where
     #[instrument(level = "trace")]
     pub async fn share_ownership(
         &self,
-        new_owner: Owner,
+        new_owner: MultiAddress,
         new_weight: u64,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {

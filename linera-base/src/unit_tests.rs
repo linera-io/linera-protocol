@@ -11,9 +11,7 @@ use test_case::test_case;
 use crate::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
-    identifiers::{
-        Account, ChainId, ChannelName, Destination, MessageId, ModuleId, MultiAddress, Owner,
-    },
+    identifiers::{Account, ChainId, ChannelName, Destination, MessageId, ModuleId, MultiAddress},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -26,7 +24,7 @@ use crate::{
 #[test_case(Timestamp::from(6_400_003); "of_timestamp")]
 #[test_case(resources_test_case(); "of_resources")]
 #[test_case(send_message_request_test_case(); "of_send_message_request")]
-#[test_case(Owner(CryptoHash::test_hash("owner")); "of_owner")]
+#[test_case(MultiAddress::from(CryptoHash::test_hash("owner")); "of_owner")]
 #[test_case(account_test_case(); "of_account")]
 #[test_case(ChainId(CryptoHash::test_hash("chain_id")); "of_chain_id")]
 #[test_case(message_id_test_case(); "of_message_id")]
@@ -137,13 +135,18 @@ fn timeout_config_test_case() -> TimeoutConfig {
 fn chain_ownership_test_case() -> ChainOwnership {
     let super_owners = ["Alice", "Bob"]
         .into_iter()
-        .map(|owner_name| Owner(CryptoHash::test_hash(owner_name)))
+        .map(|owner_name| MultiAddress::from(CryptoHash::test_hash(owner_name)))
         .collect();
 
     let owners = ["Carol", "Dennis", "Eve"]
         .into_iter()
         .enumerate()
-        .map(|(index, owner_name)| (Owner(CryptoHash::test_hash(owner_name)), index as u64))
+        .map(|(index, owner_name)| {
+            (
+                MultiAddress::from(CryptoHash::test_hash(owner_name)),
+                index as u64,
+            )
+        })
         .collect();
 
     ChainOwnership {

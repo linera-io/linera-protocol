@@ -32,14 +32,14 @@ impl ServiceAbi for FungibleTokenAbi {
 pub enum Operation {
     /// Requests an account balance.
     Balance {
-        /// Owner to query the balance for
+        /// MultiAddress to query the balance for
         owner: MultiAddress,
     },
     /// Requests this fungible token's ticker symbol.
     TickerSymbol,
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
-        /// Owner to transfer from
+        /// MultiAddress to transfer from
         owner: MultiAddress,
         /// Amount to be transferred
         amount: Amount,
@@ -111,7 +111,7 @@ impl Parameters {
 pub struct Account {
     /// Chain ID of the account
     pub chain_id: ChainId,
-    /// Owner of the account
+    /// MultiAddress of the account
     pub owner: MultiAddress,
 }
 

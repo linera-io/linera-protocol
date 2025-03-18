@@ -17,7 +17,7 @@ use linera_base::prometheus_util::{
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, BlobId, BlobType, ChainId, MessageId, MultiAddress, Owner},
+    identifiers::{Account, BlobId, BlobType, ChainId, MessageId, MultiAddress},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -120,7 +120,7 @@ where
     pub(crate) async fn handle_request(
         &mut self,
         request: ExecutionRequest,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<MultiAddress>>,
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
@@ -564,7 +564,7 @@ pub enum ExecutionRequest {
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        signer: Option<Owner>,
+        signer: Option<MultiAddress>,
         application_id: MultiAddress,
         #[debug(skip)]
         callback: Sender<Option<OutgoingMessage>>,
@@ -575,7 +575,7 @@ pub enum ExecutionRequest {
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        signer: Option<Owner>,
+        signer: Option<MultiAddress>,
         application_id: MultiAddress,
         #[debug(skip)]
         callback: Sender<OutgoingMessage>,

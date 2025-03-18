@@ -11,7 +11,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey, CryptoHash},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::Owner,
+    identifiers::MultiAddress,
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::ProposedBlock;
@@ -35,7 +35,7 @@ pub struct ChainClientState {
     /// This is always at the same height as `next_block_height`.
     pending_proposal: Option<PendingProposal>,
     /// Known key pairs from present and past identities.
-    known_key_pairs: BTreeMap<Owner, AccountSecretKey>,
+    known_key_pairs: BTreeMap<MultiAddress, AccountSecretKey>,
 
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.
@@ -52,7 +52,7 @@ impl ChainClientState {
     ) -> ChainClientState {
         let known_key_pairs = known_key_pairs
             .into_iter()
-            .map(|kp| (Owner::from(kp.public()), kp))
+            .map(|kp| (MultiAddress::from(kp.public()), kp))
             .collect();
         ChainClientState {
             known_key_pairs,
@@ -97,7 +97,7 @@ impl ChainClientState {
         }
     }
 
-    pub fn known_key_pairs(&self) -> &BTreeMap<Owner, AccountSecretKey> {
+    pub fn known_key_pairs(&self) -> &BTreeMap<MultiAddress, AccountSecretKey> {
         &self.known_key_pairs
     }
 

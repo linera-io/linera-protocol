@@ -15,7 +15,7 @@ use std::{collections::BTreeMap, sync::Arc, thread, vec};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
-    identifiers::{BlobId, BlobType, ChainId, MessageId, ModuleId, MultiAddress, Owner},
+    identifiers::{BlobId, BlobType, ChainId, MessageId, ModuleId, MultiAddress},
     vm::VmRuntime,
 };
 use linera_views::{
@@ -80,7 +80,7 @@ pub fn create_dummy_operation_context() -> OperationContext {
 }
 
 /// Creates a dummy [`MessageContext`] to use in tests.
-pub fn create_dummy_message_context(authenticated_signer: Option<Owner>) -> MessageContext {
+pub fn create_dummy_message_context(authenticated_signer: Option<MultiAddress>) -> MessageContext {
     MessageContext {
         chain_id: ChainId::root(0),
         is_bouncing: false,
