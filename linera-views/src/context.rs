@@ -273,12 +273,6 @@ where
 /// An implementation of [`crate::context::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ViewContext<E, MemoryStore>;
 
-/// Provides a `MemoryContext<()>` that can be used for tests.
-#[cfg(with_testing)]
-pub fn create_test_memory_context() -> MemoryContext<()> {
-    MemoryContext::new_for_testing(())
-}
-
 impl<E> MemoryContext<E> {
     /// Creates a [`Context`] instance in memory for testing.
     #[cfg(with_testing)]

@@ -643,7 +643,7 @@ impl BatchValueWriter<UnorderedBatch> for UnorderedBatchIter {
 mod tests {
     use linera_views::{
         batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
-        context::{create_test_memory_context, Context},
+        context::{Context, MemoryContext},
     };
 
     #[test]
@@ -700,7 +700,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simplify_batch5() {
-        let context = create_test_memory_context();
+        let context = MemoryContext::new_for_testing(());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
@@ -723,7 +723,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simplify_batch6() {
-        let context = create_test_memory_context();
+        let context = MemoryContext::new_for_testing(());
         let insertions = vec![(vec![1, 2, 3], vec![])];
         let simple_unordered_batch = SimpleUnorderedBatch {
             insertions: insertions.clone(),

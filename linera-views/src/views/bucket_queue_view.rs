@@ -328,10 +328,10 @@ where
     /// Gets the number of entries in the container that are stored
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// assert_eq!(queue.stored_count(), 0);
@@ -356,10 +356,10 @@ where
     /// The total number of entries of the container
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// assert_eq!(queue.count(), 1);
@@ -379,10 +379,10 @@ where
     /// Gets a reference on the front value if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(42);
@@ -405,10 +405,10 @@ where
     /// Reads the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(42);
@@ -433,10 +433,10 @@ where
     /// Deletes the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34 as u128);
     /// queue.delete_front().await.unwrap();
@@ -478,10 +478,10 @@ where
     /// Pushes a value to the end of the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// assert_eq!(queue.elements().await.unwrap(), vec![34]);
@@ -494,10 +494,10 @@ where
     /// Returns the list of elements in the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(37);
@@ -512,10 +512,10 @@ where
     /// Returns the last element of a bucket queue view
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(37);
@@ -605,10 +605,10 @@ where
     /// Returns the first elements of a bucket queue view
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(37);
@@ -624,10 +624,10 @@ where
     /// Returns the last element of a bucket queue view
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u128, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(37);
@@ -679,10 +679,10 @@ where
     /// Gets a mutable iterator on the entries of the queue
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::context::MemoryContext;
     /// # use linera_views::bucket_queue_view::BucketQueueView;
     /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
+    /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// let mut iter = queue.iter_mut().await.unwrap();

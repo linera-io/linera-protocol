@@ -19,7 +19,7 @@ use linera_views::{
         WriteOperation::{Delete, DeletePrefix, Put},
     },
     collection_view::HashedCollectionView,
-    context::{create_test_memory_context, Context, MemoryContext, ViewContext},
+    context::{Context, MemoryContext, ViewContext},
     key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::{LruCachingMemoryStore, LruCachingStore},
@@ -103,7 +103,7 @@ impl StateStorage for KeyValueStoreTestStorage {
     type Context = ViewContext<usize, ViewContainer<MemoryContext<()>>>;
 
     async fn new() -> Self {
-        let context = create_test_memory_context();
+        let context = MemoryContext::new_for_testing(());
         let store = ViewContainer::new(context).await.unwrap();
         KeyValueStoreTestStorage {
             accessed_chains: BTreeSet::new(),
@@ -627,7 +627,7 @@ pub struct ByteMapStateView<C> {
 
 #[tokio::test]
 async fn test_byte_map_view() -> Result<()> {
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
         view.map.insert(vec![0, 1], 5);
@@ -824,7 +824,7 @@ async fn test_collection_removal() -> Result<()> {
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
 
     // Write a dummy entry into the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
@@ -855,7 +855,7 @@ async fn test_removal_api_first_second_condition(
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_test_memory_context();
+    let context = MemoryContext::new_for_testing(());
 
     // First add an entry `1` with value `100` and commit
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
