@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, vec};
 
 use linera_base::{
     data_types::Amount,
-    identifiers::{ChainDescription, MultiAddress},
+    identifiers::{Address, ChainDescription},
 };
 use linera_execution::{
     test_utils::{
@@ -51,7 +51,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
 /// Tests the contract system API to read a single account balance.
 #[proptest(async = "tokio")]
 async fn test_read_owner_balance_system_api(
-    #[strategy(test_accounts_strategy())] accounts: BTreeMap<MultiAddress, Amount>,
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<Address, Amount>,
 ) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -84,7 +84,7 @@ async fn test_read_owner_balance_system_api(
 
 /// Tests if reading the balance of a missing account returns zero.
 #[proptest(async = "tokio")]
-async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_account: MultiAddress) {
+async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_account: Address) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
@@ -117,7 +117,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
 /// Tests the contract system API to read all account balances.
 #[proptest(async = "tokio")]
 async fn test_read_owner_balances_system_api(
-    #[strategy(test_accounts_strategy())] accounts: BTreeMap<MultiAddress, Amount>,
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<Address, Amount>,
 ) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -152,7 +152,7 @@ async fn test_read_owner_balances_system_api(
 /// Tests the contract system API to read all account owners.
 #[proptest(async = "tokio")]
 async fn test_read_balance_owners_system_api(
-    #[strategy(test_accounts_strategy())] accounts: BTreeMap<MultiAddress, Amount>,
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<Address, Amount>,
 ) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),

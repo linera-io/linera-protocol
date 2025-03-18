@@ -11,8 +11,8 @@ use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
     linera_base_types::{
-        AccountSecretKey, Amount, ApplicationId, Ed25519SecretKey, MultiAddress,
-        Secp256k1SecretKey, Timestamp,
+        AccountSecretKey, Address, Amount, ApplicationId, Ed25519SecretKey, Secp256k1SecretKey,
+        Timestamp,
     },
     test::TestValidator,
 };
@@ -39,7 +39,7 @@ async fn collect_pledges() {
     let fungible_publisher_chain = validator.new_chain_with_keypair(fungible_chain_owner).await;
     let campaign_chain_owner = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate());
     let mut campaign_chain = validator.new_chain_with_keypair(campaign_chain_owner).await;
-    let campaign_account = MultiAddress::from(campaign_chain.public_key());
+    let campaign_account = Address::from(campaign_chain.public_key());
 
     let fungible_module_id = fungible_publisher_chain
         .publish_bytecode_files_in("../fungible")
@@ -141,7 +141,7 @@ async fn cancel_successful_campaign() {
 
     let fungible_publisher_chain = validator.new_chain().await;
     let mut campaign_chain = validator.new_chain().await;
-    let campaign_account = MultiAddress::from(campaign_chain.public_key());
+    let campaign_account = Address::from(campaign_chain.public_key());
 
     let fungible_module_id = fungible_publisher_chain
         .publish_bytecode_files_in("../fungible")

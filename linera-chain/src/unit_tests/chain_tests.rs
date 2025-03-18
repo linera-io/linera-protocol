@@ -17,7 +17,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     hashed::Hashed,
-    identifiers::{ChainId, MessageId, ModuleId, MultiAddress},
+    identifiers::{Address, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -168,7 +168,7 @@ async fn test_block_size_limit() {
     let invalid_block = valid_block
         .clone()
         .with_operation(SystemOperation::Transfer {
-            owner: MultiAddress::chain(),
+            owner: Address::chain(),
             recipient: Recipient::root(0),
             amount: Amount::ONE,
         });
@@ -204,7 +204,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
 
     // Create a mock application.
     let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = MultiAddress::from(&app_description);
+    let application_id = Address::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
     extra
@@ -390,7 +390,7 @@ async fn prepare_test_with_dummy_mock_application(
     maximum_service_oracle_execution_ms: u64,
 ) -> anyhow::Result<(
     MockApplication,
-    MultiAddress,
+    Address,
     ChainStateView<ViewContext<TestExecutionRuntimeContext, MemoryStore>>,
     ProposedBlock,
     Timestamp,
@@ -425,7 +425,7 @@ async fn prepare_test_with_dummy_mock_application(
 
     // Create a mock application.
     let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = MultiAddress::from(&app_description);
+    let application_id = Address::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
     extra
@@ -501,7 +501,7 @@ async fn test_service_as_oracle_timeout_early_stop(
 
     // Create a mock application.
     let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = MultiAddress::from(&app_description);
+    let application_id = Address::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
     extra

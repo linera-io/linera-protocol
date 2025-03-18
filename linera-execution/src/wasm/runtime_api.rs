@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
-    identifiers::{Account, ChainId, ChannelName, MessageId, MultiAddress, StreamName},
+    identifiers::{Account, Address, ChainId, ChannelName, MessageId, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -100,7 +100,7 @@ where
     }
 
     /// Returns the ID of the current application.
-    fn get_application_id(caller: &mut Caller) -> Result<MultiAddress, RuntimeError> {
+    fn get_application_id(caller: &mut Caller) -> Result<Address, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -154,10 +154,7 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    fn read_owner_balance(
-        caller: &mut Caller,
-        owner: MultiAddress,
-    ) -> Result<Amount, RuntimeError> {
+    fn read_owner_balance(caller: &mut Caller, owner: Address) -> Result<Amount, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -166,9 +163,7 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    fn read_owner_balances(
-        caller: &mut Caller,
-    ) -> Result<Vec<(MultiAddress, Amount)>, RuntimeError> {
+    fn read_owner_balances(caller: &mut Caller) -> Result<Vec<(Address, Amount)>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -177,7 +172,7 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    fn read_balance_owners(caller: &mut Caller) -> Result<Vec<MultiAddress>, RuntimeError> {
+    fn read_balance_owners(caller: &mut Caller) -> Result<Vec<Address>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -389,7 +384,7 @@ where
     Runtime: ContractRuntime + 'static,
 {
     /// Returns the authenticated signer for this execution, if there is one.
-    fn authenticated_signer(caller: &mut Caller) -> Result<Option<MultiAddress>, RuntimeError> {
+    fn authenticated_signer(caller: &mut Caller) -> Result<Option<Address>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -419,7 +414,7 @@ where
     }
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context.
-    fn authenticated_caller_id(caller: &mut Caller) -> Result<Option<MultiAddress>, RuntimeError> {
+    fn authenticated_caller_id(caller: &mut Caller) -> Result<Option<Address>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -469,7 +464,7 @@ where
     /// balance) to `destination`.
     fn transfer(
         caller: &mut Caller,
-        source: MultiAddress,
+        source: Address,
         destination: Account,
         amount: Amount,
     ) -> Result<(), RuntimeError> {
@@ -547,8 +542,8 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<MultiAddress>,
-    ) -> Result<MultiAddress, RuntimeError> {
+        required_application_ids: Vec<Address>,
+    ) -> Result<Address, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -560,7 +555,7 @@ where
     fn try_call_application(
         caller: &mut Caller,
         authenticated: bool,
-        callee_id: MultiAddress,
+        callee_id: Address,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
@@ -587,7 +582,7 @@ where
     /// Queries a service and returns the response.
     fn query_service(
         caller: &mut Caller,
-        application_id: MultiAddress,
+        application_id: Address,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
@@ -653,7 +648,7 @@ where
     /// Queries another application.
     fn try_query_application(
         caller: &mut Caller,
-        application: MultiAddress,
+        application: Address,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller

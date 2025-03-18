@@ -23,7 +23,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::CryptoHash,
     data_types::{Amount, Bytecode},
-    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, MultiAddress},
+    identifiers::{Account, Address, ApplicationId, ChainId, MessageId, ModuleId},
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
@@ -268,7 +268,7 @@ impl ClientWrapper {
         &self,
         chain_ids: &[ChainId],
         faucet: FaucetOption<'_>,
-    ) -> Result<Option<(ClaimOutcome, MultiAddress)>> {
+    ) -> Result<Option<(ClaimOutcome, Address)>> {
         let mut command = self.command().await?;
         command.args(["wallet", "init"]);
         match faucet {
@@ -318,7 +318,7 @@ impl ClientWrapper {
         &self,
         faucet: &Faucet,
         set_default: bool,
-    ) -> Result<(ClaimOutcome, MultiAddress)> {
+    ) -> Result<(ClaimOutcome, Address)> {
         let mut command = self.command().await?;
         command.args(["wallet", "request-chain", "--faucet", faucet.url()]);
         if set_default {
@@ -357,7 +357,7 @@ impl ClientWrapper {
         vm_runtime: VmRuntime,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[MultiAddress],
+        required_application_ids: &[Address],
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<A>> {
         let json_parameters = serde_json::to_string(parameters)?;
@@ -373,10 +373,10 @@ impl ClientWrapper {
             .args(["--json-argument", &json_argument]);
         if !required_application_ids.is_empty() {
             command.arg("--required-application-ids");
-            command.args(required_application_ids.iter().map(MultiAddress::to_string));
+            command.args(required_application_ids.iter().map(Address::to_string));
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        Ok(stdout.trim().parse::<MultiAddress>()?.with_abi())
+        Ok(stdout.trim().parse::<Address>()?.with_abi())
     }
 
     /// Runs `linera publish-module`.
@@ -408,7 +408,7 @@ impl ClientWrapper {
         module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[MultiAddress],
+        required_application_ids: &[Address],
         creator: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<Abi>> {
         let json_parameters = serde_json::to_string(parameters)?;
@@ -422,10 +422,10 @@ impl ClientWrapper {
             .args(creator.into().iter().map(ChainId::to_string));
         if !required_application_ids.is_empty() {
             command.arg("--required-application-ids");
-            command.args(required_application_ids.iter().map(MultiAddress::to_string));
+            command.args(required_application_ids.iter().map(Address::to_string));
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        Ok(stdout.trim().parse::<MultiAddress>()?.with_abi())
+        Ok(stdout.trim().parse::<Address>()?.with_abi())
     }
 
     /// Runs `linera service`.
@@ -670,9 +670,9 @@ impl ClientWrapper {
     pub async fn open_chain(
         &self,
         from: ChainId,
-        owner: Option<MultiAddress>,
+        owner: Option<Address>,
         initial_balance: Amount,
-    ) -> Result<(MessageId, ChainId, MultiAddress)> {
+    ) -> Result<(MessageId, ChainId, Address)> {
         let mut command = self.command().await?;
         command
             .arg("open-chain")
@@ -687,7 +687,7 @@ impl ClientWrapper {
         let mut split = stdout.split('\n');
         let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
-        let new_owner = MultiAddress::from_str(split.next().context("no owner in output")?)?;
+        let new_owner = Address::from_str(split.next().context("no owner in output")?)?;
         if let Some(owner) = owner {
             assert_eq!(owner, new_owner);
         }
@@ -715,7 +715,7 @@ impl ClientWrapper {
     pub async fn open_multi_owner_chain(
         &self,
         from: ChainId,
-        owners: Vec<MultiAddress>,
+        owners: Vec<Address>,
         weights: Vec<u64>,
         multi_leader_rounds: u32,
         balance: Amount,
@@ -726,7 +726,7 @@ impl ClientWrapper {
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
             .arg("--owners")
-            .args(owners.iter().map(MultiAddress::to_string))
+            .args(owners.iter().map(Address::to_string))
             .args(["--base-timeout-ms", &base_timeout_ms.to_string()]);
         if !weights.is_empty() {
             command
@@ -748,8 +748,8 @@ impl ClientWrapper {
     pub async fn change_ownership(
         &self,
         chain_id: ChainId,
-        super_owners: Vec<MultiAddress>,
-        owners: Vec<MultiAddress>,
+        super_owners: Vec<Address>,
+        owners: Vec<Address>,
     ) -> Result<()> {
         let mut command = self.command().await?;
         command
@@ -758,12 +758,12 @@ impl ClientWrapper {
         if !super_owners.is_empty() {
             command
                 .arg("--super-owners")
-                .args(super_owners.iter().map(MultiAddress::to_string));
+                .args(super_owners.iter().map(Address::to_string));
         }
         if !owners.is_empty() {
             command
                 .arg("--owners")
-                .args(owners.iter().map(MultiAddress::to_string));
+                .args(owners.iter().map(Address::to_string));
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
@@ -846,7 +846,7 @@ impl ClientWrapper {
         &self.storage
     }
 
-    pub fn get_owner(&self) -> Option<MultiAddress> {
+    pub fn get_owner(&self) -> Option<Address> {
         let wallet = self.load_wallet().ok()?;
         let chain_id = wallet.default_chain()?;
         let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
@@ -898,14 +898,14 @@ impl ClientWrapper {
     }
 
     /// Runs `linera keygen`.
-    pub async fn keygen(&self) -> Result<MultiAddress> {
+    pub async fn keygen(&self) -> Result<Address> {
         let stdout = self
             .command()
             .await?
             .arg("keygen")
             .spawn_and_wait_for_stdout()
             .await?;
-        MultiAddress::from_str(stdout.trim())
+        Address::from_str(stdout.trim())
     }
 
     /// Returns the default chain.
@@ -914,7 +914,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera assign`.
-    pub async fn assign(&self, owner: MultiAddress, message_id: MessageId) -> Result<ChainId> {
+    pub async fn assign(&self, owner: Address, message_id: MessageId) -> Result<ChainId> {
         let stdout = self
             .command()
             .await?
@@ -1214,12 +1214,12 @@ impl NodeService {
         module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[MultiAddress],
+        required_application_ids: &[Address],
     ) -> Result<ApplicationId<Abi>> {
         let module_id = module_id.forget_abi();
         let json_required_applications_ids = required_application_ids
             .iter()
-            .map(MultiAddress::to_string)
+            .map(Address::to_string)
             .collect::<Vec<_>>()
             .to_value();
         // Convert to `serde_json::Value` then `async_graphql::Value` via the trait `InputType`.
@@ -1244,7 +1244,7 @@ impl NodeService {
             .context("missing createApplication string in response")?
             .trim();
         Ok(app_id_str
-            .parse::<MultiAddress>()
+            .parse::<Address>()
             .context("invalid application ID")?
             .with_abi())
     }

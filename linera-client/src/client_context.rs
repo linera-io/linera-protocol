@@ -10,7 +10,7 @@ use futures::Future;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, ChainId, MessageId, MultiAddress},
+    identifiers::{Account, Address, ChainId, MessageId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -395,7 +395,7 @@ where
         &mut self,
         chain_id: ChainId,
         message_id: MessageId,
-        owner: MultiAddress,
+        owner: Address,
         validators: Option<Vec<(ValidatorPublicKey, String)>>,
     ) -> Result<(), Error>
     where
@@ -649,7 +649,7 @@ where
         num_chains: usize,
         transactions_per_block: usize,
         tokens_per_chain: Amount,
-        fungible_application_id: Option<MultiAddress>,
+        fungible_application_id: Option<Address>,
     ) -> Result<
         (
             HashMap<ChainId, ChainClient<NodeProvider, S>>,
@@ -899,7 +899,7 @@ where
     async fn supply_fungible_tokens(
         &mut self,
         key_pairs: &HashMap<ChainId, AccountSecretKey>,
-        application_id: MultiAddress,
+        application_id: Address,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet

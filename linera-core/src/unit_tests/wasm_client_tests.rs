@@ -20,7 +20,7 @@ use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, Bytecode, Event, OracleResponse},
-    identifiers::{ApplicationId, MultiAddress, StreamId, StreamName},
+    identifiers::{Address, ApplicationId, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -550,9 +550,9 @@ where
     let module_id = module_id
         .with_abi::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>();
 
-    let sender_owner = MultiAddress::from(sender.key_pair().await?.public());
-    let receiver_owner = MultiAddress::from(receiver.key_pair().await?.public());
-    let receiver2_owner = MultiAddress::from(receiver2.key_pair().await?.public());
+    let sender_owner = Address::from(sender.key_pair().await?.public());
+    let receiver_owner = Address::from(receiver.key_pair().await?.public());
+    let receiver2_owner = Address::from(receiver2.key_pair().await?.public());
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = fungible::InitialState { accounts };

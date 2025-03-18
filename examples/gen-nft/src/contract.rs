@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use gen_nft::{GenNftAbi, Message, Nft, Operation, TokenId};
 use linera_sdk::{
-    linera_base_types::{MultiAddress, WithContractAbi},
+    linera_base_types::{Address, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -124,7 +124,7 @@ impl Contract for GenNftContract {
 
 impl GenNftContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: MultiAddress) {
+    fn check_account_authentication(&mut self, owner: Address) {
         assert!(
             self.runtime.authenticated_signer() == Some(owner)
                 || self.runtime.authenticated_caller_id() == Some(owner),
@@ -161,7 +161,7 @@ impl GenNftContract {
             .expect("NFT not found")
     }
 
-    async fn mint(&mut self, owner: MultiAddress, prompt: String) {
+    async fn mint(&mut self, owner: Address, prompt: String) {
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),

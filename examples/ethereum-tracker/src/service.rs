@@ -84,7 +84,7 @@ impl Query {
         let address_value = event_values.next().expect("Missing initial address value");
         let balance_value = event_values.next().expect("Missing initial balance value");
 
-        let EthereumDataType::MultiAddress(address) = address_value else {
+        let EthereumDataType::Address(address) = address_value else {
             panic!("wrong type for the first entry");
         };
         let EthereumDataType::Uint256(balance) = balance_value else {
@@ -118,10 +118,10 @@ impl Query {
                     .expect("Missing destination address in response");
                 let amount_value = event_values.next().expect("Missing amount in response");
 
-                let EthereumDataType::MultiAddress(source) = source_value else {
+                let EthereumDataType::Address(source) = source_value else {
                     panic!("Wrong type for the source address");
                 };
-                let EthereumDataType::MultiAddress(destination) = destination_value else {
+                let EthereumDataType::Address(destination) = destination_value else {
                     panic!("Wrong type for the destination address");
                 };
                 let EthereumDataType::Uint256(value) = amount_value else {

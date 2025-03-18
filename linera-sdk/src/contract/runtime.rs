@@ -10,8 +10,8 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
-        MultiAddress, StreamName,
+        Account, Address, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
+        StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -32,11 +32,11 @@ where
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
-    authenticated_signer: Option<Option<MultiAddress>>,
+    authenticated_signer: Option<Option<Address>>,
     block_height: Option<BlockHeight>,
     message_is_bouncing: Option<Option<bool>>,
     message_id: Option<Option<MessageId>>,
-    authenticated_caller_id: Option<Option<MultiAddress>>,
+    authenticated_caller_id: Option<Option<Address>>,
     timestamp: Option<Timestamp>,
 }
 
@@ -90,7 +90,7 @@ where
     pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
         *self
             .application_id
-            .get_or_insert_with(|| MultiAddress::from(base_wit::get_application_id()).with_abi())
+            .get_or_insert_with(|| Address::from(base_wit::get_application_id()).with_abi())
     }
 
     /// Returns the chain ID of the current application creator.
@@ -127,7 +127,7 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&mut self, owner: MultiAddress) -> Amount {
+    pub fn owner_balance(&mut self, owner: Address) -> Amount {
         base_wit::read_owner_balance(owner.into()).into()
     }
 
@@ -172,10 +172,10 @@ where
     Application: Contract,
 {
     /// Returns the authenticated signer for this execution, if there is one.
-    pub fn authenticated_signer(&mut self) -> Option<MultiAddress> {
+    pub fn authenticated_signer(&mut self) -> Option<Address> {
         *self
             .authenticated_signer
-            .get_or_insert_with(|| contract_wit::authenticated_signer().map(MultiAddress::from))
+            .get_or_insert_with(|| contract_wit::authenticated_signer().map(Address::from))
     }
 
     /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
@@ -196,7 +196,7 @@ where
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
-    pub fn authenticated_caller_id(&mut self) -> Option<MultiAddress> {
+    pub fn authenticated_caller_id(&mut self) -> Option<Address> {
         *self
             .authenticated_caller_id
             .get_or_insert_with(|| contract_wit::authenticated_caller_id().map(Into::into))
@@ -231,7 +231,7 @@ where
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
-    pub fn transfer(&mut self, source: MultiAddress, destination: Account, amount: Amount) {
+    pub fn transfer(&mut self, source: Address, destination: Account, amount: Amount) {
         contract_wit::transfer(source.into(), destination.into(), amount.into())
     }
 
@@ -319,7 +319,7 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<MultiAddress>,
+        required_application_ids: Vec<Address>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
@@ -335,7 +335,7 @@ where
             .into_iter()
             .map(From::from)
             .collect();
-        let application_id: MultiAddress = contract_wit::create_application(
+        let application_id: Address = contract_wit::create_application(
             module_id.into(),
             &parameters,
             &argument,

@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{
     data_types::Amount,
-    identifiers::{Account, ChainId, MultiAddress},
+    identifiers::{Account, Address, ChainId},
     vm::VmRuntime,
 };
 use linera_service::cli_wrappers::{
@@ -38,7 +38,7 @@ fn reqwest_client() -> reqwest::Client {
 async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: Account, amount: &str) {
     let variables = transfer::Variables {
         chain_id: from,
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
         recipient_chain: to.chain_id,
         recipient_account: to.owner,
         amount: Amount::from_str(amount).unwrap(),

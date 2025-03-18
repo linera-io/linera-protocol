@@ -8,7 +8,7 @@ mod state;
 use amm::{AmmAbi, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Amount, ApplicationId, ChainId, MultiAddress, WithContractAbi},
+    linera_base_types::{Address, Amount, ApplicationId, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -310,7 +310,7 @@ impl Contract for AmmContract {
 
 impl AmmContract {
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: MultiAddress) {
+    fn check_account_authentication(&mut self, owner: Address) {
         assert!(
             self.runtime.authenticated_signer() == Some(owner)
                 || self.runtime.authenticated_caller_id() == Some(owner),
@@ -428,7 +428,7 @@ impl AmmContract {
         )
     }
 
-    fn get_amm_app_owner(&mut self) -> MultiAddress {
+    fn get_amm_app_owner(&mut self) -> Address {
         self.runtime.application_id().forget_abi()
     }
 
@@ -450,14 +450,14 @@ impl AmmContract {
             .chain_id
     }
 
-    fn get_message_origin_account(&mut self, owner: MultiAddress) -> Account {
+    fn get_message_origin_account(&mut self, owner: Address) -> Account {
         Account {
             chain_id: self.get_message_creation_chain_id(),
             owner,
         }
     }
 
-    fn get_account_on_amm_chain(&mut self, owner: MultiAddress) -> Account {
+    fn get_account_on_amm_chain(&mut self, owner: Address) -> Account {
         Account {
             chain_id: self.get_amm_chain_id(),
             owner,
@@ -659,7 +659,7 @@ impl AmmContract {
 
     fn transfer(
         &mut self,
-        source_owner: MultiAddress,
+        source_owner: Address,
         amount: Amount,
         target_account: Account,
         token_idx: u32,
@@ -674,7 +674,7 @@ impl AmmContract {
         self.runtime.call_application(true, token, &operation);
     }
 
-    fn balance(&mut self, owner: &MultiAddress, token_idx: u32) -> Amount {
+    fn balance(&mut self, owner: &Address, token_idx: u32) -> Amount {
         let balance = fungible::Operation::Balance { owner: *owner };
         let token = self.fungible_id(token_idx);
         match self.runtime.call_application(true, token, &balance) {

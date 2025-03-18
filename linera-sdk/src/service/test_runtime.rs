@@ -13,7 +13,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     hex, http,
-    identifiers::{ApplicationId, ChainId, MultiAddress},
+    identifiers::{Address, ApplicationId, ChainId},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -30,7 +30,7 @@ where
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
     chain_balance: Mutex<Option<Amount>>,
-    owner_balances: Mutex<Option<HashMap<MultiAddress, Amount>>>,
+    owner_balances: Mutex<Option<HashMap<Address, Amount>>>,
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
     expected_http_requests: Mutex<VecDeque<(http::Request, http::Response)>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
@@ -214,7 +214,7 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn with_owner_balances(
         self,
-        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
+        owner_balances: impl IntoIterator<Item = (Address, Amount)>,
     ) -> Self {
         *self.owner_balances.lock().unwrap() = Some(owner_balances.into_iter().collect());
         self
@@ -223,20 +223,20 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn set_owner_balances(
         &self,
-        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
+        owner_balances: impl IntoIterator<Item = (Address, Amount)>,
     ) -> &Self {
         *self.owner_balances.lock().unwrap() = Some(owner_balances.into_iter().collect());
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn with_owner_balance(self, owner: MultiAddress, balance: Amount) -> Self {
+    pub fn with_owner_balance(self, owner: Address, balance: Amount) -> Self {
         self.set_owner_balance(owner, balance);
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn set_owner_balance(&self, owner: MultiAddress, balance: Amount) -> &Self {
+    pub fn set_owner_balance(&self, owner: Address, balance: Amount) -> &Self {
         self.owner_balances
             .lock()
             .unwrap()
@@ -246,7 +246,7 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: MultiAddress) -> Amount {
+    pub fn owner_balance(&self, owner: Address) -> Amount {
         self.owner_balances
             .lock()
             .unwrap()
@@ -262,13 +262,13 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(MultiAddress, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(Address, Amount)> {
         self.owner_balances
             .lock()
             .unwrap()
             .as_ref()
             .expect(
-                "MultiAddress balances have not been mocked, \
+                "Address balances have not been mocked, \
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .iter()
@@ -277,13 +277,13 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<MultiAddress> {
+    pub fn balance_owners(&self) -> Vec<Address> {
         self.owner_balances
             .lock()
             .unwrap()
             .as_ref()
             .expect(
-                "MultiAddress balances have not been mocked, \
+                "Address balances have not been mocked, \
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .keys()
@@ -344,7 +344,7 @@ where
     /// Configures the handler for application queries made during the test.
     pub fn with_query_application_handler(
         self,
-        handler: impl FnMut(MultiAddress, Vec<u8>) -> Vec<u8> + Send + 'static,
+        handler: impl FnMut(Address, Vec<u8>) -> Vec<u8> + Send + 'static,
     ) -> Self {
         *self.query_application_handler.lock().unwrap() = Some(Box::new(handler));
         self
@@ -353,7 +353,7 @@ where
     /// Configures the handler for application queries made during the test.
     pub fn set_query_application_handler(
         &self,
-        handler: impl FnMut(MultiAddress, Vec<u8>) -> Vec<u8> + Send + 'static,
+        handler: impl FnMut(Address, Vec<u8>) -> Vec<u8> + Send + 'static,
     ) -> &Self {
         *self.query_application_handler.lock().unwrap() = Some(Box::new(handler));
         self
@@ -470,4 +470,4 @@ where
 }
 
 /// A type alias for the handler for application queries.
-pub type QueryApplicationHandler = Box<dyn FnMut(MultiAddress, Vec<u8>) -> Vec<u8> + Send>;
+pub type QueryApplicationHandler = Box<dyn FnMut(Address, Vec<u8>) -> Vec<u8> + Send>;

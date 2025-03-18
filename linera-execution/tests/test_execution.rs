@@ -12,7 +12,7 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlockHeight, OracleResponse, Resources,
         SendMessageRequest, Timestamp,
     },
-    identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, MultiAddress},
+    identifiers::{Account, Address, ChainDescription, ChainId, Destination, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -88,7 +88,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
-    let owner = MultiAddress::from(AccountPublicKey::test_key(0));
+    let owner = Address::from(AccountPublicKey::test_key(0));
     let state_key = vec![];
     let dummy_operation = vec![1];
 
@@ -627,7 +627,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -925,7 +925,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1008,7 +1008,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1102,7 +1102,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
     };
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
@@ -1235,7 +1235,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
     };
 
     // Return to checking the user application outcomes
@@ -1301,7 +1301,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership()?, ownership);
             let destination = Account::chain(ChainId::root(2));
-            runtime.transfer(MultiAddress::chain(), destination, Amount::ONE)?;
+            runtime.transfer(Address::chain(), destination, Amount::ONE)?;
             let id = runtime.application_id()?;
             let application_permissions = ApplicationPermissions::new_single(id);
             let (actual_message_id, chain_id) =
@@ -1478,8 +1478,8 @@ async fn test_close_chain() -> anyhow::Result<()> {
 )]
 #[tokio::test]
 async fn test_message_receipt_spending_chain_balance(
-    receiving_chain_owner: Option<MultiAddress>,
-    authenticated_signer: Option<MultiAddress>,
+    receiving_chain_owner: Option<Address>,
+    authenticated_signer: Option<Address>,
 ) -> anyhow::Result<Result<(), ExecutionError>> {
     let amount = Amount::ONE;
     let super_owners = receiving_chain_owner.into_iter().collect();
@@ -1498,11 +1498,11 @@ async fn test_message_receipt_spending_chain_balance(
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
-    let receiver_chain_account = MultiAddress::chain();
+    let receiver_chain_account = Address::chain();
     let sender_chain_id = ChainId::root(2);
     let recipient = Account {
         chain_id: sender_chain_id,
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
     };
 
     application.expect_call(ExpectedCall::execute_message(

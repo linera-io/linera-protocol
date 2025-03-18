@@ -9,7 +9,7 @@ use linera_base::{
 };
 
 use super::{
-    ApplicationRegistry, ApplicationRegistryView, UserApplicationDescription, MultiAddress,
+    ApplicationRegistry, ApplicationRegistryView, UserApplicationDescription, Address,
 };
 
 fn message_id(index: u32) -> MessageId {
@@ -28,8 +28,8 @@ fn module_id() -> ModuleId {
     )
 }
 
-fn app_id(index: u32) -> MultiAddress {
-    MultiAddress {
+fn app_id(index: u32) -> Address {
+    Address {
         module_id: module_id(),
         creation: message_id(index),
     }

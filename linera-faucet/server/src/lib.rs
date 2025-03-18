@@ -12,7 +12,7 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{ChainId, MessageId, MultiAddress},
+    identifiers::{Address, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -108,7 +108,7 @@ where
     C: ClientContext,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
-    async fn claim(&self, owner: MultiAddress) -> Result<ClaimOutcome, Error> {
+    async fn claim(&self, owner: Address) -> Result<ClaimOutcome, Error> {
         self.do_claim(owner).await
     }
 }
@@ -117,7 +117,7 @@ impl<C> MutationRoot<C>
 where
     C: ClientContext,
 {
-    async fn do_claim(&self, owner: MultiAddress) -> Result<ClaimOutcome, Error> {
+    async fn do_claim(&self, owner: Address) -> Result<ClaimOutcome, Error> {
         let client = self.context.lock().await.make_chain_client(self.chain_id)?;
 
         if self.start_timestamp < self.end_timestamp {

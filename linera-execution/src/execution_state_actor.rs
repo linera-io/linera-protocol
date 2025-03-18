@@ -17,7 +17,7 @@ use linera_base::prometheus_util::{
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, BlobId, ChainId, MessageId, MultiAddress},
+    identifiers::{Account, Address, BlobId, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -65,7 +65,7 @@ where
 {
     pub(crate) async fn load_contract(
         &mut self,
-        id: MultiAddress,
+        id: Address,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -92,7 +92,7 @@ where
 
     pub(crate) async fn load_service(
         &mut self,
-        id: MultiAddress,
+        id: Address,
         txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -504,7 +504,7 @@ where
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {
-        id: MultiAddress,
+        id: Address,
         #[debug(skip)]
         callback: Sender<(
             UserContractCode,
@@ -517,7 +517,7 @@ pub enum ExecutionRequest {
 
     #[cfg(not(web))]
     LoadService {
-        id: MultiAddress,
+        id: Address,
         #[debug(skip)]
         callback: Sender<(
             UserServiceCode,
@@ -534,28 +534,28 @@ pub enum ExecutionRequest {
     },
 
     OwnerBalance {
-        owner: MultiAddress,
+        owner: Address,
         #[debug(skip)]
         callback: Sender<Amount>,
     },
 
     OwnerBalances {
         #[debug(skip)]
-        callback: Sender<Vec<(MultiAddress, Amount)>>,
+        callback: Sender<Vec<(Address, Amount)>>,
     },
 
     BalanceOwners {
         #[debug(skip)]
-        callback: Sender<Vec<MultiAddress>>,
+        callback: Sender<Vec<Address>>,
     },
 
     Transfer {
-        source: MultiAddress,
+        source: Address,
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        signer: Option<MultiAddress>,
-        application_id: MultiAddress,
+        signer: Option<Address>,
+        application_id: Address,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
@@ -565,8 +565,8 @@ pub enum ExecutionRequest {
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        signer: Option<MultiAddress>,
-        application_id: MultiAddress,
+        signer: Option<Address>,
+        application_id: Address,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
@@ -582,7 +582,7 @@ pub enum ExecutionRequest {
     },
 
     ReadValueBytes {
-        id: MultiAddress,
+        id: Address,
         #[debug(with = hex_debug)]
         key: Vec<u8>,
         #[debug(skip)]
@@ -590,21 +590,21 @@ pub enum ExecutionRequest {
     },
 
     ContainsKey {
-        id: MultiAddress,
+        id: Address,
         key: Vec<u8>,
         #[debug(skip)]
         callback: Sender<bool>,
     },
 
     ContainsKeys {
-        id: MultiAddress,
+        id: Address,
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         callback: Sender<Vec<bool>>,
     },
 
     ReadMultiValuesBytes {
-        id: MultiAddress,
+        id: Address,
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         #[debug(skip)]
@@ -612,7 +612,7 @@ pub enum ExecutionRequest {
     },
 
     FindKeysByPrefix {
-        id: MultiAddress,
+        id: Address,
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
@@ -620,7 +620,7 @@ pub enum ExecutionRequest {
     },
 
     FindKeyValuesByPrefix {
-        id: MultiAddress,
+        id: Address,
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
@@ -628,7 +628,7 @@ pub enum ExecutionRequest {
     },
 
     WriteBatch {
-        id: MultiAddress,
+        id: Address,
         batch: Batch,
         #[debug(skip)]
         callback: Sender<()>,
@@ -645,13 +645,13 @@ pub enum ExecutionRequest {
     },
 
     CloseChain {
-        application_id: MultiAddress,
+        application_id: Address,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
     },
 
     ChangeApplicationPermissions {
-        application_id: MultiAddress,
+        application_id: Address,
         application_permissions: ApplicationPermissions,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
@@ -662,7 +662,7 @@ pub enum ExecutionRequest {
         block_height: BlockHeight,
         module_id: ModuleId,
         parameters: Vec<u8>,
-        required_application_ids: Vec<MultiAddress>,
+        required_application_ids: Vec<Address>,
         #[debug(skip)]
         txn_tracker: TransactionTracker,
         #[debug(skip)]

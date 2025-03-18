@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, MultiAddress},
+    identifiers::{Address, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -199,7 +199,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
             public_key: Some(block_proposal.public_key.into()),
-            owner: Some(MultiAddress::from(block_proposal.public_key).try_into()?),
+            owner: Some(Address::from(block_proposal.public_key).try_into()?),
             signature: Some(block_proposal.signature.into()),
             validated_block_certificate: block_proposal
                 .validated_block_certificate
@@ -778,20 +778,20 @@ impl From<api::BlockHeight> for BlockHeight {
     }
 }
 
-impl TryFrom<MultiAddress> for api::MultiAddress {
+impl TryFrom<Address> for api::Address {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(account_owner: MultiAddress) -> Result<Self, Self::Error> {
+    fn try_from(account_owner: Address) -> Result<Self, Self::Error> {
         Ok(Self {
             bytes: bincode::serialize(&account_owner)?,
         })
     }
 }
 
-impl TryFrom<api::MultiAddress> for MultiAddress {
+impl TryFrom<api::Address> for Address {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(account_owner: api::MultiAddress) -> Result<Self, Self::Error> {
+    fn try_from(account_owner: api::Address) -> Result<Self, Self::Error> {
         Ok(bincode::deserialize(&account_owner.bytes)?)
     }
 }
@@ -1024,8 +1024,8 @@ pub mod tests {
     #[test]
     pub fn test_owner() {
         let key_pair = AccountSecretKey::generate();
-        let owner = MultiAddress::from(key_pair.public());
-        round_trip_check::<_, api::MultiAddress>(owner);
+        let owner = Address::from(key_pair.public());
+        round_trip_check::<_, api::Address>(owner);
     }
 
     #[test]
@@ -1087,7 +1087,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
-            request_owner_balance: MultiAddress::chain(),
+            request_owner_balance: Address::chain(),
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: Some(
                 linera_core::data_types::BlockHeightRange {

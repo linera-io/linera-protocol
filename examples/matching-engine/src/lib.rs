@@ -7,7 +7,7 @@ use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{Amount, ApplicationId, ContractAbi, MultiAddress, ServiceAbi},
+    linera_base_types::{Address, Amount, ApplicationId, ContractAbi, ServiceAbi},
     views::{CustomSerialize, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -142,19 +142,16 @@ scalar!(OrderNature);
 pub enum Order {
     /// Insertion of an order
     Insert {
-        owner: MultiAddress,
+        owner: Address,
         amount: Amount,
         nature: OrderNature,
         price: Price,
     },
     /// Cancelling of an order
-    Cancel {
-        owner: MultiAddress,
-        order_id: OrderId,
-    },
+    Cancel { owner: Address, order_id: OrderId },
     /// Modifying order (only decreasing is allowed)
     Modify {
-        owner: MultiAddress,
+        owner: Address,
         order_id: OrderId,
         cancel_amount: Amount,
     },

@@ -6,7 +6,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, TestString},
     data_types::{BlobContent, OracleResponse, Round},
     hashed::Hashed,
-    identifiers::{BlobType, ChainDescription, Destination, MultiAddress},
+    identifiers::{Address, BlobType, ChainDescription, Destination},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -67,7 +67,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Destination>(&samples)?;
     tracer.trace_type::<ChainDescription>(&samples)?;
     tracer.trace_type::<ChainOwnership>(&samples)?;
-    tracer.trace_type::<MultiAddress>(&samples)?;
+    tracer.trace_type::<Address>(&samples)?;
     tracer.trace_type::<LockingBlock>(&samples)?;
     tracer.trace_type::<ChainManagerInfo>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
@@ -75,7 +75,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<RpcMessage>(&samples)?;
     tracer.trace_type::<BlobType>(&samples)?;
     tracer.trace_type::<BlobContent>(&samples)?;
-    tracer.trace_type::<MultiAddress>(&samples)?;
+    tracer.trace_type::<Address>(&samples)?;
     tracer.registry()
 }
 

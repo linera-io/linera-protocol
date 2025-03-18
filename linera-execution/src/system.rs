@@ -23,8 +23,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName, EventId, MessageId,
-        ModuleId, MultiAddress, StreamId,
+        Account, Address, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName, EventId,
+        MessageId, ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -86,7 +86,7 @@ pub struct SystemExecutionStateView<C> {
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
-    pub balances: HashedMapView<C, MultiAddress, Amount>,
+    pub balances: HashedMapView<C, Address, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
     /// Whether this chain has been closed.
@@ -114,7 +114,7 @@ pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
-        owner: MultiAddress,
+        owner: Address,
         recipient: Recipient,
         amount: Amount,
     },
@@ -122,7 +122,7 @@ pub enum SystemOperation {
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
     /// process the message.
     Claim {
-        owner: MultiAddress,
+        owner: Address,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -136,10 +136,10 @@ pub enum SystemOperation {
     ChangeOwnership {
         /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
         #[debug(skip_if = Vec::is_empty)]
-        super_owners: Vec<MultiAddress>,
+        super_owners: Vec<Address>,
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
-        owners: Vec<(MultiAddress, u64)>,
+        owners: Vec<(Address, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
         /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -181,7 +181,7 @@ pub enum SystemOperation {
         #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
         instantiation_argument: Vec<u8>,
         #[debug(skip_if = Vec::is_empty)]
-        required_application_ids: Vec<MultiAddress>,
+        required_application_ids: Vec<Address>,
     },
     /// Operations that are only allowed on the admin chain.
     Admin(AdminOperation),
@@ -209,15 +209,15 @@ pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
     Credit {
-        target: MultiAddress,
+        target: Address,
         amount: Amount,
-        source: MultiAddress,
+        source: Address,
     },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
     /// the recipient. The message must be properly authenticated. Receiver chains may
     /// refuse it depending on their configuration.
     Withdraw {
-        owner: MultiAddress,
+        owner: Address,
         amount: Amount,
         recipient: Recipient,
     },
@@ -337,7 +337,7 @@ impl UserData {
 
 #[derive(Debug)]
 pub struct CreateApplicationResult {
-    pub app_id: MultiAddress,
+    pub app_id: Address,
     pub txn_tracker: TransactionTracker,
 }
 
@@ -368,7 +368,7 @@ where
         context: OperationContext,
         operation: SystemOperation,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<Option<(MultiAddress, Vec<u8>)>, ExecutionError> {
+    ) -> Result<Option<(Address, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut outcome = RawExecutionOutcome {
             authenticated_signer: context.authenticated_signer,
@@ -633,13 +633,13 @@ where
 
     pub async fn transfer(
         &mut self,
-        authenticated_signer: Option<MultiAddress>,
-        authenticated_application_id: Option<MultiAddress>,
-        source: MultiAddress,
+        authenticated_signer: Option<Address>,
+        authenticated_application_id: Option<Address>,
+        source: Address,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
-        if source == MultiAddress::chain() && authenticated_signer.is_some() {
+        if source == Address::chain() && authenticated_signer.is_some() {
             ensure!(
                 self.ownership
                     .get()
@@ -686,9 +686,9 @@ where
 
     pub async fn claim(
         &self,
-        authenticated_signer: Option<MultiAddress>,
-        authenticated_application_id: Option<MultiAddress>,
-        source: MultiAddress,
+        authenticated_signer: Option<Address>,
+        authenticated_application_id: Option<Address>,
+        source: Address,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -713,12 +713,8 @@ where
     }
 
     /// Debits an [`Amount`] of tokens from an account's balance.
-    async fn debit(
-        &mut self,
-        account: &MultiAddress,
-        amount: Amount,
-    ) -> Result<(), ExecutionError> {
-        let balance = if account == &MultiAddress::chain() {
+    async fn debit(&mut self, account: &Address, amount: Amount) -> Result<(), ExecutionError> {
+        let balance = if account == &Address::chain() {
             self.balance.get_mut()
         } else {
             self.balances.get_mut(account).await?.ok_or_else(|| {
@@ -732,7 +728,7 @@ where
             .try_sub_assign(amount)
             .map_err(|_| ExecutionError::InsufficientFunding { balance: *balance })?;
 
-        if account != &MultiAddress::chain() && balance.is_zero() {
+        if account != &Address::chain() && balance.is_zero() {
             self.balances.remove(account)?;
         }
 
@@ -754,7 +750,7 @@ where
                 target,
             } => {
                 let receiver = if context.is_bouncing { source } else { target };
-                if receiver == MultiAddress::chain() {
+                if receiver == Address::chain() {
                     let new_balance = self.balance.get().saturating_add(amount);
                     self.balance.set(new_balance);
                 } else {
@@ -862,7 +858,7 @@ where
                 epoch: config.epoch,
             }
         );
-        self.debit(&MultiAddress::chain(), config.balance).await?;
+        self.debit(&Address::chain(), config.balance).await?;
         let open_chain_message = RawOutgoingMessage {
             destination: Destination::Recipient(child_id),
             authenticated: false,
@@ -903,7 +899,7 @@ where
         block_height: BlockHeight,
         module_id: ModuleId,
         parameters: Vec<u8>,
-        required_application_ids: Vec<MultiAddress>,
+        required_application_ids: Vec<Address>,
         mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
@@ -931,7 +927,7 @@ where
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
 
         Ok(CreateApplicationResult {
-            app_id: MultiAddress::from(&application_description),
+            app_id: Address::from(&application_description),
             txn_tracker,
         })
     }
@@ -951,7 +947,7 @@ where
     /// Retrieves an application's description.
     pub async fn describe_application(
         &mut self,
-        id: MultiAddress,
+        id: Address,
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<UserApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
@@ -983,9 +979,9 @@ where
     /// Retrieves the recursive dependencies of applications and applies a topological sort.
     pub async fn find_dependencies(
         &mut self,
-        mut stack: Vec<MultiAddress>,
+        mut stack: Vec<Address>,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<MultiAddress>, ExecutionError> {
+    ) -> Result<Vec<Address>, ExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
         // The entries already inserted in `result`.

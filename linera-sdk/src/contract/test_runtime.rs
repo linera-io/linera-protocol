@@ -15,8 +15,8 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
-        MultiAddress, StreamName,
+        Account, Address, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
+        StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -28,8 +28,8 @@ struct ExpectedCreateApplicationCall {
     module_id: ModuleId,
     parameters: Vec<u8>,
     argument: Vec<u8>,
-    required_application_ids: Vec<MultiAddress>,
-    application_id: MultiAddress,
+    required_application_ids: Vec<Address>,
+    application_id: Address,
 }
 
 /// A mock of the common runtime to interface with the host executing the contract.
@@ -41,15 +41,15 @@ where
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
-    authenticated_signer: Option<Option<MultiAddress>>,
+    authenticated_signer: Option<Option<Address>>,
     block_height: Option<BlockHeight>,
     round: Option<u32>,
     message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
-    authenticated_caller_id: Option<Option<MultiAddress>>,
+    authenticated_caller_id: Option<Option<Address>>,
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
-    owner_balances: Option<HashMap<MultiAddress, Amount>>,
+    owner_balances: Option<HashMap<Address, Amount>>,
     chain_ownership: Option<ChainOwnership>,
     can_close_chain: Option<bool>,
     can_change_application_permissions: Option<bool>,
@@ -60,7 +60,7 @@ where
     outgoing_transfers: HashMap<Account, Amount>,
     events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
-    expected_service_queries: VecDeque<(MultiAddress, String, String)>,
+    expected_service_queries: VecDeque<(Address, String, String)>,
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
@@ -221,7 +221,7 @@ where
     /// Configures the authenticated signer to return during the test.
     pub fn with_authenticated_signer(
         mut self,
-        authenticated_signer: impl Into<Option<MultiAddress>>,
+        authenticated_signer: impl Into<Option<Address>>,
     ) -> Self {
         self.authenticated_signer = Some(authenticated_signer.into());
         self
@@ -230,14 +230,14 @@ where
     /// Configures the authenticated signer to return during the test.
     pub fn set_authenticated_signer(
         &mut self,
-        authenticated_signer: impl Into<Option<MultiAddress>>,
+        authenticated_signer: impl Into<Option<Address>>,
     ) -> &mut Self {
         self.authenticated_signer = Some(authenticated_signer.into());
         self
     }
 
     /// Returns the authenticated signer for this execution, if there is one.
-    pub fn authenticated_signer(&mut self) -> Option<MultiAddress> {
+    pub fn authenticated_signer(&mut self) -> Option<Address> {
         self.authenticated_signer.expect(
             "Authenticated signer has not been mocked, \
             please call `MockContractRuntime::set_authenticated_signer` first",
@@ -327,7 +327,7 @@ where
     /// Configures the authenticated caller ID to return during the test.
     pub fn with_authenticated_caller_id(
         mut self,
-        authenticated_caller_id: impl Into<Option<MultiAddress>>,
+        authenticated_caller_id: impl Into<Option<Address>>,
     ) -> Self {
         self.authenticated_caller_id = Some(authenticated_caller_id.into());
         self
@@ -336,7 +336,7 @@ where
     /// Configures the authenticated caller ID to return during the test.
     pub fn set_authenticated_caller_id(
         &mut self,
-        authenticated_caller_id: impl Into<Option<MultiAddress>>,
+        authenticated_caller_id: impl Into<Option<Address>>,
     ) -> &mut Self {
         self.authenticated_caller_id = Some(authenticated_caller_id.into());
         self
@@ -344,7 +344,7 @@ where
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
-    pub fn authenticated_caller_id(&mut self) -> Option<MultiAddress> {
+    pub fn authenticated_caller_id(&mut self) -> Option<Address> {
         self.authenticated_caller_id.expect(
             "Authenticated caller ID has not been mocked, \
             please call `MockContractRuntime::set_authenticated_caller_id` first",
@@ -399,7 +399,7 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn with_owner_balances(
         mut self,
-        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
+        owner_balances: impl IntoIterator<Item = (Address, Amount)>,
     ) -> Self {
         self.owner_balances = Some(owner_balances.into_iter().collect());
         self
@@ -408,20 +408,20 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn set_owner_balances(
         &mut self,
-        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
+        owner_balances: impl IntoIterator<Item = (Address, Amount)>,
     ) -> &mut Self {
         self.owner_balances = Some(owner_balances.into_iter().collect());
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn with_owner_balance(mut self, owner: MultiAddress, balance: Amount) -> Self {
+    pub fn with_owner_balance(mut self, owner: Address, balance: Amount) -> Self {
         self.set_owner_balance(owner, balance);
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn set_owner_balance(&mut self, owner: MultiAddress, balance: Amount) -> &mut Self {
+    pub fn set_owner_balance(&mut self, owner: Address, balance: Amount) -> &mut Self {
         self.owner_balances
             .get_or_insert_with(HashMap::new)
             .insert(owner, balance);
@@ -429,16 +429,16 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&mut self, owner: MultiAddress) -> Amount {
+    pub fn owner_balance(&mut self, owner: Address) -> Amount {
         *self.owner_balance_mut(owner)
     }
 
     /// Returns a mutable reference to the balance of one of the accounts on this chain.
-    fn owner_balance_mut(&mut self, owner: MultiAddress) -> &mut Amount {
+    fn owner_balance_mut(&mut self, owner: Address) -> &mut Amount {
         self.owner_balances
             .as_mut()
             .expect(
-                "MultiAddress balances have not been mocked, \
+                "Address balances have not been mocked, \
                 please call `MockContractRuntime::set_owner_balances` first",
             )
             .get_mut(&owner)
@@ -499,7 +499,7 @@ where
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
-    pub fn transfer(&mut self, source: MultiAddress, destination: Account, amount: Amount) {
+    pub fn transfer(&mut self, source: Address, destination: Account, amount: Amount) {
         self.debit(source, amount);
 
         if Some(destination.chain_id) == self.chain_id {
@@ -514,8 +514,8 @@ where
 
     /// Debits an `amount` of native tokens from a `source` owner account (or the current
     /// chain's balance).
-    fn debit(&mut self, source: MultiAddress, amount: Amount) {
-        let source_balance = if source == MultiAddress::chain() {
+    fn debit(&mut self, source: Address, amount: Amount) {
+        let source_balance = if source == Address::chain() {
             self.chain_balance_mut()
         } else {
             self.owner_balance_mut(source)
@@ -528,8 +528,8 @@ where
 
     /// Credits an `amount` of native tokens into a `destination` owner account (or the
     /// current chain's balance).
-    fn credit(&mut self, destination: MultiAddress, amount: Amount) {
-        let destination_balance = if destination == MultiAddress::chain() {
+    fn credit(&mut self, destination: Address, amount: Amount) {
+        let destination_balance = if destination == Address::chain() {
             self.chain_balance_mut()
         } else {
             self.owner_balance_mut(destination)
@@ -700,8 +700,8 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<MultiAddress>,
-        application_id: MultiAddress,
+        required_application_ids: Vec<Address>,
+        application_id: Address,
     ) where
         Parameters: Serialize,
         InstantiationArgument: Serialize,
@@ -727,7 +727,7 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<MultiAddress>,
+        required_application_ids: Vec<Address>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
@@ -759,7 +759,7 @@ where
     /// Configures the handler for cross-application calls made during the test.
     pub fn with_call_application_handler(
         mut self,
-        handler: impl FnMut(bool, MultiAddress, Vec<u8>) -> Vec<u8> + 'static,
+        handler: impl FnMut(bool, Address, Vec<u8>) -> Vec<u8> + 'static,
     ) -> Self {
         self.call_application_handler = Some(Box::new(handler));
         self
@@ -768,7 +768,7 @@ where
     /// Configures the handler for cross-application calls made during the test.
     pub fn set_call_application_handler(
         &mut self,
-        handler: impl FnMut(bool, MultiAddress, Vec<u8>) -> Vec<u8> + 'static,
+        handler: impl FnMut(bool, Address, Vec<u8>) -> Vec<u8> + 'static,
     ) -> &mut Self {
         self.call_application_handler = Some(Box::new(handler));
         self
@@ -901,7 +901,7 @@ where
 }
 
 /// A type alias for the handler for cross-application calls.
-pub type CallApplicationHandler = Box<dyn FnMut(bool, MultiAddress, Vec<u8>) -> Vec<u8>>;
+pub type CallApplicationHandler = Box<dyn FnMut(bool, Address, Vec<u8>) -> Vec<u8>>;
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then
 /// sends the message once it is dropped.

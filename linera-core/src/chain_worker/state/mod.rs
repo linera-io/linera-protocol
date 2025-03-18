@@ -17,7 +17,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, MultiAddress},
+    identifiers::{Address, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -168,7 +168,7 @@ where
     /// Returns an application's description.
     pub(super) async fn describe_application(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
     ) -> Result<UserApplicationDescription, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await

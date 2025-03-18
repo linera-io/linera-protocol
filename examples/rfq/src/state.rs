@@ -3,7 +3,7 @@
 
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
-    linera_base_types::{Amount, ChainId, MultiAddress},
+    linera_base_types::{Address, Amount, ChainId},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use rfq::{RequestId, TokenPair, Tokens};
@@ -20,11 +20,11 @@ pub struct QuoteProvided {
     token_pair: TokenPair,
     amount: Amount,
     amount_offered: Amount,
-    quoter_owner: MultiAddress,
+    quoter_owner: Address,
 }
 
 impl QuoteProvided {
-    pub fn get_quoter_owner(&self) -> MultiAddress {
+    pub fn get_quoter_owner(&self) -> Address {
         self.quoter_owner
     }
 
@@ -42,7 +42,7 @@ pub struct ExchangeInProgress {
 pub struct AwaitingTokens {
     pub token_pair: TokenPair,
     pub amount_offered: Amount,
-    pub quoter_account: MultiAddress,
+    pub quoter_account: Address,
     pub temp_chain_id: ChainId,
 }
 
@@ -71,7 +71,7 @@ pub struct RequestData {
 
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct TempChainTokenHolder {
-    pub account_owner: MultiAddress,
+    pub account_owner: Address,
     pub chain_id: ChainId,
 }
 
@@ -92,7 +92,7 @@ pub struct RfqState {
 }
 
 impl RequestData {
-    pub fn update_state_with_quote(&mut self, quote: Amount, quoter_owner: MultiAddress) {
+    pub fn update_state_with_quote(&mut self, quote: Amount, quoter_owner: Address) {
         match &self.state {
             RequestState::QuoteRequested(QuoteRequested { token_pair, amount }) => {
                 self.state = RequestState::QuoteProvided(QuoteProvided {

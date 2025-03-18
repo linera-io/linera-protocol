@@ -27,7 +27,7 @@ use linera_base::{
     bcs,
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{BlobId, ChainId, MultiAddress},
+    identifiers::{Address, BlobId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
@@ -153,9 +153,9 @@ pub enum ChainError {
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
     ClosedChain,
     #[error("All operations on this chain must be from one of the following applications: {0:?}")]
-    AuthorizedApplications(Vec<MultiAddress>),
+    AuthorizedApplications(Vec<Address>),
     #[error("Missing operations or messages from mandatory applications: {0:?}")]
-    MissingMandatoryApplications(Vec<MultiAddress>),
+    MissingMandatoryApplications(Vec<Address>),
     #[error("Can't use grant across different broadcast messages")]
     GrantUseOnBroadcast,
     #[error("ExecutedBlock contains fewer oracle responses than requests")]

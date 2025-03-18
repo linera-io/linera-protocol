@@ -9,7 +9,7 @@ use async_graphql::{InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{ChainId, ContractAbi, MultiAddress, ServiceAbi},
+    linera_base_types::{Address, ChainId, ContractAbi, ServiceAbi},
     DataBlobHash, ToBcsBytes,
 };
 use serde::{Deserialize, Serialize};
@@ -39,13 +39,13 @@ impl ServiceAbi for NonFungibleTokenAbi {
 pub enum Operation {
     /// Mints a token
     Mint {
-        minter: MultiAddress,
+        minter: Address,
         name: String,
         blob_hash: DataBlobHash,
     },
     /// Transfers a token from a (locally owned) account to a (possibly remote) account.
     Transfer {
-        source_owner: MultiAddress,
+        source_owner: Address,
         token_id: TokenId,
         target_account: Account,
     },
@@ -78,9 +78,9 @@ pub enum Message {
 #[serde(rename_all = "camelCase")]
 pub struct Nft {
     pub token_id: TokenId,
-    pub owner: MultiAddress,
+    pub owner: Address,
     pub name: String,
-    pub minter: MultiAddress,
+    pub minter: Address,
     pub blob_hash: DataBlobHash,
 }
 
@@ -88,9 +88,9 @@ pub struct Nft {
 #[serde(rename_all = "camelCase")]
 pub struct NftOutput {
     pub token_id: String,
-    pub owner: MultiAddress,
+    pub owner: Address,
     pub name: String,
-    pub minter: MultiAddress,
+    pub minter: Address,
     pub payload: Vec<u8>,
 }
 
@@ -127,9 +127,9 @@ impl Display for TokenId {
 impl Nft {
     pub fn create_token_id(
         chain_id: &ChainId,
-        application_id: &MultiAddress,
+        application_id: &Address,
         name: &String,
-        minter: &MultiAddress,
+        minter: &Address,
         blob_hash: &DataBlobHash,
         num_minted_nfts: u64,
     ) -> Result<TokenId, bcs::Error> {

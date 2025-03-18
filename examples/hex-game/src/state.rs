@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
-    linera_base_types::{ChainId, MessageId, MultiAddress},
+    linera_base_types::{Address, ChainId, MessageId},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,8 @@ pub struct GameChain {
 #[graphql(complex)]
 #[view(context = "ViewStorageContext")]
 pub struct HexState {
-    /// The `MultiAddress`s controlling players `One` and `Two`.
-    pub owners: RegisterView<Option<[MultiAddress; 2]>>,
+    /// The `Address`s controlling players `One` and `Two`.
+    pub owners: RegisterView<Option<[Address; 2]>>,
     /// The current game state.
     pub board: RegisterView<Board>,
     /// The game clock.
@@ -34,5 +34,5 @@ pub struct HexState {
     /// The timeouts.
     pub timeouts: RegisterView<Timeouts>,
     /// Temporary chains for individual games, by player.
-    pub game_chains: MapView<MultiAddress, BTreeSet<GameChain>>,
+    pub game_chains: MapView<Address, BTreeSet<GameChain>>,
 }

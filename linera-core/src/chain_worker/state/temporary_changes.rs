@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{ChannelFullName, MultiAddress},
+    identifiers::{Address, ChannelFullName},
 };
 use linera_chain::data_types::{
     BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
@@ -110,7 +110,7 @@ where
     /// Returns an application's description.
     pub(super) async fn describe_application(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
     ) -> Result<UserApplicationDescription, WorkerError> {
         self.0.ensure_is_active()?;
         let response = self.0.chain.describe_application(application_id).await?;
@@ -219,7 +219,7 @@ where
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
-        if query.request_owner_balance == MultiAddress::chain() {
+        if query.request_owner_balance == Address::chain() {
             info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
         } else {
             info.requested_owner_balance = chain

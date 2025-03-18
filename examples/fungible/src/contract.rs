@@ -11,7 +11,7 @@ use fungible::{
     Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, Operation, Parameters,
 };
 use linera_sdk::{
-    linera_base_types::{Amount, MultiAddress, WithContractAbi},
+    linera_base_types::{Address, Amount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -126,7 +126,7 @@ impl Contract for FungibleTokenContract {
 
 impl FungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: MultiAddress) {
+    fn check_account_authentication(&mut self, owner: Address) {
         assert!(
             self.runtime.authenticated_signer() == Some(owner)
                 || self.runtime.authenticated_caller_id() == Some(owner),
@@ -157,7 +157,7 @@ impl FungibleTokenContract {
         &mut self,
         amount: Amount,
         target_account: Account,
-        source: MultiAddress,
+        source: Address,
     ) {
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;

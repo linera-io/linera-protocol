@@ -10,7 +10,7 @@ use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey, Secp256k1SecretKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
-    identifiers::{ChainId, MultiAddress},
+    identifiers::{Address, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
@@ -161,7 +161,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     // the message.
     let recipient0 = Recipient::chain(chain_id0);
     client1
-        .transfer(MultiAddress::chain(), Amount::ONE, recipient0)
+        .transfer(Address::chain(), Amount::ONE, recipient0)
         .await?;
     for i in 0.. {
         client0.synchronize_from_validators().boxed().await?;

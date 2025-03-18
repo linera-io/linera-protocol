@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, CompressedBytecode, UserApplicationDescription,
     },
-    identifiers::{ApplicationId, ChainDescription, ChainId, ModuleId, MultiAddress},
+    identifiers::{Address, ApplicationId, ChainDescription, ChainId, ModuleId},
     vm::VmRuntime,
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -125,8 +125,8 @@ impl ActiveChain {
         balance
     }
 
-    /// Reads the current account balance on this microchain of an [`MultiAddress`].
-    pub async fn owner_balance(&self, owner: &MultiAddress) -> Option<Amount> {
+    /// Reads the current account balance on this microchain of an [`Address`].
+    pub async fn owner_balance(&self, owner: &Address) -> Option<Amount> {
         let chain_state = self
             .validator
             .worker()
@@ -143,11 +143,11 @@ impl ActiveChain {
             .expect("Failed to read owner balance")
     }
 
-    /// Reads the current account balance on this microchain of all [`MultiAddress`]s.
+    /// Reads the current account balance on this microchain of all [`Address`]s.
     pub async fn owner_balances(
         &self,
-        owners: impl IntoIterator<Item = MultiAddress>,
-    ) -> HashMap<MultiAddress, Option<Amount>> {
+        owners: impl IntoIterator<Item = Address>,
+    ) -> HashMap<Address, Option<Amount>> {
         let chain_state = self
             .validator
             .worker()
@@ -172,8 +172,8 @@ impl ActiveChain {
         balances
     }
 
-    /// Reads a list of [`MultiAddress`]s that have a non-zero balance on this microchain.
-    pub async fn accounts(&self) -> Vec<MultiAddress> {
+    /// Reads a list of [`Address`]s that have a non-zero balance on this microchain.
+    pub async fn accounts(&self) -> Vec<Address> {
         let chain_state = self
             .validator
             .worker()
@@ -191,7 +191,7 @@ impl ActiveChain {
     }
 
     /// Reads all the non-zero account balances on this microchain.
-    pub async fn all_owner_balances(&self) -> HashMap<MultiAddress, Amount> {
+    pub async fn all_owner_balances(&self) -> HashMap<Address, Amount> {
         self.owner_balances(self.accounts().await)
             .await
             .into_iter()
@@ -480,7 +480,7 @@ impl ActiveChain {
         module_id: ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
-        required_application_ids: Vec<MultiAddress>,
+        required_application_ids: Vec<Address>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
@@ -514,7 +514,7 @@ impl ActiveChain {
             required_application_ids,
         };
 
-        MultiAddress::from(&description).with_abi()
+        Address::from(&description).with_abi()
     }
 
     /// Returns whether this chain has been closed.

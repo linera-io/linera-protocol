@@ -4,12 +4,17 @@ An account
 scalar Account
 
 """
+A unique identifier for a user or an application.
+"""
+scalar Address
+
+"""
 A non-negative amount of tokens.
 """
 scalar Amount
 
 type ApplicationOverview {
-	id: MultiAddress!
+	id: Address!
 	description: UserApplicationDescription!
 	link: String!
 }
@@ -23,28 +28,28 @@ input ApplicationPermissions {
 	If it is `Some`, only operations from the specified applications are allowed, and
 	no system operations.
 	"""
-	executeOperations: [MultiAddress!]
+	executeOperations: [Address!]
 	"""
 	At least one operation or incoming message from each of these applications must occur in
 	every block.
 	"""
-	mandatoryApplications: [MultiAddress!]! = []
+	mandatoryApplications: [Address!]! = []
 	"""
 	These applications are allowed to close the current chain using the system API.
 	"""
-	closeChain: [MultiAddress!]! = []
+	closeChain: [Address!]! = []
 	"""
 	These applications are allowed to change the application permissions using the system API.
 	"""
-	changeApplicationPermissions: [MultiAddress!]! = []
+	changeApplicationPermissions: [Address!]! = []
 	"""
 	These applications are allowed to perform calls to services as oracles.
 	"""
-	callServiceAsOracle: [MultiAddress!] = null
+	callServiceAsOracle: [Address!] = null
 	"""
 	These applications are allowed to perform HTTP requests.
 	"""
-	makeHttpRequests: [MultiAddress!] = null
+	makeHttpRequests: [Address!] = null
 }
 
 """
@@ -147,7 +152,7 @@ type BlockHeader {
 	the default account of the chain is used. This value is also used as recipient of
 	potential refunds for the message grants created by the operations.
 	"""
-	authenticatedSigner: MultiAddress
+	authenticatedSigner: Address
 	"""
 	Cryptographic hash of all the incoming bundles in the block.
 	"""
@@ -291,7 +296,7 @@ type ChainStateExtendedView {
 	"""
 	The incomplete sets of blobs for upcoming proposals.
 	"""
-	pendingProposedBlobs: ReentrantCollectionView_MultiAddress_PendingBlobsView_3868766364!
+	pendingProposedBlobs: ReentrantCollectionView_Address_PendingBlobsView_2563393357!
 	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -450,6 +455,22 @@ scalar Destination
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_Address_Amount_b00f5572 {
+	key: Address!
+	value: Amount
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_Address_PendingBlobsView_dff6f833 {
+	key: Address!
+	value: PendingBlobsView!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_BlobId_Blob_50b95aa1 {
 	key: BlobId!
 	value: Blob
@@ -469,22 +490,6 @@ A GraphQL-visible map item, complete with key.
 type Entry_ChannelFullName_ChannelStateView_bd1de7ae {
 	key: ChannelFullName!
 	value: ChannelStateView!
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
-type Entry_MultiAddress_Amount_f77e45dd {
-	key: MultiAddress!
-	value: Amount
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
-type Entry_MultiAddress_PendingBlobsView_6793bb1b {
-	key: MultiAddress!
-	value: PendingBlobsView!
 }
 
 """
@@ -607,16 +612,16 @@ type LogView_CryptoHash_87fbb60c {
 	entries(start: Int, end: Int): [CryptoHash!]!
 }
 
+input MapFilters_Address_ddf70b4d {
+	keys: [Address!]
+}
+
 input MapFilters_BlobId_4d2a0555 {
 	keys: [BlobId!]
 }
 
 input MapFilters_ChannelFullName_7b67e184 {
 	keys: [ChannelFullName!]
-}
-
-input MapFilters_MultiAddress_d72add63 {
-	keys: [MultiAddress!]
 }
 
 input MapFilters_Origin_742d451b {
@@ -627,6 +632,10 @@ input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
 }
 
+input MapInput_Address_ddf70b4d {
+	filters: MapFilters_Address_ddf70b4d
+}
+
 input MapInput_BlobId_4d2a0555 {
 	filters: MapFilters_BlobId_4d2a0555
 }
@@ -635,16 +644,18 @@ input MapInput_ChannelFullName_7b67e184 {
 	filters: MapFilters_ChannelFullName_7b67e184
 }
 
-input MapInput_MultiAddress_d72add63 {
-	filters: MapFilters_MultiAddress_d72add63
-}
-
 input MapInput_Origin_742d451b {
 	filters: MapFilters_Origin_742d451b
 }
 
 input MapInput_Target_7aac1e1c {
 	filters: MapFilters_Target_7aac1e1c
+}
+
+type MapView_Address_Amount_914924e4 {
+	keys(count: Int): [Address!]!
+	entry(key: Address!): Entry_Address_Amount_b00f5572!
+	entries(input: MapInput_Address_ddf70b4d): [Entry_Address_Amount_b00f5572!]!
 }
 
 type MapView_BlobId_Blob_3711e760 {
@@ -657,12 +668,6 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
-}
-
-type MapView_MultiAddress_Amount_d2aadac8 {
-	keys(count: Int): [MultiAddress!]!
-	entry(key: MultiAddress!): Entry_MultiAddress_Amount_f77e45dd!
-	entries(input: MapInput_MultiAddress_d72add63): [Entry_MultiAddress_Amount_f77e45dd!]!
 }
 
 """
@@ -711,11 +716,6 @@ A unique identifier for an application module
 """
 scalar ModuleId
 
-"""
-A unique identifier for a user or an application.
-"""
-scalar MultiAddress
-
 type MutationRoot {
 	"""
 	Processes the inbox and returns the lists of certificate hashes that were created, if any.
@@ -729,13 +729,13 @@ type MutationRoot {
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the chain account.
 	"""
-	transfer(chainId: ChainId!, owner: MultiAddress!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	transfer(chainId: ChainId!, owner: Address!, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Claims `amount` units of value from the given owner's account in the remote
 	`target` chain. Depending on its configuration, the `target` chain may refuse to
 	process the message.
 	"""
-	claim(chainId: ChainId!, owner: MultiAddress!, targetId: ChainId!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	claim(chainId: ChainId!, owner: Address!, targetId: ChainId!, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Test if a data blob is readable from a transaction in the current chain.
 	"""
@@ -744,12 +744,12 @@ type MutationRoot {
 	Creates (or activates) a new chain with the given owner.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openChain(chainId: ChainId!, owner: MultiAddress!, balance: Amount): ChainId!
+	openChain(chainId: ChainId!, owner: Address!, balance: Amount): ChainId!
 	"""
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [MultiAddress!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
+	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [Address!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -774,11 +774,11 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeOwner(chainId: ChainId!, newOwner: MultiAddress!): CryptoHash!
+	changeOwner(chainId: ChainId!, newOwner: Address!): CryptoHash!
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(		chainId: ChainId!,		newOwners: [MultiAddress!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,		openMultiLeaderRounds: Boolean!,
+	changeMultipleOwners(		chainId: ChainId!,		newOwners: [Address!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,		openMultiLeaderRounds: Boolean!,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -799,7 +799,7 @@ type MutationRoot {
 	"""
 	Changes the application permissions configuration on this chain.
 	"""
-	changeApplicationPermissions(chainId: ChainId!, closeChain: [MultiAddress!]!, executeOperations: [MultiAddress!], mandatoryApplications: [MultiAddress!]!, changeApplicationPermissions: [MultiAddress!]!, callServiceAsOracle: [MultiAddress!], makeHttpRequests: [MultiAddress!]): CryptoHash!
+	changeApplicationPermissions(chainId: ChainId!, closeChain: [Address!]!, executeOperations: [Address!], mandatoryApplications: [Address!]!, changeApplicationPermissions: [Address!]!, callServiceAsOracle: [Address!], makeHttpRequests: [Address!]): CryptoHash!
 	"""
 	(admin chain only) Registers a new committee. This will notify the subscribers of
 	the admin chain so that they can migrate to the new epoch (by accepting the
@@ -831,7 +831,7 @@ type MutationRoot {
 	"""
 	Creates a new application.
 	"""
-	createApplication(chainId: ChainId!, moduleId: ModuleId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [MultiAddress!]!): MultiAddress!
+	createApplication(chainId: ChainId!, moduleId: ModuleId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [Address!]!): Address!
 }
 
 """
@@ -891,7 +891,7 @@ type OutgoingMessage {
 	"""
 	The user authentication carried by the message, if any.
 	"""
-	authenticatedSigner: MultiAddress
+	authenticatedSigner: Address
 	"""
 	A grant to pay for the message execution.
 	"""
@@ -939,7 +939,7 @@ type PostedMessage {
 	"""
 	The user authentication carried by the message, if any.
 	"""
-	authenticatedSigner: MultiAddress
+	authenticatedSigner: Address
 	"""
 	A grant to pay for the message execution.
 	"""
@@ -991,16 +991,16 @@ The recipient of a transfer
 """
 scalar Recipient
 
+type ReentrantCollectionView_Address_PendingBlobsView_2563393357 {
+	keys: [Address!]!
+	entry(key: Address!): Entry_Address_PendingBlobsView_dff6f833!
+	entries(input: MapInput_Address_ddf70b4d): [Entry_Address_PendingBlobsView_dff6f833!]!
+}
+
 type ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053 {
 	keys: [ChannelFullName!]!
 	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_bd1de7ae!
 	entries(input: MapInput_ChannelFullName_7b67e184): [Entry_ChannelFullName_ChannelStateView_bd1de7ae!]!
-}
-
-type ReentrantCollectionView_MultiAddress_PendingBlobsView_3868766364 {
-	keys: [MultiAddress!]!
-	entry(key: MultiAddress!): Entry_MultiAddress_PendingBlobsView_6793bb1b!
-	entries(input: MapInput_MultiAddress_d72add63): [Entry_MultiAddress_PendingBlobsView_6793bb1b!]!
 }
 
 type ReentrantCollectionView_Origin_InboxStateView_3699835794 {
@@ -1134,7 +1134,7 @@ type StreamId {
 	"""
 	The application that can add events to this stream.
 	"""
-	applicationId: MultiAddress!
+	applicationId: Address!
 	"""
 	The name of this stream: an application can have multiple streams with different names.
 	"""
@@ -1172,7 +1172,7 @@ type SystemExecutionStateView {
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!
-	balances: MapView_MultiAddress_Amount_d2aadac8!
+	balances: MapView_Address_Amount_914924e4!
 	timestamp: Timestamp!
 }
 

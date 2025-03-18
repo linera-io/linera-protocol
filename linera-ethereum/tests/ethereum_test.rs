@@ -66,8 +66,8 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     let big_value = U256::from_str("239675476885367459284564394732743434463843674346373355625")?;
     let target_event = EthereumEvent {
         values: vec![
-            EthereumDataType::MultiAddress(addr0.clone()),
-            EthereumDataType::MultiAddress(addr0.clone()),
+            EthereumDataType::Address(addr0.clone()),
+            EthereumDataType::Address(addr0.clone()),
             EthereumDataType::Uint256(big_value),
             EthereumDataType::Uint64(4611686018427387904),
             EthereumDataType::Int64(-1152921504606846976),
@@ -119,8 +119,8 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
     let value = U256::from(10);
     let target_event = EthereumEvent {
         values: vec![
-            EthereumDataType::MultiAddress(addr0),
-            EthereumDataType::MultiAddress(addr1),
+            EthereumDataType::Address(addr0),
+            EthereumDataType::Address(addr1),
             EthereumDataType::Uint256(value),
         ],
         block_number: 2,

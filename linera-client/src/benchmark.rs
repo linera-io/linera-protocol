@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Timestamp},
     hashed::Hashed,
-    identifiers::{ChainId, MultiAddress},
+    identifiers::{Address, ChainId},
     listen_for_shutdown_signals,
     time::Instant,
 };
@@ -506,7 +506,7 @@ where
                 operations: operations.clone(),
                 previous_block_hash: chain_client.block_hash(),
                 height: chain_client.next_block_height(),
-                authenticated_signer: Some(MultiAddress::from(key_pair.public())),
+                authenticated_signer: Some(Address::from(key_pair.public())),
                 timestamp: chain_client.timestamp().max(Timestamp::now()),
             };
             let executed_block = local_node
@@ -574,7 +574,7 @@ where
     pub fn make_benchmark_block_info(
         key_pairs: HashMap<ChainId, AccountSecretKey>,
         transactions_per_block: usize,
-        fungible_application_id: Option<MultiAddress>,
+        fungible_application_id: Option<Address>,
     ) -> Vec<(ChainId, Vec<Operation>, AccountSecretKey)> {
         let mut blocks_infos = Vec::new();
         let mut previous_chain_id = *key_pairs
@@ -594,7 +594,7 @@ where
                     amount,
                 ),
                 None => Operation::System(SystemOperation::Transfer {
-                    owner: MultiAddress::chain(),
+                    owner: Address::chain(),
                     recipient: Recipient::chain(previous_chain_id),
                     amount,
                 }),
@@ -610,7 +610,7 @@ where
 
     /// Creates a fungible token transfer operation.
     pub fn fungible_transfer(
-        application_id: MultiAddress,
+        application_id: Address,
         chain_id: ChainId,
         sender: AccountPublicKey,
         receiver: AccountPublicKey,
@@ -618,10 +618,10 @@ where
     ) -> Operation {
         let target_account = fungible::Account {
             chain_id,
-            owner: MultiAddress::from(receiver),
+            owner: Address::from(receiver),
         };
         let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-            owner: MultiAddress::from(sender),
+            owner: Address::from(sender),
             amount,
             target_account,
         })

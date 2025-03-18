@@ -9,7 +9,7 @@ use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{ApplicationId, ChainId, ChannelFullName, MultiAddress},
+    identifiers::{Address, ApplicationId, ChainId, ChannelFullName},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
@@ -49,7 +49,7 @@ impl BlockBuilder {
     /// block.
     pub(crate) fn new(
         chain_id: ChainId,
-        owner: MultiAddress,
+        owner: Address,
         epoch: Epoch,
         previous_block: Option<&ConfirmedBlockCertificate>,
         validator: TestValidator,
@@ -89,7 +89,7 @@ impl BlockBuilder {
     /// Adds a native token transfer to this block.
     pub fn with_native_token_transfer(
         &mut self,
-        sender: MultiAddress,
+        sender: Address,
         recipient: Recipient,
         amount: Amount,
     ) -> &mut Self {
@@ -109,8 +109,8 @@ impl BlockBuilder {
     /// Adds an operation to change this chain's ownership.
     pub fn with_owner_change(
         &mut self,
-        super_owners: Vec<MultiAddress>,
-        owners: Vec<(MultiAddress, u64)>,
+        super_owners: Vec<Address>,
+        owners: Vec<(Address, u64)>,
         multi_leader_rounds: u32,
         open_multi_leader_rounds: bool,
         timeout_config: TimeoutConfig,
@@ -155,7 +155,7 @@ impl BlockBuilder {
     /// Adds an already serialized user `operation` to this block.
     pub fn with_raw_operation(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         operation: impl Into<Vec<u8>>,
     ) -> &mut Self {
         self.block.operations.push(Operation::User {
@@ -184,7 +184,7 @@ impl BlockBuilder {
         channel: SystemChannel,
     ) -> &mut Self {
         let medium = Medium::Channel(ChannelFullName {
-            application_id: MultiAddress::chain(),
+            application_id: Address::chain(),
             name: channel.name(),
         });
         self.with_messages_from_by_medium(certificate, &medium, MessageAction::Accept)
