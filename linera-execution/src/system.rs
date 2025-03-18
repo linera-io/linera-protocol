@@ -639,22 +639,25 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
-        match (source, authenticated_signer, authenticated_application_id) {
-            (MultiAddress::Address32(source), Some(Owner(signer)), _) => ensure!(
-                signer == source,
+        if source == MultiAddress::chain() && authenticated_signer.is_some() {
+            ensure!(
+                self.ownership
+                    .get()
+                    .verify_owner(&authenticated_signer.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
-            ),
-            (MultiAddress::Address32(account_application), _, Some(authorized_application)) => {
-                ensure!(
-                    account_application == authorized_application.as_address().unwrap(),
-                    ExecutionError::UnauthenticatedTransferOwner
-                )
-            }
-            (MultiAddress::Chain, Some(signer), _) => ensure!(
-                self.ownership.get().verify_owner(&signer),
+            )
+        } else if authenticated_signer.is_some() {
+            ensure!(
+                source == MultiAddress::from(authenticated_signer.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
-            ),
-            (_, _, _) => return Err(ExecutionError::UnauthenticatedTransferOwner),
+            )
+        } else if authenticated_application_id.is_some() {
+            ensure!(
+                source == authenticated_application_id.unwrap(),
+                ExecutionError::UnauthenticatedTransferOwner
+            )
+        } else {
+            return Err(ExecutionError::UnauthenticatedTransferOwner);
         }
         ensure!(
             amount > Amount::ZERO,
@@ -693,10 +696,9 @@ where
         match source {
             MultiAddress::Address32(owner) => ensure!(
                 authenticated_signer.map(|o| o.0) == Some(owner)
-                    || authenticated_application_id.map(|o| o.as_address().unwrap()) == Some(owner),
+                    || authenticated_application_id.map(|o| o.as_address()) == Some(owner),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
-            MultiAddress::Chain => unreachable!(),
         }
         ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
@@ -719,26 +721,22 @@ where
         account: &MultiAddress,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let balance = match account {
-            MultiAddress::Chain => self.balance.get_mut(),
-            other => self.balances.get_mut(other).await?.ok_or_else(|| {
+        let balance = if account == &MultiAddress::chain() {
+            self.balance.get_mut()
+        } else {
+            self.balances.get_mut(account).await?.ok_or_else(|| {
                 ExecutionError::InsufficientFunding {
                     balance: Amount::ZERO,
                 }
-            })?,
+            })?
         };
 
         balance
             .try_sub_assign(amount)
             .map_err(|_| ExecutionError::InsufficientFunding { balance: *balance })?;
 
-        match account {
-            MultiAddress::Chain => {}
-            other => {
-                if balance.is_zero() {
-                    self.balances.remove(other)?;
-                }
-            }
+        if account != &MultiAddress::chain() && balance.is_zero() {
+            self.balances.remove(account)?;
         }
 
         Ok(())
@@ -759,15 +757,12 @@ where
                 target,
             } => {
                 let receiver = if context.is_bouncing { source } else { target };
-                match receiver {
-                    MultiAddress::Chain => {
-                        let new_balance = self.balance.get().saturating_add(amount);
-                        self.balance.set(new_balance);
-                    }
-                    other => {
-                        let balance = self.balances.get_mut_or_default(&other).await?;
-                        *balance = balance.saturating_add(amount);
-                    }
+                if receiver == MultiAddress::chain() {
+                    let new_balance = self.balance.get().saturating_add(amount);
+                    self.balance.set(new_balance);
+                } else {
+                    let balance = self.balances.get_mut_or_default(&receiver).await?;
+                    *balance = balance.saturating_add(amount);
                 }
             }
             Withdraw {
@@ -870,7 +865,7 @@ where
                 epoch: config.epoch,
             }
         );
-        self.debit(&MultiAddress::Chain, config.balance).await?;
+        self.debit(&MultiAddress::chain(), config.balance).await?;
         let open_chain_message = RawOutgoingMessage {
             destination: Destination::Recipient(child_id),
             authenticated: false,

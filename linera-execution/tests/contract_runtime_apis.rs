@@ -761,7 +761,7 @@ impl TransferTestEndpoint {
             TransferTestEndpoint::Application => (
                 Amount::ZERO,
                 vec![(
-                    MultiAddress::Address32(Self::sender_application_id().as_address().unwrap()),
+                    MultiAddress::Address32(Self::sender_application_id().as_address()),
                     transfer_amount,
                 )],
                 None,
@@ -785,7 +785,7 @@ impl TransferTestEndpoint {
     /// Returns the [`MultiAddress`] to represent this transfer endpoint as a sender.
     pub fn sender_account_owner(&self) -> MultiAddress {
         match self {
-            TransferTestEndpoint::Chain => MultiAddress::Chain,
+            TransferTestEndpoint::Chain => MultiAddress::chain(),
             TransferTestEndpoint::User => MultiAddress::Address32(Self::sender_owner().0),
             TransferTestEndpoint::Application => Self::sender_application_id(),
         }
@@ -794,7 +794,7 @@ impl TransferTestEndpoint {
     /// Returns the [`MultiAddress`] to represent this transfer endpoint as an unauthorized sender.
     pub fn unauthorized_sender_account_owner(&self) -> MultiAddress {
         match self {
-            TransferTestEndpoint::Chain => MultiAddress::Chain,
+            TransferTestEndpoint::Chain => MultiAddress::chain(),
             TransferTestEndpoint::User => {
                 MultiAddress::Address32(CryptoHash::test_hash("attacker"))
             }
@@ -825,7 +825,7 @@ impl TransferTestEndpoint {
     /// Returns the [`MultiAddress`] to represent this transfer endpoint as a recipient.
     pub fn recipient_account_owner(&self) -> MultiAddress {
         match self {
-            TransferTestEndpoint::Chain => MultiAddress::Chain,
+            TransferTestEndpoint::Chain => MultiAddress::chain(),
             TransferTestEndpoint::User => MultiAddress::Address32(Self::recipient_owner().0),
             TransferTestEndpoint::Application => Self::recipient_application_id(),
         }
@@ -838,9 +838,12 @@ impl TransferTestEndpoint {
         system: &SystemExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
         amount: Amount,
     ) -> anyhow::Result<()> {
-        let (expected_chain_balance, expected_balances) = match self.recipient_account_owner() {
-            MultiAddress::Chain => (amount, vec![]),
-            account_owner => (Amount::ZERO, vec![(account_owner, amount)]),
+        let account_owner = self.recipient_account_owner();
+        let (expected_chain_balance, expected_balances) = if account_owner == MultiAddress::chain()
+        {
+            (amount, vec![])
+        } else {
+            (Amount::ZERO, vec![(account_owner, amount)])
         };
 
         let balances = system.balances.index_values().await?;

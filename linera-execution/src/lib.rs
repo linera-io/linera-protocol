@@ -43,7 +43,7 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination, EventId,
-        GenericApplicationId, MessageId, ModuleId, MultiAddress, Owner, StreamName,
+        MessageId, ModuleId, MultiAddress, Owner, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -1200,10 +1200,10 @@ impl Operation {
         })
     }
 
-    pub fn application_id(&self) -> GenericApplicationId {
+    pub fn application_id(&self) -> MultiAddress {
         match self {
-            Self::System(_) => GenericApplicationId::System,
-            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
+            Self::System(_) => MultiAddress::chain(),
+            Self::User { application_id, .. } => *application_id,
         }
     }
 
@@ -1250,10 +1250,10 @@ impl Message {
         })
     }
 
-    pub fn application_id(&self) -> GenericApplicationId {
+    pub fn application_id(&self) -> MultiAddress {
         match self {
-            Self::System(_) => GenericApplicationId::System,
-            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
+            Self::System(_) => MultiAddress::chain(),
+            Self::User { application_id, .. } => *application_id,
         }
     }
 
@@ -1322,10 +1322,10 @@ impl Query {
         })
     }
 
-    pub fn application_id(&self) -> GenericApplicationId {
+    pub fn application_id(&self) -> MultiAddress {
         match self {
-            Self::System(_) => GenericApplicationId::System,
-            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
+            Self::System(_) => MultiAddress::chain(),
+            Self::User { application_id, .. } => *application_id,
         }
     }
 }

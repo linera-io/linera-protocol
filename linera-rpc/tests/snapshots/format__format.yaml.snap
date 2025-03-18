@@ -346,7 +346,7 @@ ChainOwnership:
 ChannelFullName:
   STRUCT:
     - application_id:
-        TYPENAME: GenericApplicationId
+        TYPENAME: MultiAddress
     - name:
         TYPENAME: ChannelName
 ChannelName:
@@ -453,14 +453,6 @@ EventId:
         TYPENAME: StreamId
     - key:
         SEQ: U8
-GenericApplicationId:
-  ENUM:
-    0:
-      System: UNIT
-    1:
-      User:
-        NEWTYPE:
-          TYPENAME: MultiAddress
 HandleConfirmedCertificateRequest:
   STRUCT:
     - certificate:
@@ -599,8 +591,6 @@ MultiAddress:
       Address32:
         NEWTYPE:
           TYPENAME: CryptoHash
-    1:
-      Chain: UNIT
 NodeError:
   ENUM:
     0:
@@ -1027,7 +1017,7 @@ Secp256k1Signature:
 StreamId:
   STRUCT:
     - application_id:
-        TYPENAME: GenericApplicationId
+        TYPENAME: MultiAddress
     - stream_name:
         TYPENAME: StreamName
 StreamName:

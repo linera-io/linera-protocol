@@ -203,7 +203,7 @@ where
         chain_description,
         key_pair,
         Some(key_pair.public().into()),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::chain(target_id),
         amount,
         incoming_bundles,
@@ -372,16 +372,16 @@ fn direct_outgoing_message(
 
 fn system_credit_message(amount: Amount) -> Message {
     Message::System(SystemMessage::Credit {
-        source: MultiAddress::Chain,
-        target: MultiAddress::Chain,
+        source: MultiAddress::chain(),
+        target: MultiAddress::chain(),
         amount,
     })
 }
 
 fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage {
     let message = SystemMessage::Credit {
-        source: MultiAddress::Chain,
-        target: MultiAddress::Chain,
+        source: MultiAddress::chain(),
+        target: MultiAddress::chain(),
         amount,
     };
     direct_outgoing_message(recipient, MessageKind::Tracked, message)
@@ -1390,7 +1390,7 @@ where
         ChainDescription::Root(2),
         &sender_key_pair,
         Some(chain_key_pair.public().into()),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::chain(ChainId::root(2)),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2124,7 +2124,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(Owner::from(sender_key_pair.public())),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::Account(sender_account),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2144,7 +2144,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(Owner::from(sender_key_pair.public())),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::Burn,
         Amount::ONE,
         vec![IncomingBundle {
@@ -2155,7 +2155,7 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: MultiAddress::Chain,
+                    source: MultiAddress::chain(),
                     target: MultiAddress::from(sender),
                     amount: Amount::from_tokens(5),
                 })
@@ -2983,7 +2983,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -2999,7 +2999,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3015,7 +3015,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3032,7 +3032,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::Chain,
+        MultiAddress::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3511,7 +3511,11 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(MultiAddress::Chain, Recipient::Burn, Amount::from_tokens(1))
+        .with_transfer(
+            MultiAddress::chain(),
+            Recipient::Burn,
+            Amount::from_tokens(1),
+        )
         .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,

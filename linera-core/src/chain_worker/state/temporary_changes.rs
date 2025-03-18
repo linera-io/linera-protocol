@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{ChannelFullName, GenericApplicationId, MultiAddress},
+    identifiers::{ChannelFullName, MultiAddress},
 };
 use linera_chain::data_types::{
     BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
@@ -219,14 +219,15 @@ where
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
-        match query.request_owner_balance {
-            owner @ MultiAddress::Address32(_) => {
-                info.requested_owner_balance =
-                    chain.execution_state.system.balances.get(&owner).await?;
-            }
-            MultiAddress::Chain => {
-                info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
-            }
+        if query.request_owner_balance == MultiAddress::chain() {
+            info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
+        } else {
+            info.requested_owner_balance = chain
+                .execution_state
+                .system
+                .balances
+                .get(&query.request_owner_balance)
+                .await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
@@ -248,16 +249,18 @@ where
             let subscriptions = &chain.execution_state.system.subscriptions;
             for (origin, inbox) in pairs {
                 if let Medium::Channel(ChannelFullName {
-                    application_id: GenericApplicationId::System,
+                    application_id,
                     name,
                 }) = &origin.medium
                 {
-                    let subscription = ChannelSubscription {
-                        chain_id: origin.sender,
-                        name: name.clone(),
-                    };
-                    if !subscriptions.contains(&subscription).await? {
-                        continue; // We are not subscribed to this channel.
+                    if application_id.is_chain() {
+                        let subscription = ChannelSubscription {
+                            chain_id: origin.sender,
+                            name: name.clone(),
+                        };
+                        if !subscriptions.contains(&subscription).await? {
+                            continue; // We are not subscribed to this channel.
+                        }
                     }
                 }
                 for bundle in inbox.added_bundles.elements().await? {

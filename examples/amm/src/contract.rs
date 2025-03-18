@@ -319,9 +319,6 @@ impl AmmContract {
                     "Unauthorized"
                 )
             }
-            MultiAddress::Chain => {
-                panic!("Using chain balance is not authorized")
-            }
         }
     }
 

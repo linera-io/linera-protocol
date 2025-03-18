@@ -34,8 +34,7 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId, ModuleId,
-        MultiAddress, StreamId,
+        BlobId, BlobType, ChainId, Destination, EventId, ModuleId, MultiAddress, StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -757,12 +756,14 @@ impl ApplicationPermissions {
     }
 
     /// Returns whether operations with the given application ID are allowed on this chain.
-    pub fn can_execute_operations(&self, app_id: &GenericApplicationId) -> bool {
-        match (app_id, &self.execute_operations) {
-            (_, None) => true,
-            (GenericApplicationId::System, Some(_)) => false,
-            (GenericApplicationId::User(app_id), Some(app_ids)) => app_ids.contains(app_id),
+    pub fn can_execute_operations(&self, app_id: &MultiAddress) -> bool {
+        if self.execute_operations.is_none() {
+            return true;
         }
+        if app_id.is_chain() {
+            return false;
+        }
+        self.execute_operations.as_ref().unwrap().contains(app_id)
     }
 
     /// Returns whether the given application is allowed to close this chain.

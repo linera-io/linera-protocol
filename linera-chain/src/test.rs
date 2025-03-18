@@ -106,7 +106,7 @@ impl BlockTestExt for ProposedBlock {
     }
 
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self {
-        self.with_transfer(MultiAddress::Chain, Recipient::chain(chain_id), amount)
+        self.with_transfer(MultiAddress::chain(), Recipient::chain(chain_id), amount)
     }
 
     fn with_incoming_bundle(mut self, incoming_bundle: IncomingBundle) -> Self {

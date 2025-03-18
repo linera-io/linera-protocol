@@ -404,7 +404,7 @@ where
                 source: context
                     .authenticated_signer
                     .map(|o| MultiAddress::Address32(o.0))
-                    .unwrap_or(MultiAddress::Chain),
+                    .unwrap_or(MultiAddress::chain()),
                 target: account.owner,
             },
         };

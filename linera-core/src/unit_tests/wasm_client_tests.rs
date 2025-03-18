@@ -337,7 +337,7 @@ where
         certificate.block().body.events,
         vec![vec![Event {
             stream_id: StreamId {
-                application_id: application_id2.forget_abi().into(),
+                application_id: application_id2.forget_abi(),
                 stream_name: StreamName(b"announcements".to_vec()),
             },
             key: b"updates".to_vec(),
