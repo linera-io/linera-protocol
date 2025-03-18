@@ -7,7 +7,7 @@ use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{Amount, ChainId, ContractAbi, MultiAddress, Owner, ServiceAbi},
+    linera_base_types::{Amount, ChainId, ContractAbi, MultiAddress, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
@@ -86,11 +86,11 @@ pub enum Operation {
     ProvideQuote {
         request_id: RequestId,
         quote: Amount,
-        quoter_owner: Owner,
+        quoter_owner: MultiAddress,
     },
     AcceptQuote {
         request_id: RequestId,
-        owner: Owner,
+        owner: MultiAddress,
         fee_budget: Amount,
     },
     FinalizeDeal {
@@ -113,7 +113,7 @@ pub enum Message {
     ProvideQuote {
         seq_number: u64,
         quote: Amount,
-        quoter_owner: Owner,
+        quoter_owner: MultiAddress,
     },
     QuoteAccepted {
         request_id: RequestId,

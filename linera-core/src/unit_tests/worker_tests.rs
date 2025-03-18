@@ -23,8 +23,7 @@ use linera_base::{
     data_types::*,
     hashed::Hashed,
     identifiers::{
-        Account, ChainDescription, ChainId, Destination, EventId, MessageId, MultiAddress, Owner,
-        StreamId,
+        Account, ChainDescription, ChainId, Destination, EventId, MessageId, MultiAddress, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -114,7 +113,7 @@ where
 /// Same as `init_worker` but also instantiates some initial chains.
 async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, WorkerState<S>)
 where
-    I: IntoIterator<Item = (ChainDescription, Owner, Amount)>,
+    I: IntoIterator<Item = (ChainDescription, MultiAddress, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
 {
     let (committee, worker) = init_worker(
@@ -141,7 +140,7 @@ where
 async fn init_worker_with_chain<S>(
     storage: S,
     description: ChainDescription,
-    owner: Owner,
+    owner: MultiAddress,
     balance: Amount,
 ) -> (Committee, WorkerState<S>)
 where
@@ -221,7 +220,7 @@ where
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &AccountSecretKey,
-    authenticated_signer: Option<Owner>,
+    authenticated_signer: Option<MultiAddress>,
     source: MultiAddress,
     recipient: Recipient,
     amount: Amount,
@@ -257,7 +256,7 @@ where
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &AccountSecretKey,
-    authenticated_signer: Option<Owner>,
+    authenticated_signer: Option<MultiAddress>,
     source: MultiAddress,
     recipient: Recipient,
     amount: Amount,
@@ -387,13 +386,13 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
     direct_outgoing_message(recipient, MessageKind::Tracked, message)
 }
 
-/// Creates `count` key pairs and returns them, sorted by the `Owner` created from their public key.
+/// Creates `count` key pairs and returns them, sorted by the `MultiAddress` created from their public key.
 fn generate_key_pairs(count: usize) -> Vec<AccountSecretKey> {
     let mut key_pairs = iter::repeat_with(Secp256k1SecretKey::generate)
         .map(AccountSecretKey::Secp256k1)
         .take(count)
         .collect::<Vec<_>>();
-    key_pairs.sort_by_key(|key_pair| Owner::from(key_pair.public()));
+    key_pairs.sort_by_key(|key_pair| MultiAddress::from(key_pair.public()));
     key_pairs
 }
 
@@ -2088,17 +2087,17 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let sender = Owner::from(sender_key_pair.public());
+    let sender = MultiAddress::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
-        owner: MultiAddress::from(sender),
+        owner: sender,
     };
 
     let recipient_key_pair = AccountSecretKey::generate();
-    let recipient = Owner::from(sender_key_pair.public());
+    let recipient = MultiAddress::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
-        owner: MultiAddress::from(recipient),
+        owner: recipient,
     };
 
     let (committee, worker) = init_worker_with_chains(
@@ -2123,7 +2122,7 @@ where
     let certificate00 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Some(Owner::from(sender_key_pair.public())),
+        Some(MultiAddress::from(sender_key_pair.public())),
         MultiAddress::chain(),
         Recipient::Account(sender_account),
         Amount::from_tokens(5),
@@ -2143,7 +2142,7 @@ where
     let certificate01 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Some(Owner::from(sender_key_pair.public())),
+        Some(MultiAddress::from(sender_key_pair.public())),
         MultiAddress::chain(),
         Recipient::Burn,
         Amount::ONE,
@@ -2156,7 +2155,7 @@ where
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
                     source: MultiAddress::chain(),
-                    target: MultiAddress::from(sender),
+                    target: sender,
                     amount: Amount::from_tokens(5),
                 })
                 .to_posted(0, MessageKind::Tracked)],
@@ -2165,7 +2164,7 @@ where
         }],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(MultiAddress::Address32(sender.0), Amount::from_tokens(5))]),
+        BTreeMap::from_iter([(sender, Amount::from_tokens(5))]),
         &worker,
         Some(&certificate00),
     )
@@ -2186,13 +2185,13 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
-        MultiAddress::from(sender),
+        sender,
         Recipient::Account(recipient_account),
         Amount::from_tokens(3),
         Vec::new(),
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(MultiAddress::Address32(sender.0), Amount::from_tokens(2))]),
+        BTreeMap::from_iter([(sender, Amount::from_tokens(2))]),
         &worker,
         Some(&certificate01),
     )
@@ -2206,7 +2205,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
-        MultiAddress::from(sender),
+        sender,
         Recipient::Account(recipient_account),
         Amount::from_tokens(2),
         Vec::new(),
@@ -2227,7 +2226,7 @@ where
         ChainDescription::Root(2),
         &recipient_key_pair,
         Some(recipient),
-        MultiAddress::from(recipient),
+        recipient,
         Recipient::Burn,
         Amount::ONE,
         vec![
@@ -2239,8 +2238,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: MultiAddress::from(sender),
-                        target: MultiAddress::from(recipient),
+                        source: sender,
+                        target: recipient,
                         amount: Amount::from_tokens(3),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2255,8 +2254,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: MultiAddress::from(sender),
-                        target: MultiAddress::from(recipient),
+                        source: sender,
+                        target: recipient,
                         amount: Amount::from_tokens(2),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2266,7 +2265,7 @@ where
         ],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(MultiAddress::Address32(recipient.0), Amount::from_tokens(1))]),
+        BTreeMap::from_iter([(recipient, Amount::from_tokens(1))]),
         &worker,
         None,
     )
@@ -2287,7 +2286,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(sender),
-        MultiAddress::from(sender),
+        sender,
         Recipient::Burn,
         Amount::from_tokens(3),
         vec![IncomingBundle {
@@ -2298,8 +2297,8 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: MultiAddress::from(sender),
-                    target: MultiAddress::from(recipient),
+                    source: sender,
+                    target: recipient,
                     amount: Amount::from_tokens(3),
                 })
                 .to_posted(0, MessageKind::Bouncing)],
@@ -3193,8 +3192,8 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let owner0 = Owner::from(key_pairs[0].public());
-    let owner1 = Owner::from(key_pairs[1].public());
+    let owner0 = MultiAddress::from(key_pairs[0].public());
+    let owner1 = MultiAddress::from(key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -3393,8 +3392,8 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let owner0 = Owner::from(key_pairs[0].public());
-    let owner1 = Owner::from(key_pairs[1].public());
+    let owner0 = MultiAddress::from(key_pairs[0].public());
+    let owner1 = MultiAddress::from(key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -3550,8 +3549,8 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let owner0 = Owner::from(key_pairs[0].public());
-    let owner1 = Owner::from(key_pairs[1].public());
+    let owner0 = MultiAddress::from(key_pairs[0].public());
+    let owner1 = MultiAddress::from(key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -3577,7 +3576,7 @@ where
     assert_eq!(response.info.manager.current_round, Round::Fast);
     assert_eq!(response.info.manager.leader, None);
 
-    // Owner 0 proposes another block. The validator votes to confirm.
+    // MultiAddress 0 proposes another block. The validator votes to confirm.
     let block1 = make_child_block(&value0.clone());
     let proposal1 = block1
         .clone()
@@ -3710,7 +3709,7 @@ where
     let manager = response.info.manager;
     let account_key = worker.account_key();
     assert_eq!(manager.current_round, Round::Validator(0));
-    assert_eq!(manager.leader, Some(Owner::from(account_key)));
+    assert_eq!(manager.leader, Some(MultiAddress::from(account_key)));
     Ok(())
 }
 

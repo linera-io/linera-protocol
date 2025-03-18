@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId, MessageId, MultiAddress, Owner},
+    identifiers::{ChainDescription, ChainId, MessageId, MultiAddress},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -18,7 +18,7 @@ use linera_execution::{
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
     let owner_key_pair = AccountSecretKey::generate();
-    let owner = Owner::from(owner_key_pair.public());
+    let owner = MultiAddress::from(owner_key_pair.public());
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         balance: Amount::from_tokens(4),

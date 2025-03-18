@@ -17,7 +17,7 @@ use linera_base::prometheus_util::{
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, BlobId, ChainId, MessageId, MultiAddress, Owner},
+    identifiers::{Account, BlobId, ChainId, MessageId, MultiAddress},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -554,7 +554,7 @@ pub enum ExecutionRequest {
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        signer: Option<Owner>,
+        signer: Option<MultiAddress>,
         application_id: MultiAddress,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,
@@ -565,7 +565,7 @@ pub enum ExecutionRequest {
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        signer: Option<Owner>,
+        signer: Option<MultiAddress>,
         application_id: MultiAddress,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,

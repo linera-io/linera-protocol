@@ -24,7 +24,7 @@ use linera_base::{
     ensure, hex_debug,
     identifiers::{
         Account, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName, EventId, MessageId,
-        ModuleId, MultiAddress, Owner, StreamId,
+        ModuleId, MultiAddress, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -122,7 +122,7 @@ pub enum SystemOperation {
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
     /// process the message.
     Claim {
-        owner: Owner,
+        owner: MultiAddress,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -136,10 +136,10 @@ pub enum SystemOperation {
     ChangeOwnership {
         /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
         #[debug(skip_if = Vec::is_empty)]
-        super_owners: Vec<Owner>,
+        super_owners: Vec<MultiAddress>,
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
-        owners: Vec<(Owner, u64)>,
+        owners: Vec<(MultiAddress, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
         /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -429,7 +429,7 @@ where
                     .claim(
                         context.authenticated_signer,
                         None,
-                        MultiAddress::Address32(owner.0),
+                        owner,
                         target_id,
                         recipient,
                         amount,
@@ -633,7 +633,7 @@ where
 
     pub async fn transfer(
         &mut self,
-        authenticated_signer: Option<Owner>,
+        authenticated_signer: Option<MultiAddress>,
         authenticated_application_id: Option<MultiAddress>,
         source: MultiAddress,
         recipient: Recipient,
@@ -648,7 +648,7 @@ where
             )
         } else if authenticated_signer.is_some() {
             ensure!(
-                source == MultiAddress::from(authenticated_signer.unwrap()),
+                source == authenticated_signer.unwrap(),
                 ExecutionError::UnauthenticatedTransferOwner
             )
         } else if authenticated_application_id.is_some() {
@@ -686,20 +686,17 @@ where
 
     pub async fn claim(
         &self,
-        authenticated_signer: Option<Owner>,
+        authenticated_signer: Option<MultiAddress>,
         authenticated_application_id: Option<MultiAddress>,
         source: MultiAddress,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, ExecutionError> {
-        match source {
-            MultiAddress::Address32(owner) => ensure!(
-                authenticated_signer.map(|o| o.0) == Some(owner)
-                    || authenticated_application_id.map(|o| o.as_address()) == Some(owner),
-                ExecutionError::UnauthenticatedClaimOwner
-            ),
-        }
+        ensure!(
+            authenticated_signer == Some(source) || authenticated_application_id == Some(source),
+            ExecutionError::UnauthenticatedClaimOwner
+        );
         ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
         Ok(RawOutgoingMessage {

@@ -35,7 +35,7 @@ use linera_base::{
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
-    linera_base_types::{BlobContent, BlockHeight, Owner},
+    linera_base_types::{BlobContent, BlockHeight},
     DataBlobHash,
 };
 #[cfg(any(
@@ -84,8 +84,7 @@ fn test_iterations() -> Option<usize> {
 }
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> MultiAddress {
-    let owner = client.get_owner().unwrap();
-    MultiAddress::Address32(owner.0)
+    client.get_owner().unwrap()
 }
 
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
@@ -2368,7 +2367,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let (mut net, client) = config.instantiate().await?;
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
-    let owner1 = Owner::from(
+    let owner1 = MultiAddress::from(
         client
             .load_wallet()?
             .get(chain1)

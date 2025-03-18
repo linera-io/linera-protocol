@@ -10,7 +10,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{ChainId, MultiAddress},
 };
 use linera_chain::{
     data_types::{
@@ -134,7 +134,7 @@ where
             signature: _,
         } = proposal;
 
-        let owner: Owner = public_key.into();
+        let owner = MultiAddress::from(*public_key);
         let chain = &self.state.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;

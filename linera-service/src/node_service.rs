@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     ensure,
     hashed::Hashed,
-    identifiers::{ChainId, ModuleId, MultiAddress, Owner},
+    identifiers::{ChainId, ModuleId, MultiAddress},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -291,7 +291,7 @@ where
     async fn claim(
         &self,
         chain_id: ChainId,
-        owner: Owner,
+        owner: MultiAddress,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -331,7 +331,7 @@ where
     async fn open_chain(
         &self,
         chain_id: ChainId,
-        owner: Owner,
+        owner: MultiAddress,
         balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
         let ownership = ChainOwnership::single(owner);
@@ -359,7 +359,7 @@ where
         &self,
         chain_id: ChainId,
         application_permissions: Option<ApplicationPermissions>,
-        owners: Vec<Owner>,
+        owners: Vec<MultiAddress>,
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
         balance: Option<Amount>,
@@ -436,7 +436,11 @@ where
     }
 
     /// Changes the authentication key of the chain.
-    async fn change_owner(&self, chain_id: ChainId, new_owner: Owner) -> Result<CryptoHash, Error> {
+    async fn change_owner(
+        &self,
+        chain_id: ChainId,
+        new_owner: MultiAddress,
+    ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
@@ -452,7 +456,7 @@ where
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
-        new_owners: Vec<Owner>,
+        new_owners: Vec<MultiAddress>,
         new_weights: Vec<u64>,
         multi_leader_rounds: u32,
         open_multi_leader_rounds: bool,

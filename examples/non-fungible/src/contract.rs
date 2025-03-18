@@ -129,15 +129,11 @@ impl Contract for NonFungibleTokenContract {
 impl NonFungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(&mut self, owner: MultiAddress) {
-        match owner {
-            MultiAddress::Address32(address) => {
-                assert!(
-                    self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
-                        || self.runtime.authenticated_caller_id() == Some(owner),
-                    "The requested transfer is not correctly authenticated."
-                )
-            }
-        }
+        assert!(
+            self.runtime.authenticated_signer() == Some(owner)
+                || self.runtime.authenticated_caller_id() == Some(owner),
+            "The requested transfer is not correctly authenticated."
+        )
     }
 
     /// Transfers the specified NFT to another account.

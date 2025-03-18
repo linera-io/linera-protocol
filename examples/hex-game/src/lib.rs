@@ -8,7 +8,7 @@ use std::iter;
 use async_graphql::{Enum, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{Amount, ContractAbi, Owner, ServiceAbi, TimeDelta, Timestamp},
+    linera_base_types::{Amount, ContractAbi, MultiAddress, ServiceAbi, TimeDelta, Timestamp},
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +23,7 @@ pub enum Operation {
     /// Start a game on a new temporary chain, with the given settings.
     Start {
         /// The public keys of player 1 and 2, respectively.
-        players: [Owner; 2],
+        players: [MultiAddress; 2],
         /// The side length of the board. A typical size is 11.
         board_size: u16,
         /// An amount transferred to the temporary chain to cover the fees.
@@ -248,7 +248,7 @@ impl Board {
         None
     }
 
-    /// Returns the `Owner` controlling the active player.
+    /// Returns the `MultiAddress` controlling the active player.
     pub fn active_player(&self) -> Player {
         self.active
     }

@@ -16,7 +16,7 @@ use linera_base::{
         Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp, UserApplicationDescription,
     },
     ensure,
-    identifiers::{ChainId, ChannelFullName, Destination, MessageId, MultiAddress, Owner},
+    identifiers::{ChainId, ChannelFullName, Destination, MessageId, MultiAddress},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -220,7 +220,7 @@ where
     /// The incomplete set of blobs for the pending validated block.
     pub pending_validated_blobs: PendingBlobsView<C>,
     /// The incomplete sets of blobs for upcoming proposals.
-    pub pending_proposed_blobs: ReentrantCollectionView<C, Owner, PendingBlobsView<C>>,
+    pub pending_proposed_blobs: ReentrantCollectionView<C, MultiAddress, PendingBlobsView<C>>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -945,7 +945,7 @@ where
         txn_index: u32,
         local_time: Timestamp,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<MultiAddress>>,
     ) -> Result<(), ChainError> {
         #[cfg(with_metrics)]
         let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();

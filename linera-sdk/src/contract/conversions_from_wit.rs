@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainId, MessageId, ModuleId, MultiAddress, Owner},
+    identifiers::{ChainId, MessageId, ModuleId, MultiAddress},
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
     vm::VmRuntime,
 };
@@ -21,12 +21,6 @@ impl From<wit_contract_api::CryptoHash> for CryptoHash {
             crypto_hash.part3,
             crypto_hash.part4,
         ])
-    }
-}
-
-impl From<wit_contract_api::Owner> for Owner {
-    fn from(owner: wit_contract_api::Owner) -> Self {
-        Owner(owner.inner0.into())
     }
 }
 

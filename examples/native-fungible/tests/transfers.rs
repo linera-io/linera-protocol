@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Account, Amount, ChainId, CryptoHash, MultiAddress, Owner},
+    linera_base_types::{Account, Amount, ChainId, CryptoHash, MultiAddress},
     test::{ActiveChain, Recipient, TestValidator},
 };
 
@@ -63,8 +63,8 @@ async fn transfer_to_owner() {
 
     let transfer_amount = Amount::from_tokens(2);
     let funding_chain = validator.get_chain(&ChainId::root(0));
-    let owner = Owner(CryptoHash::test_hash("owner"));
-    let account = Account::address32(recipient_chain.id(), owner.0);
+    let owner = MultiAddress::from(CryptoHash::test_hash("owner"));
+    let account = Account::address32(recipient_chain.id(), owner);
     let recipient = Recipient::Account(account);
 
     let transfer_certificate = funding_chain
@@ -101,8 +101,7 @@ async fn transfer_to_multiple_owners() {
     let funding_chain = validator.get_chain(&ChainId::root(0));
 
     let account_owners = (1..=number_of_owners)
-        .map(|index| Owner(CryptoHash::test_hash(format!("owner{index}"))))
-        .map(MultiAddress::from)
+        .map(|index| MultiAddress::from(CryptoHash::test_hash(format!("owner{index}"))))
         .collect::<Vec<_>>();
 
     let recipients = account_owners
@@ -149,8 +148,8 @@ async fn emptied_account_disappears_from_queries() {
     let transfer_amount = Amount::from_tokens(100);
     let funding_chain = validator.get_chain(&ChainId::root(0));
 
-    let owner = Owner::from(recipient_chain.public_key());
-    let recipient = Recipient::Account(Account::address32(recipient_chain.id(), owner.0));
+    let owner = MultiAddress::from(recipient_chain.public_key());
+    let recipient = Recipient::Account(Account::address32(recipient_chain.id(), owner));
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
@@ -196,7 +195,6 @@ async fn assert_balances(
     let missing_accounts = ["missing1", "missing2"]
         .into_iter()
         .map(CryptoHash::test_hash)
-        .map(Owner)
         .map(MultiAddress::from)
         .collect::<Vec<_>>();
 

@@ -48,10 +48,9 @@ impl Contract for FungibleTokenContract {
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = self.runtime.authenticated_signer() {
-                state.accounts.insert(
-                    MultiAddress::from(owner),
-                    Amount::from_str("1000000").unwrap(),
-                );
+                state
+                    .accounts
+                    .insert(owner, Amount::from_str("1000000").unwrap());
             }
         }
         self.state.initialize_accounts(state).await;
@@ -128,15 +127,11 @@ impl Contract for FungibleTokenContract {
 impl FungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(&mut self, owner: MultiAddress) {
-        match owner {
-            MultiAddress::Address32(address) => {
-                assert!(
-                    self.runtime.authenticated_signer().map(|o| o.0) == Some(address)
-                        || self.runtime.authenticated_caller_id() == Some(owner),
-                    "The requested transfer is not correctly authenticated."
-                )
-            }
-        }
+        assert!(
+            self.runtime.authenticated_signer() == Some(owner)
+                || self.runtime.authenticated_caller_id() == Some(owner),
+            "The requested transfer is not correctly authenticated."
+        )
     }
 
     async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {

@@ -43,7 +43,7 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination, EventId,
-        MessageId, ModuleId, MultiAddress, Owner, StreamName,
+        MessageId, ModuleId, MultiAddress, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -239,7 +239,7 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Module ID {0:?} is invalid")]
     InvalidModuleId(ModuleId),
-    #[error("Owner is None")]
+    #[error("MultiAddress is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(MultiAddress),
@@ -435,7 +435,7 @@ pub struct OperationContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<MultiAddress>,
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
     #[debug(skip_if = Option::is_none)]
@@ -457,7 +457,7 @@ pub struct MessageContext {
     pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<MultiAddress>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
@@ -478,7 +478,7 @@ pub struct FinalizeContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<MultiAddress>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -683,7 +683,7 @@ pub trait ServiceRuntime: BaseRuntime {
 
 pub trait ContractRuntime: BaseRuntime {
     /// The authenticated signer for this execution, if there is one.
-    fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError>;
+    fn authenticated_signer(&mut self) -> Result<Option<MultiAddress>, ExecutionError>;
 
     /// The current message ID, if there is one.
     fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError>;
@@ -940,7 +940,7 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<MultiAddress>,
     /// A grant to pay for the message execution.
     #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
@@ -961,7 +961,7 @@ impl<'de> BcsHashable<'de> for OutgoingMessage {}
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct RawExecutionOutcome<Message> {
     /// The signer who created the messages.
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<MultiAddress>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     pub refund_grant_to: Option<Account>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
@@ -981,7 +981,7 @@ pub struct ChannelSubscription {
 }
 
 impl<Message> RawExecutionOutcome<Message> {
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<MultiAddress>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }
@@ -1036,7 +1036,7 @@ impl OperationContext {
     fn refund_grant_to(&self) -> Option<Account> {
         self.authenticated_signer.map(|owner| Account {
             chain_id: self.chain_id,
-            owner: MultiAddress::from(owner),
+            owner,
         })
     }
 

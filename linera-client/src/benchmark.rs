@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Timestamp},
     hashed::Hashed,
-    identifiers::{ChainId, MultiAddress, Owner},
+    identifiers::{ChainId, MultiAddress},
     listen_for_shutdown_signals,
     time::Instant,
 };
@@ -506,7 +506,7 @@ where
                 operations: operations.clone(),
                 previous_block_hash: chain_client.block_hash(),
                 height: chain_client.next_block_height(),
-                authenticated_signer: Some(Owner::from(key_pair.public())),
+                authenticated_signer: Some(MultiAddress::from(key_pair.public())),
                 timestamp: chain_client.timestamp().max(Timestamp::now()),
             };
             let executed_block = local_node

@@ -163,7 +163,7 @@ BlockHeader:
           TYPENAME: CryptoHash
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: MultiAddress
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -325,7 +325,7 @@ ChainManagerInfo:
         TYPENAME: Round
     - leader:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: MultiAddress
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
@@ -333,11 +333,11 @@ ChainOwnership:
   STRUCT:
     - super_owners:
         SEQ:
-          TYPENAME: Owner
+          TYPENAME: MultiAddress
     - owners:
         MAP:
           KEY:
-            TYPENAME: Owner
+            TYPENAME: MultiAddress
           VALUE: U64
     - multi_leader_rounds: U32
     - open_multi_leader_rounds: BOOL
@@ -754,7 +754,7 @@ OutgoingMessage:
         TYPENAME: Destination
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: MultiAddress
     - grant:
         TYPENAME: Amount
     - refund_grant_to:
@@ -764,14 +764,11 @@ OutgoingMessage:
         TYPENAME: MessageKind
     - message:
         TYPENAME: Message
-Owner:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
 PostedMessage:
   STRUCT:
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: MultiAddress
     - grant:
         TYPENAME: Amount
     - refund_grant_to:
@@ -809,7 +806,7 @@ ProposedBlock:
         TYPENAME: Timestamp
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: MultiAddress
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
@@ -1081,7 +1078,7 @@ SystemOperation:
       Claim:
         STRUCT:
           - owner:
-              TYPENAME: Owner
+              TYPENAME: MultiAddress
           - target_id:
               TYPENAME: ChainId
           - recipient:
@@ -1099,11 +1096,11 @@ SystemOperation:
         STRUCT:
           - super_owners:
               SEQ:
-                TYPENAME: Owner
+                TYPENAME: MultiAddress
           - owners:
               SEQ:
                 TUPLE:
-                  - TYPENAME: Owner
+                  - TYPENAME: MultiAddress
                   - U64
           - multi_leader_rounds: U32
           - open_multi_leader_rounds: BOOL

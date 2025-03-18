@@ -11,7 +11,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::*,
-    identifiers::{Account, ChainId, MessageId, MultiAddress, Owner},
+    identifiers::{Account, ChainId, MessageId, MultiAddress},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -149,8 +149,7 @@ where
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let owner_identity = sender.identity().await?;
-    let owner = MultiAddress::from(owner_identity);
+    let owner = sender.identity().await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
     let friend = receiver.identity().await?;
@@ -158,7 +157,7 @@ where
         .transfer_to_account(
             MultiAddress::chain(),
             Amount::from_tokens(3),
-            Account::address32(receiver_id, owner_identity.0),
+            Account::address32(receiver_id, owner),
         )
         .await
         .unwrap()
@@ -167,7 +166,7 @@ where
         .transfer_to_account(
             MultiAddress::chain(),
             Amount::from_millis(100),
-            Account::address32(receiver_id, friend.0),
+            Account::address32(receiver_id, friend),
         )
         .await
         .unwrap()
@@ -182,10 +181,7 @@ where
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
-        receiver
-            .local_owner_balance(MultiAddress::from(friend))
-            .await
-            .unwrap(),
+        receiver.local_owner_balance(friend).await.unwrap(),
         Amount::from_millis(99)
     );
     // The received amount is not in the unprotected balance.
@@ -211,7 +207,7 @@ where
     // First attempt that should be rejected.
     sender
         .claim(
-            owner_identity,
+            owner,
             receiver_id,
             Recipient::root(1),
             Amount::from_tokens(5),
@@ -221,7 +217,7 @@ where
     // Second attempt with a correct amount.
     let cert = sender
         .claim(
-            owner_identity,
+            owner,
             receiver_id,
             Recipient::root(1),
             Amount::from_tokens(2),
@@ -273,7 +269,7 @@ where
         .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = AccountSecretKey::generate();
-    let new_owner = Owner::from(new_key_pair.public());
+    let new_owner = MultiAddress::from(new_key_pair.public());
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap().unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_proposal().is_none());
@@ -1456,9 +1452,9 @@ where
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
     let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
     let chain_id2 = client2_a.chain_id();
-    let owner2_a = Owner::from(client2_a.public_key().await.unwrap());
+    let owner2_a = MultiAddress::from(client2_a.public_key().await.unwrap());
     let key_pair2_b = AccountSecretKey::generate();
-    let owner2_b = Owner::from(key_pair2_b.public());
+    let owner2_b = MultiAddress::from(key_pair2_b.public());
     let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
@@ -1585,11 +1581,11 @@ where
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let client3_a = builder.add_root_chain(3, Amount::from_tokens(10)).await?;
     let chain_id3 = client3_a.chain_id();
-    let owner3_a = Owner::from(client3_a.public_key().await.unwrap());
+    let owner3_a = MultiAddress::from(client3_a.public_key().await.unwrap());
     let key_pair3_b = AccountSecretKey::generate();
-    let owner3_b = Owner::from(key_pair3_b.public());
+    let owner3_b = MultiAddress::from(key_pair3_b.public());
     let key_pair3_c = AccountSecretKey::generate();
-    let owner3_c = Owner::from(key_pair3_c.public());
+    let owner3_c = MultiAddress::from(key_pair3_c.public());
     let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],

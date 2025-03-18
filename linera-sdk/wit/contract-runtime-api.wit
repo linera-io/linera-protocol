@@ -1,7 +1,7 @@
 package linera:app;
 
 interface contract-runtime-api {
-    authenticated-signer: func() -> option<owner>;
+    authenticated-signer: func() -> option<multi-address>;
     get-message-id: func() -> option<message-id>;
     message-is-bouncing: func() -> option<bool>;
     authenticated-caller-id: func() -> option<multi-address>;
@@ -48,8 +48,8 @@ interface contract-runtime-api {
     }
 
     record chain-ownership {
-        super-owners: list<owner>,
-        owners: list<tuple<owner, u64>>,
+        super-owners: list<multi-address>,
+        owners: list<tuple<multi-address, u64>>,
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
@@ -93,10 +93,6 @@ interface contract-runtime-api {
 
     variant multi-address {
         address32(crypto-hash),
-    }
-
-    record owner {
-        inner0: crypto-hash,
     }
 
     record resources {

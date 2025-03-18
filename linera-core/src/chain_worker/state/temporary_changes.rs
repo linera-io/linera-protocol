@@ -138,7 +138,7 @@ where
                 .execution_state
                 .system
                 .balances
-                .get(&MultiAddress::Address32(signer.0))
+                .get(&signer)
                 .await?;
         }
 
