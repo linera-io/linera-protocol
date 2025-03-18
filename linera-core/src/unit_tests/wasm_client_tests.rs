@@ -20,7 +20,7 @@ use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, Bytecode, Event, OracleResponse},
-    identifiers::{AccountOwner, ApplicationId, Owner, StreamId, StreamName},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -29,6 +29,7 @@ use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
     SystemMessage, WasmRuntime,
 };
+use linera_storage::Storage as _;
 use serde_json::json;
 use test_case::test_case;
 
@@ -869,25 +870,24 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     let vm_runtime = VmRuntime::Wasm;
     let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
     // Set a fuel limit that is enough to instantiate the application and do one increment
-    // operation, but not ten.
-    // We also make sure that no fees are paid for reading or publishing application or
-    // bytecode blobs: We set the price higher than the chain balance.
-    let mut builder =
-        TestBuilder::new(storage_builder, 4, 1)
-            .await?
-            .with_policy(ResourceControlPolicy {
-                maximum_fuel_per_block: 30_000,
-                blob_read: Amount::from_tokens(10),
-                blob_published: Amount::from_tokens(10),
-                blob_byte_read: Amount::from_tokens(10),
-                blob_byte_published: Amount::from_tokens(10),
-                ..ResourceControlPolicy::default()
-            });
+    // operation, but not ten. We also verify blob fees for the bytecode.
+    let policy = ResourceControlPolicy {
+        maximum_fuel_per_block: 30_000,
+        blob_read: Amount::from_tokens(10), // Should not be charged.
+        blob_published: Amount::from_attos(100),
+        blob_byte_read: Amount::from_tokens(10), // Should not be charged.
+        blob_byte_published: Amount::from_attos(1),
+        ..ResourceControlPolicy::default()
+    };
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+        .await?
+        .with_policy(policy.clone());
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
 
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
 
+    let mut expected_balance = publisher.local_balance().await?;
     let (module_id, _cert) = publisher
         .publish_module(
             Bytecode::load_from_file(contract_path).await?,
@@ -898,6 +898,21 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .unwrap()
         .unwrap();
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
+    let mut blobs = publisher
+        .storage_client()
+        .read_blobs(&[
+            BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
+            BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
+        ])
+        .await?
+        .into_iter()
+        .flatten();
+    expected_balance = expected_balance
+        - policy.blob_published * 2
+        - policy.blob_byte_published
+            * (blobs.next().unwrap().bytes().len() as u128
+                + blobs.next().unwrap().bytes().len() as u128);
+    assert_eq!(publisher.local_balance().await?, expected_balance);
 
     let initial_value = 10_u64;
     let (application_id, _) = publisher

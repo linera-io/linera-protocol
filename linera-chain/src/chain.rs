@@ -768,7 +768,11 @@ where
             .track_executed_block_size_sequence_extension(0, block.operations.len())
             .with_execution_context(ChainExecutionContext::Block)?;
         for blob in published_blobs {
-            if blob.content().blob_type() == BlobType::Data {
+            let blob_type = blob.content().blob_type();
+            if blob_type == BlobType::Data
+                || blob_type == BlobType::ContractBytecode
+                || blob_type == BlobType::ServiceBytecode
+            {
                 resource_controller
                     .with_state(&mut self.execution_state.system)
                     .await?
