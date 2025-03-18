@@ -870,11 +870,17 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
     // Set a fuel limit that is enough to instantiate the application and do one increment
     // operation, but not ten.
+    // We also make sure that no fees are paid for reading or publishing application or
+    // bytecode blobs: We set the price higher than the chain balance.
     let mut builder =
         TestBuilder::new(storage_builder, 4, 1)
             .await?
             .with_policy(ResourceControlPolicy {
                 maximum_fuel_per_block: 30_000,
+                blob_read: Amount::from_tokens(10),
+                blob_published: Amount::from_tokens(10),
+                blob_byte_read: Amount::from_tokens(10),
+                blob_byte_published: Amount::from_tokens(10),
                 ..ResourceControlPolicy::default()
             });
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
