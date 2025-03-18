@@ -50,7 +50,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use system::{OpenChainConfig, SystemChannel};
+use system::{AdminOperation, OpenChainConfig, SystemChannel};
 use thiserror::Error;
 
 #[cfg(with_revm)]
@@ -1175,7 +1175,9 @@ impl Operation {
             Operation::System(SystemOperation::PublishDataBlob { blob_hash }) => {
                 vec![BlobId::new(*blob_hash, BlobType::Data)]
             }
-            Operation::System(SystemOperation::PublishCommitteeBlob { blob_hash }) => {
+            Operation::System(SystemOperation::Admin(AdminOperation::PublishCommitteeBlob {
+                blob_hash,
+            })) => {
                 vec![BlobId::new(*blob_hash, BlobType::Committee)]
             }
             Operation::System(SystemOperation::PublishModule { module_id }) => vec![

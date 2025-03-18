@@ -3018,9 +3018,9 @@ where
         let blob_hash = blob.id().hash;
         match self
             .execute_operations(
-                vec![Operation::System(SystemOperation::PublishCommitteeBlob {
-                    blob_hash,
-                })],
+                vec![Operation::System(SystemOperation::Admin(
+                    AdminOperation::PublishCommitteeBlob { blob_hash },
+                ))],
                 vec![blob],
             )
             .await?

@@ -163,9 +163,6 @@ pub enum SystemOperation {
     },
     /// Publishes a new application module.
     PublishModule { module_id: ModuleId },
-    /// Publishes a new committee as a blob. This can be assigned to an epoch using
-    /// [`AdminOperation::CreateCommittee`] in a later block.
-    PublishCommitteeBlob { blob_hash: CryptoHash },
     /// Publishes a new data blob.
     PublishDataBlob { blob_hash: CryptoHash },
     /// Reads a blob and discards the result.
@@ -194,6 +191,9 @@ pub enum SystemOperation {
 /// Operations that are only allowed on the admin chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum AdminOperation {
+    /// Publishes a new committee as a blob. This can be assigned to an epoch using
+    /// [`AdminOperation::CreateCommittee`] in a later block.
+    PublishCommitteeBlob { blob_hash: CryptoHash },
     /// Registers a new committee. Other chains can then migrate to the new epoch by executing
     /// [`SystemOperation::ProcessNewEpoch`].
     CreateCommittee { epoch: Epoch, blob_hash: CryptoHash },
@@ -437,6 +437,9 @@ where
                     ExecutionError::AdminOperationOnNonAdminChain
                 );
                 match admin_operation {
+                    AdminOperation::PublishCommitteeBlob { blob_hash } => {
+                        self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
+                    }
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
@@ -539,9 +542,6 @@ where
             }
             PublishDataBlob { blob_hash } => {
                 self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
-            }
-            PublishCommitteeBlob { blob_hash } => {
-                self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
             }
             ReadBlob { blob_id } => {
                 let content = self.read_blob_content(blob_id).await?;
