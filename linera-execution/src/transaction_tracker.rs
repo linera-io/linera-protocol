@@ -10,10 +10,7 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
 };
 
-use crate::{
-    ExecutionError, Message, OutgoingMessage, RawExecutionOutcome, RawOutgoingMessage,
-    SystemMessage,
-};
+use crate::{ExecutionError, Message, OutgoingMessage, RawExecutionOutcome, RawOutgoingMessage};
 
 /// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
 /// as replayed oracle responses.
@@ -89,13 +86,6 @@ impl TransactionTracker {
         index
     }
 
-    pub fn add_system_outcome(
-        &mut self,
-        outcome: RawExecutionOutcome<SystemMessage>,
-    ) -> Result<(), ArithmeticError> {
-        self.add_outcome(Message::System, outcome)
-    }
-
     pub fn add_user_outcome(
         &mut self,
         application_id: ApplicationId,
@@ -140,12 +130,25 @@ impl TransactionTracker {
         Ok(())
     }
 
-    fn add_outgoing_message(&mut self, message: OutgoingMessage) -> Result<(), ArithmeticError> {
+    pub fn add_outgoing_message(
+        &mut self,
+        message: OutgoingMessage,
+    ) -> Result<(), ArithmeticError> {
         self.next_message_index = self
             .next_message_index
             .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
         self.outgoing_messages.push(message);
+        Ok(())
+    }
+
+    pub fn add_outgoing_messages(
+        &mut self,
+        messages: impl IntoIterator<Item = OutgoingMessage>,
+    ) -> Result<(), ArithmeticError> {
+        for message in messages {
+            self.add_outgoing_message(message)?;
+        }
         Ok(())
     }
 

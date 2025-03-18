@@ -29,9 +29,9 @@ use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext,
-    MessageKind, Operation, OperationContext, Query, QueryContext, QueryOutcome,
-    RawExecutionOutcome, RawOutgoingMessage, ServiceSyncRuntime, SystemMessage, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    MessageKind, Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
+    ServiceSyncRuntime, SystemMessage, TransactionTracker, UserApplicationDescription,
+    UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -317,7 +317,7 @@ where
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
-                txn_tracker.add_system_outcome(outcome)?;
+                txn_tracker.add_outgoing_messages(outcome)?;
             }
             Message::User {
                 application_id,
@@ -347,41 +347,14 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match message {
-            Message::System(message) => {
-                let mut outcome = RawExecutionOutcome {
-                    authenticated_signer: context.authenticated_signer,
-                    refund_grant_to: context.refund_grant_to,
-                    ..Default::default()
-                };
-                outcome.messages.push(RawOutgoingMessage {
-                    destination: Destination::Recipient(context.message_id.chain_id),
-                    authenticated: true,
-                    grant,
-                    kind: MessageKind::Bouncing,
-                    message,
-                });
-                txn_tracker.add_system_outcome(outcome)?;
-            }
-            Message::User {
-                application_id,
-                bytes,
-            } => {
-                let mut outcome = RawExecutionOutcome {
-                    authenticated_signer: context.authenticated_signer,
-                    refund_grant_to: context.refund_grant_to,
-                    ..Default::default()
-                };
-                outcome.messages.push(RawOutgoingMessage {
-                    destination: Destination::Recipient(context.message_id.chain_id),
-                    authenticated: true,
-                    grant,
-                    kind: MessageKind::Bouncing,
-                    message: bytes,
-                });
-                txn_tracker.add_user_outcome(application_id, outcome)?;
-            }
-        }
+        txn_tracker.add_outgoing_message(OutgoingMessage {
+            destination: Destination::Recipient(context.message_id.chain_id),
+            authenticated_signer: context.authenticated_signer,
+            refund_grant_to: context.refund_grant_to.filter(|_| !grant.is_zero()),
+            grant,
+            kind: MessageKind::Bouncing,
+            message,
+        })?;
         Ok(())
     }
 
@@ -393,23 +366,17 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        let mut outcome = RawExecutionOutcome::default();
-        let message = RawOutgoingMessage {
-            destination: Destination::Recipient(account.chain_id),
-            authenticated: false,
-            grant: Amount::ZERO,
-            kind: MessageKind::Tracked,
-            message: SystemMessage::Credit {
-                amount,
-                source: context
-                    .authenticated_signer
-                    .map(AccountOwner::User)
-                    .unwrap_or(AccountOwner::Chain),
-                target: account.owner,
-            },
+        let message = SystemMessage::Credit {
+            amount,
+            source: context
+                .authenticated_signer
+                .map(AccountOwner::User)
+                .unwrap_or(AccountOwner::Chain),
+            target: account.owner,
         };
-        outcome.messages.push(message);
-        txn_tracker.add_system_outcome(outcome)?;
+        txn_tracker.add_outgoing_message(
+            OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
+        )?;
         Ok(())
     }
 

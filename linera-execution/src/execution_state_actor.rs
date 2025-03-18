@@ -29,9 +29,9 @@ use reqwest::{header::HeaderMap, Client, Url};
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, RawExecutionOutcome,
-    RawOutgoingMessage, SystemMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, OutgoingMessage,
+    TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -169,10 +169,8 @@ where
                 signer,
                 application_id,
                 callback,
-            } => {
-                let mut execution_outcome = RawExecutionOutcome::default();
-                let message = self
-                    .system
+            } => callback.respond(
+                self.system
                     .transfer(
                         signer,
                         Some(application_id),
@@ -180,13 +178,8 @@ where
                         Recipient::Account(destination),
                         amount,
                     )
-                    .await?;
-
-                if let Some(message) = message {
-                    execution_outcome.messages.push(message);
-                }
-                callback.respond(execution_outcome);
-            }
+                    .await?,
+            ),
 
             Claim {
                 source,
@@ -195,10 +188,8 @@ where
                 signer,
                 application_id,
                 callback,
-            } => {
-                let mut execution_outcome = RawExecutionOutcome::default();
-                let message = self
-                    .system
+            } => callback.respond(
+                self.system
                     .claim(
                         signer,
                         Some(application_id),
@@ -207,11 +198,8 @@ where
                         Recipient::Account(destination),
                         amount,
                     )
-                    .await?;
-
-                execution_outcome.messages.push(message);
-                callback.respond(execution_outcome);
-            }
+                    .await?,
+            ),
 
             SystemTimestamp { callback } => {
                 let timestamp = *self.system.timestamp.get();
@@ -311,8 +299,7 @@ where
                     balance,
                     application_permissions,
                 };
-                let messages = self.system.open_chain(config, next_message_id).await?;
-                callback.respond(messages)
+                callback.respond(self.system.open_chain(config, next_message_id).await?);
             }
 
             CloseChain {
@@ -557,7 +544,7 @@ pub enum ExecutionRequest {
         signer: Option<Owner>,
         application_id: UserApplicationId,
         #[debug(skip)]
-        callback: Sender<RawExecutionOutcome<SystemMessage>>,
+        callback: Sender<Option<OutgoingMessage>>,
     },
 
     Claim {
@@ -568,7 +555,7 @@ pub enum ExecutionRequest {
         signer: Option<Owner>,
         application_id: UserApplicationId,
         #[debug(skip)]
-        callback: Sender<RawExecutionOutcome<SystemMessage>>,
+        callback: Sender<OutgoingMessage>,
     },
 
     SystemTimestamp {
@@ -641,7 +628,7 @@ pub enum ExecutionRequest {
         next_message_id: MessageId,
         application_permissions: ApplicationPermissions,
         #[debug(skip)]
-        callback: Sender<RawOutgoingMessage<SystemMessage, Amount>>,
+        callback: Sender<OutgoingMessage>,
     },
 
     CloseChain {

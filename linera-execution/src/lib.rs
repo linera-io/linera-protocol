@@ -955,6 +955,32 @@ pub struct OutgoingMessage {
 
 impl<'de> BcsHashable<'de> for OutgoingMessage {}
 
+impl OutgoingMessage {
+    /// Creates a new simple outgoing message with no grant and no authenticated signer.
+    pub fn new(recipient: ChainId, message: impl Into<Message>) -> Self {
+        OutgoingMessage {
+            destination: Destination::Recipient(recipient),
+            authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
+            kind: MessageKind::Simple,
+            message: message.into(),
+        }
+    }
+
+    /// Returns the same message, with the specified kind.
+    pub fn with_kind(mut self, kind: MessageKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    /// Returns the same message, with the specified authenticated signer.
+    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+        self.authenticated_signer = authenticated_signer;
+        self
+    }
+}
+
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug)]
