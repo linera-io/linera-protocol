@@ -401,6 +401,75 @@ async fn test_service_as_oracle_exceeding_time_limit(
     Ok(())
 }
 
+/// Tests if execution fails early if services call `check_execution_time`.
+#[cfg(feature = "unstable-oracles")]
+#[test_case(&[120]; "single service as oracle call")]
+#[test_case(&[60, 60]; "two service as oracle calls")]
+#[test_case(&[105, 15]; "long and short service as oracle calls")]
+#[test_case(&[50, 50, 50]; "three service as oracle calls")]
+#[test_case(&[60, 60, 60]; "first two service as oracle calls exceeds limit")]
+#[tokio::test]
+async fn test_service_as_oracle_timeout_early_stop(
+    service_oracle_execution_times_ms: &[u64],
+) -> anyhow::Result<()> {
+    let maximum_service_oracle_execution_ms = 70;
+    let poll_interval = Duration::from_millis(10);
+    let maximum_expected_execution_time =
+        Duration::from_millis(maximum_service_oracle_execution_ms) + 2 * poll_interval;
+
+    let service_oracle_call_count = service_oracle_execution_times_ms.len();
+    let service_oracle_execution_times = service_oracle_execution_times_ms
+        .iter()
+        .copied()
+        .map(Duration::from_millis);
+
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_service_oracle_execution_ms,
+            ..ResourceControlPolicy::default()
+        })
+        .await?;
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        for _ in 0..service_oracle_call_count {
+            runtime.query_service(application_id, vec![])?;
+        }
+        Ok(vec![])
+    }));
+
+    for service_oracle_execution_time in service_oracle_execution_times {
+        application.expect_call(ExpectedCall::handle_query(move |runtime, _, _| {
+            let execution_time = Instant::now();
+            while execution_time.elapsed() < service_oracle_execution_time {
+                runtime.check_execution_time()?;
+                thread::sleep(poll_interval);
+            }
+            Ok(vec![])
+        }));
+    }
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let execution_start = Instant::now();
+    let result = chain.execute_block(&block, time, None, &[], None).await;
+    let execution_time = execution_start.elapsed();
+
+    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
+        result
+    else {
+        panic!("Expected a block execution error, got: {result:#?}");
+    };
+
+    assert_matches!(
+        *execution_error,
+        ExecutionError::MaximumServiceOracleExecutionTimeExceeded
+    );
+
+    assert!(execution_time <= maximum_expected_execution_time);
+
+    Ok(())
+}
+
 /// Sets up a test with a dummy [`MockApplication`].
 ///
 /// Creates and initializes a [`ChainStateView`] configured with the
@@ -466,118 +535,4 @@ async fn prepare_test_with_dummy_mock_application(
     });
 
     Ok((application, application_id, chain, block, time))
-}
-
-/// Tests if execution fails early if services call `check_execution_time`.
-#[cfg(feature = "unstable-oracles")]
-#[test_case(&[120]; "single service as oracle call")]
-#[test_case(&[60, 60]; "two service as oracle calls")]
-#[test_case(&[105, 15]; "long and short service as oracle calls")]
-#[test_case(&[50, 50, 50]; "three service as oracle calls")]
-#[test_case(&[60, 60, 60]; "first two service as oracle calls exceeds limit")]
-#[tokio::test]
-async fn test_service_as_oracle_timeout_early_stop(
-    service_oracle_execution_times_ms: &[u64],
-) -> anyhow::Result<()> {
-    let maximum_service_oracle_execution_ms = 70;
-    let poll_interval = Duration::from_millis(10);
-    let maximum_expected_execution_time =
-        Duration::from_millis(maximum_service_oracle_execution_ms) + 2 * poll_interval;
-
-    let service_oracle_call_count = service_oracle_execution_times_ms.len();
-    let service_oracle_execution_times = service_oracle_execution_times_ms
-        .iter()
-        .copied()
-        .map(Duration::from_millis);
-
-    let time = Timestamp::from(0);
-    let message_id = make_admin_message_id(BlockHeight(3));
-    let chain_id = ChainId::child(message_id);
-    let mut chain = ChainStateView::new(chain_id).await;
-
-    let mut config = make_open_chain_config();
-    config.committees.insert(
-        Epoch(0),
-        Committee::new(
-            BTreeMap::from([(
-                ValidatorPublicKey::test_key(1),
-                ValidatorState {
-                    network_address: ValidatorPublicKey::test_key(1).to_string(),
-                    votes: 1,
-                    account_public_key: AccountPublicKey::test_key(1),
-                },
-            )]),
-            ResourceControlPolicy {
-                maximum_service_oracle_execution_ms,
-                ..ResourceControlPolicy::default()
-            },
-        ),
-    );
-
-    chain
-        .execute_init_message(message_id, &config, time, time)
-        .await?;
-
-    // Create a mock application.
-    let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = ApplicationId::from(&app_description);
-    let application = MockApplication::default();
-    let extra = &chain.context().extra();
-    extra
-        .user_contracts()
-        .insert(application_id, application.clone().into());
-    extra
-        .user_services()
-        .insert(application_id, application.clone().into());
-    extra
-        .add_blobs([
-            contract_blob,
-            service_blob,
-            Blob::new_application_description(&app_description),
-        ])
-        .await?;
-
-    let block = make_first_block(chain_id).with_operation(Operation::User {
-        application_id,
-        bytes: vec![],
-    });
-
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
-        for _ in 0..service_oracle_call_count {
-            runtime.query_service(application_id, vec![])?;
-        }
-        Ok(vec![])
-    }));
-
-    for service_oracle_execution_time in service_oracle_execution_times {
-        application.expect_call(ExpectedCall::handle_query(move |runtime, _, _| {
-            let execution_time = Instant::now();
-            while execution_time.elapsed() < service_oracle_execution_time {
-                runtime.check_execution_time()?;
-                thread::sleep(poll_interval);
-            }
-            Ok(vec![])
-        }));
-    }
-
-    application.expect_call(ExpectedCall::default_finalize());
-
-    let execution_start = Instant::now();
-    let result = chain.execute_block(&block, time, None, &[], None).await;
-    let execution_time = execution_start.elapsed();
-
-    let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
-        result
-    else {
-        panic!("Expected a block execution error, got: {result:#?}");
-    };
-
-    assert_matches!(
-        *execution_error,
-        ExecutionError::MaximumServiceOracleExecutionTimeExceeded
-    );
-
-    assert!(execution_time <= maximum_expected_execution_time);
-
-    Ok(())
 }
