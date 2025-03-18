@@ -69,7 +69,6 @@ impl From<MultiAddress> for wit_contract_api::MultiAddress {
             MultiAddress::Address32(owner) => {
                 wit_contract_api::MultiAddress::Address32(owner.into())
             }
-            MultiAddress::Chain => wit_contract_api::MultiAddress::Chain,
         }
     }
 }

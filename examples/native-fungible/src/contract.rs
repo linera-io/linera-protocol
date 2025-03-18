@@ -40,7 +40,8 @@ impl Contract for NativeFungibleTokenContract {
                 chain_id: self.runtime.chain_id(),
                 owner,
             };
-            self.runtime.transfer(MultiAddress::Chain, account, amount);
+            self.runtime
+                .transfer(MultiAddress::chain(), account, amount);
         }
     }
 
@@ -142,9 +143,6 @@ impl NativeFungibleTokenContract {
                         || self.runtime.authenticated_caller_id() == Some(origin),
                     "The requested transfer is not correctly authenticated."
                 )
-            }
-            MultiAddress::Chain => {
-                panic!("Chain accounts are not supported")
             }
         }
     }

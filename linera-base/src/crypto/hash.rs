@@ -6,7 +6,7 @@
 
 #[cfg(with_testing)]
 use std::ops::RangeInclusive;
-use std::{borrow::Cow, fmt, io, str::FromStr};
+use std::{borrow::Cow, fmt, io, str::FromStr, sync::LazyLock};
 
 #[cfg(with_testing)]
 use alloy_primitives::FixedBytes;
@@ -27,6 +27,15 @@ use crate::{
     crypto::{BcsHashable, CryptoError, Hashable},
     doc_scalar,
 };
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct Chain;
+
+impl BcsHashable<'_> for Chain {}
+
+/// The CryptoHash of `Chain` newtype struct.
+/// It's a marker for a generic `Chain` object.
+pub static CHAIN_CRYPTO_HASH: LazyLock<CryptoHash> = LazyLock::new(|| CryptoHash::new(&Chain));
 
 /// A Keccak256 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]

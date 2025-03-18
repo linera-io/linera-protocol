@@ -9,9 +9,7 @@ use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{
-        ApplicationId, ChainId, ChannelFullName, GenericApplicationId, MultiAddress, Owner,
-    },
+    identifiers::{ApplicationId, ChainId, ChannelFullName, MultiAddress, Owner},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
@@ -186,7 +184,7 @@ impl BlockBuilder {
         channel: SystemChannel,
     ) -> &mut Self {
         let medium = Medium::Channel(ChannelFullName {
-            application_id: GenericApplicationId::System,
+            application_id: MultiAddress::chain(),
             name: channel.name(),
         });
         self.with_messages_from_by_medium(certificate, &medium, MessageAction::Accept)

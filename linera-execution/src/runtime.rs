@@ -1301,7 +1301,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
         );
-        let application_id = this.current_application().id.into();
+        let application_id = this.current_application().id;
         let stream_id = StreamId {
             stream_name,
             application_id,

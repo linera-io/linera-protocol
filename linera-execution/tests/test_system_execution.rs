@@ -30,7 +30,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     };
     let mut view = state.into_view().await;
     let operation = SystemOperation::Transfer {
-        owner: MultiAddress::Chain,
+        owner: MultiAddress::chain(),
         amount: Amount::from_tokens(4),
         recipient: Recipient::Burn,
     };
@@ -66,8 +66,8 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
-        target: MultiAddress::Chain,
-        source: MultiAddress::Chain,
+        target: MultiAddress::chain(),
+        source: MultiAddress::chain(),
     };
     let context = MessageContext {
         chain_id: ChainId::root(0),

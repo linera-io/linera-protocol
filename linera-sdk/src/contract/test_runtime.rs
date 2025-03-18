@@ -515,9 +515,10 @@ where
     /// Debits an `amount` of native tokens from a `source` owner account (or the current
     /// chain's balance).
     fn debit(&mut self, source: MultiAddress, amount: Amount) {
-        let source_balance = match source {
-            MultiAddress::Address32(_) => self.owner_balance_mut(source),
-            MultiAddress::Chain => self.chain_balance_mut(),
+        let source_balance = if source == MultiAddress::chain() {
+            self.chain_balance_mut()
+        } else {
+            self.owner_balance_mut(source)
         };
 
         *source_balance = source_balance
@@ -528,9 +529,10 @@ where
     /// Credits an `amount` of native tokens into a `destination` owner account (or the
     /// current chain's balance).
     fn credit(&mut self, destination: MultiAddress, amount: Amount) {
-        let destination_balance = match destination {
-            owner @ MultiAddress::Address32(_) => self.owner_balance_mut(owner),
-            MultiAddress::Chain => self.chain_balance_mut(),
+        let destination_balance = if destination == MultiAddress::chain() {
+            self.chain_balance_mut()
+        } else {
+            self.owner_balance_mut(destination)
         };
 
         *destination_balance = destination_balance
