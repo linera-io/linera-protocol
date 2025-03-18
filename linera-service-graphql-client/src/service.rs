@@ -74,7 +74,6 @@ mod types {
 }
 
 pub use types::*;
-pub type UserApplicationId = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(

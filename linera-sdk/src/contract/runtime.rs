@@ -11,7 +11,7 @@ use linera_base::{
     http,
     identifiers::{
         Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
-        MultiAddress, Owner, StreamName, UserApplicationId,
+        MultiAddress, Owner, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -36,7 +36,7 @@ where
     block_height: Option<BlockHeight>,
     message_is_bouncing: Option<Option<bool>>,
     message_id: Option<Option<MessageId>>,
-    authenticated_caller_id: Option<Option<UserApplicationId>>,
+    authenticated_caller_id: Option<Option<MultiAddress>>,
     timestamp: Option<Timestamp>,
 }
 
@@ -88,9 +88,9 @@ where
 
     /// Returns the ID of the current application.
     pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
-        *self.application_id.get_or_insert_with(|| {
-            UserApplicationId::from(base_wit::get_application_id()).with_abi()
-        })
+        *self
+            .application_id
+            .get_or_insert_with(|| MultiAddress::from(base_wit::get_application_id()).with_abi())
     }
 
     /// Returns the chain ID of the current application creator.
@@ -196,10 +196,10 @@ where
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context
     /// is executing a cross-application call.
-    pub fn authenticated_caller_id(&mut self) -> Option<UserApplicationId> {
+    pub fn authenticated_caller_id(&mut self) -> Option<MultiAddress> {
         *self
             .authenticated_caller_id
-            .get_or_insert_with(|| contract_wit::authenticated_caller_id())
+            .get_or_insert_with(|| contract_wit::authenticated_caller_id().map(Into::into))
     }
 
     /// Schedules a message to be sent to this application on another chain.
@@ -319,7 +319,7 @@ where
         module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<MultiAddress>,
     ) -> ApplicationId<Abi>
     where
         Abi: ContractAbi,
@@ -335,13 +335,14 @@ where
             .into_iter()
             .map(From::from)
             .collect();
-        let application_id = contract_wit::create_application(
+        let application_id: MultiAddress = contract_wit::create_application(
             module_id.into(),
             &parameters,
             &argument,
             &converted_application_ids,
-        );
-        UserApplicationId::new(application_id).with_abi::<Abi>()
+        )
+        .into();
+        application_id.with_abi::<Abi>()
     }
 
     /// Returns the round in which this block was validated.

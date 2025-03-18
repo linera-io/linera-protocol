@@ -327,22 +327,13 @@ pub struct ApplicationId<A> {
     _phantom: PhantomData<A>,
 }
 
-/// Alias for `ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-pub type UserApplicationId = MultiAddress;
-
-impl<A> From<ApplicationId<A>> for UserApplicationId {
+impl<A> From<ApplicationId<A>> for MultiAddress {
     fn from(app_id: ApplicationId<A>) -> Self {
-        UserApplicationId::new(app_id.application_description_hash)
+        MultiAddress::Address32(app_id.application_description_hash)
     }
 }
 
-impl UserApplicationId {
-    /// TODO
-    pub fn new(hash: CryptoHash) -> Self {
-        MultiAddress::Address32(hash)
-    }
-
+impl MultiAddress {
     /// Converts the application ID to the ID of the blob containing the
     /// `UserApplicationDescription`.
     pub fn description_blob_id(self) -> BlobId {
@@ -378,12 +369,12 @@ pub enum GenericApplicationId {
     /// The system application.
     System,
     /// A user application.
-    User(UserApplicationId),
+    User(MultiAddress),
 }
 
 impl GenericApplicationId {
     /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&UserApplicationId> {
+    pub fn user_application_id(&self) -> Option<&MultiAddress> {
         if let GenericApplicationId::User(app_id) = self {
             Some(app_id)
         } else {
@@ -392,8 +383,8 @@ impl GenericApplicationId {
     }
 }
 
-impl From<UserApplicationId> for GenericApplicationId {
-    fn from(user_application_id: UserApplicationId) -> Self {
+impl From<MultiAddress> for GenericApplicationId {
+    fn from(user_application_id: MultiAddress) -> Self {
         GenericApplicationId::User(user_application_id)
     }
 }
@@ -463,7 +454,7 @@ impl ChannelFullName {
     }
 
     /// Creates a full user channel name.
-    pub fn user(name: ChannelName, application_id: UserApplicationId) -> Self {
+    pub fn user(name: ChannelName, application_id: MultiAddress) -> Self {
         Self {
             application_id: application_id.into(),
             name,
@@ -903,8 +894,8 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
 
 impl<A> ApplicationId<A> {
     /// Forgets the ABI of a module ID (if any).
-    pub fn forget_abi(self) -> UserApplicationId {
-        UserApplicationId::new(self.application_description_hash)
+    pub fn forget_abi(self) -> MultiAddress {
+        MultiAddress::Address32(self.application_description_hash)
     }
 }
 
@@ -1078,7 +1069,6 @@ impl ChainId {
 
 impl<'de> BcsHashable<'de> for ChainDescription {}
 
-// bcs_scalar!(UserApplicationId, "A unique identifier for a user application");
 doc_scalar!(
     GenericApplicationId,
     "A unique identifier for a user application or for the system application"

@@ -31,7 +31,7 @@ use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
     crate::benchmark::Benchmark,
-    linera_base::{data_types::Amount, identifiers::UserApplicationId},
+    linera_base::{data_types::Amount, identifiers::MultiAddress},
     linera_execution::{
         committee::{Committee, Epoch},
         system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
@@ -649,7 +649,7 @@ where
         num_chains: usize,
         transactions_per_block: usize,
         tokens_per_chain: Amount,
-        fungible_application_id: Option<UserApplicationId>,
+        fungible_application_id: Option<MultiAddress>,
     ) -> Result<
         (
             HashMap<ChainId, ChainClient<NodeProvider, S>>,
@@ -899,7 +899,7 @@ where
     async fn supply_fungible_tokens(
         &mut self,
         key_pairs: &HashMap<ChainId, AccountSecretKey>,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet

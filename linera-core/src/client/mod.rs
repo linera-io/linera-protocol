@@ -35,7 +35,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId, ModuleId,
-        MultiAddress, Owner, StreamId, UserApplicationId,
+        MultiAddress, Owner, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -2935,7 +2935,7 @@ where
         module_id: ModuleId<A, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<MultiAddress>,
     ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, ChainClientError>
     {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
@@ -2967,9 +2967,8 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<ClientOutcome<(UserApplicationId, ConfirmedBlockCertificate)>, ChainClientError>
-    {
+        required_application_ids: Vec<MultiAddress>,
+    ) -> Result<ClientOutcome<(MultiAddress, ConfirmedBlockCertificate)>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             module_id,
             parameters,
@@ -2993,7 +2992,7 @@ where
             let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
                 "ApplicationDescription blob not found.",
             ))?;
-            let id = UserApplicationId::new(blob_id.hash);
+            let id = MultiAddress::Address32(blob_id.hash);
             Ok((id, certificate))
         })
     }

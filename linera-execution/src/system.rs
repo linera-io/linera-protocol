@@ -45,7 +45,7 @@ use crate::{
     committee::{Committee, Epoch},
     ChannelName, ChannelSubscription, Destination, ExecutionError, ExecutionRuntimeContext,
     MessageContext, MessageKind, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome,
-    RawOutgoingMessage, TransactionTracker, UserApplicationDescription, UserApplicationId,
+    RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -181,7 +181,7 @@ pub enum SystemOperation {
         #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
         instantiation_argument: Vec<u8>,
         #[debug(skip_if = Vec::is_empty)]
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<MultiAddress>,
     },
     /// Operations that are only allowed on the admin chain.
     Admin(AdminOperation),
@@ -337,7 +337,7 @@ impl UserData {
 
 #[derive(Debug)]
 pub struct CreateApplicationResult {
-    pub app_id: UserApplicationId,
+    pub app_id: MultiAddress,
     pub txn_tracker: TransactionTracker,
 }
 
@@ -368,7 +368,7 @@ where
         context: OperationContext,
         operation: SystemOperation,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<Option<(UserApplicationId, Vec<u8>)>, ExecutionError> {
+    ) -> Result<Option<(MultiAddress, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut outcome = RawExecutionOutcome {
             authenticated_signer: context.authenticated_signer,
@@ -634,7 +634,7 @@ where
     pub async fn transfer(
         &mut self,
         authenticated_signer: Option<Owner>,
-        authenticated_application_id: Option<UserApplicationId>,
+        authenticated_application_id: Option<MultiAddress>,
         source: MultiAddress,
         recipient: Recipient,
         amount: Amount,
@@ -684,7 +684,7 @@ where
     pub async fn claim(
         &self,
         authenticated_signer: Option<Owner>,
-        authenticated_application_id: Option<UserApplicationId>,
+        authenticated_application_id: Option<MultiAddress>,
         source: MultiAddress,
         target_id: ChainId,
         recipient: Recipient,
@@ -911,7 +911,7 @@ where
         block_height: BlockHeight,
         module_id: ModuleId,
         parameters: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<MultiAddress>,
         mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
@@ -939,7 +939,7 @@ where
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
 
         Ok(CreateApplicationResult {
-            app_id: UserApplicationId::from(&application_description),
+            app_id: MultiAddress::from(&application_description),
             txn_tracker,
         })
     }
@@ -959,7 +959,7 @@ where
     /// Retrieves an application's description.
     pub async fn describe_application(
         &mut self,
-        id: UserApplicationId,
+        id: MultiAddress,
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<UserApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
@@ -991,9 +991,9 @@ where
     /// Retrieves the recursive dependencies of applications and applies a topological sort.
     pub async fn find_dependencies(
         &mut self,
-        mut stack: Vec<UserApplicationId>,
+        mut stack: Vec<MultiAddress>,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<UserApplicationId>, ExecutionError> {
+    ) -> Result<Vec<MultiAddress>, ExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
         // The entries already inserted in `result`.

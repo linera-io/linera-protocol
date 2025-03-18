@@ -7,10 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
-    identifiers::{
-        Account, ChainId, ChannelName, MessageId, MultiAddress, Owner, StreamName,
-        UserApplicationId,
-    },
+    identifiers::{Account, ChainId, ChannelName, MessageId, MultiAddress, Owner, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -103,7 +100,7 @@ where
     }
 
     /// Returns the ID of the current application.
-    fn get_application_id(caller: &mut Caller) -> Result<UserApplicationId, RuntimeError> {
+    fn get_application_id(caller: &mut Caller) -> Result<MultiAddress, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -422,9 +419,7 @@ where
     }
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context.
-    fn authenticated_caller_id(
-        caller: &mut Caller,
-    ) -> Result<Option<UserApplicationId>, RuntimeError> {
+    fn authenticated_caller_id(caller: &mut Caller) -> Result<Option<MultiAddress>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -552,8 +547,8 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<UserApplicationId, RuntimeError> {
+        required_application_ids: Vec<MultiAddress>,
+    ) -> Result<MultiAddress, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -565,7 +560,7 @@ where
     fn try_call_application(
         caller: &mut Caller,
         authenticated: bool,
-        callee_id: UserApplicationId,
+        callee_id: MultiAddress,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
@@ -592,7 +587,7 @@ where
     /// Queries a service and returns the response.
     fn query_service(
         caller: &mut Caller,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
@@ -658,7 +653,7 @@ where
     /// Queries another application.
     fn try_query_application(
         caller: &mut Caller,
-        application: UserApplicationId,
+        application: MultiAddress,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller

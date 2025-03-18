@@ -11,7 +11,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
-    identifiers::{BlobId, ChainDescription, ChainId, MultiAddress, Owner, UserApplicationId},
+    identifiers::{BlobId, ChainDescription, ChainId, MultiAddress, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -51,7 +51,7 @@ pub struct SystemExecutionState {
     #[debug(skip_if = Vec::is_empty)]
     pub extra_blobs: Vec<Blob>,
     #[debug(skip_if = BTreeMap::is_empty)]
-    pub mock_applications: BTreeMap<UserApplicationId, MockApplication>,
+    pub mock_applications: BTreeMap<MultiAddress, MockApplication>,
 }
 
 impl SystemExecutionState {
@@ -166,8 +166,8 @@ impl RegisterMockApplication for SystemExecutionState {
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
-    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
-        let id = UserApplicationId::from(&description);
+    ) -> anyhow::Result<(MultiAddress, MockApplication)> {
+        let id = MultiAddress::from(&description);
         let application = MockApplication::default();
 
         self.extra_blobs.extend([

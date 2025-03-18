@@ -44,7 +44,6 @@ use linera_base::{
     identifiers::{
         Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination, EventId,
         GenericApplicationId, MessageId, ModuleId, MultiAddress, Owner, StreamName,
-        UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -207,14 +206,14 @@ pub enum ExecutionError {
     InvalidPromise,
 
     #[error("Attempted to perform a reentrant call to application {0}")]
-    ReentrantCall(UserApplicationId),
+    ReentrantCall(MultiAddress),
     #[error(
         "Application {caller_id} attempted to perform a cross-application to {callee_id} call \
         from `finalize`"
     )]
     CrossApplicationCallInFinalize {
-        caller_id: Box<UserApplicationId>,
-        callee_id: Box<UserApplicationId>,
+        caller_id: Box<MultiAddress>,
+        callee_id: Box<MultiAddress>,
     },
     #[error("Attempt to write to storage from a contract")]
     ServiceWriteAttempt,
@@ -222,7 +221,7 @@ pub enum ExecutionError {
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
     // TODO(#2927): support dynamic loading of modules on the Web
     #[error("Unsupported dynamic application load: {0:?}")]
-    UnsupportedDynamicApplicationLoad(Box<UserApplicationId>),
+    UnsupportedDynamicApplicationLoad(Box<MultiAddress>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -243,7 +242,7 @@ pub enum ExecutionError {
     #[error("Owner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
-    UnauthorizedApplication(UserApplicationId),
+    UnauthorizedApplication(MultiAddress),
     #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered I/O error: {0}")]
@@ -331,7 +330,7 @@ pub enum ExecutionError {
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<UserApplicationId>),
+    UnknownApplicationId(Box<MultiAddress>),
     #[error("Chain is not active yet.")]
     InactiveChain,
     #[error("No recorded response for oracle query")]
@@ -397,9 +396,9 @@ pub trait ExecutionRuntimeContext {
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
-    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>>;
+    fn user_contracts(&self) -> &Arc<DashMap<MultiAddress, UserContractCode>>;
 
-    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>>;
+    fn user_services(&self) -> &Arc<DashMap<MultiAddress, UserServiceCode>>;
 
     async fn get_user_contract(
         &self,
@@ -440,7 +439,7 @@ pub struct OperationContext {
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_caller_id: Option<UserApplicationId>,
+    pub authenticated_caller_id: Option<MultiAddress>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -512,7 +511,7 @@ pub trait BaseRuntime {
     fn block_height(&mut self) -> Result<BlockHeight, ExecutionError>;
 
     /// The current application ID.
-    fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
+    fn application_id(&mut self) -> Result<MultiAddress, ExecutionError>;
 
     /// The current application creator's chain ID.
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError>;
@@ -671,7 +670,7 @@ pub trait ServiceRuntime: BaseRuntime {
     /// Queries another application.
     fn try_query_application(
         &mut self,
-        queried_id: UserApplicationId,
+        queried_id: MultiAddress,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -695,7 +694,7 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.
-    fn authenticated_caller_id(&mut self) -> Result<Option<UserApplicationId>, ExecutionError>;
+    fn authenticated_caller_id(&mut self) -> Result<Option<MultiAddress>, ExecutionError>;
 
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
@@ -733,7 +732,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn try_call_application(
         &mut self,
         authenticated: bool,
-        callee_id: UserApplicationId,
+        callee_id: MultiAddress,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -748,7 +747,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Queries a service.
     fn query_service(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -775,8 +774,8 @@ pub trait ContractRuntime: BaseRuntime {
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<UserApplicationId, ExecutionError>;
+        required_application_ids: Vec<MultiAddress>,
+    ) -> Result<MultiAddress, ExecutionError>;
 
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
@@ -792,7 +791,7 @@ pub enum Operation {
     System(SystemOperation),
     /// A user operation (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -808,7 +807,7 @@ pub enum Message {
     System(SystemMessage),
     /// A user message (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -822,7 +821,7 @@ pub enum Query {
     System(SystemQuery),
     /// A user query (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1055,8 +1054,8 @@ impl OperationContext {
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
-    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    user_contracts: Arc<DashMap<MultiAddress, UserContractCode>>,
+    user_services: Arc<DashMap<MultiAddress, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, Blob>>,
     events: Arc<DashMap<EventId, Vec<u8>>>,
 }
@@ -1087,11 +1086,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &Arc<DashMap<MultiAddress, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &Arc<DashMap<MultiAddress, UserServiceCode>> {
         &self.user_services
     }
 
@@ -1192,7 +1191,7 @@ impl Operation {
     /// `application_id`.
     #[cfg(with_testing)]
     pub fn user_without_abi(
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         operation: &impl Serialize,
     ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
@@ -1314,7 +1313,7 @@ impl Query {
     /// Creates a new user application query assuming that the `query` is valid for the
     /// `application_id`.
     pub fn user_without_abi(
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         query: &impl Serialize,
     ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {

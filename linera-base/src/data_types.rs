@@ -34,8 +34,8 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId, ModuleId, StreamId,
-        UserApplicationId,
+        BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId, ModuleId,
+        MultiAddress, StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -718,34 +718,34 @@ pub struct ApplicationPermissions {
     /// If it is `Some`, only operations from the specified applications are allowed, and
     /// no system operations.
     #[debug(skip_if = Option::is_none)]
-    pub execute_operations: Option<Vec<UserApplicationId>>,
+    pub execute_operations: Option<Vec<MultiAddress>>,
     /// At least one operation or incoming message from each of these applications must occur in
     /// every block.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
-    pub mandatory_applications: Vec<UserApplicationId>,
+    pub mandatory_applications: Vec<MultiAddress>,
     /// These applications are allowed to close the current chain using the system API.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
-    pub close_chain: Vec<UserApplicationId>,
+    pub close_chain: Vec<MultiAddress>,
     /// These applications are allowed to change the application permissions using the system API.
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
-    pub change_application_permissions: Vec<UserApplicationId>,
+    pub change_application_permissions: Vec<MultiAddress>,
     /// These applications are allowed to perform calls to services as oracles.
     #[graphql(default)]
     #[debug(skip_if = Option::is_none)]
-    pub call_service_as_oracle: Option<Vec<UserApplicationId>>,
+    pub call_service_as_oracle: Option<Vec<MultiAddress>>,
     /// These applications are allowed to perform HTTP requests.
     #[graphql(default)]
     #[debug(skip_if = Option::is_none)]
-    pub make_http_requests: Option<Vec<UserApplicationId>>,
+    pub make_http_requests: Option<Vec<MultiAddress>>,
 }
 
 impl ApplicationPermissions {
     /// Creates new `ApplicationPermissions` where the given application is the only one
     /// whose operations are allowed and mandatory, and it can also close the chain.
-    pub fn new_single(app_id: UserApplicationId) -> Self {
+    pub fn new_single(app_id: MultiAddress) -> Self {
         Self {
             execute_operations: Some(vec![app_id]),
             mandatory_applications: vec![app_id],
@@ -766,18 +766,18 @@ impl ApplicationPermissions {
     }
 
     /// Returns whether the given application is allowed to close this chain.
-    pub fn can_close_chain(&self, app_id: &UserApplicationId) -> bool {
+    pub fn can_close_chain(&self, app_id: &MultiAddress) -> bool {
         self.close_chain.contains(app_id)
     }
 
     /// Returns whether the given application is allowed to change the application
     /// permissions for this chain.
-    pub fn can_change_application_permissions(&self, app_id: &UserApplicationId) -> bool {
+    pub fn can_change_application_permissions(&self, app_id: &MultiAddress) -> bool {
         self.change_application_permissions.contains(app_id)
     }
 
     /// Returns whether the given application can call services.
-    pub fn can_call_services(&self, app_id: &UserApplicationId) -> bool {
+    pub fn can_call_services(&self, app_id: &MultiAddress) -> bool {
         self.call_service_as_oracle
             .as_ref()
             .map(|app_ids| app_ids.contains(app_id))
@@ -785,7 +785,7 @@ impl ApplicationPermissions {
     }
 
     /// Returns whether the given application can make HTTP requests.
-    pub fn can_make_http_requests(&self, app_id: &UserApplicationId) -> bool {
+    pub fn can_make_http_requests(&self, app_id: &MultiAddress) -> bool {
         self.make_http_requests
             .as_ref()
             .map(|app_ids| app_ids.contains(app_id))
@@ -832,12 +832,12 @@ pub struct UserApplicationDescription {
     #[debug(with = "hex_debug")]
     pub parameters: Vec<u8>,
     /// Required dependencies.
-    pub required_application_ids: Vec<UserApplicationId>,
+    pub required_application_ids: Vec<MultiAddress>,
 }
 
-impl From<&UserApplicationDescription> for UserApplicationId {
+impl From<&UserApplicationDescription> for MultiAddress {
     fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId::Address32(CryptoHash::new(&BlobContent::new_application_description(
+        MultiAddress::Address32(CryptoHash::new(&BlobContent::new_application_description(
             description,
         )))
     }

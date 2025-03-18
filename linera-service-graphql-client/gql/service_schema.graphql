@@ -9,7 +9,7 @@ A non-negative amount of tokens.
 scalar Amount
 
 type ApplicationOverview {
-	id: UserApplicationId!
+	id: MultiAddress!
 	description: UserApplicationDescription!
 	link: String!
 }
@@ -23,28 +23,28 @@ input ApplicationPermissions {
 	If it is `Some`, only operations from the specified applications are allowed, and
 	no system operations.
 	"""
-	executeOperations: [UserApplicationId!]
+	executeOperations: [MultiAddress!]
 	"""
 	At least one operation or incoming message from each of these applications must occur in
 	every block.
 	"""
-	mandatoryApplications: [UserApplicationId!]! = []
+	mandatoryApplications: [MultiAddress!]! = []
 	"""
 	These applications are allowed to close the current chain using the system API.
 	"""
-	closeChain: [UserApplicationId!]! = []
+	closeChain: [MultiAddress!]! = []
 	"""
 	These applications are allowed to change the application permissions using the system API.
 	"""
-	changeApplicationPermissions: [UserApplicationId!]! = []
+	changeApplicationPermissions: [MultiAddress!]! = []
 	"""
 	These applications are allowed to perform calls to services as oracles.
 	"""
-	callServiceAsOracle: [UserApplicationId!] = null
+	callServiceAsOracle: [MultiAddress!] = null
 	"""
 	These applications are allowed to perform HTTP requests.
 	"""
-	makeHttpRequests: [UserApplicationId!] = null
+	makeHttpRequests: [MultiAddress!] = null
 }
 
 """
@@ -812,7 +812,7 @@ type MutationRoot {
 	"""
 	Changes the application permissions configuration on this chain.
 	"""
-	changeApplicationPermissions(chainId: ChainId!, closeChain: [UserApplicationId!]!, executeOperations: [UserApplicationId!], mandatoryApplications: [UserApplicationId!]!, changeApplicationPermissions: [UserApplicationId!]!, callServiceAsOracle: [UserApplicationId!], makeHttpRequests: [UserApplicationId!]): CryptoHash!
+	changeApplicationPermissions(chainId: ChainId!, closeChain: [MultiAddress!]!, executeOperations: [MultiAddress!], mandatoryApplications: [MultiAddress!]!, changeApplicationPermissions: [MultiAddress!]!, callServiceAsOracle: [MultiAddress!], makeHttpRequests: [MultiAddress!]): CryptoHash!
 	"""
 	(admin chain only) Registers a new committee. This will notify the subscribers of
 	the admin chain so that they can migrate to the new epoch (by accepting the
@@ -844,7 +844,7 @@ type MutationRoot {
 	"""
 	Creates a new application.
 	"""
-	createApplication(chainId: ChainId!, moduleId: ModuleId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [UserApplicationId!]!): UserApplicationId!
+	createApplication(chainId: ChainId!, moduleId: ModuleId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [MultiAddress!]!): MultiAddress!
 }
 
 """
@@ -1222,11 +1222,6 @@ type TimestampedBundleInInbox {
 Description of the necessary information to run a user application
 """
 scalar UserApplicationDescription
-
-"""
-A unique identifier for a user application
-"""
-scalar UserApplicationId
 
 scalar VersionInfo
 

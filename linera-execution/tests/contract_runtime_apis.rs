@@ -16,9 +16,7 @@ use linera_base::{
         Timestamp, UserApplicationDescription,
     },
     http,
-    identifiers::{
-        Account, ChainDescription, ChainId, ModuleId, MultiAddress, Owner, UserApplicationId,
-    },
+    identifiers::{Account, ChainDescription, ChainId, ModuleId, MultiAddress, Owner},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -697,9 +695,9 @@ impl TransferTestEndpoint {
         Owner(CryptoHash::test_hash("sender"))
     }
 
-    /// Returns the [`UserApplicationId`] used to represent a sender that's an application.
-    fn sender_application_id() -> UserApplicationId {
-        UserApplicationId::from(&Self::sender_application_description())
+    /// Returns the [`MultiAddress`] used to represent a sender that's an application.
+    fn sender_application_id() -> MultiAddress {
+        MultiAddress::from(&Self::sender_application_description())
     }
 
     /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
@@ -740,8 +738,8 @@ impl TransferTestEndpoint {
     }
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
-    fn recipient_application_id() -> UserApplicationId {
-        UserApplicationId::new(CryptoHash::test_hash("recipient application description"))
+    fn recipient_application_id() -> MultiAddress {
+        MultiAddress::Address32(CryptoHash::test_hash("recipient application description"))
     }
 
     /// Returns a [`SystemExecutionState`] initialized with this transfer endpoint's account
@@ -797,7 +795,9 @@ impl TransferTestEndpoint {
     pub fn unauthorized_sender_account_owner(&self) -> MultiAddress {
         match self {
             TransferTestEndpoint::Chain => MultiAddress::Chain,
-            TransferTestEndpoint::User => MultiAddress::Address32(CryptoHash::test_hash("attacker")),
+            TransferTestEndpoint::User => {
+                MultiAddress::Address32(CryptoHash::test_hash("attacker"))
+            }
             TransferTestEndpoint::Application => Self::recipient_application_id(),
         }
     }

@@ -31,7 +31,7 @@ use crate::{
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId, RawExecutionOutcome,
     RawOutgoingMessage, SystemMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -65,7 +65,7 @@ where
 {
     pub(crate) async fn load_contract(
         &mut self,
-        id: UserApplicationId,
+        id: MultiAddress,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -92,7 +92,7 @@ where
 
     pub(crate) async fn load_service(
         &mut self,
-        id: UserApplicationId,
+        id: MultiAddress,
         txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -504,7 +504,7 @@ where
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {
-        id: UserApplicationId,
+        id: MultiAddress,
         #[debug(skip)]
         callback: Sender<(
             UserContractCode,
@@ -517,7 +517,7 @@ pub enum ExecutionRequest {
 
     #[cfg(not(web))]
     LoadService {
-        id: UserApplicationId,
+        id: MultiAddress,
         #[debug(skip)]
         callback: Sender<(
             UserServiceCode,
@@ -555,7 +555,7 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
@@ -566,7 +566,7 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage>>,
     },
@@ -582,7 +582,7 @@ pub enum ExecutionRequest {
     },
 
     ReadValueBytes {
-        id: UserApplicationId,
+        id: MultiAddress,
         #[debug(with = hex_debug)]
         key: Vec<u8>,
         #[debug(skip)]
@@ -590,21 +590,21 @@ pub enum ExecutionRequest {
     },
 
     ContainsKey {
-        id: UserApplicationId,
+        id: MultiAddress,
         key: Vec<u8>,
         #[debug(skip)]
         callback: Sender<bool>,
     },
 
     ContainsKeys {
-        id: UserApplicationId,
+        id: MultiAddress,
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         callback: Sender<Vec<bool>>,
     },
 
     ReadMultiValuesBytes {
-        id: UserApplicationId,
+        id: MultiAddress,
         #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         #[debug(skip)]
@@ -612,7 +612,7 @@ pub enum ExecutionRequest {
     },
 
     FindKeysByPrefix {
-        id: UserApplicationId,
+        id: MultiAddress,
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
@@ -620,7 +620,7 @@ pub enum ExecutionRequest {
     },
 
     FindKeyValuesByPrefix {
-        id: UserApplicationId,
+        id: MultiAddress,
         #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
         #[debug(skip)]
@@ -628,7 +628,7 @@ pub enum ExecutionRequest {
     },
 
     WriteBatch {
-        id: UserApplicationId,
+        id: MultiAddress,
         batch: Batch,
         #[debug(skip)]
         callback: Sender<()>,
@@ -645,13 +645,13 @@ pub enum ExecutionRequest {
     },
 
     CloseChain {
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
     },
 
     ChangeApplicationPermissions {
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         application_permissions: ApplicationPermissions,
         #[debug(skip)]
         callback: Sender<Result<(), ExecutionError>>,
@@ -662,7 +662,7 @@ pub enum ExecutionRequest {
         block_height: BlockHeight,
         module_id: ModuleId,
         parameters: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<MultiAddress>,
         #[debug(skip)]
         txn_tracker: TransactionTracker,
         #[debug(skip)]
