@@ -190,7 +190,7 @@ message ChainInfoQuery {
   bool request_leader_timeout = 8;
 
   // Query the balance of a given owner.
-  MultiAddress request_owner_balance = 9;
+  Address request_owner_balance = 9;
 
   // Request a signed vote for fallback mode.
   bool request_fallback = 10;
@@ -208,7 +208,7 @@ message BlockProposal {
   AccountPublicKey public_key = 3;
 
   // Byte-encoded owner
-  MultiAddress owner = 4;
+  Address owner = 4;
 
   // Signature by chain owner
   AccountSignature signature = 5;
@@ -336,7 +336,7 @@ message CryptoHash {
   bytes bytes = 1;
 }
 
-message MultiAddress {
+message Address {
   bytes bytes = 1;
 }
 

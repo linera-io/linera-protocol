@@ -1,29 +1,33 @@
 package linera:app;
 
 interface contract-runtime-api {
-    authenticated-signer: func() -> option<multi-address>;
+    authenticated-signer: func() -> option<address>;
     get-message-id: func() -> option<message-id>;
     message-is-bouncing: func() -> option<bool>;
-    authenticated-caller-id: func() -> option<multi-address>;
+    authenticated-caller-id: func() -> option<address>;
     send-message: func(message: send-message-request);
     subscribe: func(chain: chain-id, channel: channel-name);
     unsubscribe: func(chain: chain-id, channel: channel-name);
-    transfer: func(source: multi-address, destination: account, amount: amount);
+    transfer: func(source: address, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
-    create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<multi-address>) -> multi-address;
-    try-call-application: func(authenticated: bool, callee-id: multi-address, argument: list<u8>) -> list<u8>;
+    create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<address>) -> address;
+    try-call-application: func(authenticated: bool, callee-id: address, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, key: list<u8>, value: list<u8>);
-    query-service: func(application-id: multi-address, query: list<u8>) -> list<u8>;
+    query-service: func(application-id: address, query: list<u8>) -> list<u8>;
     consume-fuel: func(fuel: u64);
     validation-round: func() -> option<u32>;
     write-batch: func(operations: list<write-operation>);
 
     record account {
         chain-id: chain-id,
-        owner: multi-address,
+        owner: address,
+    }
+
+    variant address {
+        address32(crypto-hash),
     }
 
     record amount {
@@ -31,12 +35,12 @@ interface contract-runtime-api {
     }
 
     record application-permissions {
-        execute-operations: option<list<multi-address>>,
-        mandatory-applications: list<multi-address>,
-        close-chain: list<multi-address>,
-        change-application-permissions: list<multi-address>,
-        call-service-as-oracle: option<list<multi-address>>,
-        make-http-requests: option<list<multi-address>>,
+        execute-operations: option<list<address>>,
+        mandatory-applications: list<address>,
+        close-chain: list<address>,
+        change-application-permissions: list<address>,
+        call-service-as-oracle: option<list<address>>,
+        make-http-requests: option<list<address>>,
     }
 
     record block-height {
@@ -48,8 +52,8 @@ interface contract-runtime-api {
     }
 
     record chain-ownership {
-        super-owners: list<multi-address>,
-        owners: list<tuple<multi-address, u64>>,
+        super-owners: list<address>,
+        owners: list<tuple<address, u64>>,
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
@@ -89,10 +93,6 @@ interface contract-runtime-api {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
         vm-runtime: vm-runtime,
-    }
-
-    variant multi-address {
-        address32(crypto-hash),
     }
 
     record resources {

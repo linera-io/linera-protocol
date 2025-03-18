@@ -19,7 +19,7 @@ use fungible::Account;
 use gen_nft::{NftOutput, Operation, TokenId};
 use linera_sdk::{
     http,
-    linera_base_types::{MultiAddress, WithServiceAbi},
+    linera_base_types::{Address, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
 };
@@ -108,7 +108,7 @@ impl QueryRoot {
         nfts
     }
 
-    async fn owned_token_ids_by_owner(&self, owner: MultiAddress) -> BTreeSet<String> {
+    async fn owned_token_ids_by_owner(&self, owner: Address) -> BTreeSet<String> {
         self.non_fungible_token
             .owned_token_ids
             .get(&owner)
@@ -120,7 +120,7 @@ impl QueryRoot {
             .collect()
     }
 
-    async fn owned_token_ids(&self) -> BTreeMap<MultiAddress, BTreeSet<String>> {
+    async fn owned_token_ids(&self) -> BTreeMap<Address, BTreeSet<String>> {
         let mut owners = BTreeMap::new();
         self.non_fungible_token
             .owned_token_ids
@@ -140,7 +140,7 @@ impl QueryRoot {
         owners
     }
 
-    async fn owned_nfts(&self, owner: MultiAddress) -> BTreeMap<String, NftOutput> {
+    async fn owned_nfts(&self, owner: Address) -> BTreeMap<String, NftOutput> {
         let mut result = BTreeMap::new();
         let owned_token_ids = self
             .non_fungible_token
@@ -187,7 +187,7 @@ struct MutationRoot {
 
 #[Object]
 impl MutationRoot {
-    async fn mint(&self, minter: MultiAddress, prompt: String) -> [u8; 0] {
+    async fn mint(&self, minter: Address, prompt: String) -> [u8; 0] {
         let operation = Operation::Mint { minter, prompt };
         self.runtime.schedule_operation(&operation);
         []
@@ -195,7 +195,7 @@ impl MutationRoot {
 
     async fn transfer(
         &self,
-        source_owner: MultiAddress,
+        source_owner: Address,
         token_id: String,
         target_account: Account,
     ) -> [u8; 0] {

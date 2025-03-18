@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{ChainId, MultiAddress},
+    identifiers::{Address, ChainId},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
@@ -56,13 +56,13 @@ pub fn make_first_block(chain_id: ChainId) -> ProposedBlock {
 /// A helper trait to simplify constructing blocks for tests.
 pub trait BlockTestExt: Sized {
     /// Returns the block with the given authenticated signer.
-    fn with_authenticated_signer(self, authenticated_signer: Option<MultiAddress>) -> Self;
+    fn with_authenticated_signer(self, authenticated_signer: Option<Address>) -> Self;
 
     /// Returns the block with the given operation appended at the end.
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
 
     /// Returns the block with a transfer operation appended at the end.
-    fn with_transfer(self, owner: MultiAddress, recipient: Recipient, amount: Amount) -> Self;
+    fn with_transfer(self, owner: Address, recipient: Recipient, amount: Amount) -> Self;
 
     /// Returns the block with a simple transfer operation appended at the end.
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self;
@@ -87,7 +87,7 @@ pub trait BlockTestExt: Sized {
 }
 
 impl BlockTestExt for ProposedBlock {
-    fn with_authenticated_signer(mut self, authenticated_signer: Option<MultiAddress>) -> Self {
+    fn with_authenticated_signer(mut self, authenticated_signer: Option<Address>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }
@@ -97,7 +97,7 @@ impl BlockTestExt for ProposedBlock {
         self
     }
 
-    fn with_transfer(self, owner: MultiAddress, recipient: Recipient, amount: Amount) -> Self {
+    fn with_transfer(self, owner: Address, recipient: Recipient, amount: Amount) -> Self {
         self.with_operation(SystemOperation::Transfer {
             owner,
             recipient,
@@ -106,7 +106,7 @@ impl BlockTestExt for ProposedBlock {
     }
 
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self {
-        self.with_transfer(MultiAddress::chain(), Recipient::chain(chain_id), amount)
+        self.with_transfer(Address::chain(), Recipient::chain(chain_id), amount)
     }
 
     fn with_incoming_bundle(mut self, incoming_bundle: IncomingBundle) -> Self {

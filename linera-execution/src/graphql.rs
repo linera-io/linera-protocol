@@ -7,7 +7,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Amount, Timestamp},
     doc_scalar,
-    identifiers::{ChainDescription, ChainId, MultiAddress},
+    identifiers::{Address, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
 use linera_views::{context::Context, map_view::MapView};
@@ -94,7 +94,7 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     }
 
     #[graphql(derived(name = "balances"))]
-    async fn _balances(&self) -> &MapView<C, MultiAddress, Amount> {
+    async fn _balances(&self) -> &MapView<C, Address, Amount> {
         &self.balances
     }
 

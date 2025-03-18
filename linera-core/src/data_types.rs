@@ -11,7 +11,7 @@ use linera_base::{
         ValidatorSignature,
     },
     data_types::{Amount, BlockHeight, Round, Timestamp},
-    identifiers::{ChainDescription, ChainId, MultiAddress},
+    identifiers::{Address, ChainDescription, ChainId},
 };
 use linera_chain::{
     data_types::{ChainAndHeight, IncomingBundle, Medium, MessageBundle},
@@ -70,8 +70,8 @@ pub struct ChainInfoQuery {
     /// Optionally test that the block height is the one expected.
     #[debug(skip_if = Option::is_none)]
     pub test_next_block_height: Option<BlockHeight>,
-    /// Request the balance of a given [`MultiAddress`].
-    pub request_owner_balance: MultiAddress,
+    /// Request the balance of a given [`Address`].
+    pub request_owner_balance: Address,
     /// Query the current committees.
     #[debug(skip_if = Not::not)]
     pub request_committees: bool,
@@ -101,7 +101,7 @@ impl ChainInfoQuery {
             chain_id,
             test_next_block_height: None,
             request_committees: false,
-            request_owner_balance: MultiAddress::chain(),
+            request_owner_balance: Address::chain(),
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_n: None,
@@ -121,7 +121,7 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_owner_balance(mut self, owner: MultiAddress) -> Self {
+    pub fn with_owner_balance(mut self, owner: Address) -> Self {
         self.request_owner_balance = owner;
         self
     }

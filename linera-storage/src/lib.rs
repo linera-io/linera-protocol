@@ -18,7 +18,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     hashed::Hashed,
-    identifiers::{BlobId, BlobType, ChainDescription, ChainId, EventId, MultiAddress},
+    identifiers::{Address, BlobId, BlobType, ChainDescription, ChainId, EventId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -213,7 +213,7 @@ pub trait Storage: Sized {
         committee: Committee,
         admin_id: ChainId,
         description: ChainDescription,
-        owner: MultiAddress,
+        owner: Address,
         balance: Amount,
         timestamp: Timestamp,
     ) -> Result<(), ChainError>
@@ -375,8 +375,8 @@ pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<DashMap<MultiAddress, UserContractCode>>,
-    user_services: Arc<DashMap<MultiAddress, UserServiceCode>>,
+    user_contracts: Arc<DashMap<Address, UserContractCode>>,
+    user_services: Arc<DashMap<Address, UserServiceCode>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -393,11 +393,11 @@ where
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<DashMap<MultiAddress, UserContractCode>> {
+    fn user_contracts(&self) -> &Arc<DashMap<Address, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<DashMap<MultiAddress, UserServiceCode>> {
+    fn user_services(&self) -> &Arc<DashMap<Address, UserServiceCode>> {
         &self.user_services
     }
 

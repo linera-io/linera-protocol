@@ -7,7 +7,7 @@
 
 use async_graphql::InputType;
 use linera_sdk::{
-    linera_base_types::{Amount, ApplicationId, ApplicationPermissions, MultiAddress},
+    linera_base_types::{Address, Amount, ApplicationId, ApplicationPermissions},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
 use matching_engine::{
@@ -17,7 +17,7 @@ use matching_engine::{
 pub async fn get_orders(
     application_id: ApplicationId<MatchingEngineAbi>,
     chain: &ActiveChain,
-    account_owner: MultiAddress,
+    account_owner: Address,
 ) -> Option<Vec<OrderId>> {
     let query = format!(
         "query {{ accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }} }}",
@@ -70,11 +70,11 @@ async fn single_transaction() {
         TestValidator::with_current_module::<MatchingEngineAbi, Parameters, ()>().await;
 
     let mut user_chain_a = validator.new_chain().await;
-    let owner_a = MultiAddress::from(user_chain_a.public_key());
+    let owner_a = Address::from(user_chain_a.public_key());
     let mut user_chain_b = validator.new_chain().await;
-    let owner_b = MultiAddress::from(user_chain_b.public_key());
+    let owner_b = Address::from(user_chain_b.public_key());
     let mut matching_chain = validator.new_chain().await;
-    let admin_account = MultiAddress::from(matching_chain.public_key());
+    let admin_account = Address::from(matching_chain.public_key());
 
     let fungible_module_id_a = user_chain_a
         .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")

@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Account, Amount, ChainId, CryptoHash, MultiAddress},
+    linera_base_types::{Account, Address, Amount, ChainId, CryptoHash},
     test::{ActiveChain, Recipient, TestValidator},
 };
 
@@ -33,7 +33,7 @@ async fn chain_balance_transfers() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(MultiAddress::chain(), recipient, transfer_amount);
+            block.with_native_token_transfer(Address::chain(), recipient, transfer_amount);
         })
         .await;
 
@@ -63,13 +63,13 @@ async fn transfer_to_owner() {
 
     let transfer_amount = Amount::from_tokens(2);
     let funding_chain = validator.get_chain(&ChainId::root(0));
-    let owner = MultiAddress::from(CryptoHash::test_hash("owner"));
+    let owner = Address::from(CryptoHash::test_hash("owner"));
     let account = Account::address32(recipient_chain.id(), owner);
     let recipient = Recipient::Account(account);
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(MultiAddress::chain(), recipient, transfer_amount);
+            block.with_native_token_transfer(Address::chain(), recipient, transfer_amount);
         })
         .await;
 
@@ -79,7 +79,7 @@ async fn transfer_to_owner() {
         })
         .await;
 
-    assert_balances(&recipient_chain, [(owner.into(), transfer_amount)]).await;
+    assert_balances(&recipient_chain, [(owner, transfer_amount)]).await;
 }
 
 /// Tests if multiple accounts can receive tokens.
@@ -101,7 +101,7 @@ async fn transfer_to_multiple_owners() {
     let funding_chain = validator.get_chain(&ChainId::root(0));
 
     let account_owners = (1..=number_of_owners)
-        .map(|index| MultiAddress::from(CryptoHash::test_hash(format!("owner{index}"))))
+        .map(|index| Address::from(CryptoHash::test_hash(format!("owner{index}"))))
         .collect::<Vec<_>>();
 
     let recipients = account_owners
@@ -113,7 +113,7 @@ async fn transfer_to_multiple_owners() {
     let transfer_certificate = funding_chain
         .add_block(|block| {
             for (recipient, transfer_amount) in recipients.zip(transfer_amounts.clone()) {
-                block.with_native_token_transfer(MultiAddress::chain(), recipient, transfer_amount);
+                block.with_native_token_transfer(Address::chain(), recipient, transfer_amount);
             }
         })
         .await;
@@ -148,12 +148,12 @@ async fn emptied_account_disappears_from_queries() {
     let transfer_amount = Amount::from_tokens(100);
     let funding_chain = validator.get_chain(&ChainId::root(0));
 
-    let owner = MultiAddress::from(recipient_chain.public_key());
+    let owner = Address::from(recipient_chain.public_key());
     let recipient = Recipient::Account(Account::address32(recipient_chain.id(), owner));
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(MultiAddress::chain(), recipient, transfer_amount);
+            block.with_native_token_transfer(Address::chain(), recipient, transfer_amount);
         })
         .await;
 
@@ -165,27 +165,18 @@ async fn emptied_account_disappears_from_queries() {
 
     recipient_chain
         .add_block(|block| {
-            block.with_native_token_transfer(
-                MultiAddress::from(owner),
-                Recipient::Burn,
-                transfer_amount,
-            );
+            block.with_native_token_transfer(owner, Recipient::Burn, transfer_amount);
         })
         .await;
 
-    assert_eq!(
-        recipient_chain
-            .owner_balance(&MultiAddress::from(owner))
-            .await,
-        None
-    );
+    assert_eq!(recipient_chain.owner_balance(&owner).await, None);
     assert_balances(&recipient_chain, []).await;
 }
 
 /// Asserts that all the accounts in the [`ActiveChain`] have the `expected_balances`.
 async fn assert_balances(
     chain: &ActiveChain,
-    expected_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
+    expected_balances: impl IntoIterator<Item = (Address, Amount)>,
 ) {
     let expected_balances = expected_balances.into_iter().collect::<BTreeMap<_, _>>();
     let accounts = expected_balances.keys().copied().collect::<Vec<_>>();
@@ -195,7 +186,7 @@ async fn assert_balances(
     let missing_accounts = ["missing1", "missing2"]
         .into_iter()
         .map(CryptoHash::test_hash)
-        .map(MultiAddress::from)
+        .map(Address::from)
         .collect::<Vec<_>>();
 
     let accounts_to_query = accounts

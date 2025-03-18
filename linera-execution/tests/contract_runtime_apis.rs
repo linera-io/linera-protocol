@@ -16,7 +16,7 @@ use linera_base::{
         Timestamp, UserApplicationDescription,
     },
     http,
-    identifiers::{Account, ChainDescription, ChainId, ModuleId, MultiAddress},
+    identifiers::{Account, Address, ChainDescription, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -512,7 +512,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
 /// Tests the contract system API to read a single account balance.
 #[proptest(async = "tokio")]
 async fn test_read_owner_balance_system_api(
-    #[strategy(test_accounts_strategy())] accounts: BTreeMap<MultiAddress, Amount>,
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<Address, Amount>,
 ) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -554,7 +554,7 @@ async fn test_read_owner_balance_system_api(
 
 /// Tests if reading the balance of a missing account returns zero.
 #[proptest(async = "tokio")]
-async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_account: MultiAddress) {
+async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_account: Address) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
@@ -596,7 +596,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
 /// Tests the contract system API to read all account balances.
 #[proptest(async = "tokio")]
 async fn test_read_owner_balances_system_api(
-    #[strategy(test_accounts_strategy())] accounts: BTreeMap<MultiAddress, Amount>,
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<Address, Amount>,
 ) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -640,7 +640,7 @@ async fn test_read_owner_balances_system_api(
 /// Tests the contract system API to read all account owners.
 #[proptest(async = "tokio")]
 async fn test_read_balance_owners_system_api(
-    #[strategy(test_accounts_strategy())] accounts: BTreeMap<MultiAddress, Amount>,
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<Address, Amount>,
 ) {
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -690,14 +690,14 @@ enum TransferTestEndpoint {
 }
 
 impl TransferTestEndpoint {
-    /// Returns the [`MultiAddress`] used to represent a sender that's a user.
-    fn sender_owner() -> MultiAddress {
-        MultiAddress::from(CryptoHash::test_hash("sender"))
+    /// Returns the [`Address`] used to represent a sender that's a user.
+    fn sender_owner() -> Address {
+        Address::from(CryptoHash::test_hash("sender"))
     }
 
-    /// Returns the [`MultiAddress`] used to represent a sender that's an application.
-    fn sender_application_id() -> MultiAddress {
-        MultiAddress::from(&Self::sender_application_description())
+    /// Returns the [`Address`] used to represent a sender that's an application.
+    fn sender_application_id() -> Address {
+        Address::from(&Self::sender_application_description())
     }
 
     /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
@@ -732,14 +732,14 @@ impl TransferTestEndpoint {
         })
     }
 
-    /// Returns the [`MultiAddress`] used to represent a recipient that's a user.
-    fn recipient_owner() -> MultiAddress {
-        MultiAddress::from(CryptoHash::test_hash("recipient"))
+    /// Returns the [`Address`] used to represent a recipient that's a user.
+    fn recipient_owner() -> Address {
+        Address::from(CryptoHash::test_hash("recipient"))
     }
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
-    fn recipient_application_id() -> MultiAddress {
-        MultiAddress::from(CryptoHash::test_hash("recipient application description"))
+    fn recipient_application_id() -> Address {
+        Address::from(CryptoHash::test_hash("recipient application description"))
     }
 
     /// Returns a [`SystemExecutionState`] initialized with this transfer endpoint's account
@@ -757,7 +757,7 @@ impl TransferTestEndpoint {
             TransferTestEndpoint::Application => (
                 Amount::ZERO,
                 vec![(
-                    MultiAddress::Address32(Self::sender_application_id().as_address()),
+                    Address::Address32(Self::sender_application_id().as_address()),
                     transfer_amount,
                 )],
                 None,
@@ -778,38 +778,36 @@ impl TransferTestEndpoint {
         }
     }
 
-    /// Returns the [`MultiAddress`] to represent this transfer endpoint as a sender.
-    pub fn sender_account_owner(&self) -> MultiAddress {
+    /// Returns the [`Address`] to represent this transfer endpoint as a sender.
+    pub fn sender_account_owner(&self) -> Address {
         match self {
-            TransferTestEndpoint::Chain => MultiAddress::chain(),
+            TransferTestEndpoint::Chain => Address::chain(),
             TransferTestEndpoint::User => Self::sender_owner(),
             TransferTestEndpoint::Application => Self::sender_application_id(),
         }
     }
 
-    /// Returns the [`MultiAddress`] to represent this transfer endpoint as an unauthorized sender.
-    pub fn unauthorized_sender_account_owner(&self) -> MultiAddress {
+    /// Returns the [`Address`] to represent this transfer endpoint as an unauthorized sender.
+    pub fn unauthorized_sender_account_owner(&self) -> Address {
         match self {
-            TransferTestEndpoint::Chain => MultiAddress::chain(),
-            TransferTestEndpoint::User => {
-                MultiAddress::Address32(CryptoHash::test_hash("attacker"))
-            }
+            TransferTestEndpoint::Chain => Address::chain(),
+            TransferTestEndpoint::User => Address::Address32(CryptoHash::test_hash("attacker")),
             TransferTestEndpoint::Application => Self::recipient_application_id(),
         }
     }
 
-    /// Returns the [`MultiAddress`] that should be used as the authenticated signer in the transfer
+    /// Returns the [`Address`] that should be used as the authenticated signer in the transfer
     /// operation.
-    pub fn signer(&self) -> Option<MultiAddress> {
+    pub fn signer(&self) -> Option<Address> {
         match self {
             TransferTestEndpoint::Chain | TransferTestEndpoint::User => Some(Self::sender_owner()),
             TransferTestEndpoint::Application => None,
         }
     }
 
-    /// Returns the [`MultiAddress`] that should be used as the authenticated signer when testing an
+    /// Returns the [`Address`] that should be used as the authenticated signer when testing an
     /// unauthorized transfer operation.
-    pub fn unauthorized_signer(&self) -> Option<MultiAddress> {
+    pub fn unauthorized_signer(&self) -> Option<Address> {
         match self {
             TransferTestEndpoint::Chain | TransferTestEndpoint::User => {
                 Some(Self::recipient_owner())
@@ -818,10 +816,10 @@ impl TransferTestEndpoint {
         }
     }
 
-    /// Returns the [`MultiAddress`] to represent this transfer endpoint as a recipient.
-    pub fn recipient_account_owner(&self) -> MultiAddress {
+    /// Returns the [`Address`] to represent this transfer endpoint as a recipient.
+    pub fn recipient_account_owner(&self) -> Address {
         match self {
-            TransferTestEndpoint::Chain => MultiAddress::chain(),
+            TransferTestEndpoint::Chain => Address::chain(),
             TransferTestEndpoint::User => Self::recipient_owner(),
             TransferTestEndpoint::Application => Self::recipient_application_id(),
         }
@@ -835,8 +833,7 @@ impl TransferTestEndpoint {
         amount: Amount,
     ) -> anyhow::Result<()> {
         let account_owner = self.recipient_account_owner();
-        let (expected_chain_balance, expected_balances) = if account_owner == MultiAddress::chain()
-        {
+        let (expected_chain_balance, expected_balances) = if account_owner == Address::chain() {
             (amount, vec![])
         } else {
             (Amount::ZERO, vec![(account_owner, amount)])

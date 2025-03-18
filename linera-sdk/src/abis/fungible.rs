@@ -9,7 +9,7 @@ use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::Amount,
-    identifiers::{ChainId, MultiAddress},
+    identifiers::{Address, ChainId},
 };
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
@@ -32,15 +32,15 @@ impl ServiceAbi for FungibleTokenAbi {
 pub enum Operation {
     /// Requests an account balance.
     Balance {
-        /// MultiAddress to query the balance for
-        owner: MultiAddress,
+        /// Address to query the balance for
+        owner: Address,
     },
     /// Requests this fungible token's ticker symbol.
     TickerSymbol,
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
-        /// MultiAddress to transfer from
-        owner: MultiAddress,
+        /// Address to transfer from
+        owner: Address,
         /// Amount to be transferred
         amount: Amount,
         /// Target account to transfer the amount to
@@ -75,7 +75,7 @@ pub enum FungibleResponse {
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct InitialState {
     /// Accounts and their respective initial balances
-    pub accounts: BTreeMap<MultiAddress, Amount>,
+    pub accounts: BTreeMap<Address, Amount>,
 }
 
 /// The parameters to instantiate fungible with
@@ -111,20 +111,20 @@ impl Parameters {
 pub struct Account {
     /// Chain ID of the account
     pub chain_id: ChainId,
-    /// MultiAddress of the account
-    pub owner: MultiAddress,
+    /// Address of the account
+    pub owner: Address,
 }
 
 /// A builder type for constructing the initial state of the application.
 #[derive(Debug, Default)]
 pub struct InitialStateBuilder {
     /// Accounts and their respective initial balances
-    account_balances: BTreeMap<MultiAddress, Amount>,
+    account_balances: BTreeMap<Address, Amount>,
 }
 
 impl InitialStateBuilder {
     /// Adds an account to the initial state of the application.
-    pub fn with_account(mut self, account: MultiAddress, balance: impl Into<Amount>) -> Self {
+    pub fn with_account(mut self, account: Address, balance: impl Into<Amount>) -> Self {
         self.account_balances.insert(account, balance.into());
         self
     }

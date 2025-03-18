@@ -8,7 +8,7 @@ mod state;
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Amount, ApplicationId, MultiAddress, WithContractAbi},
+    linera_base_types::{Address, Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -91,7 +91,7 @@ impl CrowdFundingContract {
     }
 
     /// Adds a pledge from a local account to the remote campaign chain.
-    fn execute_pledge_with_transfer(&mut self, owner: MultiAddress, amount: Amount) {
+    fn execute_pledge_with_transfer(&mut self, owner: Address, amount: Amount) {
         assert!(amount > Amount::ZERO, "Pledge is empty");
         // The campaign chain.
         let chain_id = self.runtime.application_creator_chain_id();
@@ -115,7 +115,7 @@ impl CrowdFundingContract {
     }
 
     /// Adds a pledge from a local account to the campaign chain.
-    async fn execute_pledge_with_account(&mut self, owner: MultiAddress, amount: Amount) {
+    async fn execute_pledge_with_account(&mut self, owner: Address, amount: Amount) {
         assert!(amount > Amount::ZERO, "Pledge is empty");
         self.receive_from_account(owner, amount);
         self.finish_pledge(owner, amount).await
@@ -123,7 +123,7 @@ impl CrowdFundingContract {
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
-    async fn finish_pledge(&mut self, source: MultiAddress, amount: Amount) {
+    async fn finish_pledge(&mut self, source: Address, amount: Amount) {
         match self.state.status.get() {
             Status::Active => self
                 .state
@@ -206,7 +206,7 @@ impl CrowdFundingContract {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `owner`'s account.
-    fn send_to(&mut self, amount: Amount, owner: MultiAddress) {
+    fn send_to(&mut self, amount: Amount, owner: Address) {
         let target_account = Account {
             chain_id: self.runtime.chain_id(),
             owner,
@@ -221,7 +221,7 @@ impl CrowdFundingContract {
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
-    fn receive_from_account(&mut self, owner: MultiAddress, amount: Amount) {
+    fn receive_from_account(&mut self, owner: Address, amount: Amount) {
         let target_account = Account {
             chain_id: self.runtime.chain_id(),
             owner: self.runtime.application_id().forget_abi(),

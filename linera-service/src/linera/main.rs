@@ -23,7 +23,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{ChainDescription, ChainId, MultiAddress},
+    identifiers::{Address, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -281,10 +281,10 @@ impl Runnable for Job {
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    MultiAddress::Address32(_) if account.owner == MultiAddress::chain() => {
+                    Address::Address32(_) if account.owner == Address::chain() => {
                         chain_client.local_balance().await?
                     }
-                    MultiAddress::Address32(_) => {
+                    Address::Address32(_) => {
                         chain_client.local_owner_balance(account.owner).await?
                     }
                 };
@@ -302,10 +302,10 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    MultiAddress::Address32(_) if account.owner == MultiAddress::chain() => {
+                    Address::Address32(_) if account.owner == Address::chain() => {
                         chain_client.query_balance().await?
                     }
-                    MultiAddress::Address32(_) => {
+                    Address::Address32(_) => {
                         chain_client.query_owner_balance(account.owner).await?
                     }
                 };
@@ -322,12 +322,10 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = match account.owner {
-                    MultiAddress::Address32(_) if account.owner == MultiAddress::chain() => {
+                    Address::Address32(_) if account.owner == Address::chain() => {
                         chain_client.query_balance().await
                     }
-                    MultiAddress::Address32(_) => {
-                        chain_client.query_owner_balance(account.owner).await
-                    }
+                    Address::Address32(_) => chain_client.query_owner_balance(account.owner).await,
                 };
                 context.update_wallet_from_client(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
@@ -1567,7 +1565,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             let start_time = Instant::now();
             let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
-            let owner = MultiAddress::from(key_pair.public());
+            let owner = Address::from(key_pair.public());
             wallet
                 .mutate(|w| w.add_unassigned_key_pair(key_pair))
                 .await?;

@@ -34,8 +34,8 @@ use linera_base::{
     ensure,
     hashed::Hashed,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId, ModuleId,
-        MultiAddress, StreamId,
+        Account, Address, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId, ModuleId,
+        StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -977,7 +977,7 @@ where
     /// Obtains the identity of the current owner of the chain. Returns an error if we have the
     /// private key for more than one identity.
     #[instrument(level = "trace")]
-    pub async fn identity(&self) -> Result<MultiAddress, ChainClientError> {
+    pub async fn identity(&self) -> Result<Address, ChainClientError> {
         let manager = self.chain_info().await?.manager;
         ensure!(
             manager.ownership.is_active(),
@@ -1610,7 +1610,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer(
         &self,
-        owner: MultiAddress,
+        owner: Address,
         amount: Amount,
         recipient: Recipient,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
@@ -1642,7 +1642,7 @@ where
     #[instrument(level = "trace")]
     pub async fn claim(
         &self,
-        owner: MultiAddress,
+        owner: Address,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -1808,7 +1808,7 @@ where
             }
         }
         for proposal in proposals {
-            let owner: MultiAddress = proposal.public_key.into();
+            let owner: Address = proposal.public_key.into();
             if let Err(mut err) = self
                 .client
                 .local_node
@@ -2135,7 +2135,7 @@ where
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
-        identity: MultiAddress,
+        identity: Address,
     ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
@@ -2294,9 +2294,7 @@ where
     /// block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self
-            .query_balances_with_owner(MultiAddress::chain())
-            .await?;
+        let (balance, _) = self.query_balances_with_owner(Address::chain()).await?;
         Ok(balance)
     }
 
@@ -2307,10 +2305,7 @@ where
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
     #[instrument(level = "trace", skip(owner))]
-    pub async fn query_owner_balance(
-        &self,
-        owner: MultiAddress,
-    ) -> Result<Amount, ChainClientError> {
+    pub async fn query_owner_balance(&self, owner: Address) -> Result<Amount, ChainClientError> {
         Ok(self
             .query_balances_with_owner(owner)
             .await?
@@ -2327,7 +2322,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn query_balances_with_owner(
         &self,
-        owner: MultiAddress,
+        owner: Address,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
         let (previous_block_hash, height, timestamp) = {
@@ -2345,7 +2340,7 @@ where
             operations: Vec::new(),
             previous_block_hash,
             height,
-            authenticated_signer: if owner == MultiAddress::chain() {
+            authenticated_signer: if owner == Address::chain() {
                 None
             } else {
                 Some(owner)
@@ -2385,9 +2380,7 @@ where
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace")]
     pub async fn local_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self
-            .local_balances_with_owner(MultiAddress::chain())
-            .await?;
+        let (balance, _) = self.local_balances_with_owner(Address::chain()).await?;
         Ok(balance)
     }
 
@@ -2395,10 +2388,7 @@ where
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace", skip(owner))]
-    pub async fn local_owner_balance(
-        &self,
-        owner: MultiAddress,
-    ) -> Result<Amount, ChainClientError> {
+    pub async fn local_owner_balance(&self, owner: Address) -> Result<Amount, ChainClientError> {
         Ok(self
             .local_balances_with_owner(owner)
             .await?
@@ -2412,7 +2402,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn local_balances_with_owner(
         &self,
-        owner: MultiAddress,
+        owner: Address,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let next_block_height = self.next_block_height();
         ensure!(
@@ -2436,7 +2426,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account(
         &self,
-        from: MultiAddress,
+        from: Address,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
@@ -2448,7 +2438,7 @@ where
     #[instrument(level = "trace")]
     pub async fn burn(
         &self,
-        owner: MultiAddress,
+        owner: Address,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.transfer(owner, amount, Recipient::Burn).await
@@ -2637,7 +2627,7 @@ where
     /// Returns a round in which we can propose a new block or the given one, if possible.
     fn round_for_new_proposal(
         info: &ChainInfo,
-        identity: &MultiAddress,
+        identity: &Address,
         block: &ProposedBlock,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
@@ -2725,7 +2715,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_ownership(
         &self,
-        new_owner: MultiAddress,
+        new_owner: Address,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
@@ -2741,7 +2731,7 @@ where
     #[instrument(level = "trace")]
     pub async fn share_ownership(
         &self,
-        new_owner: MultiAddress,
+        new_owner: Address,
         new_weight: u64,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
@@ -2940,7 +2930,7 @@ where
         module_id: ModuleId<A, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
-        required_application_ids: Vec<MultiAddress>,
+        required_application_ids: Vec<Address>,
     ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, ChainClientError>
     {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
@@ -2972,8 +2962,8 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
-        required_application_ids: Vec<MultiAddress>,
-    ) -> Result<ClientOutcome<(MultiAddress, ConfirmedBlockCertificate)>, ChainClientError> {
+        required_application_ids: Vec<Address>,
+    ) -> Result<ClientOutcome<(Address, ConfirmedBlockCertificate)>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             module_id,
             parameters,
@@ -2997,7 +2987,7 @@ where
             let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
                 "ApplicationDescription blob not found.",
             ))?;
-            let id = MultiAddress::Address32(blob_id.hash);
+            let id = Address::Address32(blob_id.hash);
             Ok((id, certificate))
         })
     }
@@ -3162,7 +3152,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
-        owner: MultiAddress,
+        owner: Address,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {

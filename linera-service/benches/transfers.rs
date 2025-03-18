@@ -9,7 +9,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountSecretKey, Ed25519SecretKey, Secp256k1SecretKey},
     data_types::Amount,
-    identifiers::{Account, ChainId, MultiAddress},
+    identifiers::{Account, Address, ChainId},
     time::{Duration, Instant},
 };
 use linera_execution::system::Recipient;
@@ -80,7 +80,7 @@ async fn setup_native_token_balances(
     for chain in &chains {
         let recipient = Recipient::Account(Account {
             chain_id: chain.id(),
-            owner: MultiAddress::from(chain.public_key()),
+            owner: Address::from(chain.public_key()),
         });
 
         // TODO: Support benchmarking chains with multiple owner accounts
@@ -88,7 +88,7 @@ async fn setup_native_token_balances(
         admin_chain
             .add_block(|block| {
                 block.with_native_token_transfer(
-                    MultiAddress::chain(),
+                    Address::chain(),
                     recipient,
                     Amount::from_tokens(initial_balance),
                 );
@@ -110,7 +110,7 @@ fn prepare_transfers(
         .iter()
         .map(|chain| Account {
             chain_id: chain.id(),
-            owner: MultiAddress::from(chain.public_key()),
+            owner: Address::from(chain.public_key()),
         })
         .collect::<Vec<_>>();
 
@@ -119,7 +119,7 @@ fn prepare_transfers(
         .enumerate()
         .map(|(index, chain)| {
             let chain_id = chain.id();
-            let sender = MultiAddress::from(chain.public_key());
+            let sender = Address::from(chain.public_key());
 
             let transfers = accounts
                 .iter()

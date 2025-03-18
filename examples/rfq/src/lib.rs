@@ -7,7 +7,7 @@ use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{Amount, ChainId, ContractAbi, MultiAddress, ServiceAbi},
+    linera_base_types::{Address, Amount, ChainId, ContractAbi, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,8 +26,8 @@ impl ServiceAbi for RfqAbi {
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
 #[graphql(input_name = "TokenPairInput")]
 pub struct TokenPair {
-    pub token_offered: MultiAddress,
-    pub token_asked: MultiAddress,
+    pub token_offered: Address,
+    pub token_asked: Address,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
@@ -70,7 +70,7 @@ impl RequestId {
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
 #[graphql(input_name = "TokensInput")]
 pub struct Tokens {
-    pub token_id: MultiAddress,
+    pub token_id: Address,
     pub owner: Account,
     pub amount: Amount,
 }
@@ -86,11 +86,11 @@ pub enum Operation {
     ProvideQuote {
         request_id: RequestId,
         quote: Amount,
-        quoter_owner: MultiAddress,
+        quoter_owner: Address,
     },
     AcceptQuote {
         request_id: RequestId,
-        owner: MultiAddress,
+        owner: Address,
         fee_budget: Amount,
     },
     FinalizeDeal {
@@ -113,7 +113,7 @@ pub enum Message {
     ProvideQuote {
         seq_number: u64,
         quote: Amount,
-        quoter_owner: MultiAddress,
+        quoter_owner: Address,
     },
     QuoteAccepted {
         request_id: RequestId,

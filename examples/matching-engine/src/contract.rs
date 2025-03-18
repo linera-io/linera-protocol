@@ -8,7 +8,7 @@ use std::cmp::min;
 
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Amount, ApplicationId, ChainId, MultiAddress, WithContractAbi},
+    linera_base_types::{Address, Amount, ApplicationId, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -132,7 +132,7 @@ impl Contract for MatchingEngineContract {
 
 impl MatchingEngineContract {
     /// Get the owner from the order
-    fn get_owner(order: &Order) -> MultiAddress {
+    fn get_owner(order: &Order) -> Address {
         match order {
             Order::Insert {
                 owner,
@@ -150,7 +150,7 @@ impl MatchingEngineContract {
     }
 
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: MultiAddress) {
+    fn check_account_authentication(&mut self, owner: Address) {
         assert!(
             self.runtime.authenticated_signer() == Some(owner)
                 || self.runtime.authenticated_caller_id() == Some(owner),
@@ -167,7 +167,7 @@ impl MatchingEngineContract {
     /// Calls into the Fungible Token application to receive tokens from the given account.
     fn receive_from_account(
         &mut self,
-        owner: &MultiAddress,
+        owner: &Address,
         amount: &Amount,
         nature: &OrderNature,
         price: &Price,
@@ -190,7 +190,7 @@ impl MatchingEngineContract {
     /// Transfers tokens from the owner to the destination
     fn transfer(
         &mut self,
-        owner: MultiAddress,
+        owner: Address,
         amount: Amount,
         target_account: Account,
         token_idx: u32,
@@ -288,7 +288,7 @@ impl MatchingEngineContract {
     }
 
     /// Checks that the order exists and has been issued by the claimed owner.
-    async fn check_order_id(&self, order_id: &OrderId, owner: &MultiAddress) {
+    async fn check_order_id(&self, order_id: &OrderId, owner: &Address) {
         let value = self
             .state
             .orders
@@ -314,7 +314,7 @@ impl MatchingEngineContract {
         &mut self,
         order_id: OrderId,
         cancel_amount: ModifyAmount,
-        owner: &MultiAddress,
+        owner: &Address,
     ) {
         self.check_order_id(&order_id, owner).await;
         let transfer = self
@@ -535,7 +535,7 @@ impl MatchingEngineContract {
         nature: &OrderNature,
         price_level: Price,
         price_insert: Price,
-    ) -> Vec<(MultiAddress, OrderId)> {
+    ) -> Vec<(Address, OrderId)> {
         let mut remove_order = Vec::new();
         let orders = view
             .queue
@@ -598,7 +598,7 @@ impl MatchingEngineContract {
     /// Removes one single (owner, order_id) from the database
     /// * This is done for the info by owners
     /// * And the symbolic information of orders
-    async fn remove_order_id(&mut self, entry: (MultiAddress, OrderId)) {
+    async fn remove_order_id(&mut self, entry: (Address, OrderId)) {
         let (owner, order_id) = entry;
         let account_info = self
             .state
@@ -611,7 +611,7 @@ impl MatchingEngineContract {
     }
 
     /// Removes a bunch of order_id
-    async fn remove_order_ids(&mut self, entries: Vec<(MultiAddress, OrderId)>) {
+    async fn remove_order_ids(&mut self, entries: Vec<(Address, OrderId)>) {
         for entry in entries {
             self.remove_order_id(entry).await;
         }

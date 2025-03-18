@@ -3,15 +3,15 @@ package linera:app;
 interface base-runtime-api {
     get-chain-id: func() -> chain-id;
     get-block-height: func() -> block-height;
-    get-application-id: func() -> multi-address;
+    get-application-id: func() -> address;
     get-application-creator-chain-id: func() -> chain-id;
     application-parameters: func() -> list<u8>;
     get-chain-ownership: func() -> chain-ownership;
     read-system-timestamp: func() -> timestamp;
     read-chain-balance: func() -> amount;
-    read-owner-balance: func(owner: multi-address) -> amount;
-    read-owner-balances: func() -> list<tuple<multi-address, amount>>;
-    read-balance-owners: func() -> list<multi-address>;
+    read-owner-balance: func(owner: address) -> amount;
+    read-owner-balances: func() -> list<tuple<address, amount>>;
+    read-balance-owners: func() -> list<address>;
     perform-http-request: func(request: http-request) -> http-response;
     assert-before: func(timestamp: timestamp);
     read-data-blob: func(hash: crypto-hash) -> list<u8>;
@@ -30,6 +30,10 @@ interface base-runtime-api {
     find-key-values-new: func(key-prefix: list<u8>) -> u32;
     find-key-values-wait: func(promise-id: u32) -> list<tuple<list<u8>, list<u8>>>;
 
+    variant address {
+        address32(crypto-hash),
+    }
+
     record amount {
         inner0: u128,
     }
@@ -43,8 +47,8 @@ interface base-runtime-api {
     }
 
     record chain-ownership {
-        super-owners: list<multi-address>,
-        owners: list<tuple<multi-address, u64>>,
+        super-owners: list<address>,
+        owners: list<tuple<address, u64>>,
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
@@ -93,10 +97,6 @@ interface base-runtime-api {
         info,
         debug,
         trace,
-    }
-
-    variant multi-address {
-        address32(crypto-hash),
     }
 
     record time-delta {

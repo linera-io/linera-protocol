@@ -39,9 +39,9 @@ fn expected_application_id(
     context: &OperationContext,
     module_id: &ModuleId,
     parameters: Vec<u8>,
-    required_application_ids: Vec<MultiAddress>,
+    required_application_ids: Vec<Address>,
     application_index: u32,
-) -> MultiAddress {
+) -> Address {
     let description = UserApplicationDescription {
         module_id: *module_id,
         creator_chain_id: context.chain_id,
@@ -118,7 +118,7 @@ async fn open_chain_message_index() {
 /// Tests if an account is removed from storage if it is drained.
 #[tokio::test]
 async fn empty_accounts_are_removed() -> anyhow::Result<()> {
-    let owner = MultiAddress::Address32(CryptoHash::test_hash("account owner"));
+    let owner = Address::Address32(CryptoHash::test_hash("account owner"));
     let amount = Amount::from_tokens(99);
 
     let mut view = SystemExecutionState {

@@ -8,7 +8,7 @@ test('InputType mounting', () => {
       props: {
         elt: {
           kind: 'SCALAR',
-          name: 'MultiAddress'
+          name: 'Address'
         }, offset: false
       },
     })

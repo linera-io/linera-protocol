@@ -6,7 +6,7 @@
 use async_graphql::{scalar, Request, Response};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{Amount, ContractAbi, MultiAddress, ServiceAbi},
+    linera_base_types::{Address, Amount, ContractAbi, ServiceAbi},
 };
 pub use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};
@@ -31,9 +31,9 @@ pub enum Operation {
     /// Given an input token idx (can be 0 or 1), and an input amount,
     /// Swap that token amount for an amount of the other token,
     /// calculated based on the current AMM ratio
-    /// MultiAddress here is the user executing the Swap
+    /// Address here is the user executing the Swap
     Swap {
-        owner: MultiAddress,
+        owner: Address,
         input_token_idx: u32,
         input_amount: Amount,
     },
@@ -42,10 +42,10 @@ pub enum Operation {
     /// add liquidity to the AMM such that you'll be adding AT MOST
     /// `max_token0_amount` of token0, and `max_token1_amount` of token1,
     /// which will be calculated based on the current AMM ratio
-    /// MultiAddress here is the user adding liquidity, which currently can only
+    /// Address here is the user adding liquidity, which currently can only
     /// be a chain owner
     AddLiquidity {
-        owner: MultiAddress,
+        owner: Address,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     },
@@ -55,18 +55,18 @@ pub enum Operation {
     /// how much of the other token will also be removed, which will be calculated
     /// based on the current AMM ratio. Then remove the amounts from both tokens
     /// as a removal of liquidity
-    /// MultiAddress here is the user removing liquidity, which currently can only
+    /// Address here is the user removing liquidity, which currently can only
     /// be a chain owner
     RemoveLiquidity {
-        owner: MultiAddress,
+        owner: Address,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     },
     /// Remove all added liquidity operation
     /// Remove all the liquidity added by the given user, that is remaining in the AMM.
-    /// MultiAddress here is the user removing liquidity, which currently can only
+    /// Address here is the user removing liquidity, which currently can only
     /// be a chain owner
-    RemoveAllAddedLiquidity { owner: MultiAddress },
+    RemoveAllAddedLiquidity { owner: Address },
     /// Close this chain, and remove all added liquidity
     /// Requires that this application is authorized to close the chain.
     CloseChain,
@@ -77,21 +77,21 @@ scalar!(Operation);
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     Swap {
-        owner: MultiAddress,
+        owner: Address,
         input_token_idx: u32,
         input_amount: Amount,
     },
     AddLiquidity {
-        owner: MultiAddress,
+        owner: Address,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     },
     RemoveLiquidity {
-        owner: MultiAddress,
+        owner: Address,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     },
     RemoveAllAddedLiquidity {
-        owner: MultiAddress,
+        owner: Address,
     },
 }

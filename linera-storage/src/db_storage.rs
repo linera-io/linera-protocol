@@ -11,7 +11,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, TimeDelta, Timestamp},
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, EventId, MultiAddress},
+    identifiers::{Address, BlobId, ChainId, EventId},
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
@@ -263,8 +263,8 @@ pub struct DbStorage<Store, Clock> {
     store: Arc<Store>,
     clock: Clock,
     wasm_runtime: Option<WasmRuntime>,
-    user_contracts: Arc<DashMap<MultiAddress, UserContractCode>>,
-    user_services: Arc<DashMap<MultiAddress, UserServiceCode>>,
+    user_contracts: Arc<DashMap<Address, UserContractCode>>,
+    user_services: Arc<DashMap<Address, UserServiceCode>>,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 

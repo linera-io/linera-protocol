@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId, MessageId, MultiAddress},
+    identifiers::{Address, ChainDescription, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -18,7 +18,7 @@ use linera_execution::{
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
     let owner_key_pair = AccountSecretKey::generate();
-    let owner = MultiAddress::from(owner_key_pair.public());
+    let owner = Address::from(owner_key_pair.public());
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         balance: Amount::from_tokens(4),
@@ -30,7 +30,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     };
     let mut view = state.into_view().await;
     let operation = SystemOperation::Transfer {
-        owner: MultiAddress::chain(),
+        owner: Address::chain(),
         amount: Amount::from_tokens(4),
         recipient: Recipient::Burn,
     };
@@ -66,8 +66,8 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
-        target: MultiAddress::chain(),
-        source: MultiAddress::chain(),
+        target: Address::chain(),
+        source: Address::chain(),
     };
     let context = MessageContext {
         chain_id: ChainId::root(0),

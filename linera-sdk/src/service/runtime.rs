@@ -9,7 +9,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     http,
-    identifiers::{ApplicationId, ChainId, MultiAddress},
+    identifiers::{Address, ApplicationId, ChainId},
 };
 use serde::Serialize;
 
@@ -27,8 +27,8 @@ where
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
     chain_balance: Mutex<Option<Amount>>,
-    owner_balances: Mutex<Option<Vec<(MultiAddress, Amount)>>>,
-    balance_owners: Mutex<Option<Vec<MultiAddress>>>,
+    owner_balances: Mutex<Option<Vec<(Address, Amount)>>>,
+    balance_owners: Mutex<Option<Vec<Address>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -75,7 +75,7 @@ where
     /// Returns the ID of the current application.
     pub fn application_id(&self) -> ApplicationId<Application::Abi> {
         Self::fetch_value_through_cache(&self.application_id, || {
-            MultiAddress::from(base_wit::get_application_id()).with_abi()
+            Address::from(base_wit::get_application_id()).with_abi()
         })
     }
 
@@ -106,12 +106,12 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: MultiAddress) -> Amount {
+    pub fn owner_balance(&self, owner: Address) -> Amount {
         base_wit::read_owner_balance(owner.into()).into()
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(MultiAddress, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(Address, Amount)> {
         Self::fetch_value_through_cache(&self.owner_balances, || {
             base_wit::read_owner_balances()
                 .into_iter()
@@ -121,11 +121,11 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<MultiAddress> {
+    pub fn balance_owners(&self) -> Vec<Address> {
         Self::fetch_value_through_cache(&self.balance_owners, || {
             base_wit::read_balance_owners()
                 .into_iter()
-                .map(MultiAddress::from)
+                .map(Address::from)
                 .collect()
         })
     }

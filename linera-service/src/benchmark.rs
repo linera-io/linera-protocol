@@ -9,7 +9,7 @@ use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
-    identifiers::{Account, ApplicationId, ChainId, MultiAddress},
+    identifiers::{Account, Address, ApplicationId, ChainId},
     time::timer::Instant,
 };
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
@@ -141,7 +141,7 @@ async fn benchmark_with_fungible(
 
     struct BenchmarkContext {
         application_id: ApplicationId<FungibleTokenAbi>,
-        owner: MultiAddress,
+        owner: Address,
         default_chain: ChainId,
     }
 
@@ -266,7 +266,7 @@ async fn benchmark_with_fungible(
 struct FungibleApp(ApplicationWrapper<FungibleTokenAbi>);
 
 impl FungibleApp {
-    async fn get_amount(&self, account_owner: &MultiAddress) -> Amount {
+    async fn get_amount(&self, account_owner: &Address) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
             account_owner.to_value()
@@ -278,7 +278,7 @@ impl FungibleApp {
 
     async fn transfer(
         &self,
-        account_owner: MultiAddress,
+        account_owner: Address,
         amount_transfer: Amount,
         destination: fungible::Account,
     ) -> Result<Value> {

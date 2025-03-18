@@ -16,7 +16,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
     data_types::{Amount, ApplicationPermissions, Blob, BlobContent, Timestamp},
-    identifiers::{ApplicationId, ChainDescription, ChainId, MessageId, ModuleId, MultiAddress},
+    identifiers::{Address, ApplicationId, ChainDescription, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
@@ -260,7 +260,7 @@ impl TestValidator {
     /// Adds a block to the admin chain to create a new chain.
     ///
     /// Returns the [`ChainDescription`] of the new chain.
-    async fn request_new_chain_from_admin_chain(&self, owner: MultiAddress) -> ChainDescription {
+    async fn request_new_chain_from_admin_chain(&self, owner: Address) -> ChainDescription {
         let admin_id = ChainId::root(0);
         let admin_chain = self
             .chains

@@ -42,8 +42,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination, EventId,
-        MessageId, ModuleId, MultiAddress, StreamName,
+        Account, Address, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
+        EventId, MessageId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -206,14 +206,14 @@ pub enum ExecutionError {
     InvalidPromise,
 
     #[error("Attempted to perform a reentrant call to application {0}")]
-    ReentrantCall(MultiAddress),
+    ReentrantCall(Address),
     #[error(
         "Application {caller_id} attempted to perform a cross-application to {callee_id} call \
         from `finalize`"
     )]
     CrossApplicationCallInFinalize {
-        caller_id: Box<MultiAddress>,
-        callee_id: Box<MultiAddress>,
+        caller_id: Box<Address>,
+        callee_id: Box<Address>,
     },
     #[error("Attempt to write to storage from a contract")]
     ServiceWriteAttempt,
@@ -221,7 +221,7 @@ pub enum ExecutionError {
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
     // TODO(#2927): support dynamic loading of modules on the Web
     #[error("Unsupported dynamic application load: {0:?}")]
-    UnsupportedDynamicApplicationLoad(Box<MultiAddress>),
+    UnsupportedDynamicApplicationLoad(Box<Address>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -239,10 +239,10 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Module ID {0:?} is invalid")]
     InvalidModuleId(ModuleId),
-    #[error("MultiAddress is None")]
+    #[error("Address is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
-    UnauthorizedApplication(MultiAddress),
+    UnauthorizedApplication(Address),
     #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered I/O error: {0}")]
@@ -330,7 +330,7 @@ pub enum ExecutionError {
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<MultiAddress>),
+    UnknownApplicationId(Box<Address>),
     #[error("Chain is not active yet.")]
     InactiveChain,
     #[error("No recorded response for oracle query")]
@@ -396,9 +396,9 @@ pub trait ExecutionRuntimeContext {
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
-    fn user_contracts(&self) -> &Arc<DashMap<MultiAddress, UserContractCode>>;
+    fn user_contracts(&self) -> &Arc<DashMap<Address, UserContractCode>>;
 
-    fn user_services(&self) -> &Arc<DashMap<MultiAddress, UserServiceCode>>;
+    fn user_services(&self) -> &Arc<DashMap<Address, UserServiceCode>>;
 
     async fn get_user_contract(
         &self,
@@ -435,11 +435,11 @@ pub struct OperationContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<MultiAddress>,
+    pub authenticated_signer: Option<Address>,
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_caller_id: Option<MultiAddress>,
+    pub authenticated_caller_id: Option<Address>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -457,7 +457,7 @@ pub struct MessageContext {
     pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<MultiAddress>,
+    pub authenticated_signer: Option<Address>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
@@ -478,7 +478,7 @@ pub struct FinalizeContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<MultiAddress>,
+    pub authenticated_signer: Option<Address>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -511,7 +511,7 @@ pub trait BaseRuntime {
     fn block_height(&mut self) -> Result<BlockHeight, ExecutionError>;
 
     /// The current application ID.
-    fn application_id(&mut self) -> Result<MultiAddress, ExecutionError>;
+    fn application_id(&mut self) -> Result<Address, ExecutionError>;
 
     /// The current application creator's chain ID.
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError>;
@@ -526,13 +526,13 @@ pub trait BaseRuntime {
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the owner balance.
-    fn read_owner_balance(&mut self, owner: MultiAddress) -> Result<Amount, ExecutionError>;
+    fn read_owner_balance(&mut self, owner: Address) -> Result<Amount, ExecutionError>;
 
     /// Reads the balances from all owners.
-    fn read_owner_balances(&mut self) -> Result<Vec<(MultiAddress, Amount)>, ExecutionError>;
+    fn read_owner_balances(&mut self) -> Result<Vec<(Address, Amount)>, ExecutionError>;
 
     /// Reads balance owners.
-    fn read_balance_owners(&mut self) -> Result<Vec<MultiAddress>, ExecutionError>;
+    fn read_balance_owners(&mut self) -> Result<Vec<Address>, ExecutionError>;
 
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
@@ -670,7 +670,7 @@ pub trait ServiceRuntime: BaseRuntime {
     /// Queries another application.
     fn try_query_application(
         &mut self,
-        queried_id: MultiAddress,
+        queried_id: Address,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -683,7 +683,7 @@ pub trait ServiceRuntime: BaseRuntime {
 
 pub trait ContractRuntime: BaseRuntime {
     /// The authenticated signer for this execution, if there is one.
-    fn authenticated_signer(&mut self) -> Result<Option<MultiAddress>, ExecutionError>;
+    fn authenticated_signer(&mut self) -> Result<Option<Address>, ExecutionError>;
 
     /// The current message ID, if there is one.
     fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError>;
@@ -694,7 +694,7 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.
-    fn authenticated_caller_id(&mut self) -> Result<Option<MultiAddress>, ExecutionError>;
+    fn authenticated_caller_id(&mut self) -> Result<Option<Address>, ExecutionError>;
 
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
@@ -714,7 +714,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
-        source: MultiAddress,
+        source: Address,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;
@@ -732,7 +732,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn try_call_application(
         &mut self,
         authenticated: bool,
-        callee_id: MultiAddress,
+        callee_id: Address,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -747,7 +747,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Queries a service.
     fn query_service(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -774,8 +774,8 @@ pub trait ContractRuntime: BaseRuntime {
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<MultiAddress>,
-    ) -> Result<MultiAddress, ExecutionError>;
+        required_application_ids: Vec<Address>,
+    ) -> Result<Address, ExecutionError>;
 
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
@@ -791,7 +791,7 @@ pub enum Operation {
     System(SystemOperation),
     /// A user operation (in serialized form).
     User {
-        application_id: MultiAddress,
+        application_id: Address,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -807,7 +807,7 @@ pub enum Message {
     System(SystemMessage),
     /// A user message (in serialized form).
     User {
-        application_id: MultiAddress,
+        application_id: Address,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -821,7 +821,7 @@ pub enum Query {
     System(SystemQuery),
     /// A user query (in serialized form).
     User {
-        application_id: MultiAddress,
+        application_id: Address,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -940,7 +940,7 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<MultiAddress>,
+    pub authenticated_signer: Option<Address>,
     /// A grant to pay for the message execution.
     #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
@@ -961,7 +961,7 @@ impl<'de> BcsHashable<'de> for OutgoingMessage {}
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct RawExecutionOutcome<Message> {
     /// The signer who created the messages.
-    pub authenticated_signer: Option<MultiAddress>,
+    pub authenticated_signer: Option<Address>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     pub refund_grant_to: Option<Account>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
@@ -981,7 +981,7 @@ pub struct ChannelSubscription {
 }
 
 impl<Message> RawExecutionOutcome<Message> {
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<MultiAddress>) -> Self {
+    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Address>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }
@@ -1054,8 +1054,8 @@ impl OperationContext {
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<DashMap<MultiAddress, UserContractCode>>,
-    user_services: Arc<DashMap<MultiAddress, UserServiceCode>>,
+    user_contracts: Arc<DashMap<Address, UserContractCode>>,
+    user_services: Arc<DashMap<Address, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, Blob>>,
     events: Arc<DashMap<EventId, Vec<u8>>>,
 }
@@ -1086,11 +1086,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<DashMap<MultiAddress, UserContractCode>> {
+    fn user_contracts(&self) -> &Arc<DashMap<Address, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<DashMap<MultiAddress, UserServiceCode>> {
+    fn user_services(&self) -> &Arc<DashMap<Address, UserServiceCode>> {
         &self.user_services
     }
 
@@ -1191,7 +1191,7 @@ impl Operation {
     /// `application_id`.
     #[cfg(with_testing)]
     pub fn user_without_abi(
-        application_id: MultiAddress,
+        application_id: Address,
         operation: &impl Serialize,
     ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
@@ -1200,9 +1200,9 @@ impl Operation {
         })
     }
 
-    pub fn application_id(&self) -> MultiAddress {
+    pub fn application_id(&self) -> Address {
         match self {
-            Self::System(_) => MultiAddress::chain(),
+            Self::System(_) => Address::chain(),
             Self::User { application_id, .. } => *application_id,
         }
     }
@@ -1250,9 +1250,9 @@ impl Message {
         })
     }
 
-    pub fn application_id(&self) -> MultiAddress {
+    pub fn application_id(&self) -> Address {
         match self {
-            Self::System(_) => MultiAddress::chain(),
+            Self::System(_) => Address::chain(),
             Self::User { application_id, .. } => *application_id,
         }
     }
@@ -1313,7 +1313,7 @@ impl Query {
     /// Creates a new user application query assuming that the `query` is valid for the
     /// `application_id`.
     pub fn user_without_abi(
-        application_id: MultiAddress,
+        application_id: Address,
         query: &impl Serialize,
     ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {
@@ -1322,9 +1322,9 @@ impl Query {
         })
     }
 
-    pub fn application_id(&self) -> MultiAddress {
+    pub fn application_id(&self) -> Address {
         match self {
-            Self::System(_) => MultiAddress::chain(),
+            Self::System(_) => Address::chain(),
             Self::User { application_id, .. } => *application_id,
         }
     }

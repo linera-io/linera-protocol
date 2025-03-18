@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     ensure,
     hashed::Hashed,
-    identifiers::{ChainId, ModuleId, MultiAddress},
+    identifiers::{Address, ChainId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -270,7 +270,7 @@ where
     async fn transfer(
         &self,
         chain_id: ChainId,
-        owner: MultiAddress,
+        owner: Address,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<CryptoHash, Error> {
@@ -291,7 +291,7 @@ where
     async fn claim(
         &self,
         chain_id: ChainId,
-        owner: MultiAddress,
+        owner: Address,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -331,7 +331,7 @@ where
     async fn open_chain(
         &self,
         chain_id: ChainId,
-        owner: MultiAddress,
+        owner: Address,
         balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
         let ownership = ChainOwnership::single(owner);
@@ -359,7 +359,7 @@ where
         &self,
         chain_id: ChainId,
         application_permissions: Option<ApplicationPermissions>,
-        owners: Vec<MultiAddress>,
+        owners: Vec<Address>,
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
         balance: Option<Amount>,
@@ -439,7 +439,7 @@ where
     async fn change_owner(
         &self,
         chain_id: ChainId,
-        new_owner: MultiAddress,
+        new_owner: Address,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
@@ -456,7 +456,7 @@ where
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
-        new_owners: Vec<MultiAddress>,
+        new_owners: Vec<Address>,
         new_weights: Vec<u64>,
         multi_leader_rounds: u32,
         open_multi_leader_rounds: bool,
@@ -500,12 +500,12 @@ where
     async fn change_application_permissions(
         &self,
         chain_id: ChainId,
-        close_chain: Vec<MultiAddress>,
-        execute_operations: Option<Vec<MultiAddress>>,
-        mandatory_applications: Vec<MultiAddress>,
-        change_application_permissions: Vec<MultiAddress>,
-        call_service_as_oracle: Option<Vec<MultiAddress>>,
-        make_http_requests: Option<Vec<MultiAddress>>,
+        close_chain: Vec<Address>,
+        execute_operations: Option<Vec<Address>>,
+        mandatory_applications: Vec<Address>,
+        change_application_permissions: Vec<Address>,
+        call_service_as_oracle: Option<Vec<Address>>,
+        make_http_requests: Option<Vec<Address>>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
@@ -626,8 +626,8 @@ where
         module_id: ModuleId,
         parameters: String,
         instantiation_argument: String,
-        required_application_ids: Vec<MultiAddress>,
-    ) -> Result<MultiAddress, Error> {
+        required_application_ids: Vec<Address>,
+    ) -> Result<Address, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
             let instantiation_argument = instantiation_argument.as_bytes().to_vec();
@@ -812,14 +812,14 @@ where
 
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
-    id: MultiAddress,
+    id: Address,
     description: UserApplicationDescription,
     link: String,
 }
 
 impl ApplicationOverview {
     fn new(
-        id: MultiAddress,
+        id: Address,
         description: UserApplicationDescription,
         port: NonZeroU16,
         chain_id: ChainId,
@@ -960,7 +960,7 @@ where
     /// Handles queries for user applications.
     async fn user_application_query(
         &self,
-        application_id: MultiAddress,
+        application_id: Address,
         request: &Request,
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
@@ -982,7 +982,7 @@ where
     /// Handles mutations for user applications.
     async fn user_application_mutation(
         &self,
-        application_id: MultiAddress,
+        application_id: Address,
         request: &Request,
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
@@ -1031,7 +1031,7 @@ where
     /// Queries a user application, returning the raw [`QueryOutcome`].
     async fn query_user_application(
         &self,
-        application_id: MultiAddress,
+        application_id: Address,
         request: &Request,
         chain_id: ChainId,
     ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
@@ -1087,7 +1087,7 @@ where
         let operation_type = operation_type(parsed_query)?;
 
         let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
-        let application_id: MultiAddress = application_id
+        let application_id: Address = application_id
             .parse()
             .map_err(|err: anyhow::Error| NodeServiceError::MalformedAddress(err.to_string()))?;
 

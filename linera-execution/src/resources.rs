@@ -9,7 +9,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError},
     ensure,
-    identifiers::MultiAddress,
+    identifiers::Address,
 };
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
@@ -434,7 +434,7 @@ impl BalanceHolder for Sources<'_> {
     }
 }
 
-impl ResourceController<Option<MultiAddress>, ResourceTracker> {
+impl ResourceController<Option<Address>, ResourceTracker> {
     /// Provides a reference to the current execution state and obtains a temporary object
     /// where the accounting functions of [`ResourceController`] are available.
     pub async fn with_state<'a, C>(

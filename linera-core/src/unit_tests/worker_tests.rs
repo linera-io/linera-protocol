@@ -23,7 +23,7 @@ use linera_base::{
     data_types::*,
     hashed::Hashed,
     identifiers::{
-        Account, ChainDescription, ChainId, Destination, EventId, MessageId, MultiAddress, StreamId,
+        Account, Address, ChainDescription, ChainId, Destination, EventId, MessageId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -113,7 +113,7 @@ where
 /// Same as `init_worker` but also instantiates some initial chains.
 async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, WorkerState<S>)
 where
-    I: IntoIterator<Item = (ChainDescription, MultiAddress, Amount)>,
+    I: IntoIterator<Item = (ChainDescription, Address, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
 {
     let (committee, worker) = init_worker(
@@ -140,7 +140,7 @@ where
 async fn init_worker_with_chain<S>(
     storage: S,
     description: ChainDescription,
-    owner: MultiAddress,
+    owner: Address,
     balance: Amount,
 ) -> (Committee, WorkerState<S>)
 where
@@ -202,7 +202,7 @@ where
         chain_description,
         key_pair,
         Some(key_pair.public().into()),
-        MultiAddress::chain(),
+        Address::chain(),
         Recipient::chain(target_id),
         amount,
         incoming_bundles,
@@ -220,14 +220,14 @@ where
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &AccountSecretKey,
-    authenticated_signer: Option<MultiAddress>,
-    source: MultiAddress,
+    authenticated_signer: Option<Address>,
+    source: Address,
     recipient: Recipient,
     amount: Amount,
     incoming_bundles: Vec<IncomingBundle>,
     committee: &Committee,
     balance: Amount,
-    balances: BTreeMap<MultiAddress, Amount>,
+    balances: BTreeMap<Address, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
 ) -> ConfirmedBlockCertificate
@@ -256,15 +256,15 @@ where
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &AccountSecretKey,
-    authenticated_signer: Option<MultiAddress>,
-    source: MultiAddress,
+    authenticated_signer: Option<Address>,
+    source: Address,
     recipient: Recipient,
     amount: Amount,
     incoming_bundles: Vec<IncomingBundle>,
     epoch: Epoch,
     committee: &Committee,
     balance: Amount,
-    balances: BTreeMap<MultiAddress, Amount>,
+    balances: BTreeMap<Address, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
 ) -> ConfirmedBlockCertificate
@@ -371,28 +371,28 @@ fn direct_outgoing_message(
 
 fn system_credit_message(amount: Amount) -> Message {
     Message::System(SystemMessage::Credit {
-        source: MultiAddress::chain(),
-        target: MultiAddress::chain(),
+        source: Address::chain(),
+        target: Address::chain(),
         amount,
     })
 }
 
 fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage {
     let message = SystemMessage::Credit {
-        source: MultiAddress::chain(),
-        target: MultiAddress::chain(),
+        source: Address::chain(),
+        target: Address::chain(),
         amount,
     };
     direct_outgoing_message(recipient, MessageKind::Tracked, message)
 }
 
-/// Creates `count` key pairs and returns them, sorted by the `MultiAddress` created from their public key.
+/// Creates `count` key pairs and returns them, sorted by the `Address` created from their public key.
 fn generate_key_pairs(count: usize) -> Vec<AccountSecretKey> {
     let mut key_pairs = iter::repeat_with(Secp256k1SecretKey::generate)
         .map(AccountSecretKey::Secp256k1)
         .take(count)
         .collect::<Vec<_>>();
-    key_pairs.sort_by_key(|key_pair| MultiAddress::from(key_pair.public()));
+    key_pairs.sort_by_key(|key_pair| Address::from(key_pair.public()));
     key_pairs
 }
 
@@ -1389,7 +1389,7 @@ where
         ChainDescription::Root(2),
         &sender_key_pair,
         Some(chain_key_pair.public().into()),
-        MultiAddress::chain(),
+        Address::chain(),
         Recipient::chain(ChainId::root(2)),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2087,14 +2087,14 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = AccountSecretKey::generate();
-    let sender = MultiAddress::from(sender_key_pair.public());
+    let sender = Address::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
         owner: sender,
     };
 
     let recipient_key_pair = AccountSecretKey::generate();
-    let recipient = MultiAddress::from(sender_key_pair.public());
+    let recipient = Address::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
         owner: recipient,
@@ -2122,8 +2122,8 @@ where
     let certificate00 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Some(MultiAddress::from(sender_key_pair.public())),
-        MultiAddress::chain(),
+        Some(Address::from(sender_key_pair.public())),
+        Address::chain(),
         Recipient::Account(sender_account),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2142,8 +2142,8 @@ where
     let certificate01 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Some(MultiAddress::from(sender_key_pair.public())),
-        MultiAddress::chain(),
+        Some(Address::from(sender_key_pair.public())),
+        Address::chain(),
         Recipient::Burn,
         Amount::ONE,
         vec![IncomingBundle {
@@ -2154,7 +2154,7 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: MultiAddress::chain(),
+                    source: Address::chain(),
                     target: sender,
                     amount: Amount::from_tokens(5),
                 })
@@ -2982,7 +2982,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::chain(),
+        Address::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -2998,7 +2998,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::chain(),
+        Address::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3014,7 +3014,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::chain(),
+        Address::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3031,7 +3031,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        MultiAddress::chain(),
+        Address::chain(),
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3192,8 +3192,8 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let owner0 = MultiAddress::from(key_pairs[0].public());
-    let owner1 = MultiAddress::from(key_pairs[1].public());
+    let owner0 = Address::from(key_pairs[0].public());
+    let owner1 = Address::from(key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -3392,8 +3392,8 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let owner0 = MultiAddress::from(key_pairs[0].public());
-    let owner1 = MultiAddress::from(key_pairs[1].public());
+    let owner0 = Address::from(key_pairs[0].public());
+    let owner1 = Address::from(key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -3510,11 +3510,7 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(
-            MultiAddress::chain(),
-            Recipient::Burn,
-            Amount::from_tokens(1),
-        )
+        .with_transfer(Address::chain(), Recipient::Burn, Amount::from_tokens(1))
         .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
@@ -3549,8 +3545,8 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let owner0 = MultiAddress::from(key_pairs[0].public());
-    let owner1 = MultiAddress::from(key_pairs[1].public());
+    let owner0 = Address::from(key_pairs[0].public());
+    let owner1 = Address::from(key_pairs[1].public());
     let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -3576,7 +3572,7 @@ where
     assert_eq!(response.info.manager.current_round, Round::Fast);
     assert_eq!(response.info.manager.leader, None);
 
-    // MultiAddress 0 proposes another block. The validator votes to confirm.
+    // Address 0 proposes another block. The validator votes to confirm.
     let block1 = make_child_block(&value0.clone());
     let proposal1 = block1
         .clone()
@@ -3709,7 +3705,7 @@ where
     let manager = response.info.manager;
     let account_key = worker.account_key();
     assert_eq!(manager.current_round, Round::Validator(0));
-    assert_eq!(manager.leader, Some(MultiAddress::from(account_key)));
+    assert_eq!(manager.leader, Some(Address::from(account_key)));
     Ok(())
 }
 

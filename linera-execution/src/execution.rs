@@ -6,7 +6,7 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, BlobType, ChainId, Destination, MultiAddress},
+    identifiers::{Account, Address, BlobType, ChainId, Destination},
 };
 use linera_views::{
     context::Context,
@@ -40,7 +40,7 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, MultiAddress, KeyValueStoreView<C>>,
+    pub users: HashedReentrantCollectionView<C, Address, KeyValueStoreView<C>>,
 }
 
 /// How to interact with a long-lived service runtime.
@@ -132,7 +132,7 @@ pub enum UserAction {
 }
 
 impl UserAction {
-    pub(crate) fn signer(&self) -> Option<MultiAddress> {
+    pub(crate) fn signer(&self) -> Option<Address> {
         use UserAction::*;
         match self {
             Instantiate(context, _) => context.authenticated_signer,
@@ -166,14 +166,14 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn run_user_action(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<MultiAddress>>,
+        resource_controller: &mut ResourceController<Option<Address>>,
     ) -> Result<(), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(
@@ -192,14 +192,14 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn run_user_action_with_runtime(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<MultiAddress>>,
+        resource_controller: &mut ResourceController<Option<Address>>,
     ) -> Result<(), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
@@ -260,7 +260,7 @@ where
         local_time: Timestamp,
         operation: Operation,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<MultiAddress>>,
+        resource_controller: &mut ResourceController<Option<Address>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -311,7 +311,7 @@ where
         message: Message,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<MultiAddress>>,
+        resource_controller: &mut ResourceController<Option<Address>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -401,9 +401,7 @@ where
             kind: MessageKind::Tracked,
             message: SystemMessage::Credit {
                 amount,
-                source: context
-                    .authenticated_signer
-                    .unwrap_or(MultiAddress::chain()),
+                source: context.authenticated_signer.unwrap_or(Address::chain()),
                 target: account.owner,
             },
         };
@@ -452,7 +450,7 @@ where
 
     async fn query_user_application(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         context: QueryContext,
         query: Vec<u8>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
@@ -482,7 +480,7 @@ where
 
     async fn query_user_application_with_long_lived_service(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         context: QueryContext,
         query: Vec<u8>,
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
@@ -518,14 +516,14 @@ where
 
     pub async fn list_applications(
         &self,
-    ) -> Result<Vec<(MultiAddress, UserApplicationDescription)>, ExecutionError> {
+    ) -> Result<Vec<(Address, UserApplicationDescription)>, ExecutionError> {
         let mut applications = vec![];
         for blob_id in self.system.used_blobs.indices().await? {
             if blob_id.blob_type == BlobType::ApplicationDescription {
                 let blob_content = self.system.read_blob_content(blob_id).await?;
                 let application_description: UserApplicationDescription =
                     bcs::from_bytes(blob_content.bytes())?;
-                let app_id = MultiAddress::from(&application_description);
+                let app_id = Address::from(&application_description);
                 applications.push((app_id, application_description));
             }
         }

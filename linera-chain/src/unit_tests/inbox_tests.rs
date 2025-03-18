@@ -6,7 +6,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, TestString},
     data_types::Timestamp,
-    identifiers::MultiAddress,
+    identifiers::Address,
 };
 use linera_execution::{Message, MessageKind};
 
@@ -20,7 +20,7 @@ fn make_bundle(
     message: impl Into<Vec<u8>>,
 ) -> MessageBundle {
     let message = Message::User {
-        application_id: MultiAddress::Address32(CryptoHash::new(&TestString::new("test"))),
+        application_id: Address::Address32(CryptoHash::new(&TestString::new("test"))),
         bytes: message.into(),
     };
     MessageBundle {

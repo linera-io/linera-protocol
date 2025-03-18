@@ -20,7 +20,7 @@ use linera_base::vm::VmRuntime;
 use linera_base::{
     crypto::Secp256k1SecretKey,
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, ChainId, MultiAddress},
+    identifiers::{Account, Address, ChainId},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_execution::committee::Epoch;
@@ -42,7 +42,7 @@ use {
 };
 
 #[cfg(feature = "benchmark")]
-fn get_fungible_account_owner(client: &ClientWrapper) -> MultiAddress {
+fn get_fungible_account_owner(client: &ClientWrapper) -> Address {
     client.get_owner().unwrap()
 }
 
@@ -176,7 +176,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     }
 
     let recipient =
-        MultiAddress::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
+        Address::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),

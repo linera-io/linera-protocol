@@ -15,7 +15,7 @@ use std::{collections::BTreeMap, sync::Arc, thread, vec};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
-    identifiers::{BlobId, BlobType, ChainId, MessageId, ModuleId, MultiAddress},
+    identifiers::{Address, BlobId, BlobType, ChainId, MessageId, ModuleId},
     vm::VmRuntime,
 };
 use linera_views::{
@@ -80,7 +80,7 @@ pub fn create_dummy_operation_context() -> OperationContext {
 }
 
 /// Creates a dummy [`MessageContext`] to use in tests.
-pub fn create_dummy_message_context(authenticated_signer: Option<MultiAddress>) -> MessageContext {
+pub fn create_dummy_message_context(authenticated_signer: Option<Address>) -> MessageContext {
     MessageContext {
         chain_id: ChainId::root(0),
         is_bouncing: false,
@@ -111,15 +111,15 @@ pub fn create_dummy_query_context() -> QueryContext {
 pub trait RegisterMockApplication {
     /// Returns the chain to use for the creation of the application.
     ///
-    /// This is included in the mocked [`MultiAddress`].
+    /// This is included in the mocked [`Address`].
     fn creator_chain_id(&self) -> ChainId;
 
-    /// Registers a new [`MockApplication`] and returns it with the [`MultiAddress`] that was
+    /// Registers a new [`MockApplication`] and returns it with the [`Address`] that was
     /// used for it.
     async fn register_mock_application(
         &mut self,
         index: u32,
-    ) -> anyhow::Result<(MultiAddress, MockApplication, [BlobId; 3])> {
+    ) -> anyhow::Result<(Address, MockApplication, [BlobId; 3])> {
         let (description, contract, service) = create_dummy_user_application_description(index);
         let description_blob_id = Blob::new_application_description(&description).id();
         let contract_blob_id = contract.id();
@@ -142,7 +142,7 @@ pub trait RegisterMockApplication {
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
-    ) -> anyhow::Result<(MultiAddress, MockApplication)>;
+    ) -> anyhow::Result<(Address, MockApplication)>;
 }
 
 impl<C> RegisterMockApplication for ExecutionStateView<C>
@@ -159,7 +159,7 @@ where
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
-    ) -> anyhow::Result<(MultiAddress, MockApplication)> {
+    ) -> anyhow::Result<(Address, MockApplication)> {
         self.system
             .register_mock_application_with(description, contract, service)
             .await
@@ -182,7 +182,7 @@ where
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
-    ) -> anyhow::Result<(MultiAddress, MockApplication)> {
+    ) -> anyhow::Result<(Address, MockApplication)> {
         let id = From::from(&description);
         let extra = self.context().extra();
         let mock_application = MockApplication::default();
@@ -207,7 +207,7 @@ where
 
 pub async fn create_dummy_user_application_registrations(
     count: u32,
-) -> anyhow::Result<Vec<(MultiAddress, UserApplicationDescription, Blob, Blob)>> {
+) -> anyhow::Result<Vec<(Address, UserApplicationDescription, Blob, Blob)>> {
     let mut ids = Vec::with_capacity(count as usize);
 
     for index in 0..count {
@@ -241,11 +241,11 @@ impl QueryContext {
     }
 }
 
-/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`MultiAddress`]s with an initial
+/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`Address`]s with an initial
 /// non-zero [`Amount`] of tokens.
-pub fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<MultiAddress, Amount>> {
+pub fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<Address, Amount>> {
     proptest::collection::btree_map(
-        any::<MultiAddress>(),
+        any::<Address>(),
         (1_u128..).prop_map(Amount::from_tokens),
         0..5,
     )

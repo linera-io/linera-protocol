@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainId, MessageId, ModuleId, MultiAddress},
+    identifiers::{Address, ChainId, MessageId, ModuleId},
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
     vm::VmRuntime,
 };
@@ -53,12 +53,10 @@ impl From<wit_contract_api::MessageId> for MessageId {
     }
 }
 
-impl From<wit_contract_api::MultiAddress> for MultiAddress {
-    fn from(account_owner: wit_contract_api::MultiAddress) -> Self {
+impl From<wit_contract_api::Address> for Address {
+    fn from(account_owner: wit_contract_api::Address) -> Self {
         match account_owner {
-            wit_contract_api::MultiAddress::Address32(owner) => {
-                MultiAddress::Address32(owner.into())
-            }
+            wit_contract_api::Address::Address32(owner) => Address::Address32(owner.into()),
         }
     }
 }

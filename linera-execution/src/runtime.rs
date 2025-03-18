@@ -18,7 +18,7 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId, MultiAddress,
+        Account, Address, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId,
         StreamId, StreamName,
     },
     ownership::ChainOwnership,
@@ -73,7 +73,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
     #[debug(skip_if = Option::is_none)]
-    authenticated_signer: Option<MultiAddress>,
+    authenticated_signer: Option<Address>,
     /// The current message being executed, if there is one.
     #[debug(skip_if = Option::is_none)]
     executing_message: Option<ExecutingMessage>,
@@ -86,21 +86,21 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// If [`true`], disables cross-application calls.
     is_finalizing: bool,
     /// Applications that need to be finalized.
-    applications_to_finalize: Vec<MultiAddress>,
+    applications_to_finalize: Vec<Address>,
 
     /// Application instances loaded in this transaction.
-    loaded_applications: HashMap<MultiAddress, LoadedApplication<UserInstance>>,
+    loaded_applications: HashMap<Address, LoadedApplication<UserInstance>>,
     /// The current stack of application descriptions.
     call_stack: Vec<ApplicationStatus>,
     /// The set of the IDs of the applications that are in the `call_stack`.
-    active_applications: HashSet<MultiAddress>,
+    active_applications: HashSet<Address>,
     /// The tracking information for this transaction.
     transaction_tracker: TransactionTracker,
     /// The operations scheduled during this query.
     scheduled_operations: Vec<Operation>,
 
     /// Track application states based on views.
-    view_user_states: BTreeMap<MultiAddress, ViewUserState>,
+    view_user_states: BTreeMap<Address, ViewUserState>,
 
     /// The deadline this runtime should finish executing.
     ///
@@ -118,13 +118,13 @@ pub struct SyncRuntimeInternal<UserInstance> {
 #[derive(Debug)]
 struct ApplicationStatus {
     /// The caller application ID, if forwarded during the call.
-    caller_id: Option<MultiAddress>,
+    caller_id: Option<Address>,
     /// The application ID.
-    id: MultiAddress,
+    id: Address,
     /// The application description.
     description: UserApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
-    signer: Option<MultiAddress>,
+    signer: Option<Address>,
 }
 
 /// A loaded application instance.
@@ -294,7 +294,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         height: BlockHeight,
         round: Option<u32>,
         local_time: Timestamp,
-        authenticated_signer: Option<MultiAddress>,
+        authenticated_signer: Option<Address>,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         deadline: Option<Instant>,
@@ -364,7 +364,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     /// Ensures that a call to `application_id` is not-reentrant.
     ///
     /// Returns an error if there already is an entry for `application_id` in the call stack.
-    fn check_for_reentrancy(&mut self, application_id: MultiAddress) -> Result<(), ExecutionError> {
+    fn check_for_reentrancy(&mut self, application_id: Address) -> Result<(), ExecutionError> {
         ensure!(
             !self.active_applications.contains(&application_id),
             ExecutionError::ReentrantCall(application_id)
@@ -378,7 +378,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     fn load_contract_instance(
         &mut self,
         this: SyncRuntimeHandle<UserContractInstance>,
-        id: MultiAddress,
+        id: Address,
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
             // TODO(#2927): support dynamic loading of modules on the Web
@@ -418,7 +418,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         &mut self,
         this: ContractSyncRuntimeHandle,
         authenticated: bool,
-        callee_id: MultiAddress,
+        callee_id: Address,
     ) -> Result<(Arc<Mutex<UserContractInstance>>, OperationContext), ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
 
@@ -469,7 +469,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Runs the service in a separate thread as an oracle.
     fn run_service_oracle_query(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let context = QueryContext {
@@ -513,7 +513,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     fn load_service_instance(
         &mut self,
         this: ServiceSyncRuntimeHandle,
-        id: MultiAddress,
+        id: Address,
     ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
             // TODO(#2927): support dynamic loading of modules on the Web
@@ -592,7 +592,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().block_height()
     }
 
-    fn application_id(&mut self) -> Result<MultiAddress, ExecutionError> {
+    fn application_id(&mut self) -> Result<Address, ExecutionError> {
         self.inner().application_id()
     }
 
@@ -612,15 +612,15 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().read_chain_balance()
     }
 
-    fn read_owner_balance(&mut self, owner: MultiAddress) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: Address) -> Result<Amount, ExecutionError> {
         self.inner().read_owner_balance(owner)
     }
 
-    fn read_owner_balances(&mut self) -> Result<Vec<(MultiAddress, Amount)>, ExecutionError> {
+    fn read_owner_balances(&mut self) -> Result<Vec<(Address, Amount)>, ExecutionError> {
         self.inner().read_owner_balances()
     }
 
-    fn read_balance_owners(&mut self) -> Result<Vec<MultiAddress>, ExecutionError> {
+    fn read_balance_owners(&mut self) -> Result<Vec<Address>, ExecutionError> {
         self.inner().read_balance_owners()
     }
 
@@ -743,7 +743,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(self.height)
     }
 
-    fn application_id(&mut self) -> Result<MultiAddress, ExecutionError> {
+    fn application_id(&mut self) -> Result<Address, ExecutionError> {
         Ok(self.current_application().id)
     }
 
@@ -767,19 +767,19 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             .recv_response()
     }
 
-    fn read_owner_balance(&mut self, owner: MultiAddress) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: Address) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
             .recv_response()
     }
 
-    fn read_owner_balances(&mut self) -> Result<Vec<(MultiAddress, Amount)>, ExecutionError> {
+    fn read_owner_balances(&mut self) -> Result<Vec<(Address, Amount)>, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
             .recv_response()
     }
 
-    fn read_balance_owners(&mut self) -> Result<Vec<MultiAddress>, ExecutionError> {
+    fn read_balance_owners(&mut self) -> Result<Vec<Address>, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
             .recv_response()
@@ -1072,7 +1072,7 @@ impl ContractSyncRuntime {
 
     pub(crate) fn preload_contract(
         &self,
-        id: MultiAddress,
+        id: Address,
         code: UserContractCode,
         description: UserApplicationDescription,
     ) -> Result<(), ExecutionError> {
@@ -1097,7 +1097,7 @@ impl ContractSyncRuntime {
     /// Main entry point to start executing a user action.
     pub(crate) fn run_action(
         mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         chain_id: ChainId,
         action: UserAction,
     ) -> Result<(Option<Vec<u8>>, ResourceController, TransactionTracker), ExecutionError> {
@@ -1118,7 +1118,7 @@ impl ContractSyncRuntime {
 impl ContractSyncRuntimeHandle {
     fn run_action(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         chain_id: ChainId,
         action: UserAction,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
@@ -1175,8 +1175,8 @@ impl ContractSyncRuntimeHandle {
     /// Executes a `closure` with the contract code for the `application_id`.
     fn execute(
         &mut self,
-        application_id: MultiAddress,
-        signer: Option<MultiAddress>,
+        application_id: Address,
+        signer: Option<Address>,
         closure: impl FnOnce(&mut UserContractInstance) -> Result<Option<Vec<u8>>, ExecutionError>,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
         let contract = {
@@ -1215,7 +1215,7 @@ impl ContractSyncRuntimeHandle {
 }
 
 impl ContractRuntime for ContractSyncRuntimeHandle {
-    fn authenticated_signer(&mut self) -> Result<Option<MultiAddress>, ExecutionError> {
+    fn authenticated_signer(&mut self) -> Result<Option<Address>, ExecutionError> {
         Ok(self.inner().authenticated_signer)
     }
 
@@ -1230,7 +1230,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .map(|metadata| metadata.is_bouncing))
     }
 
-    fn authenticated_caller_id(&mut self) -> Result<Option<MultiAddress>, ExecutionError> {
+    fn authenticated_caller_id(&mut self) -> Result<Option<Address>, ExecutionError> {
         let this = self.inner();
         if this.call_stack.len() <= 1 {
             return Ok(None);
@@ -1288,7 +1288,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn transfer(
         &mut self,
-        source: MultiAddress,
+        source: Address,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
@@ -1345,7 +1345,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn try_call_application(
         &mut self,
         authenticated: bool,
-        callee_id: MultiAddress,
+        callee_id: Address,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (contract, context) =
@@ -1388,7 +1388,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn query_service(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         ensure!(
@@ -1485,8 +1485,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<MultiAddress>,
-    ) -> Result<MultiAddress, ExecutionError> {
+        required_application_ids: Vec<Address>,
+    ) -> Result<Address, ExecutionError> {
         let chain_id = self.inner().chain_id;
         let block_height = self.block_height()?;
 
@@ -1607,7 +1607,7 @@ impl ServiceSyncRuntime {
     /// Loads a service into the runtime's memory.
     pub(crate) fn preload_service(
         &self,
-        id: MultiAddress,
+        id: Address,
         code: UserServiceCode,
         description: UserApplicationDescription,
     ) -> Result<(), ExecutionError> {
@@ -1661,10 +1661,10 @@ impl ServiceSyncRuntime {
         }
     }
 
-    /// Queries an application specified by its [`MultiAddress`].
+    /// Queries an application specified by its [`Address`].
     pub(crate) fn run_query(
         &mut self,
-        application_id: MultiAddress,
+        application_id: Address,
         query: Vec<u8>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let this = self.handle_mut();
@@ -1689,7 +1689,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
     /// Note that queries are not available from writable contexts.
     fn try_query_application(
         &mut self,
-        queried_id: MultiAddress,
+        queried_id: Address,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (query_context, service) = {
@@ -1744,7 +1744,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 /// A request to the service runtime actor.
 pub enum ServiceRuntimeRequest {
     Query {
-        application_id: MultiAddress,
+        application_id: Address,
         context: QueryContext,
         query: Vec<u8>,
         callback: oneshot::Sender<Result<QueryOutcome<Vec<u8>>, ExecutionError>>,

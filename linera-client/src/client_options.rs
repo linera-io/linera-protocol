@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
-    identifiers::{Account, ChainId, MessageId, ModuleId, MultiAddress},
+    identifiers::{Account, Address, ChainId, MessageId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
     vm::VmRuntime,
@@ -332,7 +332,7 @@ pub enum ClientCommand {
 
         /// The new owner (otherwise create a key pair and remember it)
         #[arg(long = "owner")]
-        owner: Option<MultiAddress>,
+        owner: Option<Address>,
 
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
@@ -604,7 +604,7 @@ pub enum ClientCommand {
         /// The application ID of a fungible token on the wallet's default chain.
         /// If none is specified, the benchmark uses the native token.
         #[arg(long)]
-        fungible_application_id: Option<linera_base::identifiers::MultiAddress>,
+        fungible_application_id: Option<linera_base::identifiers::Address>,
 
         /// If provided, will be long running, and block proposals will be sent at the
         /// provided fixed BPS rate.
@@ -878,7 +878,7 @@ pub enum ClientCommand {
 
         /// The list of required dependencies of application, if any.
         #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<MultiAddress>>,
+        required_application_ids: Option<Vec<Address>>,
     },
 
     /// Create an application, and publish the required module.
@@ -915,7 +915,7 @@ pub enum ClientCommand {
 
         /// The list of required dependencies of application, if any.
         #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<MultiAddress>>,
+        required_application_ids: Option<Vec<Address>>,
     },
 
     /// Create an unassigned key pair.
@@ -925,7 +925,7 @@ pub enum ClientCommand {
     Assign {
         /// The owner to assign.
         #[arg(long)]
-        owner: MultiAddress,
+        owner: Address,
 
         /// The ID of the message that created the chain. (This uniquely describes the
         /// chain and where it was created.)
@@ -1327,7 +1327,7 @@ pub enum ProjectCommand {
 
         /// The list of required dependencies of application, if any.
         #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<MultiAddress>>,
+        required_application_ids: Option<Vec<Address>>,
     },
 }
 
@@ -1335,11 +1335,11 @@ pub enum ProjectCommand {
 pub struct ChainOwnershipConfig {
     /// The new super owners.
     #[arg(long, num_args(0..))]
-    super_owners: Vec<MultiAddress>,
+    super_owners: Vec<Address>,
 
     /// The new regular owners.
     #[arg(long, num_args(0..))]
-    owners: Vec<MultiAddress>,
+    owners: Vec<Address>,
 
     /// Weights for the new owners.
     ///
@@ -1438,26 +1438,26 @@ pub struct ApplicationPermissionsConfig {
     /// If present, only operations from the specified applications are allowed, and
     /// no system operations. Otherwise all operations are allowed.
     #[arg(long)]
-    pub execute_operations: Option<Vec<MultiAddress>>,
+    pub execute_operations: Option<Vec<Address>>,
     /// At least one operation or incoming message from each of these applications must occur in
     /// every block.
     #[arg(long)]
-    pub mandatory_applications: Option<Vec<MultiAddress>>,
+    pub mandatory_applications: Option<Vec<Address>>,
     /// These applications are allowed to close the current chain using the system API.
     #[arg(long)]
-    pub close_chain: Option<Vec<MultiAddress>>,
+    pub close_chain: Option<Vec<Address>>,
     /// These applications are allowed to change the application permissions on the current chain
     /// using the system API.
     #[arg(long)]
-    pub change_application_permissions: Option<Vec<MultiAddress>>,
+    pub change_application_permissions: Option<Vec<Address>>,
     /// These applications are allowed to call services as oracles on the current chain using the
     /// system API.
     #[arg(long)]
-    pub call_service_as_oracle: Option<Vec<MultiAddress>>,
+    pub call_service_as_oracle: Option<Vec<Address>>,
     /// These applications are allowed to make HTTP requests on the current chain using the system
     /// API.
     #[arg(long)]
-    pub make_http_requests: Option<Vec<MultiAddress>>,
+    pub make_http_requests: Option<Vec<Address>>,
 }
 
 impl From<ApplicationPermissionsConfig> for ApplicationPermissions {

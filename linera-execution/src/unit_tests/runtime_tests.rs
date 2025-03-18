@@ -14,7 +14,7 @@ use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
-    identifiers::{ChainDescription, MultiAddress},
+    identifiers::{Address, ChainDescription},
 };
 use linera_views::batch::Batch;
 
@@ -206,8 +206,8 @@ fn create_dummy_application() -> ApplicationStatus {
 }
 
 /// Creates a dummy [`ApplicationId`].
-fn create_dummy_application_id() -> MultiAddress {
-    MultiAddress::Address32(CryptoHash::test_hash("application description"))
+fn create_dummy_application_id() -> Address {
+    Address::Address32(CryptoHash::test_hash("application description"))
 }
 
 /// Creates a fake application instance that's just a reference to the `runtime`.

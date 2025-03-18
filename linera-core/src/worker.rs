@@ -19,7 +19,7 @@ use linera_base::{
     },
     doc_scalar,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, EventId, MultiAddress},
+    identifiers::{Address, BlobId, ChainId, EventId},
     time::timer::{sleep, timeout},
 };
 use linera_chain::{
@@ -165,7 +165,7 @@ pub enum WorkerError {
     InvalidOwner,
 
     #[error("Operations in the block are not authenticated by the proper signer: {0}")]
-    InvalidSigner(MultiAddress),
+    InvalidSigner(Address),
 
     // Chaining
     #[error(
@@ -528,7 +528,7 @@ where
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
-        application_id: MultiAddress,
+        application_id: Address,
     ) -> Result<UserApplicationDescription, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::DescribeApplication {

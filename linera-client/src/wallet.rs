@@ -10,7 +10,7 @@ use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng},
     data_types::{BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainDescription, ChainId, MultiAddress},
+    identifiers::{Address, ChainDescription, ChainId},
 };
 use linera_core::{
     client::{ChainClient, PendingProposal},
@@ -25,7 +25,7 @@ use crate::{config::GenesisConfig, error, Error};
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
     pub chains: BTreeMap<ChainId, UserChain>,
-    pub unassigned_key_pairs: HashMap<MultiAddress, AccountSecretKey>,
+    pub unassigned_key_pairs: HashMap<Address, AccountSecretKey>,
     pub default: Option<ChainId>,
     pub genesis_config: GenesisConfig,
     pub testing_prng_seed: Option<u64>,
@@ -118,7 +118,7 @@ impl Wallet {
         self.unassigned_key_pairs.insert(owner, key_pair);
     }
 
-    pub fn key_pair_for_owner(&self, owner: &MultiAddress) -> Option<AccountSecretKey> {
+    pub fn key_pair_for_owner(&self, owner: &Address) -> Option<AccountSecretKey> {
         if let Some(key_pair) = self
             .unassigned_key_pairs
             .get(owner)
@@ -129,13 +129,13 @@ impl Wallet {
         self.chains
             .values()
             .filter_map(|user_chain| user_chain.key_pair.as_ref())
-            .find(|key_pair| MultiAddress::from(key_pair.public()) == *owner)
+            .find(|key_pair| Address::from(key_pair.public()) == *owner)
             .map(|key_pair| key_pair.copy())
     }
 
     pub fn assign_new_chain_to_owner(
         &mut self,
-        owner: MultiAddress,
+        owner: Address,
         chain_id: ChainId,
         timestamp: Timestamp,
     ) -> Result<(), Error> {

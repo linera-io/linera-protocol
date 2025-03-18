@@ -7,7 +7,7 @@ Account:
     - chain_id:
         TYPENAME: ChainId
     - owner:
-        TYPENAME: MultiAddress
+        TYPENAME: Address
 AccountPublicKey:
   ENUM:
     0:
@@ -28,6 +28,12 @@ AccountSignature:
       Secp256k1:
         NEWTYPE:
           TYPENAME: Secp256k1Signature
+Address:
+  ENUM:
+    0:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
 AdminOperation:
   ENUM:
     0:
@@ -49,24 +55,24 @@ ApplicationPermissions:
     - execute_operations:
         OPTION:
           SEQ:
-            TYPENAME: MultiAddress
+            TYPENAME: Address
     - mandatory_applications:
         SEQ:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - close_chain:
         SEQ:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - change_application_permissions:
         SEQ:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - call_service_as_oracle:
         OPTION:
           SEQ:
-            TYPENAME: MultiAddress
+            TYPENAME: Address
     - make_http_requests:
         OPTION:
           SEQ:
-            TYPENAME: MultiAddress
+            TYPENAME: Address
 BlobContent:
   STRUCT:
     - blob_type:
@@ -163,7 +169,7 @@ BlockHeader:
           TYPENAME: CryptoHash
     - authenticated_signer:
         OPTION:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -275,7 +281,7 @@ ChainInfoQuery:
         OPTION:
           TYPENAME: BlockHeight
     - request_owner_balance:
-        TYPENAME: MultiAddress
+        TYPENAME: Address
     - request_committees: BOOL
     - request_pending_message_bundles: BOOL
     - request_sent_certificate_hashes_in_range:
@@ -325,7 +331,7 @@ ChainManagerInfo:
         TYPENAME: Round
     - leader:
         OPTION:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
@@ -333,11 +339,11 @@ ChainOwnership:
   STRUCT:
     - super_owners:
         SEQ:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - owners:
         MAP:
           KEY:
-            TYPENAME: MultiAddress
+            TYPENAME: Address
           VALUE: U64
     - multi_leader_rounds: U32
     - open_multi_leader_rounds: BOOL
@@ -346,7 +352,7 @@ ChainOwnership:
 ChannelFullName:
   STRUCT:
     - application_id:
-        TYPENAME: MultiAddress
+        TYPENAME: Address
     - name:
         TYPENAME: ChannelName
 ChannelName:
@@ -540,7 +546,7 @@ Message:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: MultiAddress
+              TYPENAME: Address
           - bytes: BYTES
 MessageAction:
   ENUM:
@@ -585,12 +591,6 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
-MultiAddress:
-  ENUM:
-    0:
-      Address32:
-        NEWTYPE:
-          TYPENAME: CryptoHash
 NodeError:
   ENUM:
     0:
@@ -714,7 +714,7 @@ Operation:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: MultiAddress
+              TYPENAME: Address
           - bytes: BYTES
 OperationResult:
   NEWTYPESTRUCT: BYTES
@@ -754,7 +754,7 @@ OutgoingMessage:
         TYPENAME: Destination
     - authenticated_signer:
         OPTION:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - grant:
         TYPENAME: Amount
     - refund_grant_to:
@@ -768,7 +768,7 @@ PostedMessage:
   STRUCT:
     - authenticated_signer:
         OPTION:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - grant:
         TYPENAME: Amount
     - refund_grant_to:
@@ -806,7 +806,7 @@ ProposedBlock:
         TYPENAME: Timestamp
     - authenticated_signer:
         OPTION:
-          TYPENAME: MultiAddress
+          TYPENAME: Address
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
@@ -1014,7 +1014,7 @@ Secp256k1Signature:
 StreamId:
   STRUCT:
     - application_id:
-        TYPENAME: MultiAddress
+        TYPENAME: Address
     - stream_name:
         TYPENAME: StreamName
 StreamName:
@@ -1029,16 +1029,16 @@ SystemMessage:
       Credit:
         STRUCT:
           - target:
-              TYPENAME: MultiAddress
+              TYPENAME: Address
           - amount:
               TYPENAME: Amount
           - source:
-              TYPENAME: MultiAddress
+              TYPENAME: Address
     1:
       Withdraw:
         STRUCT:
           - owner:
-              TYPENAME: MultiAddress
+              TYPENAME: Address
           - amount:
               TYPENAME: Amount
           - recipient:
@@ -1069,7 +1069,7 @@ SystemOperation:
       Transfer:
         STRUCT:
           - owner:
-              TYPENAME: MultiAddress
+              TYPENAME: Address
           - recipient:
               TYPENAME: Recipient
           - amount:
@@ -1078,7 +1078,7 @@ SystemOperation:
       Claim:
         STRUCT:
           - owner:
-              TYPENAME: MultiAddress
+              TYPENAME: Address
           - target_id:
               TYPENAME: ChainId
           - recipient:
@@ -1096,11 +1096,11 @@ SystemOperation:
         STRUCT:
           - super_owners:
               SEQ:
-                TYPENAME: MultiAddress
+                TYPENAME: Address
           - owners:
               SEQ:
                 TUPLE:
-                  - TYPENAME: MultiAddress
+                  - TYPENAME: Address
                   - U64
           - multi_leader_rounds: U32
           - open_multi_leader_rounds: BOOL
@@ -1153,7 +1153,7 @@ SystemOperation:
           - instantiation_argument: BYTES
           - required_application_ids:
               SEQ:
-                TYPENAME: MultiAddress
+                TYPENAME: Address
     13:
       Admin:
         NEWTYPE:

@@ -11,7 +11,7 @@ use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::{Operation, Parameters};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{Amount, MultiAddress, WithServiceAbi},
+    linera_base_types::{Address, Amount, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,
 };
@@ -56,7 +56,7 @@ impl Service for FungibleTokenService {
 
 #[Object]
 impl FungibleTokenService {
-    async fn accounts(&self) -> &MapView<MultiAddress, Amount> {
+    async fn accounts(&self) -> &MapView<Address, Amount> {
         &self.state.accounts
     }
 
