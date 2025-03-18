@@ -410,10 +410,7 @@ pub trait ExecutionRuntimeContext {
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    /// Returns all requested blobs, in the specified order.
-    ///
-    /// If any blob cannot be found, an error is returned instead.
-    async fn get_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Blob>, ViewError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
 
@@ -1087,17 +1084,12 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Blob>, ViewError> {
-        let mut missing = Vec::new();
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            match self.blobs.get(blob_id) {
-                None => missing.push(*blob_id),
-                Some(blob) => blobs.push(blob.clone()),
-            }
-        }
-        linera_base::ensure!(missing.is_empty(), ViewError::BlobsNotFound(missing));
-        Ok(blobs)
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+        Ok(self
+            .blobs
+            .get(&blob_id)
+            .ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?
+            .clone())
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {

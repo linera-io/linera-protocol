@@ -17,7 +17,9 @@ use linera_base::{
         UserApplicationDescription,
     },
     ensure,
-    identifiers::{ChainId, ChannelFullName, Destination, MessageId, Owner, UserApplicationId},
+    identifiers::{
+        BlobType, ChainId, ChannelFullName, Destination, MessageId, Owner, UserApplicationId,
+    },
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -370,10 +372,9 @@ where
         &mut self,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, ChainError> {
-        // Using a throwaway resource controller: This is only used locally, off-chain.
         self.execution_state
             .system
-            .describe_application(application_id, None, &mut ResourceController::default())
+            .describe_application(application_id, None)
             .await
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
@@ -767,11 +768,13 @@ where
             .track_executed_block_size_sequence_extension(0, block.operations.len())
             .with_execution_context(ChainExecutionContext::Block)?;
         for blob in published_blobs {
-            resource_controller
-                .with_state(&mut self.execution_state.system)
-                .await?
-                .track_blob_published(blob.content())
-                .with_execution_context(ChainExecutionContext::Block)?;
+            if blob.content().blob_type() == BlobType::Data {
+                resource_controller
+                    .with_state(&mut self.execution_state.system)
+                    .await?
+                    .track_blob_published(blob.content())
+                    .with_execution_context(ChainExecutionContext::Block)?;
+            }
             self.execution_state.system.used_blobs.insert(&blob.id())?;
         }
 
@@ -895,11 +898,13 @@ where
                 ))
                 .with_execution_context(chain_execution_context)?;
             for blob in &txn_outcome.blobs {
-                resource_controller
-                    .with_state(&mut self.execution_state.system)
-                    .await?
-                    .track_blob_published(blob.content())
-                    .with_execution_context(chain_execution_context)?;
+                if blob.content().blob_type() == BlobType::Data {
+                    resource_controller
+                        .with_state(&mut self.execution_state.system)
+                        .await?
+                        .track_blob_published(blob.content())
+                        .with_execution_context(chain_execution_context)?;
+                }
             }
             resource_controller
                 .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)

@@ -213,9 +213,7 @@ where
         };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self
-            .load_contract(application_id, txn_tracker, resource_controller)
-            .await?;
+        let (code, description) = self.load_contract(application_id, txn_tracker).await?;
         let txn_tracker_moved = mem::take(txn_tracker);
         let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let runtime = ContractSyncRuntime::new(
@@ -428,9 +426,7 @@ where
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self
-            .load_service(application_id, None, &mut ResourceController::default())
-            .await?;
+        let (code, description) = self.load_service(application_id, None).await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);

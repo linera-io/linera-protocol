@@ -17,7 +17,7 @@ use linera_base::prometheus_util::{
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -67,7 +67,6 @@ where
         &mut self,
         id: UserApplicationId,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
@@ -79,7 +78,7 @@ where
             }
             None => {
                 self.system
-                    .describe_application(id, Some(txn_tracker), resource_controller)
+                    .describe_application(id, Some(txn_tracker))
                     .await?
             }
         };
@@ -95,7 +94,6 @@ where
         &mut self,
         id: UserApplicationId,
         txn_tracker: Option<&mut TransactionTracker>,
-        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
@@ -108,11 +106,7 @@ where
                 let blob = description.clone();
                 bcs::from_bytes(blob.bytes())?
             }
-            None => {
-                self.system
-                    .describe_application(id, txn_tracker, resource_controller)
-                    .await?
-            }
+            None => self.system.describe_application(id, txn_tracker).await?,
         };
         let code = self
             .context()
@@ -136,9 +130,7 @@ where
                 callback,
                 mut txn_tracker,
             } => {
-                let (code, description) = self
-                    .load_contract(id, &mut txn_tracker, resource_controller)
-                    .await?;
+                let (code, description) = self.load_contract(id, &mut txn_tracker).await?;
                 callback.respond((code, description, txn_tracker))
             }
             #[cfg(not(web))]
@@ -147,9 +139,7 @@ where
                 callback,
                 mut txn_tracker,
             } => {
-                let (code, description) = self
-                    .load_service(id, Some(&mut txn_tracker), resource_controller)
-                    .await?;
+                let (code, description) = self.load_service(id, Some(&mut txn_tracker)).await?;
                 callback.respond((code, description, txn_tracker))
             }
 
@@ -361,7 +351,6 @@ where
                         parameters,
                         required_application_ids,
                         txn_tracker,
-                        resource_controller,
                     )
                     .await?;
                 callback.respond(Ok(create_application_result));
@@ -414,21 +403,26 @@ where
 
             ReadBlobContent { blob_id, callback } => {
                 let blob = self.system.read_blob_content(blob_id).await?;
-                let is_new = self
-                    .system
-                    .blob_used(None, resource_controller, blob_id, blob.bytes().len())
-                    .await?;
+                if blob_id.blob_type == BlobType::Data {
+                    resource_controller
+                        .with_state(&mut self.system)
+                        .await?
+                        .track_blob_read(blob.bytes().len() as u64)?;
+                }
+                let is_new = self.system.blob_used(None, blob_id).await?;
                 callback.respond((blob, is_new))
             }
 
             AssertBlobExists { blob_id, callback } => {
                 self.system.assert_blob_exists(blob_id).await?;
                 // Treating this as reading a size-0 blob for fee purposes.
-                callback.respond(
-                    self.system
-                        .blob_used(None, resource_controller, blob_id, 0)
-                        .await?,
-                )
+                if blob_id.blob_type == BlobType::Data {
+                    resource_controller
+                        .with_state(&mut self.system)
+                        .await?
+                        .track_blob_read(0)?;
+                }
+                callback.respond(self.system.blob_used(None, blob_id).await?)
             }
 
             GetApplicationPermissions { callback } => {
