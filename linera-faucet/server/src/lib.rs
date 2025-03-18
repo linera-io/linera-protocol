@@ -21,6 +21,7 @@ use linera_client::{
 };
 use linera_core::data_types::ClientOutcome;
 use linera_storage::{Clock as _, Storage};
+use local_ip_address::local_ip;
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
 use tracing::info;
@@ -282,7 +283,9 @@ where
             .layer(Extension(self.clone()))
             .layer(CorsLayer::permissive());
 
+        let ip_addr = local_ip().unwrap_or(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
         info!("GraphiQL IDE: http://localhost:{}", port);
+        info!("              http://{}:{}", ip_addr_, port);
 
         ChainListener::new(self.config.clone())
             .run(Arc::clone(&self.context), self.storage.clone())
