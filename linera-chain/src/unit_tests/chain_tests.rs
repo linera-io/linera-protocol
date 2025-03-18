@@ -317,7 +317,11 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
         .map(Duration::from_millis);
 
     let (application, application_id, mut chain, block, time) =
-        prepare_test_with_dummy_mock_application(maximum_service_oracle_execution_ms).await?;
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_service_oracle_execution_ms,
+            ..ResourceControlPolicy::default()
+        })
+        .await?;
 
     application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
         for _ in 0..service_oracle_call_count {
@@ -359,7 +363,11 @@ async fn test_service_as_oracle_exceeding_time_limit(
         .map(Duration::from_millis);
 
     let (application, application_id, mut chain, block, time) =
-        prepare_test_with_dummy_mock_application(maximum_service_oracle_execution_ms).await?;
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_service_oracle_execution_ms,
+            ..ResourceControlPolicy::default()
+        })
+        .await?;
 
     application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
         for _ in 0..service_oracle_call_count {
@@ -400,7 +408,7 @@ async fn test_service_as_oracle_exceeding_time_limit(
 /// creates a block proposal with a dummy operation.
 #[cfg(feature = "unstable-oracles")]
 async fn prepare_test_with_dummy_mock_application(
-    maximum_service_oracle_execution_ms: u64,
+    policy: ResourceControlPolicy,
 ) -> anyhow::Result<(
     MockApplication,
     ApplicationId,
@@ -425,10 +433,7 @@ async fn prepare_test_with_dummy_mock_application(
                     account_public_key: AccountPublicKey::test_key(1),
                 },
             )]),
-            ResourceControlPolicy {
-                maximum_service_oracle_execution_ms,
-                ..ResourceControlPolicy::default()
-            },
+            policy,
         ),
     );
 
