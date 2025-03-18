@@ -23,6 +23,7 @@ serde_json.workspace = true
 tokio.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
+local-ip-address.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
