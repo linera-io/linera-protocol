@@ -566,6 +566,63 @@ async fn test_contract_http_response_size_limit(
     chain.execute_block(&block, time, None, &[], None).await
 }
 
+/// Tests service HTTP response size limit.
+#[cfg(feature = "unstable-oracles")]
+#[test_case(150, 140, 139 => matches Ok(_); "smaller than both limits")]
+#[test_case(140, 150, 142 => matches Ok(_); "larger than oracle limit")]
+#[test_case(
+    150, 140, 141
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than http limit"
+)]
+#[test_case(
+    140, 150, 1000
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than both limits"
+)]
+#[tokio::test]
+async fn test_service_http_response_size_limit(
+    oracle_limit: u64,
+    http_limit: u64,
+    response_size: usize,
+) -> Result<BlockExecutionOutcome, ChainError> {
+    let response_header_size = 84;
+    let response_body_size = response_size - response_header_size;
+
+    let http_server = HttpServer::start(Router::new().route(
+        "/",
+        get(move || async move { vec![b'a'; response_body_size] }),
+    ))
+    .await
+    .expect("Failed to start test HTTP server");
+
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_oracle_response_bytes: oracle_limit,
+            maximum_http_response_bytes: http_limit,
+            http_request_allow_list: BTreeSet::from_iter([http_server.hostname()]),
+            ..ResourceControlPolicy::default()
+        })
+        .await
+        .expect("Failed to set up test with mock application");
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        runtime.query_service(application_id, vec![])?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _, _| {
+        runtime.perform_http_request(http::Request::get(http_server.url()))?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    chain.execute_block(&block, time, None, &[], None).await
+}
+
 /// Sets up a test with a dummy [`MockApplication`].
 ///
 /// Creates and initializes a [`ChainStateView`] configured with the
