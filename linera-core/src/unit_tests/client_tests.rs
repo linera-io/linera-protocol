@@ -1134,18 +1134,19 @@ where
 {
     // To test that no fees are paid for reading or publishing committee blobs, we set the price
     // higher than the chain balance.
+    let initial_balance = Amount::from_tokens(3);
     let mut builder =
         TestBuilder::new(storage_builder, 4, 1)
             .await?
             .with_policy(ResourceControlPolicy {
                 maximum_fuel_per_block: 30_000,
-                blob_read: Amount::from_tokens(10),
-                blob_published: Amount::from_tokens(10),
-                blob_byte_read: Amount::from_tokens(10),
-                blob_byte_published: Amount::from_tokens(10),
+                blob_read: initial_balance + Amount::ONE,
+                blob_published: initial_balance + Amount::ONE,
+                blob_byte_read: initial_balance + Amount::ONE,
+                blob_byte_published: initial_balance + Amount::ONE,
                 ..ResourceControlPolicy::default()
             });
-    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let admin = builder.add_root_chain(0, initial_balance).await?;
     let user = builder.add_root_chain(1, Amount::ZERO).await?;
     let validators = builder.initial_committee.validators().clone();
 
