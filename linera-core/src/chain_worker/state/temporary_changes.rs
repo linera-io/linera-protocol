@@ -8,11 +8,14 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ArithmeticError, Blob, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, UserApplicationId},
+    identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, Owner, UserApplicationId},
 };
-use linera_chain::data_types::{
-    BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
-    ProposedBlock,
+use linera_chain::{
+    data_types::{
+        BlockExecutionOutcome, BlockProposal, ExecutedBlock, IncomingBundle, Medium, MessageAction,
+        ProposalContent, ProposedBlock,
+    },
+    manager,
 };
 use linera_execution::{ChannelSubscription, Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
@@ -151,7 +154,49 @@ where
         Ok((executed_block, response))
     }
 
-    /// Validates a block proposed to extend this chain.
+    /// Validates a proposal's signatures; returns `manager::Outcome::Skip` if we already voted
+    /// for it.
+    pub(super) async fn check_proposed_block(
+        &self,
+        proposal: &BlockProposal,
+    ) -> Result<manager::Outcome, WorkerError> {
+        proposal
+            .check_invariants()
+            .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
+        proposal.check_signature()?;
+        let BlockProposal {
+            content,
+            public_key,
+            validated_block_certificate,
+            signature: _,
+        } = proposal;
+        let block = &content.block;
+
+        let owner = Owner::from(public_key);
+        let chain = &self.0.chain;
+        // Check the epoch.
+        let (epoch, committee) = chain.current_committee()?;
+        super::check_block_epoch(epoch, block.chain_id, block.epoch)?;
+        let policy = committee.policy().clone();
+        block.check_proposal_size(policy.maximum_block_proposal_size)?;
+        // Check the authentication of the block.
+        ensure!(
+            chain.manager.verify_owner(proposal),
+            WorkerError::InvalidOwner
+        );
+        if let Some(lite_certificate) = validated_block_certificate {
+            // Verify that this block has been validated by a quorum before.
+            lite_certificate.check(committee)?;
+        } else if let Some(signer) = block.authenticated_signer {
+            // Check the authentication of the operations in the new block.
+            ensure!(signer == owner, WorkerError::InvalidSigner(signer));
+        }
+        // Check if the chain is ready for this new block proposal.
+        chain.tip_state.get().verify_block_chaining(block)?;
+        Ok(chain.manager.check_proposed_block(proposal)?)
+    }
+
+    /// Validates and executes a block proposed to extend this chain.
     pub(super) async fn validate_proposal_content(
         &mut self,
         content: &ProposalContent,

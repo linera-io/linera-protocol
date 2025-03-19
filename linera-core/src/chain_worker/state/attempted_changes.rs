@@ -117,11 +117,14 @@ where
         Ok((info, actions))
     }
 
-    /// Validates a proposal's signatures and blobs.
-    pub(super) async fn validate_block(
+    /// Tries to load all blobs published in this proposal.
+    ///
+    /// If they cannot be found, it creates an entry in `pending_proposed_blobs` so they can be
+    /// submitted one by one.
+    pub(super) async fn load_proposal_blobs(
         &mut self,
         proposal: &BlockProposal,
-    ) -> Result<Option<Vec<Blob>>, WorkerError> {
+    ) -> Result<Vec<Blob>, WorkerError> {
         let BlockProposal {
             content:
                 ProposalContent {
@@ -134,30 +137,7 @@ where
             signature: _,
         } = proposal;
 
-        let owner: Owner = public_key.into();
-        let chain = &self.state.chain;
-        // Check the epoch.
-        let (epoch, committee) = chain.current_committee()?;
-        check_block_epoch(epoch, block.chain_id, block.epoch)?;
-        let policy = committee.policy().clone();
-        block.check_proposal_size(policy.maximum_block_proposal_size)?;
-        // Check the authentication of the block.
-        ensure!(
-            chain.manager.verify_owner(proposal),
-            WorkerError::InvalidOwner
-        );
-        if let Some(lite_certificate) = validated_block_certificate {
-            // Verify that this block has been validated by a quorum before.
-            lite_certificate.check(committee)?;
-        } else if let Some(signer) = block.authenticated_signer {
-            // Check the authentication of the operations in the new block.
-            ensure!(signer == owner, WorkerError::InvalidSigner(signer));
-        }
-        // Check if the chain is ready for this new block proposal.
-        chain.tip_state.get().verify_block_chaining(block)?;
-        if chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
-            return Ok(None);
-        }
+        let owner = Owner::from(public_key);
         let mut maybe_blobs = self
             .state
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)
@@ -183,7 +163,7 @@ where
             .iter()
             .filter_map(|blob_id| maybe_blobs.remove(blob_id).flatten())
             .collect::<Vec<_>>();
-        Ok(Some(published_blobs))
+        Ok(published_blobs)
     }
 
     /// Votes for a block proposal for the next block for this chain.

@@ -23,6 +23,7 @@ use linera_chain::{
     data_types::{
         BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, ProposedBlock, Target,
     },
+    manager,
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
@@ -207,19 +208,20 @@ where
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         self.ensure_is_active()?;
-        proposal
-            .check_invariants()
-            .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
-        proposal.check_signature()?;
-        let Some(published_blobs) = ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+        if ChainWorkerStateWithTemporaryChanges::new(&mut *self)
             .await
-            .validate_block(&proposal)
+            .check_proposed_block(&proposal)
             .await?
-        else {
+            == manager::Outcome::Skip
+        {
             // Skipping: We already voted for this block.
             let info = ChainInfoResponse::new(&self.chain, self.config.key_pair());
             return Ok((info, NetworkActions::default()));
         };
+        let published_blobs = ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+            .await
+            .load_proposal_blobs(&proposal)
+            .await?;
         let validation_outcome = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .validate_proposal_content(&proposal.content, &published_blobs)
