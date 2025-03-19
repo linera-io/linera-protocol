@@ -466,7 +466,7 @@ View or update the resource control policy
 * `--message <MESSAGE>` — Set the base price of sending a message from a block..
 * `--message-byte <MESSAGE_BYTE>` — Set the additional price for each byte in the argument of a user message
 * `--service-as-oracle-query <SERVICE_AS_ORACLE_QUERY>` — Set the price per query to a service as an oracle
-* `--http-request <HTTP_REQUEST>` — Set the price for a performing an HTTP request
+* `--http-request <HTTP_REQUEST>` — Set the price for performing an HTTP request
 * `--maximum-fuel-per-block <MAXIMUM_FUEL_PER_BLOCK>` — Set the maximum amount of fuel per block
 * `--maximum-service-oracle-execution-ms <MAXIMUM_SERVICE_ORACLE_EXECUTION_MS>` — Set the maximum time in milliseconds that a block can spend executing services as oracles
 * `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block, in bytes
@@ -525,7 +525,7 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--message-price <MESSAGE_PRICE>` — Set the base price of sending a message from a block.. (This will overwrite value from `--policy-config`)
 * `--message-byte-price <MESSAGE_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user message. (This will overwrite value from `--policy-config`)
 * `--service-as-oracle-query-price <SERVICE_AS_ORACLE_QUERY_PRICE>` — Set the price per query to a service as an oracle
-* `--http-request-price <HTTP_REQUEST_PRICE>` — Set the price for a performing an HTTP request
+* `--http-request-price <HTTP_REQUEST_PRICE>` — Set the price for performing an HTTP request
 * `--maximum-fuel-per-block <MAXIMUM_FUEL_PER_BLOCK>` — Set the maximum amount of fuel per block. (This will overwrite value from `--policy-config`)
 * `--maximum-service-oracle-execution-ms <MAXIMUM_SERVICE_ORACLE_EXECUTION_MS>` — Set the maximum time in milliseconds that a block can spend executing services as oracles
 * `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block. (This will overwrite value from `--policy-config`)
