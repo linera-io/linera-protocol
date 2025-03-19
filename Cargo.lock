@@ -4509,6 +4509,7 @@ dependencies = [
  "assert_matches",
  "async-graphql",
  "async-trait",
+ "axum",
  "bcs",
  "cfg_aliases",
  "custom_debug_derive",

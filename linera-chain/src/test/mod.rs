@@ -3,6 +3,8 @@
 
 //! Test utilities
 
+mod http_server;
+
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, BlockHeight, Round, Timestamp},
@@ -15,6 +17,7 @@ use linera_execution::{
     Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
 };
 
+pub use self::http_server::HttpServer;
 use crate::{
     block::ConfirmedBlock,
     data_types::{
