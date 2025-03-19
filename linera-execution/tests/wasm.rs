@@ -3,7 +3,7 @@
 
 #![cfg(with_wasm_runtime)]
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
@@ -107,6 +107,7 @@ async fn test_fuel_for_counter_wasm_application(
             context,
             Timestamp::from(0),
             Operation::user_without_abi(app_id, increment).unwrap(),
+            &BTreeMap::new(),
             &mut txn_tracker,
             &mut controller,
         )

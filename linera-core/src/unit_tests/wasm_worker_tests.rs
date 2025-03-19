@@ -10,7 +10,7 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use assert_matches::assert_matches;
 use linera_base::{
@@ -285,6 +285,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
+            &BTreeMap::new(),
             &mut TransactionTracker::new(
                 0,
                 0,

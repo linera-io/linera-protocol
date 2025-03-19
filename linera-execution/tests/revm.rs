@@ -3,7 +3,7 @@
 
 #![cfg(with_revm)]
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
@@ -131,6 +131,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             operation_context,
             Timestamp::from(0),
             operation,
+            &BTreeMap::new(),
             &mut txn_tracker,
             &mut controller,
         )
