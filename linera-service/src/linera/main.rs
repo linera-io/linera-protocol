@@ -646,8 +646,7 @@ impl Runnable for Job {
                                         byte_read: byte_read.unwrap_or(existing_policy.byte_read),
                                         byte_written: byte_written
                                             .unwrap_or(existing_policy.byte_written),
-                                        blob_read: blob_read
-                                            .unwrap_or(existing_policy.blob_read),
+                                        blob_read: blob_read.unwrap_or(existing_policy.blob_read),
                                         blob_published: blob_published
                                             .unwrap_or(existing_policy.blob_published),
                                         blob_byte_read: blob_byte_read
@@ -694,12 +693,9 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.maximum_http_response_bytes),
                                         http_request_timeout_ms: http_request_timeout_ms
                                             .unwrap_or(existing_policy.http_request_timeout_ms),
-                                        http_request_allow_list: match http_request_allow_list {
-                                            None => existing_policy.http_request_allow_list,
-                                            Some(http_request_allow_list) => {
-                                                BTreeSet::from_iter(http_request_allow_list)
-                                            }
-                                        },
+                                        http_request_allow_list: http_request_allow_list
+                                            .map(BTreeSet::from_iter)
+                                            .unwrap_or(existing_policy.http_request_allow_list),
                                     };
                                     info!("{policy}");
                                     if committee.policy() == &policy {
@@ -1449,12 +1445,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 write_operation: write_operation_price.unwrap_or(existing_policy.write_operation),
                 byte_read: byte_read_price.unwrap_or(existing_policy.byte_read),
                 byte_written: byte_written_price.unwrap_or(existing_policy.byte_written),
-                blob_read: blob_read_price
-                    .unwrap_or(existing_policy.blob_read),
-                blob_published: blob_published_price
-                    .unwrap_or(existing_policy.blob_published),
-                blob_byte_read: blob_byte_read_price
-                    .unwrap_or(existing_policy.blob_byte_read),
+                blob_read: blob_read_price.unwrap_or(existing_policy.blob_read),
+                blob_published: blob_published_price.unwrap_or(existing_policy.blob_published),
+                blob_byte_read: blob_byte_read_price.unwrap_or(existing_policy.blob_byte_read),
                 blob_byte_published: blob_byte_published_price
                     .unwrap_or(existing_policy.blob_byte_published),
                 byte_stored: byte_stored_price.unwrap_or(existing_policy.byte_stored),
