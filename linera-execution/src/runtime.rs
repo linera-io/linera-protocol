@@ -506,6 +506,9 @@ impl SyncRuntimeInternal<UserContractInstance> {
             operations,
         } = result?;
 
+        self.resource_controller
+            .track_service_oracle_response(response.len())?;
+
         self.scheduled_operations.extend(operations);
         Ok(response)
     }
