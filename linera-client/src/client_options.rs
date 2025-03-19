@@ -571,7 +571,7 @@ pub enum ClientCommand {
         #[arg(long)]
         service_as_oracle_query: Option<Amount>,
 
-        /// Set the price for a performing an HTTP request.
+        /// Set the price for performing an HTTP request.
         #[arg(long)]
         http_request: Option<Amount>,
 
@@ -780,7 +780,7 @@ pub enum ClientCommand {
         #[arg(long)]
         service_as_oracle_query_price: Option<Amount>,
 
-        /// Set the price for a performing an HTTP request.
+        /// Set the price for performing an HTTP request.
         #[arg(long)]
         http_request_price: Option<Amount>,
 

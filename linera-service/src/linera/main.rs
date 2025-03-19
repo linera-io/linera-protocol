@@ -1479,13 +1479,10 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     .unwrap_or(existing_policy.maximum_http_response_bytes),
                 http_request_timeout_ms: http_request_timeout_ms
                     .unwrap_or(existing_policy.http_request_timeout_ms),
-                http_request_allow_list: match http_request_allow_list {
-                    None => existing_policy.http_request_allow_list,
-                    Some(http_request_allow_list) => http_request_allow_list
-                        .iter()
-                        .cloned()
-                        .collect::<BTreeSet<_>>(),
-                },
+                http_request_allow_list: http_request_allow_list
+                    .as_ref()
+                    .map(|list| list.iter().cloned().collect())
+                    .unwrap_or(existing_policy.http_request_allow_list),
             };
             let timestamp = start_timestamp
                 .map(|st| {
