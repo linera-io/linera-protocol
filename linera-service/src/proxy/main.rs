@@ -77,6 +77,10 @@ pub struct ProxyOptions {
     /// Path to the file describing the initial user chains (aka genesis state)
     #[arg(long = "genesis")]
     genesis_config_path: PathBuf,
+
+    /// Runs a specific proxy instance.
+    #[arg(long)]
+    id: Option<usize>,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -95,6 +99,7 @@ struct ProxyContext {
     genesis_config: GenesisConfig,
     send_timeout: Duration,
     recv_timeout: Duration,
+    id: usize
 }
 
 impl ProxyContext {
@@ -106,6 +111,7 @@ impl ProxyContext {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             genesis_config,
+            id: options.id.unwrap_or(0),
         })
     }
 }
@@ -146,6 +152,7 @@ where
                     context.recv_timeout,
                     tls,
                     storage,
+                    context.id
                 ))
             }
             (
@@ -241,24 +248,26 @@ impl<S> SimpleProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port, pyroscope_port = self.internal_config.pyroscope_port), err)]
+    // TODO
+    //#[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port, pyroscope_port = self.internal_config.pyroscope_port), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting simple server");
         let mut join_set = JoinSet::new();
         let address = self.get_listen_address(self.public_config.port);
 
-        #[cfg(with_metrics)]
-        {
-            prometheus_server::start_metrics(
-                self.get_listen_address(self.internal_config.metrics_port),
-                shutdown_signal.clone(),
-            );
-            pyroscope_server::start_pyroscope(
-                self.get_pyroscope_address(),
-                "proxy".to_string(),
-                shutdown_signal.clone(),
-            )?;
-        }
+        // TODO
+        // #[cfg(with_metrics)]
+        // {
+        //     prometheus_server::start_metrics(
+        //         self.get_listen_address(self.internal_config.metrics_port),
+        //         shutdown_signal.clone(),
+        //     );
+        //     pyroscope_server::start_pyroscope(
+        //         self.get_pyroscope_address(),
+        //         "proxy".to_string(),
+        //         shutdown_signal.clone(),
+        //     )?;
+        // }
 
         self.public_config
             .protocol
@@ -275,15 +284,16 @@ where
         SocketAddr::from(([0, 0, 0, 0], port))
     }
 
-    #[cfg(with_metrics)]
-    fn get_pyroscope_address(&self) -> String {
-        format!(
-            "{}://{}:{}",
-            self.internal_config.protocol.scheme(),
-            self.internal_config.host,
-            self.internal_config.pyroscope_port
-        )
-    }
+    // TODO
+    // #[cfg(with_metrics)]
+    // fn get_pyroscope_address(&self) -> String {
+    //     format!(
+    //         "{}://{}:{}",
+    //         self.internal_config.protocol.scheme(),
+    //         self.internal_config.host,
+    //         self.internal_config.pyroscope_port
+    //     )
+    // }
 
     async fn try_proxy_message(
         message: RpcMessage,

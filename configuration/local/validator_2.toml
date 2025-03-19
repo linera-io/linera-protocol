@@ -1,15 +1,18 @@
 server_config_path = "server_2.json"
 host = "127.0.0.1"
 port = 9200
-internal_host = "127.0.0.1"
-internal_port = 10200
-metrics_port = 11200
-pyroscope_host = "127.0.0.1"
-pyroscope_port = 4050
 [external_protocol]
 Grpc = "ClearText"
 [internal_protocol]
 Grpc = "ClearText"
+
+[[proxies]]
+host = "127.0.0.1"
+port = 20100
+metrics_host = "127.0.0.1"
+metrics_port = 11200
+pyroscope_host = "127.0.0.1"
+pyroscope_port = 4050
 
 [[shards]]
 host = "127.0.0.1"
