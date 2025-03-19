@@ -50,7 +50,7 @@ features = ["web", "wasmer"]
 
 [dependencies.linera-execution]
 path = "../linera-protocol/linera-execution"
-features = ["web", "wasmer", "test"]
+features = ["web", "wasmer"]
 
 [dependencies.linera-rpc]
 path = "../linera-protocol/linera-rpc"
