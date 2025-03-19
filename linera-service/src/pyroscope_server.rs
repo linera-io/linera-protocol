@@ -10,9 +10,10 @@ pub fn start_pyroscope(
     address: String,
     application_name: String,
     shutdown_signal: CancellationToken,
+    sample_rate: u32,
 ) -> Result<(), PyroscopeError> {
     info!("Starting to push pyroscope data to {:?}", address);
-    let pprof_config = PprofConfig::new().sample_rate(100);
+    let pprof_config = PprofConfig::new().sample_rate(sample_rate);
     let backend_impl = pprof_backend(pprof_config);
 
     let agent = PyroscopeAgent::builder(address, application_name)

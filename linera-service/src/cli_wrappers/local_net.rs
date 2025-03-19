@@ -432,6 +432,7 @@ impl LocalNet {
         let internal_port = Self::internal_port(n);
         let metrics_port = Self::proxy_metrics_port(n);
         let pyroscope_port = Self::proxy_pyroscope_port(n);
+        let pyroscope_sample_rate = 100;
         let external_protocol = self.network.external.toml();
         let internal_protocol = self.network.internal.toml();
         let external_host = self.network.external.localhost();
@@ -447,6 +448,7 @@ impl LocalNet {
                 metrics_port = {metrics_port}
                 pyroscope_port = {pyroscope_port}
                 pyroscope_host = "{pyroscope_host}"
+                pyroscope_sample_rate = {pyroscope_sample_rate}
                 external_protocol = {external_protocol}
                 internal_protocol = {internal_protocol}
             "#
@@ -464,6 +466,7 @@ impl LocalNet {
                 metrics_port = {shard_metrics_port}
                 pyroscope_host = "{pyroscope_host}"
                 pyroscope_port = {shard_pyroscope_port}
+                pyroscope_sample_rate = {pyroscope_sample_rate}
                 "#
             ));
         }

@@ -342,6 +342,7 @@ impl LocalKubernetesNet {
         let internal_port = 20100;
         let metrics_port = 21100;
         let pyroscope_port = 4040;
+        let pyroscope_sample_rate = 10;
         let mut content = format!(
             r#"
                 server_config_path = "server_{n}.json"
@@ -352,6 +353,7 @@ impl LocalKubernetesNet {
                 metrics_port = {metrics_port}
                 pyroscope_host = "linera-core-pyroscope.default.svc.cluster.local"
                 pyroscope_port = {pyroscope_port}
+                pyroscope_sample_rate = {pyroscope_sample_rate}
                 [external_protocol]
                 Grpc = "ClearText"
                 [internal_protocol]
@@ -371,6 +373,7 @@ impl LocalKubernetesNet {
                 metrics_port = {shard_metrics_port}
                 pyroscope_host = "linera-core-pyroscope.default.svc.cluster.local"
                 pyroscope_port = {shard_pyroscope_port}
+                pyroscope_sample_rate = {pyroscope_sample_rate}
                 "#
             ));
         }
