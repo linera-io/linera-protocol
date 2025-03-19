@@ -56,6 +56,8 @@ pub const OPTIONS: ClientOptions = ClientOptions {
     blanket_message_policy: linera_core::client::BlanketMessagePolicy::Accept,
     restrict_chain_ids_to: None,
     long_lived_services: false,
+    blob_download_timeout: std::time::Duration::from_millis(1000),
+    grace_period: linera_core::DEFAULT_GRACE_PERIOD,
 
     // TODO(linera-protocol#2944): separate these out from the
     // `ClientOptions` struct, since they apply only to the CLI/native
@@ -257,67 +259,25 @@ impl Frontend {
         query: &str,
     ) -> Result<String, JsError> {
         let chain_client = self.0.default_chain_client().await?;
-        let response = chain_client
+        let linera_execution::QueryOutcome {
+            response: linera_execution::QueryResponse::User(response),
+            operations,
+        } = chain_client
             .query_application(linera_execution::Query::User {
                 application_id: application_id.parse()?,
                 bytes: query.as_bytes().to_vec(),
             })
-            .await?;
-        let linera_execution::Response::User(response) = response else {
+            .await?
+        else {
             panic!("system response to user query")
         };
-        Ok(String::from_utf8(response)?)
-    }
-
-    /// Mutate an application's state with the given mutation.
-    ///
-    /// # Errors
-    /// If the application ID or mutation is invalid.
-    ///
-    /// # Panics
-    /// If the response from the service is not a GraphQL response
-    /// containing operations to execute.
-    #[wasm_bindgen]
-    // TODO(linera-protocol#2911) this function assumes GraphQL service output
-    pub async fn mutate_application(
-        &self,
-        application_id: &str,
-        mutation: &str,
-    ) -> Result<(), JsError> {
-        fn array_to_bytes(array: &[serde_json::Value]) -> Vec<u8> {
-            array
-                .iter()
-                .map(|value| value.as_u64().unwrap().try_into().unwrap())
-                .collect()
-        }
-
-        let chain_client = self.0.default_chain_client().await?;
-        let application_id = application_id.parse()?;
-        let response = chain_client
-            .query_application(linera_execution::Query::User {
-                application_id,
-                bytes: mutation.as_bytes().to_vec(),
-            })
-            .await?;
-        let linera_execution::Response::User(response) = response else {
-            panic!("system response to user query")
-        };
-        let response: serde_json::Value = serde_json::from_slice(&response)?;
-        let data = &response["data"];
-        tracing::info!("data: {data:?}");
-        let operations: Vec<_> = data
-            .as_object()
-            .unwrap()
-            .values()
-            .map(|value| linera_execution::Operation::User {
-                application_id,
-                bytes: array_to_bytes(value.as_array().unwrap()),
-            })
-            .collect();
 
         let _hash = loop {
             use linera_core::data_types::ClientOutcome::{Committed, WaitForTimeout};
-            let timeout = match chain_client.execute_operations(operations.clone()).await? {
+            let timeout = match chain_client
+                .execute_operations(operations.clone(), vec![])
+                .await?
+            {
                 Committed(certificate) => break certificate.value().hash(),
                 WaitForTimeout(timeout) => timeout,
             };
@@ -325,7 +285,7 @@ impl Frontend {
             linera_client::util::wait_for_next_round(&mut stream, timeout).await;
         };
 
-        Ok(())
+        Ok(String::from_utf8(response)?)
     }
 }
 
