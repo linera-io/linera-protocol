@@ -275,10 +275,6 @@ pub enum ExecutionError {
     UnauthorizedHttpRequest(reqwest::Url),
     #[error("Attempt to perform an HTTP request to an invalid URL")]
     InvalidUrlForHttpRequest(#[from] url::ParseError),
-    // TODO(#2127): Remove this error and the unstable-oracles feature once there are fees
-    // and enforced limits for all oracles.
-    #[error("Unstable oracles are disabled on this network.")]
-    UnstableOracle,
     #[error("Failed to send contract code to worker thread: {0:?}")]
     ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
     #[error("Failed to send service code to worker thread: {0:?}")]
