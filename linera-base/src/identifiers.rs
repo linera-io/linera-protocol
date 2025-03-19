@@ -769,6 +769,23 @@ impl ModuleId {
 }
 
 impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, InstantiationArgument> {
+    /// Returns the ID of the contract bytecode blob.
+    pub fn contract_blob_id(&self) -> BlobId {
+        BlobId::new(self.contract_blob_hash, BlobType::ContractBytecode)
+    }
+
+    /// Returns the ID of the service bytecode blob.
+    pub fn service_blob_id(&self) -> BlobId {
+        BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode)
+    }
+
+    /// Returns the contract and service blob ID.
+    pub fn bytecode_blob_ids(&self) -> [BlobId; 2] {
+        [self.contract_blob_id(), self.service_blob_id()]
+    }
+}
+
+impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, InstantiationArgument> {
     /// Forgets the ABI of a module ID (if any).
     pub fn forget_abi(self) -> ModuleId {
         ModuleId {

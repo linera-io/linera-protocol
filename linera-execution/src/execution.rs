@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, vec};
+use std::{collections::BTreeMap, mem, vec};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, AccountOwner, BlobType, ChainId, Destination},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, Destination},
 };
 use linera_views::{
     context::Context,
@@ -259,6 +259,7 @@ where
         context: OperationContext,
         local_time: Timestamp,
         operation: Operation,
+        blob_sizes: &BTreeMap<BlobId, usize>,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
@@ -267,7 +268,7 @@ where
             Operation::System(op) => {
                 let new_application = self
                     .system
-                    .execute_operation(context, *op, txn_tracker, resource_controller)
+                    .execute_operation(context, *op, blob_sizes, txn_tracker, resource_controller)
                     .await?;
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);

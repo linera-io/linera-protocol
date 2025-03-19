@@ -740,12 +740,12 @@ where
             tracker: ResourceTracker::default(),
             account: block.authenticated_signer,
         };
+        let blob_sizes = published_blobs
+            .iter()
+            .map(|blob| (blob.id(), blob.bytes().len()))
+            .collect::<BTreeMap<_, _>>();
         ensure!(
-            block.published_blob_ids()
-                == published_blobs
-                    .iter()
-                    .map(|blob| blob.id())
-                    .collect::<BTreeSet<_>>(),
+            blob_sizes.keys().eq(&block.published_blob_ids()),
             ChainError::InternalError("published_blobs mismatch".to_string())
         );
         resource_controller
@@ -758,17 +758,10 @@ where
             .track_executed_block_size_sequence_extension(0, block.operations.len())
             .with_execution_context(ChainExecutionContext::Block)?;
         for blob in published_blobs {
-            let blob_type = blob.content().blob_type();
-            if blob_type == BlobType::Data
-                || blob_type == BlobType::ContractBytecode
-                || blob_type == BlobType::ServiceBytecode
-            {
-                resource_controller
-                    .with_state(&mut self.execution_state.system)
-                    .await?
-                    .track_blob_published(blob.content())
-                    .with_execution_context(ChainExecutionContext::Block)?;
-            }
+            resource_controller
+                .policy
+                .check_blob_size(blob.content())
+                .with_execution_context(ChainExecutionContext::Block)?;
             self.execution_state.system.used_blobs.insert(&blob.id())?;
         }
 
@@ -843,6 +836,7 @@ where
                         context,
                         local_time,
                         operation.clone(),
+                        &blob_sizes,
                         &mut txn_tracker,
                         &mut resource_controller,
                     ))
@@ -893,11 +887,15 @@ where
                 ))
                 .with_execution_context(chain_execution_context)?;
             for blob in &txn_outcome.blobs {
+                resource_controller
+                    .policy
+                    .check_blob_size(blob.content())
+                    .with_execution_context(chain_execution_context)?;
                 if blob.content().blob_type() == BlobType::Data {
                     resource_controller
                         .with_state(&mut self.execution_state.system)
                         .await?
-                        .track_blob_published(blob.content())
+                        .track_blob_published(blob.bytes().len())
                         .with_execution_context(chain_execution_context)?;
                 }
             }

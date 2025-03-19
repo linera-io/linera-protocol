@@ -97,6 +97,7 @@ async fn test_transfer_system_api(
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut tracker,
         &mut controller,
     )
@@ -184,6 +185,7 @@ async fn test_unauthorized_transfer_system_api(
             context,
             Timestamp::from(0),
             operation,
+            &BTreeMap::new(),
             &mut TransactionTracker::new(
                 0,
                 0,
@@ -287,6 +289,7 @@ async fn test_claim_system_api(
             context,
             Timestamp::from(0),
             operation,
+            &BTreeMap::new(),
             &mut tracker,
             &mut controller,
         )
@@ -440,6 +443,7 @@ async fn test_unauthorized_claims(
             context,
             Timestamp::from(0),
             operation,
+            &BTreeMap::new(),
             &mut tracker,
             &mut controller,
         )
@@ -494,6 +498,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut TransactionTracker::new(
             0,
             0,
@@ -545,6 +550,7 @@ async fn test_read_owner_balance_system_api(
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
@@ -586,6 +592,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
@@ -630,6 +637,7 @@ async fn test_read_owner_balances_system_api(
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
@@ -674,6 +682,7 @@ async fn test_read_balance_owners_system_api(
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
         &mut controller,
     )
@@ -907,6 +916,7 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut TransactionTracker::new(
             0,
             0,
@@ -983,6 +993,7 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
         context,
         Timestamp::from(0),
         operation,
+        &BTreeMap::new(),
         &mut TransactionTracker::new(
             0,
             0,
