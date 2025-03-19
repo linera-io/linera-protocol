@@ -43,13 +43,18 @@ AccountSignature:
 AdminOperation:
   ENUM:
     0:
+      PublishCommitteeBlob:
+        STRUCT:
+          - blob_hash:
+              TYPENAME: CryptoHash
+    1:
       CreateCommittee:
         STRUCT:
           - epoch:
               TYPENAME: Epoch
           - blob_hash:
               TYPENAME: CryptoHash
-    1:
+    2:
       RemoveCommittee:
         STRUCT:
           - epoch:
@@ -853,6 +858,14 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - byte_written:
         TYPENAME: Amount
+    - blob_read:
+        TYPENAME: Amount
+    - blob_published:
+        TYPENAME: Amount
+    - blob_byte_read:
+        TYPENAME: Amount
+    - blob_byte_published:
+        TYPENAME: Amount
     - byte_stored:
         TYPENAME: Amount
     - operation:
@@ -1151,21 +1164,16 @@ SystemOperation:
           - module_id:
               TYPENAME: ModuleId
     9:
-      PublishCommitteeBlob:
-        STRUCT:
-          - blob_hash:
-              TYPENAME: CryptoHash
-    10:
       PublishDataBlob:
         STRUCT:
           - blob_hash:
               TYPENAME: CryptoHash
-    11:
+    10:
       ReadBlob:
         STRUCT:
           - blob_id:
               TYPENAME: BlobId
-    12:
+    11:
       CreateApplication:
         STRUCT:
           - module_id:
@@ -1175,15 +1183,15 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    13:
+    12:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
-    14:
+    13:
       ProcessNewEpoch:
         NEWTYPE:
           TYPENAME: Epoch
-    15:
+    14:
       ProcessRemovedEpoch:
         NEWTYPE:
           TYPENAME: Epoch

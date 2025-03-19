@@ -44,8 +44,8 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
     ChannelName, ChannelSubscription, ExecutionError, ExecutionRuntimeContext, MessageContext,
-    MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, ResourceController,
+    TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -163,9 +163,6 @@ pub enum SystemOperation {
     },
     /// Publishes a new application module.
     PublishModule { module_id: ModuleId },
-    /// Publishes a new committee as a blob. This can be assigned to an epoch using
-    /// [`AdminOperation::CreateCommittee`] in a later block.
-    PublishCommitteeBlob { blob_hash: CryptoHash },
     /// Publishes a new data blob.
     PublishDataBlob { blob_hash: CryptoHash },
     /// Reads a blob and discards the result.
@@ -194,6 +191,9 @@ pub enum SystemOperation {
 /// Operations that are only allowed on the admin chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum AdminOperation {
+    /// Publishes a new committee as a blob. This can be assigned to an epoch using
+    /// [`AdminOperation::CreateCommittee`] in a later block.
+    PublishCommitteeBlob { blob_hash: CryptoHash },
     /// Registers a new committee. Other chains can then migrate to the new epoch by executing
     /// [`SystemOperation::ProcessNewEpoch`].
     CreateCommittee { epoch: Epoch, blob_hash: CryptoHash },
@@ -368,6 +368,7 @@ where
         context: OperationContext,
         operation: SystemOperation,
         txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Option<(UserApplicationId, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut new_application = None;
@@ -436,6 +437,9 @@ where
                     ExecutionError::AdminOperationOnNonAdminChain
                 );
                 match admin_operation {
+                    AdminOperation::PublishCommitteeBlob { blob_hash } => {
+                        self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
+                    }
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
@@ -539,11 +543,14 @@ where
             PublishDataBlob { blob_hash } => {
                 self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
             }
-            PublishCommitteeBlob { blob_hash } => {
-                self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
-            }
             ReadBlob { blob_id } => {
-                self.read_blob_content(blob_id).await?;
+                let content = self.read_blob_content(blob_id).await?;
+                if blob_id.blob_type == BlobType::Data {
+                    resource_controller
+                        .with_state(self)
+                        .await?
+                        .track_blob_read(content.bytes().len() as u64)?;
+                }
                 self.blob_used(Some(txn_tracker), blob_id).await?;
             }
             ProcessNewEpoch(epoch) => {

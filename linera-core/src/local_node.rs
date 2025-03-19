@@ -176,8 +176,13 @@ where
         &self,
         block: ProposedBlock,
         round: Option<u32>,
+        published_blobs: Vec<Blob>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        Ok(self.node.state.stage_block_execution(block, round).await?)
+        Ok(self
+            .node
+            .state
+            .stage_block_execution(block, round, published_blobs)
+            .await?)
     }
 
     /// Reads blobs from storage.

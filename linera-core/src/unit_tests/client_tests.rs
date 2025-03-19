@@ -1132,7 +1132,19 @@ async fn test_change_voting_rights<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    // To test that no fees are paid for reading or publishing committee blobs, we set the price
+    // higher than the chain balance.
+    let mut builder =
+        TestBuilder::new(storage_builder, 4, 1)
+            .await?
+            .with_policy(ResourceControlPolicy {
+                maximum_fuel_per_block: 30_000,
+                blob_read: Amount::from_tokens(10),
+                blob_published: Amount::from_tokens(10),
+                blob_byte_read: Amount::from_tokens(10),
+                blob_byte_published: Amount::from_tokens(10),
+                ..ResourceControlPolicy::default()
+            });
     let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
     let user = builder.add_root_chain(1, Amount::ZERO).await?;
     let validators = builder.initial_committee.validators().clone();
@@ -2334,10 +2346,51 @@ where
 
     assert_matches!(
         client1.publish_data_blob(large_blob_bytes).await,
-        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
-        ))) if matches!(*error, ExecutionError::BlobTooLarge)
+        ) if matches!(**error, ExecutionError::BlobTooLarge))
     );
 
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_blob_fees<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let policy = ResourceControlPolicy {
+        blob_read: Amount::from_nanos(10_000),
+        blob_published: Amount::from_attos(1_000_000),
+        blob_byte_read: Amount::from_nanos(1),
+        blob_byte_published: Amount::from_attos(100),
+        ..ResourceControlPolicy::default()
+    };
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+        .await?
+        .with_policy(policy.clone());
+    let mut expected_balance = Amount::ONE;
+    let client = builder.add_root_chain(0, expected_balance).await?;
+    let bytes: &[u8] = b"twelve bytes";
+    let blob = Blob::new(BlobContent::new_data(bytes));
+    let blob_id = blob.id();
+    client
+        .publish_data_blob(bytes.to_vec())
+        .await
+        .unwrap()
+        .unwrap();
+    expected_balance = expected_balance
+        - policy.blob_published
+        - policy.blob_byte_published * (blob.bytes().len() as u128);
+    assert_eq!(client.local_balance().await.unwrap(), expected_balance);
+
+    client.read_data_blob(blob_id.hash).await.unwrap().unwrap();
+    expected_balance =
+        expected_balance - policy.blob_read - policy.blob_byte_read * (blob.bytes().len() as u128);
+    assert_eq!(client.local_balance().await.unwrap(), expected_balance);
     Ok(())
 }

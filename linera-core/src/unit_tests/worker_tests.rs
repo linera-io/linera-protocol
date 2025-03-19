@@ -3208,7 +3208,7 @@ where
             timeout_config: TimeoutConfig::default(),
         })
         .with_authenticated_signer(Some(owner0));
-    let (executed_block0, _) = worker.stage_block_execution(block0, None).await?;
+    let (executed_block0, _) = worker.stage_block_execution(block0, None, vec![]).await?;
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
@@ -3257,7 +3257,9 @@ where
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let block1 = make_child_block(&value0.clone());
-    let (executed_block1, _) = worker.stage_block_execution(block1.clone(), None).await?;
+    let (executed_block1, _) = worker
+        .stage_block_execution(block1.clone(), None, vec![])
+        .await?;
     let proposal1_wrong_owner = block1
         .clone()
         .with_authenticated_signer(Some(owner1))
@@ -3296,7 +3298,9 @@ where
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let block2 = make_child_block(&value0.clone()).with_simple_transfer(ChainId::root(1), amount);
-    let (executed_block2, _) = worker.stage_block_execution(block2.clone(), None).await?;
+    let (executed_block2, _) = worker
+        .stage_block_execution(block2.clone(), None, vec![])
+        .await?;
 
     // Since round 3 is already over, the validator won't vote for a validated block from round 3.
     let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
@@ -3409,7 +3413,7 @@ where
             ..TimeoutConfig::default()
         },
     });
-    let (executed_block0, _) = worker.stage_block_execution(block0, None).await?;
+    let (executed_block0, _) = worker.stage_block_execution(block0, None, vec![]).await?;
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
@@ -3499,7 +3503,7 @@ where
             },
         });
     let (change_ownership_executed_block, _) = worker
-        .stage_block_execution(change_ownership_block, None)
+        .stage_block_execution(change_ownership_block, None, vec![])
         .await?;
     let change_ownership_value = Hashed::new(ConfirmedBlock::new(change_ownership_executed_block));
     let change_ownership_certificate =
@@ -3523,7 +3527,7 @@ where
     let proposal = make_child_block(&change_ownership_value)
         .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
     let (executed_block, _) = worker
-        .stage_block_execution(proposal.content.block.clone(), None)
+        .stage_block_execution(proposal.content.block.clone(), None, vec![])
         .await?;
     let value = Hashed::new(ConfirmedBlock::new(executed_block));
     let (response, _) = worker.handle_block_proposal(proposal).await?;
@@ -3562,7 +3566,7 @@ where
             ..TimeoutConfig::default()
         },
     });
-    let (executed_block0, _) = worker.stage_block_execution(block0, None).await?;
+    let (executed_block0, _) = worker.stage_block_execution(block0, None, vec![]).await?;
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
@@ -3578,7 +3582,9 @@ where
     let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
-    let (executed_block1, _) = worker.stage_block_execution(block1.clone(), None).await?;
+    let (executed_block1, _) = worker
+        .stage_block_execution(block1.clone(), None, vec![])
+        .await?;
     let value1 = Hashed::new(ConfirmedBlock::new(executed_block1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
@@ -3624,7 +3630,9 @@ where
     worker.handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (executed_block2, _) = worker.stage_block_execution(block2.clone(), None).await?;
+    let (executed_block2, _) = worker
+        .stage_block_execution(block2.clone(), None, vec![])
+        .await?;
     let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
@@ -3679,7 +3687,7 @@ where
     let block = make_first_block(chain_id)
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_authenticated_signer(Some(key_pair.public().into()));
-    let (executed_block, _) = worker.stage_block_execution(block, None).await?;
+    let (executed_block, _) = worker.stage_block_execution(block, None, vec![]).await?;
     let value = Hashed::new(ConfirmedBlock::new(executed_block));
     let certificate = make_certificate(&committee, &worker, value);
     worker

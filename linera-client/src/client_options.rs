@@ -531,6 +531,22 @@ pub enum ClientCommand {
         #[arg(long)]
         byte_written: Option<Amount>,
 
+        /// Set the base price to read a blob.
+        #[arg(long)]
+        blob_read: Option<Amount>,
+
+        /// Set the base price to publish a blob.
+        #[arg(long)]
+        blob_published: Option<Amount>,
+
+        /// Set the price to read a blob, per byte.
+        #[arg(long)]
+        blob_byte_read: Option<Amount>,
+
+        /// The price to publish a blob, per byte.
+        #[arg(long)]
+        blob_byte_published: Option<Amount>,
+
         /// Set the price per byte stored.
         #[arg(long)]
         byte_stored: Option<Amount>,
@@ -690,6 +706,26 @@ pub enum ClientCommand {
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         byte_written_price: Option<Amount>,
+
+        /// Set the base price to read a blob.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        blob_read_price: Option<Amount>,
+
+        /// Set the base price to publish a blob.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        blob_published_price: Option<Amount>,
+
+        /// Set the price to read a blob, per byte.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        blob_byte_read_price: Option<Amount>,
+
+        /// Set the price to publish a blob, per byte.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        blob_byte_published_price: Option<Amount>,
 
         /// Set the price per byte stored.
         /// (This will overwrite value from `--policy-config`)

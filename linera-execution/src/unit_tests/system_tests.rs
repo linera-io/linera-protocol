@@ -76,7 +76,12 @@ async fn application_message_index() -> anyhow::Result<()> {
         .await?;
     let new_application = view
         .system
-        .execute_operation(context, operation, &mut txn_tracker)
+        .execute_operation(
+            context,
+            operation,
+            &mut txn_tracker,
+            &mut ResourceController::default(),
+        )
         .await?;
     let id = expected_application_id(&context, &module_id, vec![], vec![], 0);
     assert_eq!(new_application, Some((id, vec![])));
@@ -104,7 +109,12 @@ async fn open_chain_message_index() {
     let operation = SystemOperation::OpenChain(config.clone());
     let new_application = view
         .system
-        .execute_operation(context, operation, &mut txn_tracker)
+        .execute_operation(
+            context,
+            operation,
+            &mut txn_tracker,
+            &mut ResourceController::default(),
+        )
         .await
         .unwrap();
     assert_eq!(new_application, None);

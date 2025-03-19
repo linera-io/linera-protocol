@@ -510,7 +510,7 @@ where
                 timestamp: chain_client.timestamp().max(Timestamp::now()),
             };
             let executed_block = local_node
-                .stage_block_execution(block.clone(), None)
+                .stage_block_execution(block.clone(), None, Vec::new())
                 .await
                 .map_err(BenchmarkError::LocalNode)?
                 .0;
