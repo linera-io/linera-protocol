@@ -265,7 +265,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -297,7 +298,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(linera_num_cache_success[1m])) by (pod) / (sum(rate(linera_num_cache_success[1m])) by (pod) + sum(rate(linera_num_cache_fault[1m])) by (pod))) * 100",
+          "expr": "(\n    sum(rate(linera_num_cache_success[1m])) by (pod)\n    /\n    (\n        sum(rate(linera_num_cache_success[1m])) by (pod)\n        + sum(rate(linera_num_cache_fault[1m])) by (pod)\n    )\n) * 100",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
