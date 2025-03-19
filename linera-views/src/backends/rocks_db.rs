@@ -5,6 +5,7 @@
 
 use std::{
     ffi::OsString,
+    fmt::Display,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -92,6 +93,15 @@ impl RocksDbSpawnMode {
                 tokio::task::spawn_blocking(move || f(input)).await??
             }
         })
+    }
+}
+
+impl Display for RocksDbSpawnMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            RocksDbSpawnMode::SpawnBlocking => write!(f, "spawn_blocking"),
+            RocksDbSpawnMode::BlockInPlace => write!(f, "block_in_place"),
+        }
     }
 }
 
@@ -257,7 +267,7 @@ pub struct RocksDbStoreInternal {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
-    path_with_guard: PathWithGuard,
+    pub path_with_guard: PathWithGuard,
     /// The chosen spawn mode
     spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store
@@ -505,6 +515,9 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         Self::check_namespace(namespace)?;
         let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
+        if std::path::Path::exists(&path_buf) {
+            return Err(RocksDbStoreInternalError::StoreAlreadyExist);
+        }
         std::fs::create_dir_all(path_buf)?;
         Ok(())
     }
@@ -542,6 +555,10 @@ impl TestKeyValueStore for RocksDbStoreInternal {
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
+    /// Already existing storage
+    #[error("Already existing storag")]
+    StoreAlreadyExist,
+
     /// Tokio join error in RocksDB.
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
@@ -603,6 +620,13 @@ impl PathWithGuard {
         PathWithGuard { path_buf, _dir }
     }
 }
+
+impl PartialEq for PathWithGuard {
+    fn eq(&self, other: &Self) -> bool {
+        self.path_buf == other.path_buf
+    }
+}
+impl Eq for PathWithGuard {}
 
 impl KeyValueStoreError for RocksDbStoreInternalError {
     const BACKEND: &'static str = "rocks_db";

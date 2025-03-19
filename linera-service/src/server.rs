@@ -566,13 +566,6 @@ async fn run(options: ServerOptions) {
             let server_config: ValidatorServerConfig =
                 util::read_json(&server_config_path).expect("Failed to read server config");
 
-            #[cfg(feature = "rocksdb")]
-            if server_config.internal_network.shards.len() > 1
-                && storage_config.storage_config.is_rocks_db()
-            {
-                panic!("Multiple shards are not supported with RocksDB");
-            }
-
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
@@ -657,6 +650,13 @@ async fn run(options: ServerOptions) {
                 .add_common_config(common_config)
                 .await
                 .unwrap();
+            tracing::info!(
+                "server::ServerCommand::Initialize, storage_config={:?}",
+                storage_config
+            );
+            tracing::info!(
+                "server::ServerCommand::Initialize, call full_initialize_storage, step 1"
+            );
             full_initialize_storage(full_storage_config, &genesis_config)
                 .await
                 .unwrap();

@@ -507,6 +507,9 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
+        if ServiceStoreClientInternal::exists(config, namespace).await? {
+            return Err(ServiceStoreError::StoreAlreadyExist);
+        }
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestCreateNamespace { namespace };
         let request = tonic::Request::new(query);

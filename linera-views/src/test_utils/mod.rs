@@ -690,6 +690,14 @@ async fn namespaces_with_prefix<S: LocalKeyValueStore>(
 /// interact with other namespaces.
 pub async fn namespace_admin_test<S: TestKeyValueStore>() {
     let config = S::new_test_config().await.expect("config");
+    {
+        let namespace = generate_test_namespace();
+        S::create(&config, &namespace)
+            .await
+            .expect("first creation of a namespace");
+        // Creating a namespace two times should returns an error
+        assert!(S::create(&config, &namespace).await.is_err());
+    }
     let prefix = generate_test_namespace();
     let namespaces = namespaces_with_prefix::<S>(&config, &prefix).await;
     assert_eq!(namespaces.len(), 0);

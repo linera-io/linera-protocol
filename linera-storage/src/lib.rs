@@ -53,6 +53,9 @@ pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
 };
 
+/// The default namespace to be used when none is specified
+pub const DEFAULT_NAMESPACE: &str = "table_linera";
+
 /// Communicate with a persistent storage using the "views" abstraction.
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]

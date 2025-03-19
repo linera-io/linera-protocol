@@ -349,10 +349,14 @@ pub async fn list_all_chain_ids<S: AdminKeyValueStore>(
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
 /// chain states into the first store.
+#[derive(Clone, Copy)]
 pub struct ChainStatesFirstAssignment;
 
 impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
     fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error> {
+        if root_key.is_empty() {
+            return Ok(StoreInUse::Second);
+        }
         let store = match bcs::from_bytes(root_key)? {
             BaseKey::ChainState(_) => StoreInUse::First,
             _ => StoreInUse::Second,
