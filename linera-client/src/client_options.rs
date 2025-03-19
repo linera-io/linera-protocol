@@ -567,9 +567,21 @@ pub enum ClientCommand {
         #[arg(long)]
         message_byte: Option<Amount>,
 
+        /// Set the price per query to a service as an oracle.
+        #[arg(long)]
+        service_as_oracle_query: Option<Amount>,
+
+        /// Set the price for a performing an HTTP request.
+        #[arg(long)]
+        http_request: Option<Amount>,
+
         /// Set the maximum amount of fuel per block.
         #[arg(long)]
         maximum_fuel_per_block: Option<u64>,
+
+        /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
+        #[arg(long)]
+        maximum_service_oracle_execution_ms: Option<u64>,
 
         /// Set the maximum size of an executed block, in bytes.
         #[arg(long)]
@@ -599,6 +611,18 @@ pub enum ClientCommand {
         /// Set the maximum write data per block.
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
+
+        /// Set the maximum size in bytes of a received HTTP response.
+        #[arg(long)]
+        maximum_http_response_bytes: Option<u64>,
+
+        /// Set the maximum amount of time allowed to wait for an HTTP response.
+        #[arg(long)]
+        http_request_timeout_ms: Option<u64>,
+
+        /// Set the list of hosts that contracts and services can send HTTP requests to.
+        #[arg(long)]
+        http_request_allow_list: Option<Vec<String>>,
     },
 
     /// Send one transfer per chain in bulk mode
@@ -752,10 +776,22 @@ pub enum ClientCommand {
         #[arg(long)]
         message_byte_price: Option<Amount>,
 
+        /// Set the price per query to a service as an oracle.
+        #[arg(long)]
+        service_as_oracle_query_price: Option<Amount>,
+
+        /// Set the price for a performing an HTTP request.
+        #[arg(long)]
+        http_request_price: Option<Amount>,
+
         /// Set the maximum amount of fuel per block.
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_fuel_per_block: Option<u64>,
+
+        /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
+        #[arg(long)]
+        maximum_service_oracle_execution_ms: Option<u64>,
 
         /// Set the maximum size of an executed block.
         /// (This will overwrite value from `--policy-config`)
@@ -793,9 +829,17 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
 
+        /// Set the maximum size in bytes of a received HTTP response.
+        #[arg(long)]
+        maximum_http_response_bytes: Option<u64>,
+
+        /// Set the maximum amount of time allowed to wait for an HTTP response.
+        #[arg(long)]
+        http_request_timeout_ms: Option<u64>,
+
         /// Set the list of hosts that contracts and services can send HTTP requests to.
         #[arg(long)]
-        http_allow_list: Option<Vec<String>>,
+        http_request_allow_list: Option<Vec<String>>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.

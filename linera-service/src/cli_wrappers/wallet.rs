@@ -254,7 +254,9 @@ impl ClientWrapper {
                 &policy_config.to_string().to_kebab_case(),
             ]);
         if let Some(allow_list) = http_allow_list {
-            command.arg("--http-allow-list").arg(allow_list.join(","));
+            command
+                .arg("--http-request-allow-list")
+                .arg(allow_list.join(","));
         }
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());

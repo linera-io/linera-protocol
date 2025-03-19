@@ -620,7 +620,10 @@ impl Runnable for Job {
                                     operation_byte,
                                     message,
                                     message_byte,
+                                    service_as_oracle_query,
+                                    http_request,
                                     maximum_fuel_per_block,
+                                    maximum_service_oracle_execution_ms,
                                     maximum_executed_block_size,
                                     maximum_blob_size,
                                     maximum_published_blobs,
@@ -628,88 +631,76 @@ impl Runnable for Job {
                                     maximum_block_proposal_size,
                                     maximum_bytes_read_per_block,
                                     maximum_bytes_written_per_block,
+                                    maximum_http_response_bytes,
+                                    http_request_timeout_ms,
+                                    http_request_allow_list,
                                 } => {
-                                    if let Some(block) = block {
-                                        policy.block = block;
-                                    }
-                                    if let Some(fuel_unit) = fuel_unit {
-                                        policy.fuel_unit = fuel_unit;
-                                    }
-                                    if let Some(read_operation) = read_operation {
-                                        policy.read_operation = read_operation;
-                                    }
-                                    if let Some(write_operation) = write_operation {
-                                        policy.write_operation = write_operation;
-                                    }
-                                    if let Some(byte_read) = byte_read {
-                                        policy.byte_read = byte_read;
-                                    }
-                                    if let Some(byte_written) = byte_written {
-                                        policy.byte_written = byte_written;
-                                    }
-                                    if let Some(blob_read) = blob_read {
-                                        policy.blob_read = blob_read
-                                    }
-                                    if let Some(blob_published) = blob_published {
-                                        policy.blob_published = blob_published
-                                    }
-                                    if let Some(blob_byte_read) = blob_byte_read {
-                                        policy.blob_byte_read = blob_byte_read;
-                                    }
-                                    if let Some(blob_byte_published) = blob_byte_published {
-                                        policy.blob_byte_published = blob_byte_published;
-                                    }
-                                    if let Some(byte_stored) = byte_stored {
-                                        policy.byte_stored = byte_stored;
-                                    }
-                                    if let Some(operation) = operation {
-                                        policy.operation = operation;
-                                    }
-                                    if let Some(operation_byte) = operation_byte {
-                                        policy.operation_byte = operation_byte;
-                                    }
-                                    if let Some(message) = message {
-                                        policy.message = message;
-                                    }
-                                    if let Some(message_byte) = message_byte {
-                                        policy.message_byte = message_byte;
-                                    }
-                                    if let Some(maximum_fuel_per_block) = maximum_fuel_per_block {
-                                        policy.maximum_fuel_per_block = maximum_fuel_per_block;
-                                    }
-                                    if let Some(maximum_executed_block_size) =
-                                        maximum_executed_block_size
-                                    {
-                                        policy.maximum_executed_block_size =
-                                            maximum_executed_block_size;
-                                    }
-                                    if let Some(maximum_bytecode_size) = maximum_bytecode_size {
-                                        policy.maximum_bytecode_size = maximum_bytecode_size;
-                                    }
-                                    if let Some(maximum_blob_size) = maximum_blob_size {
-                                        policy.maximum_blob_size = maximum_blob_size;
-                                    }
-                                    if let Some(maximum_published_blobs) = maximum_published_blobs {
-                                        policy.maximum_published_blobs = maximum_published_blobs;
-                                    }
-                                    if let Some(maximum_block_proposal_size) =
-                                        maximum_block_proposal_size
-                                    {
-                                        policy.maximum_block_proposal_size =
-                                            maximum_block_proposal_size;
-                                    }
-                                    if let Some(maximum_bytes_read_per_block) =
-                                        maximum_bytes_read_per_block
-                                    {
-                                        policy.maximum_bytes_read_per_block =
-                                            maximum_bytes_read_per_block;
-                                    }
-                                    if let Some(maximum_bytes_written_per_block) =
-                                        maximum_bytes_written_per_block
-                                    {
-                                        policy.maximum_bytes_written_per_block =
-                                            maximum_bytes_written_per_block;
-                                    }
+                                    let existing_policy = policy.clone();
+                                    policy = linera_execution::ResourceControlPolicy {
+                                        block: block.unwrap_or(existing_policy.block),
+                                        fuel_unit: fuel_unit.unwrap_or(existing_policy.fuel_unit),
+                                        read_operation: read_operation
+                                            .unwrap_or(existing_policy.read_operation),
+                                        write_operation: write_operation
+                                            .unwrap_or(existing_policy.write_operation),
+                                        byte_read: byte_read.unwrap_or(existing_policy.byte_read),
+                                        byte_written: byte_written
+                                            .unwrap_or(existing_policy.byte_written),
+                                        blob_read: blob_read
+                                            .unwrap_or(existing_policy.blob_read),
+                                        blob_published: blob_published
+                                            .unwrap_or(existing_policy.blob_published),
+                                        blob_byte_read: blob_byte_read
+                                            .unwrap_or(existing_policy.blob_byte_read),
+                                        blob_byte_published: blob_byte_published
+                                            .unwrap_or(existing_policy.blob_byte_published),
+                                        byte_stored: byte_stored
+                                            .unwrap_or(existing_policy.byte_stored),
+                                        operation: operation.unwrap_or(existing_policy.operation),
+                                        operation_byte: operation_byte
+                                            .unwrap_or(existing_policy.operation_byte),
+                                        message: message.unwrap_or(existing_policy.message),
+                                        message_byte: message_byte
+                                            .unwrap_or(existing_policy.message_byte),
+                                        service_as_oracle_query: service_as_oracle_query
+                                            .unwrap_or(existing_policy.service_as_oracle_query),
+                                        http_request: http_request
+                                            .unwrap_or(existing_policy.http_request),
+                                        maximum_fuel_per_block: maximum_fuel_per_block
+                                            .unwrap_or(existing_policy.maximum_fuel_per_block),
+                                        maximum_service_oracle_execution_ms:
+                                            maximum_service_oracle_execution_ms.unwrap_or(
+                                                existing_policy.maximum_service_oracle_execution_ms,
+                                            ),
+                                        maximum_executed_block_size: maximum_executed_block_size
+                                            .unwrap_or(existing_policy.maximum_executed_block_size),
+                                        maximum_bytecode_size: maximum_bytecode_size
+                                            .unwrap_or(existing_policy.maximum_bytecode_size),
+                                        maximum_blob_size: maximum_blob_size
+                                            .unwrap_or(existing_policy.maximum_blob_size),
+                                        maximum_published_blobs: maximum_published_blobs
+                                            .unwrap_or(existing_policy.maximum_published_blobs),
+                                        maximum_block_proposal_size: maximum_block_proposal_size
+                                            .unwrap_or(existing_policy.maximum_block_proposal_size),
+                                        maximum_bytes_read_per_block: maximum_bytes_read_per_block
+                                            .unwrap_or(
+                                                existing_policy.maximum_bytes_read_per_block,
+                                            ),
+                                        maximum_bytes_written_per_block:
+                                            maximum_bytes_written_per_block.unwrap_or(
+                                                existing_policy.maximum_bytes_written_per_block,
+                                            ),
+                                        maximum_http_response_bytes: maximum_http_response_bytes
+                                            .unwrap_or(existing_policy.maximum_http_response_bytes),
+                                        http_request_timeout_ms: http_request_timeout_ms
+                                            .unwrap_or(existing_policy.http_request_timeout_ms),
+                                        http_request_allow_list: match http_request_allow_list {
+                                            None => existing_policy.http_request_allow_list,
+                                            Some(http_request_allow_list) => {
+                                                BTreeSet::from_iter(http_request_allow_list)
+                                            }
+                                        },
+                                    };
                                     info!("{policy}");
                                     if committee.policy() == &policy {
                                         return Ok(ClientOutcome::Committed(None));
@@ -1430,7 +1421,10 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             operation_byte_price,
             message_price,
             message_byte_price,
+            service_as_oracle_query_price,
+            http_request_price,
             maximum_fuel_per_block,
+            maximum_service_oracle_execution_ms,
             maximum_executed_block_size,
             maximum_blob_size,
             maximum_published_blobs,
@@ -1438,86 +1432,68 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             maximum_block_proposal_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
+            maximum_http_response_bytes,
+            http_request_timeout_ms,
+            http_request_allow_list,
             testing_prng_seed,
             network_name,
-            http_allow_list,
         } => {
             let start_time = Instant::now();
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
-            let mut policy = policy_config.into_policy();
-            if let Some(block_price) = block_price {
-                policy.block = *block_price;
-            }
-            if let Some(fuel_unit_price) = fuel_unit_price {
-                policy.fuel_unit = *fuel_unit_price;
-            }
-            if let Some(read_operation_price) = read_operation_price {
-                policy.read_operation = *read_operation_price;
-            }
-            if let Some(write_operation_price) = write_operation_price {
-                policy.write_operation = *write_operation_price;
-            }
-            if let Some(byte_read_price) = byte_read_price {
-                policy.byte_read = *byte_read_price;
-            }
-            if let Some(byte_written_price) = byte_written_price {
-                policy.byte_written = *byte_written_price;
-            }
-            if let Some(blob_read_price) = blob_read_price {
-                policy.blob_read = *blob_read_price;
-            }
-            if let Some(blob_published_price) = blob_published_price {
-                policy.blob_published = *blob_published_price;
-            }
-            if let Some(blob_byte_read_price) = blob_byte_read_price {
-                policy.blob_byte_read = *blob_byte_read_price;
-            }
-            if let Some(blob_byte_published_price) = blob_byte_published_price {
-                policy.blob_byte_published = *blob_byte_published_price;
-            }
-            if let Some(byte_stored_price) = byte_stored_price {
-                policy.byte_stored = *byte_stored_price;
-            }
-            if let Some(operation_price) = operation_price {
-                policy.operation = *operation_price;
-            }
-            if let Some(operation_byte_price) = operation_byte_price {
-                policy.operation_byte = *operation_byte_price;
-            }
-            if let Some(message_price) = message_price {
-                policy.message = *message_price;
-            }
-            if let Some(message_byte_price) = message_byte_price {
-                policy.message_byte = *message_byte_price;
-            }
-            if let Some(maximum_fuel_per_block) = maximum_fuel_per_block {
-                policy.maximum_fuel_per_block = *maximum_fuel_per_block;
-            }
-            if let Some(maximum_executed_block_size) = maximum_executed_block_size {
-                policy.maximum_executed_block_size = *maximum_executed_block_size;
-            }
-            if let Some(maximum_blob_size) = maximum_blob_size {
-                policy.maximum_blob_size = *maximum_blob_size;
-            }
-            if let Some(maximum_published_blobs) = maximum_published_blobs {
-                policy.maximum_published_blobs = *maximum_published_blobs;
-            }
-            if let Some(maximum_bytecode_size) = maximum_bytecode_size {
-                policy.maximum_bytecode_size = *maximum_bytecode_size;
-            }
-            if let Some(maximum_block_proposal_size) = maximum_block_proposal_size {
-                policy.maximum_block_proposal_size = *maximum_block_proposal_size;
-            }
-            if let Some(maximum_bytes_read_per_block) = maximum_bytes_read_per_block {
-                policy.maximum_bytes_read_per_block = *maximum_bytes_read_per_block;
-            }
-            if let Some(maximum_bytes_written_per_block) = maximum_bytes_written_per_block {
-                policy.maximum_bytes_written_per_block = *maximum_bytes_written_per_block;
-            }
-            if let Some(http_allow_list) = http_allow_list {
-                policy.http_request_allow_list = BTreeSet::from_iter(http_allow_list.clone());
-            }
+            let existing_policy = policy_config.into_policy();
+            let policy = linera_execution::ResourceControlPolicy {
+                block: block_price.unwrap_or(existing_policy.block),
+                fuel_unit: fuel_unit_price.unwrap_or(existing_policy.fuel_unit),
+                read_operation: read_operation_price.unwrap_or(existing_policy.read_operation),
+                write_operation: write_operation_price.unwrap_or(existing_policy.write_operation),
+                byte_read: byte_read_price.unwrap_or(existing_policy.byte_read),
+                byte_written: byte_written_price.unwrap_or(existing_policy.byte_written),
+                blob_read: blob_read_price
+                    .unwrap_or(existing_policy.blob_read),
+                blob_published: blob_published_price
+                    .unwrap_or(existing_policy.blob_published),
+                blob_byte_read: blob_byte_read_price
+                    .unwrap_or(existing_policy.blob_byte_read),
+                blob_byte_published: blob_byte_published_price
+                    .unwrap_or(existing_policy.blob_byte_published),
+                byte_stored: byte_stored_price.unwrap_or(existing_policy.byte_stored),
+                operation: operation_price.unwrap_or(existing_policy.operation),
+                operation_byte: operation_byte_price.unwrap_or(existing_policy.operation_byte),
+                message: message_price.unwrap_or(existing_policy.message),
+                message_byte: message_byte_price.unwrap_or(existing_policy.message_byte),
+                service_as_oracle_query: service_as_oracle_query_price
+                    .unwrap_or(existing_policy.service_as_oracle_query),
+                http_request: http_request_price.unwrap_or(existing_policy.http_request),
+                maximum_fuel_per_block: maximum_fuel_per_block
+                    .unwrap_or(existing_policy.maximum_fuel_per_block),
+                maximum_service_oracle_execution_ms: maximum_service_oracle_execution_ms
+                    .unwrap_or(existing_policy.maximum_service_oracle_execution_ms),
+                maximum_executed_block_size: maximum_executed_block_size
+                    .unwrap_or(existing_policy.maximum_executed_block_size),
+                maximum_bytecode_size: maximum_bytecode_size
+                    .unwrap_or(existing_policy.maximum_bytecode_size),
+                maximum_blob_size: maximum_blob_size.unwrap_or(existing_policy.maximum_blob_size),
+                maximum_published_blobs: maximum_published_blobs
+                    .unwrap_or(existing_policy.maximum_published_blobs),
+                maximum_block_proposal_size: maximum_block_proposal_size
+                    .unwrap_or(existing_policy.maximum_block_proposal_size),
+                maximum_bytes_read_per_block: maximum_bytes_read_per_block
+                    .unwrap_or(existing_policy.maximum_bytes_read_per_block),
+                maximum_bytes_written_per_block: maximum_bytes_written_per_block
+                    .unwrap_or(existing_policy.maximum_bytes_written_per_block),
+                maximum_http_response_bytes: maximum_http_response_bytes
+                    .unwrap_or(existing_policy.maximum_http_response_bytes),
+                http_request_timeout_ms: http_request_timeout_ms
+                    .unwrap_or(existing_policy.http_request_timeout_ms),
+                http_request_allow_list: match http_request_allow_list {
+                    None => existing_policy.http_request_allow_list,
+                    Some(http_request_allow_list) => http_request_allow_list
+                        .iter()
+                        .cloned()
+                        .collect::<BTreeSet<_>>(),
+                },
+            };
             let timestamp = start_timestamp
                 .map(|st| {
                     let micros =
