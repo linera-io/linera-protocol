@@ -631,6 +631,7 @@ impl Runnable for Job {
                                     maximum_block_proposal_size,
                                     maximum_bytes_read_per_block,
                                     maximum_bytes_written_per_block,
+                                    maximum_oracle_response_bytes,
                                     maximum_http_response_bytes,
                                     http_request_timeout_ms,
                                     http_request_allow_list,
@@ -688,6 +689,10 @@ impl Runnable for Job {
                                         maximum_bytes_written_per_block:
                                             maximum_bytes_written_per_block.unwrap_or(
                                                 existing_policy.maximum_bytes_written_per_block,
+                                            ),
+                                        maximum_oracle_response_bytes:
+                                            maximum_oracle_response_bytes.unwrap_or(
+                                                existing_policy.maximum_oracle_response_bytes,
                                             ),
                                         maximum_http_response_bytes: maximum_http_response_bytes
                                             .unwrap_or(existing_policy.maximum_http_response_bytes),
@@ -1428,6 +1433,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             maximum_block_proposal_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
+            maximum_oracle_response_bytes,
             maximum_http_response_bytes,
             http_request_timeout_ms,
             http_request_allow_list,
@@ -1475,6 +1481,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     .unwrap_or(existing_policy.maximum_bytes_read_per_block),
                 maximum_bytes_written_per_block: maximum_bytes_written_per_block
                     .unwrap_or(existing_policy.maximum_bytes_written_per_block),
+                maximum_oracle_response_bytes: maximum_oracle_response_bytes
+                    .unwrap_or(existing_policy.maximum_oracle_response_bytes),
                 maximum_http_response_bytes: maximum_http_response_bytes
                     .unwrap_or(existing_policy.maximum_http_response_bytes),
                 http_request_timeout_ms: http_request_timeout_ms

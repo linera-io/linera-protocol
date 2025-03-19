@@ -476,6 +476,7 @@ View or update the resource control policy
 * `--maximum-block-proposal-size <MAXIMUM_BLOCK_PROPOSAL_SIZE>` — Set the maximum size of a block proposal, in bytes
 * `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
 * `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
+* `--maximum-oracle-response-bytes <MAXIMUM_ORACLE_RESPONSE_BYTES>` — Set the maximum size of oracle responses
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
 * `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
@@ -535,6 +536,7 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--maximum-block-proposal-size <MAXIMUM_BLOCK_PROPOSAL_SIZE>` — Set the maximum size of a block proposal, in bytes. (This will overwrite value from `--policy-config`)
 * `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block. (This will overwrite value from `--policy-config`)
 * `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block. (This will overwrite value from `--policy-config`)
+* `--maximum-oracle-response-bytes <MAXIMUM_ORACLE_RESPONSE_BYTES>` — Set the maximum size of oracle responses. (This will overwrite value from `--policy-config`)
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
 * `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to

@@ -612,6 +612,10 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
 
+        /// Set the maximum size of oracle responses.
+        #[arg(long)]
+        maximum_oracle_response_bytes: Option<u64>,
+
         /// Set the maximum size in bytes of a received HTTP response.
         #[arg(long)]
         maximum_http_response_bytes: Option<u64>,
@@ -828,6 +832,11 @@ pub enum ClientCommand {
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
+
+        /// Set the maximum size of oracle responses.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        maximum_oracle_response_bytes: Option<u64>,
 
         /// Set the maximum size in bytes of a received HTTP response.
         #[arg(long)]
