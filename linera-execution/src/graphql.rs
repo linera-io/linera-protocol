@@ -22,7 +22,21 @@ doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"
 );
-doc_scalar!(Recipient, "The recipient of a transfer");
+doc_scalar!(
+    Recipient,
+    r#"
+The recipient of a transfer.
+
+An example of a `Recipient`:
+```graphql
+{
+    Account: {
+        chain_id: <chain_id>
+    }
+}
+```
+"#
+);
 doc_scalar!(UserData, "Optional user message attached to a transfer");
 
 #[async_graphql::Object(cache_control(no_cache))]
