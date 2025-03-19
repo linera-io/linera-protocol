@@ -41,7 +41,7 @@ use linera_views::{
 use test_case::test_case;
 
 #[cfg(feature = "unstable-oracles")]
-use crate::data_types::ProposedBlock;
+use crate::data_types::{BlockExecutionOutcome, ProposedBlock};
 use crate::{
     block::{Block, ConfirmedBlock},
     data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
@@ -468,6 +468,42 @@ async fn test_service_as_oracle_timeout_early_stop(
     assert!(execution_time <= maximum_expected_execution_time);
 
     Ok(())
+}
+
+/// Tests service-as-oracle response size limit.
+#[cfg(feature = "unstable-oracles")]
+#[test_case(50, 49 => matches Ok(_); "smaller than limit")]
+#[test_case(
+    50, 51
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::ServiceOracleResponseTooLarge);
+    "larger than limit"
+)]
+#[tokio::test]
+async fn test_service_as_oracle_response_size_limit(
+    limit: u64,
+    response_size: usize,
+) -> Result<BlockExecutionOutcome, ChainError> {
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_oracle_response_bytes: limit,
+            ..ResourceControlPolicy::default()
+        })
+        .await
+        .expect("Failed to set up test with mock application");
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        runtime.query_service(application_id, vec![])?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::handle_query(move |_runtime, _, _| {
+        Ok(vec![0; response_size])
+    }));
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    chain.execute_block(&block, time, None, &[], None).await
 }
 
 /// Sets up a test with a dummy [`MockApplication`].
