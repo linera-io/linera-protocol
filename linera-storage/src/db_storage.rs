@@ -349,7 +349,7 @@ pub async fn list_all_chain_ids<S: AdminKeyValueStore>(
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
 /// chain states into the first store.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct ChainStatesFirstAssignment;
 
 impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {

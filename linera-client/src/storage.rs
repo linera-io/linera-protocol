@@ -152,21 +152,6 @@ impl StorageConfig {
         }
     }
 
-    pub fn get_exclusive_storage(&self) -> Self {
-        match self {
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard,
-                spawn_mode,
-                uri: _,
-            } => StorageConfig::RocksDb {
-                path: path_with_guard.path_buf.clone(),
-                spawn_mode: *spawn_mode,
-            },
-            x => x.clone(),
-        }
-    }
-
     pub fn are_chains_shared(&self) -> bool {
         match self {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
