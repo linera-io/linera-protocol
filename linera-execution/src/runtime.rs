@@ -32,9 +32,9 @@ use crate::{
     resources::ResourceController,
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext, ModuleId,
-    Operation, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome,
-    RawOutgoingMessage, ServiceRuntime, TransactionTracker, UserApplicationDescription,
+    BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, Message, MessageContext,
+    MessageKind, ModuleId, Operation, OperationContext, OutgoingMessage, QueryContext,
+    QueryOutcome, ServiceRuntime, TransactionTracker, UserApplicationDescription,
     UserApplicationId, UserContractCode, UserContractInstance, UserServiceCode,
     UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
@@ -1135,20 +1135,37 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application = this.current_application();
-        let authenticated_signer = application.signer;
         let application_id = application.id;
+        let authenticated_signer = application.signer;
+        let mut refund_grant_to = this.refund_grant_to;
 
-        let message =
-            RawOutgoingMessage::from(message).into_priced(&this.resource_controller.policy)?;
-        this.resource_controller.track_grant(message.grant)?;
-
-        let outcome = RawExecutionOutcome {
-            authenticated_signer,
-            refund_grant_to: this.refund_grant_to,
-            messages: vec![message],
+        let grant = this
+            .resource_controller
+            .policy
+            .total_price(&message.grant)?;
+        if grant.is_zero() {
+            refund_grant_to = None;
+        } else {
+            this.resource_controller.track_grant(grant)?;
+        }
+        let kind = if message.is_tracked {
+            MessageKind::Tracked
+        } else {
+            MessageKind::Simple
         };
+
         this.transaction_tracker
-            .add_user_outcome(application_id, outcome)?;
+            .add_outgoing_message(OutgoingMessage {
+                destination: message.destination,
+                authenticated_signer,
+                refund_grant_to,
+                grant,
+                kind,
+                message: Message::User {
+                    application_id,
+                    bytes: message.message,
+                },
+            })?;
 
         Ok(())
     }
@@ -1182,7 +1199,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let application_id = current_application.id;
         let signer = current_application.signer;
 
-        let execution_outcome = this
+        let maybe_message = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Transfer {
                 source,
@@ -1195,7 +1212,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?;
 
         this.transaction_tracker
-            .add_system_outcome(execution_outcome)?;
+            .add_outgoing_messages(maybe_message)?;
         Ok(())
     }
 
@@ -1210,7 +1227,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let application_id = current_application.id;
         let signer = current_application.signer;
 
-        let execution_outcome = this
+        let message = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Claim {
                 source,
@@ -1220,10 +1237,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 application_id,
                 callback,
             })?
-            .recv_response()?
-            .with_authenticated_signer(signer);
-        this.transaction_tracker
-            .add_system_outcome(execution_outcome)?;
+            .recv_response()?;
+        this.transaction_tracker.add_outgoing_message(message)?;
         Ok(())
     }
 
@@ -1334,8 +1349,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 callback,
             })?
             .recv_response()?;
-        let outcome = RawExecutionOutcome::default().with_message(open_chain_message);
-        this.transaction_tracker.add_system_outcome(outcome)?;
+        this.transaction_tracker
+            .add_outgoing_message(open_chain_message)?;
         Ok((message_id, chain_id))
     }
 

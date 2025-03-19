@@ -43,9 +43,9 @@ use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCoun
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ChannelName, ChannelSubscription, Destination, ExecutionError, ExecutionRuntimeContext,
-    MessageContext, MessageKind, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome,
-    RawOutgoingMessage, TransactionTracker, UserApplicationDescription, UserApplicationId,
+    ChannelName, ChannelSubscription, ExecutionError, ExecutionRuntimeContext, MessageContext,
+    MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, TransactionTracker,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -370,17 +370,12 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<Option<(UserApplicationId, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
-        let mut outcome = RawExecutionOutcome {
-            authenticated_signer: context.authenticated_signer,
-            refund_grant_to: context.refund_grant_to(),
-            ..RawExecutionOutcome::default()
-        };
         let mut new_application = None;
         match operation {
             OpenChain(config) => {
                 let next_message_id = context.next_message_id(txn_tracker.next_message_index());
                 let message = self.open_chain(config, next_message_id).await?;
-                outcome.messages.push(message);
+                txn_tracker.add_outgoing_message(message)?;
                 #[cfg(with_metrics)]
                 OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
@@ -404,7 +399,7 @@ where
             }
             CloseChain => {
                 let messages = self.close_chain(context.chain_id).await?;
-                outcome.messages.extend(messages);
+                txn_tracker.add_outgoing_messages(messages)?;
             }
             Transfer {
                 owner,
@@ -412,13 +407,10 @@ where
                 recipient,
                 ..
             } => {
-                let message = self
+                let maybe_message = self
                     .transfer(context.authenticated_signer, None, owner, recipient, amount)
                     .await?;
-
-                if let Some(message) = message {
-                    outcome.messages.push(message)
-                }
+                txn_tracker.add_outgoing_messages(maybe_message)?;
             }
             Claim {
                 owner,
@@ -436,8 +428,7 @@ where
                         amount,
                     )
                     .await?;
-
-                outcome.messages.push(message)
+                txn_tracker.add_outgoing_message(message)?;
             }
             Admin(admin_operation) => {
                 ensure!(
@@ -486,17 +477,13 @@ where
                     ExecutionError::AlreadySubscribedToChannel(context.chain_id, channel)
                 );
                 self.subscriptions.insert(&subscription)?;
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Subscribe {
-                        id: context.chain_id,
-                        subscription,
-                    },
+                let message = SystemMessage::Subscribe {
+                    id: context.chain_id,
+                    subscription,
                 };
-                outcome.messages.push(message);
+                txn_tracker.add_outgoing_message(
+                    OutgoingMessage::new(chain_id, message).with_kind(MessageKind::Protected),
+                )?;
             }
             Unsubscribe { chain_id, channel } => {
                 let subscription = ChannelSubscription {
@@ -508,17 +495,13 @@ where
                     ExecutionError::InvalidUnsubscription(context.chain_id, channel)
                 );
                 self.subscriptions.remove(&subscription)?;
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Unsubscribe {
-                        id: context.chain_id,
-                        subscription,
-                    },
+                let message = SystemMessage::Unsubscribe {
+                    id: context.chain_id,
+                    subscription,
                 };
-                outcome.messages.push(message);
+                txn_tracker.add_outgoing_message(
+                    OutgoingMessage::new(chain_id, message).with_kind(MessageKind::Protected),
+                )?;
             }
             PublishModule { module_id } => {
                 self.blob_published(&BlobId::new(
@@ -617,7 +600,6 @@ where
             }
         }
 
-        txn_tracker.add_system_outcome(outcome)?;
         Ok(new_application)
     }
 
@@ -639,7 +621,7 @@ where
         source: AccountOwner,
         recipient: Recipient,
         amount: Amount,
-    ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
+    ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         match (source, authenticated_signer, authenticated_application_id) {
             (AccountOwner::User(owner), Some(signer), _) => ensure!(
                 signer == owner,
@@ -664,19 +646,14 @@ where
         self.debit(&source, amount).await?;
         match recipient {
             Recipient::Account(account) => {
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(account.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Tracked,
-                    message: SystemMessage::Credit {
-                        amount,
-                        source,
-                        target: account.owner,
-                    },
+                let message = SystemMessage::Credit {
+                    amount,
+                    source,
+                    target: account.owner,
                 };
-
-                Ok(Some(message))
+                Ok(Some(
+                    OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
+                ))
             }
             Recipient::Burn => Ok(None),
         }
@@ -690,7 +667,7 @@ where
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-    ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, ExecutionError> {
+    ) -> Result<OutgoingMessage, ExecutionError> {
         match source {
             AccountOwner::User(owner) => ensure!(
                 authenticated_signer == Some(owner),
@@ -704,17 +681,15 @@ where
         }
         ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
-        Ok(RawOutgoingMessage {
-            destination: Destination::Recipient(target_id),
-            authenticated: true,
-            grant: Amount::ZERO,
-            kind: MessageKind::Simple,
-            message: SystemMessage::Withdraw {
-                amount,
-                owner: source,
-                recipient,
-            },
-        })
+        let message = SystemMessage::Withdraw {
+            amount,
+            owner: source,
+            recipient,
+        };
+        Ok(
+            OutgoingMessage::new(target_id, message)
+                .with_authenticated_signer(authenticated_signer),
+        )
     }
 
     /// Debits an [`Amount`] of tokens from an account's balance.
@@ -753,8 +728,8 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-    ) -> Result<RawExecutionOutcome<SystemMessage>, ExecutionError> {
-        let mut outcome = RawExecutionOutcome::default();
+    ) -> Result<Vec<OutgoingMessage>, ExecutionError> {
+        let mut outcome = Vec::new();
         use SystemMessage::*;
         match message {
             Credit {
@@ -782,18 +757,15 @@ where
                 self.debit(&owner, amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
-                        let message = RawOutgoingMessage {
-                            destination: Destination::Recipient(account.chain_id),
-                            authenticated: false,
-                            grant: Amount::ZERO,
-                            kind: MessageKind::Tracked,
-                            message: SystemMessage::Credit {
-                                amount,
-                                source: owner,
-                                target: account.owner,
-                            },
+                        let message = SystemMessage::Credit {
+                            amount,
+                            source: owner,
+                            target: account.owner,
                         };
-                        outcome.messages.push(message);
+                        outcome.push(
+                            OutgoingMessage::new(account.chain_id, message)
+                                .with_kind(MessageKind::Tracked),
+                        );
                     }
                     Recipient::Burn => (),
                 }
@@ -857,7 +829,7 @@ where
         &mut self,
         config: OpenChainConfig,
         next_message_id: MessageId,
-    ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, ExecutionError> {
+    ) -> Result<OutgoingMessage, ExecutionError> {
         let child_id = ChainId::child(next_message_id);
         ensure!(
             self.admin_id.get().as_ref() == Some(&config.admin_id),
@@ -875,32 +847,25 @@ where
             }
         );
         self.debit(&AccountOwner::Chain, config.balance).await?;
-        let open_chain_message = RawOutgoingMessage {
-            destination: Destination::Recipient(child_id),
-            authenticated: false,
-            grant: Amount::ZERO,
-            kind: MessageKind::Protected,
-            message: SystemMessage::OpenChain(config),
-        };
-        Ok(open_chain_message)
+        let message = SystemMessage::OpenChain(config);
+        Ok(OutgoingMessage::new(child_id, message).with_kind(MessageKind::Protected))
     }
 
     pub async fn close_chain(
         &mut self,
         id: ChainId,
-    ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, ExecutionError> {
+    ) -> Result<Vec<OutgoingMessage>, ExecutionError> {
         let mut messages = Vec::new();
         // Unsubscribe from all channels.
         self.subscriptions
             .for_each_index(|subscription| {
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(subscription.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Unsubscribe { id, subscription },
-                };
-                messages.push(message);
+                messages.push(
+                    OutgoingMessage::new(
+                        subscription.chain_id,
+                        SystemMessage::Unsubscribe { id, subscription },
+                    )
+                    .with_kind(MessageKind::Protected),
+                );
                 Ok(())
             })
             .await?;

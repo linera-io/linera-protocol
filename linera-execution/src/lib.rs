@@ -955,18 +955,30 @@ pub struct OutgoingMessage {
 
 impl<'de> BcsHashable<'de> for OutgoingMessage {}
 
-/// Externally visible results of an execution. These results are meant in the context of
-/// the application that created them.
-#[derive(Debug)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawExecutionOutcome<Message> {
-    /// The signer who created the messages.
-    pub authenticated_signer: Option<Owner>,
-    /// Where to send a refund for the unused part of each grant after execution, if any.
-    pub refund_grant_to: Option<Account>,
-    /// Sends messages to the given destinations, possibly forwarding the authenticated
-    /// signer and including grant with the refund policy described above.
-    pub messages: Vec<RawOutgoingMessage<Message, Amount>>,
+impl OutgoingMessage {
+    /// Creates a new simple outgoing message with no grant and no authenticated signer.
+    pub fn new(recipient: ChainId, message: impl Into<Message>) -> Self {
+        OutgoingMessage {
+            destination: Destination::Recipient(recipient),
+            authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
+            kind: MessageKind::Simple,
+            message: message.into(),
+        }
+    }
+
+    /// Returns the same message, with the specified kind.
+    pub fn with_kind(mut self, kind: MessageKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    /// Returns the same message, with the specified authenticated signer.
+    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+        self.authenticated_signer = authenticated_signer;
+        self
+    }
 }
 
 /// The identifier of a channel, relative to a particular application.
@@ -978,56 +990,6 @@ pub struct ChannelSubscription {
     pub chain_id: ChainId,
     /// The name of the channel.
     pub name: ChannelName,
-}
-
-impl<Message> RawExecutionOutcome<Message> {
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
-        self.authenticated_signer = authenticated_signer;
-        self
-    }
-
-    pub fn with_refund_grant_to(mut self, refund_grant_to: Option<Account>) -> Self {
-        self.refund_grant_to = refund_grant_to;
-        self
-    }
-
-    /// Adds a `message` to this [`RawExecutionOutcome`].
-    pub fn with_message(mut self, message: RawOutgoingMessage<Message, Amount>) -> Self {
-        self.messages.push(message);
-        self
-    }
-}
-
-impl<Message> Default for RawExecutionOutcome<Message> {
-    fn default() -> Self {
-        Self {
-            authenticated_signer: None,
-            refund_grant_to: None,
-            messages: Vec::new(),
-        }
-    }
-}
-
-impl<Message> RawOutgoingMessage<Message, Resources> {
-    pub fn into_priced(
-        self,
-        policy: &ResourceControlPolicy,
-    ) -> Result<RawOutgoingMessage<Message, Amount>, ArithmeticError> {
-        let RawOutgoingMessage {
-            destination,
-            authenticated,
-            grant,
-            kind,
-            message,
-        } = self;
-        Ok(RawOutgoingMessage {
-            destination,
-            authenticated,
-            grant: policy.total_price(&grant)?,
-            kind,
-            message,
-        })
-    }
 }
 
 impl OperationContext {
