@@ -861,7 +861,6 @@ impl TransferTestEndpoint {
 }
 
 /// Tests the contract system API to query an application service.
-#[cfg(feature = "unstable-oracles")] // # TODO: Remove once #3524 lands
 #[test_case(None => matches Ok(_); "when all authorized")]
 #[test_case(Some(vec![()]) => matches Ok(_); "when single app authorized")]
 #[test_case(Some(vec![]) => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]

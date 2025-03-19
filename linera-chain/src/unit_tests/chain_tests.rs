@@ -5,11 +5,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    iter,
-};
-#[cfg(feature = "unstable-oracles")]
-use std::{
-    thread,
+    iter, thread,
     time::{Duration, Instant},
 };
 
@@ -31,12 +27,10 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
-    BaseRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageKind, Operation, ResourceControlPolicy, SystemMessage, SystemOperation,
-    TestExecutionRuntimeContext,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
+    Message, MessageKind, Operation, ResourceControlPolicy, ServiceRuntime, SystemMessage,
+    SystemOperation, TestExecutionRuntimeContext,
 };
-#[cfg(feature = "unstable-oracles")]
-use linera_execution::{ContractRuntime, ServiceRuntime};
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
     memory::MemoryStore,
@@ -306,7 +300,6 @@ async fn test_application_permissions() -> anyhow::Result<()> {
 }
 
 /// Tests if services can execute as oracles if the total execution time is less than the limit.
-#[cfg(feature = "unstable-oracles")]
 #[test_case(&[100]; "single service as oracle call")]
 #[test_case(&[50, 50]; "two service as oracle calls")]
 #[test_case(&[90, 10]; "long and short service as oracle calls")]
@@ -349,7 +342,6 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
 }
 
 /// Tests if execution fails if services executing as oracles exceed the time limit.
-#[cfg(feature = "unstable-oracles")]
 #[test_case(&[120]; "single service as oracle call")]
 #[test_case(&[60, 60]; "two service as oracle calls")]
 #[test_case(&[105, 15]; "long and short service as oracle calls")]
@@ -406,7 +398,6 @@ async fn test_service_as_oracle_exceeding_time_limit(
 }
 
 /// Tests if execution fails early if services call `check_execution_time`.
-#[cfg(feature = "unstable-oracles")]
 #[test_case(&[120]; "single service as oracle call")]
 #[test_case(&[60, 60]; "two service as oracle calls")]
 #[test_case(&[105, 15]; "long and short service as oracle calls")]
@@ -475,7 +466,6 @@ async fn test_service_as_oracle_timeout_early_stop(
 }
 
 /// Tests service-as-oracle response size limit.
-#[cfg(feature = "unstable-oracles")]
 #[test_case(50, 49 => matches Ok(_); "smaller than limit")]
 #[test_case(
     50, 51
@@ -567,7 +557,6 @@ async fn test_contract_http_response_size_limit(
 }
 
 /// Tests service HTTP response size limit.
-#[cfg(feature = "unstable-oracles")]
 #[test_case(150, 140, 139 => matches Ok(_); "smaller than both limits")]
 #[test_case(140, 150, 142 => matches Ok(_); "larger than oracle limit")]
 #[test_case(

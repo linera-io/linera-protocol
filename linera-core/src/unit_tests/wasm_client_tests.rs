@@ -354,8 +354,7 @@ where
         }]]
     );
 
-    let query_service = cfg!(feature = "unstable-oracles");
-    let mut operation = meta_counter::Operation::increment(receiver_id, 5, query_service);
+    let mut operation = meta_counter::Operation::increment(receiver_id, 5, true);
     operation.fuel_grant = 1000000;
     let cert = creator
         .execute_operation(Operation::user(application_id2, &operation)?)
@@ -367,16 +366,12 @@ where
     let [_, responses] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);
     };
-    if cfg!(feature = "unstable-oracles") {
-        let [OracleResponse::Service(json)] = &responses[..] else {
-            assert_eq!(&responses[..], &[]);
-            panic!("Unexpected oracle responses: {:?}", responses);
-        };
-        let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
-        assert_eq!(response_json["data"], json!({"value": 10}));
-    } else {
-        assert!(responses.is_empty());
-    }
+    let [OracleResponse::Service(json)] = &responses[..] else {
+        assert_eq!(&responses[..], &[]);
+        panic!("Unexpected oracle responses: {:?}", responses);
+    };
+    let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
+    assert_eq!(response_json["data"], json!({"value": 10}));
 
     receiver.synchronize_from_validators().await.unwrap();
     receiver

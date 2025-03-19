@@ -21,7 +21,6 @@ test = [
     "linera-base/test",
     "linera-execution/test",
 ]
-unstable-oracles = ["linera-execution/unstable-oracles"]
 web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 
 [dependencies]

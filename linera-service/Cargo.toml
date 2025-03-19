@@ -20,7 +20,6 @@ revm = [
     "linera-sdk/revm",
     "dep:alloy-sol-types",
 ]
-unstable-oracles = ["linera-core/unstable-oracles"]
 test = [
     "linera-base/test",
     "linera-execution/test",
