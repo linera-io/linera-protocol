@@ -3,7 +3,10 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::BTreeMap, iter};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+};
 #[cfg(feature = "unstable-oracles")]
 use std::{
     thread,
@@ -11,6 +14,7 @@ use std::{
 };
 
 use assert_matches::assert_matches;
+use axum::{routing::get, Router};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -18,6 +22,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     hashed::Hashed,
+    http,
     identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
@@ -26,26 +31,25 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
-    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
-    Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
+    BaseRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageKind, Operation, ResourceControlPolicy, SystemMessage, SystemOperation,
+    TestExecutionRuntimeContext,
 };
 #[cfg(feature = "unstable-oracles")]
 use linera_execution::{ContractRuntime, ServiceRuntime};
-#[cfg(feature = "unstable-oracles")]
-use linera_views::{context::ViewContext, memory::MemoryStore};
 use linera_views::{
-    context::{Context as _, MemoryContext},
+    context::{Context as _, MemoryContext, ViewContext},
+    memory::MemoryStore,
     views::{View, ViewError},
 };
-#[cfg(feature = "unstable-oracles")]
 use test_case::test_case;
 
-#[cfg(feature = "unstable-oracles")]
-use crate::data_types::{BlockExecutionOutcome, ProposedBlock};
 use crate::{
     block::{Block, ConfirmedBlock},
-    data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
-    test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
+    data_types::{
+        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, Origin, ProposedBlock,
+    },
+    test::{make_child_block, make_first_block, BlockTestExt, HttpServer, MessageTestExt},
     ChainError, ChainExecutionContext, ChainStateView,
 };
 
@@ -506,12 +510,67 @@ async fn test_service_as_oracle_response_size_limit(
     chain.execute_block(&block, time, None, &[], None).await
 }
 
+/// Tests contract HTTP response size limit.
+#[test_case(150, 140, 139 => matches Ok(_); "smaller than both limits")]
+#[test_case(
+    150, 140, 141
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than http limit"
+)]
+#[test_case(
+    140, 150, 142
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than oracle limit"
+)]
+#[test_case(
+    140, 150, 1000
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than both limits"
+)]
+#[tokio::test]
+async fn test_contract_http_response_size_limit(
+    oracle_limit: u64,
+    http_limit: u64,
+    response_size: usize,
+) -> Result<BlockExecutionOutcome, ChainError> {
+    let response_header_size = 84;
+    let response_body_size = response_size - response_header_size;
+
+    let http_server = HttpServer::start(Router::new().route(
+        "/",
+        get(move || async move { vec![b'a'; response_body_size] }),
+    ))
+    .await
+    .expect("Failed to start test HTTP server");
+
+    let (application, _application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_oracle_response_bytes: oracle_limit,
+            maximum_http_response_bytes: http_limit,
+            http_request_allow_list: BTreeSet::from_iter([http_server.hostname()]),
+            ..ResourceControlPolicy::default()
+        })
+        .await
+        .expect("Failed to set up test with mock application");
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        runtime.perform_http_request(http::Request::get(http_server.url()))?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    chain.execute_block(&block, time, None, &[], None).await
+}
+
 /// Sets up a test with a dummy [`MockApplication`].
 ///
 /// Creates and initializes a [`ChainStateView`] configured with the
 /// `maximum_service_oracle_execution_ms` policy. Registers the dummy application on the chain, and
 /// creates a block proposal with a dummy operation.
-#[cfg(feature = "unstable-oracles")]
 async fn prepare_test_with_dummy_mock_application(
     policy: ResourceControlPolicy,
 ) -> anyhow::Result<(
