@@ -111,7 +111,7 @@ impl Runnable for Job {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
-                                .transfer_to_account(sender.owner, amount, recipient)
+                                .transfer_to_account(sender.address, amount, recipient)
                                 .await
                         }
                     })
@@ -280,12 +280,12 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(account.chain_id)?;
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
-                let balance = match account.owner {
-                    Address::Address32(_) if account.owner == Address::chain() => {
+                let balance = match account.address {
+                    Address::Address32(_) if account.address == Address::chain() => {
                         chain_client.local_balance().await?
                     }
                     Address::Address32(_) => {
-                        chain_client.local_owner_balance(account.owner).await?
+                        chain_client.local_owner_balance(account.address).await?
                     }
                 };
                 let time_total = time_start.elapsed();
@@ -301,12 +301,12 @@ impl Runnable for Job {
                     incoming messages"
                 );
                 let time_start = Instant::now();
-                let balance = match account.owner {
-                    Address::Address32(_) if account.owner == Address::chain() => {
+                let balance = match account.address {
+                    Address::Address32(_) if account.address == Address::chain() => {
                         chain_client.query_balance().await?
                     }
                     Address::Address32(_) => {
-                        chain_client.query_owner_balance(account.owner).await?
+                        chain_client.query_owner_balance(account.address).await?
                     }
                 };
                 let time_total = time_start.elapsed();
@@ -321,11 +321,13 @@ impl Runnable for Job {
                 warn!("This command is deprecated. Use `linera sync && linera query-balance` instead.");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                let result = match account.owner {
-                    Address::Address32(_) if account.owner == Address::chain() => {
+                let result = match account.address {
+                    Address::Address32(_) if account.address == Address::chain() => {
                         chain_client.query_balance().await
                     }
-                    Address::Address32(_) => chain_client.query_owner_balance(account.owner).await,
+                    Address::Address32(_) => {
+                        chain_client.query_owner_balance(account.address).await
+                    }
                 };
                 context.update_wallet_from_client(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;

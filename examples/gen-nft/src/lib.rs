@@ -41,7 +41,7 @@ pub enum Operation {
     Mint { minter: Address, prompt: String },
     /// Transfers a token from a (locally owned) account to a (possibly remote) account.
     Transfer {
-        source_owner: Address,
+        source: Address,
         token_id: TokenId,
         target_account: Account,
     },

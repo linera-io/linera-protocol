@@ -35,10 +35,10 @@ impl Contract for NativeFungibleTokenContract {
             self.runtime.application_parameters().ticker_symbol == "NAT",
             "Only NAT is accepted as ticker symbol"
         );
-        for (owner, amount) in state.accounts {
+        for (address, amount) in state.accounts {
             let account = Account {
                 chain_id: self.runtime.chain_id(),
-                owner,
+                address,
             };
             self.runtime.transfer(Address::chain(), account, amount);
         }
@@ -46,24 +46,24 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            Operation::Balance { owner } => {
-                let balance = self.runtime.owner_balance(owner);
+            Operation::Balance { address } => {
+                let balance = self.runtime.owner_balance(address);
                 FungibleResponse::Balance(balance)
             }
 
             Operation::TickerSymbol => FungibleResponse::TickerSymbol(String::from(TICKER_SYMBOL)),
 
             Operation::Transfer {
-                owner,
+                source,
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner);
+                self.check_account_authentication(source);
 
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
 
-                self.runtime.transfer(owner, target_account, amount);
+                self.runtime.transfer(source, target_account, amount);
 
                 self.transfer(fungible_target_account.chain_id);
                 FungibleResponse::Ok
@@ -74,7 +74,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner);
+                self.check_account_authentication(source_account.address);
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -129,7 +129,7 @@ impl NativeFungibleTokenContract {
     fn normalize_account(&self, account: fungible::Account) -> Account {
         Account {
             chain_id: account.chain_id,
-            owner: account.owner,
+            address: account.address,
         }
     }
 

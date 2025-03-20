@@ -194,7 +194,7 @@ async fn benchmark_with_fungible(
                     Amount::ONE,
                     fungible::Account {
                         chain_id: receiver_context.default_chain,
-                        owner: receiver_context.owner,
+                        address: receiver_context.owner,
                     },
                 )
             })

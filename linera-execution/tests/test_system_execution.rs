@@ -30,7 +30,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     };
     let mut view = state.into_view().await;
     let operation = SystemOperation::Transfer {
-        owner: Address::chain(),
+        source: Address::chain(),
         amount: Amount::from_tokens(4),
         recipient: Recipient::Burn,
     };

@@ -65,7 +65,7 @@ async fn test_transfer_system_api(
             runtime.transfer(
                 sender.sender_account_owner(),
                 Account {
-                    owner: recipient.recipient_account_owner(),
+                    address: recipient.recipient_account_owner(),
                     chain_id: context.chain_id,
                 },
                 amount,
@@ -160,7 +160,7 @@ async fn test_unauthorized_transfer_system_api(
             runtime.transfer(
                 sender.unauthorized_sender_account_owner(),
                 Account {
-                    owner: recipient.recipient_account_owner(),
+                    address: recipient.recipient_account_owner(),
                     chain_id: context.chain_id,
                 },
                 amount,
@@ -249,11 +249,11 @@ async fn test_claim_system_api(
         move |runtime, context, _operation| {
             runtime.claim(
                 Account {
-                    owner: sender.sender_account_owner(),
+                    address: sender.sender_account_owner(),
                     chain_id: source_chain_id,
                 },
                 Account {
-                    owner: recipient.recipient_account_owner(),
+                    address: recipient.recipient_account_owner(),
                     chain_id: context.chain_id,
                 },
                 amount,
@@ -402,11 +402,11 @@ async fn test_unauthorized_claims(
         move |runtime, context, _operation| {
             runtime.claim(
                 Account {
-                    owner: sender.unauthorized_sender_account_owner(),
+                    address: sender.unauthorized_sender_account_owner(),
                     chain_id: source_chain_id,
                 },
                 Account {
-                    owner: recipient.recipient_account_owner(),
+                    address: recipient.recipient_account_owner(),
                     chain_id: context.chain_id,
                 },
                 amount,

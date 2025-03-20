@@ -1610,13 +1610,13 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer(
         &self,
-        owner: Address,
+        source: Address,
         amount: Amount,
         recipient: Recipient,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
         self.execute_operation(Operation::System(SystemOperation::Transfer {
-            owner,
+            source,
             recipient,
             amount,
         }))
@@ -2410,7 +2410,7 @@ where
             ChainClientError::WalletSynchronizationError
         );
         let mut query = ChainInfoQuery::new(self.chain_id);
-        query.request_owner_balance = owner;
+        query.request_address_balance = owner;
         let response = self
             .client
             .local_node
@@ -3152,13 +3152,13 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
-        owner: Address,
+        source: Address,
         amount: Amount,
-        account: Account,
+        recipient: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Transfer {
-            owner,
-            recipient: Recipient::Account(account),
+            source,
+            recipient: Recipient::Account(recipient),
             amount,
         }))
         .await

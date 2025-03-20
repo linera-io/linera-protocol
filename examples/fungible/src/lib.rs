@@ -33,7 +33,7 @@ pub enum Message {
     /// Withdraws from the given account and starts a transfer to the target account.
     Withdraw {
         /// Account to withdraw from
-        owner: Address,
+        address: Address,
         /// Amount to be withdrawn
         amount: Amount,
         /// Target account to transfer amount to
@@ -82,12 +82,12 @@ pub async fn create_with_accounts(
                     Operation::Claim {
                         source_account: Account {
                             chain_id: token_chain.id(),
-                            owner: *account,
+                            address: *account,
                         },
                         amount: *initial_amount,
                         target_account: Account {
                             chain_id: chain.id(),
-                            owner: *account,
+                            address: *account,
                         },
                     },
                 );

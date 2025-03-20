@@ -262,9 +262,9 @@ async fn test_fee_consumption(
     application.expect_call(ExpectedCall::default_finalize());
 
     let refund_grant_to = authenticated_signer
-        .map(|owner| Account {
+        .map(|address| Account {
             chain_id: ChainId::root(0),
-            owner,
+            address,
         })
         .or(None);
     let context = MessageContext {

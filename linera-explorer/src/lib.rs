@@ -456,7 +456,7 @@ async fn application(app: Application) -> Result<(Page, String)> {
     let subscriptions = list_entrypoints(&types, &sch["subscriptionType"]["name"])
         .unwrap_or(Value::Array(Vec::new()));
     let subscriptions = fill_type(&subscriptions, &types);
-    let pathname = format!("/application/{}", app.id);
+    let pathname = format!("/application/{}", app.address);
     Ok((
         Page::Application {
             app: Box::new(app),

@@ -53,7 +53,7 @@ async fn collect_pledges() {
     .await;
 
     let campaign_state = InstantiationArgument {
-        owner: campaign_account,
+        address: campaign_account,
         deadline: Timestamp::from(u64::MAX),
         target: target_amount,
     };
@@ -74,7 +74,7 @@ async fn collect_pledges() {
                 block.with_operation(
                     campaign_id,
                     Operation::Pledge {
-                        owner: *backer_account,
+                        address: *backer_account,
                         amount: pledge_amount,
                     },
                 );
@@ -155,7 +155,7 @@ async fn cancel_successful_campaign() {
     .await;
 
     let campaign_state = InstantiationArgument {
-        owner: campaign_account,
+        address: campaign_account,
         deadline: Timestamp::from(10),
         target: target_amount,
     };
@@ -176,7 +176,7 @@ async fn cancel_successful_campaign() {
                 block.with_operation(
                     campaign_id,
                     Operation::Pledge {
-                        owner: *backer_account,
+                        address: *backer_account,
                         amount: pledge_amount,
                     },
                 );

@@ -627,7 +627,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Address::chain(),
+        address: Address::chain(),
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -925,7 +925,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Address::chain(),
+        address: Address::chain(),
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1008,7 +1008,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Address::chain(),
+        address: Address::chain(),
     };
 
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1102,7 +1102,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Address::chain(),
+        address: Address::chain(),
     };
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     let mut expected = TransactionTracker::default();
@@ -1235,7 +1235,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Address::chain(),
+        address: Address::chain(),
     };
 
     // Return to checking the user application outcomes
@@ -1502,7 +1502,7 @@ async fn test_message_receipt_spending_chain_balance(
     let sender_chain_id = ChainId::root(2);
     let recipient = Account {
         chain_id: sender_chain_id,
-        owner: Address::chain(),
+        address: Address::chain(),
     };
 
     application.expect_call(ExpectedCall::execute_message(

@@ -33,14 +33,14 @@ pub enum Operation {
     /// Requests an account balance.
     Balance {
         /// Address to query the balance for
-        owner: Address,
+        address: Address,
     },
     /// Requests this fungible token's ticker symbol.
     TickerSymbol,
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
         /// Address to transfer from
-        owner: Address,
+        source: Address,
         /// Amount to be transferred
         amount: Amount,
         /// Target account to transfer the amount to
@@ -112,7 +112,7 @@ pub struct Account {
     /// Chain ID of the account
     pub chain_id: ChainId,
     /// Address of the account
-    pub owner: Address,
+    pub address: Address,
 }
 
 /// A builder type for constructing the initial state of the application.

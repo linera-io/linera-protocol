@@ -114,7 +114,7 @@ pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
-        owner: Address,
+        source: Address,
         recipient: Recipient,
         amount: Amount,
     },
@@ -407,7 +407,7 @@ where
                 outcome.messages.extend(messages);
             }
             Transfer {
-                owner,
+                source: owner,
                 amount,
                 recipient,
             } => {
@@ -674,7 +674,7 @@ where
                     message: SystemMessage::Credit {
                         amount,
                         source,
-                        target: account.owner,
+                        target: account.address,
                     },
                 };
 
@@ -774,7 +774,7 @@ where
                             message: SystemMessage::Credit {
                                 amount,
                                 source: owner,
-                                target: account.owner,
+                                target: account.address,
                             },
                         };
                         outcome.messages.push(message);

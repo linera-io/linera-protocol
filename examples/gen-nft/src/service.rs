@@ -108,10 +108,10 @@ impl QueryRoot {
         nfts
     }
 
-    async fn owned_token_ids_by_owner(&self, owner: Address) -> BTreeSet<String> {
+    async fn owned_token_ids_by_owner(&self, address: Address) -> BTreeSet<String> {
         self.non_fungible_token
             .owned_token_ids
-            .get(&owner)
+            .get(&address)
             .await
             .unwrap()
             .into_iter()
@@ -195,12 +195,12 @@ impl MutationRoot {
 
     async fn transfer(
         &self,
-        source_owner: Address,
+        source: Address,
         token_id: String,
         target_account: Account,
     ) -> [u8; 0] {
         let operation = Operation::Transfer {
-            source_owner,
+            source,
             token_id: TokenId {
                 id: STANDARD_NO_PAD.decode(token_id).unwrap(),
             },

@@ -214,7 +214,7 @@ query Chain(
 
 query Applications($chainId: ChainId!) {
   applications(chainId: $chainId) {
-    id
+    address
     link
     description
   }
@@ -358,6 +358,6 @@ subscription Notifications($chainId: ChainId!) {
   notifications(chainId: $chainId)
 }
 
-mutation Transfer($chainId: ChainId!, $owner: Address!, $recipient_chain: ChainId!, $recipient_account: Address!, $amount: Amount!) {
-  transfer(chainId: $chainId, owner: $owner, recipient: { Account: { chain_id: $recipient_chain, owner: $recipient_account } }, amount: $amount)
+mutation Transfer($chainId: ChainId!, $source: Address!, $recipient_chain: ChainId!, $recipient_address: Address!, $amount: Amount!) {
+  transfer(chainId: $chainId, source: $source, recipient: { Account: { chain_id: $recipient_chain, address: $recipient_address } }, amount: $amount)
 }

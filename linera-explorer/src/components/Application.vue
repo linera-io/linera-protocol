@@ -8,7 +8,7 @@ defineProps<{app: Application}>()
 <template>
   <div class="card">
     <div class="card-header">
-      <div class="card-title">Application {{ short_app_id(app.app.id) }}</div>
+      <div class="card-title">Application {{ short_app_id(app.app.address) }}</div>
     </div>
     <div class="card-body">
       <!-- QUERIES -->
