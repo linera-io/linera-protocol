@@ -27,41 +27,41 @@ use crate::{
 use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
 #[cfg(with_metrics)]
-/// The total number of cache read value faults
-static NUM_CACHE_READ_VALUE_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+/// The total number of cache read value misses
+static READ_VALUE_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "num_cache_read_value_fault",
-        "Number of cache read value faults",
+        "num_read_value_cache_miss",
+        "Number of read value cache misses",
         &[],
     )
 });
 
 #[cfg(with_metrics)]
-/// The total number of cache read value successes
-static NUM_CACHE_READ_VALUE_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+/// The total number of read value cache hits
+static READ_VALUE_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "num_cache_read_value_success",
-        "Number of cache read value success",
+        "num_read_value_cache_hits",
+        "Number of read value cache hits",
         &[],
     )
 });
 
 #[cfg(with_metrics)]
-/// The total number of cache contains key faults
-static NUM_CACHE_CONTAINS_KEY_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+/// The total number of contains key cache misses
+static CONTAINS_KEY_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "num_cache_contains_key_fault",
-        "Number of cache contains key faults",
+        "num_contains_key_cache_miss",
+        "Number of contains key cache misses",
         &[],
     )
 });
 
 #[cfg(with_metrics)]
-/// The total number of cache contains key successes
-static NUM_CACHE_CONTAINS_KEY_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+/// The total number of contains key cache hits
+static CONTAINS_KEY_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "num_cache_contains_key_success",
-        "Number of cache contains key success",
+        "num_contains_key_cache_hit",
+        "Number of contains key cache hits",
         &[],
     )
 });
@@ -70,16 +70,6 @@ enum CacheEntry {
     DoesNotExist,
     Exists,
     Value(Vec<u8>),
-}
-
-impl CacheEntry {
-    fn get_contains_key(&self) -> bool {
-        match self {
-            Self::DoesNotExist => false,
-            Self::Exists => true,
-            Self::Value(_) => true,
-        }
-    }
 }
 
 /// Stores the data for simple `read_values` queries.
@@ -107,7 +97,7 @@ impl LruPrefixCache {
 
     /// Inserts an entry into the cache.
     pub fn insert(&mut self, key: Vec<u8>, cache_entry: CacheEntry) {
-        if !cache_entry.get_contains_key() && !self.has_exclusive_access {
+        if matches!(cache_entry, CacheEntry::DoesNotExist) && !self.has_exclusive_access {
             // Just forget about the entry.
             self.map.remove(&key);
             self.queue.remove(&key);
@@ -171,7 +161,9 @@ impl LruPrefixCache {
         }
     }
 
-    /// Gets the read_value_bytes from the key.
+    /// Returns the cached value, or `Some(None)` if the entry does not exist in the
+    /// database. If `None` is returned, the entry might exist in the database but is
+    /// not in the cache.
     pub fn query_read_value(&self, key: &[u8]) -> Option<Option<Vec<u8>>> {
         match self.map.get(key) {
             None => None,
@@ -183,9 +175,10 @@ impl LruPrefixCache {
         }
     }
 
-    /// Gets the contains_key from the key.
+    /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
+    /// exist in the database. Returns `None` if that information is not in the cache.
     pub fn query_contains_key(&self, key: &[u8]) -> Option<bool> {
-        self.map.get(key).map(|entry| entry.get_contains_key())
+        self.map.get(key).map(|entry| !matches!(entry, CacheEntry::DoesNotExist))
     }
 }
 
@@ -227,12 +220,12 @@ where
             let cache = cache.lock().unwrap();
             if let Some(value) = cache.query_read_value(key) {
                 #[cfg(with_metrics)]
-                NUM_CACHE_READ_VALUE_SUCCESS.with_label_values(&[]).inc();
+                READ_VALUE_CACHE_HIT_COUNT.with_label_values(&[]).inc();
                 return Ok(value);
             }
         }
         #[cfg(with_metrics)]
-        NUM_CACHE_READ_VALUE_FAULT.with_label_values(&[]).inc();
+        READ_VALUE_CACHE_MISS_COUNT.with_label_values(&[]).inc();
         let value = self.store.read_value_bytes(key).await?;
         let mut cache = cache.lock().unwrap();
         cache.insert_read_value(key.to_vec(), &value);
@@ -247,12 +240,12 @@ where
             let cache = cache.lock().unwrap();
             if let Some(value) = cache.query_contains_key(key) {
                 #[cfg(with_metrics)]
-                NUM_CACHE_CONTAINS_KEY_SUCCESS.with_label_values(&[]).inc();
+                CONTAINS_KEY_CACHE_HIT_COUNT.with_label_values(&[]).inc();
                 return Ok(value);
             }
         }
         #[cfg(with_metrics)]
-        NUM_CACHE_CONTAINS_KEY_FAULT.with_label_values(&[]).inc();
+        CONTAINS_KEY_CACHE_MISS_COUNT.with_label_values(&[]).inc();
         let result = self.store.contains_key(key).await?;
         let mut cache = cache.lock().unwrap();
         cache.insert_contains_key(key.to_vec(), result);
@@ -272,11 +265,11 @@ where
             for i in 0..size {
                 if let Some(value) = cache.query_contains_key(&keys[i]) {
                     #[cfg(with_metrics)]
-                    NUM_CACHE_CONTAINS_KEY_SUCCESS.with_label_values(&[]).inc();
+                    CONTAINS_KEY_CACHE_HIT_COUNT.with_label_values(&[]).inc();
                     results[i] = value;
                 } else {
                     #[cfg(with_metrics)]
-                    NUM_CACHE_CONTAINS_KEY_FAULT.with_label_values(&[]).inc();
+                    CONTAINS_KEY_CACHE_MISS_COUNT.with_label_values(&[]).inc();
                     indices.push(i);
                     key_requests.push(keys[i].clone());
                 }
@@ -309,11 +302,11 @@ where
             for (i, key) in keys.into_iter().enumerate() {
                 if let Some(value) = cache.query_read_value(&key) {
                     #[cfg(with_metrics)]
-                    NUM_CACHE_READ_VALUE_SUCCESS.with_label_values(&[]).inc();
+                    READ_VALUE_CACHE_HIT_COUNT.with_label_values(&[]).inc();
                     result.push(value);
                 } else {
                     #[cfg(with_metrics)]
-                    NUM_CACHE_READ_VALUE_FAULT.with_label_values(&[]).inc();
+                    READ_VALUE_CACHE_MISS_COUNT.with_label_values(&[]).inc();
                     result.push(None);
                     cache_miss_indices.push(i);
                     miss_keys.push(key);
