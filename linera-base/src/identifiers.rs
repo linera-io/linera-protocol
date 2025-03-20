@@ -68,33 +68,33 @@ impl From<CryptoHash> for Address {
 pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
-    /// The owner of the account, or `None` for the chain balance.
-    pub owner: Address,
+    /// The address of the account.
+    pub address: Address,
 }
 
 impl Account {
     /// Creates a new [`Account`] with the given chain ID and owner.
-    pub fn new(chain_id: ChainId, owner: Address) -> Self {
-        Self { chain_id, owner }
+    pub fn new(chain_id: ChainId, address: Address) -> Self {
+        Self { chain_id, address }
     }
 
     /// Creates an [`Account`] representing the balance shared by a chain's owners.
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
-            owner: Address::chain(),
+            address: Address::chain(),
         }
     }
 
     /// Creates an [`Account`] for a specific [`Address`] on a chain.
-    pub fn address32(chain_id: ChainId, owner: Address) -> Self {
-        Account { chain_id, owner }
+    pub fn address32(chain_id: ChainId, address: Address) -> Self {
+        Account { chain_id, address }
     }
 }
 
 impl Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.chain_id, self.owner)
+        write!(f, "{}:{}", self.chain_id, self.address)
     }
 }
 

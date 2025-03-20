@@ -58,8 +58,8 @@ impl Contract for FungibleTokenContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            Operation::Balance { owner } => {
-                let balance = self.state.balance_or_default(&owner).await;
+            Operation::Balance { address } => {
+                let balance = self.state.balance_or_default(&address).await;
                 FungibleResponse::Balance(balance)
             }
 
@@ -69,13 +69,13 @@ impl Contract for FungibleTokenContract {
             }
 
             Operation::Transfer {
-                owner,
+                source: address,
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner);
-                self.state.debit(owner, amount).await;
-                self.finish_transfer_to_account(amount, target_account, owner)
+                self.check_account_authentication(address);
+                self.state.debit(address, amount).await;
+                self.finish_transfer_to_account(amount, target_account, address)
                     .await;
                 FungibleResponse::Ok
             }
@@ -85,7 +85,7 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner);
+                self.check_account_authentication(source_account.address);
                 self.claim(source_account, amount, target_account).await;
                 FungibleResponse::Ok
             }
@@ -107,13 +107,13 @@ impl Contract for FungibleTokenContract {
                 self.state.credit(receiver, amount).await;
             }
             Message::Withdraw {
-                owner,
+                address,
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner);
-                self.state.debit(owner, amount).await;
-                self.finish_transfer_to_account(amount, target_account, owner)
+                self.check_account_authentication(address);
+                self.state.debit(address, amount).await;
+                self.finish_transfer_to_account(amount, target_account, address)
                     .await;
             }
         }
@@ -126,22 +126,22 @@ impl Contract for FungibleTokenContract {
 
 impl FungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: Address) {
+    fn check_account_authentication(&mut self, address: Address) {
         assert!(
-            self.runtime.authenticated_signer() == Some(owner)
-                || self.runtime.authenticated_caller_id() == Some(owner),
+            self.runtime.authenticated_signer() == Some(address)
+                || self.runtime.authenticated_caller_id() == Some(address),
             "The requested transfer is not correctly authenticated."
         )
     }
 
     async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
-            self.state.debit(source_account.owner, amount).await;
-            self.finish_transfer_to_account(amount, target_account, source_account.owner)
+            self.state.debit(source_account.address, amount).await;
+            self.finish_transfer_to_account(amount, target_account, source_account.address)
                 .await;
         } else {
             let message = Message::Withdraw {
-                owner: source_account.owner,
+                address: source_account.address,
                 amount,
                 target_account,
             };
@@ -160,10 +160,10 @@ impl FungibleTokenContract {
         source: Address,
     ) {
         if target_account.chain_id == self.runtime.chain_id() {
-            self.state.credit(target_account.owner, amount).await;
+            self.state.credit(target_account.address, amount).await;
         } else {
             let message = Message::Credit {
-                target: target_account.owner,
+                target: target_account.address,
                 amount,
                 source,
             };

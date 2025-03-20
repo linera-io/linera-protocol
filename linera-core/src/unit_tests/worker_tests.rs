@@ -119,14 +119,14 @@ where
     let (committee, worker) = init_worker(
         storage, /* is_client */ false, /* has_long_lived_services */ false,
     );
-    for (description, owner, balance) in balances {
+    for (description, owner_address, balance) in balances {
         worker
             .storage
             .create_chain(
                 committee.clone(),
                 ChainId::root(0),
                 description,
-                owner,
+                owner_address,
                 balance,
                 Timestamp::from(0),
             )
@@ -324,7 +324,7 @@ where
                 MessageKind::Tracked,
                 SystemMessage::Credit {
                     source,
-                    target: account.owner,
+                    target: account.address,
                     amount,
                 },
             )]);
@@ -2090,14 +2090,14 @@ where
     let sender = Address::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
-        owner: sender,
+        address: sender,
     };
 
     let recipient_key_pair = AccountSecretKey::generate();
     let recipient = Address::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
-        owner: recipient,
+        address: recipient,
     };
 
     let (committee, worker) = init_worker_with_chains(

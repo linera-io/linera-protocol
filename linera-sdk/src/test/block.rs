@@ -94,7 +94,7 @@ impl BlockBuilder {
         amount: Amount,
     ) -> &mut Self {
         self.with_system_operation(SystemOperation::Transfer {
-            owner: sender,
+            source: sender,
             recipient,
             amount,
         })

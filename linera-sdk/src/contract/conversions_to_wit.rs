@@ -49,7 +49,7 @@ impl From<Account> for wit_contract_api::Account {
     fn from(account: Account) -> Self {
         wit_contract_api::Account {
             chain_id: account.chain_id.into(),
-            owner: account.owner.into(),
+            address: account.address.into(),
         }
     }
 }

@@ -142,16 +142,16 @@ scalar!(OrderNature);
 pub enum Order {
     /// Insertion of an order
     Insert {
-        owner: Address,
+        address: Address,
         amount: Amount,
         nature: OrderNature,
         price: Price,
     },
     /// Cancelling of an order
-    Cancel { owner: Address, order_id: OrderId },
+    Cancel { address: Address, order_id: OrderId },
     /// Modifying order (only decreasing is allowed)
     Modify {
-        owner: Address,
+        address: Address,
         order_id: OrderId,
         cancel_amount: Amount,
     },

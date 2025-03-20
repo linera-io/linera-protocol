@@ -135,25 +135,28 @@ impl MatchingEngineContract {
     fn get_owner(order: &Order) -> Address {
         match order {
             Order::Insert {
-                owner,
+                address,
                 amount: _,
                 nature: _,
                 price: _,
-            } => *owner,
-            Order::Cancel { owner, order_id: _ } => *owner,
+            } => *address,
+            Order::Cancel {
+                address,
+                order_id: _,
+            } => *address,
             Order::Modify {
-                owner,
+                address,
                 order_id: _,
                 cancel_amount: _,
-            } => *owner,
+            } => *address,
         }
     }
 
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: Address) {
+    fn check_account_authentication(&mut self, address: Address) {
         assert!(
-            self.runtime.authenticated_signer() == Some(owner)
-                || self.runtime.authenticated_caller_id() == Some(owner),
+            self.runtime.authenticated_signer() == Some(address)
+                || self.runtime.authenticated_caller_id() == Some(address),
             "Unauthorized."
         )
     }
@@ -174,7 +177,7 @@ impl MatchingEngineContract {
     ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: self.runtime.application_id().forget_abi(),
+            address: self.runtime.application_id().forget_abi(),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -190,13 +193,13 @@ impl MatchingEngineContract {
     /// Transfers tokens from the owner to the destination
     fn transfer(
         &mut self,
-        owner: Address,
+        source: Address,
         amount: Amount,
         target_account: Account,
         token_idx: u32,
     ) {
         let transfer = fungible::Operation::Transfer {
-            owner,
+            source,
             amount,
             target_account,
         };
@@ -216,13 +219,13 @@ impl MatchingEngineContract {
     async fn execute_order_local(&mut self, order: Order, chain_id: ChainId) {
         match order {
             Order::Insert {
-                owner,
+                address,
                 amount,
                 nature,
                 price,
             } => {
-                self.receive_from_account(&owner, &amount, &nature, &price);
-                let account = Account { chain_id, owner };
+                self.receive_from_account(&address, &amount, &nature, &price);
+                let account = Account { chain_id, address };
                 let transfers = self
                     .insert_and_uncross_market(&account, amount, nature, &price)
                     .await;
@@ -230,16 +233,16 @@ impl MatchingEngineContract {
                     self.send_to(transfer);
                 }
             }
-            Order::Cancel { owner, order_id } => {
-                self.modify_order_check(order_id, ModifyAmount::All, &owner)
+            Order::Cancel { address, order_id } => {
+                self.modify_order_check(order_id, ModifyAmount::All, &address)
                     .await;
             }
             Order::Modify {
-                owner,
+                address,
                 order_id,
                 cancel_amount,
             } => {
-                self.modify_order_check(order_id, ModifyAmount::Partial(cancel_amount), &owner)
+                self.modify_order_check(order_id, ModifyAmount::Partial(cancel_amount), &address)
                     .await;
             }
         }
@@ -270,16 +273,16 @@ impl MatchingEngineContract {
             order: order.clone(),
         };
         if let Order::Insert {
-            owner,
+            address,
             amount,
             nature,
             price,
         } = order
         {
-            // First, move the funds to the matching engine chain (under the same owner).
-            let destination = Account { chain_id, owner };
+            // First, move the funds to the matching engine chain (under the same address).
+            let destination = Account { chain_id, address };
             let (amount, token_idx) = Self::get_amount_idx(&nature, &price, &amount);
-            self.transfer(owner, amount, destination, token_idx);
+            self.transfer(address, amount, destination, token_idx);
         }
         self.runtime
             .prepare_message(message)
@@ -288,7 +291,7 @@ impl MatchingEngineContract {
     }
 
     /// Checks that the order exists and has been issued by the claimed owner.
-    async fn check_order_id(&self, order_id: &OrderId, owner: &Address) {
+    async fn check_order_id(&self, order_id: &OrderId, address: &Address) {
         let value = self
             .state
             .orders
@@ -299,7 +302,7 @@ impl MatchingEngineContract {
             None => panic!("Order is not present therefore cannot be cancelled"),
             Some(value) => {
                 assert_eq!(
-                    &value.account.owner, owner,
+                    &value.account.address, address,
                     "The owner of the order is not matching with the owner put"
                 );
             }
@@ -393,7 +396,7 @@ impl MatchingEngineContract {
                 let (cancel_amount, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
-                    self.remove_order_id((key_book.account.owner, order_id))
+                    self.remove_order_id((key_book.account.address, order_id))
                         .await;
                 }
                 let cancel_amount0 = product_price_amount(key_book.price, cancel_amount);
@@ -408,7 +411,7 @@ impl MatchingEngineContract {
                 let (cancel_count, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
-                    self.remove_order_id((key_book.account.owner, order_id))
+                    self.remove_order_id((key_book.account.address, order_id))
                         .await;
                 }
                 Transfer {
@@ -557,7 +560,7 @@ impl MatchingEngineContract {
                 ));
             }
             if order.amount == Amount::ZERO {
-                remove_order.push((order.account.owner, order.order_id));
+                remove_order.push((order.account.address, order.order_id));
             }
             if *amount == Amount::ZERO {
                 break;
@@ -580,7 +583,7 @@ impl MatchingEngineContract {
         let account_info = self
             .state
             .account_info
-            .get_mut_or_default(&account.owner)
+            .get_mut_or_default(&account.address)
             .await
             .expect("Failed to load account information");
         account_info.orders.insert(order_id);

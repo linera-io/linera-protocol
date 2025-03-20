@@ -26,7 +26,7 @@ impl ServiceAbi for CrowdFundingAbi {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, SimpleObject)]
 pub struct InstantiationArgument {
     /// The receiver of the pledges of a successful campaign.
-    pub owner: Address,
+    pub address: Address,
     /// The deadline of the campaign, after which it can be cancelled if it hasn't met its target.
     pub deadline: Timestamp,
     /// The funding target of the campaign.
@@ -47,7 +47,7 @@ impl std::fmt::Display for InstantiationArgument {
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Pledge some tokens to the campaign (from an account on the current chain to the campaign chain).
-    Pledge { owner: Address, amount: Amount },
+    Pledge { address: Address, amount: Amount },
     /// Collect the pledges after the campaign has reached its target (campaign chain only).
     Collect,
     /// Cancel the campaign and refund all pledges after the campaign has reached its deadline (campaign chain only).
@@ -58,5 +58,5 @@ pub enum Operation {
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
-    PledgeWithAccount { owner: Address, amount: Amount },
+    PledgeWithAccount { address: Address, amount: Amount },
 }

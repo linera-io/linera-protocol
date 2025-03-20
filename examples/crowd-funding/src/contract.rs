@@ -52,11 +52,11 @@ impl Contract for CrowdFundingContract {
 
     async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
-            Operation::Pledge { owner, amount } => {
+            Operation::Pledge { address, amount } => {
                 if self.runtime.chain_id() == self.runtime.application_creator_chain_id() {
-                    self.execute_pledge_with_account(owner, amount).await;
+                    self.execute_pledge_with_account(address, amount).await;
                 } else {
-                    self.execute_pledge_with_transfer(owner, amount);
+                    self.execute_pledge_with_transfer(address, amount);
                 }
             }
             Operation::Collect => self.collect_pledges(),
@@ -66,14 +66,14 @@ impl Contract for CrowdFundingContract {
 
     async fn execute_message(&mut self, message: Message) {
         match message {
-            Message::PledgeWithAccount { owner, amount } => {
+            Message::PledgeWithAccount { address, amount } => {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_creator_chain_id(),
                     "Action can only be executed on the chain that created the crowd-funding \
                     campaign"
                 );
-                self.execute_pledge_with_account(owner, amount).await;
+                self.execute_pledge_with_account(address, amount).await;
             }
         }
     }
@@ -91,16 +91,16 @@ impl CrowdFundingContract {
     }
 
     /// Adds a pledge from a local account to the remote campaign chain.
-    fn execute_pledge_with_transfer(&mut self, owner: Address, amount: Amount) {
+    fn execute_pledge_with_transfer(&mut self, address: Address, amount: Amount) {
         assert!(amount > Amount::ZERO, "Pledge is empty");
         // The campaign chain.
         let chain_id = self.runtime.application_creator_chain_id();
-        // First, move the funds to the campaign chain (under the same owner).
+        // First, move the funds to the campaign chain (under the same address).
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
         // of all messages created in the same operation/message.
-        let target_account = Account { chain_id, owner };
+        let target_account = Account { chain_id, address };
         let call = fungible::Operation::Transfer {
-            owner,
+            source: address,
             amount,
             target_account,
         };
@@ -109,30 +109,30 @@ impl CrowdFundingContract {
             .call_application(/* authenticated by owner */ true, fungible_id, &call);
         // Second, schedule the attribution of the funds to the (remote) campaign.
         self.runtime
-            .prepare_message(Message::PledgeWithAccount { owner, amount })
+            .prepare_message(Message::PledgeWithAccount { address, amount })
             .with_authentication()
             .send_to(chain_id);
     }
 
     /// Adds a pledge from a local account to the campaign chain.
-    async fn execute_pledge_with_account(&mut self, owner: Address, amount: Amount) {
+    async fn execute_pledge_with_account(&mut self, address: Address, amount: Amount) {
         assert!(amount > Amount::ZERO, "Pledge is empty");
-        self.receive_from_account(owner, amount);
-        self.finish_pledge(owner, amount).await
+        self.receive_from_account(address, amount);
+        self.finish_pledge(address, amount).await
     }
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
-    async fn finish_pledge(&mut self, source: Address, amount: Amount) {
+    async fn finish_pledge(&mut self, address: Address, amount: Amount) {
         match self.state.status.get() {
             Status::Active => self
                 .state
                 .pledges
-                .get_mut_or_default(&source)
+                .get_mut_or_default(&address)
                 .await
                 .expect("view access should not fail")
                 .saturating_add_assign(amount),
-            Status::Complete => self.send_to(amount, self.instantiation_argument().owner),
+            Status::Complete => self.send_to(amount, self.instantiation_argument().address),
             Status::Cancelled => panic!("Crowd-funding campaign has been cancelled"),
         }
     }
@@ -152,7 +152,7 @@ impl CrowdFundingContract {
             Status::Cancelled => panic!("Crowd-funding campaign has been cancelled"),
         }
 
-        self.send_to(total, self.instantiation_argument().owner);
+        self.send_to(total, self.instantiation_argument().address);
         self.state.pledges.clear();
         self.state.status.set(Status::Complete);
     }
@@ -186,18 +186,18 @@ impl CrowdFundingContract {
         }
 
         let balance = self.balance();
-        self.send_to(balance, self.instantiation_argument().owner);
+        self.send_to(balance, self.instantiation_argument().address);
         self.state.status.set(Status::Cancelled);
     }
 
     /// Queries the token application to determine the total amount of tokens in custody.
     fn balance(&mut self) -> Amount {
-        let owner = self.runtime.application_id().forget_abi();
+        let address = self.runtime.application_id().forget_abi();
         let fungible_id = self.fungible_id();
         let response = self.runtime.call_application(
             true,
             fungible_id,
-            &fungible::Operation::Balance { owner },
+            &fungible::Operation::Balance { address },
         );
         match response {
             fungible::FungibleResponse::Balance(balance) => balance,
@@ -205,14 +205,14 @@ impl CrowdFundingContract {
         }
     }
 
-    /// Transfers `amount` tokens from the funds in custody to the `owner`'s account.
-    fn send_to(&mut self, amount: Amount, owner: Address) {
+    /// Transfers `amount` tokens from the funds in custody to the `address` account.
+    fn send_to(&mut self, amount: Amount, address: Address) {
         let target_account = Account {
             chain_id: self.runtime.chain_id(),
-            owner,
+            address,
         };
         let transfer = fungible::Operation::Transfer {
-            owner: self.runtime.application_id().forget_abi(),
+            source: self.runtime.application_id().forget_abi(),
             amount,
             target_account,
         };
@@ -221,13 +221,13 @@ impl CrowdFundingContract {
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
-    fn receive_from_account(&mut self, owner: Address, amount: Amount) {
+    fn receive_from_account(&mut self, address: Address, amount: Amount) {
         let target_account = Account {
             chain_id: self.runtime.chain_id(),
-            owner: self.runtime.application_id().forget_abi(),
+            address: self.runtime.application_id().forget_abi(),
         };
         let transfer = fungible::Operation::Transfer {
-            owner,
+            source: address,
             amount,
             target_account,
         };

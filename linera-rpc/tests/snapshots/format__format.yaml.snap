@@ -6,7 +6,7 @@ Account:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
-    - owner:
+    - address:
         TYPENAME: Address
 AccountPublicKey:
   ENUM:
@@ -280,7 +280,7 @@ ChainInfoQuery:
     - test_next_block_height:
         OPTION:
           TYPENAME: BlockHeight
-    - request_owner_balance:
+    - request_address_balance:
         TYPENAME: Address
     - request_committees: BOOL
     - request_pending_message_bundles: BOOL
@@ -1068,7 +1068,7 @@ SystemOperation:
     0:
       Transfer:
         STRUCT:
-          - owner:
+          - source:
               TYPENAME: Address
           - recipient:
               TYPENAME: Recipient

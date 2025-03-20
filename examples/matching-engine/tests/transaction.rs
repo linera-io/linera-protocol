@@ -141,7 +141,7 @@ async fn single_transaction() {
     for price in [1, 2] {
         let price = Price { price };
         let order = Order::Insert {
-            owner: owner_a,
+            address: owner_a,
             amount: Amount::from_tokens(3),
             nature: OrderNature::Bid,
             price,
@@ -193,7 +193,7 @@ async fn single_transaction() {
     for price in [4, 2] {
         let price = Price { price };
         let order = Order::Insert {
-            owner: owner_b,
+            address: owner_b,
             amount: Amount::from_tokens(4),
             nature: OrderNature::Ask,
             price,
@@ -248,7 +248,7 @@ async fn single_transaction() {
 
     // Cancel A's order.
     let order = Order::Cancel {
-        owner: owner_a,
+        address: owner_a,
         order_id: order_ids_a[0],
     };
     let operation = Operation::ExecuteOrder { order };

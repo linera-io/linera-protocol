@@ -86,7 +86,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
 fn account_test_case() -> Account {
     Account {
         chain_id: ChainId::root(10),
-        owner: Address::Address32(CryptoHash::test_hash("account")),
+        address: Address::Address32(CryptoHash::test_hash("account")),
     }
 }
 

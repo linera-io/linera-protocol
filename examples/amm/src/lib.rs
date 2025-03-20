@@ -33,7 +33,7 @@ pub enum Operation {
     /// calculated based on the current AMM ratio
     /// Address here is the user executing the Swap
     Swap {
-        owner: Address,
+        address: Address,
         input_token_idx: u32,
         input_amount: Amount,
     },
@@ -45,7 +45,7 @@ pub enum Operation {
     /// Address here is the user adding liquidity, which currently can only
     /// be a chain owner
     AddLiquidity {
-        owner: Address,
+        address: Address,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     },
@@ -58,7 +58,7 @@ pub enum Operation {
     /// Address here is the user removing liquidity, which currently can only
     /// be a chain owner
     RemoveLiquidity {
-        owner: Address,
+        address: Address,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     },
@@ -66,7 +66,7 @@ pub enum Operation {
     /// Remove all the liquidity added by the given user, that is remaining in the AMM.
     /// Address here is the user removing liquidity, which currently can only
     /// be a chain owner
-    RemoveAllAddedLiquidity { owner: Address },
+    RemoveAllAddedLiquidity { address: Address },
     /// Close this chain, and remove all added liquidity
     /// Requires that this application is authorized to close the chain.
     CloseChain,
@@ -77,21 +77,21 @@ scalar!(Operation);
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     Swap {
-        owner: Address,
+        address: Address,
         input_token_idx: u32,
         input_amount: Amount,
     },
     AddLiquidity {
-        owner: Address,
+        address: Address,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     },
     RemoveLiquidity {
-        owner: Address,
+        address: Address,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     },
     RemoveAllAddedLiquidity {
-        owner: Address,
+        address: Address,
     },
 }

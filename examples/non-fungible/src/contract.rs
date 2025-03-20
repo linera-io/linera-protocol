@@ -75,7 +75,7 @@ impl Contract for NonFungibleTokenContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner);
+                self.check_account_authentication(source_account.address);
 
                 if source_account.chain_id == self.runtime.chain_id() {
                     let nft = self.get_nft(&token_id).await;
@@ -100,7 +100,7 @@ impl Contract for NonFungibleTokenContract {
                     .message_is_bouncing()
                     .expect("Message delivery status has to be available when executing a message");
                 if !is_bouncing {
-                    nft.owner = target_account.owner;
+                    nft.owner = target_account.address;
                 }
 
                 self.add_nft(nft).await;
@@ -111,7 +111,7 @@ impl Contract for NonFungibleTokenContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner);
+                self.check_account_authentication(source_account.address);
 
                 let nft = self.get_nft(&token_id).await;
                 self.check_account_authentication(nft.owner);
@@ -141,7 +141,7 @@ impl NonFungibleTokenContract {
     async fn transfer(&mut self, mut nft: Nft, target_account: Account) {
         self.remove_nft(&nft).await;
         if target_account.chain_id == self.runtime.chain_id() {
-            nft.owner = target_account.owner;
+            nft.owner = target_account.address;
             self.add_nft(nft).await;
         } else {
             let message = Message::Transfer {

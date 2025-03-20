@@ -270,13 +270,13 @@ where
     async fn transfer(
         &self,
         chain_id: ChainId,
-        owner: Address,
+        source: Address,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<CryptoHash, Error> {
         self.apply_client_command(&chain_id, move |client| async move {
             let result = client
-                .transfer(owner, amount, recipient)
+                .transfer(source, amount, recipient)
                 .await
                 .map_err(Error::from)
                 .map(|outcome| outcome.map(|certificate| certificate.hash()));
@@ -812,26 +812,26 @@ where
 
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
-    id: Address,
+    address: Address,
     description: UserApplicationDescription,
     link: String,
 }
 
 impl ApplicationOverview {
     fn new(
-        id: Address,
+        address: Address,
         description: UserApplicationDescription,
         port: NonZeroU16,
         chain_id: ChainId,
     ) -> Self {
         Self {
-            id,
+            address,
             description,
             link: format!(
                 "http://localhost:{}/chains/{}/applications/{}",
                 port.get(),
                 chain_id,
-                id
+                address
             ),
         }
     }
@@ -982,7 +982,7 @@ where
     /// Handles mutations for user applications.
     async fn user_application_mutation(
         &self,
-        application_id: Address,
+        address: Address,
         request: &Request,
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
@@ -991,7 +991,7 @@ where
             response,
             operations,
         } = self
-            .query_user_application(application_id, request, chain_id)
+            .query_user_application(address, request, chain_id)
             .await?;
         let graphql_response = serde_json::from_slice::<async_graphql::Response>(&response)?;
         if graphql_response.is_err() {

@@ -565,11 +565,11 @@ where
 
     // Make a transfer using the fungible app.
     let transfer = fungible::Operation::Transfer {
-        owner: sender_owner,
+        source: sender_owner,
         amount: 100.into(),
         target_account: fungible::Account {
             chain_id: receiver.chain_id(),
-            owner: receiver_owner,
+            address: receiver_owner,
         },
     };
     let cert = sender
@@ -593,11 +593,11 @@ where
 
     // Make another transfer.
     let transfer = fungible::Operation::Transfer {
-        owner: sender_owner,
+        source: sender_owner,
         amount: 200.into(),
         target_account: fungible::Account {
             chain_id: receiver.chain_id(),
-            owner: receiver_owner,
+            address: receiver_owner,
         },
     };
     let cert = sender
@@ -620,11 +620,11 @@ where
 
     // Try another transfer except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
-        owner: receiver_owner,
+        source: receiver_owner,
         amount: 301.into(),
         target_account: fungible::Account {
             chain_id: receiver2.chain_id(),
-            owner: receiver2_owner,
+            address: receiver2_owner,
         },
     };
     assert!(receiver
@@ -635,11 +635,11 @@ where
 
     // Try another transfer with the correct amount.
     let transfer = fungible::Operation::Transfer {
-        owner: receiver_owner,
+        source: receiver_owner,
         amount: 300.into(),
         target_account: fungible::Account {
             chain_id: receiver2.chain_id(),
-            owner: receiver2_owner,
+            address: receiver2_owner,
         },
     };
     let certificate = receiver

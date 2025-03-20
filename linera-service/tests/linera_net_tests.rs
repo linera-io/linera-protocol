@@ -724,7 +724,7 @@ async fn test_wasm_end_to_end_fungible(
         Amount::ONE,
         fungible::Account {
             chain_id: chain2,
-            owner: account_owner2,
+            address: account_owner2,
         },
     )
     .await;
@@ -760,11 +760,11 @@ async fn test_wasm_end_to_end_fungible(
     app2.claim(
         fungible::Account {
             chain_id: chain1,
-            owner: account_owner2,
+            address: account_owner2,
         },
         fungible::Account {
             chain_id: chain2,
-            owner: account_owner2,
+            address: account_owner2,
         },
         Amount::from_tokens(2),
     )
@@ -902,7 +902,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         Amount::ONE,
         Account {
             chain_id: chain2,
-            owner: account_owner2,
+            address: account_owner2,
         },
     )
     .await;
@@ -1029,7 +1029,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         &nft1_id,
         &fungible::Account {
             chain_id: chain2,
-            owner: account_owner1,
+            address: account_owner1,
         },
     )
     .await;
@@ -1061,12 +1061,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     app1.claim(
         &fungible::Account {
             chain_id: chain2,
-            owner: account_owner1,
+            address: account_owner1,
         },
         &nft1_id,
         &fungible::Account {
             chain_id: chain1,
-            owner: account_owner1,
+            address: account_owner1,
         },
     )
     .await;
@@ -1093,7 +1093,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         &nft1_id,
         &fungible::Account {
             chain_id: chain2,
-            owner: account_owner2,
+            address: account_owner2,
         },
     )
     .await;
@@ -1161,7 +1161,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         &nft2_id,
         &fungible::Account {
             chain_id: chain1,
-            owner: account_owner2,
+            address: account_owner2,
         },
     )
     .await;
@@ -1186,12 +1186,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     app2.claim(
         &fungible::Account {
             chain_id: chain1,
-            owner: account_owner2,
+            address: account_owner2,
         },
         &nft2_id,
         &fungible::Account {
             chain_id: chain2,
-            owner: account_owner2,
+            address: account_owner2,
         },
     )
     .await;
@@ -1274,7 +1274,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     let deadline = Timestamp::from(u64::MAX);
     let target = Amount::ONE;
     let state_crowd = InstantiationArgument {
-        owner: account_owner1,
+        address: account_owner1,
         deadline,
         target,
     };
@@ -1313,7 +1313,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
             Amount::ONE,
             fungible::Account {
                 chain_id: chain2,
-                owner: account_owner2,
+                address: account_owner2,
             },
         )
         .await;
@@ -1521,7 +1521,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         // 1 is expected not to match, but 2 is expected to match
         app_matching_a
             .order(matching_engine::Order::Insert {
-                owner: owner_a,
+                address: owner_a,
                 amount: Amount::from_tokens(3),
                 nature: OrderNature::Bid,
                 price: Price { price },
@@ -1532,7 +1532,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         // price 2 is expected to match, but not 4.
         app_matching_b
             .order(matching_engine::Order::Insert {
-                owner: owner_b,
+                address: owner_b,
                 amount: Amount::from_tokens(4),
                 nature: OrderNature::Ask,
                 price: Price { price },
@@ -1560,7 +1560,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     for order_id in order_ids_a {
         app_matching_a
             .order(matching_engine::Order::Cancel {
-                owner: owner_a,
+                address: owner_a,
                 order_id,
             })
             .await;
@@ -1568,7 +1568,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     for order_id in order_ids_b {
         app_matching_b
             .order(matching_engine::Order::Cancel {
-                owner: owner_b,
+                address: owner_b,
                 order_id,
             })
             .await;
@@ -1719,7 +1719,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             Amount::from_tokens(100),
             fungible::Account {
                 chain_id: chain0,
-                owner: owner0,
+                address: owner0,
             },
         )
         .await;
@@ -1729,7 +1729,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             Amount::from_tokens(170),
             fungible::Account {
                 chain_id: chain1,
-                owner: owner1,
+                address: owner1,
             },
         )
         .await;
@@ -1740,7 +1740,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             Amount::from_tokens(150),
             fungible::Account {
                 chain_id: chain0,
-                owner: owner0,
+                address: owner0,
             },
         )
         .await;
@@ -1750,7 +1750,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             Amount::from_tokens(100),
             fungible::Account {
                 chain_id: chain1,
-                owner: owner1,
+                address: owner1,
             },
         )
         .await;
@@ -2376,8 +2376,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     );
 
     // Create a fungible token application with 10 tokens for owner 1.
-    let owner = get_fungible_account_owner(&client);
-    let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
+    let address = get_fungible_account_owner(&client);
+    let accounts = BTreeMap::from([(address, Amount::from_tokens(10))]);
     let state = fungible::InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;
     let params = fungible::Parameters::new("FUN");
@@ -2433,11 +2433,11 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
             .await?,
     );
     app1.transfer(
-        &owner,
+        &address,
         Amount::from_tokens(8),
         fungible::Account {
             chain_id: chain2,
-            owner,
+            address,
         },
     )
     .await;
@@ -2452,11 +2452,11 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
             .await?,
     );
     app2.transfer(
-        &owner,
+        &address,
         Amount::from_tokens(4),
         fungible::Account {
             chain_id: chain1,
-            owner,
+            address,
         },
     )
     .await;
@@ -2464,8 +2464,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     // Verify that the default chain now has 6 and the new one has 4 tokens.
     for i in 0..10 {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-        let balance1 = app1.get_amount(&owner).await;
-        let balance2 = app2.get_amount(&owner).await;
+        let balance1 = app1.get_amount(&address).await;
+        let balance2 = app2.get_amount(&address).await;
         if balance1 == Amount::from_tokens(6) && balance2 == Amount::from_tokens(4) {
             net.ensure_is_running().await?;
             net.terminate().await?;

@@ -80,7 +80,7 @@ async fn setup_native_token_balances(
     for chain in &chains {
         let recipient = Recipient::Account(Account {
             chain_id: chain.id(),
-            owner: Address::from(chain.public_key()),
+            address: Address::from(chain.public_key()),
         });
 
         // TODO: Support benchmarking chains with multiple owner accounts
@@ -110,7 +110,7 @@ fn prepare_transfers(
         .iter()
         .map(|chain| Account {
             chain_id: chain.id(),
-            owner: Address::from(chain.public_key()),
+            address: Address::from(chain.public_key()),
         })
         .collect::<Vec<_>>();
 

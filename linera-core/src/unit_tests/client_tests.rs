@@ -1411,7 +1411,7 @@ where
         .body
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
-            owner: Address::chain(),
+            source: Address::chain(),
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
         })));
@@ -1538,7 +1538,7 @@ where
         .body
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
-            owner: Address::chain(),
+            source: Address::chain(),
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
         })));

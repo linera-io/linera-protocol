@@ -44,11 +44,11 @@ async fn test_cross_chain_transfer() {
             block.with_operation(
                 application_id,
                 Operation::Transfer {
-                    owner: sender_account,
+                    source: sender_account,
                     amount: transfer_amount,
                     target_account: Account {
                         chain_id: receiver_chain.id(),
-                        owner: receiver_account,
+                        address: receiver_account,
                     },
                 },
             );
@@ -98,11 +98,11 @@ async fn test_bouncing_tokens() {
             block.with_operation(
                 application_id,
                 Operation::Transfer {
-                    owner: sender_account,
+                    source: sender_account,
                     amount: transfer_amount,
                     target_account: Account {
                         chain_id: receiver_chain.id(),
-                        owner: receiver_account,
+                        address: receiver_account,
                     },
                 },
             );

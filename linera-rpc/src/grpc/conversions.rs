@@ -555,7 +555,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
 
         Ok(Self {
             request_committees: chain_info_query.request_committees,
-            request_owner_balance: try_proto_convert(chain_info_query.request_owner_balance)?,
+            request_address_balance: try_proto_convert(chain_info_query.request_address_balance)?,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
             request_sent_certificate_hashes_in_range,
@@ -577,12 +577,12 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             .request_sent_certificate_hashes_in_range
             .map(|range| bincode::serialize(&range))
             .transpose()?;
-        let request_owner_balance = Some(chain_info_query.request_owner_balance.try_into()?);
+        let request_address_balance = Some(chain_info_query.request_address_balance.try_into()?);
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
             request_committees: chain_info_query.request_committees,
-            request_owner_balance,
+            request_address_balance,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificate_hashes_in_range,
@@ -1087,7 +1087,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
-            request_owner_balance: Address::chain(),
+            request_address_balance: Address::chain(),
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: Some(
                 linera_core::data_types::BlockHeightRange {

@@ -62,11 +62,11 @@ impl Contract for AmmContract {
 
         match message {
             Message::Swap {
-                owner,
+                address,
                 input_token_idx,
                 input_amount,
             } => {
-                self.check_account_authentication(owner);
+                self.check_account_authentication(address);
                 // It's assumed that the tokens have already been transferred here at this point
                 assert!(
                     input_amount > Amount::ZERO,
@@ -86,10 +86,10 @@ impl Contract for AmmContract {
                 );
 
                 let amm_account = self.get_amm_account();
-                self.transfer(owner, input_amount, amm_account, input_token_idx);
+                self.transfer(address, input_amount, amm_account, input_token_idx);
 
                 let amm_app_owner = self.get_amm_app_owner();
-                let message_origin_account = self.get_message_origin_account(owner);
+                let message_origin_account = self.get_message_origin_account(address);
                 self.transfer(
                     amm_app_owner,
                     output_amount,
@@ -99,11 +99,11 @@ impl Contract for AmmContract {
             }
 
             Message::AddLiquidity {
-                owner,
+                address,
                 max_token0_amount,
                 max_token1_amount,
             } => {
-                self.check_account_authentication(owner);
+                self.check_account_authentication(address);
 
                 assert!(
                     max_token0_amount > Amount::ZERO && max_token1_amount > Amount::ZERO,
@@ -174,30 +174,30 @@ impl Contract for AmmContract {
                 }
 
                 let amm_account = self.get_amm_account();
-                let message_origin_account = self.get_message_origin_account(owner);
+                let message_origin_account = self.get_message_origin_account(address);
                 // See if we'll need to send refunds
                 if token0_amount < max_token0_amount {
                     self.transfer(
-                        owner,
+                        address,
                         max_token0_amount.saturating_sub(token0_amount),
                         message_origin_account,
                         0,
                     );
                 }
-                // Transfer tokens to AMM owner
-                self.transfer(owner, token0_amount, amm_account, 0);
+                // Transfer tokens to AMM address
+                self.transfer(address, token0_amount, amm_account, 0);
 
                 // See if we'll need to send refunds
                 if token1_amount < max_token1_amount {
                     self.transfer(
-                        owner,
+                        address,
                         max_token1_amount.saturating_sub(token1_amount),
                         message_origin_account,
                         1,
                     );
                 }
-                // Transfer tokens to AMM owner
-                self.transfer(owner, token1_amount, amm_account, 1);
+                // Transfer tokens to AMM address
+                self.transfer(address, token1_amount, amm_account, 1);
 
                 let shares_to_mint =
                     self.get_shares(token0_amount, token1_amount, &balance0_bigint);
@@ -216,11 +216,11 @@ impl Contract for AmmContract {
             }
 
             Message::RemoveLiquidity {
-                owner,
+                address,
                 token_to_remove_idx,
                 mut token_to_remove_amount,
             } => {
-                self.check_account_authentication(owner);
+                self.check_account_authentication(address);
 
                 assert!(token_to_remove_idx < 2, "Invalid token index");
 
@@ -264,7 +264,7 @@ impl Contract for AmmContract {
                     self.get_shares(other_amount, token_to_remove_amount, &balance0_bigint)
                 };
 
-                let message_origin_account = self.get_message_origin_account(owner);
+                let message_origin_account = self.get_message_origin_account(address);
                 let current_shares = self
                     .current_shares_or_default(&message_origin_account)
                     .await;
@@ -282,10 +282,10 @@ impl Contract for AmmContract {
                 )
             }
 
-            Message::RemoveAllAddedLiquidity { owner } => {
-                self.check_account_authentication(owner);
+            Message::RemoveAllAddedLiquidity { address } => {
+                self.check_account_authentication(address);
 
-                let message_origin_account = self.get_message_origin_account(owner);
+                let message_origin_account = self.get_message_origin_account(address);
                 let current_shares = self
                     .current_shares_or_default(&message_origin_account)
                     .await;
@@ -310,10 +310,10 @@ impl Contract for AmmContract {
 
 impl AmmContract {
     /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: Address) {
+    fn check_account_authentication(&mut self, address: Address) {
         assert!(
-            self.runtime.authenticated_signer() == Some(owner)
-                || self.runtime.authenticated_caller_id() == Some(owner),
+            self.runtime.authenticated_signer() == Some(address)
+                || self.runtime.authenticated_caller_id() == Some(address),
             "Unauthorized"
         )
     }
@@ -439,7 +439,7 @@ impl AmmContract {
     fn get_amm_account(&mut self) -> Account {
         Account {
             chain_id: self.get_amm_chain_id(),
-            owner: self.get_amm_app_owner(),
+            address: self.get_amm_app_owner(),
         }
     }
 
@@ -450,41 +450,41 @@ impl AmmContract {
             .chain_id
     }
 
-    fn get_message_origin_account(&mut self, owner: Address) -> Account {
+    fn get_message_origin_account(&mut self, address: Address) -> Account {
         Account {
             chain_id: self.get_message_creation_chain_id(),
-            owner,
+            address,
         }
     }
 
-    fn get_account_on_amm_chain(&mut self, owner: Address) -> Account {
+    fn get_account_on_amm_chain(&mut self, address: Address) -> Account {
         Account {
             chain_id: self.get_amm_chain_id(),
-            owner,
+            address,
         }
     }
 
     async fn execute_order_local(&mut self, operation: Operation) {
         match operation {
             Operation::Swap {
-                owner: _,
+                address: _,
                 input_token_idx: _,
                 input_amount: _,
             } => panic!("Can't swap locally"),
 
             Operation::AddLiquidity {
-                owner: _,
+                address: _,
                 max_token0_amount: _,
                 max_token1_amount: _,
             } => panic!("Can't add liquidity locally"),
 
             Operation::RemoveLiquidity {
-                owner: _,
+                address: _,
                 token_to_remove_idx: _,
                 token_to_remove_amount: _,
             } => panic!("Can't remove liquidity locally"),
 
-            Operation::RemoveAllAddedLiquidity { owner: _ } => {
+            Operation::RemoveAllAddedLiquidity { address: _ } => {
                 panic!("Can't remove liquidity locally")
             }
 
@@ -527,17 +527,17 @@ impl AmmContract {
     async fn execute_order_remote(&mut self, operation: Operation) {
         match operation {
             Operation::Swap {
-                owner,
+                address,
                 input_token_idx,
                 input_amount,
             } => {
-                self.check_account_authentication(owner);
+                self.check_account_authentication(address);
 
-                let account_on_amm_chain = self.get_account_on_amm_chain(owner);
-                self.transfer(owner, input_amount, account_on_amm_chain, input_token_idx);
+                let account_on_amm_chain = self.get_account_on_amm_chain(address);
+                self.transfer(address, input_amount, account_on_amm_chain, input_token_idx);
 
                 let message = Message::Swap {
-                    owner,
+                    address,
                     input_token_idx,
                     input_amount,
                 };
@@ -549,18 +549,18 @@ impl AmmContract {
             }
 
             Operation::AddLiquidity {
-                owner,
+                address,
                 max_token0_amount,
                 max_token1_amount,
             } => {
-                self.check_account_authentication(owner);
+                self.check_account_authentication(address);
 
-                let account_on_amm_chain = self.get_account_on_amm_chain(owner);
-                self.transfer(owner, max_token0_amount, account_on_amm_chain, 0);
-                self.transfer(owner, max_token1_amount, account_on_amm_chain, 1);
+                let account_on_amm_chain = self.get_account_on_amm_chain(address);
+                self.transfer(address, max_token0_amount, account_on_amm_chain, 0);
+                self.transfer(address, max_token1_amount, account_on_amm_chain, 1);
 
                 let message = Message::AddLiquidity {
-                    owner,
+                    address,
                     max_token0_amount,
                     max_token1_amount,
                 };
@@ -574,14 +574,14 @@ impl AmmContract {
             // remove and the amount, and we'll calculate the amount for the other token that
             // we'll remove based on the current ratio, and remove them.
             Operation::RemoveLiquidity {
-                owner,
+                address,
                 token_to_remove_idx,
                 token_to_remove_amount,
             } => {
-                self.check_account_authentication(owner);
+                self.check_account_authentication(address);
 
                 let message = Message::RemoveLiquidity {
-                    owner,
+                    address,
                     token_to_remove_idx,
                     token_to_remove_amount,
                 };
@@ -591,10 +591,10 @@ impl AmmContract {
                     .send_to(self.get_amm_chain_id());
             }
 
-            Operation::RemoveAllAddedLiquidity { owner } => {
-                self.check_account_authentication(owner);
+            Operation::RemoveAllAddedLiquidity { address } => {
+                self.check_account_authentication(address);
 
-                let message = Message::RemoveAllAddedLiquidity { owner };
+                let message = Message::RemoveAllAddedLiquidity { address };
                 self.runtime
                     .prepare_message(message)
                     .with_authentication()
@@ -659,14 +659,14 @@ impl AmmContract {
 
     fn transfer(
         &mut self,
-        source_owner: Address,
+        source: Address,
         amount: Amount,
         target_account: Account,
         token_idx: u32,
     ) {
         let token = self.fungible_id(token_idx);
         let operation = fungible::Operation::Transfer {
-            owner: source_owner,
+            source,
             amount,
             target_account,
         };
@@ -675,7 +675,7 @@ impl AmmContract {
     }
 
     fn balance(&mut self, owner: &Address, token_idx: u32) -> Amount {
-        let balance = fungible::Operation::Balance { owner: *owner };
+        let balance = fungible::Operation::Balance { address: *owner };
         let token = self.fungible_id(token_idx);
         match self.runtime.call_application(true, token, &balance) {
             fungible::FungibleResponse::Balance(balance) => balance,

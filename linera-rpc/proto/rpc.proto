@@ -189,8 +189,8 @@ message ChainInfoQuery {
   // Request a signed vote for a leader timeout.
   bool request_leader_timeout = 8;
 
-  // Query the balance of a given owner.
-  Address request_owner_balance = 9;
+  // Query the balance of a given address.
+  Address request_address_balance = 9;
 
   // Request a signed vote for fallback mode.
   bool request_fallback = 10;
@@ -207,7 +207,7 @@ message BlockProposal {
   // Byte-encoded public key
   AccountPublicKey public_key = 3;
 
-  // Byte-encoded owner
+  // Byte-encoded address of the chain owner
   Address owner = 4;
 
   // Signature by chain owner

@@ -503,7 +503,7 @@ where
         self.debit(source, amount);
 
         if Some(destination.chain_id) == self.chain_id {
-            self.credit(destination.owner, amount);
+            self.credit(destination.address, amount);
         } else {
             let destination_entry = self.outgoing_transfers.entry(destination).or_default();
             *destination_entry = destination_entry
@@ -548,10 +548,10 @@ where
     /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
     pub fn claim(&mut self, source: Account, destination: Account, amount: Amount) {
         if Some(source.chain_id) == self.chain_id {
-            self.debit(source.owner, amount);
+            self.debit(source.address, amount);
 
             if Some(destination.chain_id) == self.chain_id {
-                self.credit(destination.owner, amount);
+                self.credit(destination.address, amount);
             }
         }
 

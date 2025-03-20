@@ -202,7 +202,7 @@ where
                     .claim(
                         signer,
                         Some(application_id),
-                        source.owner,
+                        source.address,
                         source.chain_id,
                         Recipient::Account(destination),
                         amount,

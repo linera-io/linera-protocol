@@ -14,7 +14,7 @@ A non-negative amount of tokens.
 scalar Amount
 
 type ApplicationOverview {
-	id: Address!
+	address: Address!
 	description: UserApplicationDescription!
 	link: String!
 }
@@ -729,7 +729,7 @@ type MutationRoot {
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the chain account.
 	"""
-	transfer(chainId: ChainId!, owner: Address!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	transfer(chainId: ChainId!, source: Address!, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Claims `amount` units of value from the given owner's account in the remote
 	`target` chain. Depending on its configuration, the `target` chain may refuse to

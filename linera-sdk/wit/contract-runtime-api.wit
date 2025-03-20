@@ -23,7 +23,7 @@ interface contract-runtime-api {
 
     record account {
         chain-id: chain-id,
-        owner: address,
+        address: address,
     }
 
     variant address {

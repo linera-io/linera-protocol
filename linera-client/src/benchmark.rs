@@ -594,7 +594,7 @@ where
                     amount,
                 ),
                 None => Operation::System(SystemOperation::Transfer {
-                    owner: Address::chain(),
+                    source: Address::chain(),
                     recipient: Recipient::chain(previous_chain_id),
                     amount,
                 }),
@@ -618,10 +618,10 @@ where
     ) -> Operation {
         let target_account = fungible::Account {
             chain_id,
-            owner: Address::from(receiver),
+            address: Address::from(receiver),
         };
         let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-            owner: Address::from(sender),
+            source: Address::from(sender),
             amount,
             target_account,
         })

@@ -402,7 +402,7 @@ where
             message: SystemMessage::Credit {
                 amount,
                 source: context.authenticated_signer.unwrap_or(Address::chain()),
-                target: account.owner,
+                target: account.address,
             },
         };
         outcome.messages.push(message);

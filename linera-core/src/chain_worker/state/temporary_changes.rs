@@ -219,14 +219,14 @@ where
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
-        if query.request_owner_balance == Address::chain() {
+        if query.request_address_balance == Address::chain() {
             info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
         } else {
             info.requested_owner_balance = chain
                 .execution_state
                 .system
                 .balances
-                .get(&query.request_owner_balance)
+                .get(&query.request_address_balance)
                 .await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {
