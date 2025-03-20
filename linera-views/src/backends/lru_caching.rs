@@ -73,33 +73,11 @@ enum CacheEntry {
 }
 
 impl CacheEntry {
-    fn from_contains_key(test: bool) -> Self {
-        match test {
-            false => Self::DoesNotExist,
-            true => Self::Exists,
-        }
-    }
-
-    fn from_read_value(result: &Option<Vec<u8>>) -> Self {
-        match result {
-            None => Self::DoesNotExist,
-            Some(vec) => Self::Value(vec.to_vec()),
-        }
-    }
-
     fn get_contains_key(&self) -> bool {
         match self {
             Self::DoesNotExist => false,
             Self::Exists => true,
             Self::Value(_) => true,
-        }
-    }
-
-    fn get_read_value(&self) -> Option<Option<Vec<u8>>> {
-        match self {
-            Self::DoesNotExist => Some(None),
-            Self::Exists => None,
-            Self::Value(vec) => Some(Some(vec.clone())),
         }
     }
 }
@@ -157,13 +135,19 @@ impl LruPrefixCache {
 
     /// Inserts a read_value entry into the cache.
     pub fn insert_read_value(&mut self, key: Vec<u8>, value: &Option<Vec<u8>>) {
-        let cache_entry = CacheEntry::from_read_value(value);
+        let cache_entry = match value {
+            None => CacheEntry::DoesNotExist,
+            Some(vec) => CacheEntry::Value(vec.to_vec()),
+        };
         self.insert(key, cache_entry)
     }
 
     /// Inserts a read_value entry into the cache.
     pub fn insert_contains_key(&mut self, key: Vec<u8>, result: bool) {
-        let cache_entry = CacheEntry::from_contains_key(result);
+        let cache_entry = match result {
+            false => CacheEntry::DoesNotExist,
+            true => CacheEntry::Exists,
+        };
         self.insert(key, cache_entry)
     }
 
@@ -191,7 +175,11 @@ impl LruPrefixCache {
     pub fn query_read_value(&self, key: &[u8]) -> Option<Option<Vec<u8>>> {
         match self.map.get(key) {
             None => None,
-            Some(entry) => entry.get_read_value(),
+            Some(entry) => match entry {
+                CacheEntry::DoesNotExist => Some(None),
+                CacheEntry::Exists => None,
+                CacheEntry::Value(vec) => Some(Some(vec.clone())),
+            },
         }
     }
 
