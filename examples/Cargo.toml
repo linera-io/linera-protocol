@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "amm",
     "counter",
+    "counter-no-graphql",
     "crowd-funding",
     "ethereum-tracker",
     "fungible",

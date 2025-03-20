@@ -150,6 +150,7 @@ alloy = { workspace = true, default-features = false, features = [
 amm.workspace = true
 base64.workspace = true
 counter.workspace = true
+counter-no-graphql.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
 ethereum-tracker.workspace = true

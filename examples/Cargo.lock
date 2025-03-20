@@ -1515,6 +1515,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter-no-graphql"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1073,6 +1073,16 @@ fn truncate_query_output(input: &str) -> String {
     }
 }
 
+fn truncate_query_output_serialize<T: Serialize>(query: T) -> String {
+    let query = serde_json::to_string(&query).expect("Failed to serialize the failed query");
+    let max_len = 200;
+    if query.len() < max_len {
+        query
+    } else {
+        format!("{} ...", query.get(..max_len).unwrap())
+    }
+}
+
 /// A running node service.
 pub struct NodeService {
     port: u16,
@@ -1378,39 +1388,37 @@ pub struct ApplicationWrapper<A> {
 }
 
 impl<A> ApplicationWrapper<A> {
-    pub async fn raw_query(&self, query: impl AsRef<str>) -> Result<Value> {
+    pub async fn run_graphql_query(&self, query: impl AsRef<str>) -> Result<Value> {
+        let query = query.as_ref();
+        let value = self.run_json_query(json!({ "query": query })).await?;
+        Ok(value["data"].clone())
+    }
+
+    pub async fn run_json_query<T: Serialize>(&self, query: T) -> Result<Value> {
         const MAX_RETRIES: usize = 5;
 
         for i in 0.. {
-            let query = query.as_ref();
             let client = reqwest_client();
-            let result = client
-                .post(&self.uri)
-                .json(&json!({ "query": query }))
-                .send()
-                .await;
+            let result = client.post(&self.uri).json(&query).send().await;
             let response = match result {
                 Ok(response) => response,
                 Err(error) if i < MAX_RETRIES => {
                     warn!(
                         "Failed to post query \"{}\": {error}; retrying",
-                        truncate_query_output(query),
+                        truncate_query_output_serialize(&query),
                     );
                     continue;
                 }
                 Err(error) => {
-                    return Err(error).with_context(|| {
-                        format!(
-                            "raw_query: failed to post query={}",
-                            truncate_query_output(query)
-                        )
-                    });
+                    let query = truncate_query_output_serialize(&query);
+                    return Err(error)
+                        .with_context(|| format!("run_json_query: failed to post query={query}"));
                 }
             };
             anyhow::ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
-                truncate_query_output(query),
+                truncate_query_output_serialize(&query),
                 response
                     .text()
                     .await
@@ -1420,18 +1428,19 @@ impl<A> ApplicationWrapper<A> {
             if let Some(errors) = value.get("errors") {
                 bail!(
                     "Query \"{}\" failed: {}",
-                    truncate_query_output(query),
+                    truncate_query_output_serialize(&query),
                     errors
                 );
             }
-            return Ok(value["data"].clone());
+            return Ok(value);
         }
         unreachable!()
     }
 
     pub async fn query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
-        self.raw_query(&format!("query {{ {query} }}")).await
+        self.run_graphql_query(&format!("query {{ {query} }}"))
+            .await
     }
 
     pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
@@ -1446,7 +1455,8 @@ impl<A> ApplicationWrapper<A> {
 
     pub async fn mutate(&self, mutation: impl AsRef<str>) -> Result<Value> {
         let mutation = mutation.as_ref();
-        self.raw_query(&format!("mutation {{ {mutation} }}")).await
+        self.run_graphql_query(&format!("mutation {{ {mutation} }}"))
+            .await
     }
 }
 

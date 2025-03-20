@@ -2081,6 +2081,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter-no-graphql"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "linera-sdk",
+ "serde",
+]
+
+[[package]]
 name = "cpp_demangle"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4983,6 +4992,7 @@ dependencies = [
  "comfy-table",
  "convert_case",
  "counter",
+ "counter-no-graphql",
  "criterion",
  "crowd-funding",
  "current_platform",
