@@ -405,7 +405,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let query = hex::encode(&query);
     let query = format!("query {{ v{} }}", query);
 
-    let result = application.json_query(query).await?;
+    let result = application.run_graphql_query(query).await?;
     let result = result.to_string();
     let result = hex::decode(&result[1..result.len() - 1])?;
 
@@ -417,14 +417,14 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let mutation = hex::encode(&mutation);
     let mutation = format!("mutation {{ v{} }}", mutation);
 
-    application.json_query(mutation).await?;
+    application.run_graphql_query(mutation).await?;
 
     let query = get_valueCall {};
     let query = query.abi_encode();
     let query = hex::encode(&query);
     let query = format!("query {{ v{} }}", query);
 
-    let result = application.json_query(query).await?;
+    let result = application.run_graphql_query(query).await?;
     let result = result.to_string();
     let result = hex::decode(&result[1..result.len() - 1])?;
 
@@ -530,16 +530,16 @@ async fn test_wasm_end_to_end_counter_no_graphql(config: impl LineraNetConfig) -
         .await?;
 
     let query = CounterRequest::Query;
-    let read_counter_value = application.raw_query(&query).await?;
+    let read_counter_value = application.run_json_query(&query).await?;
     let mut counter_value = original_counter_value;
     assert_eq!(read_counter_value, counter_value);
 
     // executing a query that mutates the state
 
     let query_increment = CounterRequest::Increment(increment);
-    application.raw_query(&query_increment).await?;
+    application.run_json_query(&query_increment).await?;
 
-    let read_counter_value = application.raw_query(&query).await?;
+    let read_counter_value = application.run_json_query(&query).await?;
     counter_value += increment;
     assert_eq!(read_counter_value, counter_value);
 
