@@ -261,6 +261,7 @@ where
                 self.pyroscope_address(),
                 "proxy".to_string(),
                 shutdown_signal.clone(),
+                self.0.internal_config.pyroscope_sample_rate,
             )?;
         }
 

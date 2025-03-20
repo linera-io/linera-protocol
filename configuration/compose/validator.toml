@@ -9,6 +9,7 @@ port = 19100
 metrics_port = 21100
 pyroscope_host = "docker-pyroscope"
 pyroscope_port = 4040
+pyroscope_sample_rate = 100
 internal_host = "proxy"
 internal_port = 20100
 [external_protocol]
@@ -22,6 +23,7 @@ port = 19100
 metrics_port = 21100
 pyroscope_host = "docker-pyroscope"
 pyroscope_port = 4040
+pyroscope_sample_rate = 100
 
 [[shards]]
 host = "docker-shard-2"
@@ -29,6 +31,7 @@ port = 19100
 metrics_port = 21100
 pyroscope_host = "docker-pyroscope"
 pyroscope_port = 4040
+pyroscope_sample_rate = 100
 
 [[shards]]
 host = "docker-shard-3"
@@ -36,6 +39,7 @@ port = 19100
 metrics_port = 21100
 pyroscope_host = "docker-pyroscope"
 pyroscope_port = 4040
+pyroscope_sample_rate = 100
 
 [[shards]]
 host = "docker-shard-4"
@@ -43,3 +47,4 @@ port = 19100
 metrics_port = 21100
 pyroscope_host = "docker-pyroscope"
 pyroscope_port = 4040
+pyroscope_sample_rate = 100
