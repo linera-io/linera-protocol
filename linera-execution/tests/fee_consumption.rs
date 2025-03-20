@@ -112,7 +112,7 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000));
     "with execution and an empty read and with owner account and grant"
 )]
-#[cfg_attr(feature = "unstable-oracles", test_case(
+#[test_case(
     vec![
         FeeSpend::QueryServiceOracle,
     ],
@@ -120,8 +120,8 @@ use test_case::test_case;
     Some(Amount::from_tokens(1)),
     Some(Amount::from_tokens(1_000));
     "with only a service oracle call"
-))]
-#[cfg_attr(feature = "unstable-oracles", test_case(
+)]
+#[test_case(
     vec![
         FeeSpend::QueryServiceOracle,
         FeeSpend::QueryServiceOracle,
@@ -131,8 +131,8 @@ use test_case::test_case;
     Some(Amount::from_tokens(1)),
     Some(Amount::from_tokens(1_000));
     "with three service oracle calls"
-))]
-#[cfg_attr(feature = "unstable-oracles", test_case(
+)]
+#[test_case(
     vec![
         FeeSpend::Fuel(91),
         FeeSpend::QueryServiceOracle,
@@ -146,7 +146,7 @@ use test_case::test_case;
     Some(Amount::from_tokens(1_000)),
     None;
     "with service oracle calls, fuel consumption and a read operation"
-))]
+)]
 #[test_case(
     vec![FeeSpend::HttpRequest],
     Amount::from_tokens(2),

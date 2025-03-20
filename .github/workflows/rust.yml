@@ -121,10 +121,10 @@ jobs:
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
-    - name: Run all tests using the default features (plus unstable-oracles, except storage-service)
+    - name: Run all tests using the default features (except storage-service)
       run: |
         # TODO(#2764): Actually link this to the default features
-        cargo test --no-default-features --features fs,macros,wasmer,rocksdb,unstable-oracles --locked
+        cargo test --no-default-features --features fs,macros,wasmer,rocksdb --locked
     - name: Run Witty integration tests
       run: |
         cargo test -p linera-witty --features wasmer,wasmtime
@@ -208,7 +208,7 @@ jobs:
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service
     - name: Run REVM test
       run: |
         cargo test -p linera-execution test_fuel_for_counter_revm_application --features revm
@@ -231,7 +231,7 @@ jobs:
     - name: Run the storage-service instance and the storage-service tests
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
+        cargo test --features storage-service -- storage_service --nocapture
 
   web:
     runs-on: ubuntu-latest

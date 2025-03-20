@@ -1318,11 +1318,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         application_id: ApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        ensure!(
-            cfg!(feature = "unstable-oracles"),
-            ExecutionError::UnstableOracle
-        );
-
         let mut this = self.inner();
 
         let app_permissions = this
