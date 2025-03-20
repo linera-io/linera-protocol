@@ -365,6 +365,19 @@ where
 
         Ok(())
     }
+
+    /// Tracks the size of a response produced by an oracle.
+    pub(crate) fn track_service_oracle_response(
+        &mut self,
+        response_bytes: usize,
+    ) -> Result<(), ExecutionError> {
+        ensure!(
+            response_bytes as u64 <= self.policy.maximum_oracle_response_bytes,
+            ExecutionError::ServiceOracleResponseTooLarge
+        );
+
+        Ok(())
+    }
 }
 
 impl<Account, Tracker> ResourceController<Account, Tracker>

@@ -231,6 +231,8 @@ pub enum ExecutionError {
     MaximumFuelExceeded,
     #[error("Services running as oracles in block took longer than allowed")]
     MaximumServiceOracleExecutionTimeExceeded,
+    #[error("Service running as an oracle produced a response that's too large")]
+    ServiceOracleResponseTooLarge,
     #[error("Serialized size of the executed block exceeds limit")]
     ExecutedBlockTooLarge,
     #[error("HTTP response exceeds the size limit of {limit} bytes, having at least {size} bytes")]

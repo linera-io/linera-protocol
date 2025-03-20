@@ -3,7 +3,10 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::BTreeMap, iter};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+};
 #[cfg(feature = "unstable-oracles")]
 use std::{
     thread,
@@ -11,6 +14,7 @@ use std::{
 };
 
 use assert_matches::assert_matches;
+use axum::{routing::get, Router};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
@@ -18,6 +22,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     hashed::Hashed,
+    http,
     identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
@@ -26,26 +31,25 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
-    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
-    Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
+    BaseRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageKind, Operation, ResourceControlPolicy, SystemMessage, SystemOperation,
+    TestExecutionRuntimeContext,
 };
 #[cfg(feature = "unstable-oracles")]
 use linera_execution::{ContractRuntime, ServiceRuntime};
-#[cfg(feature = "unstable-oracles")]
-use linera_views::{context::ViewContext, memory::MemoryStore};
 use linera_views::{
-    context::{Context as _, MemoryContext},
+    context::{Context as _, MemoryContext, ViewContext},
+    memory::MemoryStore,
     views::{View, ViewError},
 };
-#[cfg(feature = "unstable-oracles")]
 use test_case::test_case;
 
-#[cfg(feature = "unstable-oracles")]
-use crate::data_types::ProposedBlock;
 use crate::{
     block::{Block, ConfirmedBlock},
-    data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
-    test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
+    data_types::{
+        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, Origin, ProposedBlock,
+    },
+    test::{make_child_block, make_first_block, BlockTestExt, HttpServer, MessageTestExt},
     ChainError, ChainExecutionContext, ChainStateView,
 };
 
@@ -123,7 +127,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 847;
+    let maximum_executed_block_size = 855;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -317,7 +321,11 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
         .map(Duration::from_millis);
 
     let (application, application_id, mut chain, block, time) =
-        prepare_test_with_dummy_mock_application(maximum_service_oracle_execution_ms).await?;
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_service_oracle_execution_ms,
+            ..ResourceControlPolicy::default()
+        })
+        .await?;
 
     application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
         for _ in 0..service_oracle_call_count {
@@ -359,7 +367,11 @@ async fn test_service_as_oracle_exceeding_time_limit(
         .map(Duration::from_millis);
 
     let (application, application_id, mut chain, block, time) =
-        prepare_test_with_dummy_mock_application(maximum_service_oracle_execution_ms).await?;
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_service_oracle_execution_ms,
+            ..ResourceControlPolicy::default()
+        })
+        .await?;
 
     application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
         for _ in 0..service_oracle_call_count {
@@ -393,76 +405,6 @@ async fn test_service_as_oracle_exceeding_time_limit(
     Ok(())
 }
 
-/// Sets up a test with a dummy [`MockApplication`].
-///
-/// Creates and initializes a [`ChainStateView`] configured with the
-/// `maximum_service_oracle_execution_ms` policy. Registers the dummy application on the chain, and
-/// creates a block proposal with a dummy operation.
-#[cfg(feature = "unstable-oracles")]
-async fn prepare_test_with_dummy_mock_application(
-    maximum_service_oracle_execution_ms: u64,
-) -> anyhow::Result<(
-    MockApplication,
-    ApplicationId,
-    ChainStateView<ViewContext<TestExecutionRuntimeContext, MemoryStore>>,
-    ProposedBlock,
-    Timestamp,
-)> {
-    let time = Timestamp::from(0);
-    let message_id = make_admin_message_id(BlockHeight(3));
-    let chain_id = ChainId::child(message_id);
-    let mut chain = ChainStateView::new(chain_id).await;
-
-    let mut config = make_open_chain_config();
-    config.committees.insert(
-        Epoch(0),
-        Committee::new(
-            BTreeMap::from([(
-                ValidatorPublicKey::test_key(1),
-                ValidatorState {
-                    network_address: ValidatorPublicKey::test_key(1).to_string(),
-                    votes: 1,
-                    account_public_key: AccountPublicKey::test_key(1),
-                },
-            )]),
-            ResourceControlPolicy {
-                maximum_service_oracle_execution_ms,
-                ..ResourceControlPolicy::default()
-            },
-        ),
-    );
-
-    chain
-        .execute_init_message(message_id, &config, time, time)
-        .await?;
-
-    // Create a mock application.
-    let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = ApplicationId::from(&app_description);
-    let application = MockApplication::default();
-    let extra = &chain.context().extra();
-    extra
-        .user_contracts()
-        .insert(application_id, application.clone().into());
-    extra
-        .user_services()
-        .insert(application_id, application.clone().into());
-    extra
-        .add_blobs([
-            contract_blob,
-            service_blob,
-            Blob::new_application_description(&app_description),
-        ])
-        .await?;
-
-    let block = make_first_block(chain_id).with_operation(Operation::User {
-        application_id,
-        bytes: vec![],
-    });
-
-    Ok((application, application_id, chain, block, time))
-}
-
 /// Tests if execution fails early if services call `check_execution_time`.
 #[cfg(feature = "unstable-oracles")]
 #[test_case(&[120]; "single service as oracle call")]
@@ -485,57 +427,12 @@ async fn test_service_as_oracle_timeout_early_stop(
         .copied()
         .map(Duration::from_millis);
 
-    let time = Timestamp::from(0);
-    let message_id = make_admin_message_id(BlockHeight(3));
-    let chain_id = ChainId::child(message_id);
-    let mut chain = ChainStateView::new(chain_id).await;
-
-    let mut config = make_open_chain_config();
-    config.committees.insert(
-        Epoch(0),
-        Committee::new(
-            BTreeMap::from([(
-                ValidatorPublicKey::test_key(1),
-                ValidatorState {
-                    network_address: ValidatorPublicKey::test_key(1).to_string(),
-                    votes: 1,
-                    account_public_key: AccountPublicKey::test_key(1),
-                },
-            )]),
-            ResourceControlPolicy {
-                maximum_service_oracle_execution_ms,
-                ..ResourceControlPolicy::default()
-            },
-        ),
-    );
-
-    chain
-        .execute_init_message(message_id, &config, time, time)
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_service_oracle_execution_ms,
+            ..ResourceControlPolicy::default()
+        })
         .await?;
-
-    // Create a mock application.
-    let (app_description, contract_blob, service_blob) = make_app_description();
-    let application_id = ApplicationId::from(&app_description);
-    let application = MockApplication::default();
-    let extra = &chain.context().extra();
-    extra
-        .user_contracts()
-        .insert(application_id, application.clone().into());
-    extra
-        .user_services()
-        .insert(application_id, application.clone().into());
-    extra
-        .add_blobs([
-            contract_blob,
-            service_blob,
-            Blob::new_application_description(&app_description),
-        ])
-        .await?;
-
-    let block = make_first_block(chain_id).with_operation(Operation::User {
-        application_id,
-        bytes: vec![],
-    });
 
     application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
         for _ in 0..service_oracle_call_count {
@@ -575,4 +472,219 @@ async fn test_service_as_oracle_timeout_early_stop(
     assert!(execution_time <= maximum_expected_execution_time);
 
     Ok(())
+}
+
+/// Tests service-as-oracle response size limit.
+#[cfg(feature = "unstable-oracles")]
+#[test_case(50, 49 => matches Ok(_); "smaller than limit")]
+#[test_case(
+    50, 51
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::ServiceOracleResponseTooLarge);
+    "larger than limit"
+)]
+#[tokio::test]
+async fn test_service_as_oracle_response_size_limit(
+    limit: u64,
+    response_size: usize,
+) -> Result<BlockExecutionOutcome, ChainError> {
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_oracle_response_bytes: limit,
+            ..ResourceControlPolicy::default()
+        })
+        .await
+        .expect("Failed to set up test with mock application");
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        runtime.query_service(application_id, vec![])?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::handle_query(move |_runtime, _, _| {
+        Ok(vec![0; response_size])
+    }));
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    chain.execute_block(&block, time, None, &[], None).await
+}
+
+/// Tests contract HTTP response size limit.
+#[test_case(150, 140, 139 => matches Ok(_); "smaller than both limits")]
+#[test_case(
+    150, 140, 141
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than http limit"
+)]
+#[test_case(
+    140, 150, 142
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than oracle limit"
+)]
+#[test_case(
+    140, 150, 1000
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than both limits"
+)]
+#[tokio::test]
+async fn test_contract_http_response_size_limit(
+    oracle_limit: u64,
+    http_limit: u64,
+    response_size: usize,
+) -> Result<BlockExecutionOutcome, ChainError> {
+    let response_header_size = 84;
+    let response_body_size = response_size - response_header_size;
+
+    let http_server = HttpServer::start(Router::new().route(
+        "/",
+        get(move || async move { vec![b'a'; response_body_size] }),
+    ))
+    .await
+    .expect("Failed to start test HTTP server");
+
+    let (application, _application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_oracle_response_bytes: oracle_limit,
+            maximum_http_response_bytes: http_limit,
+            http_request_allow_list: BTreeSet::from_iter([http_server.hostname()]),
+            ..ResourceControlPolicy::default()
+        })
+        .await
+        .expect("Failed to set up test with mock application");
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        runtime.perform_http_request(http::Request::get(http_server.url()))?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    chain.execute_block(&block, time, None, &[], None).await
+}
+
+/// Tests service HTTP response size limit.
+#[cfg(feature = "unstable-oracles")]
+#[test_case(150, 140, 139 => matches Ok(_); "smaller than both limits")]
+#[test_case(140, 150, 142 => matches Ok(_); "larger than oracle limit")]
+#[test_case(
+    150, 140, 141
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than http limit"
+)]
+#[test_case(
+    140, 150, 1000
+    => matches Err(ChainError::ExecutionError(execution_error, _))
+        if matches!(*execution_error, ExecutionError::HttpResponseSizeLimitExceeded { .. });
+    "larger than both limits"
+)]
+#[tokio::test]
+async fn test_service_http_response_size_limit(
+    oracle_limit: u64,
+    http_limit: u64,
+    response_size: usize,
+) -> Result<BlockExecutionOutcome, ChainError> {
+    let response_header_size = 84;
+    let response_body_size = response_size - response_header_size;
+
+    let http_server = HttpServer::start(Router::new().route(
+        "/",
+        get(move || async move { vec![b'a'; response_body_size] }),
+    ))
+    .await
+    .expect("Failed to start test HTTP server");
+
+    let (application, application_id, mut chain, block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy {
+            maximum_oracle_response_bytes: oracle_limit,
+            maximum_http_response_bytes: http_limit,
+            http_request_allow_list: BTreeSet::from_iter([http_server.hostname()]),
+            ..ResourceControlPolicy::default()
+        })
+        .await
+        .expect("Failed to set up test with mock application");
+
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+        runtime.query_service(application_id, vec![])?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _, _| {
+        runtime.perform_http_request(http::Request::get(http_server.url()))?;
+        Ok(vec![])
+    }));
+
+    application.expect_call(ExpectedCall::default_finalize());
+
+    chain.execute_block(&block, time, None, &[], None).await
+}
+
+/// Sets up a test with a dummy [`MockApplication`].
+///
+/// Creates and initializes a [`ChainStateView`] configured with the
+/// `maximum_service_oracle_execution_ms` policy. Registers the dummy application on the chain, and
+/// creates a block proposal with a dummy operation.
+async fn prepare_test_with_dummy_mock_application(
+    policy: ResourceControlPolicy,
+) -> anyhow::Result<(
+    MockApplication,
+    ApplicationId,
+    ChainStateView<ViewContext<TestExecutionRuntimeContext, MemoryStore>>,
+    ProposedBlock,
+    Timestamp,
+)> {
+    let time = Timestamp::from(0);
+    let message_id = make_admin_message_id(BlockHeight(3));
+    let chain_id = ChainId::child(message_id);
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    let mut config = make_open_chain_config();
+    config.committees.insert(
+        Epoch(0),
+        Committee::new(
+            BTreeMap::from([(
+                ValidatorPublicKey::test_key(1),
+                ValidatorState {
+                    network_address: ValidatorPublicKey::test_key(1).to_string(),
+                    votes: 1,
+                    account_public_key: AccountPublicKey::test_key(1),
+                },
+            )]),
+            policy,
+        ),
+    );
+
+    chain
+        .execute_init_message(message_id, &config, time, time)
+        .await?;
+
+    // Create a mock application.
+    let (app_description, contract_blob, service_blob) = make_app_description();
+    let application_id = ApplicationId::from(&app_description);
+    let application = MockApplication::default();
+    let extra = &chain.context().extra();
+    extra
+        .user_contracts()
+        .insert(application_id, application.clone().into());
+    extra
+        .user_services()
+        .insert(application_id, application.clone().into());
+    extra
+        .add_blobs([
+            contract_blob,
+            service_blob,
+            Blob::new_application_description(&app_description),
+        ])
+        .await?;
+
+    let block = make_first_block(chain_id).with_operation(Operation::User {
+        application_id,
+        bytes: vec![],
+    });
+
+    Ok((application, application_id, chain, block, time))
 }

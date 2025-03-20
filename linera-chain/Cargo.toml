@@ -12,15 +12,23 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["tokio/macros", "linera-base/test", "linera-execution/test"]
-metrics = ["prometheus", "linera-views/metrics", "linera-execution/metrics"]
-web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 benchmark = ["linera-base/test"]
+metrics = ["prometheus", "linera-views/metrics", "linera-execution/metrics"]
+test = [
+    "dep:anyhow",
+    "dep:axum",
+    "tokio/macros",
+    "linera-base/test",
+    "linera-execution/test",
+]
 unstable-oracles = ["linera-execution/unstable-oracles"]
+web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 
 [dependencies]
+anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
 async-trait.workspace = true
+axum = { workspace = true, optional = true }
 custom_debug_derive.workspace = true
 futures.workspace = true
 linera-base.workspace = true

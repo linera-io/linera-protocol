@@ -506,6 +506,9 @@ impl SyncRuntimeInternal<UserContractInstance> {
             operations,
         } = result?;
 
+        self.resource_controller
+            .track_service_oracle_response(response.len())?;
+
         self.scheduled_operations.extend(operations);
         Ok(response)
     }
@@ -576,7 +579,10 @@ impl<UserInstance> SyncRuntimeHandle<UserInstance> {
     }
 }
 
-impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
+impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance>
+where
+    Self: ContractOrServiceRuntime,
+{
     type Read = ();
     type ReadValueBytes = u32;
     type ContainsKey = u32;
@@ -862,6 +868,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
                 this.execution_state_sender
                     .send_request(|callback| ExecutionRequest::PerformHttpRequest {
                         request,
+                        http_responses_are_oracle_responses:
+                            Self::LIMIT_HTTP_RESPONSE_SIZE_TO_ORACLE_RESPONSE_SIZE,
                         callback,
                     })?
                     .recv_response()?
@@ -916,6 +924,25 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         }
         Ok(())
     }
+}
+
+/// An extension trait to determine in compile time the different behaviors between contract and
+/// services in the implementation of [`BaseRuntime`].
+trait ContractOrServiceRuntime {
+    /// Configured to `true` if the HTTP response size should be limited to the oracle response
+    /// size.
+    ///
+    /// This is `false` for services, potentially allowing them to receive a larger HTTP response
+    /// and only storing in the block a shorter oracle response.
+    const LIMIT_HTTP_RESPONSE_SIZE_TO_ORACLE_RESPONSE_SIZE: bool;
+}
+
+impl ContractOrServiceRuntime for ContractSyncRuntimeHandle {
+    const LIMIT_HTTP_RESPONSE_SIZE_TO_ORACLE_RESPONSE_SIZE: bool = true;
+}
+
+impl ContractOrServiceRuntime for ServiceSyncRuntimeHandle {
+    const LIMIT_HTTP_RESPONSE_SIZE_TO_ORACLE_RESPONSE_SIZE: bool = false;
 }
 
 impl<UserInstance> Clone for SyncRuntimeHandle<UserInstance> {

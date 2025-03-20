@@ -356,7 +356,11 @@ where
                 callback.respond(Ok(create_application_result));
             }
 
-            PerformHttpRequest { request, callback } => {
+            PerformHttpRequest {
+                request,
+                http_responses_are_oracle_responses,
+                callback,
+            } => {
                 let headers = request
                     .headers
                     .into_iter()
@@ -393,7 +397,12 @@ where
 
                 let response = request.send().await?;
 
-                let response_size_limit = committee.policy().maximum_http_response_bytes;
+                let mut response_size_limit = committee.policy().maximum_http_response_bytes;
+
+                if http_responses_are_oracle_responses {
+                    response_size_limit =
+                        response_size_limit.min(committee.policy().maximum_oracle_response_bytes);
+                }
 
                 callback.respond(
                     self.receive_http_response(response, response_size_limit)
@@ -672,6 +681,7 @@ pub enum ExecutionRequest {
 
     PerformHttpRequest {
         request: http::Request,
+        http_responses_are_oracle_responses: bool,
         #[debug(skip)]
         callback: Sender<http::Response>,
     },
