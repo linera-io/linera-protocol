@@ -20,7 +20,7 @@ pub struct HttpServer {
 impl HttpServer {
     /// Spawns a task with an HTTP server serving the routes defined by the [`Router`].
     ///
-    /// Returns a [`HttpServer`] handle to keep the server running in the background.
+    /// Returns an [`HttpServer`] handle to keep the server running in the background.
     pub async fn start(router: Router) -> anyhow::Result<Self> {
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
         let shutdown_signal = shutdown_receiver.map(|_| ());
