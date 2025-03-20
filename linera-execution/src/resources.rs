@@ -371,13 +371,15 @@ impl<Account, Tracker> ResourceController<Account, Tracker>
 where
     Tracker: AsMut<ResourceTracker>,
 {
-    /// Tracks the extension of a sequence in an executed block.
+    /// Tracks the extension of a number of sequence in an executed block.
     ///
     /// The sequence length is ULEB128-encoded, so extending a sequence can add an additional byte.
+    /// The `multiplier` specifies the number of sequences of the given length that are being extended.
     pub fn track_executed_block_size_sequence_extension(
         &mut self,
         old_len: usize,
         delta: usize,
+        multiplier: usize,
     ) -> Result<(), ExecutionError> {
         if delta == 0 {
             return Ok(());
@@ -387,7 +389,7 @@ where
         let old_size = ((usize::BITS - old_len.leading_zeros()) / 7).max(1);
         let new_size = ((usize::BITS - new_len.leading_zeros()) / 7).max(1);
         if new_size > old_size {
-            self.track_block_size((new_size - old_size) as usize)?;
+            self.track_block_size((new_size - old_size) as usize * multiplier)?;
         }
         Ok(())
     }

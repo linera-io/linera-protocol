@@ -1,12 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    sync::Arc,
-};
 
 use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
@@ -17,17 +14,14 @@ use linera_base::{
         UserApplicationDescription,
     },
     ensure,
-    identifiers::{
-        BlobType, ChainId, ChannelFullName, Destination, MessageId, Owner, UserApplicationId,
-    },
+    identifiers::{ChainId, ChannelFullName, Destination, MessageId, Owner, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
-    OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    BlockExecutor, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
+    OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
 };
 use linera_views::{
     context::Context,
@@ -43,7 +37,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        OperationResult, Origin, PostedMessage, ProposedBlock, Target, Transaction,
+        Origin, ProposedBlock, Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -62,6 +56,7 @@ use {
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
         register_int_counter_vec, MeasureLatency,
     },
+    linera_execution::ResourceTracker,
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -744,12 +739,6 @@ where
             ChainError::InvalidBlockTimestamp
         );
         self.execution_state.system.timestamp.set(block.timestamp);
-        let (_, committee) = self.current_committee()?;
-        let mut resource_controller = ResourceController {
-            policy: Arc::new(committee.policy().clone()),
-            tracker: ResourceTracker::default(),
-            account: block.authenticated_signer,
-        };
         ensure!(
             block.published_blob_ids()
                 == published_blobs
@@ -758,30 +747,6 @@ where
                     .collect::<BTreeSet<_>>(),
             ChainError::InternalError("published_blobs mismatch".to_string())
         );
-        resource_controller
-            .track_block_size(EMPTY_BLOCK_SIZE)
-            .with_execution_context(ChainExecutionContext::Block)?;
-        resource_controller
-            .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
-            .with_execution_context(ChainExecutionContext::Block)?;
-        resource_controller
-            .track_executed_block_size_sequence_extension(0, block.operations.len())
-            .with_execution_context(ChainExecutionContext::Block)?;
-        for blob in published_blobs {
-            let blob_type = blob.content().blob_type();
-            if blob_type == BlobType::Data
-                || blob_type == BlobType::ContractBytecode
-                || blob_type == BlobType::ServiceBytecode
-            {
-                resource_controller
-                    .with_state(&mut self.execution_state.system)
-                    .await?
-                    .track_blob_published(blob.content())
-                    .with_execution_context(ChainExecutionContext::Block)?;
-            }
-            self.execution_state.system.used_blobs.insert(&blob.id())?;
-        }
-
         if self.is_closed() {
             ensure!(
                 !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
@@ -790,53 +755,97 @@ where
         }
         self.check_app_permissions(block)?;
 
+        let mut executor = BlockExecutor::new(
+            &mut self.execution_state,
+            block.authenticated_signer,
+            replaying_oracle_responses,
+            local_time,
+        )
+        .with_execution_context(ChainExecutionContext::Block)?;
+        executor
+            .track_block(
+                EMPTY_BLOCK_SIZE,
+                block.incoming_bundles.len(),
+                block.operations.len(),
+                published_blobs,
+            )
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
+
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
-        let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
-        let mut next_message_index = 0;
-        let mut next_application_index = 0;
-        let mut oracle_responses = Vec::new();
-        let mut events = Vec::new();
-        let mut blobs = Vec::new();
-        let mut messages = Vec::new();
-        let mut operation_results = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
                 Transaction::ExecuteOperation(_) => ChainExecutionContext::Operation(txn_index),
             };
-            let maybe_responses = match replaying_oracle_responses.as_mut().map(Iterator::next) {
-                Some(Some(responses)) => Some(responses),
-                Some(None) => return Err(ChainError::MissingOracleResponseList),
-                None => None,
-            };
-            let mut txn_tracker = TransactionTracker::new(
-                next_message_index,
-                next_application_index,
-                maybe_responses,
-            );
+
+            let mut txn_executor = executor
+                .new_transaction()
+                .with_execution_context(chain_execution_context)?;
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
-                    resource_controller
+                    txn_executor
                         .track_block_size_of(&incoming_bundle)
                         .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
-                        Box::pin(self.execute_message_in_block(
-                            message_id,
-                            posted_message,
-                            incoming_bundle,
-                            block,
+                        #[cfg(with_metrics)]
+                        let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
+                        let context = MessageContext {
+                            chain_id: block.chain_id,
+                            is_bouncing: posted_message.is_bouncing(),
+                            height: block.height,
                             round,
-                            txn_index,
-                            local_time,
-                            &mut txn_tracker,
-                            &mut resource_controller,
-                        ))
-                        .await?;
+                            certificate_hash: incoming_bundle.bundle.certificate_hash,
+                            message_id,
+                            authenticated_signer: posted_message.authenticated_signer,
+                            refund_grant_to: posted_message.refund_grant_to,
+                        };
+                        let message = posted_message.message.clone();
+                        let grant = posted_message.grant;
+                        match incoming_bundle.action {
+                            MessageAction::Accept => {
+                                // Once a chain is closed, accepting incoming messages is not allowed.
+                                ensure!(
+                                    !txn_executor.block_executor.state.system.closed.get(),
+                                    ChainError::ClosedChain
+                                );
+
+                                Box::pin(txn_executor.execute_message(context, message, grant))
+                                    .await
+                                    .with_execution_context(chain_execution_context)?;
+                            }
+                            MessageAction::Reject => {
+                                // If rejecting a message fails, the entire block proposal should be
+                                // scrapped.
+                                ensure!(
+                                    !posted_message.is_protected()
+                                        || *txn_executor.block_executor.state.system.closed.get(),
+                                    ChainError::CannotRejectMessage {
+                                        chain_id: block.chain_id,
+                                        origin: Box::new(incoming_bundle.origin.clone()),
+                                        posted_message: Box::new(posted_message.clone()),
+                                    }
+                                );
+                                if posted_message.is_tracked() {
+                                    // Bounce the message.
+                                    txn_executor
+                                        .bounce_message(context, grant, message)
+                                        .await
+                                        .with_execution_context(chain_execution_context)?;
+                                } else if grant > Amount::ZERO {
+                                    // Refund grant.
+                                    txn_executor
+                                        .send_refund(context, grant)
+                                        .await
+                                        .with_execution_context(chain_execution_context)?;
+                                }
+                            }
+                        }
                     }
                 }
                 Transaction::ExecuteOperation(operation) => {
-                    resource_controller
+                    txn_executor
                         .track_block_size_of(&operation)
                         .with_execution_context(chain_execution_context)?;
                     #[cfg(with_metrics)]
@@ -849,101 +858,56 @@ where
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
                     };
-                    Box::pin(self.execution_state.execute_operation(
-                        context,
-                        local_time,
-                        operation.clone(),
-                        &mut txn_tracker,
-                        &mut resource_controller,
-                    ))
-                    .await
-                    .with_execution_context(chain_execution_context)?;
-                    resource_controller
-                        .with_state(&mut self.execution_state.system)
-                        .await?
-                        .track_operation(operation)
+                    Box::pin(txn_executor.execute_operation(context, operation.clone()))
+                        .await
                         .with_execution_context(chain_execution_context)?;
                 }
             }
 
-            let txn_outcome = txn_tracker
-                .into_outcome()
-                .with_execution_context(chain_execution_context)?;
-            next_message_index = txn_outcome.next_message_index;
-            next_application_index = txn_outcome.next_application_index;
-
-            // Update the channels.
-            self.process_unsubscribes(txn_outcome.unsubscribe).await?;
-            self.process_outgoing_messages(block.height, &txn_outcome.outgoing_messages)
-                .await?;
-            self.process_subscribes(txn_outcome.subscribe).await?;
-            if matches!(
+            let is_accepted_message = matches!(
                 transaction,
-                Transaction::ExecuteOperation(_)
-                    | Transaction::ReceiveMessages(IncomingBundle {
-                        action: MessageAction::Accept,
-                        ..
-                    })
-            ) {
-                for message_out in &txn_outcome.outgoing_messages {
-                    resource_controller
-                        .with_state(&mut self.execution_state.system)
-                        .await?
-                        .track_message(&message_out.message)
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
+                Transaction::ReceiveMessages(IncomingBundle {
+                    action: MessageAction::Accept,
+                    ..
+                })
+            );
+            let is_operation = matches!(transaction, Transaction::ExecuteOperation(_));
 
-            resource_controller
-                .track_block_size_of(&(
-                    &txn_outcome.oracle_responses,
-                    &txn_outcome.outgoing_messages,
-                    &txn_outcome.events,
-                ))
+            txn_executor
+                .finalize_transaction(is_accepted_message, is_operation)
+                .await
                 .with_execution_context(chain_execution_context)?;
-            for blob in &txn_outcome.blobs {
-                if blob.content().blob_type() == BlobType::Data {
-                    resource_controller
-                        .with_state(&mut self.execution_state.system)
-                        .await?
-                        .track_blob_published(blob.content())
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
-            resource_controller
-                .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
-                .with_execution_context(chain_execution_context)?;
-            resource_controller
-                .track_executed_block_size_sequence_extension(messages.len(), 1)
-                .with_execution_context(chain_execution_context)?;
-            resource_controller
-                .track_executed_block_size_sequence_extension(events.len(), 1)
-                .with_execution_context(chain_execution_context)?;
-            oracle_responses.push(txn_outcome.oracle_responses);
-            messages.push(txn_outcome.outgoing_messages);
-            events.push(txn_outcome.events);
-            blobs.push(txn_outcome.blobs);
-
-            if let Transaction::ExecuteOperation(_) = transaction {
-                resource_controller
-                    .track_block_size_of(&(&txn_outcome.operation_result))
-                    .with_execution_context(chain_execution_context)?;
-                resource_controller
-                    .track_executed_block_size_sequence_extension(operation_results.len(), 1)
-                    .with_execution_context(chain_execution_context)?;
-                operation_results.push(OperationResult(txn_outcome.operation_result));
-            }
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
         // always be able to reject incoming messages.
-        if !self.is_closed() {
-            resource_controller
-                .with_state(&mut self.execution_state.system)
-                .await?
+        if !executor.state.system.closed.get() {
+            executor
+                .resource_controller_with_state()
+                .await
+                .with_execution_context(ChainExecutionContext::Block)?
                 .track_block()
                 .with_execution_context(ChainExecutionContext::Block)?;
         }
+
+        let BlockExecutor {
+            resource_controller: _resource_controller,
+            oracle_responses,
+            events,
+            blobs,
+            messages,
+            operation_results,
+            subscribe,
+            unsubscribe,
+            ..
+        } = executor;
+
+        self.process_unsubscribes(unsubscribe).await?;
+        for outgoing_messages in &messages {
+            self.process_outgoing_messages(block.height, outgoing_messages)
+                .await?;
+        }
+        self.process_subscribes(subscribe).await?;
 
         // Recompute the state hash.
         let state_hash = self.update_execution_state_hash().await?;
@@ -951,12 +915,14 @@ where
         self.reset_chain_manager(block.height.try_add_one()?, local_time)?;
 
         #[cfg(with_metrics)]
-        Self::track_block_metrics(&resource_controller.tracker);
+        Self::track_block_metrics(&_resource_controller.tracker);
 
-        assert_eq!(
-            messages.len(),
-            block.incoming_bundles.len() + block.operations.len()
-        );
+        let txn_count = block.incoming_bundles.len() + block.operations.len();
+        assert_eq!(messages.len(), txn_count);
+        assert_eq!(events.len(), txn_count);
+        assert_eq!(oracle_responses.len(), txn_count);
+        assert_eq!(blobs.len(), txn_count);
+
         let outcome = BlockExecutionOutcome {
             messages,
             state_hash,
@@ -966,95 +932,6 @@ where
             operation_results,
         };
         Ok(outcome)
-    }
-
-    /// Executes a message as part of an incoming bundle in a block.
-    #[expect(clippy::too_many_arguments)]
-    async fn execute_message_in_block(
-        &mut self,
-        message_id: MessageId,
-        posted_message: &PostedMessage,
-        incoming_bundle: &IncomingBundle,
-        block: &ProposedBlock,
-        round: Option<u32>,
-        txn_index: u32,
-        local_time: Timestamp,
-        txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(), ChainError> {
-        #[cfg(with_metrics)]
-        let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
-        let context = MessageContext {
-            chain_id: block.chain_id,
-            is_bouncing: posted_message.is_bouncing(),
-            height: block.height,
-            round,
-            certificate_hash: incoming_bundle.bundle.certificate_hash,
-            message_id,
-            authenticated_signer: posted_message.authenticated_signer,
-            refund_grant_to: posted_message.refund_grant_to,
-        };
-        let mut grant = posted_message.grant;
-        match incoming_bundle.action {
-            MessageAction::Accept => {
-                // Once a chain is closed, accepting incoming messages is not allowed.
-                ensure!(!self.is_closed(), ChainError::ClosedChain);
-
-                Box::pin(self.execution_state.execute_message(
-                    context,
-                    local_time,
-                    posted_message.message.clone(),
-                    (grant > Amount::ZERO).then_some(&mut grant),
-                    txn_tracker,
-                    resource_controller,
-                ))
-                .await
-                .with_execution_context(ChainExecutionContext::IncomingBundle(txn_index))?;
-                if grant > Amount::ZERO {
-                    if let Some(refund_grant_to) = posted_message.refund_grant_to {
-                        self.execution_state
-                            .send_refund(context, grant, refund_grant_to, txn_tracker)
-                            .await
-                            .with_execution_context(ChainExecutionContext::IncomingBundle(
-                                txn_index,
-                            ))?;
-                    }
-                }
-            }
-            MessageAction::Reject => {
-                // If rejecting a message fails, the entire block proposal should be
-                // scrapped.
-                ensure!(
-                    !posted_message.is_protected() || self.is_closed(),
-                    ChainError::CannotRejectMessage {
-                        chain_id: block.chain_id,
-                        origin: Box::new(incoming_bundle.origin.clone()),
-                        posted_message: Box::new(posted_message.clone()),
-                    }
-                );
-                if posted_message.is_tracked() {
-                    // Bounce the message.
-                    self.execution_state
-                        .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
-                        .await
-                        .with_execution_context(ChainExecutionContext::Block)?;
-                } else if grant > Amount::ZERO {
-                    // Nothing to do except maybe refund the grant.
-                    let Some(refund_grant_to) = posted_message.refund_grant_to else {
-                        // See OperationContext::refund_grant_to()
-                        return Err(ChainError::InternalError(
-                            "Messages with grants should have a non-empty `refund_grant_to`".into(),
-                        ));
-                    };
-                    // Refund grant.
-                    self.execution_state
-                        .send_refund(context, posted_message.grant, refund_grant_to, txn_tracker)
-                        .await
-                        .with_execution_context(ChainExecutionContext::Block)?;
-                }
-            }
-        }
-        Ok(())
     }
 
     /// Returns whether this is a child chain.

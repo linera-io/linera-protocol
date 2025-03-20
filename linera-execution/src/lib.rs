@@ -7,6 +7,7 @@
 #![cfg_attr(web, feature(trait_upcasting))]
 #![deny(clippy::large_futures)]
 
+mod block_executor;
 pub mod committee;
 mod execution;
 mod execution_state_actor;
@@ -64,6 +65,7 @@ pub use crate::wasm::{
     ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
+    block_executor::{BlockExecutor, OperationResult},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
@@ -335,6 +337,10 @@ pub enum ExecutionError {
     InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+    #[error("ExecutedBlock contains fewer oracle responses than requests")]
+    MissingOracleResponseList,
+    #[error("Internal error: {0}")]
+    InternalError(&'static str),
 }
 
 impl From<ViewError> for ExecutionError {
