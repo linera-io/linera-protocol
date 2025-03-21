@@ -178,7 +178,9 @@ impl LruPrefixCache {
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
     /// exist in the database. Returns `None` if that information is not in the cache.
     pub fn query_contains_key(&self, key: &[u8]) -> Option<bool> {
-        self.map.get(key).map(|entry| !matches!(entry, CacheEntry::DoesNotExist))
+        self.map
+            .get(key)
+            .map(|entry| !matches!(entry, CacheEntry::DoesNotExist))
     }
 }
 
