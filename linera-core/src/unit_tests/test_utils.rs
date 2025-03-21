@@ -218,7 +218,6 @@ where
             validator.do_download_certificate(hash, sender)
         })
         .await
-        .map(Into::into)
     }
 
     async fn download_certificates(
