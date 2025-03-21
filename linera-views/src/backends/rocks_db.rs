@@ -49,8 +49,8 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 // 8388608 and so for offset reason we decrease by 400
 const MAX_KEY_SIZE: usize = 8388208;
 
-const DB_CACHE_SIZE: usize = 8 * 1024 * 1024; // 8 MiB
-const DB_MAX_WRITE_BUFFER_NUMBER: i32 = 16;
+const DB_CACHE_SIZE: usize = 128 * 1024 * 1024; // 128 MiB
+const DB_MAX_WRITE_BUFFER_NUMBER: i32 = 8;
 
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -307,6 +307,13 @@ impl RocksDbStoreInternal {
         options.set_write_buffer_size(DB_CACHE_SIZE);
         options.set_max_write_buffer_number(DB_MAX_WRITE_BUFFER_NUMBER);
         options.set_compression_type(rocksdb::DBCompressionType::Lz4);
+        options.set_level_zero_slowdown_writes_trigger(-1);
+        options.set_level_zero_stop_writes_trigger(48);
+        options.set_stats_dump_period_sec(60);
+        options.enable_statistics();
+        options.increase_parallelism(num_cpus::get() as i32);
+        options.set_max_background_jobs(8);
+        options.set_level_compaction_dynamic_level_bytes(true);
 
         let db = DB::open(&options, path_buf)?;
         let executor = RocksDbStoreExecutor {
