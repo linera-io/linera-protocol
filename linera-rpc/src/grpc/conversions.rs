@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, ChainId, Owner},
+    identifiers::{BlobId, ChainId, MultiAddress, Owner},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -778,20 +778,20 @@ impl From<api::BlockHeight> for BlockHeight {
     }
 }
 
-impl TryFrom<AccountOwner> for api::AccountOwner {
+impl TryFrom<MultiAddress> for api::MultiAddress {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(account_owner: AccountOwner) -> Result<Self, Self::Error> {
+    fn try_from(account_owner: MultiAddress) -> Result<Self, Self::Error> {
         Ok(Self {
             bytes: bincode::serialize(&account_owner)?,
         })
     }
 }
 
-impl TryFrom<api::AccountOwner> for AccountOwner {
+impl TryFrom<api::MultiAddress> for MultiAddress {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(account_owner: api::AccountOwner) -> Result<Self, Self::Error> {
+    fn try_from(account_owner: api::MultiAddress) -> Result<Self, Self::Error> {
         Ok(bincode::deserialize(&account_owner.bytes)?)
     }
 }
@@ -1103,7 +1103,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
-            request_owner_balance: AccountOwner::Chain,
+            request_owner_balance: MultiAddress::Chain,
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: Some(
                 linera_core::data_types::BlockHeightRange {

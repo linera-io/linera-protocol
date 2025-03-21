@@ -19,7 +19,7 @@ test('Entrypoint mounting', () => {
             name: 'accountOwner',
             type: {
               kind: 'SCALAR',
-              name: 'AccountOwner'
+              name: 'MultiAddress'
             }
           } ],
         }

@@ -8,7 +8,7 @@ interface contract-runtime-api {
     send-message: func(message: send-message-request);
     subscribe: func(chain: chain-id, channel: channel-name);
     unsubscribe: func(chain: chain-id, channel: channel-name);
-    transfer: func(source: account-owner, destination: account, amount: amount);
+    transfer: func(source: multi-address, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
@@ -23,12 +23,7 @@ interface contract-runtime-api {
 
     record account {
         chain-id: chain-id,
-        owner: account-owner,
-    }
-
-    variant account-owner {
-        address32(crypto-hash),
-        chain,
+        owner: multi-address,
     }
 
     record amount {
@@ -94,6 +89,11 @@ interface contract-runtime-api {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
         vm-runtime: vm-runtime,
+    }
+
+    variant multi-address {
+        address32(crypto-hash),
+        chain,
     }
 
     record owner {

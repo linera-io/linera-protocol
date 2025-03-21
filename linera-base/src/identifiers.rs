@@ -33,7 +33,7 @@ pub struct Owner(pub CryptoHash);
 /// An account owner.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
-pub enum AccountOwner {
+pub enum MultiAddress {
     /// 32-byte account address.
     Address32(CryptoHash),
     /// Chain account.
@@ -48,12 +48,12 @@ pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
     /// The owner of the account, or `None` for the chain balance.
-    pub owner: AccountOwner,
+    pub owner: MultiAddress,
 }
 
 impl Account {
     /// Creates a new [`Account`] with the given chain ID and owner.
-    pub fn new(chain_id: ChainId, owner: AccountOwner) -> Self {
+    pub fn new(chain_id: ChainId, owner: MultiAddress) -> Self {
         Self { chain_id, owner }
     }
 
@@ -61,7 +61,7 @@ impl Account {
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
-            owner: AccountOwner::Chain,
+            owner: MultiAddress::Chain,
         }
     }
 
@@ -69,7 +69,7 @@ impl Account {
     pub fn address32(chain_id: ChainId, owner: CryptoHash) -> Self {
         Account {
             chain_id,
-            owner: AccountOwner::Address32(owner),
+            owner: MultiAddress::Address32(owner),
         }
     }
 }
@@ -94,7 +94,7 @@ impl FromStr for Account {
             .parse()?;
 
         if let Some(owner_string) = parts.next() {
-            let owner = owner_string.parse::<AccountOwner>()?;
+            let owner = owner_string.parse::<MultiAddress>()?;
             Ok(Account::new(chain_id, owner))
         } else {
             Ok(Account::chain(chain_id))
@@ -102,21 +102,21 @@ impl FromStr for Account {
     }
 }
 
-impl From<AccountPublicKey> for AccountOwner {
+impl From<AccountPublicKey> for MultiAddress {
     fn from(public_key: AccountPublicKey) -> Self {
-        AccountOwner::Address32(Owner::from(public_key).0)
+        MultiAddress::Address32(Owner::from(public_key).0)
     }
 }
 
-impl From<Owner> for AccountOwner {
+impl From<Owner> for MultiAddress {
     fn from(owner: Owner) -> Self {
-        AccountOwner::Address32(owner.0)
+        MultiAddress::Address32(owner.0)
     }
 }
 
-impl From<UserApplicationId> for AccountOwner {
+impl From<UserApplicationId> for MultiAddress {
     fn from(application_id: UserApplicationId) -> Self {
-        AccountOwner::Address32(application_id.0)
+        MultiAddress::Address32(application_id.0)
     }
 }
 
@@ -974,27 +974,27 @@ impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename = "AccountOwner")]
+#[serde(rename = "MultiAddress")]
 enum SerializableAccountOwner {
     Address32(CryptoHash),
     Chain,
 }
 
-impl Serialize for AccountOwner {
+impl Serialize for MultiAddress {
     fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
             match self {
-                AccountOwner::Address32(app_id) => SerializableAccountOwner::Address32(*app_id),
-                AccountOwner::Chain => SerializableAccountOwner::Chain,
+                MultiAddress::Address32(app_id) => SerializableAccountOwner::Address32(*app_id),
+                MultiAddress::Chain => SerializableAccountOwner::Chain,
             }
             .serialize(serializer)
         }
     }
 }
 
-impl<'de> Deserialize<'de> for AccountOwner {
+impl<'de> Deserialize<'de> for MultiAddress {
     fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
@@ -1003,34 +1003,34 @@ impl<'de> Deserialize<'de> for AccountOwner {
         } else {
             let value = SerializableAccountOwner::deserialize(deserializer)?;
             match value {
-                SerializableAccountOwner::Address32(app_id) => Ok(AccountOwner::Address32(app_id)),
-                SerializableAccountOwner::Chain => Ok(AccountOwner::Chain),
+                SerializableAccountOwner::Address32(app_id) => Ok(MultiAddress::Address32(app_id)),
+                SerializableAccountOwner::Chain => Ok(MultiAddress::Chain),
             }
         }
     }
 }
 
-impl Display for AccountOwner {
+impl Display for MultiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccountOwner::Address32(owner) => write!(f, "0x{}", owner)?,
-            AccountOwner::Chain => write!(f, "Chain")?,
+            MultiAddress::Address32(owner) => write!(f, "0x{}", owner)?,
+            MultiAddress::Chain => write!(f, "Chain")?,
         };
 
         Ok(())
     }
 }
 
-impl FromStr for AccountOwner {
+impl FromStr for MultiAddress {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(owner) = s.strip_prefix("0x") {
-            Ok(AccountOwner::Address32(
+            Ok(MultiAddress::Address32(
                 CryptoHash::from_str(owner).context("Parsing Address should not fail")?,
             ))
         } else if s.strip_prefix("Chain").is_some() {
-            Ok(AccountOwner::Chain)
+            Ok(MultiAddress::Chain)
         } else {
             Err(anyhow!("Invalid enum! Enum: {}", s))
         }
@@ -1112,7 +1112,7 @@ doc_scalar!(
     Destination,
     "The destination of a message, relative to a particular application."
 );
-doc_scalar!(AccountOwner, "An owner of an account.");
+doc_scalar!(MultiAddress, "An owner of an account.");
 doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
@@ -1130,7 +1130,7 @@ mod tests {
     use super::ChainId;
     use crate::{
         crypto::{CryptoHash, TestString},
-        identifiers::AccountOwner,
+        identifiers::MultiAddress,
     };
 
     /// Verifies that chain IDs that are explicitly used in some example and test scripts don't
@@ -1162,17 +1162,17 @@ mod tests {
     #[test]
     fn parse_account_addresses() {
         let input = "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844";
-        assert!(AccountOwner::from_str(input).is_ok());
+        assert!(MultiAddress::from_str(input).is_ok());
         let crypto_hash = CryptoHash::new(&TestString::new("Chain"));
         let input_str = format!("0x{}", crypto_hash);
-        let account_owner = AccountOwner::from_str(&input_str).unwrap();
-        if let AccountOwner::Address32(owner) = account_owner {
+        let account_owner = MultiAddress::from_str(&input_str).unwrap();
+        if let MultiAddress::Address32(owner) = account_owner {
             assert_eq!(owner, crypto_hash);
         } else {
             panic!("Expected Address32 variant");
         }
         assert_eq!(
-            AccountOwner::from_str(&account_owner.to_string()).unwrap(),
+            MultiAddress::from_str(&account_owner.to_string()).unwrap(),
             account_owner
         );
     }

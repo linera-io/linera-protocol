@@ -10,8 +10,8 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName, UserApplicationId,
+        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
+        MultiAddress, Owner, StreamName, UserApplicationId,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -127,7 +127,7 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&mut self, owner: AccountOwner) -> Amount {
+    pub fn owner_balance(&mut self, owner: MultiAddress) -> Amount {
         base_wit::read_owner_balance(owner.into()).into()
     }
 
@@ -231,7 +231,7 @@ where
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
-    pub fn transfer(&mut self, source: AccountOwner, destination: Account, amount: Amount) {
+    pub fn transfer(&mut self, source: MultiAddress, destination: Account, amount: Amount) {
         contract_wit::transfer(source.into(), destination.into(), amount.into())
     }
 

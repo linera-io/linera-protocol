@@ -6,7 +6,7 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, AccountOwner, BlobType, ChainId, Destination, Owner},
+    identifiers::{Account, BlobType, ChainId, Destination, MultiAddress, Owner},
 };
 use linera_views::{
     context::Context,
@@ -370,8 +370,8 @@ where
             amount,
             source: context
                 .authenticated_signer
-                .map(|o| AccountOwner::Address32(o.0))
-                .unwrap_or(AccountOwner::Chain),
+                .map(MultiAddress::from)
+                .unwrap_or(MultiAddress::Chain),
             target: account.owner,
         };
         txn_tracker.add_outgoing_message(

@@ -15,7 +15,7 @@ export type Scalars = {
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
   /** An owner of an account. */
-  AccountOwner: { input: any; output: any; }
+  MultiAddress: { input: any; output: any; }
   /** A non-negative amount of tokens. */
   Amount: { input: any; output: any; }
   /** The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription. */
@@ -25,7 +25,7 @@ export type Scalars = {
 /** A GraphQL-visible map item, complete with key. */
 export type Entry_AccountOwner_Amount_92cf94e6 = {
   __typename?: 'Entry_AccountOwner_Amount_92cf94e6';
-  key: Scalars['AccountOwner']['output'];
+  key: Scalars['MultiAddress']['output'];
   value?: Maybe<Scalars['Amount']['output']>;
 };
 
@@ -34,7 +34,7 @@ export type FungibleAccount = {
   /** Chain ID of the account */
   chainId: Scalars['ChainId']['input'];
   /** Owner of the account */
-  owner: Scalars['AccountOwner']['input'];
+  owner: Scalars['MultiAddress']['input'];
 };
 
 export type FungibleTokenService = {
@@ -44,7 +44,7 @@ export type FungibleTokenService = {
 };
 
 export type MapFilters_AccountOwner_2fb690f5 = {
-  keys?: InputMaybe<Array<Scalars['AccountOwner']['input']>>;
+  keys?: InputMaybe<Array<Scalars['MultiAddress']['input']>>;
 };
 
 export type MapInput_AccountOwner_30d769cb = {
@@ -55,7 +55,7 @@ export type MapView_AccountOwner_Amount_Ea496e19 = {
   __typename?: 'MapView_AccountOwner_Amount_ea496e19';
   entries: Array<Entry_AccountOwner_Amount_92cf94e6>;
   entry: Entry_AccountOwner_Amount_92cf94e6;
-  keys: Array<Scalars['AccountOwner']['output']>;
+  keys: Array<Scalars['MultiAddress']['output']>;
 };
 
 
@@ -65,7 +65,7 @@ export type MapView_AccountOwner_Amount_Ea496e19EntriesArgs = {
 
 
 export type MapView_AccountOwner_Amount_Ea496e19EntryArgs = {
-  key: Scalars['AccountOwner']['input'];
+  key: Scalars['MultiAddress']['input'];
 };
 
 
@@ -83,7 +83,7 @@ export type OperationMutationRoot = {
 
 
 export type OperationMutationRootBalanceArgs = {
-  owner: Scalars['AccountOwner']['input'];
+  owner: Scalars['MultiAddress']['input'];
 };
 
 
@@ -96,12 +96,12 @@ export type OperationMutationRootClaimArgs = {
 
 export type OperationMutationRootTransferArgs = {
   amount: Scalars['Amount']['input'];
-  owner: Scalars['AccountOwner']['input'];
+  owner: Scalars['MultiAddress']['input'];
   targetAccount: FungibleAccount;
 };
 
 export type AccountsQueryVariables = Exact<{
-  owner: Scalars['AccountOwner']['input'];
+  owner: Scalars['MultiAddress']['input'];
 }>;
 
 
@@ -113,7 +113,7 @@ export type TickerSymbolQueryVariables = Exact<{ [key: string]: never; }>;
 export type TickerSymbolQuery = { __typename?: 'FungibleTokenService', tickerSymbol: string };
 
 export type TransferMutationVariables = Exact<{
-  owner: Scalars['AccountOwner']['input'];
+  owner: Scalars['MultiAddress']['input'];
   amount: Scalars['Amount']['input'];
   targetAccount: FungibleAccount;
 }>;
@@ -122,6 +122,6 @@ export type TransferMutationVariables = Exact<{
 export type TransferMutation = { __typename?: 'OperationMutationRoot', transfer: Array<number> };
 
 
-export const AccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Accounts"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountOwner"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entry"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"key"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}}]}}]} as unknown as DocumentNode<AccountsQuery, AccountsQueryVariables>;
+export const AccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Accounts"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MultiAddress"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entry"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"key"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}}]}}]} as unknown as DocumentNode<AccountsQuery, AccountsQueryVariables>;
 export const TickerSymbolDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TickerSymbol"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tickerSymbol"}}]}}]} as unknown as DocumentNode<TickerSymbolQuery, TickerSymbolQueryVariables>;
-export const TransferDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Transfer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountOwner"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"amount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Amount"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"FungibleAccount"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transfer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"owner"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}},{"kind":"Argument","name":{"kind":"Name","value":"amount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"amount"}}},{"kind":"Argument","name":{"kind":"Name","value":"targetAccount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}}}]}]}}]} as unknown as DocumentNode<TransferMutation, TransferMutationVariables>;
+export const TransferDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Transfer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MultiAddress"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"amount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Amount"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"FungibleAccount"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transfer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"owner"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}},{"kind":"Argument","name":{"kind":"Name","value":"amount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"amount"}}},{"kind":"Argument","name":{"kind":"Name","value":"targetAccount"},"value":{"kind":"Variable","name":{"kind":"Name","value":"targetAccount"}}}]}]}}]} as unknown as DocumentNode<TransferMutation, TransferMutationVariables>;

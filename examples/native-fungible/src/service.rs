@@ -9,7 +9,7 @@ use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::{Operation, Parameters};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, WithServiceAbi},
+    linera_base_types::{MultiAddress, WithServiceAbi},
     Service, ServiceRuntime,
 };
 use native_fungible::{AccountEntry, TICKER_SYMBOL};
@@ -52,7 +52,7 @@ struct Accounts {
 #[Object]
 impl Accounts {
     // Define a field that lets you query by key
-    async fn entry(&self, key: AccountOwner) -> AccountEntry {
+    async fn entry(&self, key: MultiAddress) -> AccountEntry {
         let value = self.runtime.owner_balance(key);
 
         AccountEntry { key, value }
@@ -69,7 +69,7 @@ impl Accounts {
             .collect()
     }
 
-    async fn keys(&self) -> Vec<AccountOwner> {
+    async fn keys(&self) -> Vec<MultiAddress> {
         self.runtime.balance_owners()
     }
 }

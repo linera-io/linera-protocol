@@ -13,7 +13,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     hex, http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, UserApplicationId},
+    identifiers::{ApplicationId, ChainId, MultiAddress, UserApplicationId},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -30,7 +30,7 @@ where
     next_block_height: Mutex<Option<BlockHeight>>,
     timestamp: Mutex<Option<Timestamp>>,
     chain_balance: Mutex<Option<Amount>>,
-    owner_balances: Mutex<Option<HashMap<AccountOwner, Amount>>>,
+    owner_balances: Mutex<Option<HashMap<MultiAddress, Amount>>>,
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
     expected_http_requests: Mutex<VecDeque<(http::Request, http::Response)>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
@@ -214,7 +214,7 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn with_owner_balances(
         self,
-        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
     ) -> Self {
         *self.owner_balances.lock().unwrap() = Some(owner_balances.into_iter().collect());
         self
@@ -223,20 +223,20 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn set_owner_balances(
         &self,
-        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
     ) -> &Self {
         *self.owner_balances.lock().unwrap() = Some(owner_balances.into_iter().collect());
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn with_owner_balance(self, owner: AccountOwner, balance: Amount) -> Self {
+    pub fn with_owner_balance(self, owner: MultiAddress, balance: Amount) -> Self {
         self.set_owner_balance(owner, balance);
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn set_owner_balance(&self, owner: AccountOwner, balance: Amount) -> &Self {
+    pub fn set_owner_balance(&self, owner: MultiAddress, balance: Amount) -> &Self {
         self.owner_balances
             .lock()
             .unwrap()
@@ -246,7 +246,7 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: AccountOwner) -> Amount {
+    pub fn owner_balance(&self, owner: MultiAddress) -> Amount {
         self.owner_balances
             .lock()
             .unwrap()
@@ -262,7 +262,7 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(AccountOwner, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(MultiAddress, Amount)> {
         self.owner_balances
             .lock()
             .unwrap()
@@ -277,7 +277,7 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<AccountOwner> {
+    pub fn balance_owners(&self) -> Vec<MultiAddress> {
         self.owner_balances
             .lock()
             .unwrap()

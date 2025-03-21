@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
     identifiers::{
-        Account, AccountOwner, ChainId, ChannelName, MessageId, Owner, StreamName,
+        Account, ChainId, ChannelName, MessageId, MultiAddress, Owner, StreamName,
         UserApplicationId,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
@@ -159,7 +159,7 @@ where
     /// Returns the balance of one of the accounts on this chain.
     fn read_owner_balance(
         caller: &mut Caller,
-        owner: AccountOwner,
+        owner: MultiAddress,
     ) -> Result<Amount, RuntimeError> {
         caller
             .user_data_mut()
@@ -171,7 +171,7 @@ where
     /// Returns the balances of all accounts on the chain.
     fn read_owner_balances(
         caller: &mut Caller,
-    ) -> Result<Vec<(AccountOwner, Amount)>, RuntimeError> {
+    ) -> Result<Vec<(MultiAddress, Amount)>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -180,7 +180,7 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    fn read_balance_owners(caller: &mut Caller) -> Result<Vec<AccountOwner>, RuntimeError> {
+    fn read_balance_owners(caller: &mut Caller) -> Result<Vec<MultiAddress>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -474,7 +474,7 @@ where
     /// balance) to `destination`.
     fn transfer(
         caller: &mut Caller,
-        source: AccountOwner,
+        source: MultiAddress,
         destination: Account,
         amount: Amount,
     ) -> Result<(), RuntimeError> {

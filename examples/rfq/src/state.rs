@@ -3,7 +3,7 @@
 
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ChainId, Owner},
+    linera_base_types::{Amount, ChainId, MultiAddress, Owner},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use rfq::{RequestId, TokenPair, Tokens};
@@ -42,7 +42,7 @@ pub struct ExchangeInProgress {
 pub struct AwaitingTokens {
     pub token_pair: TokenPair,
     pub amount_offered: Amount,
-    pub quoter_account: AccountOwner,
+    pub quoter_account: MultiAddress,
     pub temp_chain_id: ChainId,
 }
 
@@ -71,7 +71,7 @@ pub struct RequestData {
 
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct TempChainTokenHolder {
-    pub account_owner: AccountOwner,
+    pub account_owner: MultiAddress,
     pub chain_id: ChainId,
 }
 

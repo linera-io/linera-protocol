@@ -23,8 +23,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName,
-        EventId, MessageId, ModuleId, Owner, StreamId,
+        Account, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName, EventId, MessageId,
+        ModuleId, MultiAddress, Owner, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -86,7 +86,7 @@ pub struct SystemExecutionStateView<C> {
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
-    pub balances: HashedMapView<C, AccountOwner, Amount>,
+    pub balances: HashedMapView<C, MultiAddress, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
     /// Whether this chain has been closed.
@@ -114,7 +114,7 @@ pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
-        owner: AccountOwner,
+        owner: MultiAddress,
         recipient: Recipient,
         amount: Amount,
     },
@@ -209,15 +209,15 @@ pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
     Credit {
-        target: AccountOwner,
+        target: MultiAddress,
         amount: Amount,
-        source: AccountOwner,
+        source: MultiAddress,
     },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
     /// the recipient. The message must be properly authenticated. Receiver chains may
     /// refuse it depending on their configuration.
     Withdraw {
-        owner: AccountOwner,
+        owner: MultiAddress,
         amount: Amount,
         recipient: Recipient,
     },
@@ -422,7 +422,7 @@ where
                     .claim(
                         context.authenticated_signer,
                         None,
-                        AccountOwner::Address32(owner.0),
+                        MultiAddress::Address32(owner.0),
                         target_id,
                         recipient,
                         amount,
@@ -624,22 +624,22 @@ where
         &mut self,
         authenticated_signer: Option<Owner>,
         authenticated_application_id: Option<UserApplicationId>,
-        source: AccountOwner,
+        source: MultiAddress,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         match (source, authenticated_signer, authenticated_application_id) {
-            (AccountOwner::Address32(source), Some(Owner(signer)), _) => ensure!(
+            (MultiAddress::Address32(source), Some(Owner(signer)), _) => ensure!(
                 signer == source,
                 ExecutionError::UnauthenticatedTransferOwner
             ),
-            (AccountOwner::Address32(account_application), _, Some(authorized_application)) => {
+            (MultiAddress::Address32(account_application), _, Some(authorized_application)) => {
                 ensure!(
                     account_application == authorized_application.0,
                     ExecutionError::UnauthenticatedTransferOwner
                 )
             }
-            (AccountOwner::Chain, Some(signer), _) => ensure!(
+            (MultiAddress::Chain, Some(signer), _) => ensure!(
                 self.ownership.get().verify_owner(&signer),
                 ExecutionError::UnauthenticatedTransferOwner
             ),
@@ -669,18 +669,18 @@ where
         &self,
         authenticated_signer: Option<Owner>,
         authenticated_application_id: Option<UserApplicationId>,
-        source: AccountOwner,
+        source: MultiAddress,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<OutgoingMessage, ExecutionError> {
         match source {
-            AccountOwner::Address32(owner) => ensure!(
+            MultiAddress::Address32(owner) => ensure!(
                 authenticated_signer.map(|owner| owner.0) == Some(owner)
                     || authenticated_application_id.map(|owner| owner.0) == Some(owner),
                 ExecutionError::UnauthenticatedClaimOwner
             ),
-            AccountOwner::Chain => unreachable!(),
+            MultiAddress::Chain => unreachable!(),
         }
         ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
@@ -698,11 +698,11 @@ where
     /// Debits an [`Amount`] of tokens from an account's balance.
     async fn debit(
         &mut self,
-        account: &AccountOwner,
+        account: &MultiAddress,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
         let balance = match account {
-            AccountOwner::Chain => self.balance.get_mut(),
+            MultiAddress::Chain => self.balance.get_mut(),
             other => self.balances.get_mut(other).await?.ok_or_else(|| {
                 ExecutionError::InsufficientFunding {
                     balance: Amount::ZERO,
@@ -715,7 +715,7 @@ where
             .map_err(|_| ExecutionError::InsufficientFunding { balance: *balance })?;
 
         match account {
-            AccountOwner::Chain => {}
+            MultiAddress::Chain => {}
             other => {
                 if balance.is_zero() {
                     self.balances.remove(other)?;
@@ -742,7 +742,7 @@ where
             } => {
                 let receiver = if context.is_bouncing { source } else { target };
                 match receiver {
-                    AccountOwner::Chain => {
+                    MultiAddress::Chain => {
                         let new_balance = self.balance.get().saturating_add(amount);
                         self.balance.set(new_balance);
                     }
@@ -849,7 +849,7 @@ where
                 epoch: config.epoch,
             }
         );
-        self.debit(&AccountOwner::Chain, config.balance).await?;
+        self.debit(&MultiAddress::Chain, config.balance).await?;
         let message = SystemMessage::OpenChain(config);
         Ok(OutgoingMessage::new(child_id, message).with_kind(MessageKind::Protected))
     }

@@ -11,7 +11,7 @@ use fungible::{
     Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, Operation, Parameters,
 };
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, WithContractAbi},
+    linera_base_types::{Amount, MultiAddress, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -49,7 +49,7 @@ impl Contract for FungibleTokenContract {
         if state.accounts.is_empty() {
             if let Some(owner) = self.runtime.authenticated_signer() {
                 state.accounts.insert(
-                    AccountOwner::from(owner),
+                    MultiAddress::from(owner),
                     Amount::from_str("1000000").unwrap(),
                 );
             }
@@ -127,9 +127,9 @@ impl Contract for FungibleTokenContract {
 
 impl FungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
+    fn check_account_authentication(&mut self, owner: MultiAddress) {
         match owner {
-            AccountOwner::Address32(address) => {
+            MultiAddress::Address32(address) => {
                 assert!(
                     self.runtime.authenticated_signer().map(|owner| owner.0) == Some(address)
                         || self.runtime.authenticated_caller_id().map(|owner| owner.0)
@@ -137,7 +137,7 @@ impl FungibleTokenContract {
                     "The requested transfer is not correctly authenticated."
                 )
             }
-            AccountOwner::Chain => {
+            MultiAddress::Chain => {
                 panic!("Chain account is not supported")
             }
         }
@@ -166,7 +166,7 @@ impl FungibleTokenContract {
         &mut self,
         amount: Amount,
         target_account: Account,
-        source: AccountOwner,
+        source: MultiAddress,
     ) {
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;

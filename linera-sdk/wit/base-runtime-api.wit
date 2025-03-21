@@ -9,9 +9,9 @@ interface base-runtime-api {
     get-chain-ownership: func() -> chain-ownership;
     read-system-timestamp: func() -> timestamp;
     read-chain-balance: func() -> amount;
-    read-owner-balance: func(owner: account-owner) -> amount;
-    read-owner-balances: func() -> list<tuple<account-owner, amount>>;
-    read-balance-owners: func() -> list<account-owner>;
+    read-owner-balance: func(owner: multi-address) -> amount;
+    read-owner-balances: func() -> list<tuple<multi-address, amount>>;
+    read-balance-owners: func() -> list<multi-address>;
     perform-http-request: func(request: http-request) -> http-response;
     assert-before: func(timestamp: timestamp);
     read-data-blob: func(hash: crypto-hash) -> list<u8>;
@@ -29,11 +29,6 @@ interface base-runtime-api {
     find-keys-wait: func(promise-id: u32) -> list<list<u8>>;
     find-key-values-new: func(key-prefix: list<u8>) -> u32;
     find-key-values-wait: func(promise-id: u32) -> list<tuple<list<u8>, list<u8>>>;
-
-    variant account-owner {
-        address32(crypto-hash),
-        chain,
-    }
 
     record amount {
         inner0: u128,
@@ -98,6 +93,11 @@ interface base-runtime-api {
         info,
         debug,
         trace,
+    }
+
+    variant multi-address {
+        address32(crypto-hash),
+        chain,
     }
 
     record owner {

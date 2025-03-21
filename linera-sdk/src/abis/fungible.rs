@@ -9,7 +9,7 @@ use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::Amount,
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{ChainId, MultiAddress},
 };
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
@@ -33,14 +33,14 @@ pub enum Operation {
     /// Requests an account balance.
     Balance {
         /// Owner to query the balance for
-        owner: AccountOwner,
+        owner: MultiAddress,
     },
     /// Requests this fungible token's ticker symbol.
     TickerSymbol,
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
         /// Owner to transfer from
-        owner: AccountOwner,
+        owner: MultiAddress,
         /// Amount to be transferred
         amount: Amount,
         /// Target account to transfer the amount to
@@ -75,7 +75,7 @@ pub enum FungibleResponse {
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct InitialState {
     /// Accounts and their respective initial balances
-    pub accounts: BTreeMap<AccountOwner, Amount>,
+    pub accounts: BTreeMap<MultiAddress, Amount>,
 }
 
 /// The parameters to instantiate fungible with
@@ -112,19 +112,19 @@ pub struct Account {
     /// Chain ID of the account
     pub chain_id: ChainId,
     /// Owner of the account
-    pub owner: AccountOwner,
+    pub owner: MultiAddress,
 }
 
 /// A builder type for constructing the initial state of the application.
 #[derive(Debug, Default)]
 pub struct InitialStateBuilder {
     /// Accounts and their respective initial balances
-    account_balances: BTreeMap<AccountOwner, Amount>,
+    account_balances: BTreeMap<MultiAddress, Amount>,
 }
 
 impl InitialStateBuilder {
     /// Adds an account to the initial state of the application.
-    pub fn with_account(mut self, account: AccountOwner, balance: impl Into<Amount>) -> Self {
+    pub fn with_account(mut self, account: MultiAddress, balance: impl Into<Amount>) -> Self {
         self.account_balances.insert(account, balance.into());
         self
     }

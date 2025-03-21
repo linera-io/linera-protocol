@@ -9,7 +9,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
     },
     identifiers::{
-        Account, AccountOwner, ChainId, ChannelName, Destination, MessageId, ModuleId, Owner,
+        Account, ChainId, ChannelName, Destination, MessageId, ModuleId, MultiAddress, Owner,
         StreamName, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
@@ -63,13 +63,13 @@ impl From<Account> for wit_contract_api::Account {
     }
 }
 
-impl From<AccountOwner> for wit_contract_api::AccountOwner {
-    fn from(account_owner: AccountOwner) -> Self {
+impl From<MultiAddress> for wit_contract_api::MultiAddress {
+    fn from(account_owner: MultiAddress) -> Self {
         match account_owner {
-            AccountOwner::Address32(owner) => {
-                wit_contract_api::AccountOwner::Address32(owner.into())
+            MultiAddress::Address32(owner) => {
+                wit_contract_api::MultiAddress::Address32(owner.into())
             }
-            AccountOwner::Chain => wit_contract_api::AccountOwner::Chain,
+            MultiAddress::Chain => wit_contract_api::MultiAddress::Chain,
         }
     }
 }

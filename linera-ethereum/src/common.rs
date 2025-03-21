@@ -84,7 +84,7 @@ pub enum EthereumServiceError {
 /// entries of Ethereum events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumDataType {
-    Address(String),
+    MultiAddress(String),
     Uint256(U256),
     Uint64(u64),
     Int64(i64),
@@ -108,7 +108,7 @@ fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, Eth
     if ethereum_type == "address" {
         let address = Address::from_word(entry);
         let address = format!("{:?}", address);
-        return Ok(EthereumDataType::Address(address));
+        return Ok(EthereumDataType::MultiAddress(address));
     }
     if ethereum_type == "uint256" {
         let entry = U256::from_be_bytes(entry.0);

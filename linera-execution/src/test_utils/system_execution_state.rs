@@ -11,7 +11,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
-    identifiers::{AccountOwner, BlobId, ChainDescription, ChainId, Owner, UserApplicationId},
+    identifiers::{BlobId, ChainDescription, ChainId, MultiAddress, Owner, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -41,7 +41,7 @@ pub struct SystemExecutionState {
     pub ownership: ChainOwnership,
     pub balance: Amount,
     #[debug(skip_if = BTreeMap::is_empty)]
-    pub balances: BTreeMap<AccountOwner, Amount>,
+    pub balances: BTreeMap<MultiAddress, Amount>,
     pub timestamp: Timestamp,
     pub used_blobs: BTreeSet<BlobId>,
     #[debug(skip_if = Not::not)]

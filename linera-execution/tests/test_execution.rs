@@ -13,7 +13,7 @@ use linera_base::{
         SendMessageRequest, Timestamp,
     },
     identifiers::{
-        Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
+        Account, ChainDescription, ChainId, Destination, MessageId, MultiAddress, Owner,
     },
     ownership::ChainOwnership,
 };
@@ -1288,7 +1288,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership()?, ownership);
             let destination = Account::chain(ChainId::root(2));
-            runtime.transfer(AccountOwner::Chain, destination, Amount::ONE)?;
+            runtime.transfer(MultiAddress::Chain, destination, Amount::ONE)?;
             let id = runtime.application_id()?;
             let application_permissions = ApplicationPermissions::new_single(id);
             let (actual_message_id, chain_id) =
@@ -1485,11 +1485,11 @@ async fn test_message_receipt_spending_chain_balance(
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
-    let receiver_chain_account = AccountOwner::Chain;
+    let receiver_chain_account = MultiAddress::Chain;
     let sender_chain_id = ChainId::root(2);
     let recipient = Account {
         chain_id: sender_chain_id,
-        owner: AccountOwner::Chain,
+        owner: MultiAddress::Chain,
     };
 
     application.expect_call(ExpectedCall::execute_message(

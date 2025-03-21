@@ -15,8 +15,8 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName, UserApplicationId,
+        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
+        MultiAddress, Owner, StreamName, UserApplicationId,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -49,7 +49,7 @@ where
     authenticated_caller_id: Option<Option<UserApplicationId>>,
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
-    owner_balances: Option<HashMap<AccountOwner, Amount>>,
+    owner_balances: Option<HashMap<MultiAddress, Amount>>,
     chain_ownership: Option<ChainOwnership>,
     can_close_chain: Option<bool>,
     can_change_application_permissions: Option<bool>,
@@ -399,7 +399,7 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn with_owner_balances(
         mut self,
-        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
     ) -> Self {
         self.owner_balances = Some(owner_balances.into_iter().collect());
         self
@@ -408,20 +408,20 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn set_owner_balances(
         &mut self,
-        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (MultiAddress, Amount)>,
     ) -> &mut Self {
         self.owner_balances = Some(owner_balances.into_iter().collect());
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn with_owner_balance(mut self, owner: AccountOwner, balance: Amount) -> Self {
+    pub fn with_owner_balance(mut self, owner: MultiAddress, balance: Amount) -> Self {
         self.set_owner_balance(owner, balance);
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn set_owner_balance(&mut self, owner: AccountOwner, balance: Amount) -> &mut Self {
+    pub fn set_owner_balance(&mut self, owner: MultiAddress, balance: Amount) -> &mut Self {
         self.owner_balances
             .get_or_insert_with(HashMap::new)
             .insert(owner, balance);
@@ -429,12 +429,12 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&mut self, owner: AccountOwner) -> Amount {
+    pub fn owner_balance(&mut self, owner: MultiAddress) -> Amount {
         *self.owner_balance_mut(owner)
     }
 
     /// Returns a mutable reference to the balance of one of the accounts on this chain.
-    fn owner_balance_mut(&mut self, owner: AccountOwner) -> &mut Amount {
+    fn owner_balance_mut(&mut self, owner: MultiAddress) -> &mut Amount {
         self.owner_balances
             .as_mut()
             .expect(
@@ -499,7 +499,7 @@ where
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
-    pub fn transfer(&mut self, source: AccountOwner, destination: Account, amount: Amount) {
+    pub fn transfer(&mut self, source: MultiAddress, destination: Account, amount: Amount) {
         self.debit(source, amount);
 
         if Some(destination.chain_id) == self.chain_id {
@@ -514,10 +514,10 @@ where
 
     /// Debits an `amount` of native tokens from a `source` owner account (or the current
     /// chain's balance).
-    fn debit(&mut self, source: AccountOwner, amount: Amount) {
+    fn debit(&mut self, source: MultiAddress, amount: Amount) {
         let source_balance = match source {
-            AccountOwner::Address32(_) => self.owner_balance_mut(source),
-            AccountOwner::Chain => self.chain_balance_mut(),
+            MultiAddress::Address32(_) => self.owner_balance_mut(source),
+            MultiAddress::Chain => self.chain_balance_mut(),
         };
 
         *source_balance = source_balance
@@ -527,10 +527,10 @@ where
 
     /// Credits an `amount` of native tokens into a `destination` owner account (or the
     /// current chain's balance).
-    fn credit(&mut self, destination: AccountOwner, amount: Amount) {
+    fn credit(&mut self, destination: MultiAddress, amount: Amount) {
         let destination_balance = match destination {
-            owner @ AccountOwner::Address32(_) => self.owner_balance_mut(owner),
-            AccountOwner::Chain => self.chain_balance_mut(),
+            owner @ MultiAddress::Address32(_) => self.owner_balance_mut(owner),
+            MultiAddress::Chain => self.chain_balance_mut(),
         };
 
         *destination_balance = destination_balance

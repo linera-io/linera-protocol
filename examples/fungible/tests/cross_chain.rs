@@ -9,7 +9,7 @@ use fungible::{
     Account, FungibleTokenAbi, InitialState, InitialStateBuilder, Operation, Parameters,
 };
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{Amount, MultiAddress},
     test::{Medium, MessageAction, TestValidator},
 };
 
@@ -28,7 +28,7 @@ async fn test_cross_chain_transfer() {
         )
         .await;
     let mut sender_chain = validator.new_chain().await;
-    let sender_account = AccountOwner::from(sender_chain.public_key());
+    let sender_account = MultiAddress::from(sender_chain.public_key());
 
     let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
     let params = Parameters::new("FUN");
@@ -37,7 +37,7 @@ async fn test_cross_chain_transfer() {
         .await;
 
     let receiver_chain = validator.new_chain().await;
-    let receiver_account = AccountOwner::from(receiver_chain.public_key());
+    let receiver_account = MultiAddress::from(receiver_chain.public_key());
 
     sender_chain
         .add_block(|block| {
@@ -82,7 +82,7 @@ async fn test_bouncing_tokens() {
     let (validator, module_id) =
         TestValidator::with_current_module::<FungibleTokenAbi, Parameters, InitialState>().await;
     let mut sender_chain = validator.new_chain().await;
-    let sender_account = AccountOwner::from(sender_chain.public_key());
+    let sender_account = MultiAddress::from(sender_chain.public_key());
 
     let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
     let params = Parameters::new("RET");
@@ -91,7 +91,7 @@ async fn test_bouncing_tokens() {
         .await;
 
     let receiver_chain = validator.new_chain().await;
-    let receiver_account = AccountOwner::from(receiver_chain.public_key());
+    let receiver_account = MultiAddress::from(receiver_chain.public_key());
 
     let certificate = sender_chain
         .add_block(|block| {

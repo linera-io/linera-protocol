@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, ChainId, Owner, UserApplicationId},
+    identifiers::{ChainId, MultiAddress, Owner, UserApplicationId},
     listen_for_shutdown_signals,
     time::Instant,
 };
@@ -594,7 +594,7 @@ where
                     amount,
                 ),
                 None => Operation::System(SystemOperation::Transfer {
-                    owner: AccountOwner::Chain,
+                    owner: MultiAddress::Chain,
                     recipient: Recipient::chain(previous_chain_id),
                     amount,
                 }),
@@ -618,10 +618,10 @@ where
     ) -> Operation {
         let target_account = fungible::Account {
             chain_id,
-            owner: AccountOwner::from(receiver),
+            owner: MultiAddress::from(receiver),
         };
         let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-            owner: AccountOwner::from(sender),
+            owner: MultiAddress::from(sender),
             amount,
             target_account,
         })

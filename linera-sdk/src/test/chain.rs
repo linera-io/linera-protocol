@@ -19,7 +19,7 @@ use linera_base::{
         Amount, Blob, BlockHeight, Bytecode, CompressedBytecode, UserApplicationDescription,
     },
     identifiers::{
-        AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, UserApplicationId,
+        ApplicationId, ChainDescription, ChainId, ModuleId, MultiAddress, UserApplicationId,
     },
     vm::VmRuntime,
 };
@@ -127,8 +127,8 @@ impl ActiveChain {
         balance
     }
 
-    /// Reads the current account balance on this microchain of an [`AccountOwner`].
-    pub async fn owner_balance(&self, owner: &AccountOwner) -> Option<Amount> {
+    /// Reads the current account balance on this microchain of an [`MultiAddress`].
+    pub async fn owner_balance(&self, owner: &MultiAddress) -> Option<Amount> {
         let chain_state = self
             .validator
             .worker()
@@ -145,11 +145,11 @@ impl ActiveChain {
             .expect("Failed to read owner balance")
     }
 
-    /// Reads the current account balance on this microchain of all [`AccountOwner`]s.
+    /// Reads the current account balance on this microchain of all [`MultiAddress`]s.
     pub async fn owner_balances(
         &self,
-        owners: impl IntoIterator<Item = AccountOwner>,
-    ) -> HashMap<AccountOwner, Option<Amount>> {
+        owners: impl IntoIterator<Item = MultiAddress>,
+    ) -> HashMap<MultiAddress, Option<Amount>> {
         let chain_state = self
             .validator
             .worker()
@@ -174,8 +174,8 @@ impl ActiveChain {
         balances
     }
 
-    /// Reads a list of [`AccountOwner`]s that have a non-zero balance on this microchain.
-    pub async fn accounts(&self) -> Vec<AccountOwner> {
+    /// Reads a list of [`MultiAddress`]s that have a non-zero balance on this microchain.
+    pub async fn accounts(&self) -> Vec<MultiAddress> {
         let chain_state = self
             .validator
             .worker()
@@ -193,7 +193,7 @@ impl ActiveChain {
     }
 
     /// Reads all the non-zero account balances on this microchain.
-    pub async fn all_owner_balances(&self) -> HashMap<AccountOwner, Amount> {
+    pub async fn all_owner_balances(&self) -> HashMap<MultiAddress, Amount> {
         self.owner_balances(self.accounts().await)
             .await
             .into_iter()

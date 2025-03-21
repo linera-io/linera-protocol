@@ -20,7 +20,7 @@ use linera_base::vm::VmRuntime;
 use linera_base::{
     crypto::Secp256k1SecretKey,
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, AccountOwner, ChainId},
+    identifiers::{Account, ChainId, MultiAddress},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_execution::committee::Epoch;
@@ -42,9 +42,9 @@ use {
 };
 
 #[cfg(feature = "benchmark")]
-fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+fn get_fungible_account_owner(client: &ClientWrapper) -> MultiAddress {
     let owner = client.get_owner().unwrap();
-    AccountOwner::from(owner)
+    MultiAddress::from(owner)
 }
 
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
@@ -177,7 +177,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     }
 
     let recipient =
-        AccountOwner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
+        MultiAddress::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),
