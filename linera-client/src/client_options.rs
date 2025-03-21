@@ -1500,7 +1500,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
                 weights: owner_weights.len(),
             });
         }
-        let super_owners = super_owners.into_iter().map(Into::into).collect();
+        let super_owners = super_owners.into_iter().collect();
         let owners = owners
             .into_iter()
             .zip(owner_weights.into_iter().chain(iter::repeat(100)))
