@@ -370,7 +370,7 @@ where
             amount,
             source: context
                 .authenticated_signer
-                .map(AccountOwner::User)
+                .map(|o| AccountOwner::Address32(o.0))
                 .unwrap_or(AccountOwner::Chain),
             target: account.owner,
         };

@@ -136,14 +136,14 @@ impl NativeFungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
-            AccountOwner::User(address) => {
-                assert_eq!(
-                    self.runtime.authenticated_signer(),
-                    Some(address),
+            AccountOwner::Address32(address) => {
+                assert!(
+                    self.runtime.authenticated_signer().map(|owner| owner.0) == Some(address)
+                        || self.runtime.authenticated_caller_id().map(|owner| owner.0)
+                            == Some(address),
                     "The requested transfer is not correctly authenticated."
-                );
+                )
             }
-            AccountOwner::Application(_) => panic!("Applications not supported yet"),
             AccountOwner::Chain => {
                 panic!("Chain accounts are not supported")
             }

@@ -101,9 +101,6 @@ impl Runnable for Job {
                 amount,
             } => {
                 let chain_client = context.make_chain_client(sender.chain_id)?;
-                if let AccountOwner::Application(_) = sender.owner {
-                    bail!("Can't transfer from an application account")
-                };
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
                     amount, sender, recipient
@@ -284,7 +281,7 @@ impl Runnable for Job {
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    AccountOwner::User(_) | AccountOwner::Application(_) => {
+                    AccountOwner::Address32(_) => {
                         chain_client.local_owner_balance(account.owner).await?
                     }
                     AccountOwner::Chain => chain_client.local_balance().await?,
@@ -303,7 +300,7 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    AccountOwner::User(_) | AccountOwner::Application(_) => {
+                    AccountOwner::Address32(_) => {
                         chain_client.query_owner_balance(account.owner).await?
                     }
                     AccountOwner::Chain => chain_client.query_balance().await?,
@@ -321,7 +318,7 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = match account.owner {
-                    AccountOwner::User(_) | AccountOwner::Application(_) => {
+                    AccountOwner::Address32(_) => {
                         chain_client.query_owner_balance(account.owner).await
                     }
                     AccountOwner::Chain => chain_client.query_balance().await,

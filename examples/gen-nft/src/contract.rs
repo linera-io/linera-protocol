@@ -126,17 +126,11 @@ impl GenNftContract {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(&mut self, owner: AccountOwner) {
         match owner {
-            AccountOwner::User(address) => {
-                assert_eq!(
-                    self.runtime.authenticated_signer(),
-                    Some(address),
-                    "The requested transfer is not correctly authenticated."
-                )
-            }
-            AccountOwner::Application(id) => {
-                assert_eq!(
-                    self.runtime.authenticated_caller_id(),
-                    Some(id),
+            AccountOwner::Address32(address) => {
+                assert!(
+                    self.runtime.authenticated_signer().map(|owner| owner.0) == Some(address)
+                        || self.runtime.authenticated_caller_id().map(|owner| owner.0)
+                            == Some(address),
                     "The requested transfer is not correctly authenticated."
                 )
             }

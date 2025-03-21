@@ -219,7 +219,7 @@ where
     }
 
     /// Transfers `amount` units of value from the given owner's account to the recipient.
-    /// If no owner is given, try to take the units out of the unattributed account.
+    /// If no owner is given, try to take the units out of the chain account.
     async fn transfer(
         &self,
         chain_id: ChainId,

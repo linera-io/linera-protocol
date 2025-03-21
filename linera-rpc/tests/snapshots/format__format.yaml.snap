@@ -11,14 +11,10 @@ Account:
 AccountOwner:
   ENUM:
     0:
-      User:
+      Address32:
         NEWTYPE:
-          TYPENAME: Owner
+          TYPENAME: CryptoHash
     1:
-      Application:
-        NEWTYPE:
-          TYPENAME: UserApplicationId
-    2:
       Chain: UNIT
 AccountPublicKey:
   ENUM:
