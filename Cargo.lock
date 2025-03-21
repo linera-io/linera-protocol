@@ -5190,6 +5190,7 @@ dependencies = [
  "linera-views-derive",
  "linera-witty",
  "linked-hash-map",
+ "num_cpus",
  "prometheus",
  "rand",
  "rocksdb",

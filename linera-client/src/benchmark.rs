@@ -186,7 +186,6 @@ where
             let local_node = local_node.clone();
             let chain_client = chain_clients[&chain_id].clone();
             chain_client.process_inbox().await?;
-            let short_chain_id = format!("{:?}", chain_id);
             join_set.spawn_blocking(move || {
                 handle.block_on(
                     async move {
@@ -207,7 +206,7 @@ where
                     }
                     .instrument(tracing::info_span!(
                         "benchmark_chain_id",
-                        chain_id = short_chain_id
+                        chain_id = format!("{:?}", chain_id)
                     )),
                 )
             });
@@ -494,6 +493,7 @@ where
         );
         let cross_chain_message_delivery = chain_client.options().cross_chain_message_delivery;
         let mut num_sent_proposals = 0;
+        let authenticated_signer = Some(Owner::from(key_pair.public()));
         loop {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");
@@ -506,7 +506,7 @@ where
                 operations: operations.clone(),
                 previous_block_hash: chain_client.block_hash(),
                 height: chain_client.next_block_height(),
-                authenticated_signer: Some(Owner::from(key_pair.public())),
+                authenticated_signer,
                 timestamp: chain_client.timestamp().max(Timestamp::now()),
             };
             let executed_block = local_node
