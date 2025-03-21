@@ -220,7 +220,7 @@ impl IncomingBundle {
     }
 }
 
-impl<'de> BcsHashable<'de> for IncomingBundle {}
+impl BcsHashable<'_> for IncomingBundle {}
 
 /// What to do with a message picked from the inbox.
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -367,7 +367,7 @@ pub struct OperationResult(
     pub Vec<u8>,
 );
 
-impl<'de> BcsHashable<'de> for OperationResult {}
+impl BcsHashable<'_> for OperationResult {}
 
 doc_scalar!(
     OperationResult,
@@ -943,9 +943,9 @@ pub(crate) fn check_signatures(
     Ok(())
 }
 
-impl<'de> BcsSignable<'de> for ProposalContent {}
+impl BcsSignable<'_> for ProposalContent {}
 
-impl<'de> BcsSignable<'de> for VoteValue {}
+impl BcsSignable<'_> for VoteValue {}
 
 doc_scalar!(
     MessageAction,

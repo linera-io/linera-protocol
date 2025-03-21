@@ -89,7 +89,7 @@ where
     }
 }
 
-impl<'a, T> ValueOrBytes<'a, T>
+impl<T> ValueOrBytes<'_, T>
 where
     T: Serialize,
 {

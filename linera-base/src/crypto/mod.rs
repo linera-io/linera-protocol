@@ -344,7 +344,7 @@ impl TestString {
 }
 
 #[cfg(with_testing)]
-impl<'de> BcsSignable<'de> for TestString {}
+impl BcsSignable<'_> for TestString {}
 
 /// Reads the `bytes` as four little-endian unsigned 64-bit integers and returns them.
 pub(crate) fn le_bytes_to_u64_array(bytes: &[u8]) -> [u64; 4] {

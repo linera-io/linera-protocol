@@ -1034,7 +1034,7 @@ impl ChainId {
     }
 }
 
-impl<'de> BcsHashable<'de> for ChainDescription {}
+impl BcsHashable<'_> for ChainDescription {}
 
 bcs_scalar!(ApplicationId, "A unique identifier for a user application");
 doc_scalar!(

@@ -192,7 +192,7 @@ impl fmt::Debug for Secp256k1PublicKey {
     }
 }
 
-impl<'de> BcsHashable<'de> for Secp256k1PublicKey {}
+impl BcsHashable<'_> for Secp256k1PublicKey {}
 
 impl WitType for Secp256k1PublicKey {
     const SIZE: u32 = <(u64, u64, u64, u64, u8) as WitType>::SIZE;
@@ -501,7 +501,7 @@ mod tests {
         #[derive(Debug, Serialize, Deserialize)]
         struct Foo(String);
 
-        impl<'de> BcsSignable<'de> for Foo {}
+        impl BcsSignable<'_> for Foo {}
 
         let keypair1 = Secp256k1KeyPair::generate();
         let keypair2 = Secp256k1KeyPair::generate();
