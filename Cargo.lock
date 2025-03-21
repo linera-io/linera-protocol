@@ -4698,6 +4698,7 @@ dependencies = [
  "linera-execution",
  "linera-views",
  "linera-views-derive",
+ "linera-wasm-instrument",
  "linera-wasmer",
  "linera-wasmer-compiler-singlepass",
  "linera-witty",
@@ -4720,7 +4721,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "wasm-instrument",
  "wasmtime",
 ]
 
@@ -4883,6 +4883,12 @@ dependencies = [
  "tokio",
  "tracing",
 ]
+
+[[package]]
+name = "linera-parity-wasm"
+version = "0.45.1-linera.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-rpc"
@@ -5219,6 +5225,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.95",
+]
+
+[[package]]
+name = "linera-wasm-instrument"
+version = "0.4.0-linera.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80b01177f7f9e3404738607912cfe9887f0f717a8dc45adff03adc9f34f5b22e"
+dependencies = [
+ "linera-parity-wasm",
 ]
 
 [[package]]
@@ -6023,12 +6038,6 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
-
-[[package]]
-name = "parity-wasm"
-version = "0.45.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1ad0aff30c1da14b1254fcb2af73e1fa9a28670e584a626f53a369d0e157304"
 
 [[package]]
 name = "parking"
@@ -9324,15 +9333,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b88b0814c9a2b323a9b46c687e726996c255ac8b64aa237dd11c81ed4854760"
 dependencies = [
  "leb128",
-]
-
-[[package]]
-name = "wasm-instrument"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a47ecb37b9734d1085eaa5ae1a81e60801fd8c28d4cabdd8aedb982021918bc"
-dependencies = [
- "parity-wasm",
 ]
 
 [[package]]
