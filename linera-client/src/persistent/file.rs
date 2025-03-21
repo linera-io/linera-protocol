@@ -6,7 +6,7 @@ use std::{
     path::Path,
 };
 
-use fs4::FileExt as _;
+use fs4::FileExt;
 use thiserror_context::Context;
 
 use super::{Dirty, Persist};
@@ -69,7 +69,7 @@ impl Lock {
 
 impl Drop for Lock {
     fn drop(&mut self) {
-        if let Err(error) = self.0.file().unlock() {
+        if let Err(error) = FileExt::unlock(self.0.file()) {
             tracing::warn!("Failed to unlock wallet file: {error}");
         }
     }
