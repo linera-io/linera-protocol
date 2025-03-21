@@ -10,7 +10,7 @@
 
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::{ChainId, UserApplicationId},
+    identifiers::{ChainId, MultiAddress},
 };
 use linera_views::context::MemoryContext;
 use serde::Serialize;
@@ -30,7 +30,7 @@ pub fn mock_chain_id(_chain_id: impl Into<Option<ChainId>>) {
 }
 
 /// Sets the mocked application ID.
-pub fn mock_application_id(_application_id: impl Into<Option<UserApplicationId>>) {
+pub fn mock_application_id(_application_id: impl Into<Option<MultiAddress>>) {
     unreachable!("{ERROR_MESSAGE}");
 }
 
@@ -66,7 +66,7 @@ pub fn mock_key_value_store() -> MemoryContext<()> {
 
 /// Mocks the `try_query_application` system API.
 pub fn mock_try_query_application<E>(
-    _handler: impl FnMut(UserApplicationId, Vec<u8>) -> Result<Vec<u8>, E> + 'static,
+    _handler: impl FnMut(MultiAddress, Vec<u8>) -> Result<Vec<u8>, E> + 'static,
 ) where
     E: ToString + 'static,
 {

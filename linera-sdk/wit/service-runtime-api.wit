@@ -2,7 +2,7 @@ package linera:app;
 
 interface service-runtime-api {
     schedule-operation: func(operation: list<u8>);
-    try-query-application: func(application: user-application-id, argument: list<u8>) -> list<u8>;
+    try-query-application: func(application: multi-address, argument: list<u8>) -> list<u8>;
     check-execution-time: func(fuel-consumed: u64);
 
     record crypto-hash {
@@ -12,7 +12,8 @@ interface service-runtime-api {
         part4: u64,
     }
 
-    record user-application-id {
-        inner0: crypto-hash,
+    variant multi-address {
+        address32(crypto-hash),
+        chain,
     }
 }

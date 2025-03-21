@@ -195,14 +195,14 @@ where
         module_id,
         parameters: parameters_bytes.clone(),
         instantiation_argument: initial_value_bytes.clone(),
-        required_application_ids: vec![],
+        required_applications: vec![],
     };
     let application_description = UserApplicationDescription {
         module_id,
         creator_chain_id: creator_chain.into(),
         block_height: BlockHeight::from(0),
         application_index: 0,
-        required_application_ids: vec![],
+        required_applications: vec![],
         parameters: parameters_bytes,
     };
     let application_description_blob = Blob::new_application_description(&application_description);

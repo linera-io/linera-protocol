@@ -23,7 +23,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::CryptoHash,
     data_types::{Amount, Bytecode},
-    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner, UserApplicationId},
+    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, MultiAddress, Owner},
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
@@ -126,7 +126,7 @@ impl ClientWrapper {
     pub async fn project_publish<T: Serialize>(
         &self,
         path: PathBuf,
-        required_application_ids: Vec<String>,
+        required_applications: Vec<String>,
         publisher: impl Into<Option<ChainId>>,
         argument: &T,
     ) -> Result<String> {
@@ -140,9 +140,9 @@ impl ClientWrapper {
             .args(publisher.into().iter().map(ChainId::to_string))
             .args(["--json-parameters", &json_parameters])
             .args(["--json-argument", &json_argument]);
-        if !required_application_ids.is_empty() {
-            command.arg("--required-application-ids");
-            command.args(required_application_ids);
+        if !required_applications.is_empty() {
+            command.arg("--required-applications");
+            command.args(required_applications);
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
         Ok(stdout.trim().to_string())
@@ -359,7 +359,7 @@ impl ClientWrapper {
         vm_runtime: VmRuntime,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[UserApplicationId],
+        required_applications: &[MultiAddress],
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<A>> {
         let json_parameters = serde_json::to_string(parameters)?;
@@ -373,16 +373,12 @@ impl ClientWrapper {
             .args(publisher.into().iter().map(ChainId::to_string))
             .args(["--json-parameters", &json_parameters])
             .args(["--json-argument", &json_argument]);
-        if !required_application_ids.is_empty() {
-            command.arg("--required-application-ids");
-            command.args(
-                required_application_ids
-                    .iter()
-                    .map(UserApplicationId::to_string),
-            );
+        if !required_applications.is_empty() {
+            command.arg("--required-applications");
+            command.args(required_applications.iter().map(MultiAddress::to_string));
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        Ok(stdout.trim().parse::<UserApplicationId>()?.with_abi())
+        Ok(stdout.trim().parse::<MultiAddress>()?.with_abi())
     }
 
     /// Runs `linera publish-module`.
@@ -414,7 +410,7 @@ impl ClientWrapper {
         module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[UserApplicationId],
+        required_applications: &[MultiAddress],
         creator: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<Abi>> {
         let json_parameters = serde_json::to_string(parameters)?;
@@ -426,16 +422,12 @@ impl ClientWrapper {
             .args(["--json-parameters", &json_parameters])
             .args(["--json-argument", &json_argument])
             .args(creator.into().iter().map(ChainId::to_string));
-        if !required_application_ids.is_empty() {
-            command.arg("--required-application-ids");
-            command.args(
-                required_application_ids
-                    .iter()
-                    .map(UserApplicationId::to_string),
-            );
+        if !required_applications.is_empty() {
+            command.arg("--required-applications");
+            command.args(required_applications.iter().map(MultiAddress::to_string));
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        Ok(stdout.trim().parse::<UserApplicationId>()?.with_abi())
+        Ok(stdout.trim().parse::<MultiAddress>()?.with_abi())
     }
 
     /// Runs `linera service`.
@@ -1234,12 +1226,12 @@ impl NodeService {
         module_id: &ModuleId<Abi, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         argument: &InstantiationArgument,
-        required_application_ids: &[UserApplicationId],
+        required_applications: &[MultiAddress],
     ) -> Result<ApplicationId<Abi>> {
         let module_id = module_id.forget_abi();
-        let json_required_applications_ids = required_application_ids
+        let json_required_applications = required_applications
             .iter()
-            .map(UserApplicationId::to_string)
+            .map(MultiAddress::to_string)
             .collect::<Vec<_>>()
             .to_value();
         // Convert to `serde_json::Value` then `async_graphql::Value` via the trait `InputType`.
@@ -1255,7 +1247,7 @@ impl NodeService {
                  moduleId: \"{module_id}\", \
                  parameters: {new_parameters}, \
                  instantiationArgument: {new_argument}, \
-                 requiredApplicationIds: {json_required_applications_ids}) \
+                 requiredApplications: {json_required_applications}) \
              }}"
         );
         let data = self.query_node(query).await?;
@@ -1264,7 +1256,7 @@ impl NodeService {
             .context("missing createApplication string in response")?
             .trim();
         Ok(app_id_str
-            .parse::<UserApplicationId>()
+            .parse::<MultiAddress>()
             .context("invalid application ID")?
             .with_abi())
     }

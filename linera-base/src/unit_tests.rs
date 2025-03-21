@@ -13,7 +13,6 @@ use crate::{
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
         Account, ChainId, ChannelName, Destination, MessageId, ModuleId, MultiAddress, Owner,
-        UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -110,9 +109,9 @@ fn message_id_test_case() -> MessageId {
     }
 }
 
-/// Creates a dummy [`UserApplicationId`] instance to use for the WIT roundtrip test.
-fn application_id_test_case() -> UserApplicationId {
-    UserApplicationId(CryptoHash::test_hash("application description"))
+/// Creates a dummy [`MultiAddress`] instance to use for the WIT roundtrip test.
+fn application_id_test_case() -> MultiAddress {
+    MultiAddress::Address32(CryptoHash::test_hash("application description"))
 }
 
 /// Creates a dummy [`ModuleId`] instance to use for the WIT roundtrip test.

@@ -19,7 +19,7 @@ use linera_base::{
     },
     doc_scalar,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, EventId, Owner, UserApplicationId},
+    identifiers::{BlobId, ChainId, EventId, MultiAddress, Owner},
     time::timer::{sleep, timeout},
 };
 use linera_chain::{
@@ -530,7 +530,7 @@ where
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
     ) -> Result<UserApplicationDescription, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::DescribeApplication {

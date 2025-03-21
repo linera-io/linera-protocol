@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    identifiers::{BlobId, ChainId, MultiAddress},
 };
 use linera_chain::{
     data_types::{BlockProposal, ExecutedBlock, MessageBundle, Origin, ProposedBlock, Target},
@@ -76,7 +76,7 @@ where
 
     /// Describe an application.
     DescribeApplication {
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         #[debug(skip)]
         callback: oneshot::Sender<Result<UserApplicationDescription, WorkerError>>,
     },

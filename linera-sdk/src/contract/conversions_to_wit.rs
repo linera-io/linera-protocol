@@ -10,7 +10,7 @@ use linera_base::{
     },
     identifiers::{
         Account, ChainId, ChannelName, Destination, MessageId, ModuleId, MultiAddress, Owner,
-        StreamName, UserApplicationId,
+        StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -115,14 +115,6 @@ impl From<MessageId> for wit_contract_api::MessageId {
             chain_id: message_id.chain_id.into(),
             height: message_id.height.into(),
             index: message_id.index,
-        }
-    }
-}
-
-impl From<UserApplicationId> for wit_contract_api::UserApplicationId {
-    fn from(application_id: UserApplicationId) -> Self {
-        wit_contract_api::UserApplicationId {
-            inner0: application_id.0.into(),
         }
     }
 }

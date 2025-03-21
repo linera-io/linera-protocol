@@ -13,7 +13,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     hex, http,
-    identifiers::{ApplicationId, ChainId, MultiAddress, UserApplicationId},
+    identifiers::{ApplicationId, ChainId, MultiAddress},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -344,7 +344,7 @@ where
     /// Configures the handler for application queries made during the test.
     pub fn with_query_application_handler(
         self,
-        handler: impl FnMut(UserApplicationId, Vec<u8>) -> Vec<u8> + Send + 'static,
+        handler: impl FnMut(MultiAddress, Vec<u8>) -> Vec<u8> + Send + 'static,
     ) -> Self {
         *self.query_application_handler.lock().unwrap() = Some(Box::new(handler));
         self
@@ -353,7 +353,7 @@ where
     /// Configures the handler for application queries made during the test.
     pub fn set_query_application_handler(
         &self,
-        handler: impl FnMut(UserApplicationId, Vec<u8>) -> Vec<u8> + Send + 'static,
+        handler: impl FnMut(MultiAddress, Vec<u8>) -> Vec<u8> + Send + 'static,
     ) -> &Self {
         *self.query_application_handler.lock().unwrap() = Some(Box::new(handler));
         self
@@ -470,4 +470,4 @@ where
 }
 
 /// A type alias for the handler for application queries.
-pub type QueryApplicationHandler = Box<dyn FnMut(UserApplicationId, Vec<u8>) -> Vec<u8> + Send>;
+pub type QueryApplicationHandler = Box<dyn FnMut(MultiAddress, Vec<u8>) -> Vec<u8> + Send>;

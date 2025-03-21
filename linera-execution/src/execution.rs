@@ -31,7 +31,6 @@ use crate::{
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext,
     MessageKind, Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
     ServiceSyncRuntime, SystemMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -40,7 +39,7 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+    pub users: HashedReentrantCollectionView<C, MultiAddress, KeyValueStoreView<C>>,
 }
 
 /// How to interact with a long-lived service runtime.
@@ -166,7 +165,7 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn run_user_action(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
@@ -192,7 +191,7 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn run_user_action_with_runtime(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
@@ -420,7 +419,7 @@ where
 
     async fn query_user_application(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         context: QueryContext,
         query: Vec<u8>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
@@ -451,7 +450,7 @@ where
 
     async fn query_user_application_with_long_lived_service(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: MultiAddress,
         context: QueryContext,
         query: Vec<u8>,
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
@@ -487,14 +486,14 @@ where
 
     pub async fn list_applications(
         &self,
-    ) -> Result<Vec<(UserApplicationId, UserApplicationDescription)>, ExecutionError> {
+    ) -> Result<Vec<(MultiAddress, UserApplicationDescription)>, ExecutionError> {
         let mut applications = vec![];
         for blob_id in self.system.used_blobs.indices().await? {
             if blob_id.blob_type == BlobType::ApplicationDescription {
                 let blob_content = self.system.read_blob_content(blob_id).await?;
                 let application_description: UserApplicationDescription =
                     bcs::from_bytes(blob_content.bytes())?;
-                let app_id = UserApplicationId::from(&application_description);
+                let app_id = MultiAddress::from(&application_description);
                 applications.push((app_id, application_description));
             }
         }

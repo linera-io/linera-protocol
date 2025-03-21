@@ -39,16 +39,16 @@ fn expected_application_id(
     context: &OperationContext,
     module_id: &ModuleId,
     parameters: Vec<u8>,
-    required_application_ids: Vec<UserApplicationId>,
+    required_applications: Vec<MultiAddress>,
     application_index: u32,
-) -> UserApplicationId {
+) -> MultiAddress {
     let description = UserApplicationDescription {
         module_id: *module_id,
         creator_chain_id: context.chain_id,
         block_height: context.height,
         application_index,
         parameters,
-        required_application_ids,
+        required_applications,
     };
     From::from(&description)
 }
@@ -67,7 +67,7 @@ async fn application_message_index() -> anyhow::Result<()> {
         module_id,
         parameters: vec![],
         instantiation_argument: vec![],
-        required_application_ids: vec![],
+        required_applications: vec![],
     };
     let mut txn_tracker = TransactionTracker::default();
     view.context()

@@ -672,7 +672,7 @@ Create an application
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
 * `--json-argument-path <JSON_ARGUMENT_PATH>` — Path to a JSON file containing the instantiation argument
-* `--required-application-ids <REQUIRED_APPLICATION_IDS>` — The list of required dependencies of application, if any
+* `--required-applications <REQUIRED_APPLICATIONS>` — The list of required dependencies of application, if any
 
 
 
@@ -697,7 +697,7 @@ Create an application, and publish the required module
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
 * `--json-argument-path <JSON_ARGUMENT_PATH>` — Path to a JSON file containing the instantiation argument
-* `--required-application-ids <REQUIRED_APPLICATION_IDS>` — The list of required dependencies of application, if any
+* `--required-applications <REQUIRED_APPLICATIONS>` — The list of required dependencies of application, if any
 
 
 
@@ -915,7 +915,7 @@ Build and publish a Linera project
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
 * `--json-argument-path <JSON_ARGUMENT_PATH>` — Path to a JSON file containing the instantiation argument
-* `--required-application-ids <REQUIRED_APPLICATION_IDS>` — The list of required dependencies of application, if any
+* `--required-applications <REQUIRED_APPLICATIONS>` — The list of required dependencies of application, if any
 
 
 

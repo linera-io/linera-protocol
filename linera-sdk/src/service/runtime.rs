@@ -9,7 +9,7 @@ use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     http,
-    identifiers::{ApplicationId, ChainId, MultiAddress, UserApplicationId},
+    identifiers::{ApplicationId, ChainId, MultiAddress},
 };
 use serde::Serialize;
 
@@ -75,7 +75,7 @@ where
     /// Returns the ID of the current application.
     pub fn application_id(&self) -> ApplicationId<Application::Abi> {
         Self::fetch_value_through_cache(&self.application_id, || {
-            UserApplicationId::from(base_wit::get_application_id()).with_abi()
+            MultiAddress::from(base_wit::get_application_id()).with_abi()
         })
     }
 

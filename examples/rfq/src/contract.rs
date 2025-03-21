@@ -8,8 +8,8 @@ mod state;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{
-        Amount, ApplicationPermissions, ChainId, ChainOwnership, MultiAddress, Owner,
-        TimeoutConfig, WithContractAbi,
+        Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, TimeoutConfig,
+        WithContractAbi,
     },
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -142,7 +142,7 @@ impl Contract for RfqContract {
                     amount: awaiting_tokens.amount_offered,
                     target_account: Account {
                         chain_id: temp_chain_id,
-                        owner: MultiAddress::from(self.runtime.application_id().forget_abi()),
+                        owner: self.runtime.application_id().forget_abi(),
                     },
                 };
                 let token = token_pair.token_asked;
@@ -259,12 +259,12 @@ impl Contract for RfqContract {
                     None => {
                         // This should never really happen, but if it does, return the
                         // sent tokens
-                        let app_id = self.runtime.application_id().forget_abi();
+                        let app_address = self.runtime.application_id().forget_abi();
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: MultiAddress::from(app_id),
+                                owner: app_address,
                                 amount: tokens.amount,
                                 target_account: tokens.owner,
                             },
@@ -273,12 +273,12 @@ impl Contract for RfqContract {
                     Some(held_tokens) => {
                         // we have tokens from both parties now: return them to the
                         // correct parties
-                        let app_id = self.runtime.application_id().forget_abi();
+                        let app_address = self.runtime.application_id().forget_abi();
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: MultiAddress::from(app_id),
+                                owner: app_address,
                                 amount: tokens.amount,
                                 target_account: held_tokens.owner,
                             },
@@ -289,7 +289,7 @@ impl Contract for RfqContract {
                                 .token_id
                                 .with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: MultiAddress::from(app_id),
+                                owner: app_address,
                                 amount: held_tokens.amount,
                                 target_account: tokens.owner,
                             },
@@ -341,7 +341,7 @@ impl RfqContract {
             amount: quote_provided.get_amount(),
             target_account: Account {
                 chain_id: temp_chain_id,
-                owner: MultiAddress::from(self.runtime.application_id().forget_abi()),
+                owner: self.runtime.application_id().forget_abi(),
             },
         };
         let token = token_pair.token_offered;
@@ -375,12 +375,12 @@ impl RfqContract {
         // we're executing on the temporary chain
         // if we hold some tokens, we return them before closing
         if let Some(tokens) = self.state.temp_chain_held_tokens() {
-            let app_id = self.runtime.application_id().forget_abi();
+            let app_address = self.runtime.application_id().forget_abi();
             self.runtime.call_application(
                 true,
                 tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                 &fungible::Operation::Transfer {
-                    owner: MultiAddress::from(app_id),
+                    owner: app_address,
                     amount: tokens.amount,
                     target_account: tokens.owner,
                 },
