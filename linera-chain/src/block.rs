@@ -14,14 +14,14 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{BlobId, ChainId, MessageId, Owner},
 };
-use linera_execution::{committee::Epoch, BlobState, Operation, OutgoingMessage};
+use linera_execution::{committee::Epoch, BlobState, Operation, OperationResult, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     data_types::{
         BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
-        OperationResult, OutgoingMessageExt, ProposedBlock,
+        OutgoingMessageExt, ProposedBlock,
     },
     types::CertificateValue,
     ChainError,

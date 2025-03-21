@@ -18,13 +18,12 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
-    hex_debug,
     identifiers::{Account, BlobId, ChainId, ChannelFullName, Destination, MessageId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
-    Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
+    Message, MessageKind, Operation, OperationResult, OutgoingMessage, SystemMessage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -352,21 +351,6 @@ impl OutgoingMessageExt for OutgoingMessage {
         }
     }
 }
-
-/// The execution result of a single operation.
-#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct OperationResult(
-    #[debug(with = "hex_debug")]
-    #[serde(with = "serde_bytes")]
-    pub Vec<u8>,
-);
-
-impl<'de> BcsHashable<'de> for OperationResult {}
-
-doc_scalar!(
-    OperationResult,
-    "The execution result of a single operation."
-);
 
 /// A [`ProposedBlock`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]

@@ -31,8 +31,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle,
-        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, OperationResult, Origin,
-        PostedMessage, ProposedBlock, SignatureAggregator,
+        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin, PostedMessage,
+        ProposedBlock, SignatureAggregator,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -49,8 +49,8 @@ use linera_execution::{
         EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
-    ExecutionError, Message, MessageKind, OutgoingMessage, Query, QueryContext, QueryOutcome,
-    QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, Message, MessageKind, OperationResult, OutgoingMessage, Query, QueryContext,
+    QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{

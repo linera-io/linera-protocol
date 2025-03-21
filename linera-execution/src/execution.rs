@@ -6,7 +6,7 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, AccountOwner, BlobType, ChainId, Destination, Owner},
+    identifiers::{Account, BlobType, ChainId, Owner},
 };
 use linera_views::{
     context::Context,
@@ -29,9 +29,8 @@ use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext,
-    MessageKind, Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
-    ServiceSyncRuntime, SystemMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
+    Operation, OperationContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
+    TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -336,47 +335,6 @@ where
                 .await?;
             }
         }
-        Ok(())
-    }
-
-    pub async fn bounce_message(
-        &self,
-        context: MessageContext,
-        grant: Amount,
-        message: Message,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), ExecutionError> {
-        assert_eq!(context.chain_id, self.context().extra().chain_id());
-        txn_tracker.add_outgoing_message(OutgoingMessage {
-            destination: Destination::Recipient(context.message_id.chain_id),
-            authenticated_signer: context.authenticated_signer,
-            refund_grant_to: context.refund_grant_to.filter(|_| !grant.is_zero()),
-            grant,
-            kind: MessageKind::Bouncing,
-            message,
-        })?;
-        Ok(())
-    }
-
-    pub async fn send_refund(
-        &self,
-        context: MessageContext,
-        amount: Amount,
-        account: Account,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), ExecutionError> {
-        assert_eq!(context.chain_id, self.context().extra().chain_id());
-        let message = SystemMessage::Credit {
-            amount,
-            source: context
-                .authenticated_signer
-                .map(AccountOwner::User)
-                .unwrap_or(AccountOwner::Chain),
-            target: account.owner,
-        };
-        txn_tracker.add_outgoing_message(
-            OutgoingMessage::new(account.chain_id, message).with_kind(MessageKind::Tracked),
-        )?;
         Ok(())
     }
 

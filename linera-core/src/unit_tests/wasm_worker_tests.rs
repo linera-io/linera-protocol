@@ -24,14 +24,14 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, OperationResult},
+    data_types::BlockExecutionOutcome,
     test::{make_child_block, make_first_block, BlockTestExt},
     types::ConfirmedBlock,
 };
 use linera_execution::{
     committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState,
-    ExecutionRuntimeContext, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    ExecutionRuntimeContext, Operation, OperationContext, OperationResult, ResourceController,
+    TransactionTracker, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]

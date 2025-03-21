@@ -66,11 +66,13 @@ mod types {
         ownership::ChainOwnership,
     };
     pub use linera_chain::{
-        data_types::{MessageAction, MessageBundle, OperationResult, Origin, Target},
+        data_types::{MessageAction, MessageBundle, Origin, Target},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
-    pub use linera_execution::{committee::Epoch, Message, MessageKind, Operation};
+    pub use linera_execution::{
+        committee::Epoch, Message, MessageKind, Operation, OperationResult,
+    };
 }
 
 pub use types::*;
