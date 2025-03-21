@@ -69,7 +69,7 @@ impl Lock {
 
 impl Drop for Lock {
     fn drop(&mut self) {
-        if let Err(error) = self.0.file().unlock() {
+        if let Err(error) = fs4::FileExt::unlock(self.0.file()) {
             tracing::warn!("Failed to unlock wallet file: {error}");
         }
     }
