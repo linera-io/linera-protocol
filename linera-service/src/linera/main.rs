@@ -23,7 +23,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{ChainDescription, ChainId, MultiAddress, Owner},
+    identifiers::{ChainDescription, ChainId, MultiAddress},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -1573,7 +1573,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             let start_time = Instant::now();
             let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
-            let owner = Owner::from(key_pair.public());
+            let owner = MultiAddress::from(key_pair.public());
             wallet
                 .mutate(|w| w.add_unassigned_key_pair(key_pair))
                 .await?;

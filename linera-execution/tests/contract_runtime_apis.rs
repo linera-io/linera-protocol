@@ -16,7 +16,7 @@ use linera_base::{
         Timestamp, UserApplicationDescription,
     },
     http,
-    identifiers::{Account, ChainDescription, ChainId, ModuleId, MultiAddress, Owner},
+    identifiers::{Account, ChainDescription, ChainId, ModuleId, MultiAddress},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -690,9 +690,9 @@ enum TransferTestEndpoint {
 }
 
 impl TransferTestEndpoint {
-    /// Returns the [`Owner`] used to represent a sender that's a user.
-    fn sender_owner() -> Owner {
-        Owner(CryptoHash::test_hash("sender"))
+    /// Returns the [`MultiAddress`] used to represent a sender that's a user.
+    fn sender_owner() -> MultiAddress {
+        MultiAddress::from(CryptoHash::test_hash("sender"))
     }
 
     /// Returns the [`MultiAddress`] used to represent a sender that's an application.
@@ -732,14 +732,14 @@ impl TransferTestEndpoint {
         })
     }
 
-    /// Returns the [`Owner`] used to represent a recipient that's a user.
-    fn recipient_owner() -> Owner {
-        Owner(CryptoHash::test_hash("recipient"))
+    /// Returns the [`MultiAddress`] used to represent a recipient that's a user.
+    fn recipient_owner() -> MultiAddress {
+        MultiAddress::from(CryptoHash::test_hash("recipient"))
     }
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
     fn recipient_application_id() -> MultiAddress {
-        MultiAddress::Address32(CryptoHash::test_hash("recipient application description"))
+        MultiAddress::from(CryptoHash::test_hash("recipient application description"))
     }
 
     /// Returns a [`SystemExecutionState`] initialized with this transfer endpoint's account
@@ -752,18 +752,11 @@ impl TransferTestEndpoint {
             TransferTestEndpoint::Chain => (transfer_amount, vec![], Some(Self::sender_owner())),
             TransferTestEndpoint::User => {
                 let owner = Self::sender_owner();
-                (
-                    Amount::ZERO,
-                    vec![(MultiAddress::Address32(owner.0), transfer_amount)],
-                    Some(owner),
-                )
+                (Amount::ZERO, vec![(owner, transfer_amount)], Some(owner))
             }
             TransferTestEndpoint::Application => (
                 Amount::ZERO,
-                vec![(
-                    MultiAddress::Address32(Self::sender_application_id().as_address()),
-                    transfer_amount,
-                )],
+                vec![(Self::sender_application_id(), transfer_amount)],
                 None,
             ),
         };
@@ -786,7 +779,7 @@ impl TransferTestEndpoint {
     pub fn sender_account_owner(&self) -> MultiAddress {
         match self {
             TransferTestEndpoint::Chain => MultiAddress::chain(),
-            TransferTestEndpoint::User => MultiAddress::Address32(Self::sender_owner().0),
+            TransferTestEndpoint::User => Self::sender_owner(),
             TransferTestEndpoint::Application => Self::sender_application_id(),
         }
     }
@@ -802,18 +795,18 @@ impl TransferTestEndpoint {
         }
     }
 
-    /// Returns the [`Owner`] that should be used as the authenticated signer in the transfer
+    /// Returns the [`MultiAddress`] that should be used as the authenticated signer in the transfer
     /// operation.
-    pub fn signer(&self) -> Option<Owner> {
+    pub fn signer(&self) -> Option<MultiAddress> {
         match self {
             TransferTestEndpoint::Chain | TransferTestEndpoint::User => Some(Self::sender_owner()),
             TransferTestEndpoint::Application => None,
         }
     }
 
-    /// Returns the [`Owner`] that should be used as the authenticated signer when testing an
+    /// Returns the [`MultiAddress`] that should be used as the authenticated signer when testing an
     /// unauthorized transfer operation.
-    pub fn unauthorized_signer(&self) -> Option<Owner> {
+    pub fn unauthorized_signer(&self) -> Option<MultiAddress> {
         match self {
             TransferTestEndpoint::Chain | TransferTestEndpoint::User => {
                 Some(Self::recipient_owner())
@@ -826,7 +819,7 @@ impl TransferTestEndpoint {
     pub fn recipient_account_owner(&self) -> MultiAddress {
         match self {
             TransferTestEndpoint::Chain => MultiAddress::chain(),
-            TransferTestEndpoint::User => MultiAddress::Address32(Self::recipient_owner().0),
+            TransferTestEndpoint::User => Self::recipient_owner(),
             TransferTestEndpoint::Application => Self::recipient_application_id(),
         }
     }

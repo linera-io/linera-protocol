@@ -9,7 +9,7 @@ use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
-    identifiers::{Account, ApplicationId, ChainId, MultiAddress, Owner},
+    identifiers::{Account, ApplicationId, ChainId, MultiAddress},
     time::timer::Instant,
 };
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
@@ -141,7 +141,7 @@ async fn benchmark_with_fungible(
 
     struct BenchmarkContext {
         application_id: ApplicationId<FungibleTokenAbi>,
-        owner: Owner,
+        owner: MultiAddress,
         default_chain: ChainId,
     }
 
@@ -151,10 +151,7 @@ async fn benchmark_with_fungible(
             let owner = client.get_owner().context("missing owner")?;
             let default_chain = client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
-                accounts: BTreeMap::from([(
-                    MultiAddress::from(owner),
-                    Amount::from_tokens(num_transactions as u128),
-                )]),
+                accounts: BTreeMap::from([(owner, Amount::from_tokens(num_transactions as u128))]),
             };
             let parameters = Parameters::new(format!("FUN{}", i).leak());
             let application_id = node_service
@@ -193,11 +190,11 @@ async fn benchmark_with_fungible(
                     .try_add_assign(Amount::ONE)
                     .unwrap();
                 sender_app.transfer(
-                    MultiAddress::from(sender_context.owner),
+                    sender_context.owner,
                     Amount::ONE,
                     fungible::Account {
                         chain_id: receiver_context.default_chain,
-                        owner: MultiAddress::from(receiver_context.owner),
+                        owner: receiver_context.owner,
                     },
                 )
             })
@@ -243,8 +240,7 @@ async fn benchmark_with_fungible(
                     );
                     for i in 0.. {
                         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-                        let actual_balance =
-                            app.get_amount(&MultiAddress::from(context.owner)).await;
+                        let actual_balance = app.get_amount(&context.owner).await;
                         if actual_balance == expected_balance {
                             break;
                         }
@@ -256,10 +252,7 @@ async fn benchmark_with_fungible(
                             );
                         }
                     }
-                    assert_eq!(
-                        app.get_amount(&MultiAddress::from(context.owner)).await,
-                        expected_balance
-                    );
+                    assert_eq!(app.get_amount(&context.owner).await, expected_balance);
                     Ok(())
                 },
             ))

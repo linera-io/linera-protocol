@@ -10,7 +10,7 @@ use futures::Future;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, ChainId, MessageId, Owner},
+    identifiers::{Account, ChainId, MessageId, MultiAddress},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -31,7 +31,7 @@ use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
     crate::benchmark::Benchmark,
-    linera_base::{data_types::Amount, identifiers::MultiAddress},
+    linera_base::data_types::Amount,
     linera_execution::{
         committee::{Committee, Epoch},
         system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
@@ -395,7 +395,7 @@ where
         &mut self,
         chain_id: ChainId,
         message_id: MessageId,
-        owner: Owner,
+        owner: MultiAddress,
         validators: Option<Vec<(ValidatorPublicKey, String)>>,
     ) -> Result<(), Error>
     where

@@ -43,8 +43,7 @@ use {
 
 #[cfg(feature = "benchmark")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> MultiAddress {
-    let owner = client.get_owner().unwrap();
-    MultiAddress::from(owner)
+    client.get_owner().unwrap()
 }
 
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]

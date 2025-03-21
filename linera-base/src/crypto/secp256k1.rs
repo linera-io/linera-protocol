@@ -23,7 +23,7 @@ use linera_witty::{
 use serde::{Deserialize, Serialize};
 
 use super::{BcsHashable, BcsSignable, CryptoError, CryptoHash, HasTypeName};
-use crate::{doc_scalar, identifiers::Owner};
+use crate::doc_scalar;
 
 /// Name of the secp256k1 scheme.
 const SECP256K1_SCHEME_LABEL: &str = "secp256k1";
@@ -189,18 +189,6 @@ impl fmt::Display for Secp256k1PublicKey {
 impl fmt::Debug for Secp256k1PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}..", hex::encode(&self.as_bytes()[0..9]))
-    }
-}
-
-impl From<Secp256k1PublicKey> for Owner {
-    fn from(value: Secp256k1PublicKey) -> Self {
-        Self(CryptoHash::new(&value))
-    }
-}
-
-impl From<&Secp256k1PublicKey> for Owner {
-    fn from(value: &Secp256k1PublicKey) -> Self {
-        Self(CryptoHash::new(value))
     }
 }
 

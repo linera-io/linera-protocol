@@ -9,7 +9,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{ChainId, MultiAddress, Owner},
+    identifiers::{ChainId, MultiAddress},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
@@ -59,7 +59,7 @@ pub fn make_first_block(chain_id: ChainId) -> ProposedBlock {
 /// A helper trait to simplify constructing blocks for tests.
 pub trait BlockTestExt: Sized {
     /// Returns the block with the given authenticated signer.
-    fn with_authenticated_signer(self, authenticated_signer: Option<Owner>) -> Self;
+    fn with_authenticated_signer(self, authenticated_signer: Option<MultiAddress>) -> Self;
 
     /// Returns the block with the given operation appended at the end.
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
@@ -90,7 +90,7 @@ pub trait BlockTestExt: Sized {
 }
 
 impl BlockTestExt for ProposedBlock {
-    fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+    fn with_authenticated_signer(mut self, authenticated_signer: Option<MultiAddress>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }

@@ -5,7 +5,7 @@ use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
 };
-use linera_base::identifiers::{ChainId, Owner};
+use linera_base::identifiers::{ChainId, MultiAddress};
 pub use linera_client::wallet::*;
 
 pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId>) {
@@ -47,7 +47,7 @@ fn update_table_with_chain(
         chain_id_cell,
         Cell::new(format!(
             r#"Public Key:         {}
-Owner:              {}
+MultiAddress:              {}
 Block Hash:         {}
 Timestamp:          {}
 Next Block Height:  {}"#,
@@ -59,7 +59,7 @@ Next Block Height:  {}"#,
             user_chain
                 .key_pair
                 .as_ref()
-                .map(|kp| Owner::from(kp.public()))
+                .map(|kp| MultiAddress::from(kp.public()))
                 .map(|o| o.to_string())
                 .unwrap_or_else(|| "-".to_string()),
             user_chain

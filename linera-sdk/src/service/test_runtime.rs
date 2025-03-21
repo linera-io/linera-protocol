@@ -268,7 +268,7 @@ where
             .unwrap()
             .as_ref()
             .expect(
-                "Owner balances have not been mocked, \
+                "MultiAddress balances have not been mocked, \
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .iter()
@@ -283,7 +283,7 @@ where
             .unwrap()
             .as_ref()
             .expect(
-                "Owner balances have not been mocked, \
+                "MultiAddress balances have not been mocked, \
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .keys()

@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
-    identifiers::{Account, ChainId, ChannelName, MessageId, MultiAddress, Owner, StreamName},
+    identifiers::{Account, ChainId, ChannelName, MessageId, MultiAddress, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -389,7 +389,7 @@ where
     Runtime: ContractRuntime + 'static,
 {
     /// Returns the authenticated signer for this execution, if there is one.
-    fn authenticated_signer(caller: &mut Caller) -> Result<Option<Owner>, RuntimeError> {
+    fn authenticated_signer(caller: &mut Caller) -> Result<Option<MultiAddress>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime

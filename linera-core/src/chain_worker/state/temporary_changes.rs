@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ArithmeticError, Blob, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{ChannelFullName, MultiAddress, Owner},
+    identifiers::{ChannelFullName, MultiAddress},
 };
 use linera_chain::{
     data_types::{
@@ -147,7 +147,7 @@ where
                 .execution_state
                 .system
                 .balances
-                .get(&MultiAddress::Address32(signer.0))
+                .get(&signer)
                 .await?;
         }
 
@@ -172,7 +172,7 @@ where
         } = proposal;
         let block = &content.block;
 
-        let owner = Owner::from(public_key);
+        let owner = MultiAddress::from(*public_key);
         let chain = &self.0.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;

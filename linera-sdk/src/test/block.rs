@@ -9,7 +9,7 @@ use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{ApplicationId, ChainId, ChannelFullName, MultiAddress, Owner},
+    identifiers::{ApplicationId, ChainId, ChannelFullName, MultiAddress},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
@@ -49,7 +49,7 @@ impl BlockBuilder {
     /// block.
     pub(crate) fn new(
         chain_id: ChainId,
-        owner: Owner,
+        owner: MultiAddress,
         epoch: Epoch,
         previous_block: Option<&ConfirmedBlockCertificate>,
         validator: TestValidator,
@@ -109,8 +109,8 @@ impl BlockBuilder {
     /// Adds an operation to change this chain's ownership.
     pub fn with_owner_change(
         &mut self,
-        super_owners: Vec<Owner>,
-        owners: Vec<(Owner, u64)>,
+        super_owners: Vec<MultiAddress>,
+        owners: Vec<(MultiAddress, u64)>,
         multi_leader_rounds: u32,
         open_multi_leader_rounds: bool,
         timeout_config: TimeoutConfig,

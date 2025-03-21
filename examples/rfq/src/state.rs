@@ -3,7 +3,7 @@
 
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
-    linera_base_types::{Amount, ChainId, MultiAddress, Owner},
+    linera_base_types::{Amount, ChainId, MultiAddress},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use rfq::{RequestId, TokenPair, Tokens};
@@ -20,11 +20,11 @@ pub struct QuoteProvided {
     token_pair: TokenPair,
     amount: Amount,
     amount_offered: Amount,
-    quoter_owner: Owner,
+    quoter_owner: MultiAddress,
 }
 
 impl QuoteProvided {
-    pub fn get_quoter_owner(&self) -> Owner {
+    pub fn get_quoter_owner(&self) -> MultiAddress {
         self.quoter_owner
     }
 
@@ -92,7 +92,7 @@ pub struct RfqState {
 }
 
 impl RequestData {
-    pub fn update_state_with_quote(&mut self, quote: Amount, quoter_owner: Owner) {
+    pub fn update_state_with_quote(&mut self, quote: Amount, quoter_owner: MultiAddress) {
         match &self.state {
             RequestState::QuoteRequested(QuoteRequested { token_pair, amount }) => {
                 self.state = RequestState::QuoteProvided(QuoteProvided {
@@ -133,7 +133,7 @@ impl RequestData {
                 self.state = RequestState::AwaitingTokens(Box::new(AwaitingTokens {
                     token_pair: token_pair.clone(),
                     amount_offered: *amount_offered,
-                    quoter_account: (*quoter_owner).into(),
+                    quoter_account: *quoter_owner,
                     temp_chain_id,
                 }));
             }

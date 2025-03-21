@@ -19,8 +19,6 @@ pub use secp256k1::{Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::identifiers::Owner;
-
 /// The public key of a validator.
 pub type ValidatorPublicKey = secp256k1::Secp256k1PublicKey;
 /// The private key of a validator.
@@ -204,24 +202,6 @@ impl FromStr for AccountPublicKey {
 impl Display for AccountPublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(self.as_bytes()))
-    }
-}
-
-impl From<AccountPublicKey> for Owner {
-    fn from(public_key: AccountPublicKey) -> Self {
-        match public_key {
-            AccountPublicKey::Ed25519(public_key) => public_key.into(),
-            AccountPublicKey::Secp256k1(public_key) => public_key.into(),
-        }
-    }
-}
-
-impl From<&AccountPublicKey> for Owner {
-    fn from(public_key: &AccountPublicKey) -> Self {
-        match public_key {
-            AccountPublicKey::Ed25519(public_key) => public_key.into(),
-            AccountPublicKey::Secp256k1(public_key) => public_key.into(),
-        }
     }
 }
 

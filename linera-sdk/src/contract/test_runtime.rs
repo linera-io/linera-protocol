@@ -16,7 +16,7 @@ use linera_base::{
     http,
     identifiers::{
         Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, ModuleId,
-        MultiAddress, Owner, StreamName,
+        MultiAddress, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -41,7 +41,7 @@ where
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
-    authenticated_signer: Option<Option<Owner>>,
+    authenticated_signer: Option<Option<MultiAddress>>,
     block_height: Option<BlockHeight>,
     round: Option<u32>,
     message_id: Option<Option<MessageId>>,
@@ -221,7 +221,7 @@ where
     /// Configures the authenticated signer to return during the test.
     pub fn with_authenticated_signer(
         mut self,
-        authenticated_signer: impl Into<Option<Owner>>,
+        authenticated_signer: impl Into<Option<MultiAddress>>,
     ) -> Self {
         self.authenticated_signer = Some(authenticated_signer.into());
         self
@@ -230,14 +230,14 @@ where
     /// Configures the authenticated signer to return during the test.
     pub fn set_authenticated_signer(
         &mut self,
-        authenticated_signer: impl Into<Option<Owner>>,
+        authenticated_signer: impl Into<Option<MultiAddress>>,
     ) -> &mut Self {
         self.authenticated_signer = Some(authenticated_signer.into());
         self
     }
 
     /// Returns the authenticated signer for this execution, if there is one.
-    pub fn authenticated_signer(&mut self) -> Option<Owner> {
+    pub fn authenticated_signer(&mut self) -> Option<MultiAddress> {
         self.authenticated_signer.expect(
             "Authenticated signer has not been mocked, \
             please call `MockContractRuntime::set_authenticated_signer` first",
@@ -438,7 +438,7 @@ where
         self.owner_balances
             .as_mut()
             .expect(
-                "Owner balances have not been mocked, \
+                "MultiAddress balances have not been mocked, \
                 please call `MockContractRuntime::set_owner_balances` first",
             )
             .get_mut(&owner)

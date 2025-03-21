@@ -4,7 +4,7 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{self, Display, Formatter},
+    fmt::{self, Display},
     hash::{Hash, Hasher},
     marker::PhantomData,
     str::FromStr,
@@ -18,17 +18,14 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{AccountPublicKey, BcsHashable, CryptoError, CryptoHash, CHAIN_CRYPTO_HASH},
+    crypto::{
+        AccountPublicKey, BcsHashable, CryptoError, CryptoHash, Ed25519PublicKey,
+        Secp256k1PublicKey, CHAIN_CRYPTO_HASH,
+    },
     data_types::BlockHeight,
     doc_scalar, hex_debug,
     vm::VmRuntime,
 };
-
-/// The owner of a chain. This is currently the hash of the owner's public key used to
-/// verify signatures.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct Owner(pub CryptoHash);
 
 /// An account owner.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
@@ -48,14 +45,19 @@ impl MultiAddress {
     pub fn is_chain(&self) -> bool {
         self == &MultiAddress::chain()
     }
-}
 
-impl MultiAddress {
     /// Returns the address, if any, as [`CryptoHash`].
     pub fn as_address(&self) -> CryptoHash {
         match self {
             MultiAddress::Address32(address) => *address,
         }
+    }
+}
+
+#[cfg(with_testing)]
+impl From<CryptoHash> for MultiAddress {
+    fn from(address: CryptoHash) -> Self {
+        MultiAddress::Address32(address)
     }
 }
 
@@ -84,12 +86,9 @@ impl Account {
         }
     }
 
-    /// Creates an [`Account`] for a specific [`Owner`] on a chain.
-    pub fn address32(chain_id: ChainId, owner: CryptoHash) -> Self {
-        Account {
-            chain_id,
-            owner: MultiAddress::Address32(owner),
-        }
+    /// Creates an [`Account`] for a specific [`MultiAddress`] on a chain.
+    pub fn address32(chain_id: ChainId, owner: MultiAddress) -> Self {
+        Account { chain_id, owner }
     }
 }
 
@@ -118,18 +117,6 @@ impl FromStr for Account {
         } else {
             Ok(Account::chain(chain_id))
         }
-    }
-}
-
-impl From<AccountPublicKey> for MultiAddress {
-    fn from(public_key: AccountPublicKey) -> Self {
-        MultiAddress::Address32(Owner::from(public_key).0)
-    }
-}
-
-impl From<Owner> for MultiAddress {
-    fn from(owner: Owner) -> Self {
-        MultiAddress::Address32(owner.0)
     }
 }
 
@@ -339,6 +326,27 @@ pub struct ApplicationId<A> {
 impl<A> From<ApplicationId<A>> for MultiAddress {
     fn from(app_id: ApplicationId<A>) -> Self {
         MultiAddress::Address32(app_id.application_description_hash)
+    }
+}
+
+impl From<AccountPublicKey> for MultiAddress {
+    fn from(public_key: AccountPublicKey) -> Self {
+        match public_key {
+            AccountPublicKey::Ed25519(public_key) => public_key.into(),
+            AccountPublicKey::Secp256k1(public_key) => public_key.into(),
+        }
+    }
+}
+
+impl From<Secp256k1PublicKey> for MultiAddress {
+    fn from(public_key: Secp256k1PublicKey) -> Self {
+        MultiAddress::Address32(CryptoHash::new(&public_key))
+    }
+}
+
+impl From<Ed25519PublicKey> for MultiAddress {
+    fn from(public_key: Ed25519PublicKey) -> Self {
+        MultiAddress::Address32(CryptoHash::new(&public_key))
     }
 }
 
@@ -870,64 +878,6 @@ impl<A> ApplicationId<A> {
     }
 }
 
-impl Display for Owner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
-    }
-}
-
-impl std::str::FromStr for Owner {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Owner(CryptoHash::from_str(s)?))
-    }
-}
-
-impl Serialize for Owner {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&self.to_string())
-        } else {
-            serializer.serialize_newtype_struct("Owner", &self.0)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for Owner {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let string = String::deserialize(deserializer)?;
-            Self::from_str(&string).map_err(serde::de::Error::custom)
-        } else {
-            deserializer.deserialize_newtype_struct("Owner", OwnerVisitor)
-        }
-    }
-}
-
-struct OwnerVisitor;
-
-impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
-    type Value = Owner;
-
-    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "an owner represented as a `CryptoHash`")
-    }
-
-    fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(Owner(CryptoHash::deserialize(deserializer)?))
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "MultiAddress")]
 enum SerializableAccountOwner {
@@ -1044,11 +994,6 @@ doc_scalar!(
 doc_scalar!(ChannelName, "The name of a subscription channel");
 doc_scalar!(StreamName, "The name of an event stream");
 bcs_scalar!(MessageId, "The index of a message in a chain");
-doc_scalar!(
-    Owner,
-    "The owner of a chain. This is currently the hash of the owner's public key used to verify \
-    signatures."
-);
 doc_scalar!(
     Destination,
     "The destination of a message, relative to a particular application."

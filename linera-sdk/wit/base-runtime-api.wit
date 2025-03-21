@@ -43,8 +43,8 @@ interface base-runtime-api {
     }
 
     record chain-ownership {
-        super-owners: list<owner>,
-        owners: list<tuple<owner, u64>>,
+        super-owners: list<multi-address>,
+        owners: list<tuple<multi-address, u64>>,
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
@@ -97,10 +97,6 @@ interface base-runtime-api {
 
     variant multi-address {
         address32(crypto-hash),
-    }
-
-    record owner {
-        inner0: crypto-hash,
     }
 
     record time-delta {

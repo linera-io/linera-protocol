@@ -19,7 +19,7 @@ use linera_base::{
     ensure, http,
     identifiers::{
         Account, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId, MultiAddress,
-        Owner, StreamId, StreamName,
+        StreamId, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -73,7 +73,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
     #[debug(skip_if = Option::is_none)]
-    authenticated_signer: Option<Owner>,
+    authenticated_signer: Option<MultiAddress>,
     /// The current message being executed, if there is one.
     #[debug(skip_if = Option::is_none)]
     executing_message: Option<ExecutingMessage>,
@@ -124,7 +124,7 @@ struct ApplicationStatus {
     /// The application description.
     description: UserApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
-    signer: Option<Owner>,
+    signer: Option<MultiAddress>,
 }
 
 /// A loaded application instance.
@@ -294,7 +294,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         height: BlockHeight,
         round: Option<u32>,
         local_time: Timestamp,
-        authenticated_signer: Option<Owner>,
+        authenticated_signer: Option<MultiAddress>,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         deadline: Option<Instant>,
@@ -1085,7 +1085,7 @@ impl ContractSyncRuntimeHandle {
     fn execute(
         &mut self,
         application_id: MultiAddress,
-        signer: Option<Owner>,
+        signer: Option<MultiAddress>,
         closure: impl FnOnce(&mut UserContractInstance) -> Result<Option<Vec<u8>>, ExecutionError>,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
         let contract = {
@@ -1124,7 +1124,7 @@ impl ContractSyncRuntimeHandle {
 }
 
 impl ContractRuntime for ContractSyncRuntimeHandle {
-    fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError> {
+    fn authenticated_signer(&mut self) -> Result<Option<MultiAddress>, ExecutionError> {
         Ok(self.inner().authenticated_signer)
     }
 

@@ -19,7 +19,7 @@ use linera_base::{
     },
     doc_scalar,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, EventId, MultiAddress, Owner},
+    identifiers::{BlobId, ChainId, EventId, MultiAddress},
     time::timer::{sleep, timeout},
 };
 use linera_chain::{
@@ -165,7 +165,7 @@ pub enum WorkerError {
     InvalidOwner,
 
     #[error("Operations in the block are not authenticated by the proper signer: {0}")]
-    InvalidSigner(Owner),
+    InvalidSigner(MultiAddress),
 
     // Chaining
     #[error(

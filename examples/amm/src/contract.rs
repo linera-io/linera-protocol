@@ -311,15 +311,11 @@ impl Contract for AmmContract {
 impl AmmContract {
     /// authenticate the originator of the message
     fn check_account_authentication(&mut self, origin: MultiAddress) {
-        match origin {
-            MultiAddress::Address32(address) => {
-                assert!(
-                    self.runtime.authenticated_signer().map(|owner| owner.0) == Some(address)
-                        || self.runtime.authenticated_caller_id() == Some(origin),
-                    "Unauthorized"
-                )
-            }
-        }
+        assert!(
+            self.runtime.authenticated_signer() == Some(origin)
+                || self.runtime.authenticated_caller_id() == Some(origin),
+            "Unauthorized"
+        )
     }
 
     /// Obtains the current shares for an `account`.

@@ -10,7 +10,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{ChainId, MultiAddress},
 };
 use linera_chain::{
     data_types::{
@@ -137,7 +137,7 @@ where
             signature: _,
         } = proposal;
 
-        let owner = Owner::from(public_key);
+        let owner = MultiAddress::from(*public_key);
         let mut maybe_blobs = self
             .state
             .maybe_get_required_blobs(proposal.required_blob_ids(), None)

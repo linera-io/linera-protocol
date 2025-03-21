@@ -6,7 +6,7 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, BlobType, ChainId, Destination, MultiAddress, Owner},
+    identifiers::{Account, BlobType, ChainId, Destination, MultiAddress},
 };
 use linera_views::{
     context::Context,
@@ -131,7 +131,7 @@ pub enum UserAction {
 }
 
 impl UserAction {
-    pub(crate) fn signer(&self) -> Option<Owner> {
+    pub(crate) fn signer(&self) -> Option<MultiAddress> {
         use UserAction::*;
         match self {
             Instantiate(context, _) => context.authenticated_signer,
@@ -172,7 +172,7 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<MultiAddress>>,
     ) -> Result<(), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(
@@ -198,7 +198,7 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<MultiAddress>>,
     ) -> Result<(), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
@@ -259,7 +259,7 @@ where
         local_time: Timestamp,
         operation: Operation,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<MultiAddress>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -310,7 +310,7 @@ where
         message: Message,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<MultiAddress>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {

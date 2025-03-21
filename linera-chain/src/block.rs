@@ -12,7 +12,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlockHeight, Event, OracleResponse, Timestamp},
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, MessageId, Owner},
+    identifiers::{BlobId, ChainId, MessageId, MultiAddress},
 };
 use linera_execution::{committee::Epoch, BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
@@ -336,7 +336,7 @@ pub struct BlockHeader {
     /// fees. If set, this must be the `owner` in the block proposal. `None` means that
     /// the default account of the chain is used. This value is also used as recipient of
     /// potential refunds for the message grants created by the operations.
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<MultiAddress>,
 
     // Inputs to the block, chosen by the block proposer.
     /// Cryptographic hash of all the incoming bundles in the block.
@@ -640,7 +640,7 @@ struct SerializedHeader {
     timestamp: Timestamp,
     state_hash: CryptoHash,
     previous_block_hash: Option<CryptoHash>,
-    authenticated_signer: Option<Owner>,
+    authenticated_signer: Option<MultiAddress>,
 }
 
 mod hashing {

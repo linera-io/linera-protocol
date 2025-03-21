@@ -33,7 +33,7 @@ export type Entry_AccountOwner_Amount_92cf94e6 = {
 export type FungibleAccount = {
   /** Chain ID of the account */
   chainId: Scalars['ChainId']['input'];
-  /** Owner of the account */
+  /** MultiAddress of the account */
   owner: Scalars['MultiAddress']['input'];
 };
 
