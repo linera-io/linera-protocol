@@ -17,7 +17,7 @@ use lru::LruCache;
 use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 /// The default cache size.
-pub const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
+pub const DEFAULT_VALUE_CACHE_SIZE: usize = 10_000;
 
 /// A counter metric for the number of cache hits in the [`ValueCache`].
 #[cfg(with_metrics)]
