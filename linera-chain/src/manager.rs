@@ -458,7 +458,7 @@ where
                 .locking_block
                 .get()
                 .as_ref()
-                .map_or(true, |locking| locking.round() < lite_cert.round)
+                .is_none_or(|locking| locking.round() < lite_cert.round)
             {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.clone().with_value(value) {
