@@ -203,7 +203,7 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
-wasm-instrument = "0.4.0"
+wasm-instrument = { git = "https://github.com/jvff/wasm-instrument.git", rev = "984fc7742233400cfb0dae1a87394740525a063b" }
 wasm_thread = "0.3.0"
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.6", default-features = false }
 wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.6", default-features = false, features = [
