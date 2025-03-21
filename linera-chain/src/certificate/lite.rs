@@ -30,7 +30,7 @@ pub struct LiteCertificate<'a> {
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
 }
 
-impl<'a> LiteCertificate<'a> {
+impl LiteCertificate<'_> {
     pub fn new(
         value: LiteValue,
         round: Round,

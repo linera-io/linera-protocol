@@ -822,7 +822,7 @@ pub enum OracleResponse {
     Event(EventId, Vec<u8>),
 }
 
-impl<'de> BcsHashable<'de> for OracleResponse {}
+impl BcsHashable<'_> for OracleResponse {}
 
 /// Description of the necessary information to run a user application used within blobs.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
@@ -990,7 +990,7 @@ impl CompressedBytecode {
     }
 }
 
-impl<'a> BcsHashable<'a> for BlobContent {}
+impl BcsHashable<'_> for BlobContent {}
 
 /// A blob of binary data.
 #[derive(Hash, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1185,7 +1185,7 @@ impl<'a> Deserialize<'a> for Blob {
     }
 }
 
-impl<'de> BcsHashable<'de> for Blob {}
+impl BcsHashable<'_> for Blob {}
 
 /// An event recorded in an executed block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
@@ -1213,7 +1213,7 @@ impl Event {
     }
 }
 
-impl<'de> BcsHashable<'de> for Event {}
+impl BcsHashable<'_> for Event {}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
