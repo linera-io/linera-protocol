@@ -159,9 +159,6 @@ impl MatchingEngineContract {
                     "Unauthorized."
                 )
             }
-            MultiAddress::Chain => {
-                panic!("Chain account is not supported")
-            }
         }
     }
 

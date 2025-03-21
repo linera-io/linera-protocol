@@ -2289,7 +2289,9 @@ where
     /// block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.query_balances_with_owner(MultiAddress::Chain).await?;
+        let (balance, _) = self
+            .query_balances_with_owner(MultiAddress::chain())
+            .await?;
         Ok(balance)
     }
 
@@ -2339,8 +2341,8 @@ where
             previous_block_hash,
             height,
             authenticated_signer: match owner {
-                MultiAddress::Address32(user) => Some(Owner(user)),
-                MultiAddress::Chain => None, // These should be unreachable?
+                MultiAddress::Address32(_) if owner == MultiAddress::chain() => None,
+                MultiAddress::Address32(other) => Some(Owner(other)),
             },
             timestamp,
         };
@@ -2377,7 +2379,9 @@ where
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace")]
     pub async fn local_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.local_balances_with_owner(MultiAddress::Chain).await?;
+        let (balance, _) = self
+            .local_balances_with_owner(MultiAddress::chain())
+            .await?;
         Ok(balance)
     }
 

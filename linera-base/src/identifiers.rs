@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{AccountPublicKey, BcsHashable, CryptoError, CryptoHash},
+    crypto::{AccountPublicKey, BcsHashable, CryptoError, CryptoHash, CHAIN_CRYPTO_HASH},
     data_types::BlockHeight,
     doc_scalar, hex_debug,
     vm::VmRuntime,
@@ -36,16 +36,25 @@ pub struct Owner(pub CryptoHash);
 pub enum MultiAddress {
     /// 32-byte account address.
     Address32(CryptoHash),
-    /// Chain account.
-    Chain,
+}
+
+impl MultiAddress {
+    /// Returns the default chain address.
+    pub fn chain() -> Self {
+        MultiAddress::Address32(*CHAIN_CRYPTO_HASH)
+    }
+
+    /// Returns whether current address is a special chain address.
+    pub fn is_chain(&self) -> bool {
+        self == &MultiAddress::chain()
+    }
 }
 
 impl MultiAddress {
     /// Returns the address, if any, as [`CryptoHash`].
-    pub fn as_address(&self) -> Option<CryptoHash> {
+    pub fn as_address(&self) -> CryptoHash {
         match self {
-            MultiAddress::Address32(address) => Some(*address),
-            MultiAddress::Chain => None,
+            MultiAddress::Address32(address) => *address,
         }
     }
 }
@@ -71,7 +80,7 @@ impl Account {
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
-            owner: MultiAddress::Chain,
+            owner: MultiAddress::chain(),
         }
     }
 
@@ -337,55 +346,15 @@ impl MultiAddress {
     /// Converts the application ID to the ID of the blob containing the
     /// `UserApplicationDescription`.
     pub fn description_blob_id(self) -> BlobId {
-        BlobId::new(self.as_address().unwrap(), BlobType::ApplicationDescription)
+        BlobId::new(self.as_address(), BlobType::ApplicationDescription)
     }
 
     /// Specializes an application ID for a given ABI.
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
-            application_description_hash: self.as_address().unwrap(),
+            application_description_hash: self.as_address(),
             _phantom: PhantomData,
         }
-    }
-}
-
-/// A unique identifier for an application.
-#[derive(
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Copy,
-    Clone,
-    Hash,
-    Debug,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-pub enum GenericApplicationId {
-    /// The system application.
-    System,
-    /// A user application.
-    User(MultiAddress),
-}
-
-impl GenericApplicationId {
-    /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&MultiAddress> {
-        if let GenericApplicationId::User(app_id) = self {
-            Some(app_id)
-        } else {
-            None
-        }
-    }
-}
-
-impl From<MultiAddress> for GenericApplicationId {
-    fn from(user_application_id: MultiAddress) -> Self {
-        GenericApplicationId::User(user_application_id)
     }
 }
 
@@ -429,7 +398,7 @@ pub struct ChannelName(
 /// A channel name together with its application ID.
 pub struct ChannelFullName {
     /// The application owning the channel.
-    pub application_id: GenericApplicationId,
+    pub application_id: MultiAddress,
     /// The name of the channel.
     pub name: ChannelName,
 }
@@ -437,9 +406,11 @@ pub struct ChannelFullName {
 impl fmt::Display for ChannelFullName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = hex::encode(&self.name);
-        match self.application_id {
-            GenericApplicationId::System => write!(f, "system channel {name}"),
-            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
+        if self.application_id.is_chain() {
+            write!(f, "system channel {name}")
+        } else {
+            let app_id = self.application_id;
+            write!(f, "user channel {name} for app {app_id}")
         }
     }
 }
@@ -448,7 +419,7 @@ impl ChannelFullName {
     /// Creates a full system channel name.
     pub fn system(name: ChannelName) -> Self {
         Self {
-            application_id: GenericApplicationId::System,
+            application_id: MultiAddress::chain(),
             name,
         }
     }
@@ -456,7 +427,7 @@ impl ChannelFullName {
     /// Creates a full user channel name.
     pub fn user(name: ChannelName, application_id: MultiAddress) -> Self {
         Self {
-            application_id: application_id.into(),
+            application_id,
             name,
         }
     }
@@ -510,7 +481,7 @@ where
 )]
 pub struct StreamId {
     /// The application that can add events to this stream.
-    pub application_id: GenericApplicationId,
+    pub application_id: MultiAddress,
     /// The name of this stream: an application can have multiple streams with different names.
     pub stream_name: StreamName,
 }
@@ -519,7 +490,7 @@ impl StreamId {
     /// Creates a system stream ID with the given name.
     pub fn system(name: impl Into<StreamName>) -> Self {
         StreamId {
-            application_id: GenericApplicationId::System,
+            application_id: MultiAddress::chain(),
             stream_name: name.into(),
         }
     }
@@ -961,7 +932,6 @@ impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
 #[serde(rename = "MultiAddress")]
 enum SerializableAccountOwner {
     Address32(CryptoHash),
-    Chain,
 }
 
 impl Serialize for MultiAddress {
@@ -971,7 +941,6 @@ impl Serialize for MultiAddress {
         } else {
             match self {
                 MultiAddress::Address32(app_id) => SerializableAccountOwner::Address32(*app_id),
-                MultiAddress::Chain => SerializableAccountOwner::Chain,
             }
             .serialize(serializer)
         }
@@ -988,7 +957,6 @@ impl<'de> Deserialize<'de> for MultiAddress {
             let value = SerializableAccountOwner::deserialize(deserializer)?;
             match value {
                 SerializableAccountOwner::Address32(app_id) => Ok(MultiAddress::Address32(app_id)),
-                SerializableAccountOwner::Chain => Ok(MultiAddress::Chain),
             }
         }
     }
@@ -998,7 +966,6 @@ impl Display for MultiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MultiAddress::Address32(owner) => write!(f, "0x{}", owner)?,
-            MultiAddress::Chain => write!(f, "Chain")?,
         };
 
         Ok(())
@@ -1013,8 +980,6 @@ impl FromStr for MultiAddress {
             Ok(MultiAddress::Address32(
                 CryptoHash::from_str(owner).context("Parsing Address should not fail")?,
             ))
-        } else if s.strip_prefix("Chain").is_some() {
-            Ok(MultiAddress::Chain)
         } else {
             Err(anyhow!("Invalid enum! Enum: {}", s))
         }
@@ -1069,10 +1034,6 @@ impl ChainId {
 
 impl<'de> BcsHashable<'de> for ChainDescription {}
 
-doc_scalar!(
-    GenericApplicationId,
-    "A unique identifier for a user application or for the system application"
-);
 bcs_scalar!(ModuleId, "A unique identifier for an application module");
 doc_scalar!(ChainDescription, "How to create a chain");
 doc_scalar!(
@@ -1092,7 +1053,10 @@ doc_scalar!(
     Destination,
     "The destination of a message, relative to a particular application."
 );
-doc_scalar!(MultiAddress, "An owner of an account.");
+doc_scalar!(
+    MultiAddress,
+    "A unique identifier for a user or an application."
+);
 doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
@@ -1146,11 +1110,8 @@ mod tests {
         let crypto_hash = CryptoHash::new(&TestString::new("Chain"));
         let input_str = format!("0x{}", crypto_hash);
         let account_owner = MultiAddress::from_str(&input_str).unwrap();
-        if let MultiAddress::Address32(owner) = account_owner {
-            assert_eq!(owner, crypto_hash);
-        } else {
-            panic!("Expected Address32 variant");
-        }
+        let MultiAddress::Address32(owner) = account_owner;
+        assert_eq!(owner, crypto_hash);
         assert_eq!(
             MultiAddress::from_str(&account_owner.to_string()).unwrap(),
             account_owner

@@ -41,7 +41,6 @@ macro_rules! impl_from_wit {
                     $wit_base_api::MultiAddress::Address32(owner) => {
                         MultiAddress::Address32(owner.into())
                     }
-                    $wit_base_api::MultiAddress::Chain => MultiAddress::Chain,
                 }
             }
         }

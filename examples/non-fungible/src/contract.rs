@@ -137,9 +137,6 @@ impl NonFungibleTokenContract {
                     "The requested transfer is not correctly authenticated."
                 )
             }
-            MultiAddress::Chain => {
-                panic!("Chain account is not supported")
-            }
         }
     }
 

@@ -281,10 +281,12 @@ impl Runnable for Job {
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
                 let balance = match account.owner {
+                    MultiAddress::Address32(_) if account.owner == MultiAddress::chain() => {
+                        chain_client.local_balance().await?
+                    }
                     MultiAddress::Address32(_) => {
                         chain_client.local_owner_balance(account.owner).await?
                     }
-                    MultiAddress::Chain => chain_client.local_balance().await?,
                 };
                 let time_total = time_start.elapsed();
                 info!("Local balance obtained after {} ms", time_total.as_millis());
@@ -300,10 +302,12 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
+                    MultiAddress::Address32(_) if account.owner == MultiAddress::chain() => {
+                        chain_client.query_balance().await?
+                    }
                     MultiAddress::Address32(_) => {
                         chain_client.query_owner_balance(account.owner).await?
                     }
-                    MultiAddress::Chain => chain_client.query_balance().await?,
                 };
                 let time_total = time_start.elapsed();
                 info!("Balance obtained after {} ms", time_total.as_millis());
@@ -318,10 +322,12 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = match account.owner {
+                    MultiAddress::Address32(_) if account.owner == MultiAddress::chain() => {
+                        chain_client.query_balance().await
+                    }
                     MultiAddress::Address32(_) => {
                         chain_client.query_owner_balance(account.owner).await
                     }
-                    MultiAddress::Chain => chain_client.query_balance().await,
                 };
                 context.update_wallet_from_client(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;

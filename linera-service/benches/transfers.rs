@@ -88,7 +88,7 @@ async fn setup_native_token_balances(
         admin_chain
             .add_block(|block| {
                 block.with_native_token_transfer(
-                    MultiAddress::Chain,
+                    MultiAddress::chain(),
                     recipient,
                     Amount::from_tokens(initial_balance),
                 );

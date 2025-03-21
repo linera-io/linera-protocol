@@ -97,7 +97,6 @@ interface base-runtime-api {
 
     variant multi-address {
         address32(crypto-hash),
-        chain,
     }
 
     record owner {

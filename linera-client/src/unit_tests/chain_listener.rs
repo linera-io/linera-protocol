@@ -161,7 +161,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     // the message.
     let recipient0 = Recipient::chain(chain_id0);
     client1
-        .transfer(MultiAddress::Chain, Amount::ONE, recipient0)
+        .transfer(MultiAddress::chain(), Amount::ONE, recipient0)
         .await?;
     for i in 0.. {
         client0.synchronize_from_validators().boxed().await?;

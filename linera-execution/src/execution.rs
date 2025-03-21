@@ -370,7 +370,7 @@ where
             source: context
                 .authenticated_signer
                 .map(MultiAddress::from)
-                .unwrap_or(MultiAddress::Chain),
+                .unwrap_or(MultiAddress::chain()),
             target: account.owner,
         };
         txn_tracker.add_outgoing_message(
