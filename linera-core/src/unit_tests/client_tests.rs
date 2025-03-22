@@ -558,8 +558,9 @@ where
     assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
-        certificate.block().body.operations[open_chain_message_id.index as usize],
-        Operation::System(SystemOperation::OpenChain(_)),
+        certificate.block().body.operations[open_chain_message_id.index as usize]
+            .as_system_operation(),
+        Some(SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -648,8 +649,9 @@ where
     assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
-        certificate.block().body.operations[open_chain_message_id.index as usize],
-        Operation::System(SystemOperation::OpenChain(_)),
+        certificate.block().body.operations[open_chain_message_id.index as usize]
+            .as_system_operation(),
+        Some(SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -763,9 +765,14 @@ where
     let client2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
 
     let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
+    assert_eq!(
+        certificate.block().body.operations.len(),
+        1,
+        "Unexpected operations in certificate"
+    );
     assert_matches!(
-        certificate.block().body.operations[..],
-        [Operation::System(SystemOperation::CloseChain)],
+        certificate.block().body.operations[0].as_system_operation(),
+        Some(SystemOperation::CloseChain),
         "Unexpected certificate value",
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
