@@ -557,7 +557,7 @@ where
     ) -> Result<(), BenchmarkError> {
         let start = Instant::now();
         chain_client
-            .execute_operation(Operation::System(SystemOperation::CloseChain))
+            .execute_operation(Operation::system(SystemOperation::CloseChain))
             .await?
             .expect("Close chain operation should not fail!");
 
@@ -593,7 +593,7 @@ where
                     public_key,
                     amount,
                 ),
-                None => Operation::System(SystemOperation::Transfer {
+                None => Operation::system(SystemOperation::Transfer {
                     owner: AccountOwner::Chain,
                     recipient: Recipient::chain(previous_chain_id),
                     amount,

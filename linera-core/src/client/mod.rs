@@ -1615,11 +1615,11 @@ where
         recipient: Recipient,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
-        self.execute_operation(Operation::System(SystemOperation::Transfer {
+        self.execute_operation(SystemOperation::Transfer {
             owner,
             recipient,
             amount,
-        }))
+        })
         .await
     }
 
@@ -1634,7 +1634,7 @@ where
             hash,
             blob_type: BlobType::Data,
         };
-        self.execute_operation(Operation::System(SystemOperation::ReadBlob { blob_id }))
+        self.execute_operation(SystemOperation::ReadBlob { blob_id })
             .await
     }
 
@@ -1647,12 +1647,12 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::Claim {
+        self.execute_operation(SystemOperation::Claim {
             owner,
             target_id,
             recipient,
             amount,
-        }))
+        })
         .await
     }
 
@@ -2073,12 +2073,12 @@ where
     }
 
     /// Executes an operation.
-    #[instrument(level = "trace")]
     pub async fn execute_operation(
         &self,
-        operation: Operation,
+        operation: impl Into<Operation>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operations(vec![operation], vec![]).await
+        self.execute_operations(vec![operation.into()], vec![])
+            .await
     }
 
     /// Executes a new block.
@@ -2732,13 +2732,13 @@ where
         &self,
         new_owner: Owner,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
+        self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
             multi_leader_rounds: 2,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
-        }))
+        })
         .await
     }
 
@@ -2758,7 +2758,7 @@ where
             let mut owners = ownership.owners.into_iter().collect::<Vec<_>>();
             owners.extend(ownership.super_owners.into_iter().zip(iter::repeat(100)));
             owners.push((new_owner, new_weight));
-            let operations = vec![Operation::System(SystemOperation::ChangeOwnership {
+            let operations = vec![Operation::system(SystemOperation::ChangeOwnership {
                 super_owners: Vec::new(),
                 owners,
                 multi_leader_rounds: ownership.multi_leader_rounds,
@@ -2789,13 +2789,13 @@ where
         &self,
         ownership: ChainOwnership,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
+        self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: ownership.super_owners.into_iter().collect(),
             owners: ownership.owners.into_iter().collect(),
             multi_leader_rounds: ownership.multi_leader_rounds,
             open_multi_leader_rounds: ownership.open_multi_leader_rounds,
             timeout_config: ownership.timeout_config.clone(),
-        }))
+        })
         .await
     }
 
@@ -2805,8 +2805,10 @@ where
         &self,
         application_permissions: ApplicationPermissions,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let operation = SystemOperation::ChangeApplicationPermissions(application_permissions);
-        self.execute_operation(operation.into()).await
+        self.execute_operation(SystemOperation::ChangeApplicationPermissions(
+            application_permissions,
+        ))
+        .await
     }
 
     /// Opens a new chain with a derived UID.
@@ -2828,7 +2830,7 @@ where
                 balance,
                 application_permissions: application_permissions.clone(),
             };
-            let operation = Operation::System(SystemOperation::OpenChain(config));
+            let operation = Operation::system(SystemOperation::OpenChain(config));
             let certificate = match self.execute_block(vec![operation], vec![]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
@@ -2857,8 +2859,7 @@ where
     pub async fn close_chain(
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        let operation = Operation::System(SystemOperation::CloseChain);
-        match self.execute_operation(operation).await {
+        match self.execute_operation(SystemOperation::CloseChain).await {
             Ok(outcome) => Ok(outcome.map(Some)),
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
@@ -2894,7 +2895,7 @@ where
         module_id: ModuleId,
     ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, ChainClientError> {
         self.execute_operations(
-            vec![Operation::System(SystemOperation::PublishModule {
+            vec![Operation::system(SystemOperation::PublishModule {
                 module_id,
             })],
             vec![contract_blob, service_blob],
@@ -2913,7 +2914,7 @@ where
         let publish_blob_operations = blobs
             .clone()
             .map(|blob| {
-                Operation::System(SystemOperation::PublishDataBlob {
+                Operation::system(SystemOperation::PublishDataBlob {
                     blob_hash: blob.id().hash,
                 })
             })
@@ -2980,12 +2981,12 @@ where
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId, ConfirmedBlockCertificate)>, ChainClientError>
     {
-        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
+        self.execute_operation(SystemOperation::CreateApplication {
             module_id,
             parameters,
             instantiation_argument,
             required_application_ids,
-        }))
+        })
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
@@ -3018,7 +3019,7 @@ where
         let blob_hash = blob.id().hash;
         match self
             .execute_operations(
-                vec![Operation::System(SystemOperation::Admin(
+                vec![Operation::system(SystemOperation::Admin(
                     AdminOperation::PublishCommitteeBlob { blob_hash },
                 ))],
                 vec![blob],
@@ -3029,9 +3030,10 @@ where
             outcome @ ClientOutcome::WaitForTimeout(_) => return Ok(outcome),
         }
         let epoch = self.epoch().await?.try_add_one()?;
-        self.execute_operation(Operation::System(SystemOperation::Admin(
-            AdminOperation::CreateCommittee { epoch, blob_hash },
-        )))
+        self.execute_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch,
+            blob_hash,
+        }))
         .await
     }
 
@@ -3100,7 +3102,7 @@ where
         };
         let mut epoch_change_ops = Vec::new();
         while self.has_admin_event(EPOCH_STREAM_NAME, next_epoch).await? {
-            epoch_change_ops.push(Operation::System(SystemOperation::ProcessNewEpoch(
+            epoch_change_ops.push(Operation::system(SystemOperation::ProcessNewEpoch(
                 next_epoch,
             )));
             next_epoch.try_add_assign_one()?;
@@ -3109,7 +3111,7 @@ where
             .has_admin_event(REMOVED_EPOCH_STREAM_NAME, min_epoch)
             .await?
         {
-            epoch_change_ops.push(Operation::System(SystemOperation::ProcessRemovedEpoch(
+            epoch_change_ops.push(Operation::system(SystemOperation::ProcessRemovedEpoch(
                 min_epoch,
             )));
             min_epoch.try_add_assign_one()?;
@@ -3151,7 +3153,7 @@ where
             .keys()
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
-                    Some(Operation::System(SystemOperation::Admin(
+                    Some(Operation::system(SystemOperation::Admin(
                         AdminOperation::RemoveCommittee { epoch: *epoch },
                     )))
                 } else {
@@ -3172,11 +3174,11 @@ where
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::Transfer {
+        self.execute_operation(SystemOperation::Transfer {
             owner,
             recipient: Recipient::Account(account),
             amount,
-        }))
+        })
         .await
     }
 

@@ -558,8 +558,9 @@ where
     assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
-        certificate.block().body.operations[open_chain_message_id.index as usize],
-        Operation::System(SystemOperation::OpenChain(_)),
+        certificate.block().body.operations[open_chain_message_id.index as usize]
+            .as_system_operation(),
+        Some(SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -648,8 +649,9 @@ where
     assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
-        certificate.block().body.operations[open_chain_message_id.index as usize],
-        Operation::System(SystemOperation::OpenChain(_)),
+        certificate.block().body.operations[open_chain_message_id.index as usize]
+            .as_system_operation(),
+        Some(SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
     assert_eq!(
@@ -763,9 +765,14 @@ where
     let client2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
 
     let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
+    assert_eq!(
+        certificate.block().body.operations.len(),
+        1,
+        "Unexpected operations in certificate"
+    );
     assert_matches!(
-        certificate.block().body.operations[..],
-        [Operation::System(SystemOperation::CloseChain)],
+        certificate.block().body.operations[0].as_system_operation(),
+        Some(SystemOperation::CloseChain),
         "Unexpected certificate value",
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
@@ -1316,7 +1323,7 @@ where
 
     // Try to read a blob without publishing it first, should fail
     let result = client1_a
-        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
         .await;
     assert_matches!(
         result,
@@ -1345,7 +1352,7 @@ where
     // and cache locally the blobs that were published by `client_a`. So this will succeed.
     client1_b.prepare_chain().await?;
     let certificate = client1_b
-        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
@@ -1364,8 +1371,8 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
     ];
@@ -1437,7 +1444,7 @@ where
         .block()
         .body
         .operations
-        .contains(&Operation::System(SystemOperation::Transfer {
+        .contains(&Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::Chain,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
@@ -1469,7 +1476,7 @@ where
     let owner2_a = Owner::from(client2_a.public_key().await.unwrap());
     let key_pair2_b = AccountSecretKey::generate();
     let owner2_b = Owner::from(key_pair2_b.public());
-    let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
         multi_leader_rounds: 10,
@@ -1512,8 +1519,8 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
     ];
@@ -1564,7 +1571,7 @@ where
         .block()
         .body
         .operations
-        .contains(&Operation::System(SystemOperation::Transfer {
+        .contains(&Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::Chain,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
@@ -1600,7 +1607,7 @@ where
     let owner3_b = Owner::from(key_pair3_b.public());
     let key_pair3_c = AccountSecretKey::generate();
     let owner3_c = Owner::from(key_pair3_c.public());
-    let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
         multi_leader_rounds: 10,
@@ -1667,8 +1674,8 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
     ];
@@ -1735,8 +1742,8 @@ where
     let blob3_hash = blob3.id().hash;
 
     let blob_2_3_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob2_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob3_hash,
         }),
     ];
@@ -1807,7 +1814,7 @@ where
         .block()
         .body
         .operations
-        .contains(&Operation::System(SystemOperation::PublishDataBlob {
+        .contains(&Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob4.id().hash
         })));
 
@@ -2318,7 +2325,7 @@ where
 
     // Client 3 should be able to update validator 3 about the blob and the message.
     let certificate = client3
-        .execute_operation(SystemOperation::ReadBlob { blob_id }.into())
+        .execute_operation(SystemOperation::ReadBlob { blob_id })
         .await
         .unwrap()
         .unwrap();

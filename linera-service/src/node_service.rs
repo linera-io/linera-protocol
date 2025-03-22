@@ -132,7 +132,7 @@ where
     ) -> Result<CryptoHash, Error> {
         let certificate = self
             .apply_client_command(&chain_id, move |client| {
-                let operation = Operation::System(system_operation.clone());
+                let operation = Operation::system(system_operation.clone());
                 async move {
                     let result = client
                         .execute_operation(operation)

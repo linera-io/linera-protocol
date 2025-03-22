@@ -629,7 +629,7 @@ impl ActiveChain {
                         block.with_raw_operation(application_id, bytes);
                     }
                     Operation::System(system_operation) => {
-                        block.with_system_operation(system_operation);
+                        block.with_system_operation(*system_operation);
                     }
                 }
             }

@@ -786,7 +786,7 @@ pub trait ContractRuntime: BaseRuntime {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     /// A system operation.
-    System(SystemOperation),
+    System(Box<SystemOperation>),
     /// A user operation (in serialized form).
     User {
         application_id: UserApplicationId,
@@ -1129,13 +1129,13 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
 impl From<SystemOperation> for Operation {
     fn from(operation: SystemOperation) -> Self {
-        Operation::System(operation)
+        Operation::System(Box::new(operation))
     }
 }
 
 impl Operation {
     pub fn system(operation: SystemOperation) -> Self {
-        Operation::System(operation)
+        Operation::System(Box::new(operation))
     }
 
     /// Creates a new user application operation following the `application_id`'s [`Abi`].
@@ -1160,6 +1160,15 @@ impl Operation {
         })
     }
 
+    /// Returns a reference to the [`SystemOperation`] in this [`Operation`], if this [`Operation`]
+    /// is for the system application.
+    pub fn as_system_operation(&self) -> Option<&SystemOperation> {
+        match self {
+            Operation::System(system_operation) => Some(system_operation),
+            Operation::User { .. } => None,
+        }
+    }
+
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
@@ -1169,16 +1178,14 @@ impl Operation {
 
     /// Returns the IDs of all blobs published in this operation.
     pub fn published_blob_ids(&self) -> Vec<BlobId> {
-        match self {
-            Operation::System(SystemOperation::PublishDataBlob { blob_hash }) => {
+        match self.as_system_operation() {
+            Some(SystemOperation::PublishDataBlob { blob_hash }) => {
                 vec![BlobId::new(*blob_hash, BlobType::Data)]
             }
-            Operation::System(SystemOperation::Admin(AdminOperation::PublishCommitteeBlob {
-                blob_hash,
-            })) => {
+            Some(SystemOperation::Admin(AdminOperation::PublishCommitteeBlob { blob_hash })) => {
                 vec![BlobId::new(*blob_hash, BlobType::Committee)]
             }
-            Operation::System(SystemOperation::PublishModule { module_id }) => vec![
+            Some(SystemOperation::PublishModule { module_id }) => vec![
                 BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
                 BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
             ],

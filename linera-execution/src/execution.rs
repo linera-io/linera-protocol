@@ -267,7 +267,7 @@ where
             Operation::System(op) => {
                 let new_application = self
                     .system
-                    .execute_operation(context, op, txn_tracker, resource_controller)
+                    .execute_operation(context, *op, txn_tracker, resource_controller)
                     .await?;
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
