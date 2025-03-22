@@ -114,7 +114,7 @@ pub fn parse_version_message(message: &str) -> String {
         .unwrap_or_default()
         .trim()
         .split(' ')
-        .last()
+        .next_back()
         .expect("splitting strings gives non-empty lists")
         .to_string()
 }
