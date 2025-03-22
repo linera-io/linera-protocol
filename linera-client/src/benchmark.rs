@@ -599,9 +599,7 @@ where
                     amount,
                 }),
             };
-            let operations = iter::repeat(operation)
-                .take(transactions_per_block)
-                .collect();
+            let operations = iter::repeat_n(operation, transactions_per_block).collect();
             blocks_infos.push((chain_id, operations, key_pair));
             previous_chain_id = chain_id;
         }

@@ -885,9 +885,11 @@ where
             balance,
             application_permissions: Default::default(),
         };
-        let operations = iter::repeat(Operation::system(SystemOperation::OpenChain(config)))
-            .take(num_new_chains)
-            .collect();
+        let operations = iter::repeat_n(
+            Operation::system(SystemOperation::OpenChain(config)),
+            num_new_chains,
+        )
+        .collect();
         info!("Executing {} OpenChain operations", num_new_chains);
         Ok(chain_client
             .execute_operations(operations, vec![])
