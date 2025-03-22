@@ -154,7 +154,7 @@ async fn test_block_size_limit() {
             height: BlockHeight(1),
             transaction_index: 0,
             timestamp: time,
-            messages: vec![Message::System(SystemMessage::OpenChain(config))
+            messages: vec![Message::System(SystemMessage::OpenChain(Box::new(config)))
                 .to_posted(0, MessageKind::Protected)],
         },
         action: MessageAction::Accept,
@@ -227,7 +227,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     chain
         .execute_init_message(message_id, &config, time, time)
         .await?;
-    let open_chain_message = Message::System(SystemMessage::OpenChain(config));
+    let open_chain_message = Message::System(SystemMessage::OpenChain(Box::new(config)));
 
     // The OpenChain message must be included in the first block. Also register the app.
     let bundle = IncomingBundle {

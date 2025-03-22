@@ -1258,7 +1258,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         .await;
     child_view
         .system
-        .initialize_chain(message_id, Timestamp::from(0), config.clone());
+        .initialize_chain(message_id, Timestamp::from(0), (**config).clone());
     assert_eq!(*child_view.system.balance.get(), Amount::ONE);
     assert_eq!(*child_view.system.ownership.get(), child_ownership);
     assert_eq!(*child_view.system.committees.get(), committees);

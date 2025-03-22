@@ -208,7 +208,7 @@ pub enum SystemMessage {
         recipient: Recipient,
     },
     /// Creates (or activates) a new chain.
-    OpenChain(OpenChainConfig),
+    OpenChain(Box<OpenChainConfig>),
     /// Notifies that a new application was created.
     ApplicationCreated,
 }
@@ -743,7 +743,7 @@ where
             }
         );
         self.debit(&AccountOwner::CHAIN, config.balance).await?;
-        let message = SystemMessage::OpenChain(config);
+        let message = SystemMessage::OpenChain(Box::new(config));
         Ok(OutgoingMessage::new(child_id, message).with_kind(MessageKind::Protected))
     }
 

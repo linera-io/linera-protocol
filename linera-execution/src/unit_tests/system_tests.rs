@@ -121,7 +121,7 @@ async fn open_chain_message_index() {
     assert_eq!(
         txn_tracker.into_outcome().unwrap().outgoing_messages[OPEN_CHAIN_MESSAGE_INDEX as usize]
             .message,
-        Message::System(SystemMessage::OpenChain(config))
+        Message::System(SystemMessage::OpenChain(Box::new(config)))
     );
 }
 

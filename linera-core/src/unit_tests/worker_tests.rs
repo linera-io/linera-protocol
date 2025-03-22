@@ -1353,15 +1353,17 @@ where
             height: BlockHeight::ZERO,
             timestamp: Timestamp::from(0),
             transaction_index: 0,
-            messages: vec![Message::System(SystemMessage::OpenChain(OpenChainConfig {
-                ownership,
-                admin_id,
-                epoch,
-                committees,
-                balance,
-                application_permissions: Default::default(),
-            }))
-            .to_posted(0, MessageKind::Protected)],
+            messages: vec![
+                Message::System(SystemMessage::OpenChain(Box::new(OpenChainConfig {
+                    ownership,
+                    admin_id,
+                    epoch,
+                    committees,
+                    balance,
+                    application_permissions: Default::default(),
+                })))
+                .to_posted(0, MessageKind::Protected),
+            ],
         },
         action: MessageAction::Accept,
     };
@@ -2384,14 +2386,14 @@ where
                 messages: vec![vec![direct_outgoing_message(
                     user_id,
                     MessageKind::Protected,
-                    SystemMessage::OpenChain(OpenChainConfig {
+                    SystemMessage::OpenChain(Box::new(OpenChainConfig {
                         ownership: ChainOwnership::single(key_pair.public().into()),
                         epoch: Epoch::ZERO,
                         committees: committees.clone(),
                         admin_id,
                         balance: Amount::ZERO,
                         application_permissions: Default::default(),
-                    }),
+                    })),
                 )]],
                 previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new()],
@@ -2575,7 +2577,7 @@ where
                             height: BlockHeight::from(0),
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
-                            messages: vec![Message::System(SystemMessage::OpenChain(
+                            messages: vec![Message::System(SystemMessage::OpenChain(Box::new(
                                 OpenChainConfig {
                                     ownership: ChainOwnership::single(key_pair.public().into()),
                                     epoch: Epoch::from(0),
@@ -2584,7 +2586,7 @@ where
                                     balance: Amount::ZERO,
                                     application_permissions: Default::default(),
                                 },
-                            ))
+                            )))
                             .to_posted(0, MessageKind::Protected)],
                         },
                         action: MessageAction::Accept,
