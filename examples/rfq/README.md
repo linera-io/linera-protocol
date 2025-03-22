@@ -157,7 +157,7 @@ mutation {
 
 Claim 500 FUN2 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
 Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"` to print the URL
-of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter the same request:
+of the GraphiQL interface for the FUN3 app. Navigate to that URL and enter the same request:
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 mutation {
