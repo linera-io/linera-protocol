@@ -1160,6 +1160,15 @@ impl Operation {
         })
     }
 
+    /// Returns a reference to the [`SystemOperation`] in this [`Operation`], if this [`Operation`]
+    /// is for the system application.
+    pub fn as_system_operation(&self) -> Option<&SystemOperation> {
+        match self {
+            Operation::System(system_operation) => Some(system_operation),
+            Operation::User { .. } => None,
+        }
+    }
+
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
