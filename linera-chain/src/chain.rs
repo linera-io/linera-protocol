@@ -899,6 +899,7 @@ where
                     &txn_outcome.oracle_responses,
                     &txn_outcome.outgoing_messages,
                     &txn_outcome.events,
+                    &txn_outcome.blobs,
                 ))
                 .with_execution_context(chain_execution_context)?;
             for blob in &txn_outcome.blobs {
@@ -918,6 +919,9 @@ where
                 .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(events.len(), 1)
+                .with_execution_context(chain_execution_context)?;
+            resource_controller
+                .track_executed_block_size_sequence_extension(blobs.len(), 1)
                 .with_execution_context(chain_execution_context)?;
             oracle_responses.push(txn_outcome.oracle_responses);
             messages.push(txn_outcome.outgoing_messages);
