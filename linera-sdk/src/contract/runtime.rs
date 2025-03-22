@@ -224,7 +224,7 @@ where
         contract_wit::subscribe(chain.into(), &channel.into());
     }
 
-    /// Unsubscribes to a message channel from another chain.
+    /// Unsubscribes from a message channel from another chain.
     pub fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) {
         contract_wit::unsubscribe(chain.into(), &channel.into());
     }

@@ -86,7 +86,7 @@ impl ValidatorNode for SimpleClient {
         self.query(request).await
     }
 
-    /// Processes a hash certificate.
+    /// Processes a lite certificate.
     async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
