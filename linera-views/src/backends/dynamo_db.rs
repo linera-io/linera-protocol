@@ -1093,7 +1093,7 @@ pub enum DynamoDbStoreInternalError {
 
     /// An error occurred while creating the table.
     #[error(transparent)]
-    CreateTable(#[from] SdkError<CreateTableError>),
+    CreateTable(#[from] Box<SdkError<CreateTableError>>),
 
     /// An error occurred while building an object
     #[error(transparent)]
