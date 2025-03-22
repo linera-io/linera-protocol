@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Spawns a new thread, returning a `JoinHandle` for it."><title>spawn in wasm_thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_thread" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_thread/index.html">wasm_thread</a><span class="version">0.3.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">wasm_thread</a>::<wbr><a class="fn" href="#">spawn</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/thread/mod.rs.html#688-692">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn spawn&lt;F, T&gt;(f: F) -&gt; <a class="struct" href="struct.JoinHandle.html" title="struct wasm_thread::JoinHandle">JoinHandle</a>&lt;T&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; T + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Spawns a new thread, returning a <a href="struct.JoinHandle.html" title="struct wasm_thread::JoinHandle"><code>JoinHandle</code></a> for it.</p>
+<p>The join handle provides a <a href="struct.JoinHandle.html#method.join" title="method wasm_thread::JoinHandle::join"><code>join</code></a> method that can be used to join the spawned
+thread. If the spawned thread panics, <a href="struct.JoinHandle.html#method.join" title="method wasm_thread::JoinHandle::join"><code>join</code></a> will return an <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a> containing
+the argument given to <a href="https://doc.rust-lang.org/1.81.0/std/macro.panic.html" title="macro std::panic"><code>panic!</code></a>.</p>
+<p>If the join handle is dropped, the spawned thread will implicitly be <em>detached</em>.
+In this case, the spawned thread may no longer be joined.
+(It is the responsibility of the program to either eventually join threads it
+creates or detach them; otherwise, a resource leak will result.)</p>
+<p>This call will create a thread using default parameters of <a href="struct.Builder.html" title="struct wasm_thread::Builder"><code>Builder</code></a>, if you
+want to specify the stack size or the name of the thread, use this API
+instead.</p>
+<p>As you can see in the signature of <code>spawn</code> there are two constraints on
+both the closure given to <code>spawn</code> and its return value, let’s explain them:</p>
+<ul>
+<li>
+<p>The <code>'static</code> constraint means that the closure and its return value
+must have a lifetime of the whole program execution. The reason for this
+is that threads can outlive the lifetime they have been created in.</p>
+<p>Indeed if the thread, and by extension its return value, can outlive their
+caller, we need to make sure that they will be valid afterwards, and since
+we <em>can’t</em> know when it will return we need to have them valid as long as
+possible, that is until the end of the program, hence the <code>'static</code>
+lifetime.</p>
+</li>
+<li>
+<p>The <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a> constraint is because the closure will need to be passed
+<em>by value</em> from the thread where it is spawned to the new thread. Its
+return value will need to be passed from the new thread to the thread
+where it is <code>join</code>ed.
+As a reminder, the <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a> marker trait expresses that it is safe to be
+passed from thread to thread. <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync"><code>Sync</code></a> expresses that it is safe to have a
+reference be passed from thread to thread.</p>
+</li>
+</ul>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Panics if the OS fails to create a thread; use <a href="struct.Builder.html#method.spawn" title="method wasm_thread::Builder::spawn"><code>Builder::spawn</code></a>
+to recover from such errors.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Creating a thread.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>handler = thread::spawn(|| {
+    <span class="comment">// thread code
+</span>});
+
+handler.join().unwrap();</code></pre></div>
+<p>As mentioned in the module documentation, threads are usually made to
+communicate using <a href="https://doc.rust-lang.org/1.81.0/std/sync/mpsc/index.html" title="mod std::sync::mpsc"><code>channels</code></a>, here is how it usually looks.</p>
+<p>This example also shows how to use <code>move</code>, in order to give ownership
+of values to a thread.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::sync::mpsc::channel;
+
+<span class="kw">let </span>(tx, rx) = channel();
+
+<span class="kw">let </span>sender = thread::spawn(<span class="kw">move </span>|| {
+    tx.send(<span class="string">"Hello, thread"</span>.to_owned())
+        .expect(<span class="string">"Unable to send on channel"</span>);
+});
+
+<span class="kw">let </span>receiver = thread::spawn(<span class="kw">move </span>|| {
+    <span class="kw">let </span>value = rx.recv().expect(<span class="string">"Unable to receive from channel"</span>);
+    <span class="macro">println!</span>(<span class="string">"{value}"</span>);
+});
+
+sender.join().expect(<span class="string">"The sender thread has panicked"</span>);
+receiver.join().expect(<span class="string">"The receiver thread has panicked"</span>);</code></pre></div>
+<p>A thread can also return a value through its <a href="struct.JoinHandle.html" title="struct wasm_thread::JoinHandle"><code>JoinHandle</code></a>, you can use
+this to make asynchronous computations (futures might be more appropriate
+though).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>computation = thread::spawn(|| {
+    <span class="comment">// Some expensive computation.
+    </span><span class="number">42
+</span>});
+
+<span class="kw">let </span>result = computation.join().unwrap();
+<span class="macro">println!</span>(<span class="string">"{result}"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

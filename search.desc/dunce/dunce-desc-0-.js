@@ -1,0 +1,1 @@
+searchState.loadedDescShard("dunce", 0, "Filesystem paths in Windows are a total mess. This crate …\nLike <code>std::fs::canonicalize()</code>, but on Windows it outputs …\nTakes any path, and when possible, converts Windows UNC …")

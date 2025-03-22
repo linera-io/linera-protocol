@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Verify a batch of `signatures` on `messages` with their respective `verifying_keys`."><title>verify_batch in ed25519_dalek - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ed25519_dalek" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ed25519_dalek/index.html">ed25519_dalek</a><span class="version">2.1.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">ed25519_dalek</a>::<wbr><a class="fn" href="#">verify_batch</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/ed25519_dalek/batch.rs.html#137-242">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn verify_batch(
+    messages: &amp;[&amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]],
+    signatures: &amp;[<a class="struct" href="struct.Signature.html" title="struct ed25519_dalek::Signature">Signature</a>],
+    verifying_keys: &amp;[<a class="struct" href="struct.VerifyingKey.html" title="struct ed25519_dalek::VerifyingKey">VerifyingKey</a>],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="type.SignatureError.html" title="type ed25519_dalek::SignatureError">SignatureError</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Verify a batch of <code>signatures</code> on <code>messages</code> with their respective <code>verifying_keys</code>.</p>
+<h2 id="inputs"><a class="doc-anchor" href="#inputs">§</a>Inputs</h2>
+<ul>
+<li><code>messages</code> is a slice of byte slices, one per signed message.</li>
+<li><code>signatures</code> is a slice of <code>Signature</code>s.</li>
+<li><code>verifying_keys</code> is a slice of <code>VerifyingKey</code>s.</li>
+</ul>
+<h2 id="returns"><a class="doc-anchor" href="#returns">§</a>Returns</h2>
+<ul>
+<li>A <code>Result</code> whose <code>Ok</code> value is an empty tuple and whose <code>Err</code> value is a
+<code>SignatureError</code> containing a description of the internal error which
+occurred.</li>
+</ul>
+<h3 id="on-deterministic-nonces"><a class="doc-anchor" href="#on-deterministic-nonces">§</a>On Deterministic Nonces</h3>
+<p>The nonces for batch signature verification are derived purely from the inputs to this function
+themselves.</p>
+<p>In any sigma protocol it is wise to include as much context pertaining
+to the public state in the protocol as possible, to avoid malleability
+attacks where an adversary alters publics in an algebraic manner that
+manages to satisfy the equations for the protocol in question.</p>
+<p>For ed25519 batch verification we include the following as scalars in the protocol transcript:</p>
+<ul>
+<li>All of the computed <code>H(R||A||M)</code>s to the protocol transcript, and</li>
+<li>All of the <code>s</code> components of each signature.</li>
+</ul>
+<p>The former, while not quite as elegant as adding the <code>R</code>s, <code>A</code>s, and
+<code>M</code>s separately, saves us a bit of context hashing since the
+<code>H(R||A||M)</code>s need to be computed for the verification equation anyway.</p>
+<p>The latter prevents a malleability attack wherein an adversary, without access
+to the signing key(s), can take any valid signature, <code>(s,R)</code>, and swap
+<code>s</code> with <code>s' = -z1</code>.  This doesn’t constitute a signature forgery, merely
+a vulnerability, as the resulting signature will not pass single
+signature verification.  (Thanks to Github users @real_or_random and
+@jonasnick for pointing out this malleability issue.)</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519_dalek::{
+    verify_batch, SigningKey, VerifyingKey, Signer, Signature,
+};
+<span class="kw">use </span>rand::rngs::OsRng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>csprng = OsRng;
+<span class="kw">let </span>signing_keys: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..<span class="number">64</span>).map(|<span class="kw">_</span>| SigningKey::generate(<span class="kw-2">&amp;mut </span>csprng)).collect();
+<span class="kw">let </span>msg: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"They're good dogs Brant"</span>;
+<span class="kw">let </span>messages: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..<span class="number">64</span>).map(|<span class="kw">_</span>| msg).collect();
+<span class="kw">let </span>signatures:  Vec&lt;<span class="kw">_</span>&gt; = signing_keys.iter().map(|key| key.sign(<span class="kw-2">&amp;</span>msg)).collect();
+<span class="kw">let </span>verifying_keys: Vec&lt;<span class="kw">_</span>&gt; = signing_keys.iter().map(|key| key.verifying_key()).collect();
+
+<span class="kw">let </span>result = verify_batch(<span class="kw-2">&amp;</span>messages, <span class="kw-2">&amp;</span>signatures, <span class="kw-2">&amp;</span>verifying_keys);
+<span class="macro">assert!</span>(result.is_ok());</code></pre></div>
+</div></details></section></div></main></body></html>

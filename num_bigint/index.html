@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Big Integer Types for Rust"><title>num_bigint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="num_bigint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../num_bigint/index.html">num_bigint</a><span class="version">0.4.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">num_bigint</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/num_bigint/lib.rs.html#11-268">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Big Integer Types for Rust</p>
+<ul>
+<li>A <a href="struct.BigUint.html" title="struct num_bigint::BigUint"><code>BigUint</code></a> is unsigned and represented as a vector of digits.</li>
+<li>A <a href="struct.BigInt.html" title="struct num_bigint::BigInt"><code>BigInt</code></a> is signed and is a combination of <a href="struct.BigUint.html" title="struct num_bigint::BigUint"><code>BigUint</code></a> and <a href="enum.Sign.html" title="enum num_bigint::Sign"><code>Sign</code></a>.</li>
+</ul>
+<p>Common numerical operations are overloaded, so we can treat them
+the same way we treat other numbers.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_bigint::BigUint;
+<span class="kw">use </span>num_traits::One;
+
+<span class="comment">// Calculate large fibonacci numbers.
+</span><span class="kw">fn </span>fib(n: usize) -&gt; BigUint {
+    <span class="kw">let </span><span class="kw-2">mut </span>f0 = BigUint::ZERO;
+    <span class="kw">let </span><span class="kw-2">mut </span>f1 = BigUint::one();
+    <span class="kw">for _ in </span><span class="number">0</span>..n {
+        <span class="kw">let </span>f2 = f0 + <span class="kw-2">&amp;</span>f1;
+        f0 = f1;
+        f1 = f2;
+    }
+    f0
+}
+
+<span class="comment">// This is a very large number.
+</span><span class="macro">println!</span>(<span class="string">"fib(1000) = {}"</span>, fib(<span class="number">1000</span>));</code></pre></div>
+<p>It’s easy to generate large random numbers:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_bigint::{ToBigInt, RandBigInt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+<span class="kw">let </span>a = rng.gen_bigint(<span class="number">1000</span>);
+
+<span class="kw">let </span>low = -<span class="number">10000</span>.to_bigint().unwrap();
+<span class="kw">let </span>high = <span class="number">10000</span>.to_bigint().unwrap();
+<span class="kw">let </span>b = rng.gen_bigint_range(<span class="kw-2">&amp;</span>low, <span class="kw-2">&amp;</span>high);
+
+<span class="comment">// Probably an even larger number.
+</span><span class="macro">println!</span>(<span class="string">"{}"</span>, a * b);</code></pre></div>
+<p>See the “Features” section for instructions for enabling random number generation.</p>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<p>The <code>std</code> crate feature is enabled by default, which enables <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error"><code>std::error::Error</code></a>
+implementations and some internal use of floating point approximations. This can be disabled by
+depending on <code>num-bigint</code> with <code>default-features = false</code>. Either way, the <code>alloc</code> crate is
+always required for heap allocation of the <code>BigInt</code>/<code>BigUint</code> digits.</p>
+<h4 id="random-generation"><a class="doc-anchor" href="#random-generation">§</a>Random Generation</h4>
+<p><code>num-bigint</code> supports the generation of random big integers when the <code>rand</code>
+feature is enabled. To enable it include rand as</p>
+<div class="example-wrap"><pre class="language-toml"><code>rand = &quot;0.8&quot;
+num-bigint = { version = &quot;0.4&quot;, features = [&quot;rand&quot;] }
+</code></pre></div>
+<p>Note that you must use the version of <code>rand</code> that <code>num-bigint</code> is compatible
+with: <code>0.8</code>.</p>
+<h4 id="arbitrary-big-integers"><a class="doc-anchor" href="#arbitrary-big-integers">§</a>Arbitrary Big Integers</h4>
+<p><code>num-bigint</code> supports <code>arbitrary</code> and <code>quickcheck</code> features to implement
+[<code>arbitrary::Arbitrary</code>] and [<code>quickcheck::Arbitrary</code>], respectively, for both <code>BigInt</code> and
+<code>BigUint</code>. These are useful for fuzzing and other forms of randomized testing.</p>
+<h4 id="serialization"><a class="doc-anchor" href="#serialization">§</a>Serialization</h4>
+<p>The <code>serde</code> feature adds implementations of [<code>Serialize</code>][serde::Serialize] and
+[<code>Deserialize</code>][serde::Deserialize] for both <code>BigInt</code> and <code>BigUint</code>. Their serialized data is
+generated portably, regardless of platform differences like the internal digit size.</p>
+<h3 id="compatibility"><a class="doc-anchor" href="#compatibility">§</a>Compatibility</h3>
+<p>The <code>num-bigint</code> crate is tested for rustc 1.60 and greater.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BigInt.html" title="struct num_bigint::BigInt">BigInt</a></div><div class="desc docblock-short">A big signed integer type.</div></li><li><div class="item-name"><a class="struct" href="struct.BigUint.html" title="struct num_bigint::BigUint">BigUint</a></div><div class="desc docblock-short">A big unsigned integer type.</div></li><li><div class="item-name"><a class="struct" href="struct.ParseBigIntError.html" title="struct num_bigint::ParseBigIntError">ParseBigIntError</a></div></li><li><div class="item-name"><a class="struct" href="struct.TryFromBigIntError.html" title="struct num_bigint::TryFromBigIntError">TryFromBigIntError</a></div><div class="desc docblock-short">The error type returned when a checked conversion regarding big integer fails.</div></li><li><div class="item-name"><a class="struct" href="struct.U32Digits.html" title="struct num_bigint::U32Digits">U32Digits</a></div><div class="desc docblock-short">An iterator of <code>u32</code> digits representation of a <code>BigUint</code> or <code>BigInt</code>,
+ordered least significant digit first.</div></li><li><div class="item-name"><a class="struct" href="struct.U64Digits.html" title="struct num_bigint::U64Digits">U64Digits</a></div><div class="desc docblock-short">An iterator of <code>u64</code> digits representation of a <code>BigUint</code> or <code>BigInt</code>,
+ordered least significant digit first.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Sign.html" title="enum num_bigint::Sign">Sign</a></div><div class="desc docblock-short">A <code>Sign</code> is a <a href="struct.BigInt.html" title="struct num_bigint::BigInt"><code>BigInt</code></a>’s composing element.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ToBigInt.html" title="trait num_bigint::ToBigInt">ToBigInt</a></div><div class="desc docblock-short">A generic trait for converting a value to a <a href="struct.BigInt.html" title="struct num_bigint::BigInt"><code>BigInt</code></a>. This may return
+<code>None</code> when converting from <code>f32</code> or <code>f64</code>, and will always succeed
+when converting from any integer or unsigned primitive, or <a href="struct.BigUint.html" title="struct num_bigint::BigUint"><code>BigUint</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.ToBigUint.html" title="trait num_bigint::ToBigUint">ToBigUint</a></div><div class="desc docblock-short">A generic trait for converting a value to a <a href="struct.BigUint.html" title="struct num_bigint::BigUint"><code>BigUint</code></a>.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A convenience trait that can be used to build a GraphQL request body."><title>GraphQLQuery in graphql_client - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="graphql_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../graphql_client/index.html">graphql_client</a><span class="version">0.13.0</span></h2></div><h2 class="location"><a href="#">GraphQLQuery</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.ResponseData">ResponseData</a></li><li><a href="#associatedtype.Variables">Variables</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.build_query">build_query</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate graphql_client</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">graphql_client</a>::<wbr><a class="trait" href="#">GraphQLQuery</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/graphql_client/lib.rs.html#79-87">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait GraphQLQuery {
+    type <a href="#associatedtype.Variables" class="associatedtype">Variables</a>: <a class="trait" href="../serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a>;
+    type <a href="#associatedtype.ResponseData" class="associatedtype">ResponseData</a>: for&lt;'de&gt; <a class="trait" href="../serde/de/trait.Deserialize.html" title="trait serde::de::Deserialize">Deserialize</a>&lt;'de&gt;;
+
+    // Required method
+    fn <a href="#tymethod.build_query" class="fn">build_query</a>(variables: Self::<a class="associatedtype" href="trait.GraphQLQuery.html#associatedtype.Variables" title="type graphql_client::GraphQLQuery::Variables">Variables</a>) -&gt; <a class="struct" href="struct.QueryBody.html" title="struct graphql_client::QueryBody">QueryBody</a>&lt;Self::<a class="associatedtype" href="trait.GraphQLQuery.html#associatedtype.Variables" title="type graphql_client::GraphQLQuery::Variables">Variables</a>&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A convenience trait that can be used to build a GraphQL request body.</p>
+<p>This will be implemented for you by codegen in the normal case. It is implemented on the struct you place the derive on.</p>
+<p>Example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>graphql_client::<span class="kw-2">*</span>;
+<span class="kw">use </span>serde_json::json;
+<span class="kw">use </span>std::error::Error;
+
+<span class="attr">#[derive(GraphQLQuery)]
+#[graphql(
+  query_path = <span class="string">"../graphql_client_codegen/src/tests/star_wars_query.graphql"</span>,
+  schema_path = <span class="string">"../graphql_client_codegen/src/tests/star_wars_schema.graphql"
+</span>)]
+</span><span class="kw">struct </span>StarWarsQuery;
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+    <span class="kw">use </span>graphql_client::GraphQLQuery;
+
+    <span class="kw">let </span>variables = star_wars_query::Variables {
+        episode_for_hero: star_wars_query::Episode::NEWHOPE,
+    };
+
+    <span class="kw">let </span>expected_body = <span class="macro">json!</span>({
+        <span class="string">"operationName"</span>: star_wars_query::OPERATION_NAME,
+        <span class="string">"query"</span>: star_wars_query::QUERY,
+        <span class="string">"variables"</span>: {
+            <span class="string">"episodeForHero"</span>: <span class="string">"NEWHOPE"
+        </span>},
+    });
+
+    <span class="kw">let </span>actual_body = serde_json::to_value(
+        StarWarsQuery::build_query(variables)
+    )<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(actual_body, expected_body);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Variables" class="method"><a class="src rightside" href="../src/graphql_client/lib.rs.html#81">source</a><h4 class="code-header">type <a href="#associatedtype.Variables" class="associatedtype">Variables</a>: <a class="trait" href="../serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a></h4></section></summary><div class="docblock"><p>The shape of the variables expected by the query. This should be a generated struct most of the time.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.ResponseData" class="method"><a class="src rightside" href="../src/graphql_client/lib.rs.html#83">source</a><h4 class="code-header">type <a href="#associatedtype.ResponseData" class="associatedtype">ResponseData</a>: for&lt;'de&gt; <a class="trait" href="../serde/de/trait.Deserialize.html" title="trait serde::de::Deserialize">Deserialize</a>&lt;'de&gt;</h4></section></summary><div class="docblock"><p>The top-level shape of the response data (the <code>data</code> field in the GraphQL response). In practice this should be generated, since it is hard to write by hand without error.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.build_query" class="method"><a class="src rightside" href="../src/graphql_client/lib.rs.html#86">source</a><h4 class="code-header">fn <a href="#tymethod.build_query" class="fn">build_query</a>(variables: Self::<a class="associatedtype" href="trait.GraphQLQuery.html#associatedtype.Variables" title="type graphql_client::GraphQLQuery::Variables">Variables</a>) -&gt; <a class="struct" href="struct.QueryBody.html" title="struct graphql_client::QueryBody">QueryBody</a>&lt;Self::<a class="associatedtype" href="trait.GraphQLQuery.html#associatedtype.Variables" title="type graphql_client::GraphQLQuery::Variables">Variables</a>&gt;</h4></section></summary><div class="docblock"><p>Produce a GraphQL query struct that can be JSON serialized and sent to a GraphQL API.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/graphql_client/trait.GraphQLQuery.js" async></script></section></div></main></body></html>

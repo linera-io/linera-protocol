@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Deserialize any value, ignore it, and return the default value for the type being deserialized."><title>deserialize_ignore_any in serde_with::rust - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde_with" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../serde_with/index.html">serde_with</a><span class="version">3.12.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In serde_with::rust</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">serde_with</a>::<wbr><a href="index.html">rust</a>::<wbr><a class="fn" href="#">deserialize_ignore_any</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/serde_with/rust.rs.html#708-712">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn deserialize_ignore_any&lt;'de, D: <a class="trait" href="../../serde/de/trait.Deserializer.html" title="trait serde::de::Deserializer">Deserializer</a>&lt;'de&gt;, T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>&gt;(
+    deserializer: D,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, D::<a class="associatedtype" href="../../serde/de/trait.Deserializer.html#associatedtype.Error" title="type serde::de::Deserializer::Error">Error</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Deserialize any value, ignore it, and return the default value for the type being deserialized.</p>
+<p>This function can be used in two different ways:</p>
+<ol>
+<li>It is useful for instance to create an enum with a catch-all variant that will accept any incoming data.</li>
+<li><a href="https://serde.rs/enum-representations.html#untagged"><code>untagged</code></a> enum representations do not allow the <code>other</code> annotation as the fallback enum variant.
+With this function you can emulate an <code>other</code> variant, which can deserialize any data carrying enum.</li>
+</ol>
+<p><strong>Note:</strong> Using this function will prevent deserializing data-less enum variants.
+If this is a problem depends on the data format.
+For example, deserializing <code>"Bar"</code> as an enum in JSON would fail, since it carries no data.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="deserializing-a-heterogeneous-collection-of-xml-nodes"><a class="doc-anchor" href="#deserializing-a-heterogeneous-collection-of-xml-nodes">§</a>Deserializing a heterogeneous collection of XML nodes</h3>
+<p>When <a href="https://docs.rs/serde-xml-rs"><code>serde-xml-rs</code></a> deserializes an XML tag to an enum, it always maps the tag
+name to the enum variant name, and the tag attributes and children to the enum contents.
+This means that in order for an enum variant to accept any XML tag, it both has to use
+<code>#[serde(other)]</code> to accept any tag name, and <code>#[serde(deserialize_with = "deserialize_ignore_any")]</code>
+to accept any attributes and children.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_with::rust::deserialize_ignore_any;
+
+<span class="attr">#[derive(Deserialize)]
+#[serde(rename_all = <span class="string">"lowercase"</span>)]
+</span><span class="kw">enum </span>Item {
+    Foo(String),
+    Bar(String),
+    <span class="attr">#[serde(other, deserialize_with = <span class="string">"deserialize_ignore_any"</span>)]
+    </span>Other,
+}
+
+<span class="comment">// Deserialize this XML
+</span><span class="string">r"
+&lt;foo&gt;a&lt;/foo&gt;
+&lt;bar&gt;b&lt;/bar&gt;
+&lt;foo&gt;c&lt;/foo&gt;
+&lt;unknown&gt;d&lt;/unknown&gt;
+"
+
+</span><span class="comment">// into these Items
+</span><span class="macro">vec!</span>[
+    Item::Foo(String::from(<span class="string">"a"</span>)),
+    Item::Bar(String::from(<span class="string">"b"</span>)),
+    Item::Foo(String::from(<span class="string">"c"</span>)),
+    Item::Other,
+]</code></pre></div>
+<h3 id="simulating-an-other-enum-variant-in-an-untagged-enum"><a class="doc-anchor" href="#simulating-an-other-enum-variant-in-an-untagged-enum">§</a>Simulating an <code>other</code> enum variant in an <code>untagged</code> enum</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_with::rust::deserialize_ignore_any;
+
+<span class="attr">#[derive(Deserialize)]
+#[serde(untagged)]
+</span><span class="kw">enum </span>Item {
+    Foo{x: u8},
+    <span class="attr">#[serde(deserialize_with = <span class="string">"deserialize_ignore_any"</span>)]
+    </span>Other,
+}
+
+<span class="comment">// Deserialize this JSON
+</span><span class="macro">json!</span>([
+    {<span class="string">"y"</span>: <span class="number">1</span>},
+    {<span class="string">"x"</span>: <span class="number">1</span>},
+])
+
+<span class="comment">// into these Items
+</span><span class="macro">vec!</span>[Item::Other, Item::Foo{x: <span class="number">1</span>}]</code></pre></div>
+</div></details></section></div></main></body></html>

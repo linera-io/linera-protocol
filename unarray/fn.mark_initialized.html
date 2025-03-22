@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Convert a `[MaybeUninit&lt;T&gt;; N]` to a `[T; N]`"><title>mark_initialized in unarray - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="unarray" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../unarray/index.html">unarray</a><span class="version">0.1.4</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">unarray</a>::<wbr><a class="fn" href="#">mark_initialized</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/unarray/lib.rs.html#166-168">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn mark_initialized&lt;T, const N: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a>&gt;(
+    src: [<a class="union" href="https://doc.rust-lang.org/1.81.0/core/mem/maybe_uninit/union.MaybeUninit.html" title="union core::mem::maybe_uninit::MaybeUninit">MaybeUninit</a>&lt;T&gt;; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.array.html">N</a>],
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.array.html">[T; N]</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Convert a <code>[MaybeUninit&lt;T&gt;; N]</code> to a <code>[T; N]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>buffer = uninit_buf::&lt;i32, <span class="number">1000</span>&gt;();
+
+<span class="kw">for </span>elem <span class="kw">in </span><span class="kw-2">&amp;mut </span>buffer {
+  elem.write(<span class="number">123</span>);
+}
+
+<span class="kw">let </span>result = <span class="kw">unsafe </span>{ mark_initialized(buffer) };
+<span class="macro">assert_eq!</span>(result, [<span class="number">123</span>; <span class="number">1000</span>])</code></pre></div>
+<p>This largely acts as a workaround to the fact that <a href="https://doc.rust-lang.org/1.81.0/core/intrinsics/fn.transmute.html" title="fn core::intrinsics::transmute"><code>core::mem::transmute</code></a> cannot be used with
+const generic arrays, as it can’t prove they have the same size (even when intuitively they are
+the same, e.g. <code>[i32; N]</code> and <code>[u32; N]</code>).</p>
+<p>This is similar to the nightly-only <a href="https://doc.rust-lang.org/1.81.0/core/mem/maybe_uninit/union.MaybeUninit.html#method.array_assume_init" title="associated function core::mem::maybe_uninit::MaybeUninit::array_assume_init"><code>core::mem::MaybeUninit::array_assume_init</code></a></p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Internally, this uses <a href="https://doc.rust-lang.org/1.81.0/core/mem/fn.transmute_copy.html" title="fn core::mem::transmute_copy"><code>core::mem::transmute_copy</code></a> to convert a <code>[MaybeUninit&lt;T&gt;; N]</code> to <code>[T; N]</code>.
+As such, you must make sure every element has been initialized before calling this function. If
+there are uninitialized elements in <code>src</code>, these will be converted to <code>T</code>s, which is UB. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// ⚠️ This example produces UB ⚠️
+</span><span class="kw">let </span>bools = uninit_buf::&lt;bool, <span class="number">10</span>&gt;();
+<span class="kw">let </span>uh_oh = <span class="kw">unsafe </span>{ mark_initialized(bools) };  <span class="comment">// UB: creating an invalid instance
+</span><span class="kw">if </span>uh_oh[<span class="number">0</span>] {                                    <span class="comment">// double UB: reading from unintiailized memory
+  // ...
+</span>}</code></pre></div>
+<p>Even if you never use a value, it’s still UB. This is especially true for types with
+<a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>core::ops::Drop</code></a> implementations:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// ⚠️ This example produces UB ⚠️
+</span><span class="kw">let </span>strings = uninit_buf::&lt;String, <span class="number">10</span>&gt;();
+<span class="kw">let </span>uh_oh = <span class="kw">unsafe </span>{ mark_initialized(strings) };  <span class="comment">// UB: creating an invalid instance
+
+// uh_oh is dropped here, freeing memory at random addresses</span></code></pre></div>
+</div></details></section></div></main></body></html>

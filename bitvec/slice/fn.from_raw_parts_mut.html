@@ -1,0 +1,60 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Raw Bit-Slice Construction"><title>from_raw_parts_mut in bitvec::slice - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="bitvec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../bitvec/index.html">bitvec</a><span class="version">1.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In bitvec::slice</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">bitvec</a>::<wbr><a href="index.html">slice</a>::<wbr><a class="fn" href="#">from_raw_parts_mut</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/bitvec/slice/api.rs.html#2456-2465">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn from_raw_parts_mut&lt;'a, T, O&gt;(
+    data: <a class="struct" href="../ptr/struct.BitPtr.html" title="struct bitvec::ptr::BitPtr">BitPtr</a>&lt;<a class="struct" href="../ptr/struct.Mut.html" title="struct bitvec::ptr::Mut">Mut</a>, T, O&gt;,
+    len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&amp;'a mut <a class="struct" href="struct.BitSlice.html" title="struct bitvec::slice::BitSlice">BitSlice</a>&lt;T, O&gt;, <a class="enum" href="../ptr/enum.BitSpanError.html" title="enum bitvec::ptr::BitSpanError">BitSpanError</a>&lt;T&gt;&gt;<div class="where">where
+    O: <a class="trait" href="../order/trait.BitOrder.html" title="trait bitvec::order::BitOrder">BitOrder</a>,
+    T: 'a + <a class="trait" href="../store/trait.BitStore.html" title="trait bitvec::store::BitStore">BitStore</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="raw-bit-slice-construction"><a class="doc-anchor" href="#raw-bit-slice-construction">§</a>Raw Bit-Slice Construction</h2>
+<p>This produces an <code>&amp;mut BitSlice&lt;T, O&gt;</code> reference handle from a
+<code>BitPtr&lt;Mut, T, O&gt;</code> bit-pointer and a length.</p>
+<h3 id="parameters"><a class="doc-anchor" href="#parameters">§</a>Parameters</h3>
+<ol>
+<li><code>data</code>: a bit-pointer to the starting bit of the produced bit-slice. This
+should generally have been produced by <code>BitSlice::as_mut_ptr</code>, but you are
+able to construct these pointers directly if you wish.</li>
+<li><code>len</code>: the number of bits, beginning at <code>data</code>, that the produced bit-slice
+includes. This value cannot depart an allocation area, or exceed <code>BitSlice</code>’s
+encoding limitations.</li>
+</ol>
+<h3 id="returns"><a class="doc-anchor" href="#returns">§</a>Returns</h3>
+<p>This returns a <code>Result</code>, because it can detect and gracefully fail if <code>len</code>
+is too large, or if <code>data</code> is ill-formed. This fails if it has an error while
+encoding the <code>&amp;mut BitSlice</code>, and succeeds if it is able to produce a correctly
+encoded value.</p>
+<p>Note that this is not able to detect semantic violations of the memory model.
+You are responsible for upholding memory safety.</p>
+<h3 id="original"><a class="doc-anchor" href="#original">§</a>Original</h3>
+<p><a href="https://doc.rust-lang.org/1.81.0/core/slice/raw/fn.from_raw_parts_mut.html" title="fn core::slice::raw::from_raw_parts_mut"><code>slice::from_raw_parts_mut</code></a></p>
+<h3 id="api-differences"><a class="doc-anchor" href="#api-differences">§</a>API Differences</h3>
+<p>This takes a <a href="../ptr/struct.BitPtr.html" title="struct bitvec::ptr::BitPtr"><code>BitPtr&lt;Mut, T, O&gt;</code></a> instead of a hypothetical <code>*mut Bit</code>, because
+<code>bitvec</code> is not able to express raw Rust pointers to individual bits.</p>
+<p>Additionally, it returns a <code>Result</code> rather than a direct bit-slice, because the
+given <code>len</code> argument may be invalid to encode into a <code>&amp;mut BitSlice</code> reference.</p>
+<h3 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h3>
+<p>This has the same memory safety requirements as the standard-library function:</p>
+<ul>
+<li><code>data</code> must be valid for reads and writes of at least <code>len</code> bits,</li>
+<li>The bits that the produced bit-slice refers to must be wholly unreachable by
+any other part of the program for the duration of the lifetime <code>'a</code>,</li>
+</ul>
+<p>and additionally imposes some of its own:</p>
+<ul>
+<li><code>len</code> cannot exceed <a href="struct.BitSlice.html#associatedconstant.MAX_BITS" title="associated constant bitvec::slice::BitSlice::MAX_BITS"><code>BitSlice::MAX_BITS</code></a>.</li>
+</ul>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::{
+  prelude::<span class="kw-2">*</span>,
+  index::BitIdx,
+  ptr::Mut,
+  slice <span class="kw">as </span>bv_slice,
+};
+
+<span class="kw">let </span><span class="kw-2">mut </span>elem = <span class="number">0u16</span>;
+<span class="kw">let </span>addr = (<span class="kw-2">&amp;mut </span>elem).into();
+<span class="kw">let </span>head = BitIdx::new(<span class="number">1</span>).unwrap();
+
+<span class="kw">let </span>data: BitPtr&lt;Mut, u16&gt; = BitPtr::new(addr, head).unwrap();
+<span class="kw">let </span>bits = <span class="kw">unsafe </span>{ bv_slice::from_raw_parts_mut(data, <span class="number">3</span>) };
+bits.unwrap()[<span class="number">1 </span>..].fill(<span class="bool-val">true</span>);
+
+<span class="macro">assert_eq!</span>(elem, <span class="number">12</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

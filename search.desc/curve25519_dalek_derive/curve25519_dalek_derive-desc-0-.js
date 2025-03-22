@@ -1,0 +1,1 @@
+searchState.loadedDescShard("curve25519_dalek_derive", 0, "A more convenient <code>#[target_feature]</code> replacement")

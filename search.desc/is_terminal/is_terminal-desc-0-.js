@@ -1,0 +1,1 @@
+searchState.loadedDescShard("is_terminal", 0, "is-terminal is a simple utility that answers one question:\nExtension trait to check whether something is a terminal.\nReturns <code>true</code> if <code>this</code> is a terminal.\nReturns true if this is a terminal.")

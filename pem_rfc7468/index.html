@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: PEM Encoding (RFC 7468)"><title>pem_rfc7468 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pem_rfc7468" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../pem_rfc7468/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../pem_rfc7468/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../pem_rfc7468/index.html">pem_rfc7468</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pem_rfc7468</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/pem_rfc7468/lib.rs.html#1-122">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-pem-encoding-rfc-7468"><a class="doc-anchor" href="#rustcrypto-pem-encoding-rfc-7468">§</a><a href="https://github.com/rustcrypto">RustCrypto</a>: PEM Encoding (<a href="https://datatracker.ietf.org/doc/html/rfc7468">RFC 7468</a>)</h2>
+<p><a href="https://crates.io/crates/pem-rfc7468"><img src="https://buildstats.info/crate/pem-rfc7468" alt="crate" /></a>
+<a href="https://docs.rs/pem-rfc7468/"><img src="https://docs.rs/pem-rfc7468/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/formats/actions/workflows/pem-rfc7468.yml"><img src="https://github.com/RustCrypto/formats/actions/workflows/pem-rfc7468.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.60+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/300570-formats"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>Pure Rust implementation of PEM Encoding (<a href="https://datatracker.ietf.org/doc/html/rfc7468">RFC 7468</a>) for PKIX, PKCS, and
+CMS Structures, a strict subset of the original Privacy-Enhanced Mail encoding
+intended  specifically for use with cryptographic keys, certificates, and other
+messages.</p>
+<p>Provides a <code>no_std</code>-friendly, constant-time implementation suitable for use with
+cryptographic private keys.</p>
+<p><a href="https://docs.rs/pem-rfc7468/">Documentation</a></p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p>Many cryptography-related document formats, such as certificates (PKIX),
+private and public keys/keypairs (PKCS), and other cryptographic messages (CMS)
+provide an ASCII encoding which can be traced back to Privacy-Enhanced Mail
+(PEM) as defined <a href="https://datatracker.ietf.org/doc/html/rfc1421">RFC 1421</a>, which look like the following:</p>
+<div class="example-wrap"><pre class="language-text"><code>-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIBftnHPp22SewYmmEoMcX8VwI4IHwaqd+9LFPj/15eqF
+-----END PRIVATE KEY-----
+</code></pre></div>
+<p>However, all of these formats actually implement a text-based encoding that is
+similar but <em>not</em> identical to the legacy PEM encoding as described in
+<a href="https://datatracker.ietf.org/doc/html/rfc1421">RFC 1421</a>.</p>
+<p>For this reason, <a href="https://datatracker.ietf.org/doc/html/rfc7468">RFC 7468</a> was created to describe a stricter form of
+“PEM encoding” for use in these applications which codifies the previously
+de facto rules that most implementations operate by, and makes recommendations
+to promote interoperability.</p>
+<p>This crate provides a strict interpretation of the <a href="https://datatracker.ietf.org/doc/html/rfc7468">RFC 7468</a> rules,
+implementing MUSTs and SHOULDs while avoiding the MAYs, targeting the
+“ABNF (Strict)” subset of the grammar as described in
+<a href="https://datatracker.ietf.org/doc/html/rfc7468#page-6">RFC 7468 Section 3 Figure 3 (p6)</a>.</p>
+<h3 id="implementation-notes"><a class="doc-anchor" href="#implementation-notes">§</a>Implementation notes</h3>
+<ul>
+<li><code>no_std</code>-friendly core implementation which requires no heap allocations
+and avoids copies and temporary buffers.</li>
+<li>Optional <code>alloc</code>-dependent convenience features and buffered decoder/encoder.</li>
+<li>Uses the <a href="https://github.com/RustCrypto/formats/tree/master/base64ct"><code>base64ct</code></a> crate to decode/encode Base64 in constant-time.</li>
+<li>PEM parser avoids branching on potentially secret data as much as possible.</li>
+</ul>
+<p>The paper <a href="https://arxiv.org/pdf/2108.04600.pdf">Util::Lookup: Exploiting key decoding in cryptographic libraries</a>
+demonstrates how the leakage from non-constant-time PEM parsers can be used
+to practically extract RSA private keys from SGX enclaves.</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.60</strong> at a minimum.</p>
+<p>We may change the MSRV in the future, but it will be accompanied by a minor
+version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="doccomment">/// Example PEM document
+/// NOTE: do not actually put private key literals into your source code!!!
+</span><span class="kw">let </span>example_pem = <span class="string">"\
+-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIBftnHPp22SewYmmEoMcX8VwI4IHwaqd+9LFPj/15eqF
+-----END PRIVATE KEY-----
+"</span>;
+
+<span class="comment">// Decode PEM
+</span><span class="kw">let </span>(type_label, data) = pem_rfc7468::decode_vec(example_pem.as_bytes())<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(type_label, <span class="string">"PRIVATE KEY"</span>);
+<span class="macro">assert_eq!</span>(
+   data,
+   <span class="kw-2">&amp;</span>[
+       <span class="number">48</span>, <span class="number">46</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">48</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">3</span>, <span class="number">43</span>, <span class="number">101</span>, <span class="number">112</span>, <span class="number">4</span>, <span class="number">34</span>, <span class="number">4</span>, <span class="number">32</span>, <span class="number">23</span>, <span class="number">237</span>, <span class="number">156</span>, <span class="number">115</span>, <span class="number">233</span>, <span class="number">219</span>,
+       <span class="number">100</span>, <span class="number">158</span>, <span class="number">193</span>, <span class="number">137</span>, <span class="number">166</span>, <span class="number">18</span>, <span class="number">131</span>, <span class="number">28</span>, <span class="number">95</span>, <span class="number">197</span>, <span class="number">112</span>, <span class="number">35</span>, <span class="number">130</span>, <span class="number">7</span>, <span class="number">193</span>, <span class="number">170</span>, <span class="number">157</span>, <span class="number">251</span>,
+       <span class="number">210</span>, <span class="number">197</span>, <span class="number">62</span>, <span class="number">63</span>, <span class="number">245</span>, <span class="number">229</span>, <span class="number">234</span>, <span class="number">133
+   </span>]
+);
+
+<span class="comment">// Encode PEM
+</span><span class="kw">use </span>pem_rfc7468::LineEnding;
+<span class="kw">let </span>encoded_pem = pem_rfc7468::encode_string(type_label, LineEnding::default(), <span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>encoded_pem, example_pem);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Decoder.html" title="struct pem_rfc7468::Decoder">Decoder</a></div><div class="desc docblock-short">Buffered PEM decoder.</div></li><li><div class="item-name"><a class="struct" href="struct.Encoder.html" title="struct pem_rfc7468::Encoder">Encoder</a></div><div class="desc docblock-short">Buffered PEM encoder.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum pem_rfc7468::Error">Error</a></div><div class="desc docblock-short">PEM errors.</div></li><li><div class="item-name"><a class="enum" href="enum.LineEnding.html" title="enum pem_rfc7468::LineEnding">LineEnding</a></div><div class="desc docblock-short">Line endings: variants of newline characters that can be used with Base64.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.BASE64_WRAP_WIDTH.html" title="constant pem_rfc7468::BASE64_WRAP_WIDTH">BASE64_WRAP_WIDTH</a></div><div class="desc docblock-short">Width at which the Base64 body of RFC7468-compliant PEM is wrapped.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.PemLabel.html" title="trait pem_rfc7468::PemLabel">PemLabel</a></div><div class="desc docblock-short">Marker trait for types with an associated PEM type label.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.decode.html" title="fn pem_rfc7468::decode">decode</a></div><div class="desc docblock-short">Decode a PEM document according to RFC 7468’s “Strict” grammar.</div></li><li><div class="item-name"><a class="fn" href="fn.decode_label.html" title="fn pem_rfc7468::decode_label">decode_label</a></div><div class="desc docblock-short">Decode the encapsulation boundaries of a PEM document according to RFC 7468’s “Strict” grammar.</div></li><li><div class="item-name"><a class="fn" href="fn.decode_vec.html" title="fn pem_rfc7468::decode_vec">decode_vec</a></div><div class="desc docblock-short">Decode a PEM document according to RFC 7468’s “Strict” grammar, returning
+the result as a <a href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec"><code>Vec</code></a> upon success.</div></li><li><div class="item-name"><a class="fn" href="fn.encapsulated_len.html" title="fn pem_rfc7468::encapsulated_len">encapsulated_len</a></div><div class="desc docblock-short">Compute the length of a PEM encoded document which encapsulates a
+Base64-encoded body including line endings every 64 characters.</div></li><li><div class="item-name"><a class="fn" href="fn.encapsulated_len_wrapped.html" title="fn pem_rfc7468::encapsulated_len_wrapped">encapsulated_len_wrapped</a></div><div class="desc docblock-short">Compute the length of a PEM encoded document with the Base64 body
+line wrapped at the specified <code>width</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.encode.html" title="fn pem_rfc7468::encode">encode</a></div><div class="desc docblock-short">Encode a PEM document according to RFC 7468’s “Strict” grammar.</div></li><li><div class="item-name"><a class="fn" href="fn.encode_string.html" title="fn pem_rfc7468::encode_string">encode_string</a></div><div class="desc docblock-short">Encode a PEM document according to RFC 7468’s “Strict” grammar, returning
+the result as a <a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a>.</div></li><li><div class="item-name"><a class="fn" href="fn.encoded_len.html" title="fn pem_rfc7468::encoded_len">encoded_len</a></div><div class="desc docblock-short">Get the length of a PEM encoded document with the given bytes and label.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Base64Decoder.html" title="type pem_rfc7468::Base64Decoder">Base64Decoder</a></div><div class="desc docblock-short">Buffered Base64 decoder type.</div></li><li><div class="item-name"><a class="type" href="type.Base64Encoder.html" title="type pem_rfc7468::Base64Encoder">Base64Encoder</a></div><div class="desc docblock-short">Buffered Base64 encoder type.</div></li><li><div class="item-name"><a class="type" href="type.Result.html" title="type pem_rfc7468::Result">Result</a></div><div class="desc docblock-short">Result type with the <code>pem-rfc7468</code> crate’s <a href="enum.Error.html" title="enum pem_rfc7468::Error"><code>Error</code></a> type.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_DEPTH","MAX_THREAD_NAME"],"enum":["Error"],"fn":["validate"],"struct":["Collector","Frames","HashCounter","ProfilerGuard","ProfilerGuardBuilder","Report","ReportBuilder","Symbol","UnresolvedReport"],"type":["Result"]};

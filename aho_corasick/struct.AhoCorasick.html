@@ -1,0 +1,1410 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An automaton for searching multiple strings in linear time."><title>AhoCorasick in aho_corasick - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../aho_corasick/index.html">aho_corasick</a><span class="version">1.1.3</span></h2></div><h2 class="location"><a href="#">AhoCorasick</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.builder">builder</a></li><li><a href="#method.find">find</a></li><li><a href="#method.find_iter">find_iter</a></li><li><a href="#method.find_overlapping">find_overlapping</a></li><li><a href="#method.find_overlapping_iter">find_overlapping_iter</a></li><li><a href="#method.is_match">is_match</a></li><li><a href="#method.kind">kind</a></li><li><a href="#method.match_kind">match_kind</a></li><li><a href="#method.max_pattern_len">max_pattern_len</a></li><li><a href="#method.memory_usage">memory_usage</a></li><li><a href="#method.min_pattern_len">min_pattern_len</a></li><li><a href="#method.new">new</a></li><li><a href="#method.patterns_len">patterns_len</a></li><li><a href="#method.replace_all">replace_all</a></li><li><a href="#method.replace_all_bytes">replace_all_bytes</a></li><li><a href="#method.replace_all_with">replace_all_with</a></li><li><a href="#method.replace_all_with_bytes">replace_all_with_bytes</a></li><li><a href="#method.start_kind">start_kind</a></li><li><a href="#method.stream_find_iter">stream_find_iter</a></li><li><a href="#method.try_find">try_find</a></li><li><a href="#method.try_find_iter">try_find_iter</a></li><li><a href="#method.try_find_overlapping">try_find_overlapping</a></li><li><a href="#method.try_find_overlapping_iter">try_find_overlapping_iter</a></li><li><a href="#method.try_replace_all">try_replace_all</a></li><li><a href="#method.try_replace_all_bytes">try_replace_all_bytes</a></li><li><a href="#method.try_replace_all_with">try_replace_all_with</a></li><li><a href="#method.try_replace_all_with_bytes">try_replace_all_with_bytes</a></li><li><a href="#method.try_stream_find_iter">try_stream_find_iter</a></li><li><a href="#method.try_stream_replace_all">try_stream_replace_all</a></li><li><a href="#method.try_stream_replace_all_with">try_stream_replace_all_with</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-AhoCorasick">Clone</a></li><li><a href="#impl-Debug-for-AhoCorasick">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-AhoCorasick">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-AhoCorasick">RefUnwindSafe</a></li><li><a href="#impl-Send-for-AhoCorasick">Send</a></li><li><a href="#impl-Sync-for-AhoCorasick">Sync</a></li><li><a href="#impl-Unpin-for-AhoCorasick">Unpin</a></li><li><a href="#impl-UnwindSafe-for-AhoCorasick">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In crate aho_corasick</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="index.html">aho_corasick</a>::<wbr><a class="struct" href="#">AhoCorasick</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/aho_corasick/ahocorasick.rs.html#177-214">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct AhoCorasick { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An automaton for searching multiple strings in linear time.</p>
+<p>The <code>AhoCorasick</code> type supports a few basic ways of constructing an
+automaton, with the default being <a href="struct.AhoCorasick.html#method.new" title="associated function aho_corasick::AhoCorasick::new"><code>AhoCorasick::new</code></a>. However, there
+are a fair number of configurable options that can be set by using
+<a href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder"><code>AhoCorasickBuilder</code></a> instead. Such options include, but are not limited
+to, how matches are determined, simple case insensitivity, whether to use a
+DFA or not and various knobs for controlling the space-vs-time trade offs
+taken when building the automaton.</p>
+<h2 id="resource-usage"><a class="doc-anchor" href="#resource-usage">§</a>Resource usage</h2>
+<p>Aho-Corasick automatons are always constructed in <code>O(p)</code> time, where
+<code>p</code> is the combined length of all patterns being searched. With that
+said, building an automaton can be fairly costly because of high constant
+factors, particularly when enabling the <a href="enum.AhoCorasickKind.html#variant.DFA" title="variant aho_corasick::AhoCorasickKind::DFA">DFA</a> option
+with <a href="struct.AhoCorasickBuilder.html#method.kind" title="method aho_corasick::AhoCorasickBuilder::kind"><code>AhoCorasickBuilder::kind</code></a>. For this reason, it’s generally a good
+idea to build an automaton once and reuse it as much as possible.</p>
+<p>Aho-Corasick automatons can also use a fair bit of memory. To get
+a concrete idea of how much memory is being used, try using the
+<a href="struct.AhoCorasick.html#method.memory_usage" title="method aho_corasick::AhoCorasick::memory_usage"><code>AhoCorasick::memory_usage</code></a> method.</p>
+<p>To give a quick idea of the differences between Aho-Corasick
+implementations and their resource usage, here’s a sample of construction
+times and heap memory used after building an automaton from 100,000
+randomly selected titles from Wikipedia:</p>
+<ul>
+<li>99MB for a <a href="nfa/noncontiguous/struct.NFA.html" title="struct aho_corasick::nfa::noncontiguous::NFA"><code>noncontiguous::NFA</code></a> in 240ms.</li>
+<li>21MB for a <a href="nfa/contiguous/struct.NFA.html" title="struct aho_corasick::nfa::contiguous::NFA"><code>contiguous::NFA</code></a> in 275ms.</li>
+<li>1.6GB for a <a href="dfa/struct.DFA.html" title="struct aho_corasick::dfa::DFA"><code>dfa::DFA</code></a> in 1.88s.</li>
+</ul>
+<p>(Note that the memory usage above reflects the size of each automaton and
+not peak memory usage. For example, building a contiguous NFA requires
+first building a noncontiguous NFA. Once the contiguous NFA is built, the
+noncontiguous NFA is freed.)</p>
+<p>This experiment very strongly argues that a contiguous NFA is often the
+best balance in terms of resource usage. It takes a little longer to build,
+but its memory usage is quite small. Its search speed (not listed) is
+also often faster than a noncontiguous NFA, but a little slower than a
+DFA. Indeed, when no specific <a href="enum.AhoCorasickKind.html" title="enum aho_corasick::AhoCorasickKind"><code>AhoCorasickKind</code></a> is used (which is the
+default), a contiguous NFA is used in most cases.</p>
+<p>The only “catch” to using a contiguous NFA is that, because of its variety
+of compression tricks, it may not be able to support automatons as large as
+what the noncontiguous NFA supports. In which case, building a contiguous
+NFA will fail and (by default) <code>AhoCorasick</code> will automatically fall
+back to a noncontiguous NFA. (This typically only happens when building
+automatons from millions of patterns.) Otherwise, the small additional time
+for building a contiguous NFA is almost certainly worth it.</p>
+<h2 id="cloning"><a class="doc-anchor" href="#cloning">§</a>Cloning</h2>
+<p>The <code>AhoCorasick</code> type uses thread safe reference counting internally. It
+is guaranteed that it is cheap to clone.</p>
+<h2 id="search-configuration"><a class="doc-anchor" href="#search-configuration">§</a>Search configuration</h2>
+<p>Most of the search routines accept anything that can be cheaply converted
+to an <a href="struct.Input.html" title="struct aho_corasick::Input"><code>Input</code></a>. This includes <code>&amp;[u8]</code>, <code>&amp;str</code> and <code>Input</code> itself.</p>
+<h2 id="construction-failure"><a class="doc-anchor" href="#construction-failure">§</a>Construction failure</h2>
+<p>It is generally possible for building an Aho-Corasick automaton to fail.
+Construction can fail in generally one way: when the inputs provided are
+too big. Whether that’s a pattern that is too long, too many patterns
+or some combination of both. A first approximation for the scale at which
+construction can fail is somewhere around “millions of patterns.”</p>
+<p>For that reason, if you’re building an Aho-Corasick automaton from
+untrusted input (or input that doesn’t have any reasonable bounds on its
+size), then it is strongly recommended to handle the possibility of an
+error.</p>
+<p>If you’re constructing an Aho-Corasick automaton from static or trusted
+data, then it is likely acceptable to panic (by calling <code>unwrap()</code> or
+<code>expect()</code>) if construction fails.</p>
+<h2 id="fallibility"><a class="doc-anchor" href="#fallibility">§</a>Fallibility</h2>
+<p>The <code>AhoCorasick</code> type provides a number of methods for searching, as one
+might expect. Depending on how the Aho-Corasick automaton was built and
+depending on the search configuration, it is possible for a search to
+return an error. Since an error is <em>never</em> dependent on the actual contents
+of the haystack, this type provides both infallible and fallible methods
+for searching. The infallible methods panic if an error occurs, and can be
+used for convenience and when you know the search will never return an
+error.</p>
+<p>For example, the <a href="struct.AhoCorasick.html#method.find_iter" title="method aho_corasick::AhoCorasick::find_iter"><code>AhoCorasick::find_iter</code></a> method is the infallible
+version of the <a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a> method.</p>
+<p>Examples of errors that can occur:</p>
+<ul>
+<li>Running a search that requires <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> semantics (such
+as a stream or overlapping search) with an automaton that was built with
+<a href="enum.MatchKind.html#variant.LeftmostFirst" title="variant aho_corasick::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a> or <a href="enum.MatchKind.html#variant.LeftmostLongest" title="variant aho_corasick::MatchKind::LeftmostLongest"><code>MatchKind::LeftmostLongest</code></a> semantics.</li>
+<li>Running an anchored search with an automaton that only supports
+unanchored searches. (By default, <code>AhoCorasick</code> only supports unanchored
+searches. But this can be toggled with <a href="struct.AhoCorasickBuilder.html#method.start_kind" title="method aho_corasick::AhoCorasickBuilder::start_kind"><code>AhoCorasickBuilder::start_kind</code></a>.)</li>
+<li>Running an unanchored search with an automaton that only supports
+anchored searches.</li>
+</ul>
+<p>The common thread between the different types of errors is that they are
+all rooted in the automaton construction and search configurations. If
+those configurations are a static property of your program, then it is
+reasonable to call infallible routines since you know an error will never
+occur. And if one <em>does</em> occur, then it’s a bug in your program.</p>
+<p>To re-iterate, if the patterns, build or search configuration come from
+user or untrusted data, then you should handle errors at build or search
+time. If only the haystack comes from user or untrusted data, then there
+should be no need to handle errors anywhere and it is generally encouraged
+to <code>unwrap()</code> (or <code>expect()</code>) both build and search time calls.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example shows how to search for occurrences of multiple patterns
+simultaneously in a case insensitive fashion. Each match includes the
+pattern that matched along with the byte offsets of the match.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"apple"</span>, <span class="string">"maple"</span>, <span class="string">"snapple"</span>];
+<span class="kw">let </span>haystack = <span class="string">"Nobody likes maple in their apple flavored Snapple."</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .ascii_case_insensitive(<span class="bool-val">true</span>)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">for </span>mat <span class="kw">in </span>ac.find_iter(haystack) {
+    matches.push((mat.pattern(), mat.start(), mat.end()));
+}
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[
+    (PatternID::must(<span class="number">1</span>), <span class="number">13</span>, <span class="number">18</span>),
+    (PatternID::must(<span class="number">0</span>), <span class="number">28</span>, <span class="number">33</span>),
+    (PatternID::must(<span class="number">2</span>), <span class="number">43</span>, <span class="number">50</span>),
+]);</code></pre></div>
+<p>This example shows how to replace matches with some other string:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"fox"</span>, <span class="string">"brown"</span>, <span class="string">"quick"</span>];
+<span class="kw">let </span>haystack = <span class="string">"The quick brown fox."</span>;
+<span class="kw">let </span>replace_with = <span class="kw-2">&amp;</span>[<span class="string">"sloth"</span>, <span class="string">"grey"</span>, <span class="string">"slow"</span>];
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span>result = ac.replace_all(haystack, replace_with);
+<span class="macro">assert_eq!</span>(result, <span class="string">"The slow grey sloth."</span>);</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-AhoCorasick" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#218-271">source</a><a href="#impl-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section></summary><div class="docblock"><p>Convenience constructors for an Aho-Corasick searcher. To configure the
+searcher, use an <a href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder"><code>AhoCorasickBuilder</code></a> instead.</p>
+</div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#243-249">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>&lt;I, P&gt;(patterns: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a>, <a class="struct" href="struct.BuildError.html" title="struct aho_corasick::BuildError">BuildError</a>&gt;<div class="where">where
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = P&gt;,
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Create a new Aho-Corasick automaton using the default configuration.</p>
+<p>The default configuration optimizes for less space usage, but at the
+expense of longer search times. To change the configuration, use
+<a href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder"><code>AhoCorasickBuilder</code></a>.</p>
+<p>This uses the default <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> match semantics, which
+reports a match as soon as it is found. This corresponds to the
+standard match semantics supported by textbook descriptions of the
+Aho-Corasick algorithm.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, PatternID};
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(PatternID::must(<span class="number">1</span>)),
+    ac.find(<span class="string">"xxx bar xxx"</span>).map(|m| m.pattern()),
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.builder" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#268-270">source</a><h4 class="code-header">pub fn <a href="#method.builder" class="fn">builder</a>() -&gt; <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>A convenience method for returning a new Aho-Corasick builder.</p>
+<p>This usually permits one to just import the <code>AhoCorasick</code> type.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Match, MatchKind};
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"samwise"</span>, <span class="string">"sam"</span>])
+    .unwrap();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">7</span>)), ac.find(<span class="string">"samwise"</span>));</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-AhoCorasick-1" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#280-913">source</a><a href="#impl-AhoCorasick-1" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section></summary><div class="docblock"><p>Infallible search routines. These APIs panic when the underlying search
+would otherwise fail. Infallible routines are useful because the errors are
+a result of both search-time configuration and what configuration is used
+to build the Aho-Corasick searcher. Both of these things are not usually
+the result of user input, and thus, an error is typically indicative of a
+programmer error. In cases where callers want errors instead of panics, use
+the corresponding <code>try</code> method in the section below.</p>
+</div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.is_match" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#311-316">source</a><h4 class="code-header">pub fn <a href="#method.is_match" class="fn">is_match</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(&amp;self, input: I) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if this automaton matches the haystack at any
+position.</p>
+<p><code>input</code> may be any type that is cheaply convertible to an <code>Input</code>. This
+includes, but is not limited to, <code>&amp;str</code> and <code>&amp;[u8]</code>.</p>
+<p>Aside from convenience, when <code>AhoCorasick</code> was built with
+leftmost-first or leftmost-longest semantics, this might result in a
+search that visits less of the haystack than <a href="struct.AhoCorasick.html#method.find" title="method aho_corasick::AhoCorasick::find"><code>AhoCorasick::find</code></a>
+would otherwise. (For standard semantics, matches are always
+immediately returned once they are seen, so there is no way for this to
+do less work in that case.)</p>
+<p>Note that there is no corresponding fallible routine for this method.
+If you need a fallible version of this, then <a href="struct.AhoCorasick.html#method.try_find" title="method aho_corasick::AhoCorasick::try_find"><code>AhoCorasick::try_find</code></a>
+can be used with <a href="struct.Input.html#method.earliest" title="method aho_corasick::Input::earliest"><code>Input::earliest</code></a> enabled.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[
+    <span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"baz"</span>,
+]).unwrap();
+<span class="macro">assert!</span>(ac.is_match(<span class="string">"xxx bar xxx"</span>));
+<span class="macro">assert!</span>(!ac.is_match(<span class="string">"xxx qux xxx"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.find" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#404-407">source</a><h4 class="code-header">pub fn <a href="#method.find" class="fn">find</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(&amp;self, input: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Match.html" title="struct aho_corasick::Match">Match</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the location of the first match according to the match
+semantics that this automaton was constructed with.</p>
+<p><code>input</code> may be any type that is cheaply convertible to an <code>Input</code>. This
+includes, but is not limited to, <code>&amp;str</code> and <code>&amp;[u8]</code>.</p>
+<p>This is the infallible version of <a href="struct.AhoCorasick.html#method.try_find" title="method aho_corasick::AhoCorasick::try_find"><code>AhoCorasick::try_find</code></a>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_find" title="method aho_corasick::AhoCorasick::try_find"><code>AhoCorasick::try_find</code></a> would return an error.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Basic usage, with standard semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::Standard) <span class="comment">// default, not necessary
+    </span>.build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.find(haystack).expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"b"</span>, <span class="kw-2">&amp;</span>haystack[mat.start()..mat.end()]);</code></pre></div>
+<p>Now with leftmost-first semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.find(haystack).expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"abc"</span>, <span class="kw-2">&amp;</span>haystack[mat.start()..mat.end()]);</code></pre></div>
+<p>And finally, leftmost-longest semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostLongest)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.find(haystack).expect(<span class="string">"should have a match"</span>);</code></pre></div>
+<h5 id="example-configuring-a-search"><a class="doc-anchor" href="#example-configuring-a-search">§</a>Example: configuring a search</h5>
+<p>Because this method accepts anything that can be turned into an
+<a href="struct.Input.html" title="struct aho_corasick::Input"><code>Input</code></a>, it’s possible to provide an <code>Input</code> directly in order to
+configure the search. In this example, we show how to use the
+<code>earliest</code> option to force the search to return as soon as it knows
+a match has occurred.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Input, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostLongest)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.find(Input::new(haystack).earliest(<span class="bool-val">true</span>))
+    .expect(<span class="string">"should have a match"</span>);
+<span class="comment">// The correct leftmost-longest match here is 'abcd', but since we
+// told the search to quit as soon as it knows a match has occurred,
+// we get a different match back.
+</span><span class="macro">assert_eq!</span>(<span class="string">"b"</span>, <span class="kw-2">&amp;</span>haystack[mat.start()..mat.end()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.find_overlapping" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#470-478">source</a><h4 class="code-header">pub fn <a href="#method.find_overlapping" class="fn">find_overlapping</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    input: I,
+    state: &amp;mut <a class="struct" href="automaton/struct.OverlappingState.html" title="struct aho_corasick::automaton::OverlappingState">OverlappingState</a>,
+)</h4></section></summary><div class="docblock"><p>Returns the location of the first overlapping match in the given
+input with respect to the current state of the underlying searcher.</p>
+<p><code>input</code> may be any type that is cheaply convertible to an <code>Input</code>. This
+includes, but is not limited to, <code>&amp;str</code> and <code>&amp;[u8]</code>.</p>
+<p>Overlapping searches do not report matches in their return value.
+Instead, matches can be accessed via <a href="automaton/struct.OverlappingState.html#method.get_match" title="method aho_corasick::automaton::OverlappingState::get_match"><code>OverlappingState::get_match</code></a>
+after a search call.</p>
+<p>This is the infallible version of
+<a href="struct.AhoCorasick.html#method.try_find_overlapping" title="method aho_corasick::AhoCorasick::try_find_overlapping"><code>AhoCorasick::try_find_overlapping</code></a>.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_find_overlapping" title="method aho_corasick::AhoCorasick::try_find_overlapping"><code>AhoCorasick::try_find_overlapping</code></a> would
+return an error. For example, when the Aho-Corasick searcher
+doesn’t support overlapping searches. (Only searchers built with
+<a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> semantics support overlapping searches.)</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<p>This shows how we can repeatedly call an overlapping search without
+ever needing to explicitly re-slice the haystack. Overlapping search
+works this way because searches depend on state saved during the
+previous search.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    automaton::OverlappingState,
+    AhoCorasick, Input, Match,
+};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+
+ac.find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">2</span>, <span class="number">0</span>..<span class="number">3</span>)), state.get_match());
+
+ac.find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>)), state.get_match());
+
+ac.find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">2</span>, <span class="number">11</span>..<span class="number">14</span>)), state.get_match());
+
+ac.find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">2</span>, <span class="number">22</span>..<span class="number">25</span>)), state.get_match());
+
+ac.find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">22</span>..<span class="number">28</span>)), state.get_match());
+
+ac.find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">22</span>..<span class="number">31</span>)), state.get_match());
+
+<span class="comment">// No more match matches to be found.
+</span>ac.find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, state.get_match());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.find_iter" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#562-568">source</a><h4 class="code-header">pub fn <a href="#method.find_iter" class="fn">find_iter</a>&lt;'a, 'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;'a self,
+    input: I,
+) -&gt; <a class="struct" href="struct.FindIter.html" title="struct aho_corasick::FindIter">FindIter</a>&lt;'a, 'h&gt; <a href="#" class="tooltip" data-notable-ty="FindIter&lt;&#39;a, &#39;h&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns an iterator of non-overlapping matches, using the match
+semantics that this automaton was constructed with.</p>
+<p><code>input</code> may be any type that is cheaply convertible to an <code>Input</code>. This
+includes, but is not limited to, <code>&amp;str</code> and <code>&amp;[u8]</code>.</p>
+<p>This is the infallible version of <a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a> would return an error.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Basic usage, with standard semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::Standard) <span class="comment">// default, not necessary
+    </span>.build(patterns)
+    .unwrap();
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = ac
+    .find_iter(haystack)
+    .map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+], matches);</code></pre></div>
+<p>Now with leftmost-first semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = ac
+    .find_iter(haystack)
+    .map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">0</span>),
+], matches);</code></pre></div>
+<p>And finally, leftmost-longest semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostLongest)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = ac
+    .find_iter(haystack)
+    .map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">1</span>),
+], matches);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.find_overlapping_iter" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#609-616">source</a><h4 class="code-header">pub fn <a href="#method.find_overlapping_iter" class="fn">find_overlapping_iter</a>&lt;'a, 'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;'a self,
+    input: I,
+) -&gt; <a class="struct" href="struct.FindOverlappingIter.html" title="struct aho_corasick::FindOverlappingIter">FindOverlappingIter</a>&lt;'a, 'h&gt; <a href="#" class="tooltip" data-notable-ty="FindOverlappingIter&lt;&#39;a, &#39;h&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns an iterator of overlapping matches. Stated differently, this
+returns an iterator of all possible matches at every position.</p>
+<p><code>input</code> may be any type that is cheaply convertible to an <code>Input</code>. This
+includes, but is not limited to, <code>&amp;str</code> and <code>&amp;[u8]</code>.</p>
+<p>This is the infallible version of
+<a href="struct.AhoCorasick.html#method.try_find_overlapping_iter" title="method aho_corasick::AhoCorasick::try_find_overlapping_iter"><code>AhoCorasick::try_find_overlapping_iter</code></a>.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>This panics when <code>AhoCorasick::try_find_overlapping_iter</code> would return
+an error. For example, when the Aho-Corasick searcher is built with
+either leftmost-first or leftmost-longest match semantics. Stated
+differently, overlapping searches require one to build the searcher
+with <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> (it is the default).</p>
+<h5 id="example-basic-usage"><a class="doc-anchor" href="#example-basic-usage">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = ac
+    .find_overlapping_iter(haystack)
+    .map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">1</span>),
+], matches);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.replace_all" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#651-657">source</a><h4 class="code-header">pub fn <a href="#method.replace_all" class="fn">replace_all</a>&lt;B&gt;(&amp;self, haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a><div class="where">where
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Replace all matches with a corresponding value in the <code>replace_with</code>
+slice given. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.find_iter" title="method aho_corasick::AhoCorasick::find_iter"><code>AhoCorasick::find_iter</code></a>.</p>
+<p>Replacements are determined by the index of the matching pattern.
+For example, if the pattern with index <code>2</code> is found, then it is
+replaced by <code>replace_with[2]</code>.</p>
+<p>This is the infallible version of <a href="struct.AhoCorasick.html#method.try_replace_all" title="method aho_corasick::AhoCorasick::try_replace_all"><code>AhoCorasick::try_replace_all</code></a>.</p>
+<h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_replace_all" title="method aho_corasick::AhoCorasick::try_replace_all"><code>AhoCorasick::try_replace_all</code></a> would return an
+error.</p>
+<p>This also panics when <code>replace_with.len()</code> does not equal
+<a href="struct.AhoCorasick.html#method.patterns_len" title="method aho_corasick::AhoCorasick::patterns_len"><code>AhoCorasick::patterns_len</code></a>.</p>
+<h5 id="example-basic-usage-1"><a class="doc-anchor" href="#example-basic-usage-1">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>result = ac.replace_all(haystack, <span class="kw-2">&amp;</span>[<span class="string">"x"</span>, <span class="string">"y"</span>, <span class="string">"z"</span>]);
+<span class="macro">assert_eq!</span>(<span class="string">"x the z to the xage"</span>, result);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.replace_all_bytes" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#693-703">source</a><h4 class="code-header">pub fn <a href="#method.replace_all_bytes" class="fn">replace_all_bytes</a>&lt;B&gt;(
+    &amp;self,
+    haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;<div class="where">where
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Replace all matches using raw bytes with a corresponding value in the
+<code>replace_with</code> slice given. Matches correspond to the same matches as
+reported by <a href="struct.AhoCorasick.html#method.find_iter" title="method aho_corasick::AhoCorasick::find_iter"><code>AhoCorasick::find_iter</code></a>.</p>
+<p>Replacements are determined by the index of the matching pattern.
+For example, if the pattern with index <code>2</code> is found, then it is
+replaced by <code>replace_with[2]</code>.</p>
+<p>This is the infallible version of
+<a href="struct.AhoCorasick.html#method.try_replace_all_bytes" title="method aho_corasick::AhoCorasick::try_replace_all_bytes"><code>AhoCorasick::try_replace_all_bytes</code></a>.</p>
+<h5 id="panics-5"><a class="doc-anchor" href="#panics-5">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_replace_all_bytes" title="method aho_corasick::AhoCorasick::try_replace_all_bytes"><code>AhoCorasick::try_replace_all_bytes</code></a> would return an
+error.</p>
+<p>This also panics when <code>replace_with.len()</code> does not equal
+<a href="struct.AhoCorasick.html#method.patterns_len" title="method aho_corasick::AhoCorasick::patterns_len"><code>AhoCorasick::patterns_len</code></a>.</p>
+<h5 id="example-basic-usage-2"><a class="doc-anchor" href="#example-basic-usage-2">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">b"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>result = ac.replace_all_bytes(haystack, <span class="kw-2">&amp;</span>[<span class="string">"x"</span>, <span class="string">"y"</span>, <span class="string">"z"</span>]);
+<span class="macro">assert_eq!</span>(<span class="string">b"x the z to the xage"</span>.to_vec(), result);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.replace_all_with" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#765-775">source</a><h4 class="code-header">pub fn <a href="#method.replace_all_with" class="fn">replace_all_with</a>&lt;F&gt;(
+    &amp;self,
+    haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    replace_with: F,
+)<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,</div></h4></section></summary><div class="docblock"><p>Replace all matches using a closure called on each match.
+Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.find_iter" title="method aho_corasick::AhoCorasick::find_iter"><code>AhoCorasick::find_iter</code></a>.</p>
+<p>The closure accepts three parameters: the match found, the text of
+the match and a string buffer with which to write the replaced text
+(if any). If the closure returns <code>true</code>, then it continues to the next
+match. If the closure returns <code>false</code>, then searching is stopped.</p>
+<p>Note that any matches with boundaries that don’t fall on a valid UTF-8
+boundary are silently skipped.</p>
+<p>This is the infallible version of
+<a href="struct.AhoCorasick.html#method.try_replace_all_with" title="method aho_corasick::AhoCorasick::try_replace_all_with"><code>AhoCorasick::try_replace_all_with</code></a>.</p>
+<h5 id="panics-6"><a class="doc-anchor" href="#panics-6">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_replace_all_with" title="method aho_corasick::AhoCorasick::try_replace_all_with"><code>AhoCorasick::try_replace_all_with</code></a> would return an
+error.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
+ac.replace_all_with(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.push_str(<span class="kw-2">&amp;</span>mat.pattern().as_usize().to_string());
+    <span class="bool-val">true
+</span>});
+<span class="macro">assert_eq!</span>(<span class="string">"0 the 2 to the 0age"</span>, result);</code></pre></div>
+<p>Stopping the replacement by returning <code>false</code> (continued from the
+example above):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
+ac.replace_all_with(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.push_str(<span class="kw-2">&amp;</span>mat.pattern().as_usize().to_string());
+    mat.pattern() != PatternID::must(<span class="number">2</span>)
+});
+<span class="macro">assert_eq!</span>(<span class="string">"0 the 2 to the appendage"</span>, result);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.replace_all_with_bytes" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#834-844">source</a><h4 class="code-header">pub fn <a href="#method.replace_all_with_bytes" class="fn">replace_all_with_bytes</a>&lt;F&gt;(
+    &amp;self,
+    haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+    replace_with: F,
+)<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,</div></h4></section></summary><div class="docblock"><p>Replace all matches using raw bytes with a closure called on each
+match. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.find_iter" title="method aho_corasick::AhoCorasick::find_iter"><code>AhoCorasick::find_iter</code></a>.</p>
+<p>The closure accepts three parameters: the match found, the text of
+the match and a byte buffer with which to write the replaced text
+(if any). If the closure returns <code>true</code>, then it continues to the next
+match. If the closure returns <code>false</code>, then searching is stopped.</p>
+<p>This is the infallible version of
+<a href="struct.AhoCorasick.html#method.try_replace_all_with_bytes" title="method aho_corasick::AhoCorasick::try_replace_all_with_bytes"><code>AhoCorasick::try_replace_all_with_bytes</code></a>.</p>
+<h5 id="panics-7"><a class="doc-anchor" href="#panics-7">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_replace_all_with_bytes" title="method aho_corasick::AhoCorasick::try_replace_all_with_bytes"><code>AhoCorasick::try_replace_all_with_bytes</code></a> would
+return an error.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">b"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>result = <span class="macro">vec!</span>[];
+ac.replace_all_with_bytes(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.extend(mat.pattern().as_usize().to_string().bytes());
+    <span class="bool-val">true
+</span>});
+<span class="macro">assert_eq!</span>(<span class="string">b"0 the 2 to the 0age"</span>.to_vec(), result);</code></pre></div>
+<p>Stopping the replacement by returning <code>false</code> (continued from the
+example above):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>result = <span class="macro">vec!</span>[];
+ac.replace_all_with_bytes(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.extend(mat.pattern().as_usize().to_string().bytes());
+    mat.pattern() != PatternID::must(<span class="number">2</span>)
+});
+<span class="macro">assert_eq!</span>(<span class="string">b"0 the 2 to the appendage"</span>.to_vec(), result);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.stream_find_iter" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#906-912">source</a><h4 class="code-header">pub fn <a href="#method.stream_find_iter" class="fn">stream_find_iter</a>&lt;'a, R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>&gt;(&amp;'a self, rdr: R) -&gt; <a class="struct" href="struct.StreamFindIter.html" title="struct aho_corasick::StreamFindIter">StreamFindIter</a>&lt;'a, R&gt; <a href="#" class="tooltip" data-notable-ty="StreamFindIter&lt;&#39;a, R&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns an iterator of non-overlapping matches in the given
+stream. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.find_iter" title="method aho_corasick::AhoCorasick::find_iter"><code>AhoCorasick::find_iter</code></a>.</p>
+<p>The matches yielded by this iterator use absolute position offsets in
+the stream given, where the first byte has index <code>0</code>. Matches are
+yieled until the stream is exhausted.</p>
+<p>Each item yielded by the iterator is an <code>Result&lt;Match, std::io::Error&gt;</code>, where an error is yielded if there was a problem
+reading from the reader given.</p>
+<p>When searching a stream, an internal buffer is used. Therefore, callers
+should avoiding providing a buffered reader, if possible.</p>
+<p>This is the infallible version of
+<a href="struct.AhoCorasick.html#method.try_stream_find_iter" title="method aho_corasick::AhoCorasick::try_stream_find_iter"><code>AhoCorasick::try_stream_find_iter</code></a>. Note that both methods return
+iterators that produce <code>Result</code> values. The difference is that this
+routine panics if <em>construction</em> of the iterator failed. The <code>Result</code>
+values yield by the iterator come from whether the given reader returns
+an error or not during the search.</p>
+<h5 id="memory-usage"><a class="doc-anchor" href="#memory-usage">§</a>Memory usage</h5>
+<p>In general, searching streams will use a constant amount of memory for
+its internal buffer. The one requirement is that the internal buffer
+must be at least the size of the longest possible match. In most use
+cases, the default buffer size will be much larger than any individual
+match.</p>
+<h5 id="panics-8"><a class="doc-anchor" href="#panics-8">§</a>Panics</h5>
+<p>This panics when <a href="struct.AhoCorasick.html#method.try_stream_find_iter" title="method aho_corasick::AhoCorasick::try_stream_find_iter"><code>AhoCorasick::try_stream_find_iter</code></a> would return
+an error. For example, when the Aho-Corasick searcher doesn’t support
+stream searches. (Only searchers built with <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a>
+semantics support stream searches.)</p>
+<h5 id="example-basic-usage-3"><a class="doc-anchor" href="#example-basic-usage-3">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">for </span>result <span class="kw">in </span>ac.stream_find_iter(haystack.as_bytes()) {
+    <span class="kw">let </span>mat = result<span class="question-mark">?</span>;
+    matches.push(mat.pattern());
+}
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+], matches);
+</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-AhoCorasick-2" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#917-1844">source</a><a href="#impl-AhoCorasick-2" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section></summary><div class="docblock"><p>Fallible search routines. These APIs return an error in cases where the
+infallible routines would panic.</p>
+</div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.try_find" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1021-1028">source</a><h4 class="code-header">pub fn <a href="#method.try_find" class="fn">try_find</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    input: I,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Match.html" title="struct aho_corasick::Match">Match</a>&gt;, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the location of the first match according to the match
+semantics that this automaton was constructed with, and according
+to the given <code>Input</code> configuration.</p>
+<p>This is the fallible version of <a href="struct.AhoCorasick.html#method.find" title="method aho_corasick::AhoCorasick::find"><code>AhoCorasick::find</code></a>.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the given <code>Input</code> configuration.</p>
+<p>For example, if the Aho-Corasick searcher only supports anchored
+searches or only supports unanchored searches, then providing an
+<code>Input</code> that requests an anchored (or unanchored) search when it isn’t
+supported would result in an error.</p>
+<h5 id="example-leftmost-first-searching"><a class="doc-anchor" href="#example-leftmost-first-searching">§</a>Example: leftmost-first searching</h5>
+<p>Basic usage with leftmost-first semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind, Input};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"foo abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.try_find(haystack)<span class="question-mark">?</span>.expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"abc"</span>, <span class="kw-2">&amp;</span>haystack[mat.span()]);
+</code></pre></div>
+<h5 id="example-anchored-leftmost-first-searching"><a class="doc-anchor" href="#example-anchored-leftmost-first-searching">§</a>Example: anchored leftmost-first searching</h5>
+<p>This shows how to anchor the search, so that even if the haystack
+contains a match somewhere, a match won’t be reported unless one can
+be found that starts at the beginning of the search:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Anchored, Input, MatchKind, StartKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"foo abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .start_kind(StartKind::Anchored)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>input = Input::new(haystack).anchored(Anchored::Yes);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, ac.try_find(input)<span class="question-mark">?</span>);
+</code></pre></div>
+<p>If the beginning of the search is changed to where a match begins, then
+it will be found:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Anchored, Input, MatchKind, StartKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"foo abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .start_kind(StartKind::Anchored)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>input = Input::new(haystack).range(<span class="number">4</span>..).anchored(Anchored::Yes);
+<span class="kw">let </span>mat = ac.try_find(input)<span class="question-mark">?</span>.expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"abc"</span>, <span class="kw-2">&amp;</span>haystack[mat.span()]);
+</code></pre></div>
+<h5 id="example-earliest-leftmost-first-searching"><a class="doc-anchor" href="#example-earliest-leftmost-first-searching">§</a>Example: earliest leftmost-first searching</h5>
+<p>This shows how to run an “earliest” search even when the Aho-Corasick
+searcher was compiled with leftmost-first match semantics. In this
+case, the search is stopped as soon as it is known that a match has
+occurred, even if it doesn’t correspond to the leftmost-first match.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Input, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"foo abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>input = Input::new(haystack).earliest(<span class="bool-val">true</span>);
+<span class="kw">let </span>mat = ac.try_find(input)<span class="question-mark">?</span>.expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"b"</span>, <span class="kw-2">&amp;</span>haystack[mat.span()]);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find_overlapping" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1184-1192">source</a><h4 class="code-header">pub fn <a href="#method.try_find_overlapping" class="fn">try_find_overlapping</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    input: I,
+    state: &amp;mut <a class="struct" href="automaton/struct.OverlappingState.html" title="struct aho_corasick::automaton::OverlappingState">OverlappingState</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the location of the first overlapping match in the given
+input with respect to the current state of the underlying searcher.</p>
+<p>Overlapping searches do not report matches in their return value.
+Instead, matches can be accessed via <a href="automaton/struct.OverlappingState.html#method.get_match" title="method aho_corasick::automaton::OverlappingState::get_match"><code>OverlappingState::get_match</code></a>
+after a search call.</p>
+<p>This is the fallible version of <a href="struct.AhoCorasick.html#method.find_overlapping" title="method aho_corasick::AhoCorasick::find_overlapping"><code>AhoCorasick::find_overlapping</code></a>.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the given <code>Input</code> configuration or if overlapping search is not
+supported.</p>
+<p>One example is that only Aho-Corasicker searchers built with
+<a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> semantics support overlapping searches. Using
+any other match semantics will result in this returning an error.</p>
+<h5 id="example-basic-usage-4"><a class="doc-anchor" href="#example-basic-usage-4">§</a>Example: basic usage</h5>
+<p>This shows how we can repeatedly call an overlapping search without
+ever needing to explicitly re-slice the haystack. Overlapping search
+works this way because searches depend on state saved during the
+previous search.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    automaton::OverlappingState,
+    AhoCorasick, Input, Match,
+};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+
+ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">2</span>, <span class="number">0</span>..<span class="number">3</span>)), state.get_match());
+
+ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>)), state.get_match());
+
+ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">2</span>, <span class="number">11</span>..<span class="number">14</span>)), state.get_match());
+
+ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">2</span>, <span class="number">22</span>..<span class="number">25</span>)), state.get_match());
+
+ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">22</span>..<span class="number">28</span>)), state.get_match());
+
+ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">22</span>..<span class="number">31</span>)), state.get_match());
+
+<span class="comment">// No more match matches to be found.
+</span>ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, state.get_match());
+</code></pre></div>
+<h5 id="example-implementing-your-own-overlapping-iteration"><a class="doc-anchor" href="#example-implementing-your-own-overlapping-iteration">§</a>Example: implementing your own overlapping iteration</h5>
+<p>The previous example can be easily adapted to implement your own
+iteration by repeatedly calling <code>try_find_overlapping</code> until either
+an error occurs or no more matches are reported.</p>
+<p>This is effectively equivalent to the iterator returned by
+<a href="struct.AhoCorasick.html#method.try_find_overlapping_iter" title="method aho_corasick::AhoCorasick::try_find_overlapping_iter"><code>AhoCorasick::try_find_overlapping_iter</code></a>, with the only difference
+being that the iterator checks for errors before construction and
+absolves the caller of needing to check for errors on every search
+call. (Indeed, if the first <code>try_find_overlapping</code> call succeeds and
+the same <code>Input</code> is given to subsequent calls, then all subsequent
+calls are guaranteed to succeed.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    automaton::OverlappingState,
+    AhoCorasick, Input, Match,
+};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+
+<span class="kw">loop </span>{
+    ac.try_find_overlapping(haystack, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+    <span class="kw">let </span>mat = <span class="kw">match </span>state.get_match() {
+        <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+        <span class="prelude-val">Some</span>(mat) =&gt; mat,
+    };
+    matches.push(mat);
+}
+<span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    Match::must(<span class="number">2</span>, <span class="number">0</span>..<span class="number">3</span>),
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>),
+    Match::must(<span class="number">2</span>, <span class="number">11</span>..<span class="number">14</span>),
+    Match::must(<span class="number">2</span>, <span class="number">22</span>..<span class="number">25</span>),
+    Match::must(<span class="number">0</span>, <span class="number">22</span>..<span class="number">28</span>),
+    Match::must(<span class="number">1</span>, <span class="number">22</span>..<span class="number">31</span>),
+];
+<span class="macro">assert_eq!</span>(expected, matches);
+</code></pre></div>
+<h5 id="example-anchored-iteration"><a class="doc-anchor" href="#example-anchored-iteration">§</a>Example: anchored iteration</h5>
+<p>The previous example can also be adapted to implement
+iteration over all anchored matches. In particular,
+<a href="struct.AhoCorasick.html#method.try_find_overlapping_iter" title="method aho_corasick::AhoCorasick::try_find_overlapping_iter"><code>AhoCorasick::try_find_overlapping_iter</code></a> does not support this
+because it isn’t totally clear what the match semantics ought to be.</p>
+<p>In this example, we will find all overlapping matches that start at
+the beginning of our search.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    automaton::OverlappingState,
+    AhoCorasick, Anchored, Input, Match, StartKind,
+};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .start_kind(StartKind::Anchored)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>input = Input::new(haystack).anchored(Anchored::Yes);
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+
+<span class="kw">loop </span>{
+    ac.try_find_overlapping(input.clone(), <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+    <span class="kw">let </span>mat = <span class="kw">match </span>state.get_match() {
+        <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+        <span class="prelude-val">Some</span>(mat) =&gt; mat,
+    };
+    matches.push(mat);
+}
+<span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    Match::must(<span class="number">2</span>, <span class="number">0</span>..<span class="number">3</span>),
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>),
+];
+<span class="macro">assert_eq!</span>(expected, matches);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find_iter" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1275-1282">source</a><h4 class="code-header">pub fn <a href="#method.try_find_iter" class="fn">try_find_iter</a>&lt;'a, 'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;'a self,
+    input: I,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.FindIter.html" title="struct aho_corasick::FindIter">FindIter</a>&lt;'a, 'h&gt;, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns an iterator of non-overlapping matches, using the match
+semantics that this automaton was constructed with.</p>
+<p>This is the fallible version of <a href="struct.AhoCorasick.html#method.find_iter" title="method aho_corasick::AhoCorasick::find_iter"><code>AhoCorasick::find_iter</code></a>.</p>
+<p>Note that the error returned by this method occurs during construction
+of the iterator. The iterator itself yields <code>Match</code> values. That is,
+once the iterator is constructed, the iteration itself will never
+report an error.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the given <code>Input</code> configuration.</p>
+<p>For example, if the Aho-Corasick searcher only supports anchored
+searches or only supports unanchored searches, then providing an
+<code>Input</code> that requests an anchored (or unanchored) search when it isn’t
+supported would result in an error.</p>
+<h5 id="example-leftmost-first-searching-1"><a class="doc-anchor" href="#example-leftmost-first-searching-1">§</a>Example: leftmost-first searching</h5>
+<p>Basic usage with leftmost-first semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Input, MatchKind, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = ac
+    .try_find_iter(Input::new(haystack))<span class="question-mark">?
+    </span>.map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">0</span>),
+], matches);
+</code></pre></div>
+<h5 id="example-anchored-leftmost-first-searching-1"><a class="doc-anchor" href="#example-anchored-leftmost-first-searching-1">§</a>Example: anchored leftmost-first searching</h5>
+<p>This shows how to anchor the search, such that all matches must begin
+at the starting location of the search. For an iterator, an anchored
+search implies that all matches are adjacent.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    AhoCorasick, Anchored, Input, MatchKind, PatternID, StartKind,
+};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>];
+<span class="kw">let </span>haystack = <span class="string">"fooquuxbar foo"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .start_kind(StartKind::Anchored)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = ac
+    .try_find_iter(Input::new(haystack).anchored(Anchored::Yes))<span class="question-mark">?
+    </span>.map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">1</span>),
+    <span class="comment">// The final 'foo' is not found because it is not adjacent to the
+    // 'bar' match. It needs to be adjacent because our search is
+    // anchored.
+</span>], matches);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find_overlapping_iter" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1350-1357">source</a><h4 class="code-header">pub fn <a href="#method.try_find_overlapping_iter" class="fn">try_find_overlapping_iter</a>&lt;'a, 'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;'a self,
+    input: I,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.FindOverlappingIter.html" title="struct aho_corasick::FindOverlappingIter">FindOverlappingIter</a>&lt;'a, 'h&gt;, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns an iterator of overlapping matches.</p>
+<p>This is the fallible version of <a href="struct.AhoCorasick.html#method.find_overlapping_iter" title="method aho_corasick::AhoCorasick::find_overlapping_iter"><code>AhoCorasick::find_overlapping_iter</code></a>.</p>
+<p>Note that the error returned by this method occurs during construction
+of the iterator. The iterator itself yields <code>Match</code> values. That is,
+once the iterator is constructed, the iteration itself will never
+report an error.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the given <code>Input</code> configuration or does not support overlapping
+searches.</p>
+<p>One example is that only Aho-Corasicker searchers built with
+<a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> semantics support overlapping searches. Using
+any other match semantics will result in this returning an error.</p>
+<h5 id="example-basic-usage-5"><a class="doc-anchor" href="#example-basic-usage-5">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Input, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = ac
+    .try_find_overlapping_iter(Input::new(haystack))<span class="question-mark">?
+    </span>.map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">0</span>),
+    PatternID::must(<span class="number">1</span>),
+], matches);
+</code></pre></div>
+<h5 id="example-anchored-overlapping-search-returns-an-error"><a class="doc-anchor" href="#example-anchored-overlapping-search-returns-an-error">§</a>Example: anchored overlapping search returns an error</h5>
+<p>It isn’t clear what the match semantics for anchored overlapping
+iterators <em>ought</em> to be, so currently an error is returned. Callers
+may use <a href="struct.AhoCorasick.html#method.try_find_overlapping" title="method aho_corasick::AhoCorasick::try_find_overlapping"><code>AhoCorasick::try_find_overlapping</code></a> to implement their own
+semantics if desired.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, Anchored, Input, StartKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"appendappendage app"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .start_kind(StartKind::Anchored)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>input = Input::new(haystack).anchored(Anchored::Yes);
+<span class="macro">assert!</span>(ac.try_find_overlapping_iter(input).is_err());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1396-1406">source</a><h4 class="code-header">pub fn <a href="#method.try_replace_all" class="fn">try_replace_all</a>&lt;B&gt;(
+    &amp;self,
+    haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Replace all matches with a corresponding value in the <code>replace_with</code>
+slice given. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<p>Replacements are determined by the index of the matching pattern.
+For example, if the pattern with index <code>2</code> is found, then it is
+replaced by <code>replace_with[2]</code>.</p>
+<h5 id="panics-9"><a class="doc-anchor" href="#panics-9">§</a>Panics</h5>
+<p>This panics when <code>replace_with.len()</code> does not equal
+<a href="struct.AhoCorasick.html#method.patterns_len" title="method aho_corasick::AhoCorasick::patterns_len"><code>AhoCorasick::patterns_len</code></a>.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the default <code>Input</code> configuration. More specifically, this occurs only
+when the Aho-Corasick searcher does not support unanchored searches
+since this replacement routine always does an unanchored search.</p>
+<h5 id="example-basic-usage-6"><a class="doc-anchor" href="#example-basic-usage-6">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>result = ac.try_replace_all(haystack, <span class="kw-2">&amp;</span>[<span class="string">"x"</span>, <span class="string">"y"</span>, <span class="string">"z"</span>])<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">"x the z to the xage"</span>, result);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all_bytes" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1447-1457">source</a><h4 class="code-header">pub fn <a href="#method.try_replace_all_bytes" class="fn">try_replace_all_bytes</a>&lt;B&gt;(
+    &amp;self,
+    haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Replace all matches using raw bytes with a corresponding value in the
+<code>replace_with</code> slice given. Matches correspond to the same matches as
+reported by <a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<p>Replacements are determined by the index of the matching pattern.
+For example, if the pattern with index <code>2</code> is found, then it is
+replaced by <code>replace_with[2]</code>.</p>
+<p>This is the fallible version of <a href="struct.AhoCorasick.html#method.replace_all_bytes" title="method aho_corasick::AhoCorasick::replace_all_bytes"><code>AhoCorasick::replace_all_bytes</code></a>.</p>
+<h5 id="panics-10"><a class="doc-anchor" href="#panics-10">§</a>Panics</h5>
+<p>This panics when <code>replace_with.len()</code> does not equal
+<a href="struct.AhoCorasick.html#method.patterns_len" title="method aho_corasick::AhoCorasick::patterns_len"><code>AhoCorasick::patterns_len</code></a>.</p>
+<h5 id="errors-5"><a class="doc-anchor" href="#errors-5">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the default <code>Input</code> configuration. More specifically, this occurs only
+when the Aho-Corasick searcher does not support unanchored searches
+since this replacement routine always does an unanchored search.</p>
+<h5 id="example-basic-usage-7"><a class="doc-anchor" href="#example-basic-usage-7">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">b"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>result = ac.try_replace_all_bytes(haystack, <span class="kw-2">&amp;</span>[<span class="string">"x"</span>, <span class="string">"y"</span>, <span class="string">"z"</span>])<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">b"x the z to the xage"</span>.to_vec(), result);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all_with" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1524-1535">source</a><h4 class="code-header">pub fn <a href="#method.try_replace_all_with" class="fn">try_replace_all_with</a>&lt;F&gt;(
+    &amp;self,
+    haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    replace_with: F,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,</div></h4></section></summary><div class="docblock"><p>Replace all matches using a closure called on each match.
+Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<p>The closure accepts three parameters: the match found, the text of
+the match and a string buffer with which to write the replaced text
+(if any). If the closure returns <code>true</code>, then it continues to the next
+match. If the closure returns <code>false</code>, then searching is stopped.</p>
+<p>Note that any matches with boundaries that don’t fall on a valid UTF-8
+boundary are silently skipped.</p>
+<p>This is the fallible version of <a href="struct.AhoCorasick.html#method.replace_all_with" title="method aho_corasick::AhoCorasick::replace_all_with"><code>AhoCorasick::replace_all_with</code></a>.</p>
+<h5 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the default <code>Input</code> configuration. More specifically, this occurs only
+when the Aho-Corasick searcher does not support unanchored searches
+since this replacement routine always does an unanchored search.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
+ac.try_replace_all_with(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.push_str(<span class="kw-2">&amp;</span>mat.pattern().as_usize().to_string());
+    <span class="bool-val">true
+</span>})<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">"0 the 2 to the 0age"</span>, result);
+</code></pre></div>
+<p>Stopping the replacement by returning <code>false</code> (continued from the
+example above):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
+ac.try_replace_all_with(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.push_str(<span class="kw-2">&amp;</span>mat.pattern().as_usize().to_string());
+    mat.pattern() != PatternID::must(<span class="number">2</span>)
+})<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">"0 the 2 to the appendage"</span>, result);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all_with_bytes" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1600-1611">source</a><h4 class="code-header">pub fn <a href="#method.try_replace_all_with_bytes" class="fn">try_replace_all_with_bytes</a>&lt;F&gt;(
+    &amp;self,
+    haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+    replace_with: F,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,</div></h4></section></summary><div class="docblock"><p>Replace all matches using raw bytes with a closure called on each
+match. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<p>The closure accepts three parameters: the match found, the text of
+the match and a byte buffer with which to write the replaced text
+(if any). If the closure returns <code>true</code>, then it continues to the next
+match. If the closure returns <code>false</code>, then searching is stopped.</p>
+<p>This is the fallible version of
+<a href="struct.AhoCorasick.html#method.replace_all_with_bytes" title="method aho_corasick::AhoCorasick::replace_all_with_bytes"><code>AhoCorasick::replace_all_with_bytes</code></a>.</p>
+<h5 id="errors-7"><a class="doc-anchor" href="#errors-7">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the default <code>Input</code> configuration. More specifically, this occurs only
+when the Aho-Corasick searcher does not support unanchored searches
+since this replacement routine always does an unanchored search.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">b"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>result = <span class="macro">vec!</span>[];
+ac.try_replace_all_with_bytes(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.extend(mat.pattern().as_usize().to_string().bytes());
+    <span class="bool-val">true
+</span>})<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">b"0 the 2 to the 0age"</span>.to_vec(), result);
+</code></pre></div>
+<p>Stopping the replacement by returning <code>false</code> (continued from the
+example above):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>result = <span class="macro">vec!</span>[];
+ac.try_replace_all_with_bytes(haystack, <span class="kw-2">&amp;mut </span>result, |mat, <span class="kw">_</span>, dst| {
+    dst.extend(mat.pattern().as_usize().to_string().bytes());
+    mat.pattern() != PatternID::must(<span class="number">2</span>)
+})<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">b"0 the 2 to the appendage"</span>.to_vec(), result);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_stream_find_iter" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1677-1683">source</a><h4 class="code-header">pub fn <a href="#method.try_stream_find_iter" class="fn">try_stream_find_iter</a>&lt;'a, R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>&gt;(
+    &amp;'a self,
+    rdr: R,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.StreamFindIter.html" title="struct aho_corasick::StreamFindIter">StreamFindIter</a>&lt;'a, R&gt;, <a class="struct" href="struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns an iterator of non-overlapping matches in the given
+stream. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<p>The matches yielded by this iterator use absolute position offsets in
+the stream given, where the first byte has index <code>0</code>. Matches are
+yieled until the stream is exhausted.</p>
+<p>Each item yielded by the iterator is an <code>Result&lt;Match, std::io::Error&gt;</code>, where an error is yielded if there was a problem
+reading from the reader given.</p>
+<p>When searching a stream, an internal buffer is used. Therefore, callers
+should avoiding providing a buffered reader, if possible.</p>
+<p>This is the fallible version of <a href="struct.AhoCorasick.html#method.stream_find_iter" title="method aho_corasick::AhoCorasick::stream_find_iter"><code>AhoCorasick::stream_find_iter</code></a>.
+Note that both methods return iterators that produce <code>Result</code> values.
+The difference is that this routine returns an error if <em>construction</em>
+of the iterator failed. The <code>Result</code> values yield by the iterator
+come from whether the given reader returns an error or not during the
+search.</p>
+<h5 id="memory-usage-1"><a class="doc-anchor" href="#memory-usage-1">§</a>Memory usage</h5>
+<p>In general, searching streams will use a constant amount of memory for
+its internal buffer. The one requirement is that the internal buffer
+must be at least the size of the longest possible match. In most use
+cases, the default buffer size will be much larger than any individual
+match.</p>
+<h5 id="errors-8"><a class="doc-anchor" href="#errors-8">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the default <code>Input</code> configuration. More specifically, this occurs only
+when the Aho-Corasick searcher does not support unanchored searches
+since this stream searching routine always does an unanchored search.</p>
+<p>This also returns an error if the searcher does not support stream
+searches. Only searchers built with <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> semantics
+support stream searches.</p>
+<h5 id="example-basic-usage-8"><a class="doc-anchor" href="#example-basic-usage-8">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"append"</span>, <span class="string">"appendage"</span>, <span class="string">"app"</span>];
+<span class="kw">let </span>haystack = <span class="string">"append the app to the appendage"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">for </span>result <span class="kw">in </span>ac.try_stream_find_iter(haystack.as_bytes())<span class="question-mark">? </span>{
+    <span class="kw">let </span>mat = result<span class="question-mark">?</span>;
+    matches.push(mat.pattern());
+}
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+    PatternID::must(<span class="number">2</span>),
+], matches);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_stream_replace_all" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1751-1765">source</a><h4 class="code-header">pub fn <a href="#method.try_stream_replace_all" class="fn">try_stream_replace_all</a>&lt;R, W, B&gt;(
+    &amp;self,
+    rdr: R,
+    wtr: W,
+    replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,
+    W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a>,
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Search for and replace all matches of this automaton in
+the given reader, and write the replacements to the given
+writer. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<p>Replacements are determined by the index of the matching pattern. For
+example, if the pattern with index <code>2</code> is found, then it is replaced by
+<code>replace_with[2]</code>.</p>
+<p>After all matches are replaced, the writer is <em>not</em> flushed.</p>
+<p>If there was a problem reading from the given reader or writing to the
+given writer, then the corresponding <code>io::Error</code> is returned and all
+replacement is stopped.</p>
+<p>When searching a stream, an internal buffer is used. Therefore, callers
+should avoiding providing a buffered reader, if possible. However,
+callers may want to provide a buffered writer.</p>
+<p>Note that there is currently no infallible version of this routine.</p>
+<h5 id="memory-usage-2"><a class="doc-anchor" href="#memory-usage-2">§</a>Memory usage</h5>
+<p>In general, searching streams will use a constant amount of memory for
+its internal buffer. The one requirement is that the internal buffer
+must be at least the size of the longest possible match. In most use
+cases, the default buffer size will be much larger than any individual
+match.</p>
+<h5 id="panics-11"><a class="doc-anchor" href="#panics-11">§</a>Panics</h5>
+<p>This panics when <code>replace_with.len()</code> does not equal
+<a href="struct.AhoCorasick.html#method.patterns_len" title="method aho_corasick::AhoCorasick::patterns_len"><code>AhoCorasick::patterns_len</code></a>.</p>
+<h5 id="errors-9"><a class="doc-anchor" href="#errors-9">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the default <code>Input</code> configuration. More specifically, this occurs only
+when the Aho-Corasick searcher does not support unanchored searches
+since this stream searching routine always does an unanchored search.</p>
+<p>This also returns an error if the searcher does not support stream
+searches. Only searchers built with <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> semantics
+support stream searches.</p>
+<h5 id="example-basic-usage-9"><a class="doc-anchor" href="#example-basic-usage-9">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"fox"</span>, <span class="string">"brown"</span>, <span class="string">"quick"</span>];
+<span class="kw">let </span>haystack = <span class="string">"The quick brown fox."</span>;
+<span class="kw">let </span>replace_with = <span class="kw-2">&amp;</span>[<span class="string">"sloth"</span>, <span class="string">"grey"</span>, <span class="string">"slow"</span>];
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>result = <span class="macro">vec!</span>[];
+ac.try_stream_replace_all(
+    haystack.as_bytes(),
+    <span class="kw-2">&amp;mut </span>result,
+    replace_with,
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">b"The slow grey sloth."</span>.to_vec(), result);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_stream_replace_all_with" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1829-1843">source</a><h4 class="code-header">pub fn <a href="#method.try_stream_replace_all_with" class="fn">try_stream_replace_all_with</a>&lt;R, W, F&gt;(
+    &amp;self,
+    rdr: R,
+    wtr: W,
+    replace_with: F,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,
+    W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut W</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Search the given reader and replace all matches of this automaton
+using the given closure. The result is written to the given
+writer. Matches correspond to the same matches as reported by
+<a href="struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>.</p>
+<p>The closure accepts three parameters: the match found, the text of
+the match and the writer with which to write the replaced text (if any).</p>
+<p>After all matches are replaced, the writer is <em>not</em> flushed.</p>
+<p>If there was a problem reading from the given reader or writing to the
+given writer, then the corresponding <code>io::Error</code> is returned and all
+replacement is stopped.</p>
+<p>When searching a stream, an internal buffer is used. Therefore, callers
+should avoiding providing a buffered reader, if possible. However,
+callers may want to provide a buffered writer.</p>
+<p>Note that there is currently no infallible version of this routine.</p>
+<h5 id="memory-usage-3"><a class="doc-anchor" href="#memory-usage-3">§</a>Memory usage</h5>
+<p>In general, searching streams will use a constant amount of memory for
+its internal buffer. The one requirement is that the internal buffer
+must be at least the size of the longest possible match. In most use
+cases, the default buffer size will be much larger than any individual
+match.</p>
+<h5 id="errors-10"><a class="doc-anchor" href="#errors-10">§</a>Errors</h5>
+<p>This returns an error when this Aho-Corasick searcher does not support
+the default <code>Input</code> configuration. More specifically, this occurs only
+when the Aho-Corasick searcher does not support unanchored searches
+since this stream searching routine always does an unanchored search.</p>
+<p>This also returns an error if the searcher does not support stream
+searches. Only searchers built with <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> semantics
+support stream searches.</p>
+<h5 id="example-basic-usage-10"><a class="doc-anchor" href="#example-basic-usage-10">§</a>Example: basic usage</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write;
+<span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"fox"</span>, <span class="string">"brown"</span>, <span class="string">"quick"</span>];
+<span class="kw">let </span>haystack = <span class="string">"The quick brown fox."</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::new(patterns).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>result = <span class="macro">vec!</span>[];
+ac.try_stream_replace_all_with(
+    haystack.as_bytes(),
+    <span class="kw-2">&amp;mut </span>result,
+    |mat, <span class="kw">_</span>, wtr| {
+        wtr.write_all(mat.pattern().as_usize().to_string().as_bytes())
+    },
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">b"The 2 1 0."</span>.to_vec(), result);
+</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-AhoCorasick-3" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1847-2024">source</a><a href="#impl-AhoCorasick-3" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section></summary><div class="docblock"><p>Routines for querying information about the Aho-Corasick automaton.</p>
+</div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.kind" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1867-1869">source</a><h4 class="code-header">pub fn <a href="#method.kind" class="fn">kind</a>(&amp;self) -&gt; <a class="enum" href="enum.AhoCorasickKind.html" title="enum aho_corasick::AhoCorasickKind">AhoCorasickKind</a></h4></section></summary><div class="docblock"><p>Returns the kind of the Aho-Corasick automaton used by this searcher.</p>
+<p>Knowing the Aho-Corasick kind is principally useful for diagnostic
+purposes. In particular, if no specific kind was given to
+<a href="struct.AhoCorasickBuilder.html#method.kind" title="method aho_corasick::AhoCorasickBuilder::kind"><code>AhoCorasickBuilder::kind</code></a>, then one is automatically chosen and
+this routine will report which one.</p>
+<p>Note that the heuristics used for choosing which <code>AhoCorasickKind</code>
+may be changed in a semver compatible release.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, AhoCorasickKind};
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="comment">// The specific Aho-Corasick kind chosen is not guaranteed!
+</span><span class="macro">assert_eq!</span>(AhoCorasickKind::DFA, ac.kind());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.start_kind" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1882-1884">source</a><h4 class="code-header">pub fn <a href="#method.start_kind" class="fn">start_kind</a>(&amp;self) -&gt; <a class="enum" href="enum.StartKind.html" title="enum aho_corasick::StartKind">StartKind</a></h4></section></summary><div class="docblock"><p>Returns the type of starting search configuration supported by this
+Aho-Corasick automaton.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, StartKind};
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(StartKind::Unanchored, ac.start_kind());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.match_kind" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1901-1903">source</a><h4 class="code-header">pub fn <a href="#method.match_kind" class="fn">match_kind</a>(&amp;self) -&gt; <a class="enum" href="enum.MatchKind.html" title="enum aho_corasick::MatchKind">MatchKind</a></h4></section></summary><div class="docblock"><p>Returns the match kind used by this automaton.</p>
+<p>The match kind is important because it determines what kinds of
+matches are returned. Also, some operations (such as overlapping
+search and stream searching) are only supported when using the
+<a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a> match kind.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(MatchKind::Standard, ac.match_kind());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.min_pattern_len" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1927-1929">source</a><h4 class="code-header">pub fn <a href="#method.min_pattern_len" class="fn">min_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the length of the shortest pattern matched by this automaton.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">3</span>, ac.min_pattern_len());</code></pre></div>
+<p>Note that an <code>AhoCorasick</code> automaton has a minimum length of <code>0</code> if
+and only if it can match the empty string:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">""</span>, <span class="string">"quux"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, ac.min_pattern_len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.max_pattern_len" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1943-1945">source</a><h4 class="code-header">pub fn <a href="#method.max_pattern_len" class="fn">max_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the length of the longest pattern matched by this automaton.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">4</span>, ac.max_pattern_len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.patterns_len" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#1965-1967">source</a><h4 class="code-header">pub fn <a href="#method.patterns_len" class="fn">patterns_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Return the total number of patterns matched by this automaton.</p>
+<p>This includes patterns that may never participate in a match. For
+example, if <a href="enum.MatchKind.html#variant.LeftmostFirst" title="variant aho_corasick::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a> match semantics are used, and
+the patterns <code>Sam</code> and <code>Samwise</code> were used to build the automaton (in
+that order), then <code>Samwise</code> can never participate in a match because
+<code>Sam</code> will always take priority.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>ac = AhoCorasick::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"baz"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">3</span>, ac.patterns_len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.memory_usage" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2021-2023">source</a><h4 class="code-header">pub fn <a href="#method.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the approximate total amount of heap used by this automaton, in
+units of bytes.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<p>This example shows the difference in heap usage between a few
+configurations:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, AhoCorasickKind, MatchKind};
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .kind(<span class="prelude-val">None</span>) <span class="comment">// default
+    </span>.build(<span class="kw-2">&amp;</span>[<span class="string">"foobar"</span>, <span class="string">"bruce"</span>, <span class="string">"triskaidekaphobia"</span>, <span class="string">"springsteen"</span>])
+    .unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">5_632</span>, ac.memory_usage());
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .kind(<span class="prelude-val">None</span>) <span class="comment">// default
+    </span>.ascii_case_insensitive(<span class="bool-val">true</span>)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"foobar"</span>, <span class="string">"bruce"</span>, <span class="string">"triskaidekaphobia"</span>, <span class="string">"springsteen"</span>])
+    .unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">11_136</span>, ac.memory_usage());
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .kind(<span class="prelude-val">Some</span>(AhoCorasickKind::NoncontiguousNFA))
+    .ascii_case_insensitive(<span class="bool-val">true</span>)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"foobar"</span>, <span class="string">"bruce"</span>, <span class="string">"triskaidekaphobia"</span>, <span class="string">"springsteen"</span>])
+    .unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">10_879</span>, ac.memory_usage());
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .kind(<span class="prelude-val">Some</span>(AhoCorasickKind::ContiguousNFA))
+    .ascii_case_insensitive(<span class="bool-val">true</span>)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"foobar"</span>, <span class="string">"bruce"</span>, <span class="string">"triskaidekaphobia"</span>, <span class="string">"springsteen"</span>])
+    .unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">2_584</span>, ac.memory_usage());
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .kind(<span class="prelude-val">Some</span>(AhoCorasickKind::DFA))
+    .ascii_case_insensitive(<span class="bool-val">true</span>)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"foobar"</span>, <span class="string">"bruce"</span>, <span class="string">"triskaidekaphobia"</span>, <span class="string">"springsteen"</span>])
+    .unwrap();
+<span class="comment">// While this shows the DFA being the biggest here by a small margin,
+// don't let the difference fool you. With such a small number of
+// patterns, the difference is small, but a bigger number of patterns
+// will reveal that the rate of growth of the DFA is far bigger than
+// the NFAs above. For a large number of patterns, it is easy for the
+// DFA to take an order of magnitude more heap space (or more!).
+</span><span class="macro">assert_eq!</span>(<span class="number">11_136</span>, ac.memory_usage());</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-AhoCorasick" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#176">source</a><a href="#impl-Clone-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#176">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-AhoCorasick" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2029-2033">source</a><a href="#impl-Debug-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2030-2032">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-AhoCorasick" class="impl"><a href="#impl-Freeze-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section><section id="impl-RefUnwindSafe-for-AhoCorasick" class="impl"><a href="#impl-RefUnwindSafe-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section><section id="impl-Send-for-AhoCorasick" class="impl"><a href="#impl-Send-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section><section id="impl-Sync-for-AhoCorasick" class="impl"><a href="#impl-Sync-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section><section id="impl-Unpin-for-AhoCorasick" class="impl"><a href="#impl-Unpin-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section><section id="impl-UnwindSafe-for-AhoCorasick" class="impl"><a href="#impl-UnwindSafe-for-AhoCorasick" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"FindIter<'a, 'h>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.FindIter.html\" title=\"struct aho_corasick::FindIter\">FindIter</a>&lt;'a, 'h&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, 'h&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.FindIter.html\" title=\"struct aho_corasick::FindIter\">FindIter</a>&lt;'a, 'h&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"struct\" href=\"struct.Match.html\" title=\"struct aho_corasick::Match\">Match</a>;</div>","FindOverlappingIter<'a, 'h>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.FindOverlappingIter.html\" title=\"struct aho_corasick::FindOverlappingIter\">FindOverlappingIter</a>&lt;'a, 'h&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, 'h&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.FindOverlappingIter.html\" title=\"struct aho_corasick::FindOverlappingIter\">FindOverlappingIter</a>&lt;'a, 'h&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"struct\" href=\"struct.Match.html\" title=\"struct aho_corasick::Match\">Match</a>;</div>","StreamFindIter<'a, R>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.StreamFindIter.html\" title=\"struct aho_corasick::StreamFindIter\">StreamFindIter</a>&lt;'a, R&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, R: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html\" title=\"trait std::io::Read\">Read</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.StreamFindIter.html\" title=\"struct aho_corasick::StreamFindIter\">StreamFindIter</a>&lt;'a, R&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"struct\" href=\"struct.Match.html\" title=\"struct aho_corasick::Match\">Match</a>, <a class=\"struct\" href=\"https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html\" title=\"struct std::io::error::Error\">Error</a>&gt;;</div>"}</script></section></div></main></body></html>

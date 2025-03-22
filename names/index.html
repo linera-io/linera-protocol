@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides a generate that constructs random name strings suitable for use in container instances, project names, application instances, etc."><title>names - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="names" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../names/index.html">names</a><span class="version">0.14.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">names</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/names/lib.rs.html#1-159">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides a generate that constructs random name strings suitable
+for use in container instances, project names, application instances, etc.</p>
+<p>The name <code>Generator</code> implements the <code>Iterator</code> trait so it can be used with
+adapters, consumers, and in loops.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>This crate is <a href="https://crates.io/crates/names">on crates.io</a> and can be
+used by adding <code>names</code> to your dependencies in your project’s <code>Cargo.toml</code>
+file:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+names = { version = &quot;0.14.0&quot;, default-features = false }
+</code></pre></div><h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3><h4 id="example-painless-defaults"><a class="doc-anchor" href="#example-painless-defaults">§</a>Example: painless defaults</h4>
+<p>The easiest way to get started is to use the default <code>Generator</code> to return
+a name:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>names::Generator;
+
+<span class="kw">let </span><span class="kw-2">mut </span>generator = Generator::default();
+<span class="macro">println!</span>(<span class="string">"Your project is: {}"</span>, generator.next().unwrap());
+<span class="comment">// #=&gt; "Your project is: rusty-nail"</span></code></pre></div>
+<p>If more randomness is required, you can generate a name with a trailing
+4-digit number:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>names::{Generator, Name};
+
+<span class="kw">let </span><span class="kw-2">mut </span>generator = Generator::with_naming(Name::Numbered);
+<span class="macro">println!</span>(<span class="string">"Your project is: {}"</span>, generator.next().unwrap());
+<span class="comment">// #=&gt; "Your project is: pushy-pencil-5602"</span></code></pre></div>
+<h4 id="example-with-custom-dictionaries"><a class="doc-anchor" href="#example-with-custom-dictionaries">§</a>Example: with custom dictionaries</h4>
+<p>If you would rather supply your own custom adjective and noun word lists,
+you can provide your own by supplying 2 string slices. For example,
+this returns only one result:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>names::{Generator, Name};
+
+<span class="kw">let </span>adjectives = <span class="kw-2">&amp;</span>[<span class="string">"imaginary"</span>];
+<span class="kw">let </span>nouns = <span class="kw-2">&amp;</span>[<span class="string">"roll"</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>generator = Generator::new(adjectives, nouns, Name::default());
+
+<span class="macro">assert_eq!</span>(<span class="string">"imaginary-roll"</span>, generator.next().unwrap());</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Generator.html" title="struct names::Generator">Generator</a></div><div class="desc docblock-short">A random name generator which combines an adjective, a noun, and an
+optional number</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Name.html" title="enum names::Name">Name</a></div><div class="desc docblock-short">A naming strategy for the <code>Generator</code></div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.ADJECTIVES.html" title="constant names::ADJECTIVES">ADJECTIVES</a></div><div class="desc docblock-short">List of English adjective words</div></li><li><div class="item-name"><a class="constant" href="constant.NOUNS.html" title="constant names::NOUNS">NOUNS</a></div><div class="desc docblock-short">List of English noun words</div></li></ul></section></div></main></body></html>

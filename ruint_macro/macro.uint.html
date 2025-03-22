@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `uint!` macro for `Uint` and `Bits` literals"><title>uint in ruint_macro - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ruint_macro" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ruint_macro/index.html">ruint_macro</a><span class="version">1.2.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">ruint_macro</a>::<wbr><a class="macro" href="#">uint</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/ruint_macro/lib.rs.html#10-12">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>uint!() { <span class="comment">/* proc-macro */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="the-uint-macro-for-uint-and-bits-literals"><a class="doc-anchor" href="#the-uint-macro-for-uint-and-bits-literals">§</a>The <code>uint!</code> macro for <code>Uint</code> and <code>Bits</code> literals</h2>
+<p>Within the <a href="macro.uint.html" title="macro ruint_macro::uint"><code>uint!</code></a> macro arguments, you can write <a href="../uint/struct.Uint.html"><code>Uint</code></a> and <a href="../uint/struct.Bits.html"><code>Bits</code></a> literals using the <a href="https://doc.rust-lang.org/stable/reference/tokens.html#integer-literals">same syntax</a> as Rust integer literals, but using a capital <code>U</code> or <code>B</code> suffix respectively. Note that there is ambiguity for hexadecimals with a <code>B</code> suffix, to lessen the impact an underscore is required in this case.</p>
+<!-- Fix linking to `Uint`. See https://github.com/rust-lang/rust/issues/74481 -->
+<p>To use it simply import it in scope:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ruint::uint;</code></pre></div>
+<p>Now constants can be created in decimal, hex, binary and even octal:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>avogadro = <span class="macro">uint!</span>(<span class="number">602_214_076_000_000_000_000_000_U256</span>);
+<span class="kw">let </span>cow_key = <span class="macro">uint!</span>(<span class="number">0xee79b5f6e221356af78cf4c36f4f7885a11b67dfcc81c34d80249947330c0f82_U256</span>);
+<span class="kw">let </span>bender = <span class="macro">uint!</span>(<span class="number">0b1010011010_U10</span>);</code></pre></div>
+<p>The <a href="macro.uint.html" title="macro ruint_macro::uint"><code>uint!</code></a> macro recurses through the parse tree, so the above can equivalently be written</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">uint!</span> {
+<span class="kw">let </span>avogadro = <span class="number">602_214_076_000_000_000_000_000_U256</span>;
+<span class="kw">let </span>cow_key = <span class="number">0xee79b5f6e221356af78cf4c36f4f7885a11b67dfcc81c34d80249947330c0f82_U256</span>;
+<span class="kw">let </span>bender = <span class="number">0b1010011010_U10</span>;
+}</code></pre></div>
+<p>This latter form is particularly useful for lookup tables:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">const </span>PRIMES: [Uint&lt;<span class="number">128</span>, <span class="number">2</span>&gt;; <span class="number">3</span>] = <span class="macro">uint!</span>([
+    <span class="number">170141183460469231731687303715884105757_U128</span>,
+    <span class="number">170141183460469231731687303715884105773_U128</span>,
+    <span class="number">170141183460469231731687303715884105793_U128</span>,
+]);</code></pre></div>
+<p>The macro will throw a compile time error if you try to create a constant that
+does not fit the type:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>sparta = <span class="number">300_U8</span>;</code></pre></div>
+<div class="example-wrap"><pre class="language-text"><code>error: Value too large for Uint&lt;8&gt;: 300
+ --&gt; src/example.rs:1:14
+  |
+1 | let sparta = 300_U8;
+  |              ^^^^^^
+</code></pre></div><h3 id="references"><a class="doc-anchor" href="#references">§</a>References</h3>
+<ul>
+<li>Rust <a href="https://doc.rust-lang.org/stable/reference/tokens.html#integer-literals">integer literals syntax</a>.</li>
+</ul>
+</div></details></section></div></main></body></html>

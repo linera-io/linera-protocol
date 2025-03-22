@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["calc_call_gas","call","call_code","create","delegate_call","eofcreate","extcall","extcall_gas_calc","extcall_input","extdelegatecall","extstaticcall","get_memory_input_and_out_ranges","pop_extcall_target_address","resize_memory","return_contract","static_call"]};

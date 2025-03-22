@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Apply `singleton_map` to all enums contained within the data structure."><title>serde_yaml::with::singleton_map_recursive - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde_yaml" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../serde_yaml/index.html">serde_yaml</a><span class="version">0.9.34+deprecated</span></h2></div><h2 class="location"><a href="#">Module singleton_map_recursive</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In serde_yaml::with</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">serde_yaml</a>::<wbr><a href="../index.html">with</a>::<wbr><a class="mod" href="#">singleton_map_recursive</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/serde_yaml/with.rs.html#935">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Apply <a href="../singleton_map/index.html" title="mod serde_yaml::with::singleton_map"><code>singleton_map</code></a> to <em>all</em> enums contained within the data structure.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
+
+<span class="attr">#[derive(Serialize, Deserialize, PartialEq, Debug)]
+</span><span class="kw">enum </span>Enum {
+    Int(i32),
+}
+
+<span class="attr">#[derive(Serialize, Deserialize, PartialEq, Debug)]
+</span><span class="kw">struct </span>Inner {
+    a: Enum,
+    bs: Vec&lt;Enum&gt;,
+}
+
+<span class="attr">#[derive(Serialize, Deserialize, PartialEq, Debug)]
+</span><span class="kw">struct </span>Outer {
+    tagged_style: Inner,
+
+    <span class="attr">#[serde(with = <span class="string">"serde_yaml::with::singleton_map_recursive"</span>)]
+    </span>singleton_map_style: Inner,
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>object = Outer {
+        tagged_style: Inner {
+            a: Enum::Int(<span class="number">0</span>),
+            bs: <span class="macro">vec!</span>[Enum::Int(<span class="number">1</span>)],
+        },
+        singleton_map_style: Inner {
+            a: Enum::Int(<span class="number">2</span>),
+            bs: <span class="macro">vec!</span>[Enum::Int(<span class="number">3</span>)],
+        },
+    };
+
+    <span class="kw">let </span>yaml = serde_yaml::to_string(<span class="kw-2">&amp;</span>object).unwrap();
+    <span class="macro">print!</span>(<span class="string">"{}"</span>, yaml);
+
+    <span class="kw">let </span>deserialized: Outer = serde_yaml::from_str(<span class="kw-2">&amp;</span>yaml).unwrap();
+    <span class="macro">assert_eq!</span>(object, deserialized);
+}</code></pre></div>
+<p>The serialized output is:</p>
+<div class="example-wrap"><pre class="language-yaml"><code>tagged_style:
+  a: !Int 0
+  bs:
+  - !Int 1
+singleton_map_style:
+  a:
+    Int: 2
+  bs:
+  - Int: 3
+</code></pre></div>
+<p>This module can also be used for the top-level serializer or deserializer
+call, without <code>serde(with = …)</code>, as follows.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{<span class="self">self</span>, Write};
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>object = Inner {
+        a: Enum::Int(<span class="number">0</span>),
+        bs: <span class="macro">vec!</span>[Enum::Int(<span class="number">1</span>)],
+    };
+
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>serializer = serde_yaml::Serializer::new(<span class="kw-2">&amp;mut </span>buf);
+    serde_yaml::with::singleton_map_recursive::serialize(<span class="kw-2">&amp;</span>object, <span class="kw-2">&amp;mut </span>serializer).unwrap();
+    io::stdout().write_all(<span class="kw-2">&amp;</span>buf).unwrap();
+
+    <span class="kw">let </span>deserializer = serde_yaml::Deserializer::from_slice(<span class="kw-2">&amp;</span>buf);
+    <span class="kw">let </span>deserialized: Inner = serde_yaml::with::singleton_map_recursive::deserialize(deserializer).unwrap();
+    <span class="macro">assert_eq!</span>(object, deserialized);
+}</code></pre></div>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.deserialize.html" title="fn serde_yaml::with::singleton_map_recursive::deserialize">deserialize</a></div></li><li><div class="item-name"><a class="fn" href="fn.serialize.html" title="fn serde_yaml::with::singleton_map_recursive::serialize">serialize</a></div></li></ul></section></div></main></body></html>

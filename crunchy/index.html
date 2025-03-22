@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The crunchy unroller - deterministically unroll constant loops. For number “crunching”."><title>crunchy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crunchy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../crunchy/index.html">crunchy</a><span class="version">0.2.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">crunchy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/crunchy/lib.rs.html#1-36">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The crunchy unroller - deterministically unroll constant loops. For number “crunching”.</p>
+<p>The Rust optimizer will unroll constant loops that don’t use the loop variable, like this:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">100 </span>{
+    <span class="macro">println!</span>(<span class="string">"Hello!"</span>);
+}</code></pre></div>
+<p>However, using the loop variable will cause it to never unroll the loop. This is unfortunate because it means that you can’t
+constant-fold the loop variable, and if you end up stomping on the registers it will have to do a load for each iteration.
+This crate ensures that your code is unrolled and const-folded. It only works on literals,
+unfortunately, but there’s a work-around:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">debug_assert_eq!</span>(MY_CONSTANT, <span class="number">100</span>);
+<span class="macro">unroll!</span> {
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">100 </span>{
+        <span class="macro">println!</span>(<span class="string">"Iteration {}"</span>, i);
+    }
+}</code></pre></div>
+<p>This means that your tests will catch if you redefine the constant.</p>
+<p>To default maximum number of loops to unroll is <code>64</code>, but that can be easily increased using the cargo features:</p>
+<ul>
+<li><code>limit_128</code></li>
+<li><code>limit_256</code></li>
+<li><code>limit_512</code></li>
+<li><code>limit_1024</code></li>
+<li><code>limit_2048</code></li>
+</ul>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.unroll.html" title="macro crunchy::unroll">unroll</a></div><div class="desc docblock-short">Unroll the given for loop</div></li></ul></section></div></main></body></html>

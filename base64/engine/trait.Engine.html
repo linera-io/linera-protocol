@@ -1,0 +1,158 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An `Engine` provides low-level encoding and decoding operations that all other higher-level parts of the API use. Users of the library will generally not need to implement this."><title>Engine in base64::engine - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="base64" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../base64/index.html">base64</a><span class="version">0.22.1</span></h2></div><h2 class="location"><a href="#">Engine</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Config">Config</a></li><li><a href="#associatedtype.DecodeEstimate">DecodeEstimate</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.config">config</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.decode">decode</a></li><li><a href="#method.decode_slice">decode_slice</a></li><li><a href="#method.decode_slice_unchecked">decode_slice_unchecked</a></li><li><a href="#method.decode_vec">decode_vec</a></li><li><a href="#method.encode">encode</a></li><li><a href="#method.encode_slice">encode_slice</a></li><li><a href="#method.encode_string">encode_string</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In base64::engine</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">base64</a>::<wbr><a href="index.html">engine</a>::<wbr><a class="trait" href="#">Engine</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/base64/engine/mod.rs.html#39-419">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Engine: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> {
+    type <a href="#associatedtype.Config" class="associatedtype">Config</a>: <a class="trait" href="trait.Config.html" title="trait base64::engine::Config">Config</a>;
+    type <a href="#associatedtype.DecodeEstimate" class="associatedtype">DecodeEstimate</a>: <a class="trait" href="trait.DecodeEstimate.html" title="trait base64::engine::DecodeEstimate">DecodeEstimate</a>;
+
+    // Required method
+    fn <a href="#tymethod.config" class="fn">config</a>(&amp;self) -&gt; &amp;Self::<a class="associatedtype" href="trait.Engine.html#associatedtype.Config" title="type base64::engine::Engine::Config">Config</a>;
+
+    // Provided methods
+    fn <a href="#method.encode" class="fn">encode</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(&amp;self, input: T) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.encode_string" class="fn">encode_string</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(&amp;self, input: T, output_buf: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.encode_slice" class="fn">encode_slice</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+        &amp;self,
+        input: T,
+        output_buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="enum" href="../enum.EncodeSliceError.html" title="enum base64::EncodeSliceError">EncodeSliceError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.decode" class="fn">decode</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(&amp;self, input: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;, <a class="enum" href="../enum.DecodeError.html" title="enum base64::DecodeError">DecodeError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.decode_vec" class="fn">decode_vec</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+        &amp;self,
+        input: T,
+        buffer: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="enum" href="../enum.DecodeError.html" title="enum base64::DecodeError">DecodeError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.decode_slice" class="fn">decode_slice</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+        &amp;self,
+        input: T,
+        output: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="enum" href="../enum.DecodeSliceError.html" title="enum base64::DecodeSliceError">DecodeSliceError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.decode_slice_unchecked" class="fn">decode_slice_unchecked</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+        &amp;self,
+        input: T,
+        output: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="enum" href="../enum.DecodeError.html" title="enum base64::DecodeError">DecodeError</a>&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An <code>Engine</code> provides low-level encoding and decoding operations that all other higher-level parts of the API use. Users of the library will generally not need to implement this.</p>
+<p>Different implementations offer different characteristics. The library currently ships with
+<a href="general_purpose/struct.GeneralPurpose.html" title="struct base64::engine::general_purpose::GeneralPurpose">GeneralPurpose</a> that offers good speed and works on any CPU, with more choices
+coming later, like a constant-time one when side channel resistance is called for, and vendor-specific vectorized ones for more speed.</p>
+<p>See <a href="general_purpose/constant.STANDARD_NO_PAD.html" title="constant base64::engine::general_purpose::STANDARD_NO_PAD">general_purpose::STANDARD_NO_PAD</a> if you just want standard base64. Otherwise, when possible, it’s
+recommended to store the engine in a <code>const</code> so that references to it won’t pose any lifetime
+issues, and to avoid repeating the cost of engine setup.</p>
+<p>Since almost nobody will need to implement <code>Engine</code>, docs for internal methods are hidden.</p>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Config" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#41">source</a><h4 class="code-header">type <a href="#associatedtype.Config" class="associatedtype">Config</a>: <a class="trait" href="trait.Config.html" title="trait base64::engine::Config">Config</a></h4></section></summary><div class="docblock"><p>The config type used by this engine</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.DecodeEstimate" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#43">source</a><h4 class="code-header">type <a href="#associatedtype.DecodeEstimate" class="associatedtype">DecodeEstimate</a>: <a class="trait" href="trait.DecodeEstimate.html" title="trait base64::engine::DecodeEstimate">DecodeEstimate</a></h4></section></summary><div class="docblock"><p>The decode estimate used by this engine</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.config" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#95">source</a><h4 class="code-header">fn <a href="#tymethod.config" class="fn">config</a>(&amp;self) -&gt; &amp;Self::<a class="associatedtype" href="trait.Engine.html#associatedtype.Config" title="type base64::engine::Engine::Config">Config</a></h4></section></summary><div class="docblock"><p>Returns the config for this engine.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.encode" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#115-131">source</a><h4 class="code-header">fn <a href="#method.encode" class="fn">encode</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(&amp;self, input: T) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a></h4></section></summary><div class="docblock"><p>Encode arbitrary octets as base64 using the provided <code>Engine</code>.
+Returns a <code>String</code>.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{Engine <span class="kw">as _</span>, engine::{<span class="self">self</span>, general_purpose}, alphabet};
+
+<span class="kw">let </span>b64 = general_purpose::STANDARD.encode(<span class="string">b"hello world~"</span>);
+<span class="macro">println!</span>(<span class="string">"{}"</span>, b64);
+
+<span class="kw">const </span>CUSTOM_ENGINE: engine::GeneralPurpose =
+    engine::GeneralPurpose::new(<span class="kw-2">&amp;</span>alphabet::URL_SAFE, general_purpose::NO_PAD);
+
+<span class="kw">let </span>b64_url = CUSTOM_ENGINE.encode(<span class="string">b"hello internet~"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.encode_string" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#155-168">source</a><h4 class="code-header">fn <a href="#method.encode_string" class="fn">encode_string</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(&amp;self, input: T, output_buf: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>)</h4></section></summary><div class="docblock"><p>Encode arbitrary octets as base64 into a supplied <code>String</code>.
+Writes into the supplied <code>String</code>, which may allocate if its internal buffer isn’t big enough.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{Engine <span class="kw">as _</span>, engine::{<span class="self">self</span>, general_purpose}, alphabet};
+<span class="kw">const </span>CUSTOM_ENGINE: engine::GeneralPurpose =
+    engine::GeneralPurpose::new(<span class="kw-2">&amp;</span>alphabet::URL_SAFE, general_purpose::NO_PAD);
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = String::new();
+    general_purpose::STANDARD.encode_string(<span class="string">b"hello world~"</span>, <span class="kw-2">&amp;mut </span>buf);
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, buf);
+
+    buf.clear();
+    CUSTOM_ENGINE.encode_string(<span class="string">b"hello internet~"</span>, <span class="kw-2">&amp;mut </span>buf);
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, buf);
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.encode_slice" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#194-222">source</a><h4 class="code-header">fn <a href="#method.encode_slice" class="fn">encode_slice</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+    &amp;self,
+    input: T,
+    output_buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="enum" href="../enum.EncodeSliceError.html" title="enum base64::EncodeSliceError">EncodeSliceError</a>&gt;</h4></section></summary><div class="docblock"><p>Encode arbitrary octets as base64 into a supplied slice.
+Writes into the supplied output buffer.</p>
+<p>This is useful if you wish to avoid allocation entirely (e.g. encoding into a stack-resident
+or statically-allocated buffer).</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{Engine <span class="kw">as _</span>, engine::general_purpose};
+<span class="kw">let </span>s = <span class="string">b"hello internet!"</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+<span class="comment">// make sure we'll have a slice big enough for base64 + padding
+</span>buf.resize(s.len() * <span class="number">4 </span>/ <span class="number">3 </span>+ <span class="number">4</span>, <span class="number">0</span>);
+
+<span class="kw">let </span>bytes_written = general_purpose::STANDARD.encode_slice(s, <span class="kw-2">&amp;mut </span>buf).unwrap();
+
+<span class="comment">// shorten our vec down to just what was written
+</span>buf.truncate(bytes_written);
+
+<span class="macro">assert_eq!</span>(s, general_purpose::STANDARD.decode(<span class="kw-2">&amp;</span>buf).unwrap().as_slice());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#244-268">source</a><h4 class="code-header">fn <a href="#method.decode" class="fn">decode</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(&amp;self, input: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;, <a class="enum" href="../enum.DecodeError.html" title="enum base64::DecodeError">DecodeError</a>&gt;</h4></section></summary><div class="docblock"><p>Decode the input into a new <code>Vec</code>.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{Engine <span class="kw">as _</span>, alphabet, engine::{<span class="self">self</span>, general_purpose}};
+
+<span class="kw">let </span>bytes = general_purpose::STANDARD
+    .decode(<span class="string">"aGVsbG8gd29ybGR+Cg=="</span>).unwrap();
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, bytes);
+
+<span class="comment">// custom engine setup
+</span><span class="kw">let </span>bytes_url = engine::GeneralPurpose::new(
+             <span class="kw-2">&amp;</span>alphabet::URL_SAFE,
+             general_purpose::NO_PAD)
+    .decode(<span class="string">"aGVsbG8gaW50ZXJuZXR-Cg"</span>).unwrap();
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, bytes_url);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode_vec" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#302-339">source</a><h4 class="code-header">fn <a href="#method.decode_vec" class="fn">decode_vec</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+    &amp;self,
+    input: T,
+    buffer: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="enum" href="../enum.DecodeError.html" title="enum base64::DecodeError">DecodeError</a>&gt;</h4></section></summary><div class="docblock"><p>Decode the <code>input</code> into the supplied <code>buffer</code>.</p>
+<p>Writes into the supplied <code>Vec</code>, which may allocate if its internal buffer isn’t big enough.
+Returns a <code>Result</code> containing an empty tuple, aka <code>()</code>.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{Engine <span class="kw">as _</span>, alphabet, engine::{<span class="self">self</span>, general_purpose}};
+<span class="kw">const </span>CUSTOM_ENGINE: engine::GeneralPurpose =
+    engine::GeneralPurpose::new(<span class="kw-2">&amp;</span>alphabet::URL_SAFE, general_purpose::PAD);
+
+<span class="kw">fn </span>main() {
+    <span class="kw">use </span>base64::Engine;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::&lt;u8&gt;::new();
+    <span class="comment">// with the default engine
+    </span>general_purpose::STANDARD
+        .decode_vec(<span class="string">"aGVsbG8gd29ybGR+Cg=="</span>, <span class="kw-2">&amp;mut </span>buffer,).unwrap();
+    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, buffer);
+
+    buffer.clear();
+
+    <span class="comment">// with a custom engine
+    </span>CUSTOM_ENGINE.decode_vec(
+        <span class="string">"aGVsbG8gaW50ZXJuZXR-Cg=="</span>,
+        <span class="kw-2">&amp;mut </span>buffer,
+    ).unwrap();
+    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, buffer);
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode_slice" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#353-376">source</a><h4 class="code-header">fn <a href="#method.decode_slice" class="fn">decode_slice</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+    &amp;self,
+    input: T,
+    output: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="enum" href="../enum.DecodeSliceError.html" title="enum base64::DecodeSliceError">DecodeSliceError</a>&gt;</h4></section></summary><div class="docblock"><p>Decode the input into the provided output slice.</p>
+<p>Returns the number of bytes written to the slice, or an error if <code>output</code> is smaller than
+the estimated decoded length.</p>
+<p>This will not write any bytes past exactly what is decoded (no stray garbage bytes at the end).</p>
+<p>See <a href="../fn.decoded_len_estimate.html" title="fn base64::decoded_len_estimate">crate::decoded_len_estimate</a> for calculating buffer sizes.</p>
+<p>See <a href="trait.Engine.html#method.decode_slice_unchecked" title="method base64::engine::Engine::decode_slice_unchecked">Engine::decode_slice_unchecked</a> for a version that panics instead of returning an error
+if the output buffer is too small.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode_slice_unchecked" class="method"><a class="src rightside" href="../../src/base64/engine/mod.rs.html#393-418">source</a><h4 class="code-header">fn <a href="#method.decode_slice_unchecked" class="fn">decode_slice_unchecked</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;&gt;(
+    &amp;self,
+    input: T,
+    output: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="enum" href="../enum.DecodeError.html" title="enum base64::DecodeError">DecodeError</a>&gt;</h4></section></summary><div class="docblock"><p>Decode the input into the provided output slice.</p>
+<p>Returns the number of bytes written to the slice.</p>
+<p>This will not write any bytes past exactly what is decoded (no stray garbage bytes at the end).</p>
+<p>See <a href="../fn.decoded_len_estimate.html" title="fn base64::decoded_len_estimate">crate::decoded_len_estimate</a> for calculating buffer sizes.</p>
+<p>See <a href="trait.Engine.html#method.decode_slice" title="method base64::engine::Engine::decode_slice">Engine::decode_slice</a> for a version that returns an error instead of panicking if the output
+buffer is too small.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>Panics if the provided output buffer is too small for the decoded data.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-Engine-for-GeneralPurpose" class="impl"><a class="src rightside" href="../../src/base64/engine/general_purpose/mod.rs.html#44-190">source</a><a href="#impl-Engine-for-GeneralPurpose" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Engine.html" title="trait base64::engine::Engine">Engine</a> for <a class="struct" href="general_purpose/struct.GeneralPurpose.html" title="struct base64::engine::general_purpose::GeneralPurpose">GeneralPurpose</a></h3></section></summary><div class="impl-items"><section id="associatedtype.Config-1" class="associatedtype trait-impl"><a href="#associatedtype.Config-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Config" class="associatedtype">Config</a> = <a class="struct" href="general_purpose/struct.GeneralPurposeConfig.html" title="struct base64::engine::general_purpose::GeneralPurposeConfig">GeneralPurposeConfig</a></h4></section><section id="associatedtype.DecodeEstimate-1" class="associatedtype trait-impl"><a href="#associatedtype.DecodeEstimate-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.DecodeEstimate" class="associatedtype">DecodeEstimate</a> = GeneralPurposeEstimate</h4></section></div></details></div><script src="../../trait.impl/base64/engine/trait.Engine.js" async></script></section></div></main></body></html>

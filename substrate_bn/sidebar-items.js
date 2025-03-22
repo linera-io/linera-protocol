@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CurveError","FieldError","GroupError"],"fn":["miller_loop_batch","pairing","pairing_batch"],"mod":["arith"],"struct":["AffineG1","AffineG2","Fq","Fq2","Fr","G1","G2","Gt"],"trait":["Group"]};

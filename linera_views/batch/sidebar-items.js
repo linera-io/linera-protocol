@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WriteOperation"],"struct":["Batch","SimpleUnorderedBatch","SimpleUnorderedBatchIter","UnorderedBatch","UnorderedBatchIter"],"trait":["BatchValueWriter","DeletePrefixExpander","LocalDeletePrefixExpander","SimplifiedBatch"]};

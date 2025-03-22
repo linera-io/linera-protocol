@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Produces a range instance representing the sub-slice containing the specified member."><title>span_of in memoffset - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="memoffset" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../memoffset/index.html">memoffset</a><span class="version">0.9.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">memoffset</a>::<wbr><a class="macro" href="#">span_of</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/memoffset/span_of.rs.html#93-152">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> span_of {
+    (@helper  <span class="macro-nonterminal">$root</span>:ident, [] ..=) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, [] ..) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, [] ..) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, [] ..= <span class="macro-nonterminal">$end</span>:tt) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, [] .. <span class="macro-nonterminal">$end</span>:tt) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, # <span class="macro-nonterminal">$begin</span>:tt [] ..= <span class="macro-nonterminal">$end</span>:tt) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, # <span class="macro-nonterminal">$begin</span>:tt [] .. <span class="macro-nonterminal">$end</span>:tt) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, # <span class="macro-nonterminal">$begin</span>:tt [] ..) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, # <span class="macro-nonterminal">$begin</span>:tt [] ..=) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, # <span class="macro-nonterminal">$field</span>:tt []) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, $(# <span class="macro-nonterminal">$begin</span>:tt)+ [] <span class="macro-nonterminal">$tt</span>:tt $(<span class="macro-nonterminal">$rest</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+    (@helper <span class="macro-nonterminal">$root</span>:ident, <span class="macro-nonterminal">$parent</span>:path, [] <span class="macro-nonterminal">$tt</span>:tt $(<span class="macro-nonterminal">$rest</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+    (<span class="macro-nonterminal">$sty</span>:path, $(<span class="macro-nonterminal">$exp</span>:tt)+) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Produces a range instance representing the sub-slice containing the specified member.</p>
+<p>This macro provides 2 forms of differing functionalities.</p>
+<p>The first form is identical to the appearance of the <code>offset_of!</code> macro.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">span_of!</span>(Struct, member)</code></pre></div>
+<p>The second form of <code>span_of!</code> returns a sub-slice which starts at one field, and ends at another.
+The general pattern of this form is:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Exclusive
+</span><span class="macro">span_of!</span>(Struct, member_a .. member_b)
+<span class="comment">// Inclusive
+</span><span class="macro">span_of!</span>(Struct, member_a ..= member_b)
+
+<span class="comment">// Open-ended ranges
+</span><span class="macro">span_of!</span>(Struct, .. end)
+<span class="macro">span_of!</span>(Struct, start ..)</code></pre></div>
+<h4 id="note"><a class="doc-anchor" href="#note">§</a>Note</h4>
+<p>This macro uses recursion in order to resolve the range expressions, so there is a limit to
+the complexity of the expression.
+In order to raise the limit, the compiler’s recursion limit should be lifted.</p>
+<h4 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h4>
+<p>The inter-field form mentioned above assumes that the first field is positioned before the
+second.
+This is only guaranteed for <code>repr(C)</code> structs.
+Usage with <code>repr(Rust)</code> structs may yield unexpected results, like downward-going ranges,
+spans that include unexpected fields, empty spans, or spans that include <em>unexpected</em> padding bytes.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>memoffset::span_of;
+
+<span class="attr">#[repr(C)]
+</span><span class="kw">struct </span>Florp {
+    a: u32
+}
+
+<span class="attr">#[repr(C)]
+</span><span class="kw">struct </span>Blarg {
+    x: [u32; <span class="number">2</span>],
+    y: [u8; <span class="number">56</span>],
+    z: Florp,
+    egg: [[u8; <span class="number">4</span>]; <span class="number">4</span>]
+}
+
+<span class="macro">assert_eq!</span>(<span class="number">0</span>..<span class="number">84</span>,  <span class="macro">span_of!</span>(Blarg, ..));
+<span class="macro">assert_eq!</span>(<span class="number">0</span>..<span class="number">8</span>,   <span class="macro">span_of!</span>(Blarg, .. y));
+<span class="macro">assert_eq!</span>(<span class="number">0</span>..<span class="number">64</span>,  <span class="macro">span_of!</span>(Blarg, ..= y));
+<span class="macro">assert_eq!</span>(<span class="number">0</span>..<span class="number">8</span>,   <span class="macro">span_of!</span>(Blarg, x));
+<span class="macro">assert_eq!</span>(<span class="number">8</span>..<span class="number">84</span>,  <span class="macro">span_of!</span>(Blarg, y ..));
+<span class="macro">assert_eq!</span>(<span class="number">0</span>..<span class="number">8</span>,   <span class="macro">span_of!</span>(Blarg, x .. y));
+<span class="macro">assert_eq!</span>(<span class="number">0</span>..<span class="number">64</span>,  <span class="macro">span_of!</span>(Blarg, x ..= y));</code></pre></div>
+</div></details></section></div></main></body></html>

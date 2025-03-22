@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Bit-Level Access Instructions"><title>BitAccess in revm::primitives::bitvec::access - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="revm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../revm/index.html">revm</a><span class="version">19.4.0</span></h2></div><h2 class="location"><a href="#">BitAccess</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.clear_bits">clear_bits</a></li><li><a href="#method.get_writers">get_writers</a></li><li><a href="#method.invert_bits">invert_bits</a></li><li><a href="#method.set_bits">set_bits</a></li><li><a href="#method.write_bit">write_bit</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In revm::primitives::bitvec::access</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../../index.html">revm</a>::<wbr><a href="../../index.html">primitives</a>::<wbr><a href="../index.html">bitvec</a>::<wbr><a href="index.html">access</a>::<wbr><a class="trait" href="#">BitAccess</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../src/bitvec/access.rs.html#18">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait BitAccess: <a class="trait" href="../../../../radium/trait.Radium.html" title="trait radium::Radium">Radium</a><div class="where">where
+    Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>: <a class="trait" href="../../../precompile/primitives/bitvec/mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a>,</div>{
+    // Provided methods
+    fn <a href="#method.clear_bits" class="fn">clear_bits</a>(&amp;self, mask: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.set_bits" class="fn">set_bits</a>(&amp;self, mask: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.invert_bits" class="fn">invert_bits</a>(&amp;self, mask: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_bit" class="fn">write_bit</a>&lt;O&gt;(&amp;self, index: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>
+       <span class="where">where O: <a class="trait" href="../../../precompile/primitives/bitvec/prelude/trait.BitOrder.html" title="trait revm::precompile::primitives::bitvec::prelude::BitOrder">BitOrder</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.get_writers" class="fn">get_writers</a>(
+        value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; for&lt;'a&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.fn.html">fn</a>(_: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a Self</a>, _: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bit-level-access-instructions"><a class="doc-anchor" href="#bit-level-access-instructions">§</a>Bit-Level Access Instructions</h2>
+<p>This trait extends <a href="../../../../radium/trait.Radium.html" title="trait radium::Radium"><code>Radium</code></a> in order to manipulate specific bits in an element
+according to the crate’s logic. It drives all memory access instructions and is
+responsible for translating the bit-selection logic of the <a href="../../../precompile/primitives/bitvec/index/index.html" title="mod revm::precompile::primitives::bitvec::index"><code>index</code></a> module into
+real effects.</p>
+<p>This is blanket-implemented on all types that permit shared-mutable memory
+access via the <a href="../../../../radium/trait.Radium.html" title="trait radium::Radium"><code>radium</code></a> crate. Its use is constrained in the <a href="../../../precompile/primitives/bitvec/store/index.html" title="mod revm::precompile::primitives::bitvec::store"><code>store</code></a> module.
+It is required to be a publicly accessible symbol, as it is exported in other
+traits, but it is a crate-internal item and is not part of the public API. Its
+blanket implementation for <code>&lt;R: Radium&gt;</code> prevents any other implementations from
+being written.</p>
+<h3 id="implementation-and-safety-notes"><a class="doc-anchor" href="#implementation-and-safety-notes">§</a>Implementation and Safety Notes</h3>
+<p>This trait is automatically implemented for all types that implement <code>Radium</code>,
+and relies exclusively on <code>Radium</code>’s API and implementations for its work. In
+particular, <code>Radium</code> has no functions which operate on <strong>pointers</strong>: it
+exclusively operates on memory through <strong>references</strong>. Since references must
+always refer to initialized memory, <code>BitAccess</code> and, by extension, all APIs in
+<code>bitvec</code> that touch memory, cannot be used to operate on uninitialized memory in
+any way.</p>
+<p>While you may <em>create</em> a <code>bitvec</code> pointer object that targets uninitialized
+memory, you may not <em>dereference</em> it until the targeted memory has been wholly
+initialized with integer values.</p>
+<p>This restriction cannot be loosened without stable access to pointer-based
+atomic intrinsics in the Rust standard library and corresponding updates to the
+<code>Radium</code> trait.</p>
+<p>Do not attempt to access uninitialized memory through <code>bitvec</code>. Doing so will
+cause <code>bitvec</code> to produce references to uninitialized memory, which is undefined
+behavior.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.clear_bits" class="method"><a class="src rightside" href="../../../../src/bitvec/access.rs.html#47">source</a><h4 class="code-header">fn <a href="#method.clear_bits" class="fn">clear_bits</a>(&amp;self, mask: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a></h4></section></summary><div class="docblock"><p>Clears bits within a memory element to <code>0</code>.</p>
+<p>The mask provided to this method must be constructed from indices that
+are valid in the caller’s context. As the mask is already computed by
+the caller, this does not take an ordering type parameter.</p>
+<h6 id="parameters"><a class="doc-anchor" href="#parameters">§</a>Parameters</h6>
+<ul>
+<li><code>mask</code>: A mask of any number of bits. This is a selection mask: all
+bits in the mask that are set to <code>1</code> will set the corresponding bit in
+<code>*self</code> to <code>0</code>.</li>
+</ul>
+<h6 id="returns"><a class="doc-anchor" href="#returns">§</a>Returns</h6>
+<p>The prior value of the memory element.</p>
+<h6 id="effects"><a class="doc-anchor" href="#effects">§</a>Effects</h6>
+<p>All bits in <code>*self</code> corresponding to <code>1</code> bits in the <code>mask</code> are cleared
+to <code>0</code>; all others retain their original value.</p>
+<p>Do not invert the <code>mask</code> prior to calling this function. <a href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask"><code>BitMask</code></a> is
+a selection type, not a bitwise-operation argument.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_bits" class="method"><a class="src rightside" href="../../../../src/bitvec/access.rs.html#72">source</a><h4 class="code-header">fn <a href="#method.set_bits" class="fn">set_bits</a>(&amp;self, mask: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a></h4></section></summary><div class="docblock"><p>Sets bits within a memory element to <code>1</code>.</p>
+<p>The mask provided to this method must be constructed from indices that
+are valid in the caller’s context. As the mask is already computed by
+the caller, this does not take an ordering type parameter.</p>
+<h6 id="parameters-1"><a class="doc-anchor" href="#parameters-1">§</a>Parameters</h6>
+<ul>
+<li><code>mask</code>: A mask of any number of bits. This is a selection mask: all
+bits in the mask that are set to <code>1</code> will set the corresponding bit in
+<code>*self</code> to <code>1</code>.</li>
+</ul>
+<h6 id="returns-1"><a class="doc-anchor" href="#returns-1">§</a>Returns</h6>
+<p>The prior value of the memory element.</p>
+<h6 id="effects-1"><a class="doc-anchor" href="#effects-1">§</a>Effects</h6>
+<p>All bits in <code>*self</code> corresponding to <code>1</code> bits in the <code>mask</code> are set to
+<code>1</code>; all others retain their original value.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.invert_bits" class="method"><a class="src rightside" href="../../../../src/bitvec/access.rs.html#97">source</a><h4 class="code-header">fn <a href="#method.invert_bits" class="fn">invert_bits</a>(&amp;self, mask: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a></h4></section></summary><div class="docblock"><p>Inverts bits within a memory element.</p>
+<p>The mask provided to this method must be constructed from indices that
+are valid in the caller’s context. As the mask is already computed by
+the caller, this does not take an ordering type parameter.</p>
+<h6 id="parameters-2"><a class="doc-anchor" href="#parameters-2">§</a>Parameters</h6>
+<ul>
+<li><code>mask</code>: A mask of any number of bits. This is a selection mask: all
+bits in the mask that are set to <code>1</code> will invert the corresponding bit
+in <code>*self</code>.</li>
+</ul>
+<h6 id="returns-2"><a class="doc-anchor" href="#returns-2">§</a>Returns</h6>
+<p>The prior value of the memory element.</p>
+<h6 id="effects-2"><a class="doc-anchor" href="#effects-2">§</a>Effects</h6>
+<p>All bits in <code>*self</code> corresponding to <code>1</code> bits in the <code>mask</code> are
+inverted; all others retain their original value.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_bit" class="method"><a class="src rightside" href="../../../../src/bitvec/access.rs.html#126-127">source</a><h4 class="code-header">fn <a href="#method.write_bit" class="fn">write_bit</a>&lt;O&gt;(&amp;self, index: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    O: <a class="trait" href="../../../precompile/primitives/bitvec/prelude/trait.BitOrder.html" title="trait revm::precompile::primitives::bitvec::prelude::BitOrder">BitOrder</a>,</div></h4></section></summary><div class="docblock"><p>Writes a value to one bit in a memory element, returning the previous
+value.</p>
+<h6 id="type-parameters"><a class="doc-anchor" href="#type-parameters">§</a>Type Parameters</h6>
+<ul>
+<li><code>O</code>: An ordering of bits in a memory element that translates the
+<code>index</code> into a real position.</li>
+</ul>
+<h6 id="parameters-3"><a class="doc-anchor" href="#parameters-3">§</a>Parameters</h6>
+<ul>
+<li><code>index</code>: The semantic index of the bit in <code>*self</code> to modify.</li>
+<li><code>value</code>: The new bit value to write into <code>*self</code> at the <code>index</code>.</li>
+</ul>
+<h6 id="returns-3"><a class="doc-anchor" href="#returns-3">§</a>Returns</h6>
+<p>The bit previously stored in <code>*self</code> at <code>index</code>. These operations are
+required to load the <code>*self</code> value from memory in order to operate, and
+so always have the prior value available for use. This can reduce
+spurious loads throughout the crate.</p>
+<h6 id="effects-3"><a class="doc-anchor" href="#effects-3">§</a>Effects</h6>
+<p><code>*self</code> is updated with the bit at <code>index</code> set to <code>value</code>; all other
+bits remain unchanged.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_writers" class="method"><a class="src rightside" href="../../../../src/bitvec/access.rs.html#156-158">source</a><h4 class="code-header">fn <a href="#method.get_writers" class="fn">get_writers</a>(
+    value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,
+) -&gt; for&lt;'a&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.fn.html">fn</a>(_: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a Self</a>, _: <a class="struct" href="../../../precompile/primitives/bitvec/index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>&gt;) -&gt; Self::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a></h4></section></summary><div class="docblock"><p>Gets the function that will write <code>value</code> into all bits under a mask.</p>
+<p>This is useful for preparing bulk operations that all write the same
+data into memory, and only need to provide the shape of memory to write.</p>
+<h6 id="parameters-4"><a class="doc-anchor" href="#parameters-4">§</a>Parameters</h6>
+<ul>
+<li><code>value</code>: The bit that will be written by the returned function.</li>
+</ul>
+<h6 id="returns-4"><a class="doc-anchor" href="#returns-4">§</a>Returns</h6>
+<p>A function which writes <code>value</code> into memory at a given address and under
+a given mask. If <code>value</code> is <code>false</code>, then this produces <a href="../../../precompile/primitives/bitvec/access/trait.BitAccess.html#method.clear_bits" title="method bitvec::access::BitAccess::clear_bits::clear_bits"><code>clear_bits</code></a>;
+if it is <code>true</code>, then this produces <a href="../../../precompile/primitives/bitvec/access/trait.BitAccess.html#method.set_bits" title="method bitvec::access::BitAccess::set_bits::set_bits"><code>set_bits</code></a>.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-BitAccess-for-A" class="impl"><a class="src rightside" href="../../../../src/bitvec/access.rs.html#168-171">source</a><a href="#impl-BitAccess-for-A" class="anchor">§</a><h3 class="code-header">impl&lt;A&gt; <a class="trait" href="../../../precompile/primitives/bitvec/access/trait.BitAccess.html" title="trait revm::precompile::primitives::bitvec::access::BitAccess">BitAccess</a> for A<div class="where">where
+    A: <a class="trait" href="../../../../radium/trait.Radium.html" title="trait radium::Radium">Radium</a>,
+    &lt;A as <a class="trait" href="../../../../radium/trait.Radium.html" title="trait radium::Radium">Radium</a>&gt;::<a class="associatedtype" href="../../../../radium/trait.Radium.html#associatedtype.Item" title="type radium::Radium::Item">Item</a>: <a class="trait" href="../../../precompile/primitives/bitvec/mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a>,</div></h3></section></div><script src="../../../../trait.impl/bitvec/access/trait.BitAccess.js" async></script></section></div></main></body></html>

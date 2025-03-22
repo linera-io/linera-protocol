@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SIGIOT","SIGPOLL","SIGUNUSED"],"enum":["SigHandler","SigevNotify","SigmaskHow","Signal"],"fn":["kill","killpg","pthread_sigmask","raise","sigaction","signal","sigprocmask"],"struct":["SaFlags","SigAction","SigEvent","SigSet","SigSetIter","SignalIterator"],"type":["type_of_thread_id"]};

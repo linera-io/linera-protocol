@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serialize value by using it’s `Display` implementation"><title>SerializeDisplay in serde_with_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_with_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_with_macros/index.html">serde_with_macros</a><span class="version">3.12.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">serde_with_macros</a>::<wbr><a class="derive" href="#">SerializeDisplay</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_with_macros/lib.rs.html#1187-1199">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(SerializeDisplay)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[serde_with]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Serialize value by using it’s <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a> implementation</p>
+<p>This is an alternative way to implement <code>Serialize</code> for types, which also implement <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a>
+by serializing the type as string. Ensure that the struct/enum also implements <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a>.
+If the implementation is missing, you will get an error message like</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0277]: `Struct` doesn&#39;t implement `std::fmt::Display`
+</code></pre></div>
+<p>Deserialization with <a href="https://doc.rust-lang.org/1.81.0/core/str/traits/trait.FromStr.html" title="trait core::str::traits::FromStr"><code>FromStr</code></a> is available with the matching <a href="derive.DeserializeFromStr.html" title="derive serde_with_macros::DeserializeFromStr"><code>DeserializeFromStr</code></a> derive.</p>
+<h2 id="attributes"><a class="doc-anchor" href="#attributes">§</a>Attributes</h2>
+<p>Attributes for the derive can be specified via the <code>#[serde_with(...)]</code> attribute on the struct
+or enum. Currently, these arguments to the attribute are possible:</p>
+<ul>
+<li>
+<p><strong><code>#[serde_with(crate = "...")]</code></strong>: This allows using <code>SerializeDisplay</code> when <code>serde_with</code> is
+not available from the crate root. This happens while <a href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#renaming-dependencies-in-cargotoml">renaming dependencies in
+Cargo.toml</a> or when re-exporting the macro from a different crate.</p>
+<p>This argument is analogue to <a href="https://serde.rs/container-attrs.html#crate">serde’s crate argument</a> and the <a href="https://docs.rs/serde_with/3.12.0/serde_with/guide/serde_as/index.html#re-exporting-serde_as">crate argument
+to <code>serde_as</code></a>.</p>
+</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt;
+
+<span class="attr">#[derive(SerializeDisplay)]
+</span><span class="kw">struct </span>A {
+    a: u32,
+    b: bool,
+}
+
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>A {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{}&lt;&gt;{}"</span>, <span class="self">self</span>.a, <span class="self">self</span>.b)
+    }
+}
+
+<span class="kw">let </span>a = A { a: <span class="number">123</span>, b: <span class="bool-val">false </span>};
+<span class="macro">assert_eq!</span>(<span class="string">r#""123&lt;&gt;false""#</span>, serde_json::to_string(<span class="kw-2">&amp;</span>a).unwrap());</code></pre></div>
+</div></details></section></div></main></body></html>

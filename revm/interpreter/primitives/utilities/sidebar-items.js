@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["KECCAK_EMPTY"],"fn":["calc_blob_gasprice","calc_excess_blob_gas","fake_exponential","keccak256"]};

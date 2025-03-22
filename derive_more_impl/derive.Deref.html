@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Using `#[derive(Deref)]`"><title>Deref in derive_more_impl - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_more_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_more_impl/index.html">derive_more_impl</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">derive_more_impl</a>::<wbr><a class="derive" href="#">Deref</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/derive_more_impl/lib.rs.html#144">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Deref)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[deref]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="using-derivederef"><a class="doc-anchor" href="#using-derivederef">§</a>Using <code>#[derive(Deref)]</code></h2>
+<p>Deriving <code>Deref</code> only works for a single field of a struct.
+It’s possible to use it in two ways:</p>
+<ol>
+<li>Dereferencing to the field, i.e. like if your type was a reference type.</li>
+<li>Doing a dereference on the field, for when the field itself is a reference type like <code>&amp;</code> and <code>Box</code>.</li>
+</ol>
+<p>With <code>#[deref]</code> or <code>#[deref(ignore)]</code> it’s possible to indicate the field that
+you want to derive <code>Deref</code> for.</p>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Deref)]
+</span><span class="kw">struct </span>Num {
+    num: i32,
+}
+
+<span class="attr">#[derive(Deref)]
+#[deref(forward)]
+</span><span class="kw">struct </span>MyBoxedInt(Box&lt;i32&gt;);
+
+<span class="comment">// You can specify the field you want to derive `Deref` for.
+</span><span class="attr">#[derive(Deref)]
+</span><span class="kw">struct </span>CoolVec {
+    cool: bool,
+    <span class="attr">#[deref]
+    </span>vec: Vec&lt;i32&gt;,
+}
+
+<span class="kw">let </span>num = Num{num: <span class="number">123</span>};
+<span class="kw">let </span>boxed = MyBoxedInt(Box::new(<span class="number">123</span>));
+<span class="kw">let </span>cool_vec = CoolVec{cool: <span class="bool-val">true</span>, vec: <span class="macro">vec!</span>[<span class="number">123</span>]};
+<span class="macro">assert_eq!</span>(<span class="number">123</span>, <span class="kw-2">*</span>num);
+<span class="macro">assert_eq!</span>(<span class="number">123</span>, <span class="kw-2">*</span>boxed);
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="number">123</span>], <span class="kw-2">*</span>cool_vec);</code></pre></div>
+<h3 id="structs"><a class="doc-anchor" href="#structs">§</a>Structs</h3>
+<p>When deriving a non-forwarded <code>Deref</code> for a struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Deref)]
+</span><span class="kw">struct </span>CoolVec {
+    cool: bool,
+    <span class="attr">#[deref]
+    </span>vec: Vec&lt;i32&gt;,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::Deref <span class="kw">for </span>CoolVec {
+    <span class="kw">type </span>Target = Vec&lt;i32&gt;;
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.vec
+    }
+}</code></pre></div>
+<p>When deriving a forwarded <code>Deref</code> for a struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Deref)]
+#[deref(forward)]
+</span><span class="kw">struct </span>MyBoxedInt(Box&lt;i32&gt;);</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::Deref <span class="kw">for </span>MyBoxedInt {
+    <span class="kw">type </span>Target = &lt;Box&lt;i32&gt; <span class="kw">as </span>derive_more::Deref&gt;::Target;
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        &lt;Box&lt;i32&gt; <span class="kw">as </span>derive_more::Deref&gt;::deref(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
+    }
+}</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>Deriving <code>Deref</code> is not supported for enums.</p>
+</div></details></section></div></main></body></html>

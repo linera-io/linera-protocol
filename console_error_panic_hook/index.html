@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`console_error_panic_hook`"><title>console_error_panic_hook - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="console_error_panic_hook" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../console_error_panic_hook/index.html">console_error_panic_hook</a><span class="version">0.1.7</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">console_error_panic_hook</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/console_error_panic_hook/lib.rs.html#1-152">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="console_error_panic_hook"><a class="doc-anchor" href="#console_error_panic_hook">§</a><code>console_error_panic_hook</code></h2>
+<p><a href="https://docs.rs/console_error_panic_hook/"><img src="https://docs.rs/console_error_panic_hook/badge.svg" alt="" /></a>
+<a href="https://crates.io/crates/console_error_panic_hook"><img src="https://img.shields.io/crates/v/console_error_panic_hook.svg" alt="" /></a>
+<a href="https://crates.io/crates/console_error_panic_hook"><img src="https://img.shields.io/crates/d/console_error_panic_hook.png" alt="" /></a>
+<a href="https://travis-ci.org/rustwasm/console_error_panic_hook"><img src="https://travis-ci.org/rustwasm/console_error_panic_hook.svg?branch=master" alt="Build Status" /></a></p>
+<p>This crate lets you debug panics on <code>wasm32-unknown-unknown</code> by providing a
+panic hook that forwards panic messages to
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Console/error"><code>console.error</code></a>.</p>
+<p>When an error is reported with <code>console.error</code>, browser devtools and node.js
+will typically capture a stack trace and display it with the logged error
+message.</p>
+<p>Without <code>console_error_panic_hook</code> you just get something like <em>RuntimeError: Unreachable executed</em></p>
+<p>Browser:
+<img src="without_panic_hook.png" alt="Console without panic hook" /></p>
+<p>Node:
+<img src="without_panic_hook_node.png" alt="Node console without panic hook" /></p>
+<p>With this panic hook installed you will see the panic message</p>
+<p>Browser:
+<img src="with_panic_hook.png" alt="Console with panic hook set up" /></p>
+<p>Node:
+<img src="with_panic_hook_node.png" alt="Node console with panic hook set up" /></p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>There are two ways to install this panic hook.</p>
+<p>First, you can set the hook yourself by calling <code>std::panic::set_hook</code> in
+some initialization function:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>console_error_panic_hook;
+<span class="kw">use </span>std::panic;
+
+<span class="kw">fn </span>my_init_function() {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>Alternatively, use <code>set_once</code> on some common code path to ensure that
+<code>set_hook</code> is called, but only the one time. Under the hood, this uses
+<code>std::sync::Once</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>console_error_panic_hook;
+
+<span class="kw">struct </span>MyBigThing;
+
+<span class="kw">impl </span>MyBigThing {
+    <span class="kw">pub fn </span>new() -&gt; MyBigThing {
+        console_error_panic_hook::set_once();
+
+        MyBigThing
+    }
+}</code></pre></div>
+<h3 id="errorstacktracelimit"><a class="doc-anchor" href="#errorstacktracelimit">§</a>Error.stackTraceLimit</h3>
+<p>Many browsers only capture the top 10 frames of a stack trace. In rust programs this is less likely to be enough. To see more frames, you can set the non-standard value <code>Error.stackTraceLimit</code>. For more information see the <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Microsoft_Extensions/Error.stackTraceLimit">MDN Web Docs</a> or <a href="https://v8.dev/docs/stack-trace-api">v8 docs</a>.</p>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.hook.html" title="fn console_error_panic_hook::hook">hook</a></div><div class="desc docblock-short">A panic hook for use with
+<a href="https://doc.rust-lang.org/nightly/std/panic/fn.set_hook.html"><code>std::panic::set_hook</code></a>
+that logs panics into
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Console/error"><code>console.error</code></a>.</div></li><li><div class="item-name"><a class="fn" href="fn.set_once.html" title="fn console_error_panic_hook::set_once">set_once</a></div><div class="desc docblock-short">Set the <code>console.error</code> panic hook the first time this is called. Subsequent
+invocations do nothing.</div></li></ul></section></div></main></body></html>

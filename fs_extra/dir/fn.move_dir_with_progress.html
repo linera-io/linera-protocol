@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Moves the directory contents from one place to another with information about progress. This function will also copy the permission bits of the original files to destination files (not for directories)."><title>move_dir_with_progress in fs_extra::dir - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fs_extra" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../fs_extra/index.html">fs_extra</a><span class="version">1.3.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In fs_extra::dir</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">fs_extra</a>::<wbr><a href="index.html">dir</a>::<wbr><a class="fn" href="#">move_dir_with_progress</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/fs_extra/dir.rs.html#1185-1381">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn move_dir_with_progress&lt;P, Q, F&gt;(
+    from: P,
+    to: Q,
+    options: &amp;<a class="struct" href="struct.CopyOptions.html" title="struct fs_extra::dir::CopyOptions">CopyOptions</a>,
+    progress_handler: F,
+) -&gt; <a class="type" href="../error/type.Result.html" title="type fs_extra::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>&gt;<div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;,
+    Q: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(<a class="struct" href="struct.TransitProcess.html" title="struct fs_extra::dir::TransitProcess">TransitProcess</a>) -&gt; <a class="enum" href="enum.TransitProcessResult.html" title="enum fs_extra::dir::TransitProcessResult">TransitProcessResult</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Moves the directory contents from one place to another with information about progress.
+This function will also copy the permission bits of the original files to
+destination files (not for directories).</p>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>This function will return an error in the following situations, but is not limited to just
+these cases:</p>
+<ul>
+<li>This <code>from</code> path is not a directory.</li>
+<li>This <code>from</code> directory does not exist.</li>
+<li>Invalid folder name for <code>from</code> or <code>to</code>.</li>
+<li>The current process does not have the permission to access <code>from</code> or write <code>to</code>.</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>fs_extra;
+<span class="kw">use </span>fs_extra::dir::move_dir_with_progress;
+
+<span class="kw">let </span>options = CopyOptions::new(); <span class="comment">//Initialize default values for CopyOptions
+</span><span class="kw">let </span>handle = |process_info: TransitProcess| {
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, process_info.total_bytes);
+    fs_extra::dir::TransitProcessResult::ContinueOrAbort
+}
+
+<span class="comment">// move source/dir1 to target/dir1
+</span>move_dir_with_progress(<span class="string">"source/dir1"</span>, <span class="string">"target/dir1"</span>, <span class="kw-2">&amp;</span>options, handle)<span class="question-mark">?</span>;
+</code></pre></div>
+</div></details></section></div></main></body></html>

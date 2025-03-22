@@ -1,0 +1,170 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="URI and IRI types."><title>iri_string::types - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="iri_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../iri_string/index.html">iri_string</a><span class="version">0.7.7</span></h2></div><h2 class="location"><a href="#">Module types</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate iri_string</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">iri_string</a>::<wbr><a class="mod" href="#">types</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/iri_string/types.rs.html#1-224">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>URI and IRI types.</p>
+<h2 id="uri-and-iri"><a class="doc-anchor" href="#uri-and-iri">§</a>URI and IRI</h2>
+<p>IRIs (Internationalized Resource Identifiers) are defined in <a href="https://tools.ietf.org/html/rfc3987">RFC 3987</a>,
+and URIs (Uniform Resource Identifiers) are defined in <a href="https://tools.ietf.org/html/rfc3986">RFC 3986</a>.</p>
+<p>URI consists of only ASCII characters, and is a subset of IRI.</p>
+<p>IRIs are defined as below:</p>
+<div class="example-wrap"><pre class="language-text"><code>IRI           = scheme &quot;:&quot; ihier-part [ &quot;?&quot; iquery ] [ &quot;#&quot; ifragment ]
+IRI-reference = IRI / irelative-ref
+absolute-IRI  = scheme &quot;:&quot; ihier-part [ &quot;?&quot; iquery ]
+irelative-ref = irelative-part [ &quot;?&quot; iquery ] [ &quot;#&quot; ifragment ]
+    (`irelative-part` is roughly same as `ihier-part`.)
+</code></pre></div>
+<p>Definitions for URIs are almost same, but they cannot have non-ASCII characters.</p>
+<h2 id="types"><a class="doc-anchor" href="#types">§</a>Types</h2>
+<p>Types can be categorized by:</p>
+<ul>
+<li>syntax,</li>
+<li>spec, and</li>
+<li>ownership.</li>
+</ul>
+<h3 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h3>
+<p>Since URIs and IRIs have almost same syntax and share algorithms, they are implemented by
+generic types.</p>
+<ul>
+<li><a href="struct.RiStr.html"><code>RiStr</code></a> and <a href="struct.RiString.html"><code>RiString</code></a>
+<ul>
+<li>String types for <code>IRI</code> and <code>URI</code> rules.</li>
+</ul>
+</li>
+<li><a href="struct.RiAbsoluteStr.html"><code>RiAbsoluteStr</code></a> and <a href="struct.RiAbsoluteString.html"><code>RiAbsoluteString</code></a>
+<ul>
+<li>String types for <code>absolute-IRI</code> and <code>absolute-URI</code> rules.</li>
+</ul>
+</li>
+<li><a href="struct.RiReferenceStr.html"><code>RiReferenceStr</code></a> and <a href="struct.RiReferenceString.html"><code>RiReferenceString</code></a>
+<ul>
+<li>String types for <code>IRI-reference</code> and <code>URI-reference</code> rules.</li>
+</ul>
+</li>
+<li><a href="struct.RiRelativeStr.html"><code>RiRelativeStr</code></a> and <a href="struct.RiRelativeString.html"><code>RiRelativeString</code></a>
+<ul>
+<li>String types for <code>irelative-ref</code> and <code>relative-ref</code> rules.</li>
+</ul>
+</li>
+<li><a href="struct.RiFragmentStr.html"><code>RiFragmentStr</code></a> and <a href="struct.RiFragmentString.html"><code>RiFragmentString</code></a>
+<ul>
+<li>String types for <code>ifragment</code> and <code>fragment</code> rules.</li>
+<li>Note that these types represents a substring of an IRI / URI references.
+They are not intended to used directly as an IRI / URI references.</li>
+</ul>
+</li>
+</ul>
+<p>“Ri” stands for “Resource Identifier”.</p>
+<h3 id="spec"><a class="doc-anchor" href="#spec">§</a>Spec</h3>
+<p>These types have a type parameter, which represents RFC specification.
+<a href="../spec/enum.IriSpec.html"><code>IriSpec</code></a> represents <a href="https://tools.ietf.org/html/rfc3987">RFC 3987</a> spec, and <a href="../spec/enum.UriSpec.html"><code>UriSpec</code></a> represents <a href="https://tools.ietf.org/html/rfc3986">RFC 3986</a> spec.
+For example, <code>RiAbsoluteStr&lt;IriSpec&gt;</code> can have <code>absolute-IRI</code> string value,
+and <code>RiReferenceStr&lt;UriSpec&gt;</code> can have <code>URI-reference</code> string value.</p>
+<h3 id="ownership"><a class="doc-anchor" href="#ownership">§</a>Ownership</h3>
+<p>String-like types have usually two variations, borrowed and owned.</p>
+<p>Borrowed types (such as <code>str</code>, <code>Path</code>, <code>OsStr</code>) are unsized, and used by reference style.
+Owned types (such as <code>String</code>, <code>PathBuf</code>, <code>OsString</code>) are sized, and requires heap allocation.
+Owned types can be coerced to a borrowed type (for example, <code>&amp;String</code> is automatically coerced
+to <code>&amp;str</code> in many context).</p>
+<p>IRI / URI types have same variations, <code>RiFooStr</code> and <code>RiFooString</code>
+(<code>Foo</code> part represents syntax).
+They are very similar to <code>&amp;str</code> and <code>String</code>.
+<code>Deref</code> is implemented, <code>RiFooStr::len()</code> is available, <code>&amp;RiFooString</code> can be coerced to
+<code>&amp;RiFooStr</code>, <code>Cow&lt;'_, RiFooStr&gt;</code> and <code>Box&lt;RiFooStr&gt;</code> is available, and so on.</p>
+<h2 id="hierarchy-and-safe-conversion"><a class="doc-anchor" href="#hierarchy-and-safe-conversion">§</a>Hierarchy and safe conversion</h2>
+<p>IRI syntaxes have the hierarchy below.</p>
+<div class="example-wrap"><pre class="language-text"><code>RiReferenceStr
+|-- RiStr
+|   `-- RiAbsoluteStr
+`-- RiRelativeStr
+</code></pre></div>
+<p>Therefore, the conversions below are safe and cheap:</p>
+<ul>
+<li><code>RiStr -&gt; RiReferenceStr</code></li>
+<li><code>RiAbsoluteStr -&gt; RiStr</code></li>
+<li><code>RiAbsoluteStr -&gt; RiReferenceStr</code></li>
+<li><code>RiRelativeStr -&gt; RiReferenceStr</code></li>
+</ul>
+<p>For safely convertible types (consider <code>FooStr -&gt; BarStr</code> is safe), traits
+below are implemented:</p>
+<ul>
+<li><code>AsRef&lt;BarStr&gt; for FooStr</code></li>
+<li><code>AsRef&lt;BarStr&gt; for FooString</code></li>
+<li><code>From&lt;FooString&gt; for BarString</code></li>
+<li><code>PartialEq&lt;FooStr&gt; for BarStr</code>, and lots of impls like that
+<ul>
+<li><code>PartialEq</code> and <code>ParitalOrd</code>.</li>
+<li>Slice, owned, <code>Cow</code>, reference, etc…</li>
+</ul>
+</li>
+</ul>
+<h3 id="fallible-conversions"><a class="doc-anchor" href="#fallible-conversions">§</a>Fallible conversions</h3>
+<p>Fallible conversions are implemented from plain string into IRI strings.</p>
+<ul>
+<li><code>TryFrom&lt;&amp;str&gt; for &amp;FooStr</code></li>
+<li><code>TryFrom&lt;&amp;str&gt; for FooString</code></li>
+<li><code>TryFrom&lt;String&gt; for FooString</code></li>
+<li><code>FromStr for FooString</code></li>
+</ul>
+<p>Some IRI string types provide more convenient methods to convert between IRI types.
+For example, <a href="struct.RiReferenceString.html#method.into_iri"><code>RiReferenceString::into_iri()</code></a> tries to convert an IRI reference into an IRI,
+and returns <code>Result&lt;IriString, IriRelativeString&gt;</code>.
+This is because an IRI reference is valid as an IRI or a relative IRI reference.
+Such methods are usually more efficient than using <code>TryFrom</code> for plain strings, because they
+prevents you from losing ownership of a string, and does a conversion without extra memory
+allocation.</p>
+<h2 id="aliases"><a class="doc-anchor" href="#aliases">§</a>Aliases</h2>
+<p>This module contains type aliases for RFC 3986 URI types and RFC 3987 IRI types.</p>
+<p><code>IriFooStr{,ing}</code> are aliases of <code>RiFooStr{,ing}&lt;IriSpec&gt;</code>, and <code>UriFooStr{,ing}</code> are aliases
+of <code>RiFooStr{,ing}&lt;UriSpec&gt;</code>.</p>
+<h2 id="wrapped-string-types"><a class="doc-anchor" href="#wrapped-string-types">§</a>Wrapped string types</h2>
+<p>Similar to string types in std (such as <code>str</code>, <code>std::path::Path</code>, and <code>std::ffi::OsStr</code>),
+IRI string types in this crate provides convenient conversions to:</p>
+<ul>
+<li><code>std::box::Box</code>,</li>
+<li><code>std::borrow::Cow</code>,</li>
+<li><code>std::rc::Rc</code>, and</li>
+<li><code>std::sync::Arc</code>.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::rc::Rc;
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>iri_string::types::IriStr;
+
+<span class="kw">let </span>iri = IriStr::new(<span class="string">"http://example.com/"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>iri_owned = iri.to_owned();
+
+<span class="comment">// From slice.
+</span><span class="kw">let </span>cow_1_1: Cow&lt;<span class="lifetime">'_</span>, IriStr&gt; = iri.into();
+<span class="kw">let </span>cow_1_2 = Cow::&lt;<span class="lifetime">'_</span>, IriStr&gt;::from(iri);
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(cow_1_1, Cow::Borrowed(<span class="kw">_</span>)));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(cow_1_2, Cow::Borrowed(<span class="kw">_</span>)));
+<span class="comment">// From owned.
+</span><span class="kw">let </span>cow_2_1: Cow&lt;<span class="lifetime">'_</span>, IriStr&gt; = iri_owned.clone().into();
+<span class="kw">let </span>cow_2_2 = Cow::&lt;<span class="lifetime">'_</span>, IriStr&gt;::from(iri_owned.clone());
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(cow_2_1, Cow::Owned(<span class="kw">_</span>)));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(cow_2_2, Cow::Owned(<span class="kw">_</span>)));
+
+<span class="comment">// From slice.
+</span><span class="kw">let </span>box_1_1: Box&lt;IriStr&gt; = iri.into();
+<span class="kw">let </span>box_1_2 = Box::&lt;IriStr&gt;::from(iri);
+<span class="comment">// From owned.
+</span><span class="kw">let </span>box_2_1: Box&lt;IriStr&gt; = iri_owned.clone().into();
+<span class="kw">let </span>box_2_2 = Box::&lt;IriStr&gt;::from(iri_owned.clone());
+
+<span class="comment">// From slice.
+</span><span class="kw">let </span>rc_1_1: Rc&lt;IriStr&gt; = iri.into();
+<span class="kw">let </span>rc_1_2 = Rc::&lt;IriStr&gt;::from(iri);
+<span class="comment">// From owned.
+// Note that `From&lt;owned&gt; for Rc&lt;borrowed&gt;` is not implemented for now.
+// Get borrowed string by `.as_slice()` and convert it.
+</span><span class="kw">let </span>rc_2_1: Rc&lt;IriStr&gt; = iri_owned.clone().as_slice().into();
+<span class="kw">let </span>rc_2_2 = Rc::&lt;IriStr&gt;::from(iri_owned.clone().as_slice());
+
+<span class="comment">// From slice.
+</span><span class="kw">let </span>arc_1_1: Arc&lt;IriStr&gt; = iri.into();
+<span class="kw">let </span>arc_1_2 = Arc::&lt;IriStr&gt;::from(iri);
+<span class="comment">// From owned.
+// Note that `From&lt;owned&gt; for Arc&lt;borrowed&gt;` is not implemented for now.
+// Get borrowed string by `.as_slice()` and convert it.
+</span><span class="kw">let </span>arc_2_1: Arc&lt;IriStr&gt; = iri_owned.clone().as_slice().into();
+<span class="kw">let </span>arc_2_2 = Arc::&lt;IriStr&gt;::from(iri_owned.clone().as_slice());</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CreationError.html" title="struct iri_string::types::CreationError">CreationError</a></div><div class="desc docblock-short">Error on conversion into an IRI type.</div></li><li><div class="item-name"><a class="struct" href="struct.RiAbsoluteStr.html" title="struct iri_string::types::RiAbsoluteStr">RiAbsoluteStr</a></div><div class="desc docblock-short">A borrowed slice of an absolute IRI without fragment part.</div></li><li><div class="item-name"><a class="struct" href="struct.RiAbsoluteString.html" title="struct iri_string::types::RiAbsoluteString">RiAbsoluteString</a></div><div class="desc docblock-short">An owned string of an absolute IRI without fragment part.</div></li><li><div class="item-name"><a class="struct" href="struct.RiFragmentStr.html" title="struct iri_string::types::RiFragmentStr">RiFragmentStr</a></div><div class="desc docblock-short">A borrowed slice of an IRI fragment (i.e. after the first <code>#</code> character).</div></li><li><div class="item-name"><a class="struct" href="struct.RiFragmentString.html" title="struct iri_string::types::RiFragmentString">RiFragmentString</a></div><div class="desc docblock-short">An owned string of an IRI fragment (i.e. after the first <code>#</code> character).</div></li><li><div class="item-name"><a class="struct" href="struct.RiQueryStr.html" title="struct iri_string::types::RiQueryStr">RiQueryStr</a></div><div class="desc docblock-short">A borrowed slice of an IRI query (i.e. after the first <code>?</code> and before the first <code>#</code>).</div></li><li><div class="item-name"><a class="struct" href="struct.RiQueryString.html" title="struct iri_string::types::RiQueryString">RiQueryString</a></div><div class="desc docblock-short">An owned string of an IRI fragment (i.e. after the first <code>#</code> character).</div></li><li><div class="item-name"><a class="struct" href="struct.RiReferenceStr.html" title="struct iri_string::types::RiReferenceStr">RiReferenceStr</a></div><div class="desc docblock-short">A borrowed string of an absolute IRI possibly with fragment part.</div></li><li><div class="item-name"><a class="struct" href="struct.RiReferenceString.html" title="struct iri_string::types::RiReferenceString">RiReferenceString</a></div><div class="desc docblock-short">An owned string of an absolute IRI possibly with fragment part.</div></li><li><div class="item-name"><a class="struct" href="struct.RiRelativeStr.html" title="struct iri_string::types::RiRelativeStr">RiRelativeStr</a></div><div class="desc docblock-short">A borrowed slice of a relative IRI reference.</div></li><li><div class="item-name"><a class="struct" href="struct.RiRelativeString.html" title="struct iri_string::types::RiRelativeString">RiRelativeString</a></div><div class="desc docblock-short">An owned string of a relative IRI reference.</div></li><li><div class="item-name"><a class="struct" href="struct.RiStr.html" title="struct iri_string::types::RiStr">RiStr</a></div><div class="desc docblock-short">A borrowed string of an absolute IRI possibly with fragment part.</div></li><li><div class="item-name"><a class="struct" href="struct.RiString.html" title="struct iri_string::types::RiString">RiString</a></div><div class="desc docblock-short">An owned string of an absolute IRI possibly with fragment part.</div></li></ul><h2 id="types-1" class="section-header">Type Aliases<a href="#types-1" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.IriAbsoluteStr.html" title="type iri_string::types::IriAbsoluteStr">IriAbsoluteStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiAbsoluteStr.html" title="struct iri_string::types::RiAbsoluteStr"><code>RiAbsoluteStr</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriAbsoluteString.html" title="type iri_string::types::IriAbsoluteString">IriAbsoluteString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiAbsoluteString.html" title="struct iri_string::types::RiAbsoluteString"><code>RiAbsoluteString</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriFragmentStr.html" title="type iri_string::types::IriFragmentStr">IriFragmentStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiFragmentStr.html" title="struct iri_string::types::RiFragmentStr"><code>RiFragmentStr</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriFragmentString.html" title="type iri_string::types::IriFragmentString">IriFragmentString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiFragmentString.html" title="struct iri_string::types::RiFragmentString"><code>RiFragmentString</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriQueryStr.html" title="type iri_string::types::IriQueryStr">IriQueryStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiQueryStr.html" title="struct iri_string::types::RiQueryStr"><code>RiQueryStr</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriQueryString.html" title="type iri_string::types::IriQueryString">IriQueryString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiQueryString.html" title="struct iri_string::types::RiQueryString"><code>RiQueryString</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriReferenceStr.html" title="type iri_string::types::IriReferenceStr">IriReferenceStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiReferenceStr.html" title="struct iri_string::types::RiReferenceStr"><code>RiReferenceStr</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriReferenceString.html" title="type iri_string::types::IriReferenceString">IriReferenceString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiReferenceString.html" title="struct iri_string::types::RiReferenceString"><code>RiReferenceString</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriRelativeStr.html" title="type iri_string::types::IriRelativeStr">IriRelativeStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiRelativeStr.html" title="struct iri_string::types::RiRelativeStr"><code>RiRelativeStr</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriRelativeString.html" title="type iri_string::types::IriRelativeString">IriRelativeString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiRelativeString.html" title="struct iri_string::types::RiRelativeString"><code>RiRelativeString</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriStr.html" title="type iri_string::types::IriStr">IriStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiStr.html" title="struct iri_string::types::RiStr"><code>RiStr</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.IriString.html" title="type iri_string::types::IriString">IriString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiString.html" title="struct iri_string::types::RiString"><code>RiString</code></a><code>&lt;</code><a href="../spec/enum.IriSpec.html" title="enum iri_string::spec::IriSpec"><code>IriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriAbsoluteStr.html" title="type iri_string::types::UriAbsoluteStr">UriAbsoluteStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiAbsoluteStr.html" title="struct iri_string::types::RiAbsoluteStr"><code>RiAbsoluteStr</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriAbsoluteString.html" title="type iri_string::types::UriAbsoluteString">UriAbsoluteString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiAbsoluteString.html" title="struct iri_string::types::RiAbsoluteString"><code>RiAbsoluteString</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriFragmentStr.html" title="type iri_string::types::UriFragmentStr">UriFragmentStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiFragmentStr.html" title="struct iri_string::types::RiFragmentStr"><code>RiFragmentStr</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriFragmentString.html" title="type iri_string::types::UriFragmentString">UriFragmentString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiFragmentString.html" title="struct iri_string::types::RiFragmentString"><code>RiFragmentString</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriQueryStr.html" title="type iri_string::types::UriQueryStr">UriQueryStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiQueryStr.html" title="struct iri_string::types::RiQueryStr"><code>RiQueryStr</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriQueryString.html" title="type iri_string::types::UriQueryString">UriQueryString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiQueryString.html" title="struct iri_string::types::RiQueryString"><code>RiQueryString</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriReferenceStr.html" title="type iri_string::types::UriReferenceStr">UriReferenceStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiReferenceStr.html" title="struct iri_string::types::RiReferenceStr"><code>RiReferenceStr</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriReferenceString.html" title="type iri_string::types::UriReferenceString">UriReferenceString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiReferenceString.html" title="struct iri_string::types::RiReferenceString"><code>RiReferenceString</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriRelativeStr.html" title="type iri_string::types::UriRelativeStr">UriRelativeStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiRelativeStr.html" title="struct iri_string::types::RiRelativeStr"><code>RiRelativeStr</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriRelativeString.html" title="type iri_string::types::UriRelativeString">UriRelativeString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiRelativeString.html" title="struct iri_string::types::RiRelativeString"><code>RiRelativeString</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriStr.html" title="type iri_string::types::UriStr">UriStr</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiStr.html" title="struct iri_string::types::RiStr"><code>RiStr</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li><li><div class="item-name"><a class="type" href="type.UriString.html" title="type iri_string::types::UriString">UriString</a></div><div class="desc docblock-short">A type alias for <a href="struct.RiString.html" title="struct iri_string::types::RiString"><code>RiString</code></a><code>&lt;</code><a href="../spec/enum.UriSpec.html" title="enum iri_string::spec::UriSpec"><code>UriSpec</code></a><code>&gt;</code>.</div></li></ul></section></div></main></body></html>

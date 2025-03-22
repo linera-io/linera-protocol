@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A thread pool used to execute functions in parallel."><title>threadpool - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="threadpool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../threadpool/index.html">threadpool</a><span class="version">1.8.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">threadpool</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/threadpool/lib.rs.html#11-1329">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A thread pool used to execute functions in parallel.</p>
+<p>Spawns a specified number of worker threads and replenishes the pool if any worker threads
+panic.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="synchronized-with-a-channel"><a class="doc-anchor" href="#synchronized-with-a-channel">§</a>Synchronized with a channel</h3>
+<p>Every thread sends one message over the channel, which then is collected with the <code>take()</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>threadpool::ThreadPool;
+<span class="kw">use </span>std::sync::mpsc::channel;
+
+<span class="kw">let </span>n_workers = <span class="number">4</span>;
+<span class="kw">let </span>n_jobs = <span class="number">8</span>;
+<span class="kw">let </span>pool = ThreadPool::new(n_workers);
+
+<span class="kw">let </span>(tx, rx) = channel();
+<span class="kw">for _ in </span><span class="number">0</span>..n_jobs {
+    <span class="kw">let </span>tx = tx.clone();
+    pool.execute(<span class="kw">move</span>|| {
+        tx.send(<span class="number">1</span>).expect(<span class="string">"channel will be there waiting for the pool"</span>);
+    });
+}
+
+<span class="macro">assert_eq!</span>(rx.iter().take(n_jobs).fold(<span class="number">0</span>, |a, b| a + b), <span class="number">8</span>);</code></pre></div>
+<h3 id="synchronized-with-a-barrier"><a class="doc-anchor" href="#synchronized-with-a-barrier">§</a>Synchronized with a barrier</h3>
+<p>Keep in mind, if a barrier synchronizes more jobs than you have workers in the pool,
+you will end up with a <a href="https://en.wikipedia.org/wiki/Deadlock">deadlock</a>
+at the barrier which is <a href="https://doc.rust-lang.org/reference/behavior-not-considered-unsafe.html">not considered unsafe</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>threadpool::ThreadPool;
+<span class="kw">use </span>std::sync::{Arc, Barrier};
+<span class="kw">use </span>std::sync::atomic::{AtomicUsize, Ordering};
+
+<span class="comment">// create at least as many workers as jobs or you will deadlock yourself
+</span><span class="kw">let </span>n_workers = <span class="number">42</span>;
+<span class="kw">let </span>n_jobs = <span class="number">23</span>;
+<span class="kw">let </span>pool = ThreadPool::new(n_workers);
+<span class="kw">let </span>an_atomic = Arc::new(AtomicUsize::new(<span class="number">0</span>));
+
+<span class="macro">assert!</span>(n_jobs &lt;= n_workers, <span class="string">"too many jobs, will deadlock"</span>);
+
+<span class="comment">// create a barrier that waits for all jobs plus the starter thread
+</span><span class="kw">let </span>barrier = Arc::new(Barrier::new(n_jobs + <span class="number">1</span>));
+<span class="kw">for _ in </span><span class="number">0</span>..n_jobs {
+    <span class="kw">let </span>barrier = barrier.clone();
+    <span class="kw">let </span>an_atomic = an_atomic.clone();
+
+    pool.execute(<span class="kw">move</span>|| {
+        <span class="comment">// do the heavy work
+        </span>an_atomic.fetch_add(<span class="number">1</span>, Ordering::Relaxed);
+
+        <span class="comment">// then wait for the other threads
+        </span>barrier.wait();
+    });
+}
+
+<span class="comment">// wait for the threads to finish the work
+</span>barrier.wait();
+<span class="macro">assert_eq!</span>(an_atomic.load(Ordering::SeqCst), <span class="comment">/* n_jobs = */ </span><span class="number">23</span>);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct threadpool::Builder">Builder</a></div><div class="desc docblock-short"><a href="struct.ThreadPool.html"><code>ThreadPool</code></a> factory, which can be used in order to configure the properties of the
+<a href="struct.ThreadPool.html"><code>ThreadPool</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ThreadPool.html" title="struct threadpool::ThreadPool">ThreadPool</a></div><div class="desc docblock-short">Abstraction of a thread pool for basic parallelism.</div></li></ul></section></div></main></body></html>

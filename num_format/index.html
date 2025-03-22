@@ -1,0 +1,162 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Crates.io Documentation License"><title>num_format - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="num_format" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../num_format/index.html">num_format</a><span class="version">0.4.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">num_format</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/num_format/lib.rs.html#1-302">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://crates.io/crates/num-format"><img src="https://img.shields.io/crates/v/num-format.svg" alt="Crates.io" /></a>
+<a href="https://docs.rs/num-format/"><img src="https://docs.rs/num-format/badge.svg" alt="Documentation" /></a>
+<img src="https://img.shields.io/crates/l/num_format.svg" alt="License" /></p>
+<p>A Rust crate for producing string representations of numbers, formatted according to international
+standards, e.g.</p>
+<ul>
+<li><code>"1,000,000"</code> for US English</li>
+<li><code>"10,00,000"</code> for Indian English</li>
+<li><code>"1 000 000"</code> for French French</li>
+</ul>
+<h2 id="creating-a-string-representation"><a class="doc-anchor" href="#creating-a-string-representation">§</a>Creating a string representation</h2>
+<p><strong>num-format</strong> offers <strong>three</strong> principal APIs…</p>
+<h4 id="toformattedstring"><a class="doc-anchor" href="#toformattedstring">§</a><code>ToFormattedString</code></h4>
+<p>The <a href="https://docs.rs/num-format/0.4.3/num_format/trait.ToFormattedString.html"><code>ToFormattedString</code></a> trait is the simplist of the three APIs. Just call
+<a href="https://docs.rs/num-format/0.4.3/num_format/trait.ToFormattedString.html#method.to_formatted_string"><code>to_formatted_string</code></a> on a type that implements it (all the integer types in the standard library
+implement it) while providing a desired format (see <a href="#picking-a-format">picking a format</a> below). That said, using
+<a href="https://docs.rs/num-format/0.4.3/num_format/trait.ToFormattedString.html"><code>ToFormattedString</code></a> will always heap allocate; so it is the slowest of the three APIs and cannot
+be used in a <code>no_std</code> environment.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_format::{Locale, ToFormattedString};
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>s = <span class="number">1000000</span>.to_formatted_string(<span class="kw-2">&amp;</span>Locale::en);
+    <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>s, <span class="string">"1,000,000"</span>);
+}</code></pre></div>
+<h4 id="buffer"><a class="doc-anchor" href="#buffer">§</a><code>Buffer</code></h4>
+<p>Using the <a href="https://docs.rs/num-format/0.4.3/num_format/struct.Buffer.html"><code>Buffer</code></a> type is the fastest API, as it does <strong>not</strong> heap allocate. Instead, the
+formatted representation is written into a stack-allocated buffer. As such, you can use it in a
+<code>no_std</code> environment.</p>
+<p>Although this API is available for all the integer types in the standard library, it is <strong>not</strong>
+available for types like <a href="https://docs.rs/num-bigint/0.2.2/num_bigint/struct.BigInt.html"><code>num_bigint::BigInt</code></a> whose maximum size cannot be known in advance.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_format::{Buffer, Locale};
+
+<span class="kw">fn </span>main() {
+    <span class="comment">// Create a stack-allocated buffer...
+    </span><span class="kw">let </span><span class="kw-2">mut </span>buf = Buffer::default();
+
+    <span class="comment">// Write "1,000,000" into the buffer...
+    </span>buf.write_formatted(<span class="kw-2">&amp;</span><span class="number">1000000</span>, <span class="kw-2">&amp;</span>Locale::en);
+
+    <span class="comment">// Get a view into the buffer as a &amp;str...
+    </span><span class="kw">let </span>s = buf.as_str();
+
+    <span class="comment">// Do what you want with the &amp;str...
+    </span><span class="macro">assert_eq!</span>(<span class="string">"1,000,000"</span>, s);
+}</code></pre></div>
+<h4 id="writeformatted"><a class="doc-anchor" href="#writeformatted">§</a><code>WriteFormatted</code></h4>
+<p>The <a href="https://docs.rs/num-format/0.4.3/num_format/trait.WriteFormatted.html"><code>WriteFormatted</code></a> trait is in between the other two APIs. You can write a formatted
+representation into any type that implements <a href="https://docs.rs/num-format/0.4.3/num_format/trait.WriteFormatted.html"><code>WriteFormatted</code></a> (all the types in the standard
+library that implement <a href="https://doc.rust-lang.org/std/io/trait.Write.html"><code>io::Write</code></a> or <a href="https://doc.rust-lang.org/std/fmt/fn.write.html"><code>fmt::Write</code></a> implement <a href="https://docs.rs/num-format/0.4.3/num_format/trait.WriteFormatted.html"><code>WriteFormatted</code></a>, such as
+<a href="https://doc.rust-lang.org/std/vec/struct.Vec.html"><code>Vec</code></a>, <a href="https://doc.rust-lang.org/std/string/struct.String.html"><code>String</code></a>, <a href="https://doc.rust-lang.org/std/fs/struct.File.html"><code>File</code></a>, etc.).</p>
+<p>If you’re writing a number type that can use the <a href="https://docs.rs/num-format/0.4.3/num_format/struct.Buffer.html"><code>Buffer</code></a> API, there is <strong>no</strong> heap allocation.
+That said, the <a href="https://doc.rust-lang.org/std/io/trait.Write.html"><code>io::Write</code></a> and <a href="https://doc.rust-lang.org/std/fmt/fn.write.html"><code>fmt::Write</code></a> machinery adds a bit of overhead; so it’s faster
+to use the <a href="https://docs.rs/num-format/0.4.3/num_format/struct.Buffer.html"><code>Buffer</code></a> type directly. This trait is <strong>not</strong> available in a <code>no_std</code> environment.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_format::{Locale, WriteFormatted};
+
+<span class="kw">fn </span>main() {
+    <span class="comment">// Create a writer...
+    </span><span class="kw">let </span><span class="kw-2">mut </span>writer = String::new(); <span class="comment">// Could also be Vec::new(), File::open(...), ...
+
+    // Write "1,000,000" into the writer...
+    </span>writer.write_formatted(<span class="kw-2">&amp;</span><span class="number">1000000</span>, <span class="kw-2">&amp;</span>Locale::en);
+
+    <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>writer, <span class="string">"1,000,000"</span>);
+}</code></pre></div>
+<h2 id="picking-a-format"><a class="doc-anchor" href="#picking-a-format">§</a>Picking a format</h2>
+<p>Formatting options (e.g. which thousands separator to use, what the minus sign looks like, etc.)
+are represented by the <a href="https://docs.rs/num-format/0.4.3/num_format/trait.Format.html"><code>Format</code></a> trait. This crate offers <strong>three</strong> concrete implementations of
+the <a href="https://docs.rs/num-format/0.4.3/num_format/trait.Format.html"><code>Format</code></a> trait…</p>
+<h4 id="locale"><a class="doc-anchor" href="#locale">§</a><code>Locale</code></h4>
+<p>The <a href="https://docs.rs/num-format/0.4.3/num_format/enum.Locale.html"><code>Locale</code></a> type is a programatically generated enum representing formatting standards from the
+<a href="https://en.wikipedia.org/wiki/Common_Locale_Data_Repository">Common Locale Data Repository</a>, which is maintained by the <a href="https://en.wikipedia.org/wiki/Unicode_Consortium">Unicode Consortium</a> and used by
+Apple in macOS and iOS, by LibreOffice, by IBM in AIX, among others.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_format::{Grouping, Locale};
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>locale = Locale::en;
+    <span class="macro">assert_eq!</span>(locale.grouping(), Grouping::Standard);
+    <span class="macro">assert_eq!</span>(locale.minus_sign(), <span class="string">"-"</span>);
+    <span class="macro">assert_eq!</span>(locale.name(), <span class="string">"en"</span>);
+    <span class="macro">assert_eq!</span>(locale.separator(), <span class="string">","</span>);
+
+    <span class="kw">let </span>locale2 = Locale::from_name(<span class="string">"en"</span>).unwrap();
+    <span class="macro">assert_eq!</span>(locale, locale2);
+
+    <span class="kw">let </span>available = Locale::available_names();
+    <span class="macro">println!</span>(<span class="string">"All of the locale names available in the Unicode database are..."</span>);
+    <span class="macro">println!</span>(<span class="string">"{:#?}"</span>, available);
+}</code></pre></div>
+<h4 id="systemlocale-available-behind-feature-flag-with-system-locale"><a class="doc-anchor" href="#systemlocale-available-behind-feature-flag-with-system-locale">§</a><code>SystemLocale</code> <em>(available behind feature flag <code>with-system-locale</code>)</em></h4>
+<p>The <code>SystemLocale</code> type is another type that implements <a href="https://docs.rs/num-format/0.4.3/num_format/trait.Format.html"><code>Format</code></a>. It allows you to access your
+OS’s locale information. It has a very similar API to <a href="https://docs.rs/num-format/0.4.3/num_format/enum.Locale.html"><code>Locale</code></a> and should work on all major
+operating systems (i.e. macOS, linux, the BSDs, and Windows).</p>
+<p><i>Since this type requires several dependencies (especially on Windows), it is behind a feature
+flag. To use it, include <code>num-format = { version = "0.4.3", features = ["with-system-locale"] }</code>
+in your <code>Cargo.toml</code>. Additionally, on Windows (but <strong>only</strong> on Windows), using <code>SystemLocale</code>
+requires Clang 3.9 or higher.</i></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_format::SystemLocale;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>locale = SystemLocale::default().unwrap();
+    <span class="macro">println!</span>(<span class="string">"My system's default locale is..."</span>);
+    <span class="macro">println!</span>(<span class="string">"{:#?}"</span>, <span class="kw-2">&amp;</span>locale);
+
+    <span class="kw">let </span>available = SystemLocale::available_names().unwrap();
+    <span class="macro">println!</span>(<span class="string">"My available locale names are..."</span>);
+    <span class="macro">println!</span>(<span class="string">"{:#?}"</span>, available);
+
+    <span class="kw">match </span>SystemLocale::from_name(<span class="string">"en_US"</span>) {
+        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">println!</span>(<span class="string">"My system has the 'en_US' locale."</span>),
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="macro">println!</span>(<span class="string">"The 'en_US' locale is not included with my system."</span>),
+    }
+}</code></pre></div>
+<h4 id="customformat"><a class="doc-anchor" href="#customformat">§</a><code>CustomFormat</code></h4>
+<p><a href="https://docs.rs/num-format/0.4.3/num_format/struct.CustomFormat.html"><code>CustomFormat</code></a> is the third and final type that implements <a href="https://docs.rs/num-format/0.4.3/num_format/trait.Format.html"><code>Format</code></a>. You can use it to build
+your own custom formats.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_format::{Buffer, Error, CustomFormat, Grouping};
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="kw">let </span>format = CustomFormat::builder()
+        .grouping(Grouping::Indian)
+        .minus_sign(<span class="string">"🙌"</span>)
+        .separator(<span class="string">"😀"</span>)
+        .build()<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = Buffer::new();
+    buf.write_formatted(<span class="kw-2">&amp;</span>(-<span class="number">1000000</span>), <span class="kw-2">&amp;</span>format);
+    <span class="macro">assert_eq!</span>(<span class="string">"🙌10😀00😀000"</span>, buf.as_str());
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h2 id="requirements"><a class="doc-anchor" href="#requirements">§</a>Requirements</h2>
+<ul>
+<li>Rust 1.56.0 or greater if compiled with <code>--no-default-features</code></li>
+<li>Rust 1.58.0 or greater if compiled with default features</li>
+<li>If you’re using the <code>with-system-locale</code> feature <strong>and</strong> you’re on Windows, Clang 3.9 or higher
+is also required. See <a href="https://rust-lang.github.io/rust-bindgen/requirements.html">here</a> for
+installation instructions.</li>
+</ul>
+<h2 id="extra-features"><a class="doc-anchor" href="#extra-features">§</a>Extra features</h2><div><table><thead><tr><th style="text-align: left">Available features</th><th style="text-align: left">What to put in your <code>Cargo.toml</code></th></tr></thead><tbody>
+<tr><td style="text-align: left"><code>no_std</code></td><td style="text-align: left"><code>num-format = { version = "0.4.3", default-features = false }</code></td></tr>
+<tr><td style="text-align: left"><code>with-num-bigint</code></td><td style="text-align: left"><code>num-format = { version = "0.4.3", features = ["with-num-bigint"] }</code></td></tr>
+<tr><td style="text-align: left"><code>with-serde</code></td><td style="text-align: left"><code>num-format = { version = "0.4.3", features = ["with-serde"] }</code></td></tr>
+<tr><td style="text-align: left"><code>with-system-locale</code></td><td style="text-align: left"><code>num-format = { version = "0.4.3", features = ["with-system-locale"] }</code></td></tr>
+</tbody></table>
+</div><h2 id="license"><a class="doc-anchor" href="#license">§</a>License</h2>
+<p><strong>num-format</strong> is licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">The Apache License, Version 2.0</a>, or</li>
+<li><a href="http://opensource.org/licenses/MIT">The MIT license</a></li>
+</ul>
+<p>at your option.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="parsing/index.html" title="mod num_format::parsing">parsing</a></div><div class="desc docblock-short">Module with traits for parsing a formatted string into a number.</div></li><li><div class="item-name"><a class="mod" href="utils/index.html" title="mod num_format::utils">utils</a></div><div class="desc docblock-short">Utility types needed if you want to implement <a href="trait.Format.html"><code>Format</code></a> on your own type.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Buffer.html" title="struct num_format::Buffer">Buffer</a></div><div class="desc docblock-short"><b><u>A key type</u></b>. Represents a stack-allocated buffer you can use to get a
+formatted <code>&amp;str</code> without heap allocation.</div></li><li><div class="item-name"><a class="struct" href="struct.CustomFormat.html" title="struct num_format::CustomFormat">CustomFormat</a></div><div class="desc docblock-short">Type for representing your own custom formats. Implements <a href="trait.Format.html"><code>Format</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.CustomFormatBuilder.html" title="struct num_format::CustomFormatBuilder">CustomFormatBuilder</a></div><div class="desc docblock-short">Type for building <a href="struct.CustomFormat.html"><code>CustomFormat</code></a>s.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct num_format::Error">Error</a></div><div class="desc docblock-short">This crate’s error type.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ErrorKind.html" title="enum num_format::ErrorKind">ErrorKind</a></div><div class="desc docblock-short">This crate’s error kind.</div></li><li><div class="item-name"><a class="enum" href="enum.Grouping.html" title="enum num_format::Grouping">Grouping</a></div><div class="desc docblock-short">Type for specifying how digits are grouped together (e.g. 1,000,000 vs. 10,00,000 vs. 1000000).</div></li><li><div class="item-name"><a class="enum" href="enum.Locale.html" title="enum num_format::Locale">Locale</a></div><div class="desc docblock-short"><b><u>A key type</u></b>. Represents formats from the <a href="https://en.wikipedia.org/wiki/Unicode_Consortium">Unicode Consortium</a>’s
+<a href="https://en.wikipedia.org/wiki/Common_Locale_Data_Repository">Common Locale Data Repository (CLDR)</a>. Implements <a href="trait.Format.html"><code>Format</code></a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Format.html" title="trait num_format::Format">Format</a></div><div class="desc docblock-short">Trait that abstracts over <a href="struct.CustomFormat.html"><code>CustomFormat</code></a>, <a href="enum.Locale.html"><code>Locale</code></a>, and <code>SystemLocale</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.ToFormattedStr.html" title="trait num_format::ToFormattedStr">ToFormattedStr</a></div><div class="desc docblock-short">Marker trait for number types that can be formatted without heap allocation (see <a href="struct.Buffer.html"><code>Buffer</code></a>).</div></li><li><div class="item-name"><a class="trait" href="trait.ToFormattedString.html" title="trait num_format::ToFormattedString">ToFormattedString</a></div><div class="desc docblock-short"><b><u>A key trait</u></b>. Gives numbers the <a href="trait.ToFormattedString.html#method.to_formatted_string"><code>to_formatted_string</code></a> method.</div></li><li><div class="item-name"><a class="trait" href="trait.WriteFormatted.html" title="trait num_format::WriteFormatted">WriteFormatted</a></div><div class="desc docblock-short"><b><u>A key trait</u></b>. Gives types in the standard library that implement <a href="https://doc.rust-lang.org/stable/std/io/trait.Write.html"><code>io::Write</code></a>
+or <a href="https://doc.rust-lang.org/stable/std/fmt/trait.Write.html"><code>fmt::Write</code></a>, such as <code>&amp;mut [u8]</code> and <code>&amp;mut String</code>, a <a href="trait.WriteFormatted.html#method.write_formatted"><code>write_formatted</code></a> method for writing
+formatted numbers.</div></li></ul></section></div></main></body></html>

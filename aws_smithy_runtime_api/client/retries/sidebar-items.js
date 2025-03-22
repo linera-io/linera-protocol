@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ErrorKind","ShouldAttempt"],"mod":["classifiers"],"struct":["AlwaysRetry","RequestAttempts","SharedRetryStrategy"],"trait":["RetryStrategy"]};

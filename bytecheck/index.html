@@ -1,0 +1,106 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="bytecheck"><title>bytecheck - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bytecheck" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bytecheck/index.html">bytecheck</a><span class="version">0.6.12</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">bytecheck</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/bytecheck/lib.rs.html#1-875">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bytecheck"><a class="doc-anchor" href="#bytecheck">§</a>bytecheck</h2>
+<p>bytecheck is a type validation framework for Rust.</p>
+<p>For some types, creating an invalid value immediately results in undefined
+behavior. This can cause some issues when trying to validate potentially
+invalid bytes, as just casting the bytes to your type can technically cause
+errors. This makes it difficult to write validation routines, because until
+you’re certain that the bytes represent valid values you cannot cast them.</p>
+<p>bytecheck provides a framework for performing these byte-level validations
+and implements checks for basic types along with a derive macro to implement
+validation for custom structs and enums.</p>
+<h3 id="design"><a class="doc-anchor" href="#design">§</a>Design</h3>
+<p><a href="trait.CheckBytes.html" title="trait bytecheck::CheckBytes"><code>CheckBytes</code></a> is at the heart of bytecheck, and does the heavy lifting of
+verifying that some bytes represent a valid type. Implementing it can be
+done manually or automatically with the <a href="derive.CheckBytes.html" title="derive bytecheck::CheckBytes">derive macro</a>.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bytecheck::CheckBytes;
+
+<span class="attr">#[derive(CheckBytes, Debug)]
+#[repr(C)]
+</span><span class="kw">struct </span>Test {
+    a: u32,
+    b: char,
+    c: bool,
+}
+<span class="attr">#[repr(C, align(<span class="number">16</span>))]
+</span><span class="kw">struct </span>Aligned&lt;<span class="kw">const </span>N: usize&gt;([u8; N]);
+
+<span class="macro">macro_rules!</span> bytes {
+    ($(<span class="macro-nonterminal">$byte</span>:literal,)<span class="kw-2">*</span>) =&gt; {
+        (<span class="kw-2">&amp;</span>Aligned([$(<span class="macro-nonterminal">$byte</span>,)<span class="kw-2">*</span>]).<span class="number">0 </span><span class="kw">as </span><span class="kw-2">&amp;</span>[u8]).as_ptr()
+    };
+    ($(<span class="macro-nonterminal">$byte</span>:literal),<span class="kw-2">*</span>) =&gt; {
+        <span class="macro">bytes!</span>($(<span class="macro-nonterminal">$byte</span>,)<span class="kw-2">*</span>)
+    };
+}
+
+<span class="comment">// This type is laid out as (u32, char, bool)
+// In this example, the architecture is assumed to be little-endian
+</span><span class="kw">unsafe </span>{
+    <span class="comment">// These are valid bytes for (0, 'x', true)
+    </span>Test::check_bytes(
+        <span class="macro">bytes!</span>[
+            <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0x78u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>,
+            <span class="number">1u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8
+        </span>].cast(),
+        <span class="kw-2">&amp;mut </span>()
+    ).unwrap();
+
+    <span class="comment">// Changing the bytes for the u32 is OK, any bytes are a valid u32
+    </span>Test::check_bytes(
+        <span class="macro">bytes!</span>[
+            <span class="number">42u8</span>, <span class="number">16u8</span>, <span class="number">20u8</span>, <span class="number">3u8</span>, <span class="number">0x78u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>,
+            <span class="number">1u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8
+        </span>].cast(),
+        <span class="kw-2">&amp;mut </span>()
+    ).unwrap();
+
+    <span class="comment">// Characters outside the valid ranges are invalid
+    </span>Test::check_bytes(
+        <span class="macro">bytes!</span>[
+            <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0x00u8</span>, <span class="number">0xd8u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>,
+            <span class="number">1u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8
+        </span>].cast(),
+        <span class="kw-2">&amp;mut </span>()
+    ).unwrap_err();
+    Test::check_bytes(
+        <span class="macro">bytes!</span>[
+            <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0x00u8</span>, <span class="number">0x00u8</span>, <span class="number">0x11u8</span>, <span class="number">0u8</span>,
+            <span class="number">1u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8
+        </span>].cast(),
+        <span class="kw-2">&amp;mut </span>()
+    ).unwrap_err();
+
+    <span class="comment">// 0 is a valid boolean value (false) but 2 is not
+    </span>Test::check_bytes(
+        <span class="macro">bytes!</span>[
+            <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0x78u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>,
+            <span class="number">0u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8
+        </span>].cast(),
+        <span class="kw-2">&amp;mut </span>()
+    ).unwrap();
+    Test::check_bytes(
+        <span class="macro">bytes!</span>[
+            <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0x78u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>,
+            <span class="number">2u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8</span>, <span class="number">255u8
+        </span>].cast(),
+        <span class="kw-2">&amp;mut </span>()
+    ).unwrap_err();
+}</code></pre></div>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li><code>verbose</code>: Some validation algorithms are optimized for speed and do not report full error
+details by default. This feature provides full error information.</li>
+<li><code>std</code>: Enables standard library support (enabled by default). If the <code>std</code> feature is not
+enabled, the <code>alloc</code> crate is required.</li>
+</ul>
+<h3 id="crate-support"><a class="doc-anchor" href="#crate-support">§</a>Crate support</h3>
+<p>Some common crates need to be supported by bytecheck before an official integration has been
+made. Support is provided by bytecheck for these crates, but in the future crates should depend
+on bytecheck and provide their own implementations. The crates that already have support
+provided by bytecheck should work toward integrating the implementations into themselves.</p>
+<p>Crates supported by bytecheck:</p>
+<ul>
+<li><a href="https://docs.rs/uuid"><code>uuid</code></a></li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ArrayCheckError.html" title="struct bytecheck::ArrayCheckError">ArrayCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid array.</div></li><li><div class="item-name"><a class="struct" href="struct.BoolCheckError.html" title="struct bytecheck::BoolCheckError">BoolCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid boolean.</div></li><li><div class="item-name"><a class="struct" href="struct.CharCheckError.html" title="struct bytecheck::CharCheckError">CharCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid character.</div></li><li><div class="item-name"><a class="struct" href="struct.StructCheckError.html" title="struct bytecheck::StructCheckError">StructCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid struct.</div></li><li><div class="item-name"><a class="struct" href="struct.TupleStructCheckError.html" title="struct bytecheck::TupleStructCheckError">TupleStructCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple struct.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.CStrCheckError.html" title="enum bytecheck::CStrCheckError">CStrCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid <code>CStr</code>.</div></li><li><div class="item-name"><a class="enum" href="enum.EnumCheckError.html" title="enum bytecheck::EnumCheckError">EnumCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid enum.</div></li><li><div class="item-name"><a class="enum" href="enum.NonZeroCheckError.html" title="enum bytecheck::NonZeroCheckError">NonZeroCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid <code>NonZero</code> integer.</div></li><li><div class="item-name"><a class="enum" href="enum.SliceCheckError.html" title="enum bytecheck::SliceCheckError">SliceCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid slice.</div></li><li><div class="item-name"><a class="enum" href="enum.StrCheckError.html" title="enum bytecheck::StrCheckError">StrCheckError</a></div><div class="desc docblock-short">An error resulting from an invalid str.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple1CheckError.html" title="enum bytecheck::Tuple1CheckError">Tuple1CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple2CheckError.html" title="enum bytecheck::Tuple2CheckError">Tuple2CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple3CheckError.html" title="enum bytecheck::Tuple3CheckError">Tuple3CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple4CheckError.html" title="enum bytecheck::Tuple4CheckError">Tuple4CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple5CheckError.html" title="enum bytecheck::Tuple5CheckError">Tuple5CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple6CheckError.html" title="enum bytecheck::Tuple6CheckError">Tuple6CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple7CheckError.html" title="enum bytecheck::Tuple7CheckError">Tuple7CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple8CheckError.html" title="enum bytecheck::Tuple8CheckError">Tuple8CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple9CheckError.html" title="enum bytecheck::Tuple9CheckError">Tuple9CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple10CheckError.html" title="enum bytecheck::Tuple10CheckError">Tuple10CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple11CheckError.html" title="enum bytecheck::Tuple11CheckError">Tuple11CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li><li><div class="item-name"><a class="enum" href="enum.Tuple12CheckError.html" title="enum bytecheck::Tuple12CheckError">Tuple12CheckError</a></div><div class="desc docblock-short">An error resulting from an invalid tuple.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.CheckBytes.html" title="trait bytecheck::CheckBytes">CheckBytes</a></div><div class="desc docblock-short">A type that can check whether a pointer points to a valid value.</div></li><li><div class="item-name"><a class="trait" href="trait.Error.html" title="trait bytecheck::Error">Error</a></div><div class="desc docblock-short">An error that can be debugged and displayed.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ErrorBox.html" title="type bytecheck::ErrorBox">ErrorBox</a></div><div class="desc docblock-short">The type used for boxing errors.</div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.CheckBytes.html" title="derive bytecheck::CheckBytes">CheckBytes</a></div><div class="desc docblock-short">Derives <code>CheckBytes</code> for the labeled type.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Used for creating a Field"><title>field in frunk - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="frunk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../frunk/index.html">frunk</a><span class="version">0.4.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">frunk</a>::<wbr><a class="macro" href="#">field</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/frunk_core/macros.rs.html#193">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> field {
+    (($(<span class="macro-nonterminal">$repeated</span>: ty),<span class="kw-2">*</span>), <span class="macro-nonterminal">$value</span>: expr) =&gt; { ... };
+    (($(<span class="macro-nonterminal">$repeated</span>: ty,)<span class="kw-2">*</span>), <span class="macro-nonterminal">$value</span>: expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$name_type</span>: ty, <span class="macro-nonterminal">$value</span>: expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$name_type</span>: ty, <span class="macro-nonterminal">$value</span>: expr, <span class="macro-nonterminal">$name</span>: expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Used for creating a Field</p>
+<p>There are 3 forms of this macro:</p>
+<ul>
+<li>Create an instance of the <code>Field</code> struct with a tuple name type
+and any given value. The runtime-retrievable static name
+field will be set to the the concatenation of the types passed in the
+tuple type used as the first argument.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frunk::labelled::chars::<span class="kw-2">*</span>;
+<span class="kw">use </span>frunk_core::field;
+<span class="kw">let </span>labelled = <span class="macro">field!</span>[(n,a,m,e), <span class="string">"joe"</span>];
+<span class="macro">assert_eq!</span>(labelled.name, <span class="string">"name"</span>);
+<span class="macro">assert_eq!</span>(labelled.value, <span class="string">"joe"</span>)</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A%23%5Ballow(unused_extern_crates)%5D%0Aextern+crate+r%23frunk;%0Ause+frunk::labelled::chars::*;%0Ause+frunk_core::field;%0Afn+main()+%7B%0Alet+labelled+=+field!%5B(n,a,m,e),+%22joe%22%5D;%0Aassert_eq!(labelled.name,+%22name%22);%0Aassert_eq!(labelled.value,+%22joe%22)%0A%7D&amp;edition=2021">Run</a></div>
+<ul>
+<li>Create an instance of the <code>Field</code> struct with a custom, non-tuple
+name type and a value. The runtime-retrievable static name field
+will be set to the stringified version of the type provided.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frunk_core::field;
+<span class="kw">enum </span>first_name {}
+<span class="kw">let </span>labelled = <span class="macro">field!</span>[first_name, <span class="string">"Joe"</span>];
+<span class="macro">assert_eq!</span>(labelled.name, <span class="string">"first_name"</span>);
+<span class="macro">assert_eq!</span>(labelled.value, <span class="string">"Joe"</span>);</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A%23%5Ballow(unused_extern_crates)%5D%0Aextern+crate+r%23frunk;%0Afn+main()+%7B%0Ause+frunk_core::field;%0Aenum+first_name+%7B%7D%0Alet+labelled+=+field!%5Bfirst_name,+%22Joe%22%5D;%0Aassert_eq!(labelled.name,+%22first_name%22);%0Aassert_eq!(labelled.value,+%22Joe%22);%0A%7D&amp;edition=2021">Run</a></div>
+<ul>
+<li>Create an instance of the <code>Field</code> struct with any name type and value,
+<em>and</em> a custom name, passed as the last argument in the macro</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frunk::labelled::chars::<span class="kw-2">*</span>;
+<span class="kw">use </span>frunk_core::field;
+<span class="comment">// useful aliasing of our type-level string
+</span><span class="kw">type </span>age = (a, g, e);
+<span class="kw">let </span>labelled = <span class="macro">field!</span>[age, <span class="number">30</span>, <span class="string">"Age"</span>];
+<span class="macro">assert_eq!</span>(labelled.name, <span class="string">"Age"</span>);
+<span class="macro">assert_eq!</span>(labelled.value, <span class="number">30</span>);</code></pre><a class="test-arrow" target="_blank" href="https://play.rust-lang.org/?code=%23!%5Ballow(unused)%5D%0A%23%5Ballow(unused_extern_crates)%5D%0Aextern+crate+r%23frunk;%0Ause+frunk::labelled::chars::*;%0Ause+frunk_core::field;%0Afn+main()+%7B%0A//+useful+aliasing+of+our+type-level+string%0Atype+age+=+(a,+g,+e);%0Alet+labelled+=+field!%5Bage,+30,+%22Age%22%5D;%0Aassert_eq!(labelled.name,+%22Age%22);%0Aassert_eq!(labelled.value,+30);%0A%7D&amp;edition=2021">Run</a></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Additional features for the Rust standard library."><title>stdext - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="stdext" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../stdext/index.html">stdext</a><span class="version">0.3.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">stdext</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/stdext/lib.rs.html#1-155">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Additional features for the Rust standard library.</p>
+<h3 id="description"><a class="doc-anchor" href="#description">§</a>Description</h3>
+<p>This crate contains enhancements to the Rust standard library types, useful for
+broad audience, but not yet implemented (or stabilized) in <code>std</code>.</p>
+<p>Crate is designed to be lightweight (no external dependencies!) and provide essential
+functionality which possible can get to the <code>std</code> some day.</p>
+<h3 id="extension-traits"><a class="doc-anchor" href="#extension-traits">§</a>Extension traits</h3>
+<p>All the new functionality the stanard library is added using extension traits.</p>
+<p>Below you can find the table of all the extension traits introduced by this crate:</p>
+<div><table><thead><tr><th><code>std</code> structure</th><th>extension traits</th></tr></thead><tbody>
+<tr><td><a href="https://doc.rust-lang.org/std/vec/struct.Vec.html"><code>Vec</code></a></td><td><a href="vec/trait.VecExt.html"><code>VecExt</code></a> and <a href="vec/trait.VecExtClone.html"><code>VecExtClone</code></a></td></tr>
+<tr><td><a href="https://doc.rust-lang.org/std/primitive.str.html"><code>&amp;str</code></a></td><td><a href="str/trait.StrExt.html"><code>StrExt</code></a></td></tr>
+<tr><td><a href="https://doc.rust-lang.org/std/option/enum.Option.html"><code>Option</code></a></td><td><a href="option/trait.OptionExt.html"><code>OptionExt</code></a></td></tr>
+<tr><td><a href="https://doc.rust-lang.org/std/result/enum.Result.html"><code>Result</code></a></td><td><a href="result/trait.ResultExt.html"><code>ResultExt</code></a></td></tr>
+<tr><td><a href="https://doc.rust-lang.org/std/time/struct.Duration.html"><code>Duration</code></a></td><td><a href="duration/trait.DurationExt.html"><code>DurationExt</code></a></td></tr>
+<tr><td><a href="https://doc.rust-lang.org/std/sync/struct.RwLock.html"><code>RwLock</code></a></td><td><a href="sync/rw_lock/trait.RwLockExt.html"><code>RwLockExt</code></a></td></tr>
+<tr><td><a href="https://doc.rust-lang.org/std/sync/struct.Mutex.html"><code>Mutex</code></a></td><td><a href="sync/mutex/trait.MutexExt.html"><code>MutexExt</code></a></td></tr>
+<tr><td><a href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html" title="primitive f32"><code>f32</code></a> and <a href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html" title="primitive f64"><code>f64</code></a></td><td><a href="num/float_convert/trait.FloatConvert.html"><code>FloatConvert</code></a></td></tr>
+</tbody></table>
+</div><h3 id="integer-super-trait"><a class="doc-anchor" href="#integer-super-trait">§</a>Integer super-trait</h3>
+<p>While all built-in integer types have mostly the same interface, it’s not backed by any trait,
+which makes it impossible to write a function that will accept any built-in integer.</p>
+<p><a href="num/integer/trait.Integer.html"><code>Integer</code></a> trait solves that problem by reflecting the common interface of all the built-in integers.</p>
+<h3 id="macros"><a class="doc-anchor" href="#macros">§</a>Macros</h3>
+<p>Another group of extensions in <code>stdext</code> is new macros:</p>
+<ul>
+<li><a href="./macro.compile_warning.html"><code>compile_warning</code></a> for spawning a user-defined compilation warnings.</li>
+<li><a href="./macro.function_name.html"><code>function_name</code></a> for getting an enclosing function name.</li>
+<li><a href="./macro.debug_name.html"><code>debug_name</code></a> for getting a helpful string for debug.</li>
+</ul>
+<h3 id="highlights"><a class="doc-anchor" href="#highlights">§</a>Highlights</h3>
+<ul>
+<li>
+<p>Convenient builder methods for <strong><code>Duration</code></strong>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>stdext::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>duration = Duration::from_minutes(<span class="number">1</span>).add_secs(<span class="number">5</span>).add_micros(<span class="number">100</span>);
+<span class="macro">assert_eq!</span>(duration, Duration::new(<span class="number">65</span>, <span class="number">100_000</span>));</code></pre></div>
+</li>
+<li>
+<p>Panicking version for <strong><code>RwLock::read</code></strong>, <strong><code>RwLock::write</code></strong> and <strong><code>Mutex::lock</code></strong> (for
+fellows who don’t really handle the lock poisoning):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::{Arc, RwLock};
+<span class="kw">use </span>stdext::prelude::<span class="kw-2">*</span>;
+ 
+<span class="kw">let </span>lock = Arc::new(RwLock::new(<span class="number">1</span>));
+{
+    <span class="kw">let </span><span class="kw-2">mut </span>n = lock.force_write(); <span class="comment">// Instead of `.write().unwrap()`.
+    </span><span class="kw-2">*</span>n = <span class="number">2</span>;
+}
+<span class="kw">let </span>n = lock.force_read();
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>n, <span class="number">2</span>);</code></pre></div>
+</li>
+<li>
+<p><strong><code>Result::combine</code></strong> and <strong><code>Option::combine</code></strong> to zip pairs of objects:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>stdext::prelude::<span class="kw-2">*</span>;
+ 
+<span class="kw">let </span>x = <span class="prelude-val">Some</span>(<span class="number">1</span>);
+<span class="kw">let </span>y = <span class="prelude-val">Some</span>(<span class="string">"hi"</span>);
+<span class="kw">let </span>z = <span class="prelude-val">None</span>::&lt;u8&gt;;
+ 
+<span class="macro">assert_eq!</span>(x.combine(y), <span class="prelude-val">Some</span>((<span class="number">1</span>, <span class="string">"hi"</span>)));
+<span class="macro">assert_eq!</span>(x.combine(z), <span class="prelude-val">None</span>);
+
+<span class="kw">let </span>x = <span class="prelude-val">Ok</span>(<span class="number">1</span>);
+<span class="kw">let </span>y = <span class="prelude-val">Ok</span>(<span class="string">"hi"</span>);
+<span class="kw">let </span>z: <span class="prelude-ty">Result</span>&lt;i32, <span class="kw-2">&amp;</span>str&gt; = <span class="prelude-val">Err</span>(<span class="string">"error"</span>);
+<span class="kw">let </span>z2: <span class="prelude-ty">Result</span>&lt;i32, <span class="kw-2">&amp;</span>str&gt; = <span class="prelude-val">Err</span>(<span class="string">"other_error"</span>);
+
+<span class="macro">assert_eq!</span>(x.combine(y), <span class="prelude-val">Ok</span>((<span class="number">1</span>, <span class="string">"hi"</span>)));
+<span class="macro">assert_eq!</span>(x.combine(z), <span class="prelude-val">Err</span>(<span class="string">"error"</span>));
+<span class="macro">assert_eq!</span>(z.combine(z2), <span class="prelude-val">Err</span>(<span class="string">"error"</span>));</code></pre></div>
+</li>
+<li>
+<p>New handy macros (mostly for development purposes):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>stdext::{compile_warning, debug_name, function_name};
+
+<span class="kw">fn </span>sample_function() {
+  <span class="macro">println!</span>(<span class="string">"This function is called {}"</span>, <span class="macro">function_name!</span>());
+  <span class="macro">println!</span>(<span class="string">"You can also found it here: {}"</span>, <span class="macro">debug_name!</span>());
+
+  <span class="macro">compile_warning!</span>(<span class="string">"This function must do something else..."</span>);
+}</code></pre></div>
+</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="default/index.html" title="mod stdext::default">default</a></div><div class="desc docblock-short">Freestanding version of <code>std::default::Default::default()</code>.</div></li><li><div class="item-name"><a class="mod" href="duration/index.html" title="mod stdext::duration">duration</a></div><div class="desc docblock-short">Extension traits for <code>std::time::Duration</code>.</div></li><li><div class="item-name"><a class="mod" href="macros/index.html" title="mod stdext::macros">macros</a></div><div class="desc docblock-short">Various helper macros.</div></li><li><div class="item-name"><a class="mod" href="num/index.html" title="mod stdext::num">num</a></div><div class="desc docblock-short">Extensions for the built-in numeric types.</div></li><li><div class="item-name"><a class="mod" href="option/index.html" title="mod stdext::option">option</a></div><div class="desc docblock-short">Extension traits for <code>std::Option</code>.</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod stdext::prelude">prelude</a></div><div class="desc docblock-short">A “prelude” module which re-exports all the extension traits for the simple library usage.</div></li><li><div class="item-name"><a class="mod" href="result/index.html" title="mod stdext::result">result</a></div><div class="desc docblock-short">Extension traits for <code>std::Result</code>.</div></li><li><div class="item-name"><a class="mod" href="str/index.html" title="mod stdext::str">str</a></div><div class="desc docblock-short">Extension traits for <code>str</code> primitive type.</div></li><li><div class="item-name"><a class="mod" href="sync/index.html" title="mod stdext::sync">sync</a></div><div class="desc docblock-short">Extension traits for the standard synchronization primitives.</div></li><li><div class="item-name"><a class="mod" href="vec/index.html" title="mod stdext::vec">vec</a></div><div class="desc docblock-short">Extension traits for <code>std::Vec</code>.</div></li></ul><h2 id="macros-1" class="section-header">Macros<a href="#macros-1" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.compile_warning.html" title="macro stdext::compile_warning">compile_warning</a></div><div class="desc docblock-short"><code>compile_warning</code> macro is a brother of <a href="https://doc.rust-lang.org/std/macro.compile_error.html"><code>std::compile_error</code></a>,
+which emits a compile-time warning with a provided message.</div></li><li><div class="item-name"><a class="macro" href="macro.debug_name.html" title="macro stdext::debug_name">debug_name</a></div><div class="desc docblock-short">This macro returns the name of the enclosing function, line number and also filename.
+As the internal implementation is based on the <a href="https://doc.rust-lang.org/std/any/fn.type_name.html"><code>std::any::type_name</code></a>, this macro derives
+all the limitations of this function.</div></li><li><div class="item-name"><a class="macro" href="macro.function_name.html" title="macro stdext::function_name">function_name</a></div><div class="desc docblock-short">This macro returns the name of the enclosing function.
+As the internal implementation is based on the <a href="https://doc.rust-lang.org/std/any/fn.type_name.html"><code>std::any::type_name</code></a>, this macro derives
+all the limitations of this function.</div></li><li><div class="item-name"><a class="macro" href="macro.return_ok.html" title="macro stdext::return_ok">return_ok</a></div><div class="desc docblock-short">Checks whether supplied <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> variable is <code>Ok</code>
+and if so, returns it.</div></li><li><div class="item-name"><a class="macro" href="macro.return_some.html" title="macro stdext::return_some">return_some</a></div><div class="desc docblock-short">Checks whether supplied <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> variable is <code>Some</code>
+and if so, returns it.</div></li><li><div class="item-name"><a class="macro" href="macro.try_match.html" title="macro stdext::try_match">try_match</a></div><div class="desc docblock-short">Attempts to get variant from the enum variable.</div></li><li><div class="item-name"><a class="macro" href="macro.unwrap_match.html" title="macro stdext::unwrap_match">unwrap_match</a></div><div class="desc docblock-short">Similar to <a href="macro.try_match.html" title="macro stdext::try_match"><code>try_match</code></a> but additionally unwraps the result.</div></li></ul></section></div></main></body></html>
