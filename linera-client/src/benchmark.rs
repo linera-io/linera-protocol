@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ChainId, Owner, UserApplicationId},
     listen_for_shutdown_signals,
     time::Instant,
 };
@@ -574,7 +574,7 @@ where
     pub fn make_benchmark_block_info(
         key_pairs: HashMap<ChainId, AccountSecretKey>,
         transactions_per_block: usize,
-        fungible_application_id: Option<ApplicationId>,
+        fungible_application_id: Option<UserApplicationId>,
     ) -> Vec<(ChainId, Vec<Operation>, AccountSecretKey)> {
         let mut blocks_infos = Vec::new();
         let mut previous_chain_id = *key_pairs
@@ -610,7 +610,7 @@ where
 
     /// Creates a fungible token transfer operation.
     pub fn fungible_transfer(
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         chain_id: ChainId,
         sender: AccountPublicKey,
         receiver: AccountPublicKey,

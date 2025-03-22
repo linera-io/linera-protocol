@@ -9,8 +9,8 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName,
+        Account, AccountOwner, ChainId, ChannelName, Destination, MessageId, ModuleId, Owner,
+        StreamName, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -120,10 +120,10 @@ impl From<MessageId> for wit_contract_api::MessageId {
     }
 }
 
-impl From<ApplicationId> for wit_contract_api::ApplicationId {
-    fn from(application_id: ApplicationId) -> Self {
-        wit_contract_api::ApplicationId {
-            application_description_hash: application_id.application_description_hash.into(),
+impl From<UserApplicationId> for wit_contract_api::UserApplicationId {
+    fn from(application_id: UserApplicationId) -> Self {
+        wit_contract_api::UserApplicationId {
+            inner0: application_id.0.into(),
         }
     }
 }

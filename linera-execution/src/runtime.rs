@@ -18,8 +18,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelFullName,
-        ChannelName, MessageId, Owner, StreamId, StreamName,
+        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId,
+        Owner, StreamId, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -472,7 +472,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Runs the service in a separate thread as an oracle.
     fn run_service_oracle_query(
         &mut self,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let context = QueryContext {
@@ -1315,7 +1315,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn query_service(
         &mut self,
-        application_id: ApplicationId,
+        application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let mut this = self.inner();

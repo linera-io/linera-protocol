@@ -17,7 +17,7 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, Owner,
+        Account, AccountOwner, ChainDescription, ChainId, ModuleId, Owner, UserApplicationId,
     },
     ownership::ChainOwnership,
     vm::VmRuntime,
@@ -697,9 +697,9 @@ impl TransferTestEndpoint {
         Owner(CryptoHash::test_hash("sender"))
     }
 
-    /// Returns the [`ApplicationId`] used to represent a sender that's an application.
-    fn sender_application_id() -> ApplicationId {
-        ApplicationId::from(&Self::sender_application_description())
+    /// Returns the [`UserApplicationId`] used to represent a sender that's an application.
+    fn sender_application_id() -> UserApplicationId {
+        UserApplicationId::from(&Self::sender_application_description())
     }
 
     /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
@@ -740,8 +740,8 @@ impl TransferTestEndpoint {
     }
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
-    fn recipient_application_id() -> ApplicationId {
-        ApplicationId::new(CryptoHash::test_hash("recipient application description"))
+    fn recipient_application_id() -> UserApplicationId {
+        UserApplicationId(CryptoHash::test_hash("recipient application description"))
     }
 
     /// Returns a [`SystemExecutionState`] initialized with this transfer endpoint's account

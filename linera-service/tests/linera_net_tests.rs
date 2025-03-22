@@ -29,7 +29,7 @@ use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, UserApplicationId},
     vm::VmRuntime,
 };
 use linera_chain::data_types::{Medium, Origin};
@@ -177,7 +177,7 @@ struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
 impl NonFungibleApp {
     pub fn create_token_id(
         chain_id: &ChainId,
-        application_id: &ApplicationId,
+        application_id: &UserApplicationId,
         name: &String,
         minter: &AccountOwner,
         hash: &DataBlobHash,
