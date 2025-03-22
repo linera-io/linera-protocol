@@ -885,7 +885,7 @@ where
             balance,
             application_permissions: Default::default(),
         };
-        let operations = iter::repeat(Operation::System(SystemOperation::OpenChain(config)))
+        let operations = iter::repeat(Operation::system(SystemOperation::OpenChain(config)))
             .take(num_new_chains)
             .collect();
         info!("Executing {} OpenChain operations", num_new_chains);

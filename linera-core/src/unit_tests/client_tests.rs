@@ -1364,8 +1364,8 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
     ];
@@ -1437,7 +1437,7 @@ where
         .block()
         .body
         .operations
-        .contains(&Operation::System(SystemOperation::Transfer {
+        .contains(&Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::Chain,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
@@ -1469,7 +1469,7 @@ where
     let owner2_a = Owner::from(client2_a.public_key().await.unwrap());
     let key_pair2_b = AccountSecretKey::generate();
     let owner2_b = Owner::from(key_pair2_b.public());
-    let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
         multi_leader_rounds: 10,
@@ -1512,8 +1512,8 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
     ];
@@ -1564,7 +1564,7 @@ where
         .block()
         .body
         .operations
-        .contains(&Operation::System(SystemOperation::Transfer {
+        .contains(&Operation::system(SystemOperation::Transfer {
             owner: AccountOwner::Chain,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
@@ -1600,7 +1600,7 @@ where
     let owner3_b = Owner::from(key_pair3_b.public());
     let key_pair3_c = AccountSecretKey::generate();
     let owner3_c = Owner::from(key_pair3_c.public());
-    let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
         multi_leader_rounds: 10,
@@ -1667,8 +1667,8 @@ where
     let blob1_hash = blob1.id().hash;
 
     let blob_0_1_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob0_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob1_hash,
         }),
     ];
@@ -1735,8 +1735,8 @@ where
     let blob3_hash = blob3.id().hash;
 
     let blob_2_3_operations = vec![
-        Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
-        Operation::System(SystemOperation::PublishDataBlob {
+        Operation::system(SystemOperation::ReadBlob { blob_id: blob2_id }),
+        Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob3_hash,
         }),
     ];
@@ -1807,7 +1807,7 @@ where
         .block()
         .body
         .operations
-        .contains(&Operation::System(SystemOperation::PublishDataBlob {
+        .contains(&Operation::system(SystemOperation::PublishDataBlob {
             blob_hash: blob4.id().hash
         })));
 

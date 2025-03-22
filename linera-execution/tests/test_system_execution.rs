@@ -47,7 +47,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     view.execute_operation(
         context,
         Timestamp::from(0),
-        Operation::System(operation),
+        Operation::system(operation),
         &mut txn_tracker,
         &mut controller,
     )

@@ -2758,7 +2758,7 @@ where
             let mut owners = ownership.owners.into_iter().collect::<Vec<_>>();
             owners.extend(ownership.super_owners.into_iter().zip(iter::repeat(100)));
             owners.push((new_owner, new_weight));
-            let operations = vec![Operation::System(SystemOperation::ChangeOwnership {
+            let operations = vec![Operation::system(SystemOperation::ChangeOwnership {
                 super_owners: Vec::new(),
                 owners,
                 multi_leader_rounds: ownership.multi_leader_rounds,
@@ -2830,7 +2830,7 @@ where
                 balance,
                 application_permissions: application_permissions.clone(),
             };
-            let operation = Operation::System(SystemOperation::OpenChain(config));
+            let operation = Operation::system(SystemOperation::OpenChain(config));
             let certificate = match self.execute_block(vec![operation], vec![]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
@@ -2895,7 +2895,7 @@ where
         module_id: ModuleId,
     ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, ChainClientError> {
         self.execute_operations(
-            vec![Operation::System(SystemOperation::PublishModule {
+            vec![Operation::system(SystemOperation::PublishModule {
                 module_id,
             })],
             vec![contract_blob, service_blob],
@@ -2914,7 +2914,7 @@ where
         let publish_blob_operations = blobs
             .clone()
             .map(|blob| {
-                Operation::System(SystemOperation::PublishDataBlob {
+                Operation::system(SystemOperation::PublishDataBlob {
                     blob_hash: blob.id().hash,
                 })
             })
@@ -3019,7 +3019,7 @@ where
         let blob_hash = blob.id().hash;
         match self
             .execute_operations(
-                vec![Operation::System(SystemOperation::Admin(
+                vec![Operation::system(SystemOperation::Admin(
                     AdminOperation::PublishCommitteeBlob { blob_hash },
                 ))],
                 vec![blob],
@@ -3102,7 +3102,7 @@ where
         };
         let mut epoch_change_ops = Vec::new();
         while self.has_admin_event(EPOCH_STREAM_NAME, next_epoch).await? {
-            epoch_change_ops.push(Operation::System(SystemOperation::ProcessNewEpoch(
+            epoch_change_ops.push(Operation::system(SystemOperation::ProcessNewEpoch(
                 next_epoch,
             )));
             next_epoch.try_add_assign_one()?;
@@ -3111,7 +3111,7 @@ where
             .has_admin_event(REMOVED_EPOCH_STREAM_NAME, min_epoch)
             .await?
         {
-            epoch_change_ops.push(Operation::System(SystemOperation::ProcessRemovedEpoch(
+            epoch_change_ops.push(Operation::system(SystemOperation::ProcessRemovedEpoch(
                 min_epoch,
             )));
             min_epoch.try_add_assign_one()?;
@@ -3153,7 +3153,7 @@ where
             .keys()
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
-                    Some(Operation::System(SystemOperation::Admin(
+                    Some(Operation::system(SystemOperation::Admin(
                         AdminOperation::RemoveCommittee { epoch: *epoch },
                     )))
                 } else {
