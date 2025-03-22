@@ -155,7 +155,7 @@ impl Operation for CheckFile {
         );
 
         for part in contents {
-            buffer.resize(part.as_bytes().len(), 0);
+            buffer.resize(part.len(), 0);
             file.read_exact(&mut buffer)
                 .with_context(|| format!("Failed to read from {}", path.display()))?;
 

@@ -276,14 +276,14 @@ mod from {
                     .map(|messages| messages.into_iter().map(Into::into).collect())
                     .collect::<Vec<Vec<_>>>(),
                 operations,
-                oracle_responses: oracle_responses.into_iter().map(Into::into).collect(),
+                oracle_responses: oracle_responses.into_iter().collect(),
                 events: events
                     .into_iter()
                     .map(|events| events.into_iter().map(Into::into).collect())
                     .collect(),
                 blobs: blobs
                     .into_iter()
-                    .map(|blobs| blobs.into_iter().map(Into::into).collect())
+                    .map(|blobs| blobs.into_iter().collect())
                     .collect(),
                 operation_results,
             };

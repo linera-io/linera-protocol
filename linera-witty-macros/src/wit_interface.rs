@@ -132,9 +132,11 @@ impl<'input> FunctionInformation<'input> {
             },
         );
 
-        let commas = iter::repeat(Some(quote! { ", ".into(), }))
-            .take(self.parameter_names.len().saturating_sub(1))
-            .chain(Some(None));
+        let commas = iter::repeat_n(
+            Some(quote! { ", ".into(), }),
+            self.parameter_names.len().saturating_sub(1),
+        )
+        .chain(Some(None));
 
         let output = self
             .output_type

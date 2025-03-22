@@ -57,7 +57,7 @@ pub struct ReadGuardedView<'a, W> {
     short_key: Vec<u8>,
 }
 
-impl<'a, W> std::ops::Deref for ReadGuardedView<'a, W> {
+impl<W> std::ops::Deref for ReadGuardedView<'_, W> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -1466,9 +1466,7 @@ mod graphql {
         views::View,
     };
 
-    impl<'value, T: async_graphql::OutputType> async_graphql::OutputType
-        for ReadGuardedView<'value, T>
-    {
+    impl<T: async_graphql::OutputType> async_graphql::OutputType for ReadGuardedView<'_, T> {
         fn type_name() -> Cow<'static, str> {
             T::type_name()
         }

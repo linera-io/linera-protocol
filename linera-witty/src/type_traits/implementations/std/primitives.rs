@@ -78,7 +78,7 @@ impl WitStore for bool {
     }
 }
 
-impl<'t, T> WitType for &'t T
+impl<T> WitType for &T
 where
     T: WitType + ?Sized,
 {
@@ -96,7 +96,7 @@ where
     }
 }
 
-impl<'t, T> WitStore for &'t T
+impl<T> WitStore for &T
 where
     T: WitStore + ?Sized,
 {

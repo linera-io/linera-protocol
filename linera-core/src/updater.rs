@@ -46,7 +46,7 @@ pub enum CommunicateAction {
         blob_ids: Vec<BlobId>,
     },
     FinalizeBlock {
-        certificate: ValidatedBlockCertificate,
+        certificate: Box<ValidatedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     },
     RequestTimeout {
@@ -452,7 +452,7 @@ where
                 delivery,
             } => {
                 let info = self
-                    .send_validated_certificate(certificate, delivery)
+                    .send_validated_certificate(*certificate, delivery)
                     .await?;
                 info.manager.pending
             }

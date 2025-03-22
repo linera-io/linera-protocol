@@ -42,7 +42,7 @@ impl KindCluster {
             .await
     }
 
-    pub async fn load_docker_image(&self, docker_image: &String) -> Result<()> {
+    pub async fn load_docker_image(&self, docker_image: &str) -> Result<()> {
         Command::new("kind")
             .args(["load", "docker-image", docker_image])
             .args(["--name", self.id.to_string().as_str()])

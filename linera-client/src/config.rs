@@ -196,7 +196,7 @@ pub struct GenesisConfig {
     pub network_name: String,
 }
 
-impl<'de> BcsSignable<'de> for GenesisConfig {}
+impl BcsSignable<'_> for GenesisConfig {}
 
 impl GenesisConfig {
     pub fn new(

@@ -1078,7 +1078,7 @@ where
             certificate.inner().block().clone().into(),
         ));
         let finalize_action = CommunicateAction::FinalizeBlock {
-            certificate,
+            certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
         };
         let certificate = self

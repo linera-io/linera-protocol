@@ -75,7 +75,7 @@ impl io::Write for Keccak256Ext {
 #[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHashVec(pub Vec<CryptoHash>);
 
-impl<'de> BcsHashable<'de> for CryptoHashVec {}
+impl BcsHashable<'_> for CryptoHashVec {}
 
 impl Serialize for CryptoHash {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

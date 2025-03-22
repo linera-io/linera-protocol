@@ -154,8 +154,8 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let proposed = manager.requested_proposed.as_ref();
         let locking = manager.requested_locking.as_ref();
         ensure!(
-            proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
-                && locking.map_or(true, |cert| cert.chain_id() == chain_id)
+            proposed.is_none_or(|proposal| proposal.content.block.chain_id == chain_id)
+                && locking.is_none_or(|cert| cert.chain_id() == chain_id)
                 && response.check(&self.public_key).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
