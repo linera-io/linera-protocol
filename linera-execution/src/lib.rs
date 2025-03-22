@@ -786,7 +786,7 @@ pub trait ContractRuntime: BaseRuntime {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Operation {
     /// A system operation.
-    System(SystemOperation),
+    System(Box<SystemOperation>),
     /// A user operation (in serialized form).
     User {
         application_id: UserApplicationId,
@@ -1129,13 +1129,13 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
 impl From<SystemOperation> for Operation {
     fn from(operation: SystemOperation) -> Self {
-        Operation::System(operation)
+        Operation::System(Box::new(operation))
     }
 }
 
 impl Operation {
     pub fn system(operation: SystemOperation) -> Self {
-        Operation::System(operation)
+        Operation::System(Box::new(operation))
     }
 
     /// Creates a new user application operation following the `application_id`'s [`Abi`].
