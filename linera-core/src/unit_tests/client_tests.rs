@@ -1316,7 +1316,7 @@ where
 
     // Try to read a blob without publishing it first, should fail
     let result = client1_a
-        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
         .await;
     assert_matches!(
         result,
@@ -1345,7 +1345,7 @@ where
     // and cache locally the blobs that were published by `client_a`. So this will succeed.
     client1_b.prepare_chain().await?;
     let certificate = client1_b
-        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
+        .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
@@ -2318,7 +2318,7 @@ where
 
     // Client 3 should be able to update validator 3 about the blob and the message.
     let certificate = client3
-        .execute_operation(SystemOperation::ReadBlob { blob_id }.into())
+        .execute_operation(SystemOperation::ReadBlob { blob_id })
         .await
         .unwrap()
         .unwrap();
