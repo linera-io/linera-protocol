@@ -58,7 +58,9 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(owner);
+                self.runtime
+                    .check_account_permission(owner)
+                    .expect("Permission for Transfer operation");
 
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
@@ -74,7 +76,9 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner);
+                self.runtime
+                    .check_account_permission(source_account.owner)
+                    .expect("Permission for Claim operation");
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -130,23 +134,6 @@ impl NativeFungibleTokenContract {
         Account {
             chain_id: account.chain_id,
             owner: account.owner,
-        }
-    }
-
-    /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
-        match owner {
-            AccountOwner::User(address) => {
-                assert_eq!(
-                    self.runtime.authenticated_signer(),
-                    Some(address),
-                    "The requested transfer is not correctly authenticated."
-                );
-            }
-            AccountOwner::Application(_) => panic!("Applications not supported yet"),
-            AccountOwner::Chain => {
-                panic!("Chain accounts are not supported")
-            }
         }
     }
 }
