@@ -195,7 +195,7 @@ pub enum ChangeApplicationPermissionsError {
     NotPermitted,
 }
 
-/// Errors that can happen when verification the authentication of an operation over an
+/// Errors that can happen when verifying the authentication of an operation over an
 /// account.
 #[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
 pub enum AccountPermissionError {
