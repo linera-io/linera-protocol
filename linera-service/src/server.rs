@@ -37,10 +37,7 @@ use linera_service::util;
 #[cfg(with_metrics)]
 use linera_service::{prometheus_server, pyroscope_server};
 use linera_storage::Storage;
-use linera_views::{
-    lru_caching::StorageCacheConfig,
-    store::CommonStoreConfig,
-};
+use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -607,7 +604,9 @@ async fn run(options: ServerOptions) {
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let storage_cache_config = StorageCacheConfig {
-                max_cache_size, max_entry_size, max_cache_entries,
+                max_cache_size,
+                max_entry_size,
+                max_cache_entries,
             };
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
@@ -678,7 +677,9 @@ async fn run(options: ServerOptions) {
             let genesis_config: GenesisConfig =
                 util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
             let storage_cache_config = StorageCacheConfig {
-                max_cache_size, max_entry_size, max_cache_entries,
+                max_cache_size,
+                max_entry_size,
+                max_cache_entries,
             };
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,

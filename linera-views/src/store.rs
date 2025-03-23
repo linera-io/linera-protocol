@@ -9,8 +9,12 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[cfg(with_testing)]
 use crate::random::generate_test_namespace;
-use crate::{batch::Batch, common::from_bytes_option, views::ViewError};
-use crate::lru_caching::{StorageCacheConfig, DEFAULT_STORAGE_CACHE_CONFIG};
+use crate::{
+    batch::Batch,
+    common::from_bytes_option,
+    lru_caching::{StorageCacheConfig, DEFAULT_STORAGE_CACHE_CONFIG},
+    views::ViewError,
+};
 
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone, Serialize, Deserialize)]

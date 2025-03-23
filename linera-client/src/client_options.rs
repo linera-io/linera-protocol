@@ -19,10 +19,7 @@ use linera_base::{
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::{ResourceControlPolicy, WasmRuntime, WithWasmDefault as _};
-use linera_views::{
-    lru_caching::StorageCacheConfig,
-    store::CommonStoreConfig,
-};
+use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 
 #[cfg(feature = "fs")]
 use crate::config::GenesisConfig;

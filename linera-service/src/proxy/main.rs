@@ -27,10 +27,7 @@ use linera_service::util;
 #[cfg(with_metrics)]
 use linera_service::{prometheus_server, pyroscope_server};
 use linera_storage::Storage;
-use linera_views::{
-    lru_caching::StorageCacheConfig,
-    store::CommonStoreConfig,
-};
+use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
