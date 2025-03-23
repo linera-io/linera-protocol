@@ -14,6 +14,11 @@ A non-negative amount of tokens.
 scalar Amount
 
 """
+Description of the necessary information to run a user application
+"""
+scalar ApplicationDescription
+
+"""
 A unique identifier for a user application
 """
 scalar ApplicationId
@@ -1242,11 +1247,6 @@ type TimestampedBundleInInbox {
 	"""
 	seen: Timestamp!
 }
-
-"""
-Description of the necessary information to run a user application
-"""
-scalar ApplicationDescription
 
 scalar VersionInfo
 
