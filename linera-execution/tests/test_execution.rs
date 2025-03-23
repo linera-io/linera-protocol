@@ -1353,7 +1353,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Tests the system API call `close_chain``.
+/// Tests the system API call `close_chain`.
 #[tokio::test]
 async fn test_close_chain() -> anyhow::Result<()> {
     let committee = Committee::make_simple(vec![(
