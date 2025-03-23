@@ -280,7 +280,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(account.chain_id)?;
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
-                let balance = chain_client.query_owner_balance(account.owner).await?;
+                let balance = chain_client.local_owner_balance(account.owner).await?;
                 let time_total = time_start.elapsed();
                 info!("Local balance obtained after {} ms", time_total.as_millis());
                 println!("{}", balance);

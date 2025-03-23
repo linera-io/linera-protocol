@@ -2306,11 +2306,15 @@ where
         &self,
         owner: AccountOwner,
     ) -> Result<Amount, ChainClientError> {
-        Ok(self
-            .query_balances_with_owner(owner)
-            .await?
-            .1
-            .unwrap_or(Amount::ZERO))
+        if owner.is_chain() {
+            self.query_balance().await
+        } else {
+            Ok(self
+                .query_balances_with_owner(owner)
+                .await?
+                .1
+                .unwrap_or(Amount::ZERO))
+        }
     }
 
     /// Obtains the local balance of an account and optionally another user after staging the
@@ -2394,11 +2398,15 @@ where
         &self,
         owner: AccountOwner,
     ) -> Result<Amount, ChainClientError> {
-        Ok(self
-            .local_balances_with_owner(owner)
-            .await?
-            .1
-            .unwrap_or(Amount::ZERO))
+        if owner.is_chain() {
+            self.local_balance().await
+        } else {
+            Ok(self
+                .local_balances_with_owner(owner)
+                .await?
+                .1
+                .unwrap_or(Amount::ZERO))
+        }
     }
 
     /// Reads the local balance of the chain account and optionally another user.
