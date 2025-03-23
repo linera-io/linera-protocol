@@ -1075,7 +1075,11 @@ doc_scalar!(
 
 #[cfg(test)]
 mod tests {
-    use super::ChainId;
+    use std::str::FromStr as _;
+
+    use assert_matches::assert_matches;
+
+    use super::{AccountOwner, ChainId};
 
     /// Verifies that chain IDs that are explicitly used in some example and test scripts don't
     /// change.
@@ -1101,5 +1105,31 @@ mod tests {
             &ChainId::root(999).to_string(),
             "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
         );
+    }
+
+    #[test]
+    fn addresses() {
+        assert_eq!(&AccountOwner::Reserved(0).to_string(), "0x00");
+
+        let address = AccountOwner::from_str("0x10").unwrap();
+        assert_eq!(address, AccountOwner::Reserved(16));
+        assert_eq!(address.to_string(), "0x10");
+
+        let address = AccountOwner::from_str(
+            "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844",
+        )
+        .unwrap();
+        assert_matches!(address, AccountOwner::Address32(_));
+        assert_eq!(
+            address.to_string(),
+            "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+        );
+
+        assert!(AccountOwner::from_str("0x5487b7").is_err());
+        assert!(AccountOwner::from_str("0").is_err());
+        assert!(AccountOwner::from_str(
+            "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+        )
+        .is_err());
     }
 }

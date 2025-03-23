@@ -4464,6 +4464,7 @@ version = "0.14.0"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "assert_matches",
  "async-graphql",
  "async-graphql-derive",
  "async-trait",
