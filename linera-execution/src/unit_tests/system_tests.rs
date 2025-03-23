@@ -39,9 +39,9 @@ fn expected_application_id(
     context: &OperationContext,
     module_id: &ModuleId,
     parameters: Vec<u8>,
-    required_application_ids: Vec<UserApplicationId>,
+    required_application_ids: Vec<ApplicationId>,
     application_index: u32,
-) -> UserApplicationId {
+) -> ApplicationId {
     let description = UserApplicationDescription {
         module_id: *module_id,
         creator_chain_id: context.chain_id,

@@ -35,7 +35,7 @@ use crate::{
     ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView, MessageContext,
     OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
     ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId,
+    UserApplicationDescription,
 };
 
 /// Creates a dummy [`UserApplicationDescription`] for use in tests.
@@ -116,12 +116,12 @@ pub trait RegisterMockApplication {
     /// This is included in the mocked [`ApplicationId`].
     fn creator_chain_id(&self) -> ChainId;
 
-    /// Registers a new [`MockApplication`] and returns it with the [`UserApplicationId`] that was
+    /// Registers a new [`MockApplication`] and returns it with the [`ApplicationId`] that was
     /// used for it.
     async fn register_mock_application(
         &mut self,
         index: u32,
-    ) -> anyhow::Result<(UserApplicationId, MockApplication, [BlobId; 3])> {
+    ) -> anyhow::Result<(ApplicationId, MockApplication, [BlobId; 3])> {
         let (description, contract, service) = create_dummy_user_application_description(index);
         let description_blob_id = Blob::new_application_description(&description).id();
         let contract_blob_id = contract.id();
@@ -144,7 +144,7 @@ pub trait RegisterMockApplication {
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
-    ) -> anyhow::Result<(UserApplicationId, MockApplication)>;
+    ) -> anyhow::Result<(ApplicationId, MockApplication)>;
 }
 
 impl<C> RegisterMockApplication for ExecutionStateView<C>
@@ -161,7 +161,7 @@ where
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
-    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+    ) -> anyhow::Result<(ApplicationId, MockApplication)> {
         self.system
             .register_mock_application_with(description, contract, service)
             .await
@@ -184,7 +184,7 @@ where
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
-    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+    ) -> anyhow::Result<(ApplicationId, MockApplication)> {
         let id = From::from(&description);
         let extra = self.context().extra();
         let mock_application = MockApplication::default();
@@ -209,7 +209,7 @@ where
 
 pub async fn create_dummy_user_application_registrations(
     count: u32,
-) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription, Blob, Blob)>> {
+) -> anyhow::Result<Vec<(ApplicationId, UserApplicationDescription, Blob, Blob)>> {
     let mut ids = Vec::with_capacity(count as usize);
 
     for index in 0..count {

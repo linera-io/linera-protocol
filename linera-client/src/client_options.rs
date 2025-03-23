@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
-    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner, UserApplicationId},
+    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
     vm::VmRuntime,
@@ -967,7 +967,7 @@ pub enum ClientCommand {
 
         /// The list of required dependencies of application, if any.
         #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<UserApplicationId>>,
+        required_application_ids: Option<Vec<ApplicationId>>,
     },
 
     /// Create an application, and publish the required module.
@@ -1004,7 +1004,7 @@ pub enum ClientCommand {
 
         /// The list of required dependencies of application, if any.
         #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<UserApplicationId>>,
+        required_application_ids: Option<Vec<ApplicationId>>,
     },
 
     /// Create an unassigned key pair.
@@ -1416,7 +1416,7 @@ pub enum ProjectCommand {
 
         /// The list of required dependencies of application, if any.
         #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<UserApplicationId>>,
+        required_application_ids: Option<Vec<ApplicationId>>,
     },
 }
 

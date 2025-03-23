@@ -37,7 +37,7 @@ pub enum AccountOwner {
     /// An account owned by a user.
     User(Owner),
     /// An account for an application.
-    Application(UserApplicationId),
+    Application(ApplicationId),
     /// Chain account.
     Chain,
 }
@@ -302,10 +302,6 @@ pub struct ApplicationId<A = ()> {
     _phantom: PhantomData<A>,
 }
 
-/// Alias for `ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-pub type UserApplicationId = ApplicationId<()>;
-
 /// A unique identifier for an application.
 #[derive(
     Eq,
@@ -326,7 +322,7 @@ pub enum GenericApplicationId {
     /// The system application.
     System,
     /// A user application.
-    User(UserApplicationId),
+    User(ApplicationId),
 }
 
 impl GenericApplicationId {

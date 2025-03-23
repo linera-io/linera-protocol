@@ -35,7 +35,7 @@ use crate::{
     doc_scalar, hex_debug, http,
     identifiers::{
         ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
-        ModuleId, StreamId, UserApplicationId,
+        ModuleId, StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -840,12 +840,12 @@ pub struct UserApplicationDescription {
     #[debug(with = "hex_debug")]
     pub parameters: Vec<u8>,
     /// Required dependencies.
-    pub required_application_ids: Vec<UserApplicationId>,
+    pub required_application_ids: Vec<ApplicationId>,
 }
 
-impl From<&UserApplicationDescription> for UserApplicationId {
+impl From<&UserApplicationDescription> for ApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId::new(CryptoHash::new(&BlobContent::new_application_description(
+        ApplicationId::new(CryptoHash::new(&BlobContent::new_application_description(
             description,
         )))
     }

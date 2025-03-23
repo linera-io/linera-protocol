@@ -43,7 +43,7 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, Owner, StreamName, UserApplicationId,
+        EventId, GenericApplicationId, MessageId, ModuleId, Owner, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -206,14 +206,14 @@ pub enum ExecutionError {
     InvalidPromise,
 
     #[error("Attempted to perform a reentrant call to application {0}")]
-    ReentrantCall(UserApplicationId),
+    ReentrantCall(ApplicationId),
     #[error(
         "Application {caller_id} attempted to perform a cross-application to {callee_id} call \
         from `finalize`"
     )]
     CrossApplicationCallInFinalize {
-        caller_id: Box<UserApplicationId>,
-        callee_id: Box<UserApplicationId>,
+        caller_id: Box<ApplicationId>,
+        callee_id: Box<ApplicationId>,
     },
     #[error("Attempt to write to storage from a contract")]
     ServiceWriteAttempt,
@@ -221,7 +221,7 @@ pub enum ExecutionError {
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
     // TODO(#2927): support dynamic loading of modules on the Web
     #[error("Unsupported dynamic application load: {0:?}")]
-    UnsupportedDynamicApplicationLoad(Box<UserApplicationId>),
+    UnsupportedDynamicApplicationLoad(Box<ApplicationId>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -244,7 +244,7 @@ pub enum ExecutionError {
     #[error("Owner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
-    UnauthorizedApplication(UserApplicationId),
+    UnauthorizedApplication(ApplicationId),
     #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered I/O error: {0}")]
@@ -328,7 +328,7 @@ pub enum ExecutionError {
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<UserApplicationId>),
+    UnknownApplicationId(Box<ApplicationId>),
     #[error("Chain is not active yet.")]
     InactiveChain,
     #[error("No recorded response for oracle query")]
@@ -394,9 +394,9 @@ pub trait ExecutionRuntimeContext {
 
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
-    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>>;
+    fn user_contracts(&self) -> &Arc<DashMap<ApplicationId, UserContractCode>>;
 
-    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>>;
+    fn user_services(&self) -> &Arc<DashMap<ApplicationId, UserServiceCode>>;
 
     async fn get_user_contract(
         &self,
@@ -437,7 +437,7 @@ pub struct OperationContext {
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_caller_id: Option<UserApplicationId>,
+    pub authenticated_caller_id: Option<ApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -509,7 +509,7 @@ pub trait BaseRuntime {
     fn block_height(&mut self) -> Result<BlockHeight, ExecutionError>;
 
     /// The current application ID.
-    fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
+    fn application_id(&mut self) -> Result<ApplicationId, ExecutionError>;
 
     /// The current application creator's chain ID.
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError>;
@@ -668,7 +668,7 @@ pub trait ServiceRuntime: BaseRuntime {
     /// Queries another application.
     fn try_query_application(
         &mut self,
-        queried_id: UserApplicationId,
+        queried_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -692,7 +692,7 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.
-    fn authenticated_caller_id(&mut self) -> Result<Option<UserApplicationId>, ExecutionError>;
+    fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError>;
 
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
@@ -730,7 +730,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn try_call_application(
         &mut self,
         authenticated: bool,
-        callee_id: UserApplicationId,
+        callee_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
@@ -772,8 +772,8 @@ pub trait ContractRuntime: BaseRuntime {
         module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<UserApplicationId, ExecutionError>;
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ApplicationId, ExecutionError>;
 
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
@@ -789,7 +789,7 @@ pub enum Operation {
     System(Box<SystemOperation>),
     /// A user operation (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -805,7 +805,7 @@ pub enum Message {
     System(SystemMessage),
     /// A user message (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -819,7 +819,7 @@ pub enum Query {
     System(SystemQuery),
     /// A user query (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1014,8 +1014,8 @@ impl OperationContext {
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
-    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    user_contracts: Arc<DashMap<ApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<ApplicationId, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, Blob>>,
     events: Arc<DashMap<EventId, Vec<u8>>>,
 }
@@ -1046,11 +1046,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &Arc<DashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &Arc<DashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
