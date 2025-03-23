@@ -297,8 +297,11 @@ pub enum ExecutionError {
     IncorrectTransferAmount,
     #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
-    #[error("The transferred amount must not exceed the current chain balance: {balance}")]
-    InsufficientFunding { balance: Amount },
+    #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
+    InsufficientFunding {
+        balance: Amount,
+        account: AccountOwner,
+    },
     #[error("Required execution fees exceeded the total funding available: {balance}")]
     InsufficientFundingForFees { balance: Amount },
     #[error("Claim must have positive amount")]

@@ -703,13 +703,17 @@ where
             self.balances.get_mut(account).await?.ok_or_else(|| {
                 ExecutionError::InsufficientFunding {
                     balance: Amount::ZERO,
+                    account: *account,
                 }
             })?
         };
 
         balance
             .try_sub_assign(amount)
-            .map_err(|_| ExecutionError::InsufficientFunding { balance: *balance })?;
+            .map_err(|_| ExecutionError::InsufficientFunding {
+                balance: *balance,
+                account: *account,
+            })?;
 
         if account != &AccountOwner::chain() && balance.is_zero() {
             self.balances.remove(account)?;
