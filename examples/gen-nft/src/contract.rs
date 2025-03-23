@@ -49,7 +49,9 @@ impl Contract for GenNftContract {
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Mint { minter, prompt } => {
-                self.check_account_authentication(minter);
+                self.runtime
+                    .check_account_permission(minter)
+                    .expect("Permission for Mint operation");
                 self.mint(minter, prompt).await;
             }
 
@@ -58,10 +60,11 @@ impl Contract for GenNftContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_owner);
-
+                self.runtime
+                    .check_account_permission(source_owner)
+                    .expect("Permission for Transfer operation");
                 let nft = self.get_nft(&token_id).await;
-                self.check_account_authentication(nft.owner);
+                assert_eq!(source_owner, nft.owner);
 
                 self.transfer(nft, target_account).await;
             }
@@ -71,11 +74,13 @@ impl Contract for GenNftContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner);
+                self.runtime
+                    .check_account_permission(source_account.owner)
+                    .expect("Permission for Claim operation");
 
                 if source_account.chain_id == self.runtime.chain_id() {
                     let nft = self.get_nft(&token_id).await;
-                    self.check_account_authentication(nft.owner);
+                    assert_eq!(source_account.owner, nft.owner);
 
                     self.transfer(nft, target_account).await;
                 } else {
@@ -107,10 +112,12 @@ impl Contract for GenNftContract {
                 token_id,
                 target_account,
             } => {
-                self.check_account_authentication(source_account.owner);
+                self.runtime
+                    .check_account_permission(source_account.owner)
+                    .expect("Permission for Claim message");
 
                 let nft = self.get_nft(&token_id).await;
-                self.check_account_authentication(nft.owner);
+                assert_eq!(source_account.owner, nft.owner);
 
                 self.transfer(nft, target_account).await;
             }
@@ -123,29 +130,6 @@ impl Contract for GenNftContract {
 }
 
 impl GenNftContract {
-    /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
-        match owner {
-            AccountOwner::User(address) => {
-                assert_eq!(
-                    self.runtime.authenticated_signer(),
-                    Some(address),
-                    "The requested transfer is not correctly authenticated."
-                )
-            }
-            AccountOwner::Application(id) => {
-                assert_eq!(
-                    self.runtime.authenticated_caller_id(),
-                    Some(id),
-                    "The requested transfer is not correctly authenticated."
-                )
-            }
-            AccountOwner::Chain => {
-                panic!("Chain account is not supported")
-            }
-        }
-    }
-
     /// Transfers the specified NFT to another account.
     /// Authentication needs to have happened already.
     async fn transfer(&mut self, mut nft: Nft, target_account: Account) {

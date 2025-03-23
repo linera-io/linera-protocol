@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::{
     data_types::{Round, TimeDelta},
     doc_scalar,
-    identifiers::Owner,
+    identifiers::{AccountOwner, Owner},
 };
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
@@ -193,6 +193,15 @@ pub enum ChangeApplicationPermissionsError {
     /// The application wasn't allowed to change the application permissions.
     #[error("Unauthorized attempt to change the application permissions")]
     NotPermitted,
+}
+
+/// Errors that can happen when verifying the authentication of an operation over an
+/// account.
+#[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
+pub enum AccountPermissionError {
+    /// Operations on this account are not permitted in the current execution context.
+    #[error("Unauthorized attempt to access account owned by {0}")]
+    NotPermitted(AccountOwner),
 }
 
 #[cfg(test)]

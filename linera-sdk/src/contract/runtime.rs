@@ -8,12 +8,14 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
-    http,
+    ensure, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
         ModuleId, Owner, StreamName,
     },
-    ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
+    ownership::{
+        AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
+    },
 };
 use serde::Serialize;
 
@@ -200,6 +202,31 @@ where
         *self
             .authenticated_caller_id
             .get_or_insert_with(|| contract_wit::authenticated_caller_id().map(ApplicationId::from))
+    }
+
+    /// Verifies that the current execution context authorizes operations on a given account.
+    pub fn check_account_permission(
+        &mut self,
+        owner: AccountOwner,
+    ) -> Result<(), AccountPermissionError> {
+        match owner {
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.authenticated_signer() == Some(address),
+                    AccountPermissionError::NotPermitted(owner)
+                );
+            }
+            AccountOwner::Application(id) => {
+                ensure!(
+                    self.authenticated_caller_id() == Some(id),
+                    AccountPermissionError::NotPermitted(owner)
+                );
+            }
+            AccountOwner::Chain => {
+                return Err(AccountPermissionError::NotPermitted(AccountOwner::Chain));
+            }
+        }
+        Ok(())
     }
 
     /// Schedules a message to be sent to this application on another chain.

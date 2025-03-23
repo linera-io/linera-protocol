@@ -77,7 +77,9 @@ impl Contract for MatchingEngineContract {
             Operation::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
                 let chain_id = self.runtime.chain_id();
-                self.check_account_authentication(owner);
+                self.runtime
+                    .check_account_permission(owner)
+                    .expect("Permission for ExecuteOrder operation");
                 if chain_id == self.runtime.application_creator_chain_id() {
                     self.execute_order_local(order, chain_id).await;
                 } else {
@@ -119,7 +121,9 @@ impl Contract for MatchingEngineContract {
                     .runtime
                     .message_id()
                     .expect("Incoming message ID has to be available when executing a message");
-                self.check_account_authentication(owner);
+                self.runtime
+                    .check_account_permission(owner)
+                    .expect("Permission for ExecuteOrder message");
                 self.execute_order_local(order, message_id.chain_id).await;
             }
         }
@@ -146,29 +150,6 @@ impl MatchingEngineContract {
                 order_id: _,
                 cancel_amount: _,
             } => *owner,
-        }
-    }
-
-    /// authenticate the originator of the message
-    fn check_account_authentication(&mut self, owner: AccountOwner) {
-        match owner {
-            AccountOwner::User(address) => {
-                assert_eq!(
-                    self.runtime.authenticated_signer(),
-                    Some(address),
-                    "Unauthorized"
-                )
-            }
-            AccountOwner::Application(id) => {
-                assert_eq!(
-                    self.runtime.authenticated_caller_id(),
-                    Some(id),
-                    "Unauthorized"
-                )
-            }
-            AccountOwner::Chain => {
-                panic!("Chain account is not supported")
-            }
         }
     }
 
