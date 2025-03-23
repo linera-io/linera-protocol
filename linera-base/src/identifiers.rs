@@ -295,7 +295,7 @@ pub struct MessageId {
 #[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct ApplicationId<A = ()> {
-    /// The hash of the `UserApplicationDescription` this refers to.
+    /// The hash of the `ApplicationDescription` this refers to.
     pub application_description_hash: CryptoHash,
     #[witty(skip)]
     #[debug(skip)]
@@ -873,7 +873,7 @@ impl<A> ApplicationId<A> {
     }
 
     /// Converts the application ID to the ID of the blob containing the
-    /// `UserApplicationDescription`.
+    /// `ApplicationDescription`.
     pub fn description_blob_id(self) -> BlobId {
         BlobId::new(
             self.application_description_hash,

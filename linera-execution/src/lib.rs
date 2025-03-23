@@ -37,8 +37,8 @@ use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
-        Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        DecompressionError, Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -218,7 +218,7 @@ pub enum ExecutionError {
     #[error("Attempt to write to storage from a contract")]
     ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
-    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+    ApplicationBytecodeNotFound(Box<ApplicationDescription>),
     // TODO(#2927): support dynamic loading of modules on the Web
     #[error("Unsupported dynamic application load: {0:?}")]
     UnsupportedDynamicApplicationLoad(Box<ApplicationId>),
@@ -400,12 +400,12 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_user_contract(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError>;
 
     async fn get_user_service(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
@@ -1056,7 +1056,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn get_user_contract(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
         Ok(self
@@ -1070,7 +1070,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn get_user_service(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let application_id = description.into();
         Ok(self

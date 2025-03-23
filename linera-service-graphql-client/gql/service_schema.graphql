@@ -20,7 +20,7 @@ scalar ApplicationId
 
 type ApplicationOverview {
 	id: ApplicationId!
-	description: UserApplicationDescription!
+	description: ApplicationDescription!
 	link: String!
 }
 
@@ -1246,7 +1246,7 @@ type TimestampedBundleInInbox {
 """
 Description of the necessary information to run a user application
 """
-scalar UserApplicationDescription
+scalar ApplicationDescription
 
 scalar VersionInfo
 

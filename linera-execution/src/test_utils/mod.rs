@@ -32,16 +32,15 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView, MessageContext,
-    OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
+    ApplicationDescription, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
+    MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
     ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
-    UserApplicationDescription,
 };
 
-/// Creates a dummy [`UserApplicationDescription`] for use in tests.
+/// Creates a dummy [`ApplicationDescription`] for use in tests.
 pub fn create_dummy_user_application_description(
     index: u32,
-) -> (UserApplicationDescription, Blob, Blob) {
+) -> (ApplicationDescription, Blob, Blob) {
     let chain_id = ChainId::root(1);
     let mut contract_bytes = b"contract".to_vec();
     let mut service_bytes = b"service".to_vec();
@@ -56,7 +55,7 @@ pub fn create_dummy_user_application_description(
 
     let vm_runtime = VmRuntime::Wasm;
     (
-        UserApplicationDescription {
+        ApplicationDescription {
             module_id: ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime),
             creator_chain_id: chain_id,
             block_height: 0.into(),
@@ -137,11 +136,11 @@ pub trait RegisterMockApplication {
         ))
     }
 
-    /// Registers a new [`MockApplication`] associated with a [`UserApplicationDescription`] and
+    /// Registers a new [`MockApplication`] associated with a [`ApplicationDescription`] and
     /// its bytecode [`Blob`]s.
     async fn register_mock_application_with(
         &mut self,
-        description: UserApplicationDescription,
+        description: ApplicationDescription,
         contract: Blob,
         service: Blob,
     ) -> anyhow::Result<(ApplicationId, MockApplication)>;
@@ -158,7 +157,7 @@ where
 
     async fn register_mock_application_with(
         &mut self,
-        description: UserApplicationDescription,
+        description: ApplicationDescription,
         contract: Blob,
         service: Blob,
     ) -> anyhow::Result<(ApplicationId, MockApplication)> {
@@ -181,7 +180,7 @@ where
 
     async fn register_mock_application_with(
         &mut self,
-        description: UserApplicationDescription,
+        description: ApplicationDescription,
         contract: Blob,
         service: Blob,
     ) -> anyhow::Result<(ApplicationId, MockApplication)> {
@@ -209,7 +208,7 @@ where
 
 pub async fn create_dummy_user_application_registrations(
     count: u32,
-) -> anyhow::Result<Vec<(ApplicationId, UserApplicationDescription, Blob, Blob)>> {
+) -> anyhow::Result<Vec<(ApplicationId, ApplicationDescription, Blob, Blob)>> {
     let mut ids = Vec::with_capacity(count as usize);
 
     for index in 0..count {

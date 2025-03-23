@@ -12,7 +12,7 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
     hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -762,14 +762,14 @@ where
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
     id: ApplicationId,
-    description: UserApplicationDescription,
+    description: ApplicationDescription,
     link: String,
 }
 
 impl ApplicationOverview {
     fn new(
         id: ApplicationId,
-        description: UserApplicationDescription,
+        description: ApplicationDescription,
         port: NonZeroU16,
         chain_id: ChainId,
     ) -> Self {

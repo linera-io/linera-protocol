@@ -10,7 +10,7 @@ use std::{
 use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
+    data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight},
     identifiers::{ApplicationId, BlobId, ChainId, MessageId},
 };
 use linera_chain::{
@@ -285,7 +285,7 @@ where
         &self,
         chain_id: ChainId,
         application_id: ApplicationId,
-    ) -> Result<UserApplicationDescription, LocalNodeError> {
+    ) -> Result<ApplicationDescription, LocalNodeError> {
         let response = self
             .node
             .state

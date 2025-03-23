@@ -32,9 +32,9 @@ use crate::{
     resources::ResourceController,
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, Message, MessageContext,
-    MessageKind, ModuleId, Operation, OperationContext, OutgoingMessage, QueryContext,
-    QueryOutcome, ServiceRuntime, TransactionTracker, UserApplicationDescription, UserContractCode,
+    ApplicationDescription, BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, Message,
+    MessageContext, MessageKind, ModuleId, Operation, OperationContext, OutgoingMessage,
+    QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker, UserContractCode,
     UserContractInstance, UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN,
     MAX_STREAM_NAME_LEN,
 };
@@ -122,7 +122,7 @@ struct ApplicationStatus {
     /// The application ID.
     id: ApplicationId,
     /// The application description.
-    description: UserApplicationDescription,
+    description: ApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
 }
@@ -131,12 +131,12 @@ struct ApplicationStatus {
 #[derive(Debug)]
 struct LoadedApplication<Instance> {
     instance: Arc<Mutex<Instance>>,
-    description: UserApplicationDescription,
+    description: ApplicationDescription,
 }
 
 impl<Instance> LoadedApplication<Instance> {
     /// Creates a new [`LoadedApplication`] entry from the `instance` and its `description`.
-    fn new(instance: Instance, description: UserApplicationDescription) -> Self {
+    fn new(instance: Instance, description: ApplicationDescription) -> Self {
         LoadedApplication {
             instance: Arc::new(Mutex::new(instance)),
             description,
@@ -986,7 +986,7 @@ impl ContractSyncRuntime {
         &self,
         id: ApplicationId,
         code: UserContractCode,
-        description: UserApplicationDescription,
+        description: ApplicationDescription,
     ) -> Result<(), ExecutionError> {
         let this = self
             .0
@@ -1531,7 +1531,7 @@ impl ServiceSyncRuntime {
         &self,
         id: ApplicationId,
         code: UserServiceCode,
-        description: UserApplicationDescription,
+        description: ApplicationDescription,
     ) -> Result<(), ExecutionError> {
         let this = self
             .runtime

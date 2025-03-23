@@ -27,11 +27,11 @@ use {
 
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ApplicationId,
-    ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, OutgoingMessage, Query, QueryContext,
-    QueryOutcome, ServiceSyncRuntime, SystemMessage, TransactionTracker,
-    UserApplicationDescription,
+    resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
+    ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
+    OutgoingMessage, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage,
+    TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -61,7 +61,7 @@ where
         &mut self,
         contract: UserContractCode,
         local_time: Timestamp,
-        application_description: UserApplicationDescription,
+        application_description: ApplicationDescription,
         instantiation_argument: Vec<u8>,
         contract_blob: Blob,
         service_blob: Blob,
@@ -487,12 +487,12 @@ where
 
     pub async fn list_applications(
         &self,
-    ) -> Result<Vec<(ApplicationId, UserApplicationDescription)>, ExecutionError> {
+    ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {
         let mut applications = vec![];
         for blob_id in self.system.used_blobs.indices().await? {
             if blob_id.blob_type == BlobType::ApplicationDescription {
                 let blob_content = self.system.read_blob_content(blob_id).await?;
-                let application_description: UserApplicationDescription =
+                let application_description: ApplicationDescription =
                     bcs::from_bytes(blob_content.bytes())?;
                 let app_id = ApplicationId::from(&application_description);
                 applications.push((app_id, application_description));

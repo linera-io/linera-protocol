@@ -14,7 +14,7 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Blob, BlockHeight, UserApplicationDescription},
+    data_types::{ApplicationDescription, Blob, BlockHeight},
     ensure,
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId},
@@ -170,7 +170,7 @@ where
     pub(super) async fn describe_application(
         &mut self,
         application_id: ApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
+    ) -> Result<ApplicationDescription, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .describe_application(application_id)

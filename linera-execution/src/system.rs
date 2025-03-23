@@ -43,9 +43,9 @@ use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCoun
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationId, ChannelName, ChannelSubscription, ExecutionError, ExecutionRuntimeContext,
-    MessageContext, MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome,
-    ResourceController, TransactionTracker, UserApplicationDescription,
+    ApplicationDescription, ApplicationId, ChannelName, ChannelSubscription, ExecutionError,
+    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, OutgoingMessage,
+    QueryContext, QueryOutcome, ResourceController, TransactionTracker,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -901,7 +901,7 @@ where
         self.blob_used(Some(&mut txn_tracker), service_bytecode_blob_id)
             .await?;
 
-        let application_description = UserApplicationDescription {
+        let application_description = ApplicationDescription {
             module_id,
             creator_chain_id: chain_id,
             block_height,
@@ -922,7 +922,7 @@ where
 
     async fn check_required_applications(
         &mut self,
-        application_description: &UserApplicationDescription,
+        application_description: &ApplicationDescription,
         mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(), ExecutionError> {
         // Make sure that referenced applications IDs have been registered.
@@ -937,7 +937,7 @@ where
         &mut self,
         id: ApplicationId,
         mut txn_tracker: Option<&mut TransactionTracker>,
-    ) -> Result<UserApplicationDescription, ExecutionError> {
+    ) -> Result<ApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
         let blob_content = match txn_tracker
             .as_ref()
@@ -947,7 +947,7 @@ where
             None => self.read_blob_content(blob_id).await?,
         };
         self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
-        let description: UserApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
+        let description: ApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
         let (contract_bytecode_blob_id, service_bytecode_blob_id) =
             self.check_bytecode_blobs(&description.module_id).await?;

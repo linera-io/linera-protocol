@@ -15,7 +15,7 @@ use linera_base::crypto::AccountPublicKey;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, DecompressionError, Round,
     },
     doc_scalar,
     hashed::Hashed,
@@ -531,7 +531,7 @@ where
         &self,
         chain_id: ChainId,
         application_id: ApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
+    ) -> Result<ApplicationDescription, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::DescribeApplication {
                 application_id,

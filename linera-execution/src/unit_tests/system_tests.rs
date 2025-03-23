@@ -42,7 +42,7 @@ fn expected_application_id(
     required_application_ids: Vec<ApplicationId>,
     application_index: u32,
 ) -> ApplicationId {
-    let description = UserApplicationDescription {
+    let description = ApplicationDescription {
         module_id: *module_id,
         creator_chain_id: context.chain_id,
         block_height: context.height,

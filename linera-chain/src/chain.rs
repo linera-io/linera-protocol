@@ -13,8 +13,8 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Timestamp,
-        UserApplicationDescription,
+        Amount, ApplicationDescription, ArithmeticError, Blob, BlockHeight, OracleResponse,
+        Timestamp,
     },
     ensure,
     identifiers::{
@@ -371,7 +371,7 @@ where
     pub async fn describe_application(
         &mut self,
         application_id: ApplicationId,
-    ) -> Result<UserApplicationDescription, ChainError> {
+    ) -> Result<ApplicationDescription, ChainError> {
         self.execution_state
             .system
             .describe_application(application_id, None)

@@ -29,8 +29,8 @@ use reqwest::{header::HeaderMap, Client, Url};
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
-    ApplicationId, ExecutionError, ExecutionRuntimeContext, ExecutionStateView, ModuleId,
-    OutgoingMessage, ResourceController, TransactionTracker, UserApplicationDescription,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
+    ExecutionStateView, ModuleId, OutgoingMessage, ResourceController, TransactionTracker,
     UserContractCode, UserServiceCode,
 };
 
@@ -67,7 +67,7 @@ where
         &mut self,
         id: ApplicationId,
         txn_tracker: &mut TransactionTracker,
-    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
+    ) -> Result<(UserContractCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
@@ -94,7 +94,7 @@ where
         &mut self,
         id: ApplicationId,
         txn_tracker: Option<&mut TransactionTracker>,
-    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
+    ) -> Result<(UserServiceCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
@@ -516,11 +516,7 @@ pub enum ExecutionRequest {
     LoadContract {
         id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(
-            UserContractCode,
-            UserApplicationDescription,
-            TransactionTracker,
-        )>,
+        callback: Sender<(UserContractCode, ApplicationDescription, TransactionTracker)>,
         #[debug(skip)]
         txn_tracker: TransactionTracker,
     },
@@ -529,11 +525,7 @@ pub enum ExecutionRequest {
     LoadService {
         id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(
-            UserServiceCode,
-            UserApplicationDescription,
-            TransactionTracker,
-        )>,
+        callback: Sender<(UserServiceCode, ApplicationDescription, TransactionTracker)>,
         #[debug(skip)]
         txn_tracker: TransactionTracker,
     },
