@@ -3,9 +3,6 @@
 
 //! Add LRU (least recently used) caching to a given store.
 
-/// The standard cache size used for tests.
-pub const TEST_CACHE_SIZE: usize = 1000;
-
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
@@ -122,36 +119,36 @@ impl LruPrefixCache {
         while self.total_size > self.storage_cache_config.max_cache_size
             || self.queue.len() > self.storage_cache_config.max_cache_entries
         {
-            let Some(value) = self.queue.pop_front() else {
+            let Some((key, key_value_size)) = self.queue.pop_front() else {
                 break;
             };
-            self.map.remove(&value.0);
-            self.total_size -= value.1;
+            self.map.remove(&key);
+            self.total_size -= key_value_size;
         }
     }
 
     /// Inserts an entry into the cache.
     pub fn insert(&mut self, key: Vec<u8>, cache_entry: CacheEntry) {
-        if matches!(cache_entry, CacheEntry::DoesNotExist) && !self.has_exclusive_access {
-            // Just forget about the entry.
-            self.map.remove(&key);
-            let key_value_size = self.queue.remove(&key);
-            if let Some(key_value_size) = key_value_size {
-                self.total_size -= key_value_size;
-            };
-            return;
-        }
         let key_value_size = key.len()
             + match &cache_entry {
                 CacheEntry::Value(vec) => vec.len(),
                 _ => 0,
             };
+        if (matches!(cache_entry, CacheEntry::DoesNotExist) && !self.has_exclusive_access)
+            || key_value_size > self.storage_cache_config.max_entry_size
+        {
+            // Just forget about the entry.
+            self.map.remove(&key);
+            if let Some(old_key_value_size) = self.queue.remove(&key) {
+                self.total_size -= old_key_value_size;
+            };
+            return;
+        }
         match self.map.entry(key.clone()) {
             btree_map::Entry::Occupied(mut entry) => {
                 entry.insert(cache_entry);
                 // Put it on first position for LRU
-                let old_key_value_size = self.queue.remove(&key);
-                let Some(old_key_value_size) = old_key_value_size else {
+                let Some(old_key_value_size) = self.queue.remove(&key) else {
                     unreachable!("The entry should be present in the map");
                 };
                 self.total_size -= old_key_value_size;
