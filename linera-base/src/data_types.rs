@@ -824,7 +824,7 @@ pub enum OracleResponse {
 
 impl<'de> BcsHashable<'de> for OracleResponse {}
 
-/// Description of the necessary information to run a user application used within blobs.
+/// Description of a user application.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct ApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
@@ -1229,10 +1229,7 @@ doc_scalar!(
     Blob,
     "A blob of binary data, with its content-addressed blob ID."
 );
-doc_scalar!(
-    ApplicationDescription,
-    "Description of the necessary information to run a user application"
-);
+doc_scalar!(ApplicationDescription, "Description of a user application");
 
 /// The time it takes to compress a bytecode.
 #[cfg(with_metrics)]
