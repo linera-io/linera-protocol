@@ -11,15 +11,12 @@ Account:
 AccountOwner:
   ENUM:
     0:
-      User:
-        NEWTYPE:
-          TYPENAME: Owner
+      Reserved:
+        NEWTYPE: U16
     1:
-      Application:
+      Address32:
         NEWTYPE:
-          TYPENAME: ApplicationId
-    2:
-      Chain: UNIT
+          TYPENAME: CryptoHash
 AccountPublicKey:
   ENUM:
     0:
@@ -184,7 +181,7 @@ BlockHeader:
           TYPENAME: CryptoHash
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -346,7 +343,7 @@ ChainManagerInfo:
         TYPENAME: Round
     - leader:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
@@ -354,11 +351,11 @@ ChainOwnership:
   STRUCT:
     - super_owners:
         SEQ:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
     - owners:
         MAP:
           KEY:
-            TYPENAME: Owner
+            TYPENAME: AccountOwner
           VALUE: U64
     - multi_leader_rounds: U32
     - open_multi_leader_rounds: BOOL
@@ -777,7 +774,7 @@ OutgoingMessage:
         TYPENAME: Destination
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
     - grant:
         TYPENAME: Amount
     - refund_grant_to:
@@ -787,14 +784,11 @@ OutgoingMessage:
         TYPENAME: MessageKind
     - message:
         TYPENAME: Message
-Owner:
-  NEWTYPESTRUCT:
-    TYPENAME: CryptoHash
 PostedMessage:
   STRUCT:
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
     - grant:
         TYPENAME: Amount
     - refund_grant_to:
@@ -832,7 +826,7 @@ ProposedBlock:
         TYPENAME: Timestamp
     - authenticated_signer:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
@@ -1113,7 +1107,7 @@ SystemOperation:
       Claim:
         STRUCT:
           - owner:
-              TYPENAME: Owner
+              TYPENAME: AccountOwner
           - target_id:
               TYPENAME: ChainId
           - recipient:
@@ -1131,11 +1125,11 @@ SystemOperation:
         STRUCT:
           - super_owners:
               SEQ:
-                TYPENAME: Owner
+                TYPENAME: AccountOwner
           - owners:
               SEQ:
                 TUPLE:
-                  - TYPENAME: Owner
+                  - TYPENAME: AccountOwner
                   - U64
           - multi_leader_rounds: U32
           - open_multi_leader_rounds: BOOL

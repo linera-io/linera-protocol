@@ -40,7 +40,8 @@ impl Contract for NativeFungibleTokenContract {
                 chain_id: self.runtime.chain_id(),
                 owner,
             };
-            self.runtime.transfer(AccountOwner::Chain, account, amount);
+            self.runtime
+                .transfer(AccountOwner::chain(), account, amount);
         }
     }
 

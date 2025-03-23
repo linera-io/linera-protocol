@@ -23,7 +23,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{AccountOwner, ChainDescription, ChainId, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -101,9 +101,6 @@ impl Runnable for Job {
                 amount,
             } => {
                 let chain_client = context.make_chain_client(sender.chain_id)?;
-                if let AccountOwner::Application(_) = sender.owner {
-                    bail!("Can't transfer from an application account")
-                };
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
                     amount, sender, recipient
@@ -283,12 +280,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(account.chain_id)?;
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
-                let balance = match account.owner {
-                    AccountOwner::User(_) | AccountOwner::Application(_) => {
-                        chain_client.local_owner_balance(account.owner).await?
-                    }
-                    AccountOwner::Chain => chain_client.local_balance().await?,
-                };
+                let balance = chain_client.query_owner_balance(account.owner).await?;
                 let time_total = time_start.elapsed();
                 info!("Local balance obtained after {} ms", time_total.as_millis());
                 println!("{}", balance);
@@ -302,12 +294,7 @@ impl Runnable for Job {
                     incoming messages"
                 );
                 let time_start = Instant::now();
-                let balance = match account.owner {
-                    AccountOwner::User(_) | AccountOwner::Application(_) => {
-                        chain_client.query_owner_balance(account.owner).await?
-                    }
-                    AccountOwner::Chain => chain_client.query_balance().await?,
-                };
+                let balance = chain_client.query_owner_balance(account.owner).await?;
                 let time_total = time_start.elapsed();
                 info!("Balance obtained after {} ms", time_total.as_millis());
                 println!("{}", balance);
@@ -320,12 +307,7 @@ impl Runnable for Job {
                 warn!("This command is deprecated. Use `linera sync && linera query-balance` instead.");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                let result = match account.owner {
-                    AccountOwner::User(_) | AccountOwner::Application(_) => {
-                        chain_client.query_owner_balance(account.owner).await
-                    }
-                    AccountOwner::Chain => chain_client.query_balance().await,
-                };
+                let result = chain_client.query_owner_balance(account.owner).await;
                 context.update_wallet_from_client(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
@@ -1570,7 +1552,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             let start_time = Instant::now();
             let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
-            let owner = Owner::from(key_pair.public());
+            let owner = AccountOwner::from(key_pair.public());
             wallet
                 .mutate(|w| w.add_unassigned_key_pair(key_pair))
                 .await?;

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ApplicationDescription, ArithmeticError, Blob, Timestamp},
     ensure,
-    identifiers::{AccountOwner, ApplicationId, ChannelFullName, GenericApplicationId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChannelFullName, GenericApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -147,7 +147,7 @@ where
                 .execution_state
                 .system
                 .balances
-                .get(&AccountOwner::User(signer))
+                .get(&signer)
                 .await?;
         }
 
@@ -172,7 +172,7 @@ where
         } = proposal;
         let block = &content.block;
 
-        let owner = Owner::from(public_key);
+        let owner = AccountOwner::from(*public_key);
         let chain = &self.0.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
@@ -278,14 +278,15 @@ where
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
-        match query.request_owner_balance {
-            owner @ AccountOwner::Application(_) | owner @ AccountOwner::User(_) => {
-                info.requested_owner_balance =
-                    chain.execution_state.system.balances.get(&owner).await?;
-            }
-            AccountOwner::Chain => {
-                info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
-            }
+        if query.request_owner_balance == AccountOwner::chain() {
+            info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
+        } else {
+            info.requested_owner_balance = chain
+                .execution_state
+                .system
+                .balances
+                .get(&query.request_owner_balance)
+                .await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(

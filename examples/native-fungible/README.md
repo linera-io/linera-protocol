@@ -71,7 +71,7 @@ The app can't mint new native tokens, so the initial balance is taken from the c
 ```bash
 APP_ID=$(linera create-application $MODULE_ID \
     --json-argument "{ \"accounts\": {
-        \"User:$OWNER_1\": \"100.\"
+        \"$OWNER_1\": \"100.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"NAT\" }" \
 )
@@ -97,7 +97,7 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
 query {
   accounts {
     entry(
-      key: "User:$OWNER_1"
+      key: "$OWNER_1"
     ) {
       value
     }
@@ -111,7 +111,7 @@ query {
 query {
   accounts {
     entry(
-      key: "User:$OWNER_2"
+      key: "$OWNER_2"
     ) {
       value
     }
@@ -124,11 +124,11 @@ query {
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 mutation {
   transfer(
-    owner: "User:$OWNER_1",
+    owner: "$OWNER_1",
     amount: "50.",
     targetAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_2"
+      owner: "$OWNER_2"
     }
   )
 }
@@ -140,7 +140,7 @@ mutation {
 query {
   accounts {
     entry(
-      key: "User:$OWNER_1"
+      key: "$OWNER_1"
     ) {
       value
     }
@@ -154,7 +154,7 @@ query {
 query {
   accounts {
     entry(
-      key: "User:$OWNER_2"
+      key: "$OWNER_2"
     ) {
       value
     }

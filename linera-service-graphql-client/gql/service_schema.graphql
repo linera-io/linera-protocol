@@ -4,7 +4,7 @@ An account
 scalar Account
 
 """
-An owner of an account.
+A unique identifier for a user or an application.
 """
 scalar AccountOwner
 
@@ -162,7 +162,7 @@ type BlockHeader {
 	the default account of the chain is used. This value is also used as recipient of
 	potential refunds for the message grants created by the operations.
 	"""
-	authenticatedSigner: Owner
+	authenticatedSigner: AccountOwner
 	"""
 	Cryptographic hash of all the incoming bundles in the block.
 	"""
@@ -306,7 +306,7 @@ type ChainStateExtendedView {
 	"""
 	The incomplete sets of blobs for upcoming proposals.
 	"""
-	pendingProposedBlobs: ReentrantCollectionView_Owner_PendingBlobsView_3247061959!
+	pendingProposedBlobs: ReentrantCollectionView_AccountOwner_PendingBlobsView_673534848!
 	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -473,6 +473,14 @@ type Entry_AccountOwner_Amount_aaf96548 {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_AccountOwner_PendingBlobsView_f0b6a64b {
+	key: AccountOwner!
+	value: PendingBlobsView!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_BlobId_Blob_50b95aa1 {
 	key: BlobId!
 	value: Blob
@@ -500,14 +508,6 @@ A GraphQL-visible map item, complete with key.
 type Entry_Origin_InboxStateView_c4db01d6 {
 	key: Origin!
 	value: InboxStateView!
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
-type Entry_Owner_PendingBlobsView_c4f6af6f {
-	key: Owner!
-	value: PendingBlobsView!
 }
 
 """
@@ -643,10 +643,6 @@ input MapFilters_Origin_742d451b {
 	keys: [Origin!]
 }
 
-input MapFilters_Owner_6898ce22 {
-	keys: [Owner!]
-}
-
 input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
 }
@@ -665,10 +661,6 @@ input MapInput_ChannelFullName_7b67e184 {
 
 input MapInput_Origin_742d451b {
 	filters: MapFilters_Origin_742d451b
-}
-
-input MapInput_Owner_6898ce22 {
-	filters: MapFilters_Owner_6898ce22
 }
 
 input MapInput_Target_7aac1e1c {
@@ -750,7 +742,7 @@ type MutationRoot {
 	retryPendingBlock(chainId: ChainId!): CryptoHash
 	"""
 	Transfers `amount` units of value from the given owner's account to the recipient.
-	If no owner is given, try to take the units out of the unattributed account.
+	If no owner is given, try to take the units out of the chain account.
 	"""
 	transfer(chainId: ChainId!, owner: AccountOwner!, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
@@ -758,7 +750,7 @@ type MutationRoot {
 	`target` chain. Depending on its configuration, the `target` chain may refuse to
 	process the message.
 	"""
-	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	claim(chainId: ChainId!, owner: AccountOwner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Test if a data blob is readable from a transaction in the current chain.
 	"""
@@ -767,12 +759,12 @@ type MutationRoot {
 	Creates (or activates) a new chain with the given owner.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openChain(chainId: ChainId!, owner: Owner!, balance: Amount): ChainId!
+	openChain(chainId: ChainId!, owner: AccountOwner!, balance: Amount): ChainId!
 	"""
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [Owner!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
+	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [AccountOwner!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -797,11 +789,11 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeOwner(chainId: ChainId!, newOwner: Owner!): CryptoHash!
+	changeOwner(chainId: ChainId!, newOwner: AccountOwner!): CryptoHash!
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(		chainId: ChainId!,		newOwners: [Owner!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,		openMultiLeaderRounds: Boolean!,
+	changeMultipleOwners(		chainId: ChainId!,		newOwners: [AccountOwner!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,		openMultiLeaderRounds: Boolean!,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -914,7 +906,7 @@ type OutgoingMessage {
 	"""
 	The user authentication carried by the message, if any.
 	"""
-	authenticatedSigner: Owner
+	authenticatedSigner: AccountOwner
 	"""
 	A grant to pay for the message execution.
 	"""
@@ -932,11 +924,6 @@ type OutgoingMessage {
 	"""
 	message: Message!
 }
-
-"""
-The owner of a chain. This is currently the hash of the owner's public key used to verify signatures.
-"""
-scalar Owner
 
 """
 The pending blobs belonging to a block that can't be processed without them.
@@ -967,7 +954,7 @@ type PostedMessage {
 	"""
 	The user authentication carried by the message, if any.
 	"""
-	authenticatedSigner: Owner
+	authenticatedSigner: AccountOwner
 	"""
 	A grant to pay for the message execution.
 	"""
@@ -1019,6 +1006,12 @@ The recipient of a transfer
 """
 scalar Recipient
 
+type ReentrantCollectionView_AccountOwner_PendingBlobsView_673534848 {
+	keys: [AccountOwner!]!
+	entry(key: AccountOwner!): Entry_AccountOwner_PendingBlobsView_f0b6a64b!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_f0b6a64b!]!
+}
+
 type ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053 {
 	keys: [ChannelFullName!]!
 	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_bd1de7ae!
@@ -1029,12 +1022,6 @@ type ReentrantCollectionView_Origin_InboxStateView_3699835794 {
 	keys: [Origin!]!
 	entry(key: Origin!): Entry_Origin_InboxStateView_c4db01d6!
 	entries(input: MapInput_Origin_742d451b): [Entry_Origin_InboxStateView_c4db01d6!]!
-}
-
-type ReentrantCollectionView_Owner_PendingBlobsView_3247061959 {
-	keys: [Owner!]!
-	entry(key: Owner!): Entry_Owner_PendingBlobsView_c4f6af6f!
-	entries(input: MapInput_Owner_6898ce22): [Entry_Owner_PendingBlobsView_c4f6af6f!]!
 }
 
 type ReentrantCollectionView_Target_OutboxStateView_2789119133 {

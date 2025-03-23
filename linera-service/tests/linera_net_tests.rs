@@ -35,7 +35,7 @@ use linera_base::{
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
-    linera_base_types::{BlobContent, BlockHeight, Owner},
+    linera_base_types::{BlobContent, BlockHeight},
     DataBlobHash,
 };
 #[cfg(any(
@@ -84,8 +84,7 @@ fn test_iterations() -> Option<usize> {
 }
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
-    let owner = client.get_owner().unwrap();
-    AccountOwner::User(owner)
+    client.get_owner().unwrap()
 }
 
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
@@ -905,7 +904,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         let wallet = client1.load_wallet()?;
         let user_chain = wallet.get(chain2).unwrap();
         let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        AccountOwner::User(public_key.into())
+        AccountOwner::from(public_key)
     };
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
@@ -1898,7 +1897,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
-    let owner_amm_app = AccountOwner::Application(application_id_amm.forget_abi());
+    let owner_amm_app = application_id_amm.into();
 
     // Create AMM wrappers
     let app_amm = AmmApp(
@@ -2429,7 +2428,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let (mut net, client) = config.instantiate().await?;
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
-    let owner1 = Owner::from(
+    let owner1 = AccountOwner::from(
         client
             .load_wallet()?
             .get(chain1)

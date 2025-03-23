@@ -208,7 +208,7 @@ message BlockProposal {
   AccountPublicKey public_key = 3;
 
   // Byte-encoded owner
-  Owner owner = 4;
+  AccountOwner owner = 4;
 
   // Signature by chain owner
   AccountSignature signature = 5;
@@ -337,10 +337,6 @@ message CryptoHash {
 }
 
 message AccountOwner {
-  bytes bytes = 1;
-}
-
-message Owner {
   bytes bytes = 1;
 }
 

@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Account, AccountOwner, Amount, ChainId, CryptoHash, Owner},
+    linera_base_types::{Account, AccountOwner, Amount, ChainId, CryptoHash},
     test::{ActiveChain, Recipient, TestValidator},
 };
 
@@ -33,7 +33,7 @@ async fn chain_balance_transfers() {
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+            block.with_native_token_transfer(AccountOwner::chain(), recipient, transfer_amount);
         })
         .await;
 
@@ -63,13 +63,13 @@ async fn transfer_to_owner() {
 
     let transfer_amount = Amount::from_tokens(2);
     let funding_chain = validator.get_chain(&ChainId::root(0));
-    let owner = Owner(CryptoHash::test_hash("owner"));
-    let account = Account::owner(recipient_chain.id(), owner);
+    let owner = AccountOwner::from(CryptoHash::test_hash("owner"));
+    let account = Account::new(recipient_chain.id(), owner);
     let recipient = Recipient::Account(account);
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+            block.with_native_token_transfer(AccountOwner::chain(), recipient, transfer_amount);
         })
         .await;
 
@@ -79,7 +79,7 @@ async fn transfer_to_owner() {
         })
         .await;
 
-    assert_balances(&recipient_chain, [(owner.into(), transfer_amount)]).await;
+    assert_balances(&recipient_chain, [(owner, transfer_amount)]).await;
 }
 
 /// Tests if multiple accounts can receive tokens.
@@ -101,20 +101,19 @@ async fn transfer_to_multiple_owners() {
     let funding_chain = validator.get_chain(&ChainId::root(0));
 
     let account_owners = (1..=number_of_owners)
-        .map(|index| Owner(CryptoHash::test_hash(format!("owner{index}"))))
-        .map(AccountOwner::from)
+        .map(|index| AccountOwner::from(CryptoHash::test_hash(format!("owner{index}"))))
         .collect::<Vec<_>>();
 
     let recipients = account_owners
         .iter()
         .copied()
-        .map(|account_owner| Account::owner(recipient_chain.id(), account_owner))
+        .map(|account_owner| Account::new(recipient_chain.id(), account_owner))
         .map(Recipient::Account);
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
             for (recipient, transfer_amount) in recipients.zip(transfer_amounts.clone()) {
-                block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+                block.with_native_token_transfer(AccountOwner::chain(), recipient, transfer_amount);
             }
         })
         .await;
@@ -149,13 +148,12 @@ async fn emptied_account_disappears_from_queries() {
     let transfer_amount = Amount::from_tokens(100);
     let funding_chain = validator.get_chain(&ChainId::root(0));
 
-    let owner = Owner::from(recipient_chain.public_key());
-    let account_owner = AccountOwner::from(owner);
-    let recipient = Recipient::Account(Account::owner(recipient_chain.id(), account_owner));
+    let owner = AccountOwner::from(recipient_chain.public_key());
+    let recipient = Recipient::Account(Account::new(recipient_chain.id(), owner));
 
     let transfer_certificate = funding_chain
         .add_block(|block| {
-            block.with_native_token_transfer(AccountOwner::Chain, recipient, transfer_amount);
+            block.with_native_token_transfer(AccountOwner::chain(), recipient, transfer_amount);
         })
         .await;
 
@@ -167,15 +165,11 @@ async fn emptied_account_disappears_from_queries() {
 
     recipient_chain
         .add_block(|block| {
-            block.with_native_token_transfer(
-                AccountOwner::User(owner),
-                Recipient::Burn,
-                transfer_amount,
-            );
+            block.with_native_token_transfer(owner, Recipient::Burn, transfer_amount);
         })
         .await;
 
-    assert_eq!(recipient_chain.owner_balance(&account_owner).await, None);
+    assert_eq!(recipient_chain.owner_balance(&owner).await, None);
     assert_balances(&recipient_chain, []).await;
 }
 
@@ -192,7 +186,6 @@ async fn assert_balances(
     let missing_accounts = ["missing1", "missing2"]
         .into_iter()
         .map(CryptoHash::test_hash)
-        .map(Owner)
         .map(AccountOwner::from)
         .collect::<Vec<_>>();
 

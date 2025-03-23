@@ -17,7 +17,9 @@ use linera_base::{
         Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
     },
     hashed::Hashed,
-    identifiers::{ApplicationId, BlobId, BlobType, ChainDescription, ChainId, EventId, Owner},
+    identifiers::{
+        AccountOwner, ApplicationId, BlobId, BlobType, ChainDescription, ChainId, EventId,
+    },
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -215,7 +217,7 @@ pub trait Storage: Sized {
         committee: Committee,
         admin_id: ChainId,
         description: ChainDescription,
-        owner: Owner,
+        owner: AccountOwner,
         balance: Amount,
         timestamp: Timestamp,
     ) -> Result<(), ChainError>

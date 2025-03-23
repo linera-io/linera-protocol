@@ -10,7 +10,7 @@ use futures::Future;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, ChainId, MessageId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -395,7 +395,7 @@ where
         &mut self,
         chain_id: ChainId,
         message_id: MessageId,
-        owner: Owner,
+        owner: AccountOwner,
         validators: Option<Vec<(ValidatorPublicKey, String)>>,
     ) -> Result<(), Error>
     where

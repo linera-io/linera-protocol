@@ -13,7 +13,7 @@ use crate::{
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner,
+        ModuleId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -27,7 +27,7 @@ use crate::{
 #[test_case(Timestamp::from(6_400_003); "of_timestamp")]
 #[test_case(resources_test_case(); "of_resources")]
 #[test_case(send_message_request_test_case(); "of_send_message_request")]
-#[test_case(Owner(CryptoHash::test_hash("owner")); "of_owner")]
+#[test_case(AccountOwner::from(CryptoHash::test_hash("owner")); "of_owner")]
 #[test_case(account_test_case(); "of_account")]
 #[test_case(ChainId(CryptoHash::test_hash("chain_id")); "of_chain_id")]
 #[test_case(message_id_test_case(); "of_message_id")]
@@ -97,7 +97,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
 fn account_test_case() -> Account {
     Account {
         chain_id: ChainId::root(10),
-        owner: AccountOwner::User(Owner(CryptoHash::test_hash("account"))),
+        owner: AccountOwner::Address32(CryptoHash::test_hash("account")),
     }
 }
 
@@ -138,13 +138,18 @@ fn timeout_config_test_case() -> TimeoutConfig {
 fn chain_ownership_test_case() -> ChainOwnership {
     let super_owners = ["Alice", "Bob"]
         .into_iter()
-        .map(|owner_name| Owner(CryptoHash::test_hash(owner_name)))
+        .map(|owner_name| AccountOwner::from(CryptoHash::test_hash(owner_name)))
         .collect();
 
     let owners = ["Carol", "Dennis", "Eve"]
         .into_iter()
         .enumerate()
-        .map(|(index, owner_name)| (Owner(CryptoHash::test_hash(owner_name)), index as u64))
+        .map(|(index, owner_name)| {
+            (
+                AccountOwner::from(CryptoHash::test_hash(owner_name)),
+                index as u64,
+            )
+        })
         .collect();
 
     ChainOwnership {

@@ -11,7 +11,7 @@ use linera_base::{
     ensure, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName,
+        ModuleId, StreamName,
     },
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
@@ -34,7 +34,7 @@ where
     application_id: Option<ApplicationId<Application::Abi>>,
     application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
-    authenticated_signer: Option<Option<Owner>>,
+    authenticated_signer: Option<Option<AccountOwner>>,
     block_height: Option<BlockHeight>,
     message_is_bouncing: Option<Option<bool>>,
     message_id: Option<Option<MessageId>>,
@@ -174,10 +174,10 @@ where
     Application: Contract,
 {
     /// Returns the authenticated signer for this execution, if there is one.
-    pub fn authenticated_signer(&mut self) -> Option<Owner> {
+    pub fn authenticated_signer(&mut self) -> Option<AccountOwner> {
         *self
             .authenticated_signer
-            .get_or_insert_with(|| contract_wit::authenticated_signer().map(Owner::from))
+            .get_or_insert_with(|| contract_wit::authenticated_signer().map(AccountOwner::from))
     }
 
     /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
@@ -209,23 +209,11 @@ where
         &mut self,
         owner: AccountOwner,
     ) -> Result<(), AccountPermissionError> {
-        match owner {
-            AccountOwner::User(address) => {
-                ensure!(
-                    self.authenticated_signer() == Some(address),
-                    AccountPermissionError::NotPermitted(owner)
-                );
-            }
-            AccountOwner::Application(id) => {
-                ensure!(
-                    self.authenticated_caller_id() == Some(id),
-                    AccountPermissionError::NotPermitted(owner)
-                );
-            }
-            AccountOwner::Chain => {
-                return Err(AccountPermissionError::NotPermitted(AccountOwner::Chain));
-            }
-        }
+        ensure!(
+            self.authenticated_signer() == Some(owner)
+                || self.authenticated_caller_id().map(AccountOwner::from) == Some(owner),
+            AccountPermissionError::NotPermitted(owner)
+        );
         Ok(())
     }
 

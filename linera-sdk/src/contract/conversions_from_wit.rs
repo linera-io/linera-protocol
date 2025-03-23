@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
-    identifiers::{ApplicationId, ChainId, MessageId, ModuleId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
     vm::VmRuntime,
 };
@@ -24,9 +24,14 @@ impl From<wit_contract_api::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<wit_contract_api::Owner> for Owner {
-    fn from(owner: wit_contract_api::Owner) -> Self {
-        Owner(owner.inner0.into())
+impl From<wit_contract_api::AccountOwner> for AccountOwner {
+    fn from(account_owner: wit_contract_api::AccountOwner) -> Self {
+        match account_owner {
+            wit_contract_api::AccountOwner::Reserved(value) => AccountOwner::Reserved(value),
+            wit_contract_api::AccountOwner::Address32(value) => {
+                AccountOwner::Address32(value.into())
+            }
+        }
     }
 }
 

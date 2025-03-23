@@ -66,7 +66,7 @@ function App({ chainId, owner }: AppProps) {
     { data: balanceData, called: balanceCalled, error: balanceError },
   ] = useLazyQuery<AccountsQuery>(GET_BALANCE, {
     fetchPolicy: "network-only",
-    variables: { owner: `User:${owner}` },
+    variables: { owner: `${owner}` },
   });
 
   useSubscription(NOTIFICATION_SUBSCRIPTION, {
@@ -128,7 +128,7 @@ function App({ chainId, owner }: AppProps) {
     event.preventDefault();
     makePayment({
       variables: {
-        owner: `User:${owner}`,
+        owner: `${owner}`,
         amount,
         targetAccount: {
           chainId: targetChain,

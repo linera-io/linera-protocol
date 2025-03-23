@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
     time::Instant,
 };
@@ -493,7 +493,7 @@ where
         );
         let cross_chain_message_delivery = chain_client.options().cross_chain_message_delivery;
         let mut num_sent_proposals = 0;
-        let authenticated_signer = Some(Owner::from(key_pair.public()));
+        let authenticated_signer = Some(AccountOwner::from(key_pair.public()));
         loop {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");
@@ -594,7 +594,7 @@ where
                     amount,
                 ),
                 None => Operation::system(SystemOperation::Transfer {
-                    owner: AccountOwner::Chain,
+                    owner: AccountOwner::chain(),
                     recipient: Recipient::chain(previous_chain_id),
                     amount,
                 }),
@@ -618,10 +618,10 @@ where
     ) -> Operation {
         let target_account = fungible::Account {
             chain_id,
-            owner: AccountOwner::User(Owner::from(receiver)),
+            owner: AccountOwner::from(receiver),
         };
         let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-            owner: AccountOwner::User(Owner::from(sender)),
+            owner: AccountOwner::from(sender),
             amount,
             target_account,
         })

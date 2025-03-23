@@ -128,7 +128,7 @@ BLOB_HASH=$(echo "$QUERY_RESULT" | jq -r '.publishDataBlob')
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 mutation {
   mint(
-    minter: "User:$OWNER_1",
+    minter: "$OWNER_1",
     name: "nft1",
     blobHash: "$BLOB_HASH",
   )
@@ -139,7 +139,7 @@ mutation {
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 query {
-  ownedNfts(owner: "User:$OWNER_1")
+  ownedNfts(owner: "$OWNER_1")
 }
 ```
 
@@ -177,11 +177,11 @@ query {
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 mutation {
   transfer(
-    sourceOwner: "User:$OWNER_1",
+    sourceOwner: "$OWNER_1",
     tokenId: "$TOKEN_ID",
     targetAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_2"
+      owner: "$OWNER_2"
     }
   )
 }

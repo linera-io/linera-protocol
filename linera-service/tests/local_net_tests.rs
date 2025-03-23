@@ -43,8 +43,7 @@ use {
 
 #[cfg(feature = "benchmark")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
-    let owner = client.get_owner().unwrap();
-    AccountOwner::User(owner)
+    client.get_owner().unwrap()
 }
 
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
@@ -57,7 +56,6 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
-    use linera_base::identifiers::Owner;
     let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -177,14 +175,13 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = AccountOwner::User(Owner::from(
-        AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public(),
-    ));
+    let recipient =
+        AccountOwner::from(AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()).public());
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),
             Account::chain(chain_1),
-            Account::owner(chain_2, recipient),
+            Account::new(chain_2, recipient),
         )
         .await?;
 
@@ -210,7 +207,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         client_2.process_inbox(chain_2).await?;
         assert_eq!(
             client_2
-                .local_balance(Account::owner(chain_2, recipient))
+                .local_balance(Account::new(chain_2, recipient))
                 .await?,
             Amount::from_tokens(5),
         );

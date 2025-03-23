@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
-    identifiers::{Account, ApplicationId, ChainId, MessageId, ModuleId, Owner},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
     vm::VmRuntime,
@@ -332,7 +332,7 @@ pub enum ClientCommand {
 
         /// The new owner (otherwise create a key pair and remember it)
         #[arg(long = "owner")]
-        owner: Option<Owner>,
+        owner: Option<AccountOwner>,
 
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
@@ -1014,7 +1014,7 @@ pub enum ClientCommand {
     Assign {
         /// The owner to assign.
         #[arg(long)]
-        owner: Owner,
+        owner: AccountOwner,
 
         /// The ID of the message that created the chain. (This uniquely describes the
         /// chain and where it was created.)
@@ -1424,11 +1424,11 @@ pub enum ProjectCommand {
 pub struct ChainOwnershipConfig {
     /// The new super owners.
     #[arg(long, num_args(0..))]
-    super_owners: Vec<Owner>,
+    super_owners: Vec<AccountOwner>,
 
     /// The new regular owners.
     #[arg(long, num_args(0..))]
-    owners: Vec<Owner>,
+    owners: Vec<AccountOwner>,
 
     /// Weights for the new owners.
     ///

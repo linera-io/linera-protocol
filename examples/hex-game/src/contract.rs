@@ -9,7 +9,7 @@ use async_graphql::ComplexObject;
 use hex_game::{Board, Clock, HexAbi, HexOutcome, Operation, Timeouts};
 use linera_sdk::{
     linera_base_types::{
-        Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, TimeoutConfig,
+        AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, TimeoutConfig,
         WithContractAbi,
     },
     views::{RootView, View},
@@ -141,7 +141,7 @@ impl HexContract {
 
     async fn execute_start(
         &mut self,
-        players: [Owner; 2],
+        players: [AccountOwner; 2],
         board_size: u16,
         fee_budget: Amount,
         timeouts: Option<Timeouts>,
@@ -200,14 +200,17 @@ pub enum Message {
     /// Initializes a game. Sent from the main chain to a temporary chain.
     Start {
         /// The players.
-        players: [Owner; 2],
+        players: [AccountOwner; 2],
         /// The side length of the board. A typical size is 11.
         board_size: u16,
         /// Settings that determine how much time the players have to think about their turns.
         timeouts: Timeouts,
     },
     /// Reports the outcome of a game. Sent from a closed chain to the main chain.
-    End { winner: Owner, loser: Owner },
+    End {
+        winner: AccountOwner,
+        loser: AccountOwner,
+    },
 }
 
 /// This implementation is only nonempty in the service.

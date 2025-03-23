@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::{
     data_types::{Round, TimeDelta},
     doc_scalar,
-    identifiers::{AccountOwner, Owner},
+    identifiers::AccountOwner,
 };
 
 /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
@@ -53,10 +53,10 @@ impl Default for TimeoutConfig {
 pub struct ChainOwnership {
     /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
     #[debug(skip_if = BTreeSet::is_empty)]
-    pub super_owners: BTreeSet<Owner>,
+    pub super_owners: BTreeSet<AccountOwner>,
     /// The regular owners, with their weights that determine how often they are round leader.
     #[debug(skip_if = BTreeMap::is_empty)]
-    pub owners: BTreeMap<Owner, u64>,
+    pub owners: BTreeMap<AccountOwner, u64>,
     /// The number of rounds in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,
     /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -69,7 +69,7 @@ pub struct ChainOwnership {
 
 impl ChainOwnership {
     /// Creates a `ChainOwnership` with a single super owner.
-    pub fn single_super(owner: Owner) -> Self {
+    pub fn single_super(owner: AccountOwner) -> Self {
         ChainOwnership {
             super_owners: iter::once(owner).collect(),
             owners: BTreeMap::new(),
@@ -80,7 +80,7 @@ impl ChainOwnership {
     }
 
     /// Creates a `ChainOwnership` with a single regular owner.
-    pub fn single(owner: Owner) -> Self {
+    pub fn single(owner: AccountOwner) -> Self {
         ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: iter::once((owner, 100)).collect(),
@@ -92,7 +92,7 @@ impl ChainOwnership {
 
     /// Creates a `ChainOwnership` with the specified regular owners.
     pub fn multiple(
-        owners_and_weights: impl IntoIterator<Item = (Owner, u64)>,
+        owners_and_weights: impl IntoIterator<Item = (AccountOwner, u64)>,
         multi_leader_rounds: u32,
         timeout_config: TimeoutConfig,
     ) -> Self {
@@ -106,7 +106,7 @@ impl ChainOwnership {
     }
 
     /// Adds a regular owner.
-    pub fn with_regular_owner(mut self, owner: Owner, weight: u64) -> Self {
+    pub fn with_regular_owner(mut self, owner: AccountOwner, weight: u64) -> Self {
         self.owners.insert(owner, weight);
         self
     }
@@ -119,7 +119,7 @@ impl ChainOwnership {
     }
 
     /// Returns `true` if this is an owner or super owner.
-    pub fn verify_owner(&self, owner: &Owner) -> bool {
+    pub fn verify_owner(&self, owner: &AccountOwner) -> bool {
         self.super_owners.contains(owner) || self.owners.contains_key(owner)
     }
 
@@ -157,7 +157,7 @@ impl ChainOwnership {
     }
 
     /// Returns an iterator over all super owners, followed by all owners.
-    pub fn all_owners(&self) -> impl Iterator<Item = &Owner> {
+    pub fn all_owners(&self) -> impl Iterator<Item = &AccountOwner> {
         self.super_owners.iter().chain(self.owners.keys())
     }
 
@@ -212,9 +212,9 @@ mod tests {
     #[test]
     fn test_ownership_round_timeouts() {
         let super_pub_key = Ed25519SecretKey::generate().public();
-        let super_owner = Owner::from(super_pub_key);
+        let super_owner = AccountOwner::from(super_pub_key);
         let pub_key = Secp256k1SecretKey::generate().public();
-        let owner = Owner::from(pub_key);
+        let owner = AccountOwner::from(pub_key);
 
         let ownership = ChainOwnership {
             super_owners: BTreeSet::from_iter([super_owner]),

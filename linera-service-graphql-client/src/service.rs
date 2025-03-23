@@ -7,7 +7,7 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     identifiers::{
         Account, AccountOwner, BlobId, ChainDescription, ChainId, ChannelName, Destination,
-        GenericApplicationId, Owner, StreamName,
+        GenericApplicationId, StreamName,
     },
 };
 

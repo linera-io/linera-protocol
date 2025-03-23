@@ -48,10 +48,9 @@ impl Contract for FungibleTokenContract {
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = self.runtime.authenticated_signer() {
-                state.accounts.insert(
-                    AccountOwner::User(owner),
-                    Amount::from_str("1000000").unwrap(),
-                );
+                state
+                    .accounts
+                    .insert(owner, Amount::from_str("1000000").unwrap());
             }
         }
         self.state.initialize_accounts(state).await;

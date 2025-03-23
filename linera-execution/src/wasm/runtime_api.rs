@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -391,7 +391,7 @@ where
     Runtime: ContractRuntime + 'static,
 {
     /// Returns the authenticated signer for this execution, if there is one.
-    fn authenticated_signer(caller: &mut Caller) -> Result<Option<Owner>, RuntimeError> {
+    fn authenticated_signer(caller: &mut Caller) -> Result<Option<AccountOwner>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
