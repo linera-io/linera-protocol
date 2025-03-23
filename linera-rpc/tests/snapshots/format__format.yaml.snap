@@ -12,7 +12,7 @@ AccountOwner:
   ENUM:
     0:
       Reserved:
-        NEWTYPE: U16
+        NEWTYPE: U8
     1:
       Address32:
         NEWTYPE:
