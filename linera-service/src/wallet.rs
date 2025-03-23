@@ -47,7 +47,7 @@ fn update_table_with_chain(
         chain_id_cell,
         Cell::new(format!(
             r#"Public Key:         {}
-AccountOwner:              {}
+AccountOwner:       {}
 Block Hash:         {}
 Timestamp:          {}
 Next Block Height:  {}"#,
