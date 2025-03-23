@@ -35,7 +35,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId,
-        ModuleId, Owner, StreamId, UserApplicationId,
+        ModuleId, Owner, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -2946,7 +2946,7 @@ where
         module_id: ModuleId<A, Parameters, InstantiationArgument>,
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<ApplicationId>,
     ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, ChainClientError>
     {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
@@ -2978,9 +2978,8 @@ where
         module_id: ModuleId,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<ClientOutcome<(UserApplicationId, ConfirmedBlockCertificate)>, ChainClientError>
-    {
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, ChainClientError> {
         self.execute_operation(SystemOperation::CreateApplication {
             module_id,
             parameters,

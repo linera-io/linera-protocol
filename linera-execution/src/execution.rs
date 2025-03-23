@@ -27,11 +27,11 @@ use {
 
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
-    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext,
-    MessageKind, Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
-    ServiceSyncRuntime, SystemMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
+    resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
+    ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
+    OutgoingMessage, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage,
+    TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -40,7 +40,7 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: HashedReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+    pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
 }
 
 /// How to interact with a long-lived service runtime.
@@ -61,7 +61,7 @@ where
         &mut self,
         contract: UserContractCode,
         local_time: Timestamp,
-        application_description: UserApplicationDescription,
+        application_description: ApplicationDescription,
         instantiation_argument: Vec<u8>,
         contract_blob: Blob,
         service_blob: Blob,
@@ -166,7 +166,7 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn run_user_action(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
@@ -192,7 +192,7 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn run_user_action_with_runtime(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
@@ -420,7 +420,7 @@ where
 
     async fn query_user_application(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         context: QueryContext,
         query: Vec<u8>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
@@ -451,7 +451,7 @@ where
 
     async fn query_user_application_with_long_lived_service(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         context: QueryContext,
         query: Vec<u8>,
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
@@ -487,14 +487,14 @@ where
 
     pub async fn list_applications(
         &self,
-    ) -> Result<Vec<(UserApplicationId, UserApplicationDescription)>, ExecutionError> {
+    ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {
         let mut applications = vec![];
         for blob_id in self.system.used_blobs.indices().await? {
             if blob_id.blob_type == BlobType::ApplicationDescription {
                 let blob_content = self.system.read_blob_content(blob_id).await?;
-                let application_description: UserApplicationDescription =
+                let application_description: ApplicationDescription =
                     bcs::from_bytes(blob_content.bytes())?;
-                let app_id = UserApplicationId::from(&application_description);
+                let app_id = ApplicationId::from(&application_description);
                 applications.push((app_id, application_description));
             }
         }

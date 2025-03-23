@@ -12,9 +12,9 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner, UserApplicationId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -575,7 +575,7 @@ where
         module_id: ModuleId,
         parameters: String,
         instantiation_argument: String,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let parameters = parameters.as_bytes().to_vec();
@@ -761,15 +761,15 @@ where
 
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
-    id: UserApplicationId,
-    description: UserApplicationDescription,
+    id: ApplicationId,
+    description: ApplicationDescription,
     link: String,
 }
 
 impl ApplicationOverview {
     fn new(
-        id: UserApplicationId,
-        description: UserApplicationDescription,
+        id: ApplicationId,
+        description: ApplicationDescription,
         port: NonZeroU16,
         chain_id: ChainId,
     ) -> Self {
@@ -889,7 +889,7 @@ where
     /// Handles service queries for user applications (including mutations).
     async fn handle_service_request(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         request: Vec<u8>,
         chain_id: ChainId,
     ) -> Result<Vec<u8>, NodeServiceError> {
@@ -932,7 +932,7 @@ where
     /// Queries a user application, returning the raw [`QueryOutcome`].
     async fn query_user_application(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         bytes: Vec<u8>,
         chain_id: ChainId,
     ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
@@ -982,7 +982,7 @@ where
         request: String,
     ) -> Result<Vec<u8>, NodeServiceError> {
         let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
-        let application_id: UserApplicationId = application_id.parse()?;
+        let application_id: ApplicationId = application_id.parse()?;
 
         debug!(
             "Processing request for application {application_id} on chain {chain_id}:\n{:?}",

@@ -13,12 +13,12 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Timestamp,
-        UserApplicationDescription,
+        Amount, ApplicationDescription, ArithmeticError, Blob, BlockHeight, OracleResponse,
+        Timestamp,
     },
     ensure,
     identifiers::{
-        BlobType, ChainId, ChannelFullName, Destination, MessageId, Owner, UserApplicationId,
+        ApplicationId, BlobType, ChainId, ChannelFullName, Destination, MessageId, Owner,
     },
     ownership::ChainOwnership,
 };
@@ -370,8 +370,8 @@ where
 
     pub async fn describe_application(
         &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, ChainError> {
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, ChainError> {
         self.execution_state
             .system
             .describe_application(application_id, None)
@@ -1073,7 +1073,7 @@ where
     /// Verifies that the block is valid according to the chain's application permission settings.
     fn check_app_permissions(&self, block: &ProposedBlock) -> Result<(), ChainError> {
         let app_permissions = self.execution_state.system.application_permissions.get();
-        let mut mandatory = HashSet::<UserApplicationId>::from_iter(
+        let mut mandatory = HashSet::<ApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().cloned(),
         );
         for operation in &block.operations {

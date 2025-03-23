@@ -14,10 +14,10 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Blob, BlockHeight, UserApplicationDescription},
+    data_types::{ApplicationDescription, Blob, BlockHeight},
     ensure,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -169,8 +169,8 @@ where
     /// Returns an application's description.
     pub(super) async fn describe_application(
         &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .describe_application(application_id)
