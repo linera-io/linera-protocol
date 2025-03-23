@@ -27,7 +27,10 @@ use linera_service::util;
 #[cfg(with_metrics)]
 use linera_service::{prometheus_server, pyroscope_server};
 use linera_storage::Storage;
-use linera_views::store::CommonStoreConfig;
+use linera_views::{
+    lru_caching::StorageCacheConfig,
+    store::CommonStoreConfig,
+};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
@@ -70,9 +73,17 @@ pub struct ProxyOptions {
     #[arg(long, default_value = "10")]
     max_stream_queries: usize,
 
+    /// The maximal memory used in the storage cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_size: usize,
+
+    /// The maximal size of an entry in the storage cache.
+    #[arg(long, default_value = "1000000")]
+    pub max_entry_size: usize,
+
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
-    cache_size: usize,
+    pub max_cache_entries: usize,
 
     /// Path to the file describing the initial user chains (aka genesis state)
     #[arg(long = "genesis")]
@@ -395,10 +406,15 @@ fn main() -> Result<()> {
 
 impl ProxyOptions {
     async fn run(&self) -> Result<()> {
+        let storage_cache_config = StorageCacheConfig {
+            max_cache_size: self.max_cache_size,
+            max_entry_size: self.max_entry_size,
+            max_cache_entries: self.max_cache_entries,
+        };
         let common_config = CommonStoreConfig {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
-            cache_size: self.cache_size,
+            storage_cache_config,
         };
         let full_storage_config = self.storage_config.add_common_config(common_config).await?;
         let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;

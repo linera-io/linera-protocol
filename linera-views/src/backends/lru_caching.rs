@@ -66,6 +66,26 @@ static CONTAINS_KEY_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| 
     )
 });
 
+/// The parametrization of the cache
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StorageCacheConfig {
+    /// The maximum size of the cache, in bytes (keys size + value sizes)
+    pub max_cache_size: usize,
+    /// The maximum size of an entry size, in bytes
+    pub max_entry_size: usize,
+    /// The maximum number of entries in the cache.
+    pub max_cache_entries: usize,
+}
+
+/// The maximum number of entries in the cache.
+/// If the number of entries in the cache is too large then the underlying maps
+/// become the limiting factor
+pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig {
+    max_cache_size: 10000000,
+    max_entry_size: 1000000,
+    max_cache_entries: 1000,
+};
+
 enum CacheEntry {
     DoesNotExist,
     Exists,
@@ -79,18 +99,20 @@ enum CacheEntry {
 struct LruPrefixCache {
     map: BTreeMap<Vec<u8>, CacheEntry>,
     queue: LinkedHashMap<Vec<u8>, (), RandomState>,
-    max_cache_size: usize,
+    storage_cache_config: StorageCacheConfig,
+    total_size: usize,
     /// Whether we have exclusive R/W access to the keys under the root key of the store.
     has_exclusive_access: bool,
 }
 
 impl LruPrefixCache {
     /// Creates an `LruPrefixCache`.
-    pub fn new(max_cache_size: usize) -> Self {
+    pub fn new(storage_cache_config: StorageCacheConfig) -> Self {
         Self {
             map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
-            max_cache_size,
+            storage_cache_config,
+            total_size: 0,
             has_exclusive_access: false,
         }
     }
@@ -113,7 +135,7 @@ impl LruPrefixCache {
             btree_map::Entry::Vacant(entry) => {
                 entry.insert(cache_entry);
                 self.queue.insert(key, ());
-                if self.queue.len() > self.max_cache_size {
+                if self.queue.len() > self.storage_cache_config .max_cache_entries {
                     let Some(key) = self.queue.pop_front() else {
                         unreachable!()
                     };
@@ -388,7 +410,7 @@ pub struct LruCachingConfig<C> {
     /// The inner configuration of the `LruCachingStore`.
     pub inner_config: C,
     /// The cache size being used
-    pub cache_size: usize,
+    pub storage_cache_config: StorageCacheConfig,
 }
 
 impl<K> AdminKeyValueStore for LruCachingStore<K>
@@ -403,14 +425,13 @@ where
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
         let store = K::connect(&config.inner_config, namespace).await?;
-        let cache_size = config.cache_size;
-        Ok(LruCachingStore::new(store, cache_size))
+        Ok(LruCachingStore::new(store, config.storage_cache_config.clone()))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
-        let cache_size = self.cache_size();
-        let store = LruCachingStore::new(store, cache_size);
+        let storage_cache_config = self.storage_cache_config();
+        let store = LruCachingStore::new(store, storage_cache_config);
         store.enable_exclusive_access();
         Ok(store)
     }
@@ -450,34 +471,34 @@ where
 {
     async fn new_test_config() -> Result<LruCachingConfig<K::Config>, K::Error> {
         let inner_config = K::new_test_config().await?;
-        let cache_size = TEST_CACHE_SIZE;
+        let storage_cache_config = DEFAULT_STORAGE_CACHE_CONFIG;
         Ok(LruCachingConfig {
             inner_config,
-            cache_size,
+            storage_cache_config,
         })
     }
 }
 
 impl<K> LruCachingStore<K> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
-    pub fn new(store: K, cache_size: usize) -> Self {
+    pub fn new(store: K, storage_cache_config: StorageCacheConfig) -> Self {
         let cache = {
-            if cache_size == 0 {
+            if storage_cache_config.max_cache_entries == 0 {
                 None
             } else {
-                Some(Arc::new(Mutex::new(LruPrefixCache::new(cache_size))))
+                Some(Arc::new(Mutex::new(LruPrefixCache::new(storage_cache_config))))
             }
         };
         Self { store, cache }
     }
 
     /// Gets the `cache_size`.
-    pub fn cache_size(&self) -> usize {
+    pub fn storage_cache_config(&self) -> StorageCacheConfig {
         match &self.cache {
-            None => 0,
+            None => StorageCacheConfig { max_cache_size: 0, max_entry_size: 0, max_cache_entries: 0 },
             Some(cache) => {
                 let cache = cache.lock().unwrap();
-                cache.max_cache_size
+                cache.storage_cache_config.clone()
             }
         }
     }

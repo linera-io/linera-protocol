@@ -27,12 +27,12 @@ pub struct IndexedDbStoreConfig {
 }
 
 impl IndexedDbStoreConfig {
-    /// Creates a `IndexedDbStoreConfig`. `max_concurrent_queries` and `cache_size` are not used.
+    /// Creates a `IndexedDbStoreConfig`. `max_concurrent_queries` and `storage_cache_config` are not used.
     pub fn new(max_stream_queries: usize) -> Self {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
+            storage_cache_config: DEFAULT_STORAGE_CACHE_POLICY,
         };
         Self { common_config }
     }

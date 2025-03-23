@@ -10,6 +10,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[cfg(with_testing)]
 use crate::random::generate_test_namespace;
 use crate::{batch::Batch, common::from_bytes_option, views::ViewError};
+use crate::lru_caching::{StorageCacheConfig, DEFAULT_STORAGE_CACHE_CONFIG};
 
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,7 +29,7 @@ pub struct CommonStoreConfig {
     /// The number of streams used for the async streams.
     pub max_stream_queries: usize,
     /// The cache size being used.
-    pub cache_size: usize,
+    pub storage_cache_config: StorageCacheConfig,
 }
 
 impl CommonStoreConfig {
@@ -46,7 +47,7 @@ impl Default for CommonStoreConfig {
         CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries: 10,
-            cache_size: 1000,
+            storage_cache_config: DEFAULT_STORAGE_CACHE_CONFIG,
         }
     }
 }
