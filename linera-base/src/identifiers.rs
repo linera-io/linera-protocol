@@ -32,7 +32,7 @@ use crate::{
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// Short addresses reserved for the protocol.
-    Reserved(u16),
+    Reserved(u8),
     /// 32-byte account address.
     Address32(CryptoHash),
 }
@@ -923,7 +923,7 @@ impl<A> ApplicationId<A> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "AccountOwner")]
 enum SerializableAccountOwner {
-    Reserved(u16),
+    Reserved(u8),
     Address32(CryptoHash),
 }
 
@@ -980,10 +980,10 @@ impl FromStr for AccountOwner {
                     return Ok(AccountOwner::Address32(hash));
                 }
             }
-            if s.len() == 4 {
+            if s.len() == 2 {
                 let bytes = hex::decode(s)?;
-                if bytes.len() == 2 {
-                    let value = u16::from_be_bytes(bytes.try_into().expect("two bytes"));
+                if bytes.len() == 1 {
+                    let value = u8::from_be_bytes(bytes.try_into().expect("one byte"));
                     return Ok(AccountOwner::Reserved(value));
                 }
             }
