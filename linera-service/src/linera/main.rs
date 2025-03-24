@@ -1338,7 +1338,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::ReadDataBlob { .. }
         | ClientCommand::CreateApplication { .. }
         | ClientCommand::PublishAndCreate { .. }
-        | ClientCommand::Keygen { .. }
+        | ClientCommand::Keygen
         | ClientCommand::Assign { .. }
         | ClientCommand::Wallet { .. }
         | ClientCommand::RetryPendingBlock { .. } => "client".into(),

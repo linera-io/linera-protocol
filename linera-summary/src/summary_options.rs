@@ -44,7 +44,7 @@ impl SummaryOptions {
     pub fn pr_number(&self) -> Option<u64> {
         match self.command {
             Command::Local { pr } => Some(pr),
-            Command::Ci { .. } => None,
+            Command::Ci => None,
         }
     }
 

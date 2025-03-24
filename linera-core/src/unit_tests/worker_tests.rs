@@ -584,7 +584,8 @@ where
         // Timestamp older than previous one
         assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp {..})
+            Err(WorkerError::ChainError(error))
+                if matches!(*error, ChainError::InvalidBlockTimestamp)
         );
     }
     Ok(())
