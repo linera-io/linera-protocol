@@ -734,7 +734,7 @@ impl TransferTestEndpoint {
 
     /// Returns the [`Owner`] used to represent a recipient that's a user.
     fn recipient_owner() -> AccountOwner {
-        AccountOwner::Address32(CryptoHash::test_hash("recipient"))
+        AccountOwner::from(CryptoHash::test_hash("recipient"))
     }
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
@@ -778,7 +778,7 @@ impl TransferTestEndpoint {
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as a sender.
     pub fn sender_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => AccountOwner::chain(),
+            TransferTestEndpoint::Chain => AccountOwner::CHAIN,
             TransferTestEndpoint::User => Self::sender_owner(),
             TransferTestEndpoint::Application => Self::sender_application_id().into(),
         }
@@ -787,10 +787,8 @@ impl TransferTestEndpoint {
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as an unauthorized sender.
     pub fn unauthorized_sender_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => AccountOwner::chain(),
-            TransferTestEndpoint::User => {
-                AccountOwner::Address32(CryptoHash::test_hash("attacker"))
-            }
+            TransferTestEndpoint::Chain => AccountOwner::CHAIN,
+            TransferTestEndpoint::User => AccountOwner::from(CryptoHash::test_hash("attacker")),
             TransferTestEndpoint::Application => Self::recipient_application_id().into(),
         }
     }
@@ -818,7 +816,7 @@ impl TransferTestEndpoint {
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as a recipient.
     pub fn recipient_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => AccountOwner::chain(),
+            TransferTestEndpoint::Chain => AccountOwner::CHAIN,
             TransferTestEndpoint::User => Self::recipient_owner(),
             TransferTestEndpoint::Application => Self::recipient_application_id().into(),
         }
@@ -832,8 +830,7 @@ impl TransferTestEndpoint {
         amount: Amount,
     ) -> anyhow::Result<()> {
         let account_owner = self.recipient_account_owner();
-        let (expected_chain_balance, expected_balances) = if account_owner == AccountOwner::chain()
-        {
+        let (expected_chain_balance, expected_balances) = if account_owner == AccountOwner::CHAIN {
             (amount, vec![])
         } else {
             (Amount::ZERO, vec![(account_owner, amount)])

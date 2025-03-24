@@ -39,13 +39,11 @@ pub enum AccountOwner {
 
 impl AccountOwner {
     /// Returns the default chain address.
-    pub fn chain() -> Self {
-        AccountOwner::Reserved(0)
-    }
+    pub const CHAIN: AccountOwner = AccountOwner::Reserved(0);
 
     /// Tests if the account is the chain address.
     pub fn is_chain(&self) -> bool {
-        self == &AccountOwner::chain()
+        self == &AccountOwner::CHAIN
     }
 }
 
@@ -77,7 +75,7 @@ impl Account {
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
-            owner: AccountOwner::chain(),
+            owner: AccountOwner::CHAIN,
         }
     }
 }

@@ -202,7 +202,7 @@ where
         chain_description,
         key_pair,
         Some(key_pair.public().into()),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::chain(target_id),
         amount,
         incoming_bundles,
@@ -371,16 +371,16 @@ fn direct_outgoing_message(
 
 fn system_credit_message(amount: Amount) -> Message {
     Message::System(SystemMessage::Credit {
-        source: AccountOwner::chain(),
-        target: AccountOwner::chain(),
+        source: AccountOwner::CHAIN,
+        target: AccountOwner::CHAIN,
         amount,
     })
 }
 
 fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage {
     let message = SystemMessage::Credit {
-        source: AccountOwner::chain(),
-        target: AccountOwner::chain(),
+        source: AccountOwner::CHAIN,
+        target: AccountOwner::CHAIN,
         amount,
     };
     direct_outgoing_message(recipient, MessageKind::Tracked, message)
@@ -1389,7 +1389,7 @@ where
         ChainDescription::Root(2),
         &sender_key_pair,
         Some(chain_key_pair.public().into()),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::chain(ChainId::root(2)),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2123,7 +2123,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(AccountOwner::from(sender_key_pair.public())),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::Account(sender_account),
         Amount::from_tokens(5),
         Vec::new(),
@@ -2143,7 +2143,7 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Some(AccountOwner::from(sender_key_pair.public())),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::Burn,
         Amount::ONE,
         vec![IncomingBundle {
@@ -2154,7 +2154,7 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: AccountOwner::chain(),
+                    source: AccountOwner::CHAIN,
                     target: sender,
                     amount: Amount::from_tokens(5),
                 })
@@ -2982,7 +2982,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -2998,7 +2998,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3014,7 +3014,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3031,7 +3031,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         ChainDescription::Root(0),
         &key_pair0,
         Some(key_pair0.public().into()),
-        AccountOwner::chain(),
+        AccountOwner::CHAIN,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3514,11 +3514,7 @@ where
     // The first round is the multi-leader round 0. Anyone is allowed to propose.
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
-        .with_transfer(
-            AccountOwner::chain(),
-            Recipient::Burn,
-            Amount::from_tokens(1),
-        )
+        .with_transfer(AccountOwner::CHAIN, Recipient::Burn, Amount::from_tokens(1))
         .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,

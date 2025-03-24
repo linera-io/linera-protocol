@@ -278,7 +278,7 @@ where
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
-        if query.request_owner_balance == AccountOwner::chain() {
+        if query.request_owner_balance == AccountOwner::CHAIN {
             info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
         } else {
             info.requested_owner_balance = chain

@@ -628,7 +628,7 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
-        if source == AccountOwner::chain() {
+        if source == AccountOwner::CHAIN {
             ensure!(
                 authenticated_signer.is_some()
                     && self
@@ -697,7 +697,7 @@ where
         account: &AccountOwner,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let balance = if account == &AccountOwner::chain() {
+        let balance = if account == &AccountOwner::CHAIN {
             self.balance.get_mut()
         } else {
             self.balances.get_mut(account).await?.ok_or_else(|| {
@@ -715,7 +715,7 @@ where
                 account: *account,
             })?;
 
-        if account != &AccountOwner::chain() && balance.is_zero() {
+        if account != &AccountOwner::CHAIN && balance.is_zero() {
             self.balances.remove(account)?;
         }
 
@@ -737,7 +737,7 @@ where
                 target,
             } => {
                 let receiver = if context.is_bouncing { source } else { target };
-                if receiver == AccountOwner::chain() {
+                if receiver == AccountOwner::CHAIN {
                     let new_balance = self.balance.get().saturating_add(amount);
                     self.balance.set(new_balance);
                 } else {
@@ -842,7 +842,7 @@ where
                 epoch: config.epoch,
             }
         );
-        self.debit(&AccountOwner::chain(), config.balance).await?;
+        self.debit(&AccountOwner::CHAIN, config.balance).await?;
         let message = SystemMessage::OpenChain(config);
         Ok(OutgoingMessage::new(child_id, message).with_kind(MessageKind::Protected))
     }

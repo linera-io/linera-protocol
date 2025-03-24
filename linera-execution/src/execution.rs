@@ -368,9 +368,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         let message = SystemMessage::Credit {
             amount,
-            source: context
-                .authenticated_signer
-                .unwrap_or(AccountOwner::chain()),
+            source: context.authenticated_signer.unwrap_or(AccountOwner::CHAIN),
             target: account.owner,
         };
         txn_tracker.add_outgoing_message(

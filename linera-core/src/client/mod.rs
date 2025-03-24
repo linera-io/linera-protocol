@@ -2289,9 +2289,7 @@ where
     /// block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self
-            .query_balances_with_owner(AccountOwner::chain())
-            .await?;
+        let (balance, _) = self.query_balances_with_owner(AccountOwner::CHAIN).await?;
         Ok(balance)
     }
 
@@ -2344,7 +2342,7 @@ where
             operations: Vec::new(),
             previous_block_hash,
             height,
-            authenticated_signer: if owner == AccountOwner::chain() {
+            authenticated_signer: if owner == AccountOwner::CHAIN {
                 None
             } else {
                 Some(owner)
@@ -2384,9 +2382,7 @@ where
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace")]
     pub async fn local_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self
-            .local_balances_with_owner(AccountOwner::chain())
-            .await?;
+        let (balance, _) = self.local_balances_with_owner(AccountOwner::CHAIN).await?;
         Ok(balance)
     }
 

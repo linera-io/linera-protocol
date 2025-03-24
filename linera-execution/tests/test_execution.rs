@@ -1286,7 +1286,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership()?, ownership);
             let destination = Account::chain(ChainId::root(2));
-            runtime.transfer(AccountOwner::chain(), destination, Amount::ONE)?;
+            runtime.transfer(AccountOwner::CHAIN, destination, Amount::ONE)?;
             let id = runtime.application_id()?;
             let application_permissions = ApplicationPermissions::new_single(id);
             let (actual_message_id, chain_id) =
@@ -1483,11 +1483,11 @@ async fn test_message_receipt_spending_chain_balance(
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
-    let receiver_chain_account = AccountOwner::chain();
+    let receiver_chain_account = AccountOwner::CHAIN;
     let sender_chain_id = ChainId::root(2);
     let recipient = Account {
         chain_id: sender_chain_id,
-        owner: AccountOwner::chain(),
+        owner: AccountOwner::CHAIN,
     };
 
     application.expect_call(ExpectedCall::execute_message(

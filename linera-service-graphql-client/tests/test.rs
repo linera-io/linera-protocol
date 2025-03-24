@@ -38,7 +38,7 @@ fn reqwest_client() -> reqwest::Client {
 async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: Account, amount: &str) {
     let variables = transfer::Variables {
         chain_id: from,
-        owner: AccountOwner::chain(),
+        owner: AccountOwner::CHAIN,
         recipient_chain: to.chain_id,
         recipient_account: to.owner,
         amount: Amount::from_str(amount).unwrap(),
