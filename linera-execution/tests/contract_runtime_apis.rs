@@ -734,7 +734,7 @@ impl TransferTestEndpoint {
 
     /// Returns the [`Owner`] used to represent a recipient that's a user.
     fn recipient_owner() -> AccountOwner {
-        AccountOwner::Address32(CryptoHash::test_hash("recipient"))
+        AccountOwner::from(CryptoHash::test_hash("recipient"))
     }
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
@@ -788,9 +788,7 @@ impl TransferTestEndpoint {
     pub fn unauthorized_sender_account_owner(&self) -> AccountOwner {
         match self {
             TransferTestEndpoint::Chain => AccountOwner::CHAIN,
-            TransferTestEndpoint::User => {
-                AccountOwner::Address32(CryptoHash::test_hash("attacker"))
-            }
+            TransferTestEndpoint::User => AccountOwner::from(CryptoHash::test_hash("attacker")),
             TransferTestEndpoint::Application => Self::recipient_application_id().into(),
         }
     }
