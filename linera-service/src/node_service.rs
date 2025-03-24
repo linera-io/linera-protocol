@@ -31,7 +31,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{AdminOperation, Recipient, SystemChannel},
+    system::{AdminOperation, Recipient},
     Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
 };
 use linera_sdk::linera_base_types::BlobContent;
@@ -492,36 +492,6 @@ where
             })
             .await?
             .hash())
-    }
-
-    /// Subscribes to a system channel.
-    async fn subscribe(
-        &self,
-        subscriber_chain_id: ChainId,
-        publisher_chain_id: ChainId,
-        channel: SystemChannel,
-    ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::Subscribe {
-            chain_id: publisher_chain_id,
-            channel,
-        };
-        self.execute_system_operation(operation, subscriber_chain_id)
-            .await
-    }
-
-    /// Unsubscribes from a system channel.
-    async fn unsubscribe(
-        &self,
-        subscriber_chain_id: ChainId,
-        publisher_chain_id: ChainId,
-        channel: SystemChannel,
-    ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::Unsubscribe {
-            chain_id: publisher_chain_id,
-            channel,
-        };
-        self.execute_system_operation(operation, subscriber_chain_id)
-            .await
     }
 
     /// (admin chain only) Removes a committee. Once this message is accepted by a chain,

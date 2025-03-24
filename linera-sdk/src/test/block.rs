@@ -9,7 +9,7 @@ use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ChannelFullName, GenericApplicationId},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
@@ -21,7 +21,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch,
-    system::{Recipient, SystemChannel, SystemOperation},
+    system::{Recipient, SystemOperation},
     Operation,
 };
 
@@ -175,19 +175,6 @@ impl BlockBuilder {
     ) -> &mut Self {
         self.block.incoming_bundles.extend(bundles);
         self
-    }
-
-    /// Receives all admin messages that were sent to this chain by the given certificate.
-    pub fn with_system_messages_from(
-        &mut self,
-        certificate: &ConfirmedBlockCertificate,
-        channel: SystemChannel,
-    ) -> &mut Self {
-        let medium = Medium::Channel(ChannelFullName {
-            application_id: GenericApplicationId::System,
-            name: channel.name(),
-        });
-        self.with_messages_from_by_medium(certificate, &medium, MessageAction::Accept)
     }
 
     /// Receives all direct messages  that were sent to this chain by the given certificate.

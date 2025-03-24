@@ -28,10 +28,7 @@ use linera_base::{
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
 use linera_core::worker::Notification;
-use linera_execution::{
-    committee::{Committee, Epoch},
-    system::SystemChannel,
-};
+use linera_execution::committee::{Committee, Epoch};
 use linera_faucet::ClaimOutcome;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
@@ -1267,24 +1264,6 @@ impl NodeService {
             .parse::<ApplicationId>()
             .context("invalid application ID")?
             .with_abi())
-    }
-
-    pub async fn subscribe(
-        &self,
-        subscriber_chain_id: ChainId,
-        publisher_chain_id: ChainId,
-        channel: SystemChannel,
-    ) -> Result<()> {
-        let query = format!(
-            "mutation {{ subscribe(\
-                 subscriberChainId: \"{subscriber_chain_id}\", \
-                 publisherChainId: \"{publisher_chain_id}\", \
-                 channel: \"{}\") \
-             }}",
-            channel.to_value(),
-        );
-        self.query_node(query).await?;
-        Ok(())
     }
 
     /// Obtains the hash of the `chain`'s tip block, as known by this node service.

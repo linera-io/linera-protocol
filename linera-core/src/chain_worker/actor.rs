@@ -125,7 +125,7 @@ where
         origin: Origin,
         bundles: Vec<(Epoch, MessageBundle)>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<Option<(BlockHeight, NetworkActions)>, WorkerError>>,
+        callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
     },
 
     /// Handle cross-chain request to confirm that the recipient was updated.

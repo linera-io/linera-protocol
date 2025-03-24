@@ -10,11 +10,9 @@ mod tests;
 use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
-    fmt::{self, Display, Formatter},
     mem,
 };
 
-use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
@@ -23,8 +21,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName,
-        EventId, MessageId, ModuleId, StreamId,
+        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, EventId, MessageId,
+        ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -43,7 +41,7 @@ use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCoun
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationDescription, ApplicationId, ChannelName, ChannelSubscription, ExecutionError,
+    ApplicationDescription, ApplicationId, ChannelSubscription, ExecutionError,
     ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, OutgoingMessage,
     QueryContext, QueryOutcome, ResourceController, TransactionTracker,
 };
@@ -151,16 +149,6 @@ pub enum SystemOperation {
     },
     /// Changes the application permissions configuration on this chain.
     ChangeApplicationPermissions(ApplicationPermissions),
-    /// Subscribes to a system channel.
-    Subscribe {
-        chain_id: ChainId,
-        channel: SystemChannel,
-    },
-    /// Unsubscribes from a system channel.
-    Unsubscribe {
-        chain_id: ChainId,
-        channel: SystemChannel,
-    },
     /// Publishes a new application module.
     PublishModule { module_id: ModuleId },
     /// Publishes a new data blob.
@@ -246,39 +234,6 @@ pub struct SystemQuery;
 pub struct SystemResponse {
     pub chain_id: ChainId,
     pub balance: Amount,
-}
-
-/// The channels available in the system application.
-#[derive(
-    Enum, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, clap::ValueEnum,
-)]
-pub enum SystemChannel {
-    /// Channel used to broadcast reconfigurations.
-    Admin,
-}
-
-impl SystemChannel {
-    /// The [`ChannelName`] of this [`SystemChannel`].
-    pub fn name(&self) -> ChannelName {
-        bcs::to_bytes(self)
-            .expect("`SystemChannel` can be serialized")
-            .into()
-    }
-
-    /// The [`ChannelFullName`] of this [`SystemChannel`].
-    pub fn full_name(&self) -> ChannelFullName {
-        ChannelFullName::system(self.name())
-    }
-}
-
-impl Display for SystemChannel {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        let display_name = match self {
-            SystemChannel::Admin => "Admin",
-        };
-
-        write!(formatter, "{display_name}")
-    }
 }
 
 /// The recipient of a transfer.
@@ -465,46 +420,6 @@ where
                         );
                     }
                 }
-            }
-            Subscribe { chain_id, channel } => {
-                ensure!(
-                    context.chain_id != chain_id,
-                    ExecutionError::SelfSubscription(context.chain_id, channel)
-                );
-                let subscription = ChannelSubscription {
-                    chain_id,
-                    name: channel.name(),
-                };
-                ensure!(
-                    !self.subscriptions.contains(&subscription).await?,
-                    ExecutionError::AlreadySubscribedToChannel(context.chain_id, channel)
-                );
-                self.subscriptions.insert(&subscription)?;
-                let message = SystemMessage::Subscribe {
-                    id: context.chain_id,
-                    subscription,
-                };
-                txn_tracker.add_outgoing_message(
-                    OutgoingMessage::new(chain_id, message).with_kind(MessageKind::Protected),
-                )?;
-            }
-            Unsubscribe { chain_id, channel } => {
-                let subscription = ChannelSubscription {
-                    chain_id,
-                    name: channel.name(),
-                };
-                ensure!(
-                    self.subscriptions.contains(&subscription).await?,
-                    ExecutionError::InvalidUnsubscription(context.chain_id, channel)
-                );
-                self.subscriptions.remove(&subscription)?;
-                let message = SystemMessage::Unsubscribe {
-                    id: context.chain_id,
-                    subscription,
-                };
-                txn_tracker.add_outgoing_message(
-                    OutgoingMessage::new(chain_id, message).with_kind(MessageKind::Protected),
-                )?;
             }
             PublishModule { module_id } => {
                 self.blob_published(&BlobId::new(

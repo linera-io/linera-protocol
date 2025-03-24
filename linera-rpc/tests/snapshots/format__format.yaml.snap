@@ -376,7 +376,7 @@ ChainOwnership:
 ChannelFullName:
   STRUCT:
     - application_id:
-        TYPENAME: GenericApplicationId
+        TYPENAME: ApplicationId
     - name:
         TYPENAME: ChannelName
 ChannelName:
@@ -1060,10 +1060,6 @@ StreamId:
         TYPENAME: StreamName
 StreamName:
   NEWTYPESTRUCT: BYTES
-SystemChannel:
-  ENUM:
-    0:
-      Admin: UNIT
 SystemMessage:
   ENUM:
     0:
@@ -1152,35 +1148,21 @@ SystemOperation:
         NEWTYPE:
           TYPENAME: ApplicationPermissions
     6:
-      Subscribe:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - channel:
-              TYPENAME: SystemChannel
-    7:
-      Unsubscribe:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - channel:
-              TYPENAME: SystemChannel
-    8:
       PublishModule:
         STRUCT:
           - module_id:
               TYPENAME: ModuleId
-    9:
+    7:
       PublishDataBlob:
         STRUCT:
           - blob_hash:
               TYPENAME: CryptoHash
-    10:
+    8:
       ReadBlob:
         STRUCT:
           - blob_id:
               TYPENAME: BlobId
-    11:
+    9:
       CreateApplication:
         STRUCT:
           - module_id:
@@ -1190,15 +1172,15 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    12:
+    10:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
-    13:
+    11:
       ProcessNewEpoch:
         NEWTYPE:
           TYPENAME: Epoch
-    14:
+    12:
       ProcessRemovedEpoch:
         NEWTYPE:
           TYPENAME: Epoch

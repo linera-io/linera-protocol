@@ -50,7 +50,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use system::{AdminOperation, OpenChainConfig, SystemChannel};
+use system::{AdminOperation, OpenChainConfig};
 use thiserror::Error;
 
 #[cfg(with_revm)]
@@ -314,12 +314,6 @@ pub enum ExecutionError {
     InvalidCommitteeEpoch { expected: Epoch, provided: Epoch },
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
-    #[error("Cannot subscribe to a channel ({1}) on the same chain ({0})")]
-    SelfSubscription(ChainId, SystemChannel),
-    #[error("Chain {0} tried to subscribe to channel {1} but it is already subscribed")]
-    AlreadySubscribedToChannel(ChainId, SystemChannel),
-    #[error("Invalid unsubscription request to channel {1} on chain {0}")]
-    InvalidUnsubscription(ChainId, SystemChannel),
     #[error("Amount overflow")]
     AmountOverflow,
     #[error("Amount underflow")]

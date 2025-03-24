@@ -418,7 +418,7 @@ pub struct ChannelName(
 /// A channel name together with its application ID.
 pub struct ChannelFullName {
     /// The application owning the channel.
-    pub application_id: GenericApplicationId,
+    pub application_id: ApplicationId,
     /// The name of the channel.
     pub name: ChannelName,
 }
@@ -426,26 +426,16 @@ pub struct ChannelFullName {
 impl fmt::Display for ChannelFullName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = hex::encode(&self.name);
-        match self.application_id {
-            GenericApplicationId::System => write!(f, "system channel {name}"),
-            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
-        }
+        let app_id = self.application_id;
+        write!(f, "user channel {name} for app {app_id}")
     }
 }
 
 impl ChannelFullName {
-    /// Creates a full system channel name.
-    pub fn system(name: ChannelName) -> Self {
-        Self {
-            application_id: GenericApplicationId::System,
-            name,
-        }
-    }
-
     /// Creates a full user channel name.
-    pub fn user(name: ChannelName, application_id: ApplicationId) -> Self {
+    pub fn new(name: ChannelName, application_id: ApplicationId) -> Self {
         Self {
-            application_id: application_id.into(),
+            application_id,
             name,
         }
     }
