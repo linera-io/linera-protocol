@@ -91,12 +91,12 @@ Now, we can publish the fungible module and create the fungible applications.
 
 APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
            examples/fungible \
-           --json-argument '{ "accounts": { "User:'$OWNER_0'": "500", "User:'$OWNER_1'": "500" } }' \
+           --json-argument '{ "accounts": { "'$OWNER_0'": "500", "'$OWNER_1'": "500" } }' \
            --json-parameters "{ \"ticker_symbol\": \"FUN1\" }")
 
 APP_ID_1=$(linera --with-wallet 0 project publish-and-create \
            examples/fungible \
-           --json-argument '{ "accounts": { "User:'$OWNER_0'": "500", "User:'$OWNER_1'": "500" } }' \
+           --json-argument '{ "accounts": { "'$OWNER_0'": "500", "'$OWNER_1'": "500" } }' \
            --json-parameters "{ \"ticker_symbol\": \"FUN2\" }")
 ```
 
@@ -144,12 +144,12 @@ mutation {
   claim(
     sourceAccount: {
       chainId: "$CHAIN_0",
-      owner: "User:$OWNER_1",
+      owner: "$OWNER_1",
     }
     amount: "500.",
     targetAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_1"
+      owner: "$OWNER_1"
     }
   )
 }
@@ -164,12 +164,12 @@ mutation {
   claim(
     sourceAccount: {
       chainId: "$CHAIN_0",
-      owner: "User:$OWNER_1",
+      owner: "$OWNER_1",
     }
     amount: "500.",
     targetAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_1"
+      owner: "$OWNER_1"
     }
   )
 }
@@ -258,7 +258,7 @@ the following queries:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
 query {
-  accounts { entry(key: "User:$OWNER_0") { value } }
+  accounts { entry(key: "$OWNER_0") { value } }
 }
 ```
 
@@ -267,7 +267,7 @@ query {
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 query {
-  accounts { entry(key: "User:$OWNER_0") { value } }
+  accounts { entry(key: "$OWNER_0") { value } }
 }
 ```
 
@@ -276,7 +276,7 @@ query {
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 query {
-  accounts { entry(key: "User:$OWNER_1") { value } }
+  accounts { entry(key: "$OWNER_1") { value } }
 }
 ```
 
@@ -285,6 +285,6 @@ query {
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 query {
-  accounts { entry(key: "User:$OWNER_1") { value } }
+  accounts { entry(key: "$OWNER_1") { value } }
 }
 ```

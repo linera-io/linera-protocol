@@ -18,8 +18,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelFullName,
-        ChannelName, MessageId, Owner, StreamId, StreamName,
+        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName,
+        GenericApplicationId, MessageId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -32,11 +32,11 @@ use crate::{
     resources::ResourceController,
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationDescription, BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, Message,
-    MessageContext, MessageKind, ModuleId, Operation, OperationContext, OutgoingMessage,
-    QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker, UserContractCode,
-    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN,
-    MAX_STREAM_NAME_LEN,
+    ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, ExecutionError,
+    FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation, OperationContext,
+    OutgoingMessage, QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker,
+    UserContractCode, UserContractInstance, UserServiceCode, UserServiceInstance,
+    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -73,7 +73,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
     #[debug(skip_if = Option::is_none)]
-    authenticated_signer: Option<Owner>,
+    authenticated_signer: Option<AccountOwner>,
     /// The current message being executed, if there is one.
     #[debug(skip_if = Option::is_none)]
     executing_message: Option<ExecutingMessage>,
@@ -124,7 +124,7 @@ struct ApplicationStatus {
     /// The application description.
     description: ApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
-    signer: Option<Owner>,
+    signer: Option<AccountOwner>,
 }
 
 /// A loaded application instance.
@@ -294,7 +294,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         height: BlockHeight,
         round: Option<u32>,
         local_time: Timestamp,
-        authenticated_signer: Option<Owner>,
+        authenticated_signer: Option<AccountOwner>,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         deadline: Option<Instant>,
@@ -1088,7 +1088,7 @@ impl ContractSyncRuntimeHandle {
     fn execute(
         &mut self,
         application_id: ApplicationId,
-        signer: Option<Owner>,
+        signer: Option<AccountOwner>,
         closure: impl FnOnce(&mut UserContractInstance) -> Result<Option<Vec<u8>>, ExecutionError>,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
         let contract = {
@@ -1127,7 +1127,7 @@ impl ContractSyncRuntimeHandle {
 }
 
 impl ContractRuntime for ContractSyncRuntimeHandle {
-    fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError> {
+    fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError> {
         Ok(self.inner().authenticated_signer)
     }
 
@@ -1304,7 +1304,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
         );
-        let application_id = this.current_application().id.into();
+        let application_id = GenericApplicationId::User(this.current_application().id);
         let stream_id = StreamId {
             stream_name,
             application_id,

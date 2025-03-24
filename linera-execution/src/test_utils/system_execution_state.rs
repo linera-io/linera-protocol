@@ -11,7 +11,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
 use linera_views::{

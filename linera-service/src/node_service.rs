@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -219,7 +219,7 @@ where
     }
 
     /// Transfers `amount` units of value from the given owner's account to the recipient.
-    /// If no owner is given, try to take the units out of the unattributed account.
+    /// If no owner is given, try to take the units out of the chain account.
     async fn transfer(
         &self,
         chain_id: ChainId,
@@ -244,7 +244,7 @@ where
     async fn claim(
         &self,
         chain_id: ChainId,
-        owner: Owner,
+        owner: AccountOwner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -284,7 +284,7 @@ where
     async fn open_chain(
         &self,
         chain_id: ChainId,
-        owner: Owner,
+        owner: AccountOwner,
         balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
         let ownership = ChainOwnership::single(owner);
@@ -312,7 +312,7 @@ where
         &self,
         chain_id: ChainId,
         application_permissions: Option<ApplicationPermissions>,
-        owners: Vec<Owner>,
+        owners: Vec<AccountOwner>,
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
         balance: Option<Amount>,
@@ -389,7 +389,11 @@ where
     }
 
     /// Changes the authentication key of the chain.
-    async fn change_owner(&self, chain_id: ChainId, new_owner: Owner) -> Result<CryptoHash, Error> {
+    async fn change_owner(
+        &self,
+        chain_id: ChainId,
+        new_owner: AccountOwner,
+    ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
@@ -405,7 +409,7 @@ where
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
-        new_owners: Vec<Owner>,
+        new_owners: Vec<AccountOwner>,
         new_weights: Vec<u64>,
         multi_leader_rounds: u32,
         open_multi_leader_rounds: bool,

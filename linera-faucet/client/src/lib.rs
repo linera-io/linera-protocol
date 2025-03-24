@@ -101,7 +101,7 @@ impl Faucet {
 
     pub async fn claim(
         &self,
-        owner: &linera_base::identifiers::Owner,
+        owner: &linera_base::identifiers::AccountOwner,
     ) -> Result<ClaimOutcome, Error> {
         let query = format!(
             "mutation {{ claim(owner: \"{owner}\") {{ \

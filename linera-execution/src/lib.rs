@@ -43,7 +43,7 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, Owner, StreamName,
+        EventId, GenericApplicationId, MessageId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -241,7 +241,7 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Module ID {0:?} is invalid")]
     InvalidModuleId(ModuleId),
-    #[error("Owner is None")]
+    #[error("AccountOwner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(ApplicationId),
@@ -297,8 +297,11 @@ pub enum ExecutionError {
     IncorrectTransferAmount,
     #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
-    #[error("The transferred amount must not exceed the current chain balance: {balance}")]
-    InsufficientFunding { balance: Amount },
+    #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
+    InsufficientFunding {
+        balance: Amount,
+        account: AccountOwner,
+    },
     #[error("Required execution fees exceeded the total funding available: {balance}")]
     InsufficientFundingForFees { balance: Amount },
     #[error("Claim must have positive amount")]
@@ -433,7 +436,7 @@ pub struct OperationContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<AccountOwner>,
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
     #[debug(skip_if = Option::is_none)]
@@ -455,7 +458,7 @@ pub struct MessageContext {
     pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<AccountOwner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
@@ -476,7 +479,7 @@ pub struct FinalizeContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<AccountOwner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -681,7 +684,7 @@ pub trait ServiceRuntime: BaseRuntime {
 
 pub trait ContractRuntime: BaseRuntime {
     /// The authenticated signer for this execution, if there is one.
-    fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError>;
+    fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
 
     /// The current message ID, if there is one.
     fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError>;
@@ -938,7 +941,7 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<AccountOwner>,
     /// A grant to pay for the message execution.
     #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
@@ -973,7 +976,7 @@ impl OutgoingMessage {
     }
 
     /// Returns the same message, with the specified authenticated signer.
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<AccountOwner>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }
@@ -996,7 +999,7 @@ impl OperationContext {
     fn refund_grant_to(&self) -> Option<Account> {
         self.authenticated_signer.map(|owner| Account {
             chain_id: self.chain_id,
-            owner: AccountOwner::User(owner),
+            owner,
         })
     }
 
@@ -1151,7 +1154,7 @@ impl Operation {
     /// `application_id`.
     #[cfg(with_testing)]
     pub fn user_without_abi(
-        application_id: ApplicationId<()>,
+        application_id: ApplicationId,
         operation: &impl Serialize,
     ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
@@ -1282,7 +1285,7 @@ impl Query {
     /// Creates a new user application query assuming that the `query` is valid for the
     /// `application_id`.
     pub fn user_without_abi(
-        application_id: ApplicationId<()>,
+        application_id: ApplicationId,
         query: &impl Serialize,
     ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {

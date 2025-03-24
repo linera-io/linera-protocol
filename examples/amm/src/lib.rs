@@ -31,7 +31,7 @@ pub enum Operation {
     /// Given an input token idx (can be 0 or 1), and an input amount,
     /// Swap that token amount for an amount of the other token,
     /// calculated based on the current AMM ratio
-    /// Owner here is the user executing the Swap
+    /// `owner` here is the user executing the Swap
     Swap {
         owner: AccountOwner,
         input_token_idx: u32,
@@ -42,7 +42,7 @@ pub enum Operation {
     /// add liquidity to the AMM such that you'll be adding AT MOST
     /// `max_token0_amount` of token0, and `max_token1_amount` of token1,
     /// which will be calculated based on the current AMM ratio
-    /// Owner here is the user adding liquidity, which currently can only
+    /// `owner` here is the user adding liquidity, which currently can only
     /// be a chain owner
     AddLiquidity {
         owner: AccountOwner,
@@ -55,7 +55,7 @@ pub enum Operation {
     /// how much of the other token will also be removed, which will be calculated
     /// based on the current AMM ratio. Then remove the amounts from both tokens
     /// as a removal of liquidity
-    /// Owner here is the user removing liquidity, which currently can only
+    /// `owner` here is the user removing liquidity, which currently can only
     /// be a chain owner
     RemoveLiquidity {
         owner: AccountOwner,
@@ -64,7 +64,7 @@ pub enum Operation {
     },
     /// Remove all added liquidity operation
     /// Remove all the liquidity added by the given user, that is remaining in the AMM.
-    /// Owner here is the user removing liquidity, which currently can only
+    /// `owner` here is the user removing liquidity, which currently can only
     /// be a chain owner
     RemoveAllAddedLiquidity { owner: AccountOwner },
     /// Close this chain, and remove all added liquidity

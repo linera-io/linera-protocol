@@ -87,8 +87,8 @@ parameter for the `matching-engine` application:
 FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
   project publish-and-create examples/fungible \
     --json-argument "{ \"accounts\": {
-        \"User:$OWNER_1\": \"100.\",
-        \"User:$OWNER_2\": \"150.\"
+        \"$OWNER_1\": \"100.\",
+        \"$OWNER_2\": \"150.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
 )
@@ -96,8 +96,8 @@ FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
 FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
   project publish-and-create examples/fungible \
     --json-argument "{ \"accounts\": {
-        \"User:$OWNER_1\": \"100.\",
-        \"User:$OWNER_2\": \"150.\"
+        \"$OWNER_1\": \"100.\",
+        \"$OWNER_2\": \"150.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN2\" }" \
 )
@@ -144,7 +144,7 @@ mutation {
   executeOrder(
     order: {
         Insert : {
-        owner: "User:$OWNER_1",
+        owner: "$OWNER_1",
         amount: "1",
         nature: Bid,
         price: {
@@ -199,12 +199,12 @@ mutation {
   claim(
     sourceAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_2",
+      owner: "$OWNER_2",
     }
     amount: "100.",
     targetAccount: {
       chainId: "$CHAIN_2",
-      owner: "User:$OWNER_3"
+      owner: "$OWNER_3"
     }
   )
 }
@@ -217,12 +217,12 @@ mutation {
   claim(
     sourceAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_2",
+      owner: "$OWNER_2",
     }
     amount: "150.",
     targetAccount: {
       chainId: "$CHAIN_2",
-      owner: "User:$OWNER_2"
+      owner: "$OWNER_2"
     }
   )
 }
@@ -236,7 +236,7 @@ mutation {
   executeOrder(
     order: {
       Insert : {
-        owner: "User:$OWNER_2",
+        owner: "$OWNER_2",
         amount: "2",
         nature: Ask,
         price: {
@@ -260,7 +260,7 @@ Owner 2 should now get back their tokens, and have 145 FUN2 left. On the URL you
 query {
   accounts {
     entry(
-      key: "User:$OWNER_2"
+      key: "$OWNER_2"
     ) {
       value
     }

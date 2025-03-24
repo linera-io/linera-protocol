@@ -6,7 +6,7 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, AccountOwner, BlobType, ChainId, Destination, Owner},
+    identifiers::{Account, AccountOwner, BlobType, ChainId, Destination},
 };
 use linera_views::{
     context::Context,
@@ -132,7 +132,7 @@ pub enum UserAction {
 }
 
 impl UserAction {
-    pub(crate) fn signer(&self) -> Option<Owner> {
+    pub(crate) fn signer(&self) -> Option<AccountOwner> {
         use UserAction::*;
         match self {
             Instantiate(context, _) => context.authenticated_signer,
@@ -173,7 +173,7 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(
@@ -199,7 +199,7 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
@@ -260,7 +260,7 @@ where
         local_time: Timestamp,
         operation: Operation,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -311,7 +311,7 @@ where
         message: Message,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -370,8 +370,7 @@ where
             amount,
             source: context
                 .authenticated_signer
-                .map(AccountOwner::User)
-                .unwrap_or(AccountOwner::Chain),
+                .unwrap_or(AccountOwner::chain()),
             target: account.owner,
         };
         txn_tracker.add_outgoing_message(

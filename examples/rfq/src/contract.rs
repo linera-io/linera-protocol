@@ -8,8 +8,8 @@ mod state;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{
-        AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner,
-        TimeoutConfig, WithContractAbi,
+        AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, TimeoutConfig,
+        WithContractAbi,
     },
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -142,9 +142,7 @@ impl Contract for RfqContract {
                     amount: awaiting_tokens.amount_offered,
                     target_account: Account {
                         chain_id: temp_chain_id,
-                        owner: AccountOwner::Application(
-                            self.runtime.application_id().forget_abi(),
-                        ),
+                        owner: self.runtime.application_id().into(),
                     },
                 };
                 let token = token_pair.token_asked;
@@ -261,12 +259,12 @@ impl Contract for RfqContract {
                     None => {
                         // This should never really happen, but if it does, return the
                         // sent tokens
-                        let app_id = self.runtime.application_id().forget_abi();
+                        let owner = self.runtime.application_id().into();
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: AccountOwner::Application(app_id),
+                                owner,
                                 amount: tokens.amount,
                                 target_account: tokens.owner,
                             },
@@ -275,12 +273,12 @@ impl Contract for RfqContract {
                     Some(held_tokens) => {
                         // we have tokens from both parties now: return them to the
                         // correct parties
-                        let app_id = self.runtime.application_id().forget_abi();
+                        let owner = self.runtime.application_id().into();
                         self.runtime.call_application(
                             true,
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: AccountOwner::Application(app_id),
+                                owner,
                                 amount: tokens.amount,
                                 target_account: held_tokens.owner,
                             },
@@ -291,7 +289,7 @@ impl Contract for RfqContract {
                                 .token_id
                                 .with_abi::<fungible::FungibleTokenAbi>(),
                             &fungible::Operation::Transfer {
-                                owner: AccountOwner::Application(app_id),
+                                owner,
                                 amount: held_tokens.amount,
                                 target_account: tokens.owner,
                             },
@@ -326,7 +324,7 @@ impl RfqContract {
         quote_provided: QuoteProvided,
         token_pair: TokenPair,
         fee_budget: Amount,
-        owner: Owner,
+        owner: AccountOwner,
     ) -> ChainId {
         let ownership = ChainOwnership::multiple(
             [(owner, 100), (quote_provided.get_quoter_owner(), 100)],
@@ -339,11 +337,11 @@ impl RfqContract {
 
         // transfer tokens to the new chain
         let transfer = fungible::Operation::Transfer {
-            owner: owner.into(),
+            owner,
             amount: quote_provided.get_amount(),
             target_account: Account {
                 chain_id: temp_chain_id,
-                owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
+                owner: self.runtime.application_id().into(),
             },
         };
         let token = token_pair.token_offered;
@@ -360,7 +358,7 @@ impl RfqContract {
                 token_id: token,
                 owner: Account {
                     chain_id: self.runtime.chain_id(),
-                    owner: owner.into(),
+                    owner,
                 },
                 amount: quote_provided.get_amount(),
             }),
@@ -377,12 +375,12 @@ impl RfqContract {
         // we're executing on the temporary chain
         // if we hold some tokens, we return them before closing
         if let Some(tokens) = self.state.temp_chain_held_tokens() {
-            let app_id = self.runtime.application_id().forget_abi();
+            let owner = self.runtime.application_id().into();
             self.runtime.call_application(
                 true,
                 tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                 &fungible::Operation::Transfer {
-                    owner: AccountOwner::Application(app_id),
+                    owner,
                     amount: tokens.amount,
                     target_account: tokens.owner,
                 },

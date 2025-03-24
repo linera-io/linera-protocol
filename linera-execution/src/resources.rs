@@ -9,7 +9,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError, BlobContent},
     ensure,
-    identifiers::{AccountOwner, Owner},
+    identifiers::AccountOwner,
 };
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
@@ -491,7 +491,7 @@ impl BalanceHolder for Sources<'_> {
     }
 }
 
-impl ResourceController<Option<Owner>, ResourceTracker> {
+impl ResourceController<Option<AccountOwner>, ResourceTracker> {
     /// Provides a reference to the current execution state and obtains a temporary object
     /// where the accounting functions of [`ResourceController`] are available.
     pub async fn with_state<'a, C>(
@@ -526,7 +526,7 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
         // Then the local account, if any. Currently, any negative fee (e.g. storage
         // refund) goes preferably to this account.
         if let Some(owner) = &self.account {
-            if let Some(balance) = view.balances.get_mut(&AccountOwner::User(*owner)).await? {
+            if let Some(balance) = view.balances.get_mut(owner).await? {
                 sources.push(balance);
             }
         }

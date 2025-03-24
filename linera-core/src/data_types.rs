@@ -101,7 +101,7 @@ impl ChainInfoQuery {
             chain_id,
             test_next_block_height: None,
             request_committees: false,
-            request_owner_balance: AccountOwner::Chain,
+            request_owner_balance: AccountOwner::chain(),
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: None,
             request_received_log_excluding_first_n: None,

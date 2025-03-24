@@ -4,7 +4,7 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{self, Display, Formatter},
+    fmt::{self, Display},
     hash::{Hash, Hasher},
     marker::PhantomData,
     str::FromStr,
@@ -18,28 +18,42 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{BcsHashable, CryptoError, CryptoHash},
+    crypto::{
+        AccountPublicKey, BcsHashable, CryptoError, CryptoHash, Ed25519PublicKey,
+        Secp256k1PublicKey,
+    },
     data_types::BlockHeight,
     doc_scalar, hex_debug,
     vm::VmRuntime,
 };
 
-/// The owner of a chain. This is currently the hash of the owner's public key used to
-/// verify signatures.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
-pub struct Owner(pub CryptoHash);
-
 /// An account owner.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
-    /// An account owned by a user.
-    User(Owner),
-    /// An account for an application.
-    Application(ApplicationId),
-    /// Chain account.
-    Chain,
+    /// Short addresses reserved for the protocol.
+    Reserved(u8),
+    /// 32-byte account address.
+    Address32(CryptoHash),
+}
+
+impl AccountOwner {
+    /// Returns the default chain address.
+    pub fn chain() -> Self {
+        AccountOwner::Reserved(0)
+    }
+
+    /// Tests if the account is the chain address.
+    pub fn is_chain(&self) -> bool {
+        self == &AccountOwner::chain()
+    }
+}
+
+#[cfg(with_testing)]
+impl From<CryptoHash> for AccountOwner {
+    fn from(address: CryptoHash) -> Self {
+        AccountOwner::Address32(address)
+    }
 }
 
 /// A system account.
@@ -54,19 +68,16 @@ pub struct Account {
 }
 
 impl Account {
+    /// Creates a new [`Account`] with the given chain ID and owner.
+    pub fn new(chain_id: ChainId, owner: AccountOwner) -> Self {
+        Self { chain_id, owner }
+    }
+
     /// Creates an [`Account`] representing the balance shared by a chain's owners.
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
-            owner: AccountOwner::Chain,
-        }
-    }
-
-    /// Creates an [`Account`] for a specific [`Owner`] on a chain.
-    pub fn owner(chain_id: ChainId, owner: impl Into<AccountOwner>) -> Self {
-        Account {
-            chain_id,
-            owner: owner.into(),
+            owner: AccountOwner::chain(),
         }
     }
 }
@@ -92,7 +103,7 @@ impl FromStr for Account {
 
         if let Some(owner_string) = parts.next() {
             let owner = owner_string.parse::<AccountOwner>()?;
-            Ok(Account::owner(chain_id, owner))
+            Ok(Account::new(chain_id, owner))
         } else {
             Ok(Account::chain(chain_id))
         }
@@ -336,9 +347,36 @@ impl GenericApplicationId {
     }
 }
 
+impl<A> From<ApplicationId<A>> for AccountOwner {
+    fn from(app_id: ApplicationId<A>) -> Self {
+        AccountOwner::Address32(app_id.application_description_hash)
+    }
+}
+
+impl From<AccountPublicKey> for AccountOwner {
+    fn from(public_key: AccountPublicKey) -> Self {
+        match public_key {
+            AccountPublicKey::Ed25519(public_key) => public_key.into(),
+            AccountPublicKey::Secp256k1(public_key) => public_key.into(),
+        }
+    }
+}
+
 impl From<ApplicationId> for GenericApplicationId {
-    fn from(user_application_id: ApplicationId) -> Self {
-        GenericApplicationId::User(user_application_id)
+    fn from(application_id: ApplicationId) -> Self {
+        GenericApplicationId::User(application_id)
+    }
+}
+
+impl From<Secp256k1PublicKey> for AccountOwner {
+    fn from(public_key: Secp256k1PublicKey) -> Self {
+        AccountOwner::Address32(CryptoHash::new(&public_key))
+    }
+}
+
+impl From<Ed25519PublicKey> for AccountOwner {
+    fn from(public_key: Ed25519PublicKey) -> Self {
+        AccountOwner::Address32(CryptoHash::new(&public_key))
     }
 }
 
@@ -854,6 +892,15 @@ impl ApplicationId {
         }
     }
 
+    /// Converts the application ID to the ID of the blob containing the
+    /// `ApplicationDescription`.
+    pub fn description_blob_id(self) -> BlobId {
+        BlobId::new(
+            self.application_description_hash,
+            BlobType::ApplicationDescription,
+        )
+    }
+
     /// Specializes an application ID for a given ABI.
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
@@ -864,88 +911,20 @@ impl ApplicationId {
 }
 
 impl<A> ApplicationId<A> {
-    /// Forgets the ABI of a module ID (if any).
+    /// Forgets the ABI of an application ID (if any).
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
             application_description_hash: self.application_description_hash,
             _phantom: PhantomData,
         }
     }
-
-    /// Converts the application ID to the ID of the blob containing the
-    /// `ApplicationDescription`.
-    pub fn description_blob_id(self) -> BlobId {
-        BlobId::new(
-            self.application_description_hash,
-            BlobType::ApplicationDescription,
-        )
-    }
-}
-
-impl Display for Owner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
-    }
-}
-
-impl std::str::FromStr for Owner {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Owner(CryptoHash::from_str(s)?))
-    }
-}
-
-impl Serialize for Owner {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&self.to_string())
-        } else {
-            serializer.serialize_newtype_struct("Owner", &self.0)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for Owner {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let string = String::deserialize(deserializer)?;
-            Self::from_str(&string).map_err(serde::de::Error::custom)
-        } else {
-            deserializer.deserialize_newtype_struct("Owner", OwnerVisitor)
-        }
-    }
-}
-
-struct OwnerVisitor;
-
-impl<'de> serde::de::Visitor<'de> for OwnerVisitor {
-    type Value = Owner;
-
-    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "an owner represented as a `CryptoHash`")
-    }
-
-    fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(Owner(CryptoHash::deserialize(deserializer)?))
-    }
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "AccountOwner")]
 enum SerializableAccountOwner {
-    User(Owner),
-    Application(ApplicationId),
-    Chain,
+    Reserved(u8),
+    Address32(CryptoHash),
 }
 
 impl Serialize for AccountOwner {
@@ -954,9 +933,8 @@ impl Serialize for AccountOwner {
             serializer.serialize_str(&self.to_string())
         } else {
             match self {
-                AccountOwner::Application(app_id) => SerializableAccountOwner::Application(*app_id),
-                AccountOwner::User(owner) => SerializableAccountOwner::User(*owner),
-                AccountOwner::Chain => SerializableAccountOwner::Chain,
+                AccountOwner::Reserved(value) => SerializableAccountOwner::Reserved(*value),
+                AccountOwner::Address32(value) => SerializableAccountOwner::Address32(*value),
             }
             .serialize(serializer)
         }
@@ -972,11 +950,8 @@ impl<'de> Deserialize<'de> for AccountOwner {
         } else {
             let value = SerializableAccountOwner::deserialize(deserializer)?;
             match value {
-                SerializableAccountOwner::Application(app_id) => {
-                    Ok(AccountOwner::Application(app_id))
-                }
-                SerializableAccountOwner::User(owner) => Ok(AccountOwner::User(owner)),
-                SerializableAccountOwner::Chain => Ok(AccountOwner::Chain),
+                SerializableAccountOwner::Reserved(value) => Ok(AccountOwner::Reserved(value)),
+                SerializableAccountOwner::Address32(value) => Ok(AccountOwner::Address32(value)),
             }
         }
     }
@@ -985,9 +960,10 @@ impl<'de> Deserialize<'de> for AccountOwner {
 impl Display for AccountOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccountOwner::User(owner) => write!(f, "User:{}", owner)?,
-            AccountOwner::Application(app_id) => write!(f, "Application:{}", app_id)?,
-            AccountOwner::Chain => write!(f, "Chain")?,
+            AccountOwner::Reserved(value) => {
+                write!(f, "0x{}", hex::encode(&value.to_be_bytes()[..]))?
+            }
+            AccountOwner::Address32(value) => write!(f, "0x{}", value)?,
         };
 
         Ok(())
@@ -998,28 +974,21 @@ impl FromStr for AccountOwner {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(owner) = s.strip_prefix("User:") {
-            Ok(AccountOwner::User(
-                Owner::from_str(owner).context("Getting Owner should not fail")?,
-            ))
-        } else if let Some(app_id) = s.strip_prefix("Application:") {
-            Ok(AccountOwner::Application(
-                ApplicationId::from_str(app_id).context("Getting ApplicationId should not fail")?,
-            ))
-        } else if s.strip_prefix("Chain").is_some() {
-            Ok(AccountOwner::Chain)
-        } else {
-            Err(anyhow!("Invalid enum! Enum: {}", s))
+        if let Some(s) = s.strip_prefix("0x") {
+            if s.len() == 64 {
+                if let Ok(hash) = CryptoHash::from_str(s) {
+                    return Ok(AccountOwner::Address32(hash));
+                }
+            }
+            if s.len() == 2 {
+                let bytes = hex::decode(s)?;
+                if bytes.len() == 1 {
+                    let value = u8::from_be_bytes(bytes.try_into().expect("one byte"));
+                    return Ok(AccountOwner::Reserved(value));
+                }
+            }
         }
-    }
-}
-
-impl<T> From<T> for AccountOwner
-where
-    T: Into<Owner>,
-{
-    fn from(owner: T) -> Self {
-        AccountOwner::User(owner.into())
+        anyhow::bail!("Invalid address value: {}", s);
     }
 }
 
@@ -1087,15 +1056,13 @@ doc_scalar!(ChannelName, "The name of a subscription channel");
 doc_scalar!(StreamName, "The name of an event stream");
 bcs_scalar!(MessageId, "The index of a message in a chain");
 doc_scalar!(
-    Owner,
-    "The owner of a chain. This is currently the hash of the owner's public key used to verify \
-    signatures."
-);
-doc_scalar!(
     Destination,
     "The destination of a message, relative to a particular application."
 );
-doc_scalar!(AccountOwner, "An owner of an account.");
+doc_scalar!(
+    AccountOwner,
+    "A unique identifier for a user or an application."
+);
 doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
@@ -1108,7 +1075,11 @@ doc_scalar!(
 
 #[cfg(test)]
 mod tests {
-    use super::ChainId;
+    use std::str::FromStr as _;
+
+    use assert_matches::assert_matches;
+
+    use super::{AccountOwner, ChainId};
 
     /// Verifies that chain IDs that are explicitly used in some example and test scripts don't
     /// change.
@@ -1134,5 +1105,31 @@ mod tests {
             &ChainId::root(999).to_string(),
             "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
         );
+    }
+
+    #[test]
+    fn addresses() {
+        assert_eq!(&AccountOwner::Reserved(0).to_string(), "0x00");
+
+        let address = AccountOwner::from_str("0x10").unwrap();
+        assert_eq!(address, AccountOwner::Reserved(16));
+        assert_eq!(address.to_string(), "0x10");
+
+        let address = AccountOwner::from_str(
+            "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844",
+        )
+        .unwrap();
+        assert_matches!(address, AccountOwner::Address32(_));
+        assert_eq!(
+            address.to_string(),
+            "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+        );
+
+        assert!(AccountOwner::from_str("0x5487b7").is_err());
+        assert!(AccountOwner::from_str("0").is_err());
+        assert!(AccountOwner::from_str(
+            "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+        )
+        .is_err());
     }
 }

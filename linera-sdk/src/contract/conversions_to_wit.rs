@@ -10,7 +10,7 @@ use linera_base::{
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, Owner, StreamName,
+        ModuleId, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -38,14 +38,6 @@ impl From<ChainId> for wit_contract_api::CryptoHash {
     }
 }
 
-impl From<Owner> for wit_contract_api::Owner {
-    fn from(owner: Owner) -> Self {
-        wit_contract_api::Owner {
-            inner0: owner.0.into(),
-        }
-    }
-}
-
 impl From<Amount> for wit_contract_api::Amount {
     fn from(host: Amount) -> Self {
         wit_contract_api::Amount {
@@ -66,11 +58,10 @@ impl From<Account> for wit_contract_api::Account {
 impl From<AccountOwner> for wit_contract_api::AccountOwner {
     fn from(account_owner: AccountOwner) -> Self {
         match account_owner {
-            AccountOwner::User(owner) => wit_contract_api::AccountOwner::User(owner.into()),
-            AccountOwner::Application(application_id) => {
-                wit_contract_api::AccountOwner::Application(application_id.into())
+            AccountOwner::Reserved(value) => wit_contract_api::AccountOwner::Reserved(value),
+            AccountOwner::Address32(owner) => {
+                wit_contract_api::AccountOwner::Address32(owner.into())
             }
-            AccountOwner::Chain => wit_contract_api::AccountOwner::Chain,
         }
     }
 }

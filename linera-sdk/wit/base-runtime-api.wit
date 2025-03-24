@@ -31,9 +31,8 @@ interface base-runtime-api {
     find-key-values-wait: func(promise-id: u32) -> list<tuple<list<u8>, list<u8>>>;
 
     variant account-owner {
-        user(owner),
-        application(application-id),
-        chain,
+        reserved(u8),
+        address32(crypto-hash),
     }
 
     record amount {
@@ -53,8 +52,8 @@ interface base-runtime-api {
     }
 
     record chain-ownership {
-        super-owners: list<owner>,
-        owners: list<tuple<owner, u64>>,
+        super-owners: list<account-owner>,
+        owners: list<tuple<account-owner, u64>>,
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
@@ -103,10 +102,6 @@ interface base-runtime-api {
         info,
         debug,
         trace,
-    }
-
-    record owner {
-        inner0: crypto-hash,
     }
 
     record time-delta {

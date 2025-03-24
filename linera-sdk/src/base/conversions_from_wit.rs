@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
@@ -29,20 +29,13 @@ macro_rules! impl_from_wit {
             }
         }
 
-        impl From<$wit_base_api::Owner> for Owner {
-            fn from(owner: $wit_base_api::Owner) -> Self {
-                Owner(owner.inner0.into())
-            }
-        }
-
         impl From<$wit_base_api::AccountOwner> for AccountOwner {
             fn from(account_owner: $wit_base_api::AccountOwner) -> Self {
                 match account_owner {
-                    $wit_base_api::AccountOwner::User(owner) => AccountOwner::User(owner.into()),
-                    $wit_base_api::AccountOwner::Application(owner) => {
-                        AccountOwner::Application(owner.into())
+                    $wit_base_api::AccountOwner::Reserved(value) => AccountOwner::Reserved(value),
+                    $wit_base_api::AccountOwner::Address32(value) => {
+                        AccountOwner::Address32(value.into())
                     }
-                    $wit_base_api::AccountOwner::Chain => AccountOwner::Chain,
                 }
             }
         }

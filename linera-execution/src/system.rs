@@ -24,7 +24,7 @@ use linera_base::{
     ensure, hex_debug,
     identifiers::{
         Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, ChannelFullName,
-        EventId, MessageId, ModuleId, Owner, StreamId,
+        EventId, MessageId, ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -122,7 +122,7 @@ pub enum SystemOperation {
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
     /// process the message.
     Claim {
-        owner: Owner,
+        owner: AccountOwner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -136,10 +136,10 @@ pub enum SystemOperation {
     ChangeOwnership {
         /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
         #[debug(skip_if = Vec::is_empty)]
-        super_owners: Vec<Owner>,
+        super_owners: Vec<AccountOwner>,
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
-        owners: Vec<(Owner, u64)>,
+        owners: Vec<(AccountOwner, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
         /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
@@ -368,7 +368,7 @@ where
         context: OperationContext,
         operation: SystemOperation,
         txn_tracker: &mut TransactionTracker,
-        resource_controller: &mut ResourceController<Option<Owner>>,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<Option<(ApplicationId, Vec<u8>)>, ExecutionError> {
         use SystemOperation::*;
         let mut new_application = None;
@@ -406,7 +406,6 @@ where
                 owner,
                 amount,
                 recipient,
-                ..
             } => {
                 let maybe_message = self
                     .transfer(context.authenticated_signer, None, owner, recipient, amount)
@@ -423,7 +422,7 @@ where
                     .claim(
                         context.authenticated_signer,
                         None,
-                        AccountOwner::User(owner),
+                        owner,
                         target_id,
                         recipient,
                         amount,
@@ -623,28 +622,27 @@ where
 
     pub async fn transfer(
         &mut self,
-        authenticated_signer: Option<Owner>,
+        authenticated_signer: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
-        match (source, authenticated_signer, authenticated_application_id) {
-            (AccountOwner::User(owner), Some(signer), _) => ensure!(
-                signer == owner,
+        if source == AccountOwner::chain() {
+            ensure!(
+                authenticated_signer.is_some()
+                    && self
+                        .ownership
+                        .get()
+                        .verify_owner(&authenticated_signer.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
-            ),
-            (AccountOwner::Application(account_application), _, Some(authorized_application)) => {
-                ensure!(
-                    account_application == authorized_application,
-                    ExecutionError::UnauthenticatedTransferOwner
-                )
-            }
-            (AccountOwner::Chain, Some(signer), _) => ensure!(
-                self.ownership.get().verify_owner(&signer),
+            );
+        } else {
+            ensure!(
+                authenticated_signer == Some(source)
+                    || authenticated_application_id.map(AccountOwner::from) == Some(source),
                 ExecutionError::UnauthenticatedTransferOwner
-            ),
-            (_, _, _) => return Err(ExecutionError::UnauthenticatedTransferOwner),
+            );
         }
         ensure!(
             amount > Amount::ZERO,
@@ -668,24 +666,18 @@ where
 
     pub async fn claim(
         &self,
-        authenticated_signer: Option<Owner>,
+        authenticated_signer: Option<AccountOwner>,
         authenticated_application_id: Option<ApplicationId>,
         source: AccountOwner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<OutgoingMessage, ExecutionError> {
-        match source {
-            AccountOwner::User(owner) => ensure!(
-                authenticated_signer == Some(owner),
-                ExecutionError::UnauthenticatedClaimOwner
-            ),
-            AccountOwner::Application(owner) => ensure!(
-                authenticated_application_id == Some(owner),
-                ExecutionError::UnauthenticatedClaimOwner
-            ),
-            AccountOwner::Chain => unreachable!(),
-        }
+        ensure!(
+            authenticated_signer == Some(source)
+                || authenticated_application_id.map(AccountOwner::from) == Some(source),
+            ExecutionError::UnauthenticatedClaimOwner
+        );
         ensure!(amount > Amount::ZERO, ExecutionError::IncorrectClaimAmount);
 
         let message = SystemMessage::Withdraw {
@@ -705,26 +697,26 @@ where
         account: &AccountOwner,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let balance = match account {
-            AccountOwner::Chain => self.balance.get_mut(),
-            other => self.balances.get_mut(other).await?.ok_or_else(|| {
+        let balance = if account == &AccountOwner::chain() {
+            self.balance.get_mut()
+        } else {
+            self.balances.get_mut(account).await?.ok_or_else(|| {
                 ExecutionError::InsufficientFunding {
                     balance: Amount::ZERO,
+                    account: *account,
                 }
-            })?,
+            })?
         };
 
         balance
             .try_sub_assign(amount)
-            .map_err(|_| ExecutionError::InsufficientFunding { balance: *balance })?;
+            .map_err(|_| ExecutionError::InsufficientFunding {
+                balance: *balance,
+                account: *account,
+            })?;
 
-        match account {
-            AccountOwner::Chain => {}
-            other => {
-                if balance.is_zero() {
-                    self.balances.remove(other)?;
-                }
-            }
+        if account != &AccountOwner::chain() && balance.is_zero() {
+            self.balances.remove(account)?;
         }
 
         Ok(())
@@ -745,15 +737,12 @@ where
                 target,
             } => {
                 let receiver = if context.is_bouncing { source } else { target };
-                match receiver {
-                    AccountOwner::Chain => {
-                        let new_balance = self.balance.get().saturating_add(amount);
-                        self.balance.set(new_balance);
-                    }
-                    other => {
-                        let balance = self.balances.get_mut_or_default(&other).await?;
-                        *balance = balance.saturating_add(amount);
-                    }
+                if receiver == AccountOwner::chain() {
+                    let new_balance = self.balance.get().saturating_add(amount);
+                    self.balance.set(new_balance);
+                } else {
+                    let balance = self.balances.get_mut_or_default(&receiver).await?;
+                    *balance = balance.saturating_add(amount);
                 }
             }
             Withdraw {
@@ -853,7 +842,7 @@ where
                 epoch: config.epoch,
             }
         );
-        self.debit(&AccountOwner::Chain, config.balance).await?;
+        self.debit(&AccountOwner::chain(), config.balance).await?;
         let message = SystemMessage::OpenChain(config);
         Ok(OutgoingMessage::new(child_id, message).with_kind(MessageKind::Protected))
     }

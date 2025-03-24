@@ -121,7 +121,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 855;
+    let maximum_executed_block_size = 856;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -166,10 +166,11 @@ async fn test_block_size_limit() {
     let invalid_block = valid_block
         .clone()
         .with_operation(SystemOperation::Transfer {
-            owner: AccountOwner::Chain,
+            owner: AccountOwner::chain(),
             recipient: Recipient::root(0),
             amount: Amount::ONE,
         });
+
     let result = chain
         .execute_block(&invalid_block, time, None, &[], None)
         .await;

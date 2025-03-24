@@ -99,9 +99,9 @@ linera wallet init --faucet $FAUCET_URL
 INFO1=($(linera wallet request-chain --faucet $FAUCET_URL))
 INFO2=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN1="${INFO1[0]}"
-ACCOUNT1="User:${INFO1[3]}"
+ACCOUNT1="${INFO1[3]}"
 CHAIN2="${INFO2[0]}"
-ACCOUNT2="User:${INFO2[3]}"
+ACCOUNT2="${INFO2[3]}"
 
 # Show the different chains tracked by the wallet.
 linera wallet show
@@ -125,8 +125,6 @@ linera transfer 2 --from "$CHAIN1:$ACCOUNT1" --to "$CHAIN2:$ACCOUNT2"
 # Query user balances again.
 linera query-balance "$CHAIN1:$ACCOUNT1"
 linera query-balance "$CHAIN2:$ACCOUNT2"
-
-# TODO(#1713): The syntax `User:$OWNER` for user accounts will change in the future.
 ```
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well

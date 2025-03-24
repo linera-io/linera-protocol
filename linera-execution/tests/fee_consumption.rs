@@ -11,7 +11,7 @@ use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     http,
-    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
     test_utils::{
@@ -195,11 +195,10 @@ async fn test_fee_consumption(
 
     let mut oracle_responses = blob_oracle_responses(blobs.iter());
 
-    let signer = Owner::from(AccountPublicKey::test_key(0));
-    let owner = AccountOwner::User(signer);
+    let signer = AccountOwner::from(AccountPublicKey::test_key(0));
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
-        view.system.balances.insert(&owner, owner_balance)?;
+        view.system.balances.insert(&signer, owner_balance)?;
     }
 
     let prices = ResourceControlPolicy {
@@ -270,7 +269,7 @@ async fn test_fee_consumption(
     let refund_grant_to = authenticated_signer
         .map(|owner| Account {
             chain_id: ChainId::root(0),
-            owner: AccountOwner::User(owner),
+            owner,
         })
         .or(None);
     let context = MessageContext {
@@ -325,7 +324,7 @@ async fn test_fee_consumption(
             };
             assert_eq!(*view.system.balance.get(), expected_chain_balance);
             assert_eq!(
-                view.system.balances.get(&owner).await?,
+                view.system.balances.get(&signer).await?,
                 expected_owner_balance
             );
             assert_eq!(grant, Amount::ZERO);
@@ -348,7 +347,7 @@ async fn test_fee_consumption(
             };
             assert_eq!(*view.system.balance.get(), chain_balance);
             assert_eq!(
-                view.system.balances.get(&owner).await?,
+                view.system.balances.get(&signer).await?,
                 expected_owner_balance
             );
             assert_eq!(grant, expected_grant);

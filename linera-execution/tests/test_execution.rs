@@ -12,9 +12,7 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlockHeight, OracleResponse, Resources,
         SendMessageRequest, Timestamp,
     },
-    identifiers::{
-        Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
-    },
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -89,7 +87,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
-    let owner = Owner::from(AccountPublicKey::test_key(0));
+    let owner = AccountOwner::from(AccountPublicKey::test_key(0));
     let state_key = vec![];
     let dummy_operation = vec![1];
 
@@ -1288,7 +1286,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership()?, ownership);
             let destination = Account::chain(ChainId::root(2));
-            runtime.transfer(AccountOwner::Chain, destination, Amount::ONE)?;
+            runtime.transfer(AccountOwner::chain(), destination, Amount::ONE)?;
             let id = runtime.application_id()?;
             let application_permissions = ApplicationPermissions::new_single(id);
             let (actual_message_id, chain_id) =
@@ -1465,8 +1463,8 @@ async fn test_close_chain() -> anyhow::Result<()> {
 )]
 #[tokio::test]
 async fn test_message_receipt_spending_chain_balance(
-    receiving_chain_owner: Option<Owner>,
-    authenticated_signer: Option<Owner>,
+    receiving_chain_owner: Option<AccountOwner>,
+    authenticated_signer: Option<AccountOwner>,
 ) -> anyhow::Result<Result<(), ExecutionError>> {
     let amount = Amount::ONE;
     let super_owners = receiving_chain_owner.into_iter().collect();
@@ -1485,11 +1483,11 @@ async fn test_message_receipt_spending_chain_balance(
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
-    let receiver_chain_account = AccountOwner::Chain;
+    let receiver_chain_account = AccountOwner::chain();
     let sender_chain_id = ChainId::root(2);
     let recipient = Account {
         chain_id: sender_chain_id,
-        owner: AccountOwner::Chain,
+        owner: AccountOwner::chain(),
     };
 
     application.expect_call(ExpectedCall::execute_message(

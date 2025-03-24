@@ -35,7 +35,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId,
-        ModuleId, Owner, StreamId,
+        ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -977,7 +977,7 @@ where
     /// Obtains the identity of the current owner of the chain. Returns an error if we have the
     /// private key for more than one identity.
     #[instrument(level = "trace")]
-    pub async fn identity(&self) -> Result<Owner, ChainClientError> {
+    pub async fn identity(&self) -> Result<AccountOwner, ChainClientError> {
         let manager = self.chain_info().await?.manager;
         ensure!(
             manager.ownership.is_active(),
@@ -1642,7 +1642,7 @@ where
     #[instrument(level = "trace")]
     pub async fn claim(
         &self,
-        owner: Owner,
+        owner: AccountOwner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
@@ -1808,7 +1808,7 @@ where
             }
         }
         for proposal in proposals {
-            let owner: Owner = proposal.public_key.into();
+            let owner: AccountOwner = proposal.public_key.into();
             if let Err(mut err) = self
                 .client
                 .local_node
@@ -2139,7 +2139,7 @@ where
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
-        identity: Owner,
+        identity: AccountOwner,
     ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
@@ -2289,7 +2289,9 @@ where
     /// block.
     #[instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.query_balances_with_owner(AccountOwner::Chain).await?;
+        let (balance, _) = self
+            .query_balances_with_owner(AccountOwner::chain())
+            .await?;
         Ok(balance)
     }
 
@@ -2304,11 +2306,15 @@ where
         &self,
         owner: AccountOwner,
     ) -> Result<Amount, ChainClientError> {
-        Ok(self
-            .query_balances_with_owner(owner)
-            .await?
-            .1
-            .unwrap_or(Amount::ZERO))
+        if owner.is_chain() {
+            self.query_balance().await
+        } else {
+            Ok(self
+                .query_balances_with_owner(owner)
+                .await?
+                .1
+                .unwrap_or(Amount::ZERO))
+        }
     }
 
     /// Obtains the local balance of an account and optionally another user after staging the
@@ -2338,10 +2344,10 @@ where
             operations: Vec::new(),
             previous_block_hash,
             height,
-            authenticated_signer: match owner {
-                AccountOwner::User(user) => Some(user),
-                AccountOwner::Application(_) => None,
-                AccountOwner::Chain => None, // These should be unreachable?
+            authenticated_signer: if owner == AccountOwner::chain() {
+                None
+            } else {
+                Some(owner)
             },
             timestamp,
         };
@@ -2378,7 +2384,9 @@ where
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace")]
     pub async fn local_balance(&self) -> Result<Amount, ChainClientError> {
-        let (balance, _) = self.local_balances_with_owner(AccountOwner::Chain).await?;
+        let (balance, _) = self
+            .local_balances_with_owner(AccountOwner::chain())
+            .await?;
         Ok(balance)
     }
 
@@ -2390,11 +2398,15 @@ where
         &self,
         owner: AccountOwner,
     ) -> Result<Amount, ChainClientError> {
-        Ok(self
-            .local_balances_with_owner(owner)
-            .await?
-            .1
-            .unwrap_or(Amount::ZERO))
+        if owner.is_chain() {
+            self.local_balance().await
+        } else {
+            Ok(self
+                .local_balances_with_owner(owner)
+                .await?
+                .1
+                .unwrap_or(Amount::ZERO))
+        }
     }
 
     /// Reads the local balance of the chain account and optionally another user.
@@ -2427,11 +2439,11 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_to_account(
         &self,
-        owner: AccountOwner,
+        from: AccountOwner,
         amount: Amount,
         account: Account,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.transfer(owner, amount, Recipient::Account(account))
+        self.transfer(from, amount, Recipient::Account(account))
             .await
     }
 
@@ -2642,7 +2654,7 @@ where
     /// Returns a round in which we can propose a new block or the given one, if possible.
     fn round_for_new_proposal(
         info: &ChainInfo,
-        identity: &Owner,
+        identity: &AccountOwner,
         block: &ProposedBlock,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
@@ -2730,7 +2742,7 @@ where
     #[instrument(level = "trace")]
     pub async fn transfer_ownership(
         &self,
-        new_owner: Owner,
+        new_owner: AccountOwner,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
@@ -2746,7 +2758,7 @@ where
     #[instrument(level = "trace")]
     pub async fn share_ownership(
         &self,
-        new_owner: Owner,
+        new_owner: AccountOwner,
         new_weight: u64,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {

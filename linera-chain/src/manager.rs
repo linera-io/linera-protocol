@@ -78,7 +78,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight, Round, Timestamp},
     ensure,
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, Owner},
+    identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
 };
 use linera_execution::{committee::Epoch, ExecutionRuntimeContext};
@@ -193,7 +193,7 @@ where
     #[graphql(skip)]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
-    pub fallback_owners: RegisterView<C, BTreeMap<Owner, u64>>,
+    pub fallback_owners: RegisterView<C, BTreeMap<AccountOwner, u64>>,
 }
 
 #[ComplexObject]
@@ -232,7 +232,7 @@ where
             None
         };
         let fallback_owners = fallback_owners
-            .map(|(pub_key, weight)| (Owner::from(pub_key), weight))
+            .map(|(pub_key, weight)| (AccountOwner::from(pub_key), weight))
             .collect::<BTreeMap<_, _>>();
         let fallback_distribution = if !fallback_owners.is_empty() {
             let weights = fallback_owners.values().copied().collect();
@@ -612,7 +612,7 @@ where
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
     /// owner is allowed to propose. Exception: In `Round::Fast`, only super owners can propose.
-    fn round_leader(&self, round: Round) -> Option<&Owner> {
+    fn round_leader(&self, round: Round) -> Option<&AccountOwner> {
         match round {
             Round::SingleLeader(r) => {
                 let index = self.round_leader_index(r)?;
@@ -646,7 +646,7 @@ where
     }
 
     /// Returns whether the owner is a super owner.
-    fn is_super(&self, owner: &Owner) -> bool {
+    fn is_super(&self, owner: &AccountOwner) -> bool {
         self.ownership.get().super_owners.contains(owner)
     }
 
@@ -725,7 +725,7 @@ pub struct ChainManagerInfo {
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.
     #[debug(skip_if = Option::is_none)]
-    pub leader: Option<Owner>,
+    pub leader: Option<AccountOwner>,
     /// The timestamp when the current round times out.
     #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
@@ -787,7 +787,7 @@ impl ChainManagerInfo {
 
     /// Returns whether the `identity` is allowed to propose a block in `round`.
     /// This is dependent on the type of round and whether `identity` is a validator or (super)owner.
-    pub fn can_propose(&self, identity: &Owner, round: Round) -> bool {
+    pub fn can_propose(&self, identity: &AccountOwner, round: Round) -> bool {
         match round {
             Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,

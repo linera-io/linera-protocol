@@ -19,7 +19,9 @@ use linera_base::{
     doc_scalar, ensure,
     hashed::Hashed,
     hex_debug,
-    identifiers::{Account, BlobId, ChainId, ChannelFullName, Destination, MessageId, Owner},
+    identifiers::{
+        Account, AccountOwner, BlobId, ChainId, ChannelFullName, Destination, MessageId,
+    },
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -71,7 +73,7 @@ pub struct ProposedBlock {
     /// the default account of the chain is used. This value is also used as recipient of
     /// potential refunds for the message grants created by the operations.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<AccountOwner>,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
     pub previous_block_hash: Option<CryptoHash>,
@@ -288,7 +290,7 @@ pub struct BlockProposal {
 pub struct PostedMessage {
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<Owner>,
+    pub authenticated_signer: Option<AccountOwner>,
     /// A grant to pay for the message execution.
     #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,

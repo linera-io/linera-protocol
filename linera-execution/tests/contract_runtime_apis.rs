@@ -16,9 +16,7 @@ use linera_base::{
         CompressedBytecode, OracleResponse, Timestamp,
     },
     http,
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId, Owner,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -692,9 +690,9 @@ enum TransferTestEndpoint {
 }
 
 impl TransferTestEndpoint {
-    /// Returns the [`Owner`] used to represent a sender that's a user.
-    fn sender_owner() -> Owner {
-        Owner(CryptoHash::test_hash("sender"))
+    /// Returns the [`AccountOwner`] used to represent a sender that's a user.
+    fn sender_owner() -> AccountOwner {
+        AccountOwner::from(CryptoHash::test_hash("sender"))
     }
 
     /// Returns the [`ApplicationId`] used to represent a sender that's an application.
@@ -735,8 +733,8 @@ impl TransferTestEndpoint {
     }
 
     /// Returns the [`Owner`] used to represent a recipient that's a user.
-    fn recipient_owner() -> Owner {
-        Owner(CryptoHash::test_hash("recipient"))
+    fn recipient_owner() -> AccountOwner {
+        AccountOwner::Address32(CryptoHash::test_hash("recipient"))
     }
 
     /// Returns the [`ApplicationId`] used to represent a recipient that's an application.
@@ -754,18 +752,11 @@ impl TransferTestEndpoint {
             TransferTestEndpoint::Chain => (transfer_amount, vec![], Some(Self::sender_owner())),
             TransferTestEndpoint::User => {
                 let owner = Self::sender_owner();
-                (
-                    Amount::ZERO,
-                    vec![(AccountOwner::User(owner), transfer_amount)],
-                    Some(owner),
-                )
+                (Amount::ZERO, vec![(owner, transfer_amount)], Some(owner))
             }
             TransferTestEndpoint::Application => (
                 Amount::ZERO,
-                vec![(
-                    AccountOwner::Application(Self::sender_application_id()),
-                    transfer_amount,
-                )],
+                vec![(Self::sender_application_id().into(), transfer_amount)],
                 None,
             ),
         };
@@ -787,39 +778,35 @@ impl TransferTestEndpoint {
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as a sender.
     pub fn sender_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => AccountOwner::Chain,
-            TransferTestEndpoint::User => AccountOwner::User(Self::sender_owner()),
-            TransferTestEndpoint::Application => {
-                AccountOwner::Application(Self::sender_application_id())
-            }
+            TransferTestEndpoint::Chain => AccountOwner::chain(),
+            TransferTestEndpoint::User => Self::sender_owner(),
+            TransferTestEndpoint::Application => Self::sender_application_id().into(),
         }
     }
 
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as an unauthorized sender.
     pub fn unauthorized_sender_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => AccountOwner::Chain,
+            TransferTestEndpoint::Chain => AccountOwner::chain(),
             TransferTestEndpoint::User => {
-                AccountOwner::User(Owner(CryptoHash::test_hash("attacker")))
+                AccountOwner::Address32(CryptoHash::test_hash("attacker"))
             }
-            TransferTestEndpoint::Application => {
-                AccountOwner::Application(Self::recipient_application_id())
-            }
+            TransferTestEndpoint::Application => Self::recipient_application_id().into(),
         }
     }
 
-    /// Returns the [`Owner`] that should be used as the authenticated signer in the transfer
+    /// Returns the [`AccountOwner`] that should be used as the authenticated signer in the transfer
     /// operation.
-    pub fn signer(&self) -> Option<Owner> {
+    pub fn signer(&self) -> Option<AccountOwner> {
         match self {
             TransferTestEndpoint::Chain | TransferTestEndpoint::User => Some(Self::sender_owner()),
             TransferTestEndpoint::Application => None,
         }
     }
 
-    /// Returns the [`Owner`] that should be used as the authenticated signer when testing an
+    /// Returns the [`AccountOwner`] that should be used as the authenticated signer when testing an
     /// unauthorized transfer operation.
-    pub fn unauthorized_signer(&self) -> Option<Owner> {
+    pub fn unauthorized_signer(&self) -> Option<AccountOwner> {
         match self {
             TransferTestEndpoint::Chain | TransferTestEndpoint::User => {
                 Some(Self::recipient_owner())
@@ -831,11 +818,9 @@ impl TransferTestEndpoint {
     /// Returns the [`AccountOwner`] to represent this transfer endpoint as a recipient.
     pub fn recipient_account_owner(&self) -> AccountOwner {
         match self {
-            TransferTestEndpoint::Chain => AccountOwner::Chain,
-            TransferTestEndpoint::User => AccountOwner::User(Self::recipient_owner()),
-            TransferTestEndpoint::Application => {
-                AccountOwner::Application(Self::recipient_application_id())
-            }
+            TransferTestEndpoint::Chain => AccountOwner::chain(),
+            TransferTestEndpoint::User => Self::recipient_owner(),
+            TransferTestEndpoint::Application => Self::recipient_application_id().into(),
         }
     }
 
@@ -846,9 +831,12 @@ impl TransferTestEndpoint {
         system: &SystemExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
         amount: Amount,
     ) -> anyhow::Result<()> {
-        let (expected_chain_balance, expected_balances) = match self.recipient_account_owner() {
-            AccountOwner::Chain => (amount, vec![]),
-            account_owner => (Amount::ZERO, vec![(account_owner, amount)]),
+        let account_owner = self.recipient_account_owner();
+        let (expected_chain_balance, expected_balances) = if account_owner == AccountOwner::chain()
+        {
+            (amount, vec![])
+        } else {
+            (Amount::ZERO, vec![(account_owner, amount)])
         };
 
         let balances = system.balances.index_values().await?;

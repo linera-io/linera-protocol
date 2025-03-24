@@ -61,7 +61,7 @@ function App({ chainId, owner }) {
     { data: ownedNftsData, called: ownedNftsCalled, loading: ownedNftsLoading },
   ] = useLazyQuery(GET_OWNED_NFTS, {
     fetchPolicy: "network-only",
-    variables: { owner: `User:${owner}` },
+    variables: { owner: `${owner}` },
   });
 
   const [transferNft, { loading: transferLoading }] = useMutation(TRANSFER_NFT, {
@@ -121,7 +121,7 @@ function App({ chainId, owner }) {
 
     mintNft({
       variables: {
-        minter: `User:${owner}`,
+        minter: `${owner}`,
         prompt: prompt,
       },
     }).then(r => console.log("NFT minted: " + JSON.stringify(r, null, 2)));
@@ -152,11 +152,11 @@ function App({ chainId, owner }) {
   const handleTransferSubmit = () => {
     transferNft({
       variables: {
-        sourceOwner: `User:${owner}`,
+        sourceOwner: `${owner}`,
         tokenId: tokenID,
         targetAccount: {
           chainId: targetChainID,
-          owner: `User:${targetOwner}`,
+          owner: `${targetOwner}`,
         }
       },
     }).then(r => console.log("NFT transferred: " + JSON.stringify(r, null, 2)));

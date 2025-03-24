@@ -77,7 +77,7 @@ Now we have to publish and create the fungible applications. The flag `--wait-fo
 FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
   publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
-        \"User:$OWNER_AMM\": \"100.\"
+        \"$OWNER_AMM\": \"100.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
 )
@@ -85,7 +85,7 @@ FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
 FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
   publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
-        \"User:$OWNER_AMM\": \"100.\"
+        \"$OWNER_AMM\": \"100.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN2\" }" \
 )
@@ -120,11 +120,11 @@ To properly setup the tokens in the proper chains, we need to do some transfer o
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
 mutation {
   transfer(
-    owner: "User:$OWNER_AMM",
+    owner: "$OWNER_AMM",
     amount: "50.",
     targetAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_1",
+      owner: "$OWNER_1",
     }
   )
 }
@@ -135,11 +135,11 @@ mutation {
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
 mutation {
   transfer(
-    owner: "User:$OWNER_AMM",
+    owner: "$OWNER_AMM",
     amount: "50.",
     targetAccount: {
       chainId: "$CHAIN_2",
-      owner: "User:$OWNER_2",
+      owner: "$OWNER_2",
     }
   )
 }
@@ -152,11 +152,11 @@ mutation {
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
 mutation {
   transfer(
-    owner: "User:$OWNER_AMM",
+    owner: "$OWNER_AMM",
     amount: "50.",
     targetAccount: {
       chainId: "$CHAIN_1",
-      owner: "User:$OWNER_1",
+      owner: "$OWNER_1",
     }
   )
 }
@@ -167,11 +167,11 @@ mutation {
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
 mutation {
   transfer(
-    owner: "User:$OWNER_AMM",
+    owner: "$OWNER_AMM",
     amount: "50.",
     targetAccount: {
       chainId: "$CHAIN_2",
-      owner: "User:$OWNER_2",
+      owner: "$OWNER_2",
     }
   )
 }
@@ -187,7 +187,7 @@ To perform the `AddLiquidity` operation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   addLiquidity(
-    owner: "User:$OWNER_1",
+    owner: "$OWNER_1",
     maxToken0Amount: "50",
     maxToken1Amount: "50",
   )
@@ -200,7 +200,7 @@ perform the following mutation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID
 mutation {
   swap(
-    owner: "User:$OWNER_2",
+    owner: "$OWNER_2",
     inputTokenIdx: 1,
     inputAmount: "1",
   )
@@ -213,7 +213,7 @@ perform the following mutation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   removeLiquidity(
-    owner: "User:$OWNER_1",
+    owner: "$OWNER_1",
     tokenToRemoveIdx: 1,
     tokenToRemoveAmount: "1",
   )
@@ -226,7 +226,7 @@ perform the following mutation:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   removeAllAddedLiquidity(
-    owner: "User:$OWNER_1",
+    owner: "$OWNER_1",
   )
 }
 ```
@@ -263,7 +263,7 @@ First, let's add some liquidity again to the AMM. Navigate to the URL you get by
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
   addLiquidity(
-    owner: "User:$OWNER_1",
+    owner: "$OWNER_1",
     maxToken0Amount: "40",
     maxToken1Amount: "40",
   )
@@ -284,7 +284,7 @@ to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/appli
 query {
     accounts {
         entry(
-            key: "User:$OWNER_1"
+            key: "$OWNER_1"
         ) {
             value
         }
@@ -298,7 +298,7 @@ Then navigate to the URL you get by running `echo "http://localhost:8080/chains/
 query {
     accounts {
         entry(
-            key: "User:$OWNER_1"
+            key: "$OWNER_1"
         ) {
             value
         }
