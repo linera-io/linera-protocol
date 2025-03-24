@@ -59,7 +59,7 @@ where
 
     let account = Account::new(chain2.chain_id(), owner1);
     let cert = chain1
-        .transfer_to_account(AccountOwner::chain(), amt, account)
+        .transfer_to_account(AccountOwner::CHAIN, amt, account)
         .await
         .unwrap()
         .unwrap();

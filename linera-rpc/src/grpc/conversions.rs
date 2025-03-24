@@ -1087,7 +1087,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
-            request_owner_balance: AccountOwner::chain(),
+            request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: Some(
                 linera_core::data_types::BlockHeightRange {

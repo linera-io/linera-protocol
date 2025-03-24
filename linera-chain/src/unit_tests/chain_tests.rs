@@ -166,7 +166,7 @@ async fn test_block_size_limit() {
     let invalid_block = valid_block
         .clone()
         .with_operation(SystemOperation::Transfer {
-            owner: AccountOwner::chain(),
+            owner: AccountOwner::CHAIN,
             recipient: Recipient::root(0),
             amount: Amount::ONE,
         });

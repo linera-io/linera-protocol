@@ -530,7 +530,7 @@ where
     /// Debits an `amount` of native tokens from a `source` owner account (or the current
     /// chain's balance).
     fn debit(&mut self, source: AccountOwner, amount: Amount) {
-        let source_balance = if source == AccountOwner::chain() {
+        let source_balance = if source == AccountOwner::CHAIN {
             self.chain_balance_mut()
         } else {
             self.owner_balance_mut(source)
@@ -544,7 +544,7 @@ where
     /// Credits an `amount` of native tokens into a `destination` owner account (or the
     /// current chain's balance).
     fn credit(&mut self, destination: AccountOwner, amount: Amount) {
-        let destination_balance = if destination == AccountOwner::chain() {
+        let destination_balance = if destination == AccountOwner::CHAIN {
             self.chain_balance_mut()
         } else {
             self.owner_balance_mut(destination)

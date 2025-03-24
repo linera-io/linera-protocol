@@ -104,7 +104,7 @@ where
     {
         let certificate = sender
             .transfer_to_account(
-                AccountOwner::chain(),
+                AccountOwner::CHAIN,
                 Amount::from_tokens(3),
                 Account::chain(ChainId::root(2)),
             )
@@ -155,7 +155,7 @@ where
     let friend = receiver.identity().await?;
     sender
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(3),
             Account::new(receiver_id, owner),
         )
@@ -164,7 +164,7 @@ where
         .unwrap();
     let cert = sender
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_millis(100),
             Account::new(receiver_id, friend),
         )
@@ -288,7 +288,7 @@ where
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
     sender
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await
         .unwrap();
     Ok(())
@@ -335,7 +335,7 @@ where
     // Cannot use the chain any more.
     assert_matches!(
         sender
-            .burn(AccountOwner::chain(), Amount::from_tokens(3))
+            .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
             .await,
         Err(ChainClientError::CannotFindKeyForChain(_))
     );
@@ -378,7 +378,7 @@ where
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain with the old client.
     sender
-        .burn(AccountOwner::chain(), Amount::from_tokens(2))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
         .await
         .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
@@ -405,7 +405,7 @@ where
 
     // We need at least three validators for making an operation.
     builder.set_fault_type([0, 1], FaultType::Offline).await;
-    let result = client.burn(AccountOwner::chain(), Amount::ONE).await;
+    let result = client.burn(AccountOwner::CHAIN, Amount::ONE).await;
     assert_matches!(
         result,
         Err(ChainClientError::CommunicationError(
@@ -415,7 +415,7 @@ where
     builder.set_fault_type([0, 1], FaultType::Honest).await;
     builder.set_fault_type([2, 3], FaultType::Offline).await;
     assert_matches!(
-        sender.burn(AccountOwner::chain(), Amount::ONE).await,
+        sender.burn(AccountOwner::CHAIN, Amount::ONE).await,
         Err(ChainClientError::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
@@ -434,7 +434,7 @@ where
     );
     client.clear_pending_proposal();
     client
-        .burn(AccountOwner::chain(), Amount::ONE)
+        .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap()
         .unwrap();
@@ -444,10 +444,7 @@ where
     sender.process_inbox().await.unwrap();
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_proposal();
-    sender
-        .burn(AccountOwner::chain(), Amount::ONE)
-        .await
-        .unwrap();
+    sender.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
 
     // That's it, we spent all our money on this test!
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
@@ -534,7 +531,7 @@ where
     // Transfer before creating the chain. The validators will ignore the cross-chain messages.
     sender
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(2),
             Account::chain(new_id),
         )
@@ -581,7 +578,7 @@ where
     // process the cross-chain messages.
     let certificate2 = sender
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(1),
             Account::chain(new_id),
         )
@@ -597,7 +594,7 @@ where
         Amount::from_tokens(3)
     );
     client
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await
         .unwrap();
     Ok(())
@@ -626,7 +623,7 @@ where
     // Transfer before creating the chain.
     sender
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(3),
             Account::chain(new_id),
         )
@@ -669,7 +666,7 @@ where
         .await
         .unwrap();
     let result = client
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert_matches!(
         result,
@@ -711,7 +708,7 @@ where
     // Transfer after creating the chain.
     let transfer_certificate = sender
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(3),
             Account::chain(new_id),
         )
@@ -740,7 +737,7 @@ where
         Amount::from_tokens(3)
     );
     client
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
@@ -786,7 +783,7 @@ where
     );
     // Cannot use the chain for operations any more.
     let result = client1
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert!(
         matches!(
@@ -802,7 +799,7 @@ where
     // Incoming messages now get rejected.
     client2
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(3),
             Account::chain(client1.chain_id()),
         )
@@ -860,7 +857,7 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let result = sender
         .transfer_to_account_unsafe_unconfirmed(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(3),
             Account::chain(ChainId::root(2)),
         )
@@ -910,7 +907,7 @@ where
     );
     let certificate = client1
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(3),
             Account::chain(client2.chain_id),
         )
@@ -959,7 +956,7 @@ where
     assert_eq!(client2.next_block_height(), BlockHeight::ZERO);
     client2
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(client1.chain_id),
         )
@@ -1005,7 +1002,7 @@ where
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let certificate = client1
         .transfer_to_account_unsafe_unconfirmed(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(2),
             Account::chain(client2.chain_id),
         )
@@ -1055,7 +1052,7 @@ where
     // Confirming to a quorum of nodes only at the end.
     client1
         .transfer_to_account_unsafe_unconfirmed(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(client2.chain_id),
         )
@@ -1063,7 +1060,7 @@ where
         .unwrap();
     client1
         .transfer_to_account_unsafe_unconfirmed(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(client2.chain_id),
         )
@@ -1083,7 +1080,7 @@ where
     // Sending money from client2 fails, as a consequence.
     let obtained_error = client2
         .transfer_to_account_unsafe_unconfirmed(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(2),
             Account::chain(client3.chain_id),
         )
@@ -1100,7 +1097,7 @@ where
     client2.synchronize_from_validators().await.unwrap();
     let certificate = client2
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(2),
             Account::chain(client3.chain_id),
         )
@@ -1176,7 +1173,7 @@ where
     // Sending money from the admin chain is supported.
     let cert = admin
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(2),
             Account::chain(user.chain_id()),
         )
@@ -1185,7 +1182,7 @@ where
         .unwrap();
     admin
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(user.chain_id()),
         )
@@ -1211,7 +1208,7 @@ where
     // Try to make a transfer back to the admin chain.
     let cert = user
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(2),
             Account::chain(admin.chain_id()),
         )
@@ -1227,7 +1224,7 @@ where
     // Try again to make a transfer back to the admin chain.
     let cert = user
         .transfer_to_account(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::ONE,
             Account::chain(admin.chain_id()),
         )
@@ -1257,12 +1254,12 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
     let obtained_error = sender
-        .burn(AccountOwner::chain(), Amount::from_tokens(4))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
         .await;
     assert_insufficient_funding_during_operation(obtained_error, 0);
 
     let obtained_error = sender
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert_insufficient_funding_fees(obtained_error);
     Ok(())
@@ -1427,7 +1424,7 @@ where
         *info2_b.manager.requested_locking.unwrap()
     );
     let bt_certificate = client2_b
-        .burn(AccountOwner::chain(), Amount::from_tokens(1))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap()
         .unwrap();
@@ -1444,7 +1441,7 @@ where
         .body
         .operations
         .contains(&Operation::system(SystemOperation::Transfer {
-            owner: AccountOwner::chain(),
+            owner: AccountOwner::CHAIN,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
         })));
@@ -1554,7 +1551,7 @@ where
 
     client2_b.prepare_chain().await.unwrap();
     let bt_certificate = client2_b
-        .burn(AccountOwner::chain(), Amount::from_tokens(1))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap()
         .unwrap();
@@ -1571,7 +1568,7 @@ where
         .body
         .operations
         .contains(&Operation::system(SystemOperation::Transfer {
-            owner: AccountOwner::chain(),
+            owner: AccountOwner::CHAIN,
             recipient: Recipient::Burn,
             amount: Amount::from_tokens(1),
         })));
@@ -1903,7 +1900,7 @@ where
 
     // The other owner is leader now. Trying to submit a block should return `WaitForTimeout`.
     let result = client
-        .transfer(AccountOwner::chain(), Amount::ONE, Recipient::root(2))
+        .transfer(AccountOwner::CHAIN, Amount::ONE, Recipient::root(2))
         .await
         .unwrap();
     let timeout = match result {
@@ -1930,7 +1927,7 @@ where
 
     // Now we are the leader, and the transfer should succeed.
     let _certificate = client
-        .transfer(AccountOwner::chain(), Amount::ONE, Recipient::root(2))
+        .transfer(AccountOwner::CHAIN, Amount::ONE, Recipient::root(2))
         .await
         .unwrap()
         .unwrap();
@@ -1988,7 +1985,7 @@ where
         .set_fault_type([2], FaultType::OfflineWithInfo)
         .await;
     let result = client0
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert!(result.is_err());
 
@@ -2031,7 +2028,7 @@ where
     // Client 0 now only tries to burn 1 token. Before that, they automatically finalize the
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
     client0
-        .burn(AccountOwner::chain(), Amount::from_tokens(1))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap();
     client0.synchronize_from_validators().await.unwrap();
@@ -2045,7 +2042,7 @@ where
     // Burn another token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
     client1
-        .burn(AccountOwner::chain(), Amount::from_tokens(1))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
@@ -2077,7 +2074,7 @@ where
         .set_fault_type([2], FaultType::OfflineWithInfo)
         .await;
     let result = client
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert!(result.is_err());
 
@@ -2086,10 +2083,7 @@ where
 
     // The client tries to burn another token. Before that, they automatically finalize the
     // pending block, which burns 3 tokens, leaving 10 - 3 - 1 = 6.
-    client
-        .burn(AccountOwner::chain(), Amount::ONE)
-        .await
-        .unwrap();
+    client.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
     client.synchronize_from_validators().await.unwrap();
     client.process_inbox().await.unwrap();
     assert_eq!(
@@ -2140,7 +2134,7 @@ where
         .await;
     builder.set_fault_type([3], FaultType::Offline).await;
     let result = client0
-        .burn(AccountOwner::chain(), Amount::from_tokens(3))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
     assert!(result.is_err());
     let manager = client0
@@ -2178,7 +2172,7 @@ where
     assert!(manager.requested_locking.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1
-        .burn(AccountOwner::chain(), Amount::from_tokens(2))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
         .await;
     assert!(result.is_err());
 
@@ -2199,7 +2193,7 @@ where
     assert_eq!(manager.current_round, Round::MultiLeader(1));
     assert!(client1.pending_proposal().is_some());
     client1
-        .burn(AccountOwner::chain(), Amount::from_tokens(4))
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
         .await
         .unwrap();
 
@@ -2226,7 +2220,7 @@ where
     let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let recipient = Recipient::chain(receiver.chain_id());
     let cert = sender
-        .transfer(AccountOwner::chain(), Amount::ONE, recipient)
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
         .await
         .unwrap()
         .unwrap();
@@ -2312,7 +2306,7 @@ where
     // Send a message from chain 2 to chain 3.
     let certificate = client2
         .transfer(
-            AccountOwner::chain(),
+            AccountOwner::CHAIN,
             Amount::from_millis(1),
             Recipient::chain(chain_id3),
         )
