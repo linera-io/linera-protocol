@@ -450,7 +450,7 @@ where
                 "The message with the ID returned by the faucet is not OpenChain. \
                 Please make sure you are connecting to a genuine faucet."
             );
-            return Err(error::Inner::InvalidOpenMessage(message.cloned()).into());
+            return Err(error::Inner::InvalidOpenMessage(message.cloned().map(Box::new)).into());
         };
 
         if !config.ownership.verify_owner(&owner) {

@@ -33,7 +33,7 @@ pub(crate) enum Inner {
     #[error("arithmetic error: {0}")]
     Arithmetic(#[from] linera_base::data_types::ArithmeticError),
     #[error("invalid open message")]
-    InvalidOpenMessage(Option<linera_execution::Message>),
+    InvalidOpenMessage(Option<Box<linera_execution::Message>>),
     #[error("incorrect chain ownership")]
     ChainOwnership,
     #[cfg(feature = "benchmark")]
