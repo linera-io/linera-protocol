@@ -24,7 +24,6 @@ use super::{MockApplication, RegisterMockApplication};
 use crate::{
     committee::{Committee, Epoch},
     execution::UserAction,
-    system::SystemChannel,
     ApplicationDescription, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, ExecutionStateView, OperationContext, ResourceControlPolicy,
     ResourceController, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,

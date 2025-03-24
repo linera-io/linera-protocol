@@ -822,14 +822,6 @@ type MutationRoot {
 	"""
 	createCommittee(chainId: ChainId!, committee: Committee!): CryptoHash!
 	"""
-	Subscribes to a system channel.
-	"""
-	subscribe(subscriberChainId: ChainId!, publisherChainId: ChainId!, channel: SystemChannel!): CryptoHash!
-	"""
-	Unsubscribes from a system channel.
-	"""
-	unsubscribe(subscriberChainId: ChainId!, publisherChainId: ChainId!, channel: SystemChannel!): CryptoHash!
-	"""
 	(admin chain only) Removes a committee. Once this message is accepted by a chain,
 	blocks from the retired epoch will not be accepted until they are followed (hence
 	re-certified) by a block certified by a recent committee.
@@ -1187,16 +1179,6 @@ type SubscriptionRoot {
 	Subscribes to notifications from the specified chain.
 	"""
 	notifications(chainId: ChainId!): Notification!
-}
-
-"""
-The channels available in the system application.
-"""
-enum SystemChannel {
-	"""
-	Channel used to broadcast reconfigurations.
-	"""
-	ADMIN
 }
 
 type SystemExecutionStateView {

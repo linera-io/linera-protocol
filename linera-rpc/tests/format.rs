@@ -17,7 +17,7 @@ use linera_chain::{
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
-    system::{AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
+    system::{AdminOperation, Recipient, SystemMessage, SystemOperation},
     Message, MessageKind, Operation,
 };
 use linera_rpc::RpcMessage;
@@ -48,7 +48,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Round>(&samples)?;
     tracer.trace_type::<OracleResponse>(&samples)?;
     tracer.trace_type::<Recipient>(&samples)?;
-    tracer.trace_type::<SystemChannel>(&samples)?;
     tracer.trace_type::<SystemOperation>(&samples)?;
     tracer.trace_type::<AdminOperation>(&samples)?;
     tracer.trace_type::<SystemMessage>(&samples)?;
