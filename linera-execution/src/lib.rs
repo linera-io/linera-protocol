@@ -4,7 +4,6 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
-#![cfg_attr(web, feature(trait_upcasting))]
 #![deny(clippy::large_futures)]
 
 pub mod committee;
