@@ -14,7 +14,9 @@ use std::{
 };
 
 use linera_base::ensure;
+use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle};
 use serde::{Deserialize, Serialize};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -49,8 +51,9 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 // 8388608 and so for offset reason we decrease by 400
 const MAX_KEY_SIZE: usize = 8388208;
 
-const DB_CACHE_SIZE: usize = 128 * 1024 * 1024; // 128 MiB
-const DB_MAX_WRITE_BUFFER_NUMBER: i32 = 8;
+const WRITE_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64 MB
+const MAX_WRITE_BUFFER_NUMBER: i32 = 32;
+const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KB
 
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -300,20 +303,37 @@ impl RocksDbStoreInternal {
         if !std::path::Path::exists(&path_buf) {
             std::fs::create_dir(path_buf.clone())?;
         }
+        let sys = System::new_with_specifics(
+            RefreshKind::nothing()
+                .with_cpu(CpuRefreshKind::everything())
+                .with_memory(MemoryRefreshKind::nothing().with_ram()),
+        );
+        let num_cpus = sys.cpus().len() as i32;
+        let total_ram = sys.total_memory() as usize;
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
         // Flush in-memory buffer to disk more often
-        options.set_write_buffer_size(DB_CACHE_SIZE);
-        options.set_max_write_buffer_number(DB_MAX_WRITE_BUFFER_NUMBER);
+        options.set_write_buffer_size(WRITE_BUFFER_SIZE);
+        options.set_max_write_buffer_number(MAX_WRITE_BUFFER_NUMBER);
         options.set_compression_type(rocksdb::DBCompressionType::Lz4);
-        options.set_level_zero_slowdown_writes_trigger(-1);
-        options.set_level_zero_stop_writes_trigger(48);
-        options.set_stats_dump_period_sec(60);
-        options.enable_statistics();
-        options.increase_parallelism(num_cpus::get() as i32);
-        options.set_max_background_jobs(8);
+        options.set_level_zero_slowdown_writes_trigger(12);
+        options.set_level_zero_stop_writes_trigger(20);
+        options.increase_parallelism((num_cpus / 2).max(1));
+        options.set_max_background_jobs((num_cpus / 3).max(1));
         options.set_level_compaction_dynamic_level_bytes(true);
+
+        options.set_compaction_style(DBCompactionStyle::Level);
+        options.set_target_file_size_base(WRITE_BUFFER_SIZE as u64);
+
+        let mut block_options = BlockBasedOptions::default();
+        block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
+        block_options.set_cache_index_and_filter_blocks(true);
+        block_options.set_block_cache(&Cache::new_hyper_clock_cache(
+            total_ram / 4,
+            HYPER_CLOCK_CACHE_BLOCK_SIZE,
+        ));
+        options.set_block_based_table_factory(&block_options);
 
         let db = DB::open(&options, path_buf)?;
         let executor = RocksDbStoreExecutor {
