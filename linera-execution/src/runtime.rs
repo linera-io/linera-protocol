@@ -18,8 +18,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName,
-        GenericApplicationId, MessageId, StreamId, StreamName,
+        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, MessageId,
+        StreamId, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -1304,7 +1304,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
         );
-        let application_id = GenericApplicationId::User(this.current_application().id);
+        let application_id = AccountOwner::from(this.current_application().id);
         let stream_id = StreamId {
             stream_name,
             application_id,

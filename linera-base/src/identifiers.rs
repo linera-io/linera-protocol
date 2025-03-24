@@ -311,40 +311,6 @@ pub struct ApplicationId<A = ()> {
     _phantom: PhantomData<A>,
 }
 
-/// A unique identifier for an application.
-#[derive(
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Copy,
-    Clone,
-    Hash,
-    Debug,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-pub enum GenericApplicationId {
-    /// The system application.
-    System,
-    /// A user application.
-    User(ApplicationId),
-}
-
-impl GenericApplicationId {
-    /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&ApplicationId> {
-        if let GenericApplicationId::User(app_id) = self {
-            Some(app_id)
-        } else {
-            None
-        }
-    }
-}
-
 impl<A> From<ApplicationId<A>> for AccountOwner {
     fn from(app_id: ApplicationId<A>) -> Self {
         AccountOwner::Address32(app_id.application_description_hash)
@@ -357,12 +323,6 @@ impl From<AccountPublicKey> for AccountOwner {
             AccountPublicKey::Ed25519(public_key) => public_key.into(),
             AccountPublicKey::Secp256k1(public_key) => public_key.into(),
         }
-    }
-}
-
-impl From<ApplicationId> for GenericApplicationId {
-    fn from(application_id: ApplicationId) -> Self {
-        GenericApplicationId::User(application_id)
     }
 }
 
@@ -418,7 +378,7 @@ pub struct ChannelName(
 /// A channel name together with its application ID.
 pub struct ChannelFullName {
     /// The application owning the channel.
-    pub application_id: GenericApplicationId,
+    pub application_id: AccountOwner,
     /// The name of the channel.
     pub name: ChannelName,
 }
@@ -427,8 +387,8 @@ impl fmt::Display for ChannelFullName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = hex::encode(&self.name);
         match self.application_id {
-            GenericApplicationId::System => write!(f, "system channel {name}"),
-            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
+            AccountOwner::Reserved(idx) => write!(f, "system channel Reserved({idx})"),
+            AccountOwner::Address32(app_id) => write!(f, "user channel {name} for app {app_id}"),
         }
     }
 }
@@ -437,7 +397,7 @@ impl ChannelFullName {
     /// Creates a full system channel name.
     pub fn system(name: ChannelName) -> Self {
         Self {
-            application_id: GenericApplicationId::System,
+            application_id: AccountOwner::CHAIN,
             name,
         }
     }
@@ -499,7 +459,7 @@ where
 )]
 pub struct StreamId {
     /// The application that can add events to this stream.
-    pub application_id: GenericApplicationId,
+    pub application_id: AccountOwner,
     /// The name of this stream: an application can have multiple streams with different names.
     pub stream_name: StreamName,
 }
@@ -508,7 +468,7 @@ impl StreamId {
     /// Creates a system stream ID with the given name.
     pub fn system(name: impl Into<StreamName>) -> Self {
         StreamId {
-            application_id: GenericApplicationId::System,
+            application_id: AccountOwner::CHAIN,
             stream_name: name.into(),
         }
     }
@@ -906,6 +866,11 @@ impl ApplicationId {
             _phantom: PhantomData,
         }
     }
+
+    /// Returns the ID of the application.
+    pub fn id(&self) -> CryptoHash {
+        self.application_description_hash
+    }
 }
 
 impl<A> ApplicationId<A> {
@@ -1039,10 +1004,6 @@ impl ChainId {
 impl<'de> BcsHashable<'de> for ChainDescription {}
 
 bcs_scalar!(ApplicationId, "A unique identifier for a user application");
-doc_scalar!(
-    GenericApplicationId,
-    "A unique identifier for a user application or for the system application"
-);
 bcs_scalar!(ModuleId, "A unique identifier for an application module");
 doc_scalar!(ChainDescription, "How to create a chain");
 doc_scalar!(

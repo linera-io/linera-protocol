@@ -364,7 +364,7 @@ ChainOwnership:
 ChannelFullName:
   STRUCT:
     - application_id:
-        TYPENAME: GenericApplicationId
+        TYPENAME: AccountOwner
     - name:
         TYPENAME: ChannelName
 ChannelName:
@@ -471,14 +471,6 @@ EventId:
         TYPENAME: StreamId
     - key:
         SEQ: U8
-GenericApplicationId:
-  ENUM:
-    0:
-      System: UNIT
-    1:
-      User:
-        NEWTYPE:
-          TYPENAME: ApplicationId
 HandleConfirmedCertificateRequest:
   STRUCT:
     - certificate:
@@ -1043,7 +1035,7 @@ Secp256k1Signature:
 StreamId:
   STRUCT:
     - application_id:
-        TYPENAME: GenericApplicationId
+        TYPENAME: AccountOwner
     - stream_name:
         TYPENAME: StreamName
 StreamName:
