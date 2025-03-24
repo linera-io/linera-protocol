@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
 };
@@ -285,6 +286,9 @@ impl<'de> Deserialize<'de> for Block {
 
         let bundles_hash = hashing::hash_vec(&inner.body.incoming_bundles);
         let messages_hash = hashing::hash_vec_vec(&inner.body.messages);
+        let previous_message_blocks_hash = CryptoHash::new(&PreviousMessageBlocksMap {
+            inner: Cow::Borrowed(&inner.body.previous_message_blocks),
+        });
         let operations_hash = hashing::hash_vec(&inner.body.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
@@ -302,6 +306,7 @@ impl<'de> Deserialize<'de> for Block {
             bundles_hash,
             operations_hash,
             messages_hash,
+            previous_message_blocks_hash,
             oracle_responses_hash,
             events_hash,
             blobs_hash,
@@ -347,6 +352,8 @@ pub struct BlockHeader {
     // Outcome of the block execution.
     /// Cryptographic hash of all the messages in the block.
     pub messages_hash: CryptoHash,
+    /// Cryptographic hash of the lookup table for previous sending blocks.
+    pub previous_message_blocks_hash: CryptoHash,
     /// Cryptographic hash of all the oracle responses in the block.
     pub oracle_responses_hash: CryptoHash,
     /// Cryptographic hash of all the events in the block.
@@ -367,6 +374,8 @@ pub struct BlockBody {
     pub operations: Vec<Operation>,
     /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
+    /// The hashes of previous blocks that sent messages to the same recipients.
+    pub previous_message_blocks: BTreeMap<ChainId, CryptoHash>,
     /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
@@ -381,6 +390,9 @@ impl Block {
     pub fn new(block: ProposedBlock, outcome: BlockExecutionOutcome) -> Self {
         let bundles_hash = hashing::hash_vec(&block.incoming_bundles);
         let messages_hash = hashing::hash_vec_vec(&outcome.messages);
+        let previous_message_blocks_hash = CryptoHash::new(&PreviousMessageBlocksMap {
+            inner: Cow::Borrowed(&outcome.previous_message_blocks),
+        });
         let operations_hash = hashing::hash_vec(&block.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&outcome.events);
@@ -398,6 +410,7 @@ impl Block {
             bundles_hash,
             operations_hash,
             messages_hash,
+            previous_message_blocks_hash,
             oracle_responses_hash,
             events_hash,
             blobs_hash,
@@ -408,6 +421,7 @@ impl Block {
             incoming_bundles: block.incoming_bundles,
             operations: block.operations,
             messages: outcome.messages,
+            previous_message_blocks: outcome.previous_message_blocks,
             oracle_responses: outcome.oracle_responses,
             events: outcome.events,
             blobs: outcome.blobs,
@@ -588,6 +602,7 @@ impl From<Block> for ExecutedBlock {
                     bundles_hash: _,
                     operations_hash: _,
                     messages_hash: _,
+                    previous_message_blocks_hash: _,
                     oracle_responses_hash: _,
                     events_hash: _,
                     blobs_hash: _,
@@ -598,6 +613,7 @@ impl From<Block> for ExecutedBlock {
                     incoming_bundles,
                     operations,
                     messages,
+                    previous_message_blocks,
                     oracle_responses,
                     events,
                     blobs,
@@ -619,6 +635,7 @@ impl From<Block> for ExecutedBlock {
         let outcome = BlockExecutionOutcome {
             state_hash,
             messages,
+            previous_message_blocks,
             oracle_responses,
             events,
             blobs,
@@ -630,6 +647,13 @@ impl From<Block> for ExecutedBlock {
 }
 
 impl<'de> BcsHashable<'de> for Block {}
+
+#[derive(Serialize, Deserialize)]
+pub struct PreviousMessageBlocksMap<'a> {
+    inner: Cow<'a, BTreeMap<ChainId, CryptoHash>>,
+}
+
+impl<'de> BcsHashable<'de> for PreviousMessageBlocksMap<'de> {}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "BlockHeader")]

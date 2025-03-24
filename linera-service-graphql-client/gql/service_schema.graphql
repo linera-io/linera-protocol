@@ -109,6 +109,10 @@ type BlockBody {
 	"""
 	messages: [[OutgoingMessage!]!]!
 	"""
+	The hashes of previous blocks that sent messages to the same recipients.
+	"""
+	previousMessageBlocks: JSONObject!
+	"""
 	The record of oracle responses for each transaction.
 	"""
 	oracleResponses: [[OracleResponse!]!]!
@@ -175,6 +179,10 @@ type BlockHeader {
 	Cryptographic hash of all the messages in the block.
 	"""
 	messagesHash: CryptoHash!
+	"""
+	Cryptographic hash of the lookup table for previous sending blocks.
+	"""
+	previousMessageBlocksHash: CryptoHash!
 	"""
 	Cryptographic hash of all the oracle responses in the block.
 	"""
@@ -332,6 +340,10 @@ type ChainStateExtendedView {
 	Unskippable bundles that have been removed but are still in the queue.
 	"""
 	removedUnskippableBundles: [BundleInInbox!]!
+	"""
+	The heights of previous blocks that sent messages to the same recipients.
+	"""
+	previousMessageBlocks: MapView_ChainId_BlockHeight_f2e56e12!
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
@@ -497,6 +509,14 @@ type Entry_BlobId_Blob_9f0b41f3 {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_ChainId_BlockHeight_2fe78645 {
+	key: ChainId!
+	value: BlockHeight
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_ChannelFullName_ChannelStateView_bd1de7ae {
 	key: ChannelFullName!
 	value: ChannelStateView!
@@ -635,6 +655,10 @@ input MapFilters_BlobId_4d2a0555 {
 	keys: [BlobId!]
 }
 
+input MapFilters_ChainId_37f83aa9 {
+	keys: [ChainId!]
+}
+
 input MapFilters_ChannelFullName_7b67e184 {
 	keys: [ChannelFullName!]
 }
@@ -653,6 +677,10 @@ input MapInput_AccountOwner_d6668c53 {
 
 input MapInput_BlobId_4d2a0555 {
 	filters: MapFilters_BlobId_4d2a0555
+}
+
+input MapInput_ChainId_37f83aa9 {
+	filters: MapFilters_ChainId_37f83aa9
 }
 
 input MapInput_ChannelFullName_7b67e184 {
@@ -683,6 +711,12 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
+}
+
+type MapView_ChainId_BlockHeight_f2e56e12 {
+	keys(count: Int): [ChainId!]!
+	entry(key: ChainId!): Entry_ChainId_BlockHeight_2fe78645!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_BlockHeight_2fe78645!]!
 }
 
 """

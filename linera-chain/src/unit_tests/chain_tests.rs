@@ -121,7 +121,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 856;
+    let maximum_executed_block_size = 857;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();

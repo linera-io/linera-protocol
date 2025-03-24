@@ -126,6 +126,12 @@ BlockBody:
         SEQ:
           SEQ:
             TYPENAME: OutgoingMessage
+    - previous_message_blocks:
+        MAP:
+          KEY:
+            TYPENAME: ChainId
+          VALUE:
+            TYPENAME: CryptoHash
     - oracle_responses:
         SEQ:
           SEQ:
@@ -147,6 +153,12 @@ BlockExecutionOutcome:
         SEQ:
           SEQ:
             TYPENAME: OutgoingMessage
+    - previous_message_blocks:
+        MAP:
+          KEY:
+            TYPENAME: ChainId
+          VALUE:
+            TYPENAME: CryptoHash
     - state_hash:
         TYPENAME: CryptoHash
     - oracle_responses:

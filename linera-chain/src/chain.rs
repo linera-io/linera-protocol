@@ -32,6 +32,7 @@ use linera_execution::{
 use linera_views::{
     context::Context,
     log_view::LogView,
+    map_view::MapView,
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
@@ -171,7 +172,7 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 /// The BCS-serialized size of an empty [`Block`].
-const EMPTY_BLOCK_SIZE: usize = 93;
+const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
@@ -239,6 +240,8 @@ where
     pub unskippable_bundles: QueueView<C, TimestampedBundleInInbox>,
     /// Unskippable bundles that have been removed but are still in the queue.
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
+    /// The heights of previous blocks that sent messages to the same recipients.
+    pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
@@ -949,6 +952,27 @@ where
                 .with_execution_context(ChainExecutionContext::Block)?;
         }
 
+        let recipients = messages
+            .iter()
+            .flatten()
+            .flat_map(|message| message.destination.recipient())
+            .collect::<BTreeSet<_>>();
+        let mut previous_message_blocks = BTreeMap::new();
+        for recipient in recipients {
+            if let Some(height) = self.previous_message_blocks.get(&recipient).await? {
+                let hash = self
+                    .confirmed_log
+                    .get(usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?)
+                    .await?
+                    .ok_or_else(|| {
+                        ChainError::InternalError("missing entry in confirmed_log".into())
+                    })?;
+                previous_message_blocks.insert(recipient, hash);
+            }
+            self.previous_message_blocks
+                .insert(&recipient, block.height)?;
+        }
+
         // Recompute the state hash.
         let state_hash = self.update_execution_state_hash().await?;
         // Last, reset the consensus state based on the current ownership.
@@ -963,6 +987,7 @@ where
         );
         let outcome = BlockExecutionOutcome {
             messages,
+            previous_message_blocks,
             state_hash,
             oracle_responses,
             events,

@@ -252,6 +252,10 @@ where
     .await
 }
 
+/// Creates a certificate with a transfer.
+///
+/// This does not work for blocks with ancestors that sent a message to the same recipient, unless
+/// the `previous_confirmed_block` also did.
 #[expect(clippy::too_many_arguments)]
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
@@ -340,9 +344,22 @@ where
         .take(block.operations.len())
         .collect();
     let state_hash = system_state.into_hash().await;
+    let previous_message_blocks = messages
+        .iter()
+        .flatten()
+        .flat_map(|message| message.destination.recipient())
+        .filter(|recipient| {
+            previous_confirmed_block
+                .iter()
+                .flat_map(|block| block.inner().block().body.messages.iter().flatten())
+                .any(|message| message.destination.recipient() == Some(*recipient))
+        })
+        .map(|recipient| (recipient, previous_confirmed_block.unwrap().hash()))
+        .collect();
     let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages,
+            previous_message_blocks,
             events,
             blobs,
             state_hash,
@@ -792,6 +809,7 @@ where
                         Amount::from_tokens(2),
                     )],
                 ],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new(); 2],
                 blobs: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
@@ -823,6 +841,7 @@ where
                     ChainId::root(2),
                     Amount::from_tokens(3),
                 )]],
+                previous_message_blocks: BTreeMap::from([(ChainId::root(2), certificate0.hash())]),
                 events: vec![Vec::new()],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
@@ -1059,6 +1078,7 @@ where
                         Vec::new(),
                         vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
                     ],
+                    previous_message_blocks: BTreeMap::new(),
                     events: vec![Vec::new(); 2],
                     blobs: vec![Vec::new(); 2],
                     state_hash: SystemExecutionState {
@@ -1348,6 +1368,7 @@ where
     let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
+            previous_message_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: state.into_hash().await,
@@ -2372,6 +2393,7 @@ where
                         application_permissions: Default::default(),
                     }),
                 )]],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new()],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
@@ -2441,6 +2463,7 @@ where
                     vec![],
                     vec![direct_credit_message(user_id, Amount::from_tokens(2))],
                 ],
+                previous_message_blocks: BTreeMap::from([(user_id, certificate0.hash())]),
                 events: vec![
                     vec![Event {
                         stream_id: event_id.stream_id.clone(),
@@ -2523,6 +2546,7 @@ where
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![Vec::new(); 3],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new(); 3],
                 blobs: vec![Vec::new(); 3],
                 state_hash: SystemExecutionState {
@@ -2653,6 +2677,7 @@ where
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new()],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
@@ -2687,6 +2712,7 @@ where
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![]],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![vec![Event {
                     stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
                     key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
@@ -2792,6 +2818,7 @@ where
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new()],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
@@ -2823,6 +2850,7 @@ where
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![]; 2],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![
                     vec![Event {
                         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
@@ -2898,6 +2926,7 @@ where
         Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![Vec::new()],
+                previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new()],
                 blobs: vec![Vec::new()],
                 state_hash: SystemExecutionState {
@@ -3944,6 +3973,7 @@ where
     let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![],
+            previous_message_blocks: BTreeMap::new(),
             events: vec![],
             blobs: vec![],
             state_hash: state.crypto_hash_mut().await?,

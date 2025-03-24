@@ -178,6 +178,7 @@ async fn get_chain(node: &str, chain_id: ChainId) -> Result<Chain> {
         channels_input: None,
         inboxes_input: None,
         outboxes_input: None,
+        previous_message_blocks_input: None,
     };
     let chain = request::<gql_service::Chain, _>(&client, node, variables)
         .await?
