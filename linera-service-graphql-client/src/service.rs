@@ -6,7 +6,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     identifiers::{
-        Account, AccountOwner, BlobId, ChainDescription, ChainId, ChannelName, Destination,
+        Account, AccountOwner, BlobId, ChainDescription, ChainId, Destination,
         GenericApplicationId, StreamName,
     },
 };

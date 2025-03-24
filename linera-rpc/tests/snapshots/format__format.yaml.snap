@@ -381,12 +381,6 @@ ChannelFullName:
         TYPENAME: ChannelName
 ChannelName:
   NEWTYPESTRUCT: BYTES
-ChannelSubscription:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - name:
-        TYPENAME: ChannelName
 Committee:
   STRUCT:
     - validators:
@@ -1085,20 +1079,6 @@ SystemMessage:
         NEWTYPE:
           TYPENAME: OpenChainConfig
     3:
-      Subscribe:
-        STRUCT:
-          - id:
-              TYPENAME: ChainId
-          - subscription:
-              TYPENAME: ChannelSubscription
-    4:
-      Unsubscribe:
-        STRUCT:
-          - id:
-              TYPENAME: ChainId
-          - subscription:
-              TYPENAME: ChannelSubscription
-    5:
       ApplicationCreated: UNIT
 SystemOperation:
   ENUM:

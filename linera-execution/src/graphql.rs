@@ -15,7 +15,7 @@ use linera_views::{context::Context, map_view::MapView};
 use crate::{
     committee::{Committee, Epoch, ValidatorState},
     system::{Recipient, UserData},
-    ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
+    ExecutionStateView, SystemExecutionStateView,
 };
 
 doc_scalar!(
@@ -71,11 +71,6 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     #[graphql(derived(name = "admin_id"))]
     async fn _admin_id(&self) -> &Option<ChainId> {
         self.admin_id.get()
-    }
-
-    #[graphql(derived(name = "subscription"))]
-    async fn _subscriptions(&self) -> Result<Vec<ChannelSubscription>, async_graphql::Error> {
-        Ok(self.subscriptions.indices().await?)
     }
 
     #[graphql(derived(name = "committees"))]

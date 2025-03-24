@@ -444,22 +444,10 @@ where
         let mut heights_by_recipient = BTreeMap::<_, BTreeMap<_, _>>::new();
         let mut targets = self.chain.outboxes.indices().await?;
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
-            let publishers = self
-                .chain
-                .execution_state
-                .system
-                .subscriptions
-                .indices()
-                .await?
-                .iter()
-                .map(|subscription| subscription.chain_id)
-                .collect::<HashSet<_>>();
             let tracked_chains = tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`");
-            targets.retain(|target| {
-                tracked_chains.contains(&target.recipient) || publishers.contains(&target.recipient)
-            });
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
@@ -544,20 +532,8 @@ where
         };
         let mut targets = self.chain.outboxes.indices().await?;
         {
-            let publishers = self
-                .chain
-                .execution_state
-                .system
-                .subscriptions
-                .indices()
-                .await?
-                .iter()
-                .map(|subscription| subscription.chain_id)
-                .collect::<HashSet<_>>();
             let tracked_chains = tracked_chains.read().unwrap();
-            targets.retain(|target| {
-                tracked_chains.contains(&target.recipient) || publishers.contains(&target.recipient)
-            });
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for outbox in outboxes {
