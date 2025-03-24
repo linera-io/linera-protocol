@@ -3580,7 +3580,7 @@ where
     assert_eq!(response.info.manager.current_round, Round::Fast);
     assert_eq!(response.info.manager.leader, None);
 
-    // AccountOwner 0 proposes another block. The validator votes to confirm.
+    // Owner 0 proposes another block. The validator votes to confirm.
     let block1 = make_child_block(&value0.clone());
     let proposal1 = block1
         .clone()
