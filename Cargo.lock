@@ -5238,9 +5238,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer"
-version = "4.4.0-linera.6"
+version = "4.4.0-linera.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0878cce565a3c8e3b7c786a33c6f682f35fea56c816aef2014d67537a9faad6"
+checksum = "d6652182476826343f0dd1e76a184ad34bcee57650a9c00c77574b993dd30529"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -5269,9 +5269,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler"
-version = "4.4.0-linera.6"
+version = "4.4.0-linera.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "149ce5d54f0353047349ccf1ac68b6571e8fda10c2082720fba4c83fc3277cdb"
+checksum = "a4781ce9fc4a892c9a9727f51ec92d19e1c5b54259da21573671aa49211ae80f"
 dependencies = [
  "backtrace",
  "bytes",
@@ -5300,9 +5300,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
-version = "4.4.0-linera.6"
+version = "4.4.0-linera.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "693854eb826bb380d8ef1fe168998bdbba66c707c4990ebd27e95d99821c617f"
+checksum = "8056c8bff8e1b5cafd21aac59b9009e93b30f35b7baab5592a6f4c7db120b490"
 dependencies = [
  "cranelift-codegen 0.91.1",
  "cranelift-entity 0.91.1",
@@ -5319,9 +5319,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
-version = "4.4.0-linera.6"
+version = "4.4.0-linera.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eeea457da007afc2adbb106ea6025d2563cef774f6cd26e9e2f1cd348c423f1a"
+checksum = "3635a86dd98e2c2fd6dd603054f40b8e379f84365a2238cc177d47547a83eebc"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -5338,9 +5338,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-vm"
-version = "4.4.0-linera.6"
+version = "4.4.0-linera.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c74dd9994ec47851c5166543ab4bb93457670024663192cb5753e01548acc15"
+checksum = "f27d020717572fdb6222324ec46b10eeb49f6f4a120ee63cf7145f4392f12fd8"
 dependencies = [
  "backtrace",
  "cc",
