@@ -22,6 +22,7 @@ fn test_signed_values() {
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
     let executed_block = BlockExecutionOutcome {
         messages: vec![Vec::new()],
+        previous_message_blocks: BTreeMap::new(),
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
@@ -84,6 +85,7 @@ fn test_hashes() {
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
     let executed_block = BlockExecutionOutcome {
         messages: vec![Vec::new()],
+        previous_message_blocks: BTreeMap::new(),
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
@@ -114,6 +116,7 @@ fn test_certificates() {
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);
     let executed_block = BlockExecutionOutcome {
         messages: vec![Vec::new()],
+        previous_message_blocks: BTreeMap::new(),
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],

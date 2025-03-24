@@ -94,6 +94,7 @@ query Chain(
   $inboxesInput: MapInput_Origin_742d451b,
   $outboxesInput: MapInput_Target_7aac1e1c,
   $channelsInput: MapInput_ChannelFullName_7b67e184,
+  $previousMessageBlocksInput: MapInput_ChainId_37f83aa9,
 ) {
   chain(chainId: $chainId) {
     chainId
@@ -196,6 +197,13 @@ query Chain(
       }
     }
     outboxCounters
+    previousMessageBlocks {
+      keys
+      entries(input: $previousMessageBlocksInput) {
+        key
+        value
+      }
+    }
     channels {
       keys
       entries(input: $channelsInput) {
@@ -237,6 +245,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           bundlesHash
           operationsHash
           messagesHash
+          previousMessageBlocksHash
           oracleResponsesHash
           eventsHash
           blobsHash
@@ -270,6 +279,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
             kind
             message
           }
+          previousMessageBlocks
           oracleResponses
           events {
             streamId {
@@ -304,6 +314,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           bundlesHash
           operationsHash
           messagesHash
+          previousMessageBlocksHash
           oracleResponsesHash
           eventsHash
           blobsHash
@@ -337,6 +348,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
             kind
             message
           }
+          previousMessageBlocks
           oracleResponses
           events {
             streamId {

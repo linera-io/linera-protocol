@@ -564,6 +564,14 @@ impl Destination {
     pub fn is_channel(&self) -> bool {
         matches!(self, Destination::Subscribers(_))
     }
+
+    /// Returns the recipient chain, or `None` if it is `Subscribers`.
+    pub fn recipient(&self) -> Option<ChainId> {
+        match self {
+            Destination::Recipient(chain_id) => Some(*chain_id),
+            Destination::Subscribers(_) => None,
+        }
+    }
 }
 
 impl From<ChainId> for Destination {

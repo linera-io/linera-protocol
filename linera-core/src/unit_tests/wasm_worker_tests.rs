@@ -10,7 +10,7 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use assert_matches::assert_matches;
 use linera_base::{
@@ -149,6 +149,7 @@ where
     let publish_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
+            previous_message_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: publisher_state_hash,
@@ -226,6 +227,7 @@ where
     let create_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![vec![]],
+            previous_message_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![vec![
@@ -297,6 +299,7 @@ where
     let run_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
+            previous_message_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,

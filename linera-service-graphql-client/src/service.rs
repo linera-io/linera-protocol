@@ -233,6 +233,7 @@ mod from {
                 state_hash,
                 bundles_hash,
                 messages_hash,
+                previous_message_blocks_hash,
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
@@ -242,6 +243,7 @@ mod from {
             let block::BlockBlockValueBlockBody {
                 incoming_bundles,
                 messages,
+                previous_message_blocks,
                 operations,
                 oracle_responses,
                 events,
@@ -259,6 +261,7 @@ mod from {
                 state_hash,
                 bundles_hash,
                 messages_hash,
+                previous_message_blocks_hash,
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
@@ -274,6 +277,7 @@ mod from {
                     .into_iter()
                     .map(|messages| messages.into_iter().map(Into::into).collect())
                     .collect::<Vec<Vec<_>>>(),
+                previous_message_blocks: serde_json::from_value(previous_message_blocks).unwrap(),
                 operations,
                 oracle_responses: oracle_responses.into_iter().map(Into::into).collect(),
                 events: events
