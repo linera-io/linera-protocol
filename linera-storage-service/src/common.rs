@@ -48,7 +48,7 @@ pub enum ServiceStoreError {
 
     /// gRPC error
     #[error(transparent)]
-    GrpcError(#[from] Status),
+    GrpcError(#[from] Box<Status>),
 
     /// The key size must be at most 1 MB
     #[error("The key size must be at most 1 MB")]
@@ -65,6 +65,12 @@ pub enum ServiceStoreError {
     /// An error occurred during BCS serialization
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
+}
+
+impl From<Status> for ServiceStoreError {
+    fn from(error: Status) -> Self {
+        Box::new(error).into()
+    }
 }
 
 impl KeyValueStoreError for ServiceStoreError {
