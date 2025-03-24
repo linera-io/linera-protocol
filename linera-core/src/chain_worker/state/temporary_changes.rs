@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ApplicationDescription, ArithmeticError, Blob, Timestamp},
     ensure,
-    identifiers::{AccountOwner, ApplicationId, ChannelFullName, GenericApplicationId},
+    identifiers::{AccountOwner, ApplicationId, ChannelFullName},
 };
 use linera_chain::{
     data_types::{
@@ -308,7 +308,7 @@ where
             let subscriptions = &chain.execution_state.system.subscriptions;
             for (origin, inbox) in pairs {
                 if let Medium::Channel(ChannelFullName {
-                    application_id: GenericApplicationId::System,
+                    application_id: AccountOwner::CHAIN,
                     name,
                 }) = &origin.medium
                 {

@@ -566,11 +566,6 @@ type ExecutionStateView {
 }
 
 
-"""
-A unique identifier for a user application or for the system application
-"""
-scalar GenericApplicationId
-
 type HashedConfirmedBlock {
 	hash: CryptoHash!
 	value: ConfirmedBlock!
@@ -1203,7 +1198,7 @@ type StreamId {
 	"""
 	The application that can add events to this stream.
 	"""
-	applicationId: GenericApplicationId!
+	applicationId: AccountOwner!
 	"""
 	The name of this stream: an application can have multiple streams with different names.
 	"""

@@ -34,8 +34,8 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
-        ModuleId, StreamId,
+        AccountOwner, ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, ModuleId,
+        StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -765,11 +765,13 @@ impl ApplicationPermissions {
     }
 
     /// Returns whether operations with the given application ID are allowed on this chain.
-    pub fn can_execute_operations(&self, app_id: &GenericApplicationId) -> bool {
+    pub fn can_execute_operations(&self, app_id: &AccountOwner) -> bool {
         match (app_id, &self.execute_operations) {
             (_, None) => true,
-            (GenericApplicationId::System, Some(_)) => false,
-            (GenericApplicationId::User(app_id), Some(app_ids)) => app_ids.contains(app_id),
+            (AccountOwner::Reserved(_), Some(_)) => false,
+            (AccountOwner::Address32(app_id), Some(app_ids)) => {
+                app_ids.iter().any(|app| app.id() == *app_id)
+            }
         }
     }
 
