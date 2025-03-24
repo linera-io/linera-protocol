@@ -608,7 +608,7 @@ where
         origin: Origin,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<(BlockHeight, NetworkActions)>, WorkerError> {
+    ) -> Result<Option<BlockHeight>, WorkerError> {
         self.query_chain_worker(recipient, move |callback| {
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
@@ -988,11 +988,10 @@ where
                 let mut actions = NetworkActions::default();
                 for (medium, bundles) in bundle_vecs {
                     let origin = Origin { sender, medium };
-                    if let Some((height, new_actions)) = self
+                    if let Some(height) = self
                         .process_cross_chain_update(origin.clone(), recipient, bundles)
                         .await?
                     {
-                        actions.extend(new_actions);
                         height_by_origin.push((origin, height));
                     }
                 }

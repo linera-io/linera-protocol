@@ -20,7 +20,8 @@ use linera_base::{
     hashed::Hashed,
     hex_debug,
     identifiers::{
-        Account, AccountOwner, BlobId, ChainId, ChannelFullName, Destination, MessageId,
+        Account, AccountOwner, BlobId, ChainId, ChannelFullName, Destination, GenericApplicationId,
+        MessageId,
     },
 };
 use linera_execution::{
@@ -330,7 +331,10 @@ impl OutgoingMessageExt for OutgoingMessage {
                     application_id,
                     name,
                 }),
-            ) => *application_id == self.message.application_id() && name == dest_name,
+            ) => {
+                GenericApplicationId::User(*application_id) == self.message.application_id()
+                    && name == dest_name
+            }
         }
     }
 

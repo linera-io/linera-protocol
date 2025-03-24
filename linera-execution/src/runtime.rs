@@ -1200,7 +1200,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn subscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application_id = this.current_application().id;
-        let full_name = ChannelFullName::user(name, application_id);
+        let full_name = ChannelFullName::new(name, application_id);
         this.transaction_tracker.subscribe(full_name, chain);
 
         Ok(())
@@ -1209,7 +1209,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn unsubscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application_id = this.current_application().id;
-        let full_name = ChannelFullName::user(name, application_id);
+        let full_name = ChannelFullName::new(name, application_id);
         this.transaction_tracker.unsubscribe(full_name, chain);
 
         Ok(())

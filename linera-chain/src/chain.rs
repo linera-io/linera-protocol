@@ -18,7 +18,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        AccountOwner, ApplicationId, BlobType, ChainId, ChannelFullName, Destination, MessageId,
+        AccountOwner, ApplicationId, BlobType, ChainId, ChannelFullName, Destination,
+        GenericApplicationId, MessageId,
     },
     ownership::ChainOwnership,
 };
@@ -506,7 +507,7 @@ where
         bundle: MessageBundle,
         local_time: Timestamp,
         add_to_received_log: bool,
-    ) -> Result<bool, ChainError> {
+    ) -> Result<(), ChainError> {
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
@@ -517,8 +518,6 @@ where
             chain_id: origin.sender,
             height: bundle.height,
         };
-        let mut subscribe_names_and_ids = Vec::new();
-        let mut unsubscribe_names_and_ids = Vec::new();
 
         // Handle immediate messages.
         for posted_message in &bundle.messages {
@@ -528,17 +527,8 @@ where
                     self.execute_init_message(message_id, config, bundle.timestamp, local_time)
                         .await?;
                 }
-            } else if let Some((id, subscription)) = posted_message.message.matches_subscribe() {
-                let name = ChannelFullName::system(subscription.name.clone());
-                subscribe_names_and_ids.push((name, *id));
-            }
-            if let Some((id, subscription)) = posted_message.message.matches_unsubscribe() {
-                let name = ChannelFullName::system(subscription.name.clone());
-                unsubscribe_names_and_ids.push((name, *id));
             }
         }
-        self.process_unsubscribes(unsubscribe_names_and_ids).await?;
-        let new_outbox_entries = self.process_subscribes(subscribe_names_and_ids).await?;
 
         if bundle.goes_to_inbox() {
             // Process the inbox bundle and update the inbox state.
@@ -569,7 +559,7 @@ where
         if add_to_received_log {
             self.received_log.push(chain_and_height);
         }
-        Ok(new_outbox_entries)
+        Ok(())
     }
 
     /// Updates the `received_log` trackers.
@@ -1167,8 +1157,15 @@ where
                         message.grant == Amount::ZERO,
                         ChainError::GrantUseOnBroadcast
                     );
+                    let GenericApplicationId::User(application_id) =
+                        message.message.application_id()
+                    else {
+                        return Err(ChainError::InternalError(
+                            "System messages cannot be sent to channels".to_string(),
+                        ));
+                    };
                     channel_broadcasts.insert(ChannelFullName {
-                        application_id: message.message.application_id(),
+                        application_id,
                         name: name.clone(),
                     });
                 }

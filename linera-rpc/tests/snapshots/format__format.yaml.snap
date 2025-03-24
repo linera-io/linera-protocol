@@ -364,7 +364,7 @@ ChainOwnership:
 ChannelFullName:
   STRUCT:
     - application_id:
-        TYPENAME: GenericApplicationId
+        TYPENAME: ApplicationId
     - name:
         TYPENAME: ChannelName
 ChannelName:

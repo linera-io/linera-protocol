@@ -8,16 +8,16 @@ use std::collections::HashMap;
 use linera_base::{
     data_types::{ApplicationDescription, ArithmeticError, Blob, Timestamp},
     ensure,
-    identifiers::{AccountOwner, ApplicationId, ChannelFullName, GenericApplicationId},
+    identifiers::{AccountOwner, ApplicationId},
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ExecutedBlock, IncomingBundle, Medium, MessageAction,
+        BlockExecutionOutcome, BlockProposal, ExecutedBlock, IncomingBundle, MessageAction,
         ProposalContent, ProposedBlock,
     },
     manager,
 };
-use linera_execution::{ChannelSubscription, Query, QueryOutcome};
+use linera_execution::{Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{View, ViewError};
 #[cfg(with_testing)]
@@ -305,21 +305,7 @@ where
             } else {
                 MessageAction::Accept
             };
-            let subscriptions = &chain.execution_state.system.subscriptions;
             for (origin, inbox) in pairs {
-                if let Medium::Channel(ChannelFullName {
-                    application_id: GenericApplicationId::System,
-                    name,
-                }) = &origin.medium
-                {
-                    let subscription = ChannelSubscription {
-                        chain_id: origin.sender,
-                        name: name.clone(),
-                    };
-                    if !subscriptions.contains(&subscription).await? {
-                        continue; // We are not subscribed to this channel.
-                    }
-                }
                 for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
                         origin: origin.clone(),
