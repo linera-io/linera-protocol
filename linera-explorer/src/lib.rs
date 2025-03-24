@@ -312,7 +312,7 @@ async fn applications(node: &str, chain_id: ChainId) -> Result<(Page, String)> {
     ))
 }
 
-/// Returns the applications page.
+/// Returns the operations page.
 async fn operations(indexer: &str, chain_id: ChainId) -> Result<(Page, String)> {
     let operations = get_operations(indexer, chain_id).await?;
     Ok((
