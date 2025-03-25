@@ -28,7 +28,7 @@ defineProps<{blocks: HashedConfirmedBlock[]}>()
             <a @click="$root.route('block', [['block', b.hash]])" class="btn btn-link">{{ short_hash(b.hash) }}</a>
           </td>
           <td>{{ (new Date(b.value.block.header.timestamp/1000)).toLocaleString() }}</td>
-          <td :title="b.value.block.header.authenticatedSigner">{{ short_hash(b.value.block.header.authenticatedSigner) }}</td>
+          <td :title="b.value.block.header.authenticatedSigner">{{ b.value.block.header.authenticatedSigner }}</td>
           <td>{{ b.value.status }}</td>
           <td>{{ b.value.block.body.incomingBundles.length }}</td>
           <td>{{ b.value.block.body.messages.length }}</td>
