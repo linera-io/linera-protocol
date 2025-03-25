@@ -10,6 +10,7 @@ use linera_base::{
         GenericApplicationId, StreamName,
     },
 };
+use thiserror::Error;
 
 pub type JSONObject = serde_json::Value;
 
@@ -131,6 +132,14 @@ pub struct Notifications;
 )]
 pub struct Transfer;
 
+#[derive(Error, Debug)]
+pub enum ConversionError {
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error("Unexpected certificate type: {0}")]
+    UnexpectedCertificateType(String),
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
     use linera_base::{data_types::Event, hashed::Hashed, identifiers::StreamId};
@@ -220,8 +229,10 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueBlock> for ExecutedBlock {
-        fn from(val: block::BlockBlockValueBlock) -> Self {
+    impl TryFrom<block::BlockBlockValueBlock> for ExecutedBlock {
+        type Error = serde_json::Error;
+
+        fn try_from(val: block::BlockBlockValueBlock) -> Result<Self, Self::Error> {
             let block::BlockBlockValueBlock { header, body } = val;
             let block::BlockBlockValueBlockHeader {
                 chain_id,
@@ -277,7 +288,7 @@ mod from {
                     .into_iter()
                     .map(|messages| messages.into_iter().map(Into::into).collect())
                     .collect::<Vec<Vec<_>>>(),
-                previous_message_blocks: serde_json::from_value(previous_message_blocks).unwrap(),
+                previous_message_blocks: serde_json::from_value(previous_message_blocks)?,
                 operations,
                 oracle_responses: oracle_responses.into_iter().map(Into::into).collect(),
                 events: events
@@ -291,11 +302,11 @@ mod from {
                 operation_results,
             };
 
-            Block {
+            Ok(Block {
                 header: block_header,
                 body: block_body,
             }
-            .into()
+            .into())
         }
     }
 
@@ -319,11 +330,12 @@ mod from {
     }
 
     impl TryFrom<block::BlockBlock> for Hashed<ConfirmedBlock> {
-        type Error = String;
+        type Error = ConversionError;
+
         fn try_from(val: block::BlockBlock) -> Result<Self, Self::Error> {
             match (val.value.status.as_str(), val.value.block) {
-                ("confirmed", block) => Ok(Hashed::new(ConfirmedBlock::new(block.into()))),
-                _ => Err(val.value.status),
+                ("confirmed", block) => Ok(Hashed::new(ConfirmedBlock::new(block.try_into()?))),
+                _ => Err(ConversionError::UnexpectedCertificateType(val.value.status)),
             }
         }
     }

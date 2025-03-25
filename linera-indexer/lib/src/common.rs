@@ -38,8 +38,8 @@ pub enum IndexerError {
     UnknownPlugin(String),
     #[error("Plugin not loaded: {0}")]
     UnloadedPlugin(String),
-    #[error("Unknown certificate status: {0:?}")]
-    UnknownCertificateStatus(String),
+    #[error(transparent)]
+    ConversionError(linera_service_graphql_client::ConversionError),
     #[error("Different plugins in command line and memory")]
     WrongPlugins,
     #[error("Plugin is already registered")]
