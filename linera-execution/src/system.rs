@@ -310,6 +310,7 @@ where
         &mut self,
         context: OperationContext,
         operation: SystemOperation,
+        blob_sizes: &BTreeMap<BlobId, usize>,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<Option<(ApplicationId, Vec<u8>)>, ExecutionError> {
@@ -407,14 +408,19 @@ where
                 }
             }
             PublishModule { module_id } => {
-                self.blob_published(&BlobId::new(
-                    module_id.contract_blob_hash,
-                    BlobType::ContractBytecode,
-                ))?;
-                self.blob_published(&BlobId::new(
-                    module_id.service_blob_hash,
-                    BlobType::ServiceBytecode,
-                ))?;
+                let blob_ids = module_id.bytecode_blob_ids();
+                {
+                    let mut controller = resource_controller.with_state(self).await?;
+                    for blob_id in blob_ids {
+                        let size = *blob_sizes
+                            .get(&blob_id)
+                            .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
+                        controller.track_blob_published(size)?;
+                    }
+                }
+                for blob_id in blob_ids {
+                    self.blob_published(&blob_id)?;
+                }
             }
             CreateApplication {
                 module_id,
@@ -440,7 +446,15 @@ where
                 new_application = Some((app_id, instantiation_argument));
             }
             PublishDataBlob { blob_hash } => {
-                self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
+                let blob_id = BlobId::new(blob_hash, BlobType::Data);
+                let size = *blob_sizes
+                    .get(&blob_id)
+                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
+                resource_controller
+                    .with_state(self)
+                    .await?
+                    .track_blob_published(size)?;
+                self.blob_published(&blob_id)?;
             }
             ReadBlob { blob_id } => {
                 let content = self.read_blob_content(blob_id).await?;
@@ -918,28 +932,13 @@ where
         &mut self,
         module_id: &ModuleId,
     ) -> Result<(BlobId, BlobId), ExecutionError> {
-        let contract_bytecode_blob_id =
-            BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode);
+        let blob_ids = module_id.bytecode_blob_ids();
 
         let mut missing_blobs = Vec::new();
-        if !self
-            .context()
-            .extra()
-            .contains_blob(contract_bytecode_blob_id)
-            .await?
-        {
-            missing_blobs.push(contract_bytecode_blob_id);
-        }
-
-        let service_bytecode_blob_id =
-            BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode);
-        if !self
-            .context()
-            .extra()
-            .contains_blob(service_bytecode_blob_id)
-            .await?
-        {
-            missing_blobs.push(service_bytecode_blob_id);
+        for blob_id in blob_ids {
+            if !self.context().extra().contains_blob(blob_id).await? {
+                missing_blobs.push(blob_id);
+            }
         }
 
         ensure!(
@@ -947,6 +946,6 @@ where
             ExecutionError::BlobsNotFound(missing_blobs)
         );
 
-        Ok((contract_bytecode_blob_id, service_bytecode_blob_id))
+        Ok((blob_ids[0], blob_ids[1]))
     }
 }

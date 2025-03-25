@@ -7,7 +7,7 @@ use std::{sync::Arc, time::Duration};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, BlobContent},
+    data_types::{Amount, ArithmeticError},
     ensure,
     identifiers::AccountOwner,
 };
@@ -292,9 +292,8 @@ where
     }
 
     /// Tracks a number of blob bytes published.
-    pub fn track_blob_published(&mut self, content: &BlobContent) -> Result<(), ExecutionError> {
-        self.policy.check_blob_size(content)?;
-        let size = content.bytes().len() as u64;
+    pub fn track_blob_published(&mut self, size: usize) -> Result<(), ExecutionError> {
+        let size = size as u64;
         {
             let tracker = self.tracker.as_mut();
             tracker.blob_bytes_published = tracker

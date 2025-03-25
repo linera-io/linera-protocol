@@ -79,6 +79,7 @@ async fn application_message_index() -> anyhow::Result<()> {
         .execute_operation(
             context,
             operation,
+            &BTreeMap::new(),
             &mut txn_tracker,
             &mut ResourceController::default(),
         )
@@ -112,6 +113,7 @@ async fn open_chain_message_index() {
         .execute_operation(
             context,
             operation,
+            &BTreeMap::new(),
             &mut txn_tracker,
             &mut ResourceController::default(),
         )

@@ -20,7 +20,7 @@ use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, Bytecode, Event, OracleResponse},
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, StreamId, StreamName},
+    identifiers::{AccountOwner, ApplicationId, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -895,10 +895,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
     let mut blobs = publisher
         .storage_client()
-        .read_blobs(&[
-            BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
-            BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
-        ])
+        .read_blobs(&module_id.bytecode_blob_ids())
         .await?
         .into_iter()
         .flatten();

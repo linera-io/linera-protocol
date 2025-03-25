@@ -3,6 +3,8 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
+use std::collections::BTreeMap;
+
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
@@ -48,6 +50,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         context,
         Timestamp::from(0),
         Operation::system(operation),
+        &BTreeMap::new(),
         &mut txn_tracker,
         &mut controller,
     )
