@@ -6,7 +6,7 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, AccountOwner, BlobType, ChainId, Destination},
+    identifiers::{Account, AccountOwner, BlobType, Destination},
 };
 use linera_views::{
     context::Context,
@@ -67,6 +67,7 @@ where
         service_blob: Blob,
     ) -> Result<(), ExecutionError> {
         let chain_id = application_description.creator_chain_id;
+        assert_eq!(chain_id, self.context().extra().chain_id);
         let context = OperationContext {
             chain_id,
             authenticated_signer: None,
@@ -116,7 +117,6 @@ where
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
         self.run_user_action(
             application_id,
-            chain_id,
             action,
             context.refund_grant_to(),
             None,
@@ -167,11 +167,9 @@ where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    #[expect(clippy::too_many_arguments)]
     async fn run_user_action(
         &mut self,
         application_id: ApplicationId,
-        chain_id: ChainId,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
@@ -181,7 +179,6 @@ where
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(
             application_id,
-            chain_id,
             action,
             refund_grant_to,
             grant,
@@ -191,17 +188,16 @@ where
         .await
     }
 
-    #[expect(clippy::too_many_arguments)]
     async fn run_user_action_with_runtime(
         &mut self,
         application_id: ApplicationId,
-        chain_id: ChainId,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
+        let chain_id = self.context().extra().chain_id();
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
             .with_state_and_grant(&mut self.system, cloned_grant.as_mut())
@@ -272,7 +268,6 @@ where
                     let user_action = UserAction::Instantiate(context, argument);
                     self.run_user_action(
                         application_id,
-                        context.chain_id,
                         user_action,
                         context.refund_grant_to(),
                         None,
@@ -288,7 +283,6 @@ where
             } => {
                 self.run_user_action(
                     application_id,
-                    context.chain_id,
                     UserAction::Operation(context, bytes),
                     context.refund_grant_to(),
                     None,
@@ -321,7 +315,6 @@ where
             } => {
                 self.run_user_action(
                     application_id,
-                    context.chain_id,
                     UserAction::Message(context, bytes),
                     context.refund_grant_to,
                     grant,
