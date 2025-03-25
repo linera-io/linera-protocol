@@ -268,7 +268,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     namespace,
                 });
             }
-            if parts.len() == 3 {
+            if parts.len() == 2 || parts.len() == 3 {
                 let path = parts[0].to_string().into();
                 let spawn_mode = match parts[1] {
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
@@ -279,14 +279,20 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                         parts[1]
                     ))),
                 }?;
-                let namespace = parts[2].to_string();
+                let namespace = if parts.len() == 2 {
+                    DEFAULT_NAMESPACE.to_string()
+                } else {
+                    parts[2].to_string()
+                };
                 let storage_config = StorageConfig::RocksDb { path, spawn_mode };
                 return Ok(StorageConfigNamespace {
                     storage_config,
                     namespace,
                 });
             }
-            return Err(Error::Format("We should have one or three parts".into()));
+            return Err(Error::Format(
+                "We should have one, two or three parts".into(),
+            ));
         }
         #[cfg(feature = "dynamodb")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
@@ -958,16 +964,6 @@ fn test_shared_store_config_from_str() {
 #[cfg(feature = "rocksdb")]
 #[test]
 fn test_rocks_db_storage_config_from_str() {
-    assert_eq!(
-        StorageConfigNamespace::from_str("rocksdb:foo.db:block_in_place:chosen_namespace").unwrap(),
-        StorageConfigNamespace {
-            storage_config: StorageConfig::RocksDb {
-                path: "foo.db".into(),
-                spawn_mode: RocksDbSpawnMode::BlockInPlace,
-            },
-            namespace: "chosen_namespace".into()
-        }
-    );
     assert!(StorageConfigNamespace::from_str("rocksdb_foo.db").is_err());
     assert_eq!(
         StorageConfigNamespace::from_str("rocksdb:foo.db").unwrap(),
@@ -977,6 +973,26 @@ fn test_rocks_db_storage_config_from_str() {
                 spawn_mode: RocksDbSpawnMode::SpawnBlocking,
             },
             namespace: DEFAULT_NAMESPACE.to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str("rocksdb:foo.db:block_in_place").unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::RocksDb {
+                path: "foo.db".into(),
+                spawn_mode: RocksDbSpawnMode::BlockInPlace,
+            },
+            namespace: DEFAULT_NAMESPACE.to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str("rocksdb:foo.db:block_in_place:chosen_namespace").unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::RocksDb {
+                path: "foo.db".into(),
+                spawn_mode: RocksDbSpawnMode::BlockInPlace,
+            },
+            namespace: "chosen_namespace".into()
         }
     );
 }
