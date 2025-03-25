@@ -13,7 +13,7 @@ use std::{
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, Timestamp},
+    data_types::BlockHeight,
     identifiers::{ApplicationId, ChainDescription},
 };
 use linera_views::batch::Batch;
@@ -186,7 +186,7 @@ fn create_runtime<Application>() -> (
         None,
         None,
         resource_controller,
-        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new())),
+        TransactionTracker::new_replaying(Vec::new()),
     );
 
     (runtime, execution_state_receiver)

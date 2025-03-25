@@ -43,7 +43,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_caller_id: None,
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
     view.execute_operation(
         context,
         Operation::system(operation),
@@ -83,7 +83,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         refund_grant_to: None,
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
     view.execute_message(
         context,
         Message::System(message),

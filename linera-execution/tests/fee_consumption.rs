@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
-    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse},
     http,
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId},
 };
@@ -283,8 +283,7 @@ async fn test_fee_consumption(
         message_id: MessageId::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let mut txn_tracker =
-        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses));
+    let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
     view.execute_message(
         context,
         Message::User {

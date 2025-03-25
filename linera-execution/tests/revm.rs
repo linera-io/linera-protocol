@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
-    data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -111,17 +111,11 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         account: None,
     };
     for increment in &increments {
-        let mut txn_tracker = TransactionTracker::new(
-            Timestamp::from(0),
-            0,
-            0,
-            0,
-            Some(vec![
-                OracleResponse::Blob(app_desc_blob_id),
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-            ]),
-        );
+        let mut txn_tracker = TransactionTracker::new_replaying_blobs([
+            app_desc_blob_id,
+            contract_blob_id,
+            service_blob_id,
+        ]);
         value += increment;
         let operation = incrementCall { input: *increment };
         let bytes = operation.abi_encode();

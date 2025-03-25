@@ -232,3 +232,28 @@ impl TransactionTracker {
         })
     }
 }
+
+#[cfg(with_testing)]
+impl TransactionTracker {
+    /// Creates a new [`TransactionTracker`] for testing, with default values and the given
+    /// oracle responses.
+    pub fn new_replaying(oracle_responses: Vec<OracleResponse>) -> Self {
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses))
+    }
+
+    /// Creates a new [`TransactionTracker`] for testing, with default values and oracle responses
+    /// for the given blobs.
+    pub fn new_replaying_blobs<T>(blob_ids: T) -> Self
+    where
+        T: IntoIterator,
+        T::Item: std::borrow::Borrow<BlobId>,
+    {
+        use std::borrow::Borrow;
+
+        let oracle_responses = blob_ids
+            .into_iter()
+            .map(|blob_id| OracleResponse::Blob(*blob_id.borrow()))
+            .collect();
+        TransactionTracker::new_replaying(oracle_responses)
+    }
+}

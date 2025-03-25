@@ -9,8 +9,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, OracleResponse, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, Blob, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId},
     ownership::ChainOwnership,
@@ -56,17 +55,11 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: *app_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0),
-                0,
-                0,
-                0,
-                Some(vec![
-                    OracleResponse::Blob(app_desc_blob_id),
-                    OracleResponse::Blob(contract_blob_id),
-                    OracleResponse::Blob(service_blob_id),
-                ]),
-            ),
+            &mut TransactionTracker::new_replaying_blobs([
+                app_desc_blob_id,
+                contract_blob_id,
+                service_blob_id,
+            ]),
             &mut controller,
         )
         .await;
@@ -149,15 +142,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ..create_dummy_operation_context()
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(
-            caller_blobs.iter().chain(target_blobs.iter()),
-        )),
-    );
+    let mut txn_tracker =
+        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
     view.execute_operation(
         context,
         Operation::User {
@@ -300,15 +286,8 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(
-            caller_blobs.iter().chain(target_blobs.iter()),
-        )),
-    );
+    let mut txn_tracker =
+        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
     view.execute_operation(
         context,
         Operation::User {
@@ -383,15 +362,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0),
-                0,
-                0,
-                0,
-                Some(blob_oracle_responses(
-                    caller_blobs.iter().chain(target_blobs.iter()),
-                )),
-            ),
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
         )
         .await;
@@ -428,13 +399,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
                 application_id: id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0),
-                0,
-                0,
-                0,
-                Some(blob_oracle_responses(blobs.iter())),
-            ),
+            &mut TransactionTracker::new_replaying_blobs(blobs),
             &mut controller,
         )
         .await;
@@ -497,18 +462,12 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
                 application_id: first_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0),
-                0,
-                0,
-                0,
-                Some(blob_oracle_responses(
-                    first_app_blobs
-                        .iter()
-                        .chain(second_app_blobs.iter())
-                        .chain(third_app_blobs.iter())
-                        .chain(fourth_app_blobs.iter()),
-                )),
+            &mut TransactionTracker::new_replaying_blobs(
+                first_app_blobs
+                    .iter()
+                    .chain(&second_app_blobs)
+                    .chain(&third_app_blobs)
+                    .chain(&fourth_app_blobs),
             ),
             &mut controller,
         )
@@ -629,18 +588,12 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(
-            first_app_blobs
-                .iter()
-                .chain(second_app_blobs.iter())
-                .chain(third_app_blobs.iter())
-                .chain(fourth_app_blobs.iter()),
-        )),
+    let mut txn_tracker = TransactionTracker::new_replaying_blobs(
+        first_app_blobs
+            .iter()
+            .chain(&second_app_blobs)
+            .chain(&third_app_blobs)
+            .chain(&fourth_app_blobs),
     );
     view.execute_operation(
         context,
@@ -698,15 +651,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0),
-                0,
-                0,
-                0,
-                Some(blob_oracle_responses(
-                    caller_blobs.iter().chain(target_blobs.iter()),
-                )),
-            ),
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
         )
         .await;
@@ -760,15 +705,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0),
-                0,
-                0,
-                0,
-                Some(blob_oracle_responses(
-                    caller_blobs.iter().chain(target_blobs.iter()),
-                )),
-            ),
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
         )
         .await;
@@ -821,15 +758,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0),
-                0,
-                0,
-                0,
-                Some(blob_oracle_responses(
-                    caller_blobs.iter().chain(target_blobs.iter()),
-                )),
-            ),
+            &mut TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs)),
             &mut controller,
         )
         .await;
@@ -880,11 +809,9 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(
-                Timestamp::from(0), 0, 0, 0, Some(blob_oracle_responses(caller_blobs
-                    .iter()
-                    .chain(target_blobs.iter())))
-                ),
+            &mut TransactionTracker::new_replaying_blobs(
+                caller_blobs.iter().chain(&target_blobs)
+            ),
             &mut controller,
         )
         .await,
@@ -931,13 +858,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(blobs.iter())),
-    );
+    let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
     view.execute_operation(
         context,
         Operation::User {
@@ -1007,15 +928,8 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(
-            caller_blobs.iter().chain(target_blobs.iter()),
-        )),
-    );
+    let mut txn_tracker =
+        TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
     view.execute_operation(
         context,
         Operation::User {
@@ -1093,17 +1007,11 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(
-            caller_blobs
-                .iter()
-                .chain(middle_blobs.iter())
-                .chain(target_blobs.iter()),
-        )),
+    let mut txn_tracker = TransactionTracker::new_replaying_blobs(
+        caller_blobs
+            .iter()
+            .chain(&middle_blobs)
+            .chain(&target_blobs),
     );
     view.execute_operation(
         context,
@@ -1211,17 +1119,11 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     // Execute the operation, starting the test scenario
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(
-            caller_blobs
-                .iter()
-                .chain(silent_blobs.iter())
-                .chain(sending_blobs.iter()),
-        )),
+    let mut txn_tracker = TransactionTracker::new_replaying_blobs(
+        caller_blobs
+            .iter()
+            .chain(&silent_blobs)
+            .chain(&sending_blobs),
     );
     view.execute_operation(
         context,
@@ -1407,13 +1309,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     view.execute_operation(
         context,
         operation,
-        &mut TransactionTracker::new(
-            Timestamp::from(0),
-            0,
-            0,
-            0,
-            Some(blob_oracle_responses(blobs.iter())),
-        ),
+        &mut TransactionTracker::new_replaying_blobs(blobs),
         &mut controller,
     )
     .await?;
@@ -1425,7 +1321,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     view.execute_operation(
         context,
         operation.into(),
-        &mut TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new())),
+        &mut TransactionTracker::new_replaying(Vec::new()),
         &mut controller,
     )
     .await?;
@@ -1445,7 +1341,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     view.execute_operation(
         context,
         operation,
-        &mut TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new())),
+        &mut TransactionTracker::new_replaying(Vec::new()),
         &mut controller,
     )
     .await?;
@@ -1520,13 +1416,7 @@ async fn test_message_receipt_spending_chain_balance(
 
     let context = create_dummy_message_context(authenticated_signer);
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(
-        Timestamp::from(0),
-        0,
-        0,
-        0,
-        Some(blob_oracle_responses(blobs.iter())),
-    );
+    let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
 
     let execution_result = view
         .execute_message(
