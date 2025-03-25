@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet},
     iter::IntoIterator,
 };
 
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash, CryptoRng},
+    crypto::{AccountPublicKey, CryptoHash, CryptoRng, Signer},
     data_types::{BlockHeight, Timestamp},
     ensure,
     identifiers::{AccountOwner, ChainDescription, ChainId},
@@ -25,7 +25,8 @@ use crate::{config::GenesisConfig, error, Error};
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
     pub chains: BTreeMap<ChainId, UserChain>,
-    pub unassigned_key_pairs: HashMap<AccountOwner, AccountSecretKey>,
+    pub signer: Box<dyn Signer>,
+    pub unassigned_keys: BTreeSet<AccountOwner>,
     pub default: Option<ChainId>,
     pub genesis_config: GenesisConfig,
     pub testing_prng_seed: Option<u64>,
@@ -46,10 +47,15 @@ impl Extend<UserChain> for Wallet {
 }
 
 impl Wallet {
-    pub fn new(genesis_config: GenesisConfig, testing_prng_seed: Option<u64>) -> Self {
+    pub fn new(
+        genesis_config: GenesisConfig,
+        testing_prng_seed: Option<u64>,
+        signer: Box<dyn Signer>,
+    ) -> Self {
         Wallet {
             chains: BTreeMap::new(),
-            unassigned_key_pairs: HashMap::new(),
+            signer,
+            unassigned_keys: BTreeSet::new(),
             default: None,
             genesis_config,
             testing_prng_seed,
@@ -68,15 +74,28 @@ impl Wallet {
         self.chains.insert(chain.chain_id, chain);
     }
 
-    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<AccountSecretKey, Error> {
+    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<(), Error> {
         let chain = self
             .chains
             .get_mut(chain_id)
             .ok_or(error::Inner::NonexistentChain(*chain_id))?;
-        chain
-            .key_pair
+
+        let owner = chain
+            .owner
             .take()
-            .ok_or(error::Inner::NonexistentKeypair(*chain_id).into())
+            .ok_or(error::Inner::NonexistentKeypair(*chain_id))?;
+
+        if !chain
+            .signer
+            .as_mut()
+            .take()
+            .ok_or(error::Inner::NonexistentKeypair(*chain_id))?
+            .remove(&owner)
+        {
+            return Err(error::Inner::NonexistentKeypair(*chain_id).into());
+        }
+
+        Ok(())
     }
 
     pub fn forget_chain(&mut self, chain_id: &ChainId) -> Result<UserChain, Error> {
@@ -97,7 +116,7 @@ impl Wallet {
     pub fn owned_chain_ids(&self) -> Vec<ChainId> {
         self.chains
             .iter()
-            .filter_map(|(chain_id, chain)| chain.key_pair.is_some().then_some(*chain_id))
+            .filter_map(|(chain_id, chain)| chain.owner.is_some().then_some(*chain_id))
             .collect()
     }
 
@@ -113,24 +132,8 @@ impl Wallet {
         self.chains.values_mut()
     }
 
-    pub fn add_unassigned_key_pair(&mut self, key_pair: AccountSecretKey) {
-        let owner = key_pair.public().into();
-        self.unassigned_key_pairs.insert(owner, key_pair);
-    }
-
-    pub fn key_pair_for_owner(&self, owner: &AccountOwner) -> Option<AccountSecretKey> {
-        if let Some(key_pair) = self
-            .unassigned_key_pairs
-            .get(owner)
-            .map(|key_pair| key_pair.copy())
-        {
-            return Some(key_pair);
-        }
-        self.chains
-            .values()
-            .filter_map(|user_chain| user_chain.key_pair.as_ref())
-            .find(|key_pair| AccountOwner::from(key_pair.public()) == *owner)
-            .map(|key_pair| key_pair.copy())
+    pub fn add_unassigned_key_pair(&mut self, public_key: AccountPublicKey) {
+        self.unassigned_keys.insert(AccountOwner::from(public_key));
     }
 
     pub fn assign_new_chain_to_owner(
@@ -139,13 +142,13 @@ impl Wallet {
         chain_id: ChainId,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        let key_pair = self
-            .unassigned_key_pairs
-            .remove(&owner)
-            .ok_or(error::Inner::NonexistentKeypair(chain_id))?;
+        if !self.unassigned_keys.remove(&owner) {
+            return Err(error::Inner::NonexistentKeypair(chain_id).into());
+        }
         let user_chain = UserChain {
             chain_id,
-            key_pair: Some(key_pair),
+            owner: Some(owner),
+            signer: Some(self.signer.clone()),
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight(0),
@@ -169,13 +172,16 @@ impl Wallet {
         P: ValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,
     {
-        let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();
+        let identity = chain_client.identity().await.ok();
+        let signer = identity.map(|_| chain_client.state().signer().clone());
+
         let state = chain_client.state();
         self.chains.insert(
             chain_client.chain_id(),
             UserChain {
                 chain_id: chain_client.chain_id(),
-                key_pair,
+                owner: identity,
+                signer,
                 block_hash: state.block_hash(),
                 next_block_height: state.next_block_height(),
                 timestamp: state.timestamp(),
@@ -206,7 +212,10 @@ impl Wallet {
 #[derive(Serialize, Deserialize)]
 pub struct UserChain {
     pub chain_id: ChainId,
-    pub key_pair: Option<AccountSecretKey>,
+    /// The owner of the chain, if we own it.
+    pub owner: Option<AccountOwner>,
+    #[serde(skip)]
+    pub signer: Option<Box<dyn Signer>>,
     pub block_hash: Option<CryptoHash>,
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
@@ -217,7 +226,8 @@ impl Clone for UserChain {
     fn clone(&self) -> Self {
         Self {
             chain_id: self.chain_id,
-            key_pair: self.key_pair.as_ref().map(AccountSecretKey::copy),
+            owner: self.owner,
+            signer: self.signer.clone(),
             block_hash: self.block_hash,
             timestamp: self.timestamp,
             next_block_height: self.next_block_height,
@@ -229,13 +239,15 @@ impl Clone for UserChain {
 impl UserChain {
     /// Create a user chain that we own.
     pub fn make_initial(
-        key_pair: AccountSecretKey,
+        owner: AccountOwner,
+        signer: Box<dyn Signer>,
         description: ChainDescription,
         timestamp: Timestamp,
     ) -> Self {
         Self {
             chain_id: description.into(),
-            key_pair: Some(key_pair),
+            owner: Some(owner),
+            signer: Some(signer),
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight::ZERO,
@@ -248,11 +260,21 @@ impl UserChain {
     pub fn make_other(chain_id: ChainId, timestamp: Timestamp) -> Self {
         Self {
             chain_id,
-            key_pair: None,
+            owner: None,
+            signer: None,
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_proposal: None,
         }
+    }
+
+    /// Returns the public key of the owner of this chain, if we own it.
+    pub fn owner_public_key(&self) -> Option<AccountPublicKey> {
+        self.owner.as_ref().and_then(|owner| {
+            self.signer
+                .as_ref()
+                .and_then(|signer| signer.get_public(owner))
+        })
     }
 }

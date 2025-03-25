@@ -9,8 +9,8 @@ use std::{
 
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, Ed25519SecretKey,
-        ValidatorPublicKey, ValidatorSecretKey,
+        AccountPublicKey, BcsSignable, CryptoHash, CryptoRng, ValidatorPublicKey,
+        ValidatorSecretKey,
     },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
@@ -160,14 +160,20 @@ impl WalletState<persistent::File<Wallet>> {
 }
 
 #[cfg(with_indexed_db)]
-impl WalletState<persistent::IndexedDb<Wallet>> {
-    pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, Error> {
+impl<K> WalletState<persistent::IndexedDb<Wallet>> {
+    pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, Error>
+    where
+        K: Serialize + DeserializeOwned,
+    {
         Ok(Self::new(
             persistent::IndexedDb::read_or_create(key, wallet).await?,
         ))
     }
 
-    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, Error> {
+    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, Error>
+    where
+        K: Serialize + DeserializeOwned,
+    {
         Ok(persistent::IndexedDb::read(key).await?.map(Self::new))
     }
 }
@@ -179,9 +185,11 @@ impl<W: Deref<Target = Wallet>> WalletState<W> {
             wallet,
         }
     }
+}
 
-    pub fn generate_key_pair(&mut self) -> AccountSecretKey {
-        AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(&mut self.prng))
+impl<W: DerefMut<Target = Wallet>> WalletState<W> {
+    pub fn generate_key_pair(&mut self) -> AccountPublicKey {
+        self.signer.generate_new()
     }
 }
 
