@@ -1483,12 +1483,9 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
     pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
-        Self::new_with_txn_tracker(
-            execution_state_sender,
-            context,
-            None,
-            TransactionTracker::default(),
-        )
+        let mut txn_tracker = TransactionTracker::default();
+        txn_tracker.set_local_time(context.local_time);
+        Self::new_with_txn_tracker(execution_state_sender, context, None, txn_tracker)
     }
 
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
