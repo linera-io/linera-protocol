@@ -85,6 +85,8 @@ async fn test_transfer_system_api(
         bytes: vec![],
     };
     let mut tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(vec![
@@ -93,14 +95,8 @@ async fn test_transfer_system_api(
             OracleResponse::Blob(service_blob_id),
         ]),
     );
-    view.execute_operation(
-        context,
-        Timestamp::from(0),
-        operation,
-        &mut tracker,
-        &mut controller,
-    )
-    .await?;
+    view.execute_operation(context, operation, &mut tracker, &mut controller)
+        .await?;
 
     let TransactionOutcome {
         outgoing_messages,
@@ -115,10 +111,9 @@ async fn test_transfer_system_api(
 
     view.execute_message(
         create_dummy_message_context(None),
-        Timestamp::from(0),
         outgoing_messages[0].message.clone(),
         None,
-        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+        &mut TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await?;
@@ -182,9 +177,10 @@ async fn test_unauthorized_transfer_system_api(
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             operation,
             &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
                 0,
                 0,
                 Some(vec![
@@ -274,6 +270,8 @@ async fn test_claim_system_api(
         bytes: vec![],
     };
     let mut tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(vec![
@@ -283,13 +281,7 @@ async fn test_claim_system_api(
         ]),
     );
     claimer_view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            operation,
-            &mut tracker,
-            &mut controller,
-        )
+        .execute_operation(context, operation, &mut tracker, &mut controller)
         .await?;
 
     let TransactionOutcome {
@@ -303,11 +295,10 @@ async fn test_claim_system_api(
     assert_eq!(next_message_index, 1);
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
-    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new()));
     source_view
         .execute_message(
             create_dummy_message_context(None),
-            Timestamp::from(0),
             outgoing_messages[0].message.clone(),
             None,
             &mut tracker,
@@ -338,7 +329,7 @@ async fn test_claim_system_api(
     assert_eq!(next_message_index, 1);
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
-    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new()));
     let context = MessageContext {
         chain_id: claimer_chain_id,
         ..create_dummy_message_context(None)
@@ -346,7 +337,6 @@ async fn test_claim_system_api(
     claimer_view
         .execute_message(
             context,
-            Timestamp::from(0),
             outgoing_messages[0].message.clone(),
             None,
             &mut tracker,
@@ -427,6 +417,8 @@ async fn test_unauthorized_claims(
         bytes: vec![],
     };
     let mut tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(vec![
@@ -436,13 +428,7 @@ async fn test_unauthorized_claims(
         ]),
     );
     let result = claimer_view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            operation,
-            &mut tracker,
-            &mut controller,
-        )
+        .execute_operation(context, operation, &mut tracker, &mut controller)
         .await;
 
     assert_matches!(result, Err(ExecutionError::UnauthenticatedClaimOwner));
@@ -492,9 +478,10 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
         &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
             0,
             0,
             Some(vec![
@@ -543,9 +530,14 @@ async fn test_read_owner_balance_system_api(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
+            0,
+            0,
+            Some(blob_oracle_responses(blobs.iter())),
+        ),
         &mut controller,
     )
     .await
@@ -584,9 +576,14 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
+            0,
+            0,
+            Some(blob_oracle_responses(blobs.iter())),
+        ),
         &mut controller,
     )
     .await
@@ -628,9 +625,14 @@ async fn test_read_owner_balances_system_api(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
+            0,
+            0,
+            Some(blob_oracle_responses(blobs.iter())),
+        ),
         &mut controller,
     )
     .await
@@ -672,9 +674,14 @@ async fn test_read_balance_owners_system_api(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
+            0,
+            0,
+            Some(blob_oracle_responses(blobs.iter())),
+        ),
         &mut controller,
     )
     .await
@@ -905,9 +912,10 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
         &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
             0,
             0,
             Some(vec![
@@ -981,9 +989,10 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
         &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
             0,
             0,
             Some(vec![

@@ -91,6 +91,8 @@ async fn test_fuel_for_counter_wasm_application(
 
     for (index, increment) in increments.iter().enumerate() {
         let mut txn_tracker = TransactionTracker::new(
+            Timestamp::from(0),
+            0,
             0,
             0,
             Some(if index == 0 {
@@ -105,7 +107,6 @@ async fn test_fuel_for_counter_wasm_application(
         );
         view.execute_operation(
             context,
-            Timestamp::from(0),
             Operation::user_without_abi(app_id, increment).unwrap(),
             &mut txn_tracker,
             &mut controller,

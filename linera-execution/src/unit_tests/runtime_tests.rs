@@ -180,14 +180,13 @@ fn create_runtime<Application>() -> (
         chain_id,
         BlockHeight(0),
         Some(0),
-        Timestamp::from(0),
         None,
         None,
         execution_state_sender,
         None,
         None,
         resource_controller,
-        TransactionTracker::new(0, 0, Some(Vec::new())),
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new())),
     );
 
     (runtime, execution_state_receiver)

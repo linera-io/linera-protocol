@@ -112,6 +112,8 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     };
     for increment in &increments {
         let mut txn_tracker = TransactionTracker::new(
+            Timestamp::from(0),
+            0,
             0,
             0,
             Some(vec![
@@ -129,7 +131,6 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         };
         view.execute_operation(
             operation_context,
-            Timestamp::from(0),
             operation,
             &mut txn_tracker,
             &mut controller,

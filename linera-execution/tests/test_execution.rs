@@ -52,12 +52,13 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: *app_id,
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
                 0,
                 0,
                 Some(vec![
@@ -149,6 +150,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     };
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(blob_oracle_responses(
@@ -157,7 +160,6 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     );
     view.execute_operation(
         context,
-        Timestamp::from(0),
         Operation::User {
             application_id: caller_id,
             bytes: dummy_operation.clone(),
@@ -299,6 +301,8 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(blob_oracle_responses(
@@ -307,7 +311,6 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     );
     view.execute_operation(
         context,
-        Timestamp::from(0),
         Operation::User {
             application_id: caller_id,
             bytes: vec![],
@@ -376,12 +379,13 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
                 0,
                 0,
                 Some(blob_oracle_responses(
@@ -420,12 +424,17 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+            &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
+                0,
+                0,
+                Some(blob_oracle_responses(blobs.iter())),
+            ),
             &mut controller,
         )
         .await;
@@ -484,12 +493,13 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: first_id,
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
                 0,
                 0,
                 Some(blob_oracle_responses(
@@ -620,6 +630,8 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(blob_oracle_responses(
@@ -632,7 +644,6 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     );
     view.execute_operation(
         context,
-        Timestamp::from(0),
         Operation::User {
             application_id: first_id,
             bytes: vec![],
@@ -683,12 +694,13 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
                 0,
                 0,
                 Some(blob_oracle_responses(
@@ -744,12 +756,13 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
                 0,
                 0,
                 Some(blob_oracle_responses(
@@ -804,12 +817,13 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
+                Timestamp::from(0),
+                0,
                 0,
                 0,
                 Some(blob_oracle_responses(
@@ -862,13 +876,12 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     assert_matches!(
         view.execute_operation(
             context,
-            Timestamp::from(0),
             Operation::User {
                 application_id: caller_id,
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
-                0, 0, Some(blob_oracle_responses(caller_blobs
+                Timestamp::from(0), 0, 0, 0, Some(blob_oracle_responses(caller_blobs
                     .iter()
                     .chain(target_blobs.iter())))
                 ),
@@ -918,10 +931,15 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter())));
+    let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
+        0,
+        0,
+        Some(blob_oracle_responses(blobs.iter())),
+    );
     view.execute_operation(
         context,
-        Timestamp::from(0),
         Operation::User {
             application_id,
             bytes: vec![],
@@ -990,6 +1008,8 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(blob_oracle_responses(
@@ -998,7 +1018,6 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     );
     view.execute_operation(
         context,
-        Timestamp::from(0),
         Operation::User {
             application_id: caller_id,
             bytes: vec![],
@@ -1075,6 +1094,8 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(blob_oracle_responses(
@@ -1086,7 +1107,6 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     );
     view.execute_operation(
         context,
-        Timestamp::from(0),
         Operation::User {
             application_id: caller_id,
             bytes: vec![],
@@ -1192,6 +1212,8 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
         0,
         0,
         Some(blob_oracle_responses(
@@ -1203,7 +1225,6 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     );
     view.execute_operation(
         context,
-        Timestamp::from(0),
         Operation::User {
             application_id: caller_id,
             bytes: vec![],
@@ -1304,18 +1325,14 @@ async fn test_open_chain() -> anyhow::Result<()> {
         bytes: vec![],
     };
     let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        1,
         first_message_index,
         0,
         Some(blob_oracle_responses(blobs.iter())),
     );
-    view.execute_operation(
-        context,
-        Timestamp::from(0),
-        operation,
-        &mut txn_tracker,
-        &mut controller,
-    )
-    .await?;
+    view.execute_operation(context, operation, &mut txn_tracker, &mut controller)
+        .await?;
 
     assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
     let txn_outcome = txn_tracker.into_outcome().unwrap();
@@ -1389,9 +1406,14 @@ async fn test_close_chain() -> anyhow::Result<()> {
     };
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new(
+            Timestamp::from(0),
+            0,
+            0,
+            0,
+            Some(blob_oracle_responses(blobs.iter())),
+        ),
         &mut controller,
     )
     .await?;
@@ -1402,9 +1424,8 @@ async fn test_close_chain() -> anyhow::Result<()> {
     let operation = SystemOperation::ChangeApplicationPermissions(permissions);
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation.into(),
-        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+        &mut TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await?;
@@ -1423,9 +1444,8 @@ async fn test_close_chain() -> anyhow::Result<()> {
     };
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+        &mut TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await?;
@@ -1500,12 +1520,17 @@ async fn test_message_receipt_spending_chain_balance(
 
     let context = create_dummy_message_context(authenticated_signer);
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter())));
+    let mut txn_tracker = TransactionTracker::new(
+        Timestamp::from(0),
+        0,
+        0,
+        0,
+        Some(blob_oracle_responses(blobs.iter())),
+    );
 
     let execution_result = view
         .execute_message(
             context,
-            Timestamp::from(0),
             Message::User {
                 application_id,
                 bytes: vec![],

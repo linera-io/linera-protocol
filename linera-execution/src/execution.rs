@@ -5,7 +5,7 @@ use std::{mem, vec};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight},
     identifiers::{Account, AccountOwner, BlobType, ChainId, Destination},
 };
 use linera_views::{
@@ -60,7 +60,7 @@ where
     pub async fn simulate_instantiation(
         &mut self,
         contract: UserContractCode,
-        local_time: Timestamp,
+        local_time: linera_base::data_types::Timestamp,
         application_description: ApplicationDescription,
         instantiation_argument: Vec<u8>,
         contract_blob: Blob,
@@ -106,13 +106,17 @@ where
             tracker,
             account: None,
         };
-        let mut txn_tracker =
-            TransactionTracker::new(next_message_index, next_application_index, None);
+        let mut txn_tracker = TransactionTracker::new(
+            local_time,
+            0,
+            next_message_index,
+            next_application_index,
+            None,
+        );
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
         self.run_user_action(
             application_id,
             chain_id,
-            local_time,
             action,
             context.refund_grant_to(),
             None,
@@ -168,7 +172,6 @@ where
         &mut self,
         application_id: ApplicationId,
         chain_id: ChainId,
-        local_time: Timestamp,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
@@ -179,7 +182,6 @@ where
         self.run_user_action_with_runtime(
             application_id,
             chain_id,
-            local_time,
             action,
             refund_grant_to,
             grant,
@@ -194,7 +196,6 @@ where
         &mut self,
         application_id: ApplicationId,
         chain_id: ChainId,
-        local_time: Timestamp,
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
@@ -219,7 +220,6 @@ where
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
                 chain_id,
-                local_time,
                 refund_grant_to,
                 controller,
                 &action,
@@ -257,7 +257,6 @@ where
     pub async fn execute_operation(
         &mut self,
         context: OperationContext,
-        local_time: Timestamp,
         operation: Operation,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
@@ -274,7 +273,6 @@ where
                     self.run_user_action(
                         application_id,
                         context.chain_id,
-                        local_time,
                         user_action,
                         context.refund_grant_to(),
                         None,
@@ -291,7 +289,6 @@ where
                 self.run_user_action(
                     application_id,
                     context.chain_id,
-                    local_time,
                     UserAction::Operation(context, bytes),
                     context.refund_grant_to(),
                     None,
@@ -307,7 +304,6 @@ where
     pub async fn execute_message(
         &mut self,
         context: MessageContext,
-        local_time: Timestamp,
         message: Message,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
@@ -326,7 +322,6 @@ where
                 self.run_user_action(
                     application_id,
                     context.chain_id,
-                    local_time,
                     UserAction::Message(context, bytes),
                     context.refund_grant_to,
                     grant,

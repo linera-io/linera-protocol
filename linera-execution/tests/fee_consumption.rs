@@ -283,10 +283,10 @@ async fn test_fee_consumption(
         message_id: MessageId::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(oracle_responses));
+    let mut txn_tracker =
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses));
     view.execute_message(
         context,
-        Timestamp::from(0),
         Message::User {
             application_id,
             bytes: vec![],
