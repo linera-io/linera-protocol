@@ -3446,6 +3446,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "trait-variant",
  "zstd",
 ]
 

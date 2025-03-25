@@ -44,6 +44,10 @@ pub struct ClientContextOptions {
     #[arg(long = "wallet")]
     pub wallet_state_path: Option<PathBuf>,
 
+    /// Sets the file storing the keystore state.
+    #[arg(long = "keystore")]
+    pub keystore_env_var: Option<PathBuf>,
+
     /// Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet
     /// storage config from the environment variables `LINERA_WALLET_{X}` and
     /// `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and

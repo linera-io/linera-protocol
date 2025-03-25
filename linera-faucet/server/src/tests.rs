@@ -8,13 +8,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey},
+    crypto::{AccountPublicKey, Signer},
     data_types::{Amount, Timestamp},
-    identifiers::ChainId,
+    identifiers::{AccountOwner, ChainId},
 };
 use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
-    client::ChainClient,
+    client::{ChainClient, InMemSigner},
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
 use linera_storage::{DbStorage, TestClock};
@@ -39,6 +39,10 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
+    fn signer(&self) -> &Box<dyn Signer> {
+        unimplemented!()
+    }
+
     fn make_chain_client(
         &self,
         chain_id: ChainId,
@@ -50,7 +54,7 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
-        _: Option<AccountSecretKey>,
+        _: Option<AccountOwner>,
         _: Timestamp,
     ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
@@ -69,9 +73,12 @@ impl chain_listener::ClientContext for ClientContext {
 #[tokio::test]
 async fn test_faucet_rate_limiting() {
     let storage_builder = MemoryStorageBuilder::default();
+    let mut keys: Box<dyn Signer> = Box::new(InMemSigner::new(None));
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
+        .await
+        .unwrap();
     let client = builder
         .add_root_chain(1, Amount::from_tokens(6))
         .await

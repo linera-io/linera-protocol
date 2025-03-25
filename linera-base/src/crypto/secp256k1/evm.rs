@@ -377,9 +377,14 @@ impl EvmSignature {
     where
         T: BcsSignable<'de>,
     {
+        Self::sign_prehash(secret, CryptoHash::new(value))
+    }
+
+    /// Computes a signature from a prehash.
+    pub fn sign_prehash(secret: &EvmSecretKey, prehash: CryptoHash) -> Self {
         use k256::ecdsa::signature::hazmat::PrehashSigner;
 
-        let message = eip191_hash_message(CryptoHash::new(value).as_bytes().0).0;
+        let message = eip191_hash_message(prehash.as_bytes().0).0;
         let (signature, rid) = secret
             .0
             .sign_prehash(&message)
