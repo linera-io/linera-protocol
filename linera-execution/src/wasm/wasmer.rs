@@ -11,7 +11,6 @@ use linera_witty::{
     ExportTo,
 };
 use tokio::sync::Mutex;
-use wasm_instrument::{gas_metering, parity_wasm};
 
 use super::{
     module_cache::ModuleCache,
@@ -202,54 +201,12 @@ impl From<wasmer::RuntimeError> for ExecutionError {
 #[derive(Clone)]
 pub struct CachedContractModule(wasmer::Module);
 
-pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
-    struct WasmtimeRules;
-
-    impl gas_metering::Rules for WasmtimeRules {
-        /// Calculates the fuel cost of a WebAssembly [`Operator`].
-        ///
-        /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
-        /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
-        fn instruction_cost(
-            &self,
-            instruction: &parity_wasm::elements::Instruction,
-        ) -> Option<u32> {
-            use parity_wasm::elements::Instruction::*;
-
-            Some(match instruction {
-                Nop | Drop | Block(_) | Loop(_) | Unreachable | Else | End => 0,
-                _ => 1,
-            })
-        }
-
-        fn memory_grow_cost(&self) -> gas_metering::MemoryGrowCost {
-            gas_metering::MemoryGrowCost::Free
-        }
-
-        fn call_per_local_cost(&self) -> u32 {
-            0
-        }
-    }
-
-    let instrumented_module = gas_metering::inject(
-        parity_wasm::deserialize_buffer(&bytecode.bytes)?,
-        gas_metering::host_function::Injector::new(
-            "linera:app/contract-runtime-api",
-            "consume-fuel",
-        ),
-        &WasmtimeRules,
-    )
-    .map_err(|_| anyhow::anyhow!("failed to instrument module"))?;
-
-    Ok(Bytecode::new(instrumented_module.into_bytes()?))
-}
-
 impl CachedContractModule {
     /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
     pub fn new(contract_bytecode: Bytecode) -> Result<Self, anyhow::Error> {
         let module = wasmer::Module::new(
             &Self::create_compilation_engine(),
-            add_metering(contract_bytecode)?,
+            super::add_metering(contract_bytecode)?,
         )?;
         Ok(CachedContractModule(module))
     }
