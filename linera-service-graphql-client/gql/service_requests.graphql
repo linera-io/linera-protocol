@@ -103,10 +103,6 @@ query Chain(
         description
         epoch
         adminId
-        subscriptions {
-          chainId
-          name
-        }
         ownership
         balance
         timestamp

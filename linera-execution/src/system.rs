@@ -41,9 +41,9 @@ use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCoun
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationDescription, ApplicationId, ChannelSubscription, ExecutionError,
-    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, OutgoingMessage,
-    QueryContext, QueryOutcome, ResourceController, TransactionTracker,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext, MessageContext,
+    MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, ResourceController,
+    TransactionTracker,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -72,8 +72,6 @@ pub struct SystemExecutionStateView<C> {
     pub epoch: HashedRegisterView<C, Option<Epoch>>,
     /// The admin of the chain.
     pub admin_id: HashedRegisterView<C, Option<ChainId>>,
-    /// Track the channels that we have subscribed to.
-    pub subscriptions: HashedSetView<C, ChannelSubscription>,
     /// The committees that we trust, indexed by epoch number.
     // Not using a `MapView` because the set active of committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
@@ -211,16 +209,6 @@ pub enum SystemMessage {
     },
     /// Creates (or activates) a new chain.
     OpenChain(OpenChainConfig),
-    /// Subscribes to a channel.
-    Subscribe {
-        id: ChainId,
-        subscription: ChannelSubscription,
-    },
-    /// Unsubscribes from a channel.
-    Unsubscribe {
-        id: ChainId,
-        subscription: ChannelSubscription,
-    },
     /// Notifies that a new application was created.
     ApplicationCreated,
 }
@@ -353,10 +341,7 @@ where
             ChangeApplicationPermissions(application_permissions) => {
                 self.application_permissions.set(application_permissions);
             }
-            CloseChain => {
-                let messages = self.close_chain(context.chain_id).await?;
-                txn_tracker.add_outgoing_messages(messages)?;
-            }
+            CloseChain => self.close_chain().await?,
             Transfer {
                 owner,
                 amount,
@@ -682,7 +667,7 @@ where
                 }
             }
             // These messages are executed immediately when cross-chain requests are received.
-            Subscribe { .. } | Unsubscribe { .. } | OpenChain(_) => {}
+            OpenChain(_) => {}
             // This message is only a placeholder: Its ID is part of the application ID.
             ApplicationCreated => {}
         }
@@ -762,27 +747,9 @@ where
         Ok(OutgoingMessage::new(child_id, message).with_kind(MessageKind::Protected))
     }
 
-    pub async fn close_chain(
-        &mut self,
-        id: ChainId,
-    ) -> Result<Vec<OutgoingMessage>, ExecutionError> {
-        let mut messages = Vec::new();
-        // Unsubscribe from all channels.
-        self.subscriptions
-            .for_each_index(|subscription| {
-                messages.push(
-                    OutgoingMessage::new(
-                        subscription.chain_id,
-                        SystemMessage::Unsubscribe { id, subscription },
-                    )
-                    .with_kind(MessageKind::Protected),
-                );
-                Ok(())
-            })
-            .await?;
-        self.subscriptions.clear();
+    pub async fn close_chain(&mut self) -> Result<(), ExecutionError> {
         self.closed.set(true);
-        Ok(messages)
+        Ok(())
     }
 
     pub async fn create_application(

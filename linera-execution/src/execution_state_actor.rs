@@ -311,8 +311,7 @@ where
                 if !app_permissions.can_close_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
-                    let chain_id = self.context().extra().chain_id();
-                    self.system.close_chain(chain_id).await?;
+                    self.system.close_chain().await?;
                     callback.respond(Ok(()));
                 }
             }

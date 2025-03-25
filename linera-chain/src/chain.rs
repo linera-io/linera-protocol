@@ -532,30 +532,27 @@ where
                 }
             }
         }
-
-        if bundle.goes_to_inbox() {
-            // Process the inbox bundle and update the inbox state.
-            let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-            #[cfg(with_metrics)]
-            NUM_INBOXES
-                .with_label_values(&[])
-                .observe(self.inboxes.count().await? as f64);
-            let entry = BundleInInbox::new(origin.clone(), &bundle);
-            let skippable = bundle.is_skippable();
-            let newly_added = inbox
-                .add_bundle(bundle)
-                .await
-                .map_err(|error| match error {
-                    InboxError::ViewError(error) => ChainError::ViewError(error),
-                    error => ChainError::InternalError(format!(
-                        "while processing messages in certified block: {error}"
-                    )),
-                })?;
-            if newly_added && !skippable {
-                let seen = local_time;
-                self.unskippable_bundles
-                    .push_back(TimestampedBundleInInbox { entry, seen });
-            }
+        // Process the inbox bundle and update the inbox state.
+        let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
+        #[cfg(with_metrics)]
+        NUM_INBOXES
+            .with_label_values(&[])
+            .observe(self.inboxes.count().await? as f64);
+        let entry = BundleInInbox::new(origin.clone(), &bundle);
+        let skippable = bundle.is_skippable();
+        let newly_added = inbox
+            .add_bundle(bundle)
+            .await
+            .map_err(|error| match error {
+                InboxError::ViewError(error) => ChainError::ViewError(error),
+                error => ChainError::InternalError(format!(
+                    "while processing messages in certified block: {error}"
+                )),
+            })?;
+        if newly_added && !skippable {
+            let seen = local_time;
+            self.unskippable_bundles
+                .push_back(TimestampedBundleInInbox { entry, seen });
         }
 
         // Remember the certificate for future validator/client synchronizations.

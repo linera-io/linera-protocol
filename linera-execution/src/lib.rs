@@ -976,17 +976,6 @@ impl OutgoingMessage {
     }
 }
 
-/// The identifier of a channel, relative to a particular application.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize, SimpleObject,
-)]
-pub struct ChannelSubscription {
-    /// The chain ID broadcasting on this channel.
-    pub chain_id: ChainId,
-    /// The name of the channel.
-    pub name: ChannelName,
-}
-
 impl OperationContext {
     /// Returns an account for the refund.
     /// Returns `None` if there is no authenticated signer of the [`OperationContext`].
@@ -1220,32 +1209,6 @@ impl Message {
         match self {
             Self::System(_) => GenericApplicationId::System,
             Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
-        }
-    }
-
-    /// Returns whether this message must be added to the inbox.
-    pub fn goes_to_inbox(&self) -> bool {
-        !matches!(
-            self,
-            Message::System(SystemMessage::Subscribe { .. } | SystemMessage::Unsubscribe { .. })
-        )
-    }
-
-    pub fn matches_subscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
-        match self {
-            Message::System(SystemMessage::Subscribe { id, subscription }) => {
-                Some((id, subscription))
-            }
-            _ => None,
-        }
-    }
-
-    pub fn matches_unsubscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
-        match self {
-            Message::System(SystemMessage::Unsubscribe { id, subscription }) => {
-                Some((id, subscription))
-            }
-            _ => None,
         }
     }
 

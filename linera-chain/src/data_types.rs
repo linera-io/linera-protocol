@@ -558,15 +558,6 @@ impl MessageBundle {
     pub fn is_protected(&self) -> bool {
         self.messages.iter().any(PostedMessage::is_protected)
     }
-
-    /// Returns whether this bundle must be added to the inbox.
-    ///
-    /// If this is `false`, it gets handled immediately and should never be received in a block.
-    pub fn goes_to_inbox(&self) -> bool {
-        self.messages
-            .iter()
-            .any(|posted_message| posted_message.message.goes_to_inbox())
-    }
 }
 
 impl PostedMessage {

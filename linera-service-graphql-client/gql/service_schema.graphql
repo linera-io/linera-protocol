@@ -396,11 +396,6 @@ A channel name together with its application ID.
 scalar ChannelFullName
 
 """
-The name of a subscription channel
-"""
-scalar ChannelName
-
-"""
 The state of a channel followed by subscribers.
 """
 type ChannelStateView {
@@ -412,20 +407,6 @@ type ChannelStateView {
 	The block heights so far, to be sent to future subscribers.
 	"""
 	blockHeights: LogView_BlockHeight_e824a938!
-}
-
-"""
-The identifier of a channel, relative to a particular application.
-"""
-type ChannelSubscription {
-	"""
-	The chain ID broadcasting on this channel.
-	"""
-	chainId: ChainId!
-	"""
-	The name of the channel.
-	"""
-	name: ChannelName!
 }
 
 """
@@ -1219,7 +1200,6 @@ type SystemExecutionStateView {
 	description: ChainDescription
 	epoch: Epoch
 	adminId: ChainId
-	subscriptions: [ChannelSubscription!]!
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!

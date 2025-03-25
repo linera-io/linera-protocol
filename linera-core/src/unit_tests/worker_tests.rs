@@ -2510,16 +2510,6 @@ where
             *user_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
-        assert_eq!(
-            user_chain
-                .execution_state
-                .system
-                .subscriptions
-                .indices()
-                .await?
-                .len(),
-            0
-        );
         user_chain.validate_incoming_bundles().await?;
         matches!(
             &user_chain
@@ -2628,16 +2618,6 @@ where
         assert_eq!(
             *user_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
-        );
-        assert_eq!(
-            user_chain
-                .execution_state
-                .system
-                .subscriptions
-                .indices()
-                .await?
-                .len(),
-            0
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
         user_chain.validate_incoming_bundles().await?;

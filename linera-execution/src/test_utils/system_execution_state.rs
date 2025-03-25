@@ -24,9 +24,9 @@ use super::{MockApplication, RegisterMockApplication};
 use crate::{
     committee::{Committee, Epoch},
     execution::UserAction,
-    ApplicationDescription, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, OperationContext, ResourceControlPolicy,
-    ResourceController, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
+    ApplicationDescription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
+    ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
+    ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.
@@ -35,7 +35,6 @@ pub struct SystemExecutionState {
     pub description: Option<ChainDescription>,
     pub epoch: Option<Epoch>,
     pub admin_id: Option<ChainId>,
-    pub subscriptions: BTreeSet<ChannelSubscription>,
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Amount,
@@ -88,7 +87,6 @@ impl SystemExecutionState {
             description,
             epoch,
             admin_id,
-            subscriptions,
             committees,
             ownership,
             balance,
@@ -120,12 +118,6 @@ impl SystemExecutionState {
         view.system.description.set(description);
         view.system.epoch.set(epoch);
         view.system.admin_id.set(admin_id);
-        for subscription in subscriptions {
-            view.system
-                .subscriptions
-                .insert(&subscription)
-                .expect("serialization of subscription should not fail");
-        }
         view.system.committees.set(committees);
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
