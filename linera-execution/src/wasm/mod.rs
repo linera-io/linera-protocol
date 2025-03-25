@@ -211,7 +211,7 @@ impl UserServiceModule for WasmServiceModule {
 }
 
 /// Instrument the [`Bytecode`] to add fuel metering.
-pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
+pub fn add_metering(bytecode: Bytecode) -> Result<Bytecode, WasmExecutionError> {
     struct WasmtimeRules;
 
     impl gas_metering::Rules for WasmtimeRules {
@@ -248,7 +248,7 @@ pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
         ),
         &WasmtimeRules,
     )
-    .map_err(|_| anyhow::anyhow!("failed to instrument module"))?;
+    .map_err(|_| WasmExecutionError::InstrumentModule)?;
 
     Ok(Bytecode::new(instrumented_module.into_bytes()?))
 }
@@ -321,6 +321,10 @@ pub enum WasmExecutionError {
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service Wasm module: {_0}")]
     LoadServiceModule(#[source] anyhow::Error),
+    #[error("Failed to instrument Wasm module to add fuel metering")]
+    InstrumentModule,
+    #[error("Invalid Wasm module")]
+    InvalidBytecode(#[from] wasm_instrument::parity_wasm::SerializationError),
     #[cfg(with_wasmer)]
     #[error("Failed to instantiate Wasm module: {_0}")]
     InstantiateModuleWithWasmer(#[from] Box<::wasmer::InstantiationError>),
