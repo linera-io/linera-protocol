@@ -204,10 +204,7 @@ pub struct CachedContractModule(wasmer::Module);
 impl CachedContractModule {
     /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
     pub fn new(contract_bytecode: Bytecode) -> Result<Self, anyhow::Error> {
-        let module = wasmer::Module::new(
-            &Self::create_compilation_engine(),
-            super::add_metering(contract_bytecode)?,
-        )?;
+        let module = wasmer::Module::new(&Self::create_compilation_engine(), contract_bytecode)?;
         Ok(CachedContractModule(module))
     }
 

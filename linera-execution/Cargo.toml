@@ -28,7 +28,6 @@ wasmer = [
     "wasmer/enable-serde",
     "linera-witty/wasmer",
     "wasm-encoder",
-    "wasm-instrument",
     "wasmparser",
 ]
 wasmtime = [
@@ -76,7 +75,7 @@ thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 url.workspace = true
 wasm-encoder = { workspace = true, optional = true }
-wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
+wasm-instrument = { workspace = true, features = ["sign_ext"] }
 wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 

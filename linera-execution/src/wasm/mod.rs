@@ -91,6 +91,7 @@ impl WasmContractModule {
         } else {
             contract_bytecode
         };
+        let contract_bytecode = add_metering(contract_bytecode)?;
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
