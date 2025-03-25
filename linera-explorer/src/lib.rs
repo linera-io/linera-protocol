@@ -255,9 +255,14 @@ async fn blocks(
     from: Option<CryptoHash>,
     limit: Option<u32>,
 ) -> Result<(Page, String)> {
-    // TODO: limit is not used in the UI, it should be implemented with some path arguments and select input
-    let blocks = get_blocks(node, chain_id, from, limit).await?;
-    Ok((Page::Blocks(blocks), format!("/blocks?chain={}", chain_id)))
+    let limit_value = limit.unwrap_or(20);
+    let blocks = get_blocks(node, chain_id, from, Some(limit_value)).await?;
+    let url = if let Some(limit) = limit {
+        format!("/blocks?chain={}&limit={}", chain_id, limit)
+    } else {
+        format!("/blocks?chain={}", chain_id)
+    };
+    Ok((Page::Blocks(blocks), url))
 }
 
 /// Returns the block page.
@@ -598,7 +603,10 @@ async fn page(
             let hash = find_arg_map(args, "block", CryptoHash::from_str)?;
             block(node, chain_id, hash).await
         }
-        "blocks" => blocks(node, chain_id, None, Some(20)).await,
+        "blocks" => {
+            let limit = find_arg_map(args, "limit", u32::from_str)?;
+            blocks(node, chain_id, None, limit).await
+        }
         "applications" => applications(node, chain_id).await,
         "application" => {
             let app_arg = find_arg(args, "app").context("unknown application")?;
