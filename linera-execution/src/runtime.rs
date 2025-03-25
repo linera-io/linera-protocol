@@ -69,8 +69,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     height: BlockHeight,
     /// The current consensus round. Only available during block validation in multi-leader rounds.
     round: Option<u32>,
-    /// The current local time.
-    local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
     #[debug(skip_if = Option::is_none)]
     authenticated_signer: Option<AccountOwner>,
@@ -293,7 +291,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         chain_id: ChainId,
         height: BlockHeight,
         round: Option<u32>,
-        local_time: Timestamp,
         authenticated_signer: Option<AccountOwner>,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
@@ -306,7 +303,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             chain_id,
             height,
             round,
-            local_time,
             authenticated_signer,
             executing_message,
             execution_state_sender,
@@ -478,7 +474,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         let context = QueryContext {
             chain_id: self.chain_id,
             next_block_height: self.height,
-            local_time: self.local_time,
+            local_time: self.transaction_tracker.local_time(),
         };
         let sender = self.execution_state_sender.clone();
 
@@ -886,11 +882,12 @@ where
             .replay_oracle_response(OracleResponse::Assert)?
         {
             // There are no recorded oracle responses, so we check the local time.
+            let local_time = this.transaction_tracker.local_time();
             ensure!(
-                this.local_time < timestamp,
+                local_time < timestamp,
                 ExecutionError::AssertBefore {
                     timestamp,
-                    local_time: this.local_time,
+                    local_time,
                 }
             );
         }
@@ -955,7 +952,6 @@ impl ContractSyncRuntime {
     pub(crate) fn new(
         execution_state_sender: ExecutionStateSender,
         chain_id: ChainId,
-        local_time: Timestamp,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: &UserAction,
@@ -966,7 +962,6 @@ impl ContractSyncRuntime {
                 chain_id,
                 action.height(),
                 action.round(),
-                local_time,
                 action.signer(),
                 if let UserAction::Message(context, _) = action {
                     Some(context.into())
@@ -1488,12 +1483,9 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 impl ServiceSyncRuntime {
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
     pub fn new(execution_state_sender: ExecutionStateSender, context: QueryContext) -> Self {
-        Self::new_with_txn_tracker(
-            execution_state_sender,
-            context,
-            None,
-            TransactionTracker::default(),
-        )
+        let mut txn_tracker = TransactionTracker::default();
+        txn_tracker.set_local_time(context.local_time);
+        Self::new_with_txn_tracker(execution_state_sender, context, None, txn_tracker)
     }
 
     /// Creates a new [`ServiceSyncRuntime`] ready to execute using a provided [`QueryContext`].
@@ -1508,7 +1500,6 @@ impl ServiceSyncRuntime {
                 context.chain_id,
                 context.next_block_height,
                 None,
-                context.local_time,
                 None,
                 None,
                 execution_state_sender,
@@ -1579,7 +1570,10 @@ impl ServiceSyncRuntime {
             let execution_state_sender = self.handle_mut().inner().execution_state_sender.clone();
             *self = ServiceSyncRuntime::new(execution_state_sender, new_context);
         } else {
-            self.handle_mut().inner().local_time = new_context.local_time;
+            self.handle_mut()
+                .inner()
+                .transaction_tracker
+                .set_local_time(new_context.local_time);
         }
     }
 
@@ -1623,7 +1617,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             let query_context = QueryContext {
                 chain_id: this.chain_id,
                 next_block_height: this.height,
-                local_time: this.local_time,
+                local_time: this.transaction_tracker.local_time(),
             };
             this.push_application(ApplicationStatus {
                 caller_id: None,

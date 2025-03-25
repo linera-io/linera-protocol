@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ArithmeticError, Blob, Event, OracleResponse},
+    data_types::{ArithmeticError, Blob, Event, OracleResponse, Timestamp},
     ensure,
     identifiers::{BlobId, ChainId, ChannelFullName, StreamId},
 };
@@ -22,6 +22,10 @@ pub struct TransactionTracker {
     oracle_responses: Vec<OracleResponse>,
     #[debug(skip_if = Vec::is_empty)]
     outgoing_messages: Vec<OutgoingMessage>,
+    /// The current local time.
+    local_time: Timestamp,
+    /// The index of the current transaction in the block.
+    transaction_index: u32,
     next_message_index: u32,
     next_application_index: u32,
     /// Events recorded by contracts' `emit` calls.
@@ -59,14 +63,18 @@ pub struct TransactionOutcome {
 
 impl TransactionTracker {
     pub fn new(
+        local_time: Timestamp,
+        transaction_index: u32,
         next_message_index: u32,
         next_application_index: u32,
         oracle_responses: Option<Vec<OracleResponse>>,
     ) -> Self {
         TransactionTracker {
-            replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
+            local_time,
+            transaction_index,
             next_message_index,
             next_application_index,
+            replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
             ..Self::default()
         }
     }
@@ -74,6 +82,18 @@ impl TransactionTracker {
     pub fn with_blobs(mut self, blobs: BTreeMap<BlobId, Blob>) -> Self {
         self.blobs = blobs;
         self
+    }
+
+    pub fn local_time(&self) -> Timestamp {
+        self.local_time
+    }
+
+    pub fn set_local_time(&mut self, local_time: Timestamp) {
+        self.local_time = local_time;
+    }
+
+    pub fn transaction_index(&self) -> u32 {
+        self.transaction_index
     }
 
     pub fn next_message_index(&self) -> u32 {
@@ -183,6 +203,8 @@ impl TransactionTracker {
             replaying_oracle_responses,
             oracle_responses,
             outgoing_messages,
+            local_time: _,
+            transaction_index: _,
             next_message_index,
             next_application_index,
             events,
@@ -208,5 +230,30 @@ impl TransactionTracker {
             unsubscribe,
             operation_result: operation_result.unwrap_or_default(),
         })
+    }
+}
+
+#[cfg(with_testing)]
+impl TransactionTracker {
+    /// Creates a new [`TransactionTracker`] for testing, with default values and the given
+    /// oracle responses.
+    pub fn new_replaying(oracle_responses: Vec<OracleResponse>) -> Self {
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses))
+    }
+
+    /// Creates a new [`TransactionTracker`] for testing, with default values and oracle responses
+    /// for the given blobs.
+    pub fn new_replaying_blobs<T>(blob_ids: T) -> Self
+    where
+        T: IntoIterator,
+        T::Item: std::borrow::Borrow<BlobId>,
+    {
+        use std::borrow::Borrow;
+
+        let oracle_responses = blob_ids
+            .into_iter()
+            .map(|blob_id| OracleResponse::Blob(*blob_id.borrow()))
+            .collect();
+        TransactionTracker::new_replaying(oracle_responses)
     }
 }

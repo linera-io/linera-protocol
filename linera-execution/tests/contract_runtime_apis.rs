@@ -13,7 +13,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight,
-        CompressedBytecode, OracleResponse, Timestamp,
+        CompressedBytecode, OracleResponse,
     },
     http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
@@ -22,8 +22,8 @@ use linera_base::{
 };
 use linera_execution::{
     test_utils::{
-        blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,
-        test_accounts_strategy, ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        create_dummy_message_context, create_dummy_operation_context, test_accounts_strategy,
+        ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, Message, MessageContext, Operation,
     OperationContext, ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext,
@@ -84,23 +84,13 @@ async fn test_transfer_system_api(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(
-        0,
-        0,
-        Some(vec![
-            OracleResponse::Blob(app_desc_blob_id),
-            OracleResponse::Blob(contract_blob_id),
-            OracleResponse::Blob(service_blob_id),
-        ]),
-    );
-    view.execute_operation(
-        context,
-        Timestamp::from(0),
-        operation,
-        &mut tracker,
-        &mut controller,
-    )
-    .await?;
+    let mut tracker = TransactionTracker::new_replaying_blobs([
+        app_desc_blob_id,
+        contract_blob_id,
+        service_blob_id,
+    ]);
+    view.execute_operation(context, operation, &mut tracker, &mut controller)
+        .await?;
 
     let TransactionOutcome {
         outgoing_messages,
@@ -115,10 +105,9 @@ async fn test_transfer_system_api(
 
     view.execute_message(
         create_dummy_message_context(None),
-        Timestamp::from(0),
         outgoing_messages[0].message.clone(),
         None,
-        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+        &mut TransactionTracker::new_replaying(Vec::new()),
         &mut controller,
     )
     .await?;
@@ -182,17 +171,12 @@ async fn test_unauthorized_transfer_system_api(
     let result = view
         .execute_operation(
             context,
-            Timestamp::from(0),
             operation,
-            &mut TransactionTracker::new(
-                0,
-                0,
-                Some(vec![
-                    OracleResponse::Blob(app_desc_blob_id),
-                    OracleResponse::Blob(contract_blob_id),
-                    OracleResponse::Blob(service_blob_id),
-                ]),
-            ),
+            &mut TransactionTracker::new_replaying_blobs([
+                app_desc_blob_id,
+                contract_blob_id,
+                service_blob_id,
+            ]),
             &mut controller,
         )
         .await;
@@ -273,23 +257,13 @@ async fn test_claim_system_api(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(
-        0,
-        0,
-        Some(vec![
-            OracleResponse::Blob(app_desc_blob_id),
-            OracleResponse::Blob(contract_blob_id),
-            OracleResponse::Blob(service_blob_id),
-        ]),
-    );
+    let mut tracker = TransactionTracker::new_replaying_blobs([
+        app_desc_blob_id,
+        contract_blob_id,
+        service_blob_id,
+    ]);
     claimer_view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            operation,
-            &mut tracker,
-            &mut controller,
-        )
+        .execute_operation(context, operation, &mut tracker, &mut controller)
         .await?;
 
     let TransactionOutcome {
@@ -303,11 +277,10 @@ async fn test_claim_system_api(
     assert_eq!(next_message_index, 1);
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
-    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new_replaying(Vec::new());
     source_view
         .execute_message(
             create_dummy_message_context(None),
-            Timestamp::from(0),
             outgoing_messages[0].message.clone(),
             None,
             &mut tracker,
@@ -338,7 +311,7 @@ async fn test_claim_system_api(
     assert_eq!(next_message_index, 1);
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
-    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new_replaying(Vec::new());
     let context = MessageContext {
         chain_id: claimer_chain_id,
         ..create_dummy_message_context(None)
@@ -346,7 +319,6 @@ async fn test_claim_system_api(
     claimer_view
         .execute_message(
             context,
-            Timestamp::from(0),
             outgoing_messages[0].message.clone(),
             None,
             &mut tracker,
@@ -426,23 +398,13 @@ async fn test_unauthorized_claims(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(
-        0,
-        0,
-        Some(vec![
-            OracleResponse::Blob(app_desc_blob_id),
-            OracleResponse::Blob(contract_blob_id),
-            OracleResponse::Blob(service_blob_id),
-        ]),
-    );
+    let mut tracker = TransactionTracker::new_replaying_blobs([
+        app_desc_blob_id,
+        contract_blob_id,
+        service_blob_id,
+    ]);
     let result = claimer_view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            operation,
-            &mut tracker,
-            &mut controller,
-        )
+        .execute_operation(context, operation, &mut tracker, &mut controller)
         .await;
 
     assert_matches!(result, Err(ExecutionError::UnauthenticatedClaimOwner));
@@ -492,17 +454,12 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(
-            0,
-            0,
-            Some(vec![
-                OracleResponse::Blob(app_desc_blob_id),
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-            ]),
-        ),
+        &mut TransactionTracker::new_replaying_blobs([
+            app_desc_blob_id,
+            contract_blob_id,
+            service_blob_id,
+        ]),
         &mut controller,
     )
     .await
@@ -543,9 +500,8 @@ async fn test_read_owner_balance_system_api(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new_replaying_blobs(blobs),
         &mut controller,
     )
     .await
@@ -584,9 +540,8 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new_replaying_blobs(blobs),
         &mut controller,
     )
     .await
@@ -628,9 +583,8 @@ async fn test_read_owner_balances_system_api(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new_replaying_blobs(blobs),
         &mut controller,
     )
     .await
@@ -672,9 +626,8 @@ async fn test_read_balance_owners_system_api(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(blob_oracle_responses(blobs.iter()))),
+        &mut TransactionTracker::new_replaying_blobs(blobs),
         &mut controller,
     )
     .await
@@ -905,18 +858,13 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(
-            0,
-            0,
-            Some(vec![
-                OracleResponse::Blob(app_desc_blob_id),
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-                OracleResponse::Service(vec![]),
-            ]),
-        ),
+        &mut TransactionTracker::new_replaying(vec![
+            OracleResponse::Blob(app_desc_blob_id),
+            OracleResponse::Blob(contract_blob_id),
+            OracleResponse::Blob(service_blob_id),
+            OracleResponse::Service(vec![]),
+        ]),
         &mut controller,
     )
     .await?;
@@ -981,18 +929,13 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
 
     view.execute_operation(
         context,
-        Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(
-            0,
-            0,
-            Some(vec![
-                OracleResponse::Blob(app_desc_blob_id),
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-                OracleResponse::Http(http::Response::ok(vec![])),
-            ]),
-        ),
+        &mut TransactionTracker::new_replaying(vec![
+            OracleResponse::Blob(app_desc_blob_id),
+            OracleResponse::Blob(contract_blob_id),
+            OracleResponse::Blob(service_blob_id),
+            OracleResponse::Http(http::Response::ok(vec![])),
+        ]),
         &mut controller,
     )
     .await?;

@@ -330,6 +330,8 @@ pub enum ExecutionError {
     InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+    #[error("Internal error: {0}")]
+    InternalError(&'static str),
 }
 
 impl From<ViewError> for ExecutionError {
