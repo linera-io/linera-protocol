@@ -12,8 +12,10 @@ use std::fmt;
 
 #[doc(hidden)]
 pub use async_trait::async_trait;
+#[cfg(all(not(target_arch = "wasm32"), unix))]
+use tokio::signal::unix;
 #[cfg(not(target_arch = "wasm32"))]
-use {::tracing::debug, tokio::signal::unix, tokio_util::sync::CancellationToken};
+use {::tracing::debug, tokio_util::sync::CancellationToken};
 pub mod abi;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod command;
@@ -158,16 +160,27 @@ pub fn hex_vec_debug(list: &Vec<Vec<u8>>, f: &mut fmt::Formatter) -> fmt::Result
 pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
     let _shutdown_guard = shutdown_sender.drop_guard();
 
-    let mut sigint =
-        unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
-    let mut sigterm =
-        unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
-    let mut sighup =
-        unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
+    #[cfg(unix)]
+    {
+        let mut sigint =
+            unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
+        let mut sigterm =
+            unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
+        let mut sighup =
+            unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
 
-    tokio::select! {
-        _ = sigint.recv() => debug!("Received SIGINT"),
-        _ = sigterm.recv() => debug!("Received SIGTERM"),
-        _ = sighup.recv() => debug!("Received SIGHUP"),
+        tokio::select! {
+            _ = sigint.recv() => debug!("Received SIGINT"),
+            _ = sigterm.recv() => debug!("Received SIGTERM"),
+            _ = sighup.recv() => debug!("Received SIGHUP"),
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to set up Ctrl+C handler");
+        debug!("Received Ctrl+C");
     }
 }
