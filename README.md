@@ -1,5 +1,6 @@
 # <img src="https://github.com/linera-io/linera-protocol/assets/1105398/fe08c941-93af-4114-bb83-bcc0eaec95f9" width="250" height="90" />
 
+[![Github release](https://img.shields.io/github/v/tag/linera-io/linera-protocol.svg?sort=semver)](https://github.com/linera-io/linera-protocol/releases)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
 [![Build Status for Docker](https://github.com/linera-io/linera-protocol/actions/workflows/docker.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/docker.yml)
 [![Build Status for Rust](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml)
