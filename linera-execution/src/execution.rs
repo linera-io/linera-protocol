@@ -350,10 +350,17 @@ where
         &self,
         context: MessageContext,
         amount: Amount,
-        account: Account,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
+        if amount.is_zero() {
+            return Ok(());
+        }
+        let Some(account) = context.refund_grant_to else {
+            return Err(ExecutionError::InternalError(
+                "Messages with grants should have a non-empty `refund_grant_to`",
+            ));
+        };
         let message = SystemMessage::Credit {
             amount,
             source: context.authenticated_signer.unwrap_or(AccountOwner::CHAIN),
