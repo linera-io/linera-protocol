@@ -71,7 +71,6 @@ linera-storage.workspace = true
 linera-views.workspace = true
 num-format = { workspace = true, optional = true }
 prometheus-parse = { workspace = true, optional = true }
-rand.workspace = true
 reqwest = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true

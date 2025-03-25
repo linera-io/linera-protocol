@@ -10,8 +10,8 @@ use std::{
 
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, Ed25519SecretKey,
-        ValidatorPublicKey, ValidatorSecretKey,
+        AccountPublicKey, BcsSignable, CryptoHash, InMemorySigner, ValidatorPublicKey,
+        ValidatorSecretKey,
     },
     data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
     identifiers::ChainId,
@@ -68,9 +68,9 @@ pub struct ValidatorServerConfig {
 }
 
 #[cfg(web)]
-use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
+use crate::persistent::LocalPersist as Persist;
 #[cfg(not(web))]
-use crate::persistent::{Persist, PersistExt as _};
+use crate::persistent::Persist;
 
 /// The (public) configuration for all validators.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -102,7 +102,6 @@ impl CommitteeConfig {
 /// [`Persist`].
 pub struct WalletState<W> {
     wallet: W,
-    prng: Box<dyn CryptoRng>,
 }
 
 impl<W: Persist<Target = Wallet>> WalletState<W> {
@@ -138,9 +137,7 @@ impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
     }
 
     async fn persist(&mut self) -> Result<(), W::Error> {
-        self.wallet
-            .mutate(|w| w.refresh_prng_seed(&mut self.prng))
-            .await?;
+        self.wallet.persist().await?;
         tracing::trace!("Persisted user chains");
         Ok(())
     }
@@ -152,7 +149,9 @@ impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
 
 #[cfg(feature = "fs")]
 impl WalletState<persistent::File<Wallet>> {
-    pub fn create_from_file(path: &std::path::Path, wallet: Wallet) -> Result<Self, Error> {
+    /// Reads the wallet from the given path, creating it if it does not exist.
+    /// The wallet is created with the given `wallet` value.
+    pub fn read_or_create(path: &std::path::Path, wallet: Wallet) -> Result<Self, Error> {
         Ok(Self::new(persistent::File::read_or_create(path, || {
             Ok(wallet)
         })?))
@@ -178,14 +177,76 @@ impl WalletState<persistent::IndexedDb<Wallet>> {
 
 impl<W: Deref<Target = Wallet>> WalletState<W> {
     pub fn new(wallet: W) -> Self {
-        Self {
-            prng: wallet.make_prng(),
-            wallet,
-        }
+        Self { wallet }
+    }
+}
+
+pub struct SignerState<S> {
+    signer: S,
+}
+
+impl<S: Deref> Deref for SignerState<S> {
+    type Target = S::Target;
+    fn deref(&self) -> &S::Target {
+        self.signer.deref()
+    }
+}
+
+impl<S: DerefMut> DerefMut for SignerState<S> {
+    fn deref_mut(&mut self) -> &mut S::Target {
+        self.signer.deref_mut()
+    }
+}
+
+impl<S: Persist<Target = InMemorySigner>> Persist for SignerState<S> {
+    type Error = S::Error;
+
+    fn as_mut(&mut self) -> &mut InMemorySigner {
+        self.signer.as_mut()
     }
 
-    pub fn generate_key_pair(&mut self) -> AccountSecretKey {
-        AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(&mut self.prng))
+    async fn persist(&mut self) -> Result<(), S::Error> {
+        self.signer.persist().await?;
+        tracing::trace!("Persisted signer struct");
+        Ok(())
+    }
+
+    fn into_value(self) -> InMemorySigner {
+        self.signer.into_value()
+    }
+}
+
+#[cfg(feature = "fs")]
+impl SignerState<persistent::File<InMemorySigner>> {
+    /// Reads the wallet from the given path, creating it if it does not exist.
+    /// The wallet is created with the given `wallet` value.
+    pub fn read_or_create(path: &std::path::Path, signer: InMemorySigner) -> Result<Self, Error> {
+        Ok(Self::new(persistent::File::read_or_create(path, || {
+            Ok(signer)
+        })?))
+    }
+
+    pub fn read_from_file(path: &std::path::Path) -> Result<Self, Error> {
+        Ok(Self::new(persistent::File::read(path)?))
+    }
+}
+
+#[cfg(with_indexed_db)]
+impl SignerState<persistent::IndexedDb<InMemorySigner>> {
+    pub async fn create_from_indexed_db(key: &str, wallet: InMemorySigner) -> Result<Self, Error> {
+        Ok(Self::new(
+            persistent::IndexedDb::read_or_create(key, wallet).await?,
+        ))
+    }
+
+    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, Error> {
+        Ok(persistent::IndexedDb::read(key).await?.map(Self::new))
+    }
+}
+
+impl<S: Deref<Target = InMemorySigner>> SignerState<S> {
+    pub fn new(signer: S) -> Self {
+        Self { signer }
     }
 }
 

@@ -277,6 +277,14 @@ async fn print_messages_and_create_faucet(
     );
     println!(
         "{}",
+        format!(
+            "export LINERA_KEYSTORE=\"{}\"",
+            client.keystore_path().display()
+        )
+        .bold()
+    );
+    println!(
+        "{}",
         format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
     );
 
