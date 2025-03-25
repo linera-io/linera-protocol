@@ -26,10 +26,13 @@ use linera_client::{
 use linera_core::node::ValidatorNodeProvider;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
-#[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
-use linera_views::rocks_db::{RocksDbSpawnMode, RocksDbStore};
 #[cfg(all(feature = "scylladb", with_testing))]
-use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
+use linera_views::scylla_db::ScyllaDbStore;
+#[cfg(all(feature = "rocksdb", with_testing))]
+use linera_views::{
+    rocks_db::{RocksDbSpawnMode, RocksDbStore},
+    store::TestKeyValueStore as _,
+};
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
 use tonic::transport::{channel::ClientTlsConfig, Endpoint};
@@ -96,6 +99,19 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
             }
             #[cfg(not(feature = "scylladb"))]
             panic!("Database::ScyllaDb is selected without the feature scylladb");
+        }
+        Database::RocksDb => {
+            #[cfg(feature = "rocksdb")]
+            {
+                let config = RocksDbStore::new_test_config().await?;
+                let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
+                Ok(StorageConfig::RocksDb {
+                    path: config.inner_config.path_with_guard.path_buf,
+                    spawn_mode,
+                })
+            }
+            #[cfg(not(feature = "rocksdb"))]
+            panic!("Database::RocksDb is selected without the feature rocksdb");
         }
         Database::DualRocksDbScyllaDb => {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -210,6 +226,7 @@ pub enum Database {
     Service,
     DynamoDb,
     ScyllaDb,
+    RocksDb,
     DualRocksDbScyllaDb,
 }
 

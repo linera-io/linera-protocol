@@ -90,7 +90,7 @@ impl StorageConfigProvider {
         match self.storage.storage_config {
             StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { .. } => anyhow::bail!("Not possible to work with RocksDB"),
+            StorageConfig::RocksDb { .. } => Ok(Database::RocksDb),
             #[cfg(feature = "storage-service")]
             StorageConfig::Service { .. } => Ok(Database::Service),
             #[cfg(feature = "dynamodb")]
