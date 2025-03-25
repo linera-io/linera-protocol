@@ -1,4 +1,4 @@
-name: Docker
+name: Docker Compose
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
     paths:
       - 'docker/**'
       - 'Cargo.toml'
-      - '.github/workflows/docker.yml'
+      - '.github/workflows/docker-compose.yml'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  compose:
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
 
