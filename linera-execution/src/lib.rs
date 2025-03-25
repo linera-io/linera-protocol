@@ -1298,10 +1298,6 @@ pub enum WasmRuntime {
     #[cfg_attr(not(with_wasmer), default)]
     #[display("wasmtime")]
     Wasmtime,
-    #[cfg(with_wasmer)]
-    WasmerWithSanitizer,
-    #[cfg(with_wasmtime)]
-    WasmtimeWithSanitizer,
 }
 
 #[derive(Clone, Copy, Display)]
@@ -1316,19 +1312,6 @@ pub enum EvmRuntime {
 /// Trait used to select a default `WasmRuntime`, if one is available.
 pub trait WithWasmDefault {
     fn with_wasm_default(self) -> Self;
-}
-
-impl WasmRuntime {
-    pub fn needs_sanitizer(self) -> bool {
-        match self {
-            #[cfg(with_wasmer)]
-            WasmRuntime::WasmerWithSanitizer => true,
-            #[cfg(with_wasmtime)]
-            WasmRuntime::WasmtimeWithSanitizer => true,
-            #[cfg(with_wasm_runtime)]
-            _ => false,
-        }
-    }
 }
 
 impl WithWasmDefault for Option<WasmRuntime> {

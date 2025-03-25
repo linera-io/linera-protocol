@@ -12,7 +12,6 @@
 
 mod entrypoints;
 mod module_cache;
-mod sanitizer;
 #[macro_use]
 mod runtime_api;
 #[cfg(with_wasmer)]
@@ -36,7 +35,6 @@ use {
     std::sync::LazyLock,
 };
 
-use self::sanitizer::sanitize;
 pub use self::{
     entrypoints::{ContractEntrypoints, ServiceEntrypoints},
     runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
@@ -84,23 +82,12 @@ impl WasmContractModule {
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
-        let contract_bytecode = if runtime.needs_sanitizer() {
-            // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
-            // compared.
-            sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)?
-        } else {
-            contract_bytecode
-        };
         let contract_bytecode = add_metering(contract_bytecode)?;
         match runtime {
             #[cfg(with_wasmer)]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::from_wasmer(contract_bytecode).await
-            }
+            WasmRuntime::Wasmer => Self::from_wasmer(contract_bytecode).await,
             #[cfg(with_wasmtime)]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::from_wasmtime(contract_bytecode).await
-            }
+            WasmRuntime::Wasmtime => Self::from_wasmtime(contract_bytecode).await,
         }
     }
 
@@ -161,13 +148,9 @@ impl WasmServiceModule {
     ) -> Result<Self, WasmExecutionError> {
         match runtime {
             #[cfg(with_wasmer)]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::from_wasmer(service_bytecode).await
-            }
+            WasmRuntime::Wasmer => Self::from_wasmer(service_bytecode).await,
             #[cfg(with_wasmtime)]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::from_wasmtime(service_bytecode).await
-            }
+            WasmRuntime::Wasmtime => Self::from_wasmtime(service_bytecode).await,
         }
     }
 
