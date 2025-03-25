@@ -8,7 +8,7 @@ use std::sync::Arc;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::ChainDescription,
 };
 use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
@@ -45,10 +45,11 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         description: Some(ChainDescription::Root(0)),
         ..Default::default()
     };
-    let mut view = state
-        .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
-        .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
+    let chain_id = app_desc.creator_chain_id;
+    let mut view = state
+        .into_view_with(chain_id, ExecutionRuntimeConfig::default())
+        .await;
     let app_id = From::from(&app_desc);
     let app_desc_blob_id = Blob::new_application_description(&app_desc).id();
     let contract_blob_id = contract_blob.id();
@@ -79,7 +80,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     .await?;
 
     let operation_context = OperationContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         height: BlockHeight(0),
         round: Some(0),
         index: Some(0),
@@ -88,7 +89,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     };
 
     let query_context = QueryContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
