@@ -97,7 +97,7 @@ impl Service {
             .block
             .ok_or_else(|| IndexerError::NotFound(hash))?
             .try_into()
-            .map_err(IndexerError::UnknownCertificateStatus)
+            .map_err(IndexerError::ConversionError)
     }
 
     /// Gets chains
