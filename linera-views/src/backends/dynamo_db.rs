@@ -67,11 +67,7 @@ async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInte
 }
 
 fn get_endpoint_address() -> Option<String> {
-    let endpoint_address = env::var(LOCALSTACK_ENDPOINT);
-    match endpoint_address {
-        Err(_) => None,
-        Ok(address) => Some(address),
-    }
+    env::var(LOCALSTACK_ENDPOINT).ok()
 }
 
 /// Gets the LocalStack config
@@ -1093,7 +1089,7 @@ pub enum DynamoDbStoreInternalError {
 
     /// An error occurred while creating the table.
     #[error(transparent)]
-    CreateTable(#[from] SdkError<CreateTableError>),
+    CreateTable(#[from] Box<SdkError<CreateTableError>>),
 
     /// An error occurred while building an object
     #[error(transparent)]

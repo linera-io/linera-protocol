@@ -17,7 +17,7 @@ impl DockerImage {
         &self.name
     }
 
-    pub async fn build(name: &String, binaries: &BuildArg, github_root: &PathBuf) -> Result<Self> {
+    pub async fn build(name: &str, binaries: &BuildArg, github_root: &PathBuf) -> Result<Self> {
         let build_arg = match binaries {
             BuildArg::Directory(bin_path) => {
                 // Get the binaries from the specified path
@@ -47,7 +47,9 @@ impl DockerImage {
             }
         };
 
-        let docker_image = Self { name: name.clone() };
+        let docker_image = Self {
+            name: name.to_owned(),
+        };
         let mut command = Command::new("docker");
         command
             .current_dir(github_root)

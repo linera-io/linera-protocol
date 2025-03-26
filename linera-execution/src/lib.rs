@@ -4,7 +4,6 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
-#![cfg_attr(web, feature(trait_upcasting))]
 #![deny(clippy::large_futures)]
 
 pub mod committee;
@@ -795,7 +794,7 @@ pub enum Operation {
     },
 }
 
-impl<'de> BcsHashable<'de> for Operation {}
+impl BcsHashable<'_> for Operation {}
 
 /// A message to be sent and possibly executed in the receiver's block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -950,7 +949,7 @@ pub struct OutgoingMessage {
     pub message: Message,
 }
 
-impl<'de> BcsHashable<'de> for OutgoingMessage {}
+impl BcsHashable<'_> for OutgoingMessage {}
 
 impl OutgoingMessage {
     /// Creates a new simple outgoing message with no grant and no authenticated signer.

@@ -293,7 +293,7 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
     }
 }
 
-impl<'a> TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'a> {
+impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: api::LiteCertificate) -> Result<Self, Self::Error> {
@@ -321,7 +321,7 @@ impl<'a> TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'a> {
     }
 }
 
-impl<'a> TryFrom<HandleLiteCertRequest<'a>> for api::LiteCertificate {
+impl TryFrom<HandleLiteCertRequest<'_>> for api::LiteCertificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(request: HandleLiteCertRequest) -> Result<Self, Self::Error> {
@@ -981,7 +981,7 @@ pub mod tests {
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
 
-    impl<'de> BcsSignable<'de> for Foo {}
+    impl BcsSignable<'_> for Foo {}
 
     fn get_block() -> ProposedBlock {
         make_first_block(ChainId::root(0))

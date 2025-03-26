@@ -276,7 +276,7 @@ impl WitStore for Ed25519PublicKey {
     }
 }
 
-impl<'de> BcsHashable<'de> for Ed25519PublicKey {}
+impl BcsHashable<'_> for Ed25519PublicKey {}
 
 impl Ed25519Signature {
     /// Computes a signature.
@@ -436,7 +436,7 @@ mod tests {
         #[derive(Debug, Serialize, Deserialize)]
         struct Foo(String);
 
-        impl<'de> BcsSignable<'de> for Foo {}
+        impl BcsSignable<'_> for Foo {}
 
         let key1 = Ed25519SecretKey::generate();
         let addr1 = key1.public();

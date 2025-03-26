@@ -346,7 +346,7 @@ where
     /// * Since a block must contain at least one operation and M bytes of the
     ///   serialization overhead (typically M is 2 or 3 bytes of vector sizes), condition (3)
     ///   requires that each operation in the original batch satisfies:
-    ///     `sizeof(key) + sizeof(value) + M <= K::MAX_VALUE_SIZE`
+    ///   `sizeof(key) + sizeof(value) + M <= K::MAX_VALUE_SIZE`
     ///
     /// * Similarly, a transaction must contain at least one block so it is desirable that
     ///   the maximum size of a block insertion `1 + sizeof(block_key) + K::MAX_VALUE_SIZE`

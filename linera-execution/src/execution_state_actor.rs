@@ -467,7 +467,7 @@ where
 
         let total_header_size = headers
             .iter()
-            .map(|header| (header.name.as_bytes().len() + header.value.len()) as u64)
+            .map(|header| (header.name.len() + header.value.len()) as u64)
             .sum();
 
         let mut remaining_bytes = size_limit.checked_sub(total_header_size).ok_or(

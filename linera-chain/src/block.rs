@@ -74,7 +74,7 @@ impl ValidatedBlock {
     }
 }
 
-impl<'de> BcsHashable<'de> for ValidatedBlock {}
+impl BcsHashable<'_> for ValidatedBlock {}
 
 /// Wrapper around an `ExecutedBlock` that has been confirmed.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -93,7 +93,7 @@ impl ConfirmedBlock {
     }
 }
 
-impl<'de> BcsHashable<'de> for ConfirmedBlock {}
+impl BcsHashable<'_> for ConfirmedBlock {}
 
 impl ConfirmedBlock {
     pub fn new(block: ExecutedBlock) -> Self {
@@ -223,7 +223,7 @@ impl Timeout {
     }
 }
 
-impl<'de> BcsHashable<'de> for Timeout {}
+impl BcsHashable<'_> for Timeout {}
 
 /// Failure to convert a `Certificate` into one of the expected certificate types.
 #[derive(Clone, Copy, Debug, Error)]
@@ -646,7 +646,7 @@ impl From<Block> for ExecutedBlock {
     }
 }
 
-impl<'de> BcsHashable<'de> for Block {}
+impl BcsHashable<'_> for Block {}
 
 #[derive(Serialize, Deserialize)]
 pub struct PreviousMessageBlocksMap<'a> {

@@ -48,7 +48,7 @@ async fn collect_pledges() {
     let (token_id, backers) = fungible::create_with_accounts(
         &validator,
         fungible_module_id,
-        iter::repeat(initial_amount).take(3),
+        iter::repeat_n(initial_amount, 3),
     )
     .await;
 
@@ -150,7 +150,7 @@ async fn cancel_successful_campaign() {
     let (token_id, backers) = fungible::create_with_accounts(
         &validator,
         fungible_module_id,
-        iter::repeat(initial_amount).take(3),
+        iter::repeat_n(initial_amount, 3),
     )
     .await;
 

@@ -450,7 +450,7 @@ where
                 "The message with the ID returned by the faucet is not OpenChain. \
                 Please make sure you are connecting to a genuine faucet."
             );
-            return Err(error::Inner::InvalidOpenMessage(message.cloned()).into());
+            return Err(error::Inner::InvalidOpenMessage(message.cloned().map(Box::new)).into());
         };
 
         if !config.ownership.verify_owner(&owner) {
@@ -885,9 +885,11 @@ where
             balance,
             application_permissions: Default::default(),
         };
-        let operations = iter::repeat(Operation::system(SystemOperation::OpenChain(config)))
-            .take(num_new_chains)
-            .collect();
+        let operations = iter::repeat_n(
+            Operation::system(SystemOperation::OpenChain(config)),
+            num_new_chains,
+        )
+        .collect();
         info!("Executing {} OpenChain operations", num_new_chains);
         Ok(chain_client
             .execute_operations(operations, vec![])

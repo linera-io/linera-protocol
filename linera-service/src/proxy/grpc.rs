@@ -332,6 +332,7 @@ where
         Ok((client, inner))
     }
 
+    #[allow(clippy::result_large_err)]
     fn log_and_return_proxy_request_outcome(
         result: Result<Response<ChainInfoResult>, Status>,
         method_name: &str,

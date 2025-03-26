@@ -301,7 +301,7 @@ impl Committee {
         // * ⌊2 N / 3⌋ + 1 = ⌊(6f + 2 + 2k) / 3⌋ + 1 = 2f + 1 + k + ⌊(2 - k) / 3⌋ = N - f
         // * ⌊(N + 2) / 3⌋= ⌊(3f + 3 + k) / 3⌋ = f + 1 + ⌊k / 3⌋ = f + 1
         let quorum_threshold = 2 * total_votes / 3 + 1;
-        let validity_threshold = (total_votes + 2) / 3;
+        let validity_threshold = total_votes.div_ceil(3);
 
         Committee {
             validators,

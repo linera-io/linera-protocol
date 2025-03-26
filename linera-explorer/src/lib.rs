@@ -63,7 +63,7 @@ pub(crate) fn reqwest_client() -> reqwest::Client {
 enum Page {
     Unloaded,
     Home {
-        chain: Chain,
+        chain: Box<Chain>,
         blocks: Vec<Blocks>,
         apps: Vec<Application>,
     },
@@ -171,7 +171,7 @@ fn url(config: &Config, protocol: Protocol, kind: AddressKind) -> String {
     format!("{}{}://{}", protocol, tls, address)
 }
 
-async fn get_chain(node: &str, chain_id: ChainId) -> Result<Chain> {
+async fn get_chain(node: &str, chain_id: ChainId) -> Result<Box<Chain>> {
     let client = reqwest::Client::new();
     let variables = chain::Variables {
         chain_id,
@@ -184,7 +184,7 @@ async fn get_chain(node: &str, chain_id: ChainId) -> Result<Chain> {
         .await?
         .chain;
     log_str(&serde_json::to_string_pretty(&chain).unwrap());
-    Ok(chain)
+    Ok(Box::new(chain))
 }
 
 async fn get_blocks(

@@ -372,7 +372,7 @@ where
     }
 }
 
-impl<'a, C> KeyValueStoreView<C>
+impl<C> KeyValueStoreView<C>
 where
     C: Send + Context + Sync,
     ViewError: From<C::Error>,
