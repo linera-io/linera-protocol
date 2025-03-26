@@ -138,9 +138,9 @@ impl LruPrefixCache {
             || key_value_size > self.storage_cache_config.max_entry_size
         {
             // Just forget about the entry.
-            self.map.remove(&key);
             if let Some(old_key_value_size) = self.queue.remove(&key) {
                 self.total_size -= old_key_value_size;
+                self.map.remove(&key);
             };
             return;
         }
@@ -149,7 +149,7 @@ impl LruPrefixCache {
                 entry.insert(cache_entry);
                 // Put it on first position for LRU
                 let Some(old_key_value_size) = self.queue.remove(&key) else {
-                    unreachable!("The entry should be present in the map");
+                    unreachable!("The entry should be present in the queue");
                 };
                 self.total_size -= old_key_value_size;
                 self.queue.insert(key, key_value_size);
@@ -186,7 +186,8 @@ impl LruPrefixCache {
     /// create new entries in the cache.
     pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
-            for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
+            for (key, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
+                *self.queue.get_mut(key).unwrap() = key.len();
                 let value_size = match value {
                     CacheEntry::Value(vec) => vec.len(),
                     _ => 0,
