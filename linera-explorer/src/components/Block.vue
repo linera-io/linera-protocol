@@ -82,6 +82,23 @@ defineProps<{block: HashedConfirmedBlock, title: string}>()
             </li>
           </ul>
         </div>
+        <li v-if="block.value.block.body.operations.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#operations-collapse-'+block.hash">
+          <span><strong>Operations</strong> ({{ block.value.block.body.operations.length }})</span>
+          <i class="bi bi-caret-down-fill"></i>
+        </li>
+        <li v-else class="list-group-item d-flex justify-content-between">
+          <span><strong>Operations</strong> (0)</span>
+          <span></span>
+        </li>
+        <div v-if="block.value.block.body.operations.length!==0" class="collapse" :id="'operations-collapse-'+block.hash">
+          <ul class="list-group">
+            <li v-for="(o, i) in block.value.block.body.operations" class="list-group-item p-0" key="block.hash+'-operation-'+i">
+              <div class="card card-body p-0">
+                <Op :op="o" :id="block.hash+'-operation-'+i" :index="i"/>
+              </div>
+            </li>
+          </ul>
+        </div>
         <li v-if="block.value.block.body.messages.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#out-messages-collapse-'+block.hash">
           <span><strong>Outgoing Messages</strong> ({{ block.value.block.body.messages.length }})</span>
           <i class="bi bi-caret-down-fill"></i>
@@ -102,19 +119,102 @@ defineProps<{block: HashedConfirmedBlock, title: string}>()
             </li>
           </ul>
         </div>
-        <li v-if="block.value.block.body.operations.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#operations-collapse-'+block.hash">
-          <span><strong>Operations</strong> ({{ block.value.block.body.operations.length }})</span>
+        <li v-if="Object.keys(block.value.block.body.previousMessageBlocks).length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#previous-message-blocks-collapse-'+block.hash">
+          <span><strong>Previous Message Blocks</strong> ({{ Object.keys(block.value.block.body.previousMessageBlocks).length }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
         <li v-else class="list-group-item d-flex justify-content-between">
-          <span><strong>Operations</strong> (0)</span>
+          <span><strong>Previous Message Blocks</strong> (0)</span>
           <span></span>
         </li>
-        <div v-if="block.value.block.body.operations.length!==0" class="collapse" :id="'operations-collapse-'+block.hash">
+        <div v-if=" Object.keys(block.value.block.body.previousMessageBlocks).length!==0" class="collapse" :id="'previous-message-blocks-collapse-'+block.hash">
           <ul class="list-group">
-            <li v-for="(o, i) in block.value.block.body.operations" class="list-group-item p-0" key="block.hash+'-operation-'+i">
-              <div class="card card-body p-0">
-                <Op :op="o" :id="block.hash+'-operation-'+i" :index="i"/>
+            <li v-for="(hash, id) in block.value.block.body.previousMessageBlocks" class="list-group-item p-0" key="block.hash+'-previousmessageblock-'+id">
+              <div class="card">
+                <div class="card-header">Previous message from chain {{ id }} was sent at block</div>
+                <div class="card-body">
+                  <a @click="$root.route('block', [['block', hash]])" class="btn btn-link">{{ hash }}</a>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <li v-if="block.value.block.body.oracleResponses.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#oracle-responses-collapse-'+block.hash">
+          <span><strong>Oracle Responses</strong> ({{ block.value.block.body.oracleResponses.length }})</span>
+          <i class="bi bi-caret-down-fill"></i>
+        </li>
+        <li v-else class="list-group-item d-flex justify-content-between">
+          <span><strong>Oracle Responses</strong> (0)</span>
+          <span></span>
+        </li>
+        <div v-if="block.value.block.body.oracleResponses.length!==0" class="collapse" :id="'oracle-responses-collapse-'+block.hash">
+          <ul class="list-group">
+            <li v-for="(m, i) in block.value.block.body.oracleResponses" class="list-group-item p-0" key="block.hash+'-oracleresponse-'+i">
+              <div class="card">
+                <div class="card-header">Oracle Response {{ i+1 }}</div>
+                <div class="card-body">
+                  <Json :data="m"/>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <li v-if="block.value.block.body.events.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#events-collapse-'+block.hash">
+          <span><strong>Events</strong> ({{ block.value.block.body.events.length }})</span>
+          <i class="bi bi-caret-down-fill"></i>
+        </li>
+        <li v-else class="list-group-item d-flex justify-content-between">
+          <span><strong>Events</strong> (0)</span>
+          <span></span>
+        </li>
+        <div v-if="block.value.block.body.events.length!==0" class="collapse" :id="'events-collapse-'+block.hash">
+          <ul class="list-group">
+            <li v-for="(m, i) in block.value.block.body.events" class="list-group-item p-0" key="block.hash+'-event-'+i">
+              <div class="card">
+                <div class="card-header">Event {{ i+1 }}</div>
+                <div class="card-body">
+                  <Json :data="m"/>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <li v-if="block.value.block.body.blobs.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#blobs-collapse-'+block.hash">
+          <span><strong>Blobs</strong> ({{ block.value.block.body.blobs.length }})</span>
+          <i class="bi bi-caret-down-fill"></i>
+        </li>
+        <li v-else class="list-group-item d-flex justify-content-between">
+          <span><strong>Blobs</strong> (0)</span>
+          <span></span>
+        </li>
+        <div v-if="block.value.block.body.blobs.length!==0" class="collapse" :id="'blobs-collapse-'+block.hash">
+          <ul class="list-group">
+            <li v-for="(m, i) in block.value.block.body.blobs" class="list-group-item p-0" key="block.hash+'-blob-'+i">
+              <div class="card">
+                <div class="card-header">Blob {{ i+1 }}</div>
+                <div class="card-body">
+                  <Json :data="m"/>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <li v-if="block.value.block.body.operationResults.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#operation-results-collapse-'+block.hash">
+          <span><strong>Operation Results</strong> ({{ block.value.block.body.operationResults.length }})</span>
+          <i class="bi bi-caret-down-fill"></i>
+        </li>
+        <li v-else class="list-group-item d-flex justify-content-between">
+          <span><strong>Operation Results</strong> (0)</span>
+          <span></span>
+        </li>
+        <div v-if="block.value.block.body.operationResults.length!==0" class="collapse" :id="'operation-results-collapse-'+block.hash">
+          <ul class="list-group">
+            <li v-for="(m, i) in block.value.block.body.operationResults" class="list-group-item p-0" key="block.hash+'-operationresult-'+i">
+              <div class="card">
+                <div class="card-header">Operation Result {{ i+1 }}</div>
+                <div class="card-body">
+                  <Json :data="m"/>
+                </div>
               </div>
             </li>
           </ul>
