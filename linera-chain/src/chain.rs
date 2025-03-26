@@ -751,12 +751,6 @@ where
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
             .with_execution_context(ChainExecutionContext::Block)?;
-        resource_controller
-            .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
-            .with_execution_context(ChainExecutionContext::Block)?;
-        resource_controller
-            .track_executed_block_size_sequence_extension(0, block.operations.len())
-            .with_execution_context(ChainExecutionContext::Block)?;
         for blob in published_blobs {
             let blob_type = blob.content().blob_type();
             if blob_type == BlobType::Data
@@ -900,18 +894,6 @@ where
                         .with_execution_context(chain_execution_context)?;
                 }
             }
-            resource_controller
-                .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
-                .with_execution_context(chain_execution_context)?;
-            resource_controller
-                .track_executed_block_size_sequence_extension(messages.len(), 1)
-                .with_execution_context(chain_execution_context)?;
-            resource_controller
-                .track_executed_block_size_sequence_extension(events.len(), 1)
-                .with_execution_context(chain_execution_context)?;
-            resource_controller
-                .track_executed_block_size_sequence_extension(blobs.len(), 1)
-                .with_execution_context(chain_execution_context)?;
             oracle_responses.push(txn_outcome.oracle_responses);
             messages.push(txn_outcome.outgoing_messages);
             events.push(txn_outcome.events);
@@ -920,9 +902,6 @@ where
             if let Transaction::ExecuteOperation(_) = transaction {
                 resource_controller
                     .track_block_size_of(&(&txn_outcome.operation_result))
-                    .with_execution_context(chain_execution_context)?;
-                resource_controller
-                    .track_executed_block_size_sequence_extension(operation_results.len(), 1)
                     .with_execution_context(chain_execution_context)?;
                 operation_results.push(OperationResult(txn_outcome.operation_result));
             }

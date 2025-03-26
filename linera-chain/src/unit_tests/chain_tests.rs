@@ -189,7 +189,7 @@ async fn test_block_size_limit() {
         .unwrap();
     let block = Block::new(valid_block, outcome);
 
-    // ...because its size is exactly at the allowed limit.
+    // ...because its size is at the allowed limit.
     assert_eq!(
         bcs::serialized_size(&block).unwrap(),
         maximum_executed_block_size as usize
