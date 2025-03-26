@@ -384,27 +384,6 @@ impl<Account, Tracker> ResourceController<Account, Tracker>
 where
     Tracker: AsMut<ResourceTracker>,
 {
-    /// Tracks the extension of a sequence in an executed block.
-    ///
-    /// The sequence length is ULEB128-encoded, so extending a sequence can add an additional byte.
-    pub fn track_executed_block_size_sequence_extension(
-        &mut self,
-        old_len: usize,
-        delta: usize,
-    ) -> Result<(), ExecutionError> {
-        if delta == 0 {
-            return Ok(());
-        }
-        let new_len = old_len + delta;
-        // ULEB128 uses one byte per 7 bits of the number. It always uses at least one byte.
-        let old_size = ((usize::BITS - old_len.leading_zeros()) / 7).max(1);
-        let new_size = ((usize::BITS - new_len.leading_zeros()) / 7).max(1);
-        if new_size > old_size {
-            self.track_block_size((new_size - old_size) as usize)?;
-        }
-        Ok(())
-    }
-
     /// Tracks the serialized size of an executed block, or parts of it.
     pub fn track_block_size_of(&mut self, data: &impl Serialize) -> Result<(), ExecutionError> {
         self.track_block_size(bcs::serialized_size(data)?)
