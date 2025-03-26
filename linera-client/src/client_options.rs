@@ -88,6 +88,14 @@ pub struct ClientContextOptions {
     #[arg(long)]
     pub long_lived_services: bool,
 
+    /// The number of Tokio worker threads to use.
+    #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
+    pub tokio_threads: Option<usize>,
+
+    /// The number of Tokio blocking threads to use.
+    #[arg(long)]
+    pub tokio_blocking_threads: Option<usize>,
+
     /// The policy for handling incoming messages.
     #[arg(long, default_value = "accept")]
     pub blanket_message_policy: BlanketMessagePolicy,
