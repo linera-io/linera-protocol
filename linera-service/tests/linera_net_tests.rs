@@ -397,7 +397,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let query = EvmQuery::Query(query);
     let result = application.run_json_query(query.clone()).await?;
 
-
     let counter_value = read_evm_u64_entry(result)?;
     assert_eq!(counter_value, original_counter_value);
 

@@ -14,7 +14,8 @@ use linera_base::{
 use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
-        create_dummy_user_application_description, solidity::{get_evm_example_counter, read_evm_u64_entry},
+        create_dummy_user_application_description,
+        solidity::{get_evm_example_counter, read_evm_u64_entry},
         SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,

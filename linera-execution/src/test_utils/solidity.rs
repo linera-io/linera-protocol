@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::Context;
+use serde_json::Value;
 use tempfile::{tempdir, TempDir};
 
 fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
