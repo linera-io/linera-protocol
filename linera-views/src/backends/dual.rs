@@ -321,21 +321,21 @@ where
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        let test1 = S1::exists(&config.first_config, namespace)
+        let exists1 = S1::exists(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
-        let test2 = S2::exists(&config.second_config, namespace)
+        let exists2 = S2::exists(&config.second_config, namespace)
             .await
             .map_err(DualStoreError::Second)?;
-        if test1 && test2 {
+        if exists1 && exists2 {
             return Err(DualStoreError::StoreAlreadyExist);
         }
-        if !test1 {
+        if !exists1 {
             S1::create(&config.first_config, namespace)
                 .await
                 .map_err(DualStoreError::First)?;
         }
-        if !test2 {
+        if !exists2 {
             S2::create(&config.second_config, namespace)
                 .await
                 .map_err(DualStoreError::Second)?;

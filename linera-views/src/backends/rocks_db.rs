@@ -523,7 +523,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
         if std::path::Path::exists(&path_buf) {
-            return Err(RocksDbStoreInternalError::StoreAlreadyExist);
+            return Err(RocksDbStoreInternalError::StoreAlreadyExists);
         }
         std::fs::create_dir_all(path_buf)?;
         Ok(())
@@ -562,9 +562,9 @@ impl TestKeyValueStore for RocksDbStoreInternal {
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
-    /// Already existing storage
-    #[error("Already existing storag")]
-    StoreAlreadyExist,
+    /// Store already exists
+    #[error("Store already exists")]
+    StoreAlreadyExists,
 
     /// Tokio join error in RocksDB.
     #[error("tokio join error: {0}")]
