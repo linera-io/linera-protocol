@@ -46,6 +46,13 @@ impl CryptoHash {
         &self.0
     }
 
+    /// set the hash as the one from EVM by setting the last 12 bytes to zero.
+    pub fn set_as_evm(&mut self) {
+        for index in 20..32 {
+            self.0 .0[index] = 0;
+        }
+    }
+
     /// Returns the hash of `TestString(s)`, for testing purposes.
     #[cfg(with_testing)]
     pub fn test_hash(s: impl Into<String>) -> Self {
