@@ -9,11 +9,12 @@ use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
     identifiers::ChainDescription,
+    vm::EvmQuery,
 };
 use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
-        create_dummy_user_application_description, solidity::get_evm_example_counter,
+        create_dummy_user_application_description, solidity::{get_evm_example_counter, read_evm_u64_entry},
         SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
@@ -21,6 +22,7 @@ use linera_execution::{
     TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
+use serde_json::Value;
 
 #[tokio::test]
 async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
@@ -113,7 +115,8 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         ]);
         value += increment;
         let operation = incrementCall { input: *increment };
-        let bytes = operation.abi_encode();
+        let operation = operation.abi_encode();
+        let bytes = bcs::to_bytes(&operation)?;
         let operation = Operation::User {
             application_id: app_id,
             bytes,
@@ -128,15 +131,12 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
 
         let query = get_valueCall {};
         let query = query.abi_encode();
-        let query = hex::encode(&query);
-        let query = format!("query {{ v{} }}", query);
-        let query = serde_json::json!({"query": query});
-        let query = serde_json::to_string(&query)?;
-        let query = query.into_bytes();
+        let query = EvmQuery::Query(query);
+        let bytes = serde_json::to_vec(&query)?;
 
         let query = Query::User {
             application_id: app_id,
-            bytes: query,
+            bytes,
         };
 
         let result = view.query_application(query_context, query, None).await?;
@@ -145,11 +145,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             anyhow::bail!("Wrong QueryResponse result");
         };
         let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-        let result = result["data"].to_string();
-        let result = hex::decode(&result[1..result.len() - 1])?;
-        let mut arr = [0_u8; 8];
-        arr.copy_from_slice(&result[..8]);
-        let result = u64::from_be_bytes(arr);
+        let result = read_evm_u64_entry(result)?;
         assert_eq!(result, value);
     }
     Ok(())
