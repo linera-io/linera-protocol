@@ -1320,6 +1320,10 @@ struct ClientOptions {
     #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 
+    /// The number of Tokio blocking threads to use.
+    #[arg(long, env = "LINERA_CLIENT_TOKIO_BLOCKING_THREADS")]
+    tokio_blocking_threads: Option<usize>,
+
     /// Subcommand.
     #[command(subcommand)]
     command: ClientCommand,
@@ -1571,6 +1575,10 @@ fn main() -> anyhow::Result<()> {
 
         builder
     };
+
+    if let Some(blocking_threads) = options.tokio_blocking_threads {
+        runtime.max_blocking_threads(blocking_threads);
+    }
 
     let span = tracing::info_span!("linera::main");
     if let Some(wallet_id) = &options.inner.with_wallet {
