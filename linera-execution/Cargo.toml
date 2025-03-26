@@ -23,20 +23,8 @@ revm = [
 ]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
-wasmer = [
-    "dep:wasmer",
-    "wasmer/enable-serde",
-    "linera-witty/wasmer",
-    "wasm-encoder",
-    "wasm-instrument",
-    "wasmparser",
-]
-wasmtime = [
-    "dep:wasmtime",
-    "linera-witty/wasmtime",
-    "wasm-encoder",
-    "wasmparser",
-]
+wasmer = ["dep:wasmer", "wasmer/enable-serde", "linera-witty/wasmer"]
+wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
 web = ["linera-base/web", "linera-views/web", "js-sys"]
 
 [dependencies]
@@ -75,9 +63,7 @@ tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 url.workspace = true
-wasm-encoder = { workspace = true, optional = true }
-wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
-wasmparser = { workspace = true, optional = true }
+wasm-instrument = { workspace = true, features = ["sign_ext"] }
 wasmtime = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

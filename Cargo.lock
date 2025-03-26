@@ -4720,9 +4720,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "wasm-encoder 0.24.1",
  "wasm-instrument",
- "wasmparser 0.101.1",
  "wasmtime",
 ]
 
@@ -9303,15 +9301,6 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f7d56227d910901ce12dfd19acc40c12687994dfb3f57c90690f80be946ec5"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wasm-encoder"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18c41dbd92eaebf3612a39be316540b8377c871cb9bde6b064af962984912881"
@@ -9432,16 +9421,6 @@ dependencies = [
  "target-lexicon",
  "thiserror 1.0.69",
  "xxhash-rust",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.101.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf2f22ef84ac5666544afa52f326f13e16f3d019d2e61e704fd8091c9358b130"
-dependencies = [
- "indexmap 1.9.3",
- "url",
 ]
 
 [[package]]

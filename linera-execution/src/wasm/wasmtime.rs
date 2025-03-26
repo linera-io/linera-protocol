@@ -6,9 +6,9 @@
 use std::sync::LazyLock;
 
 use linera_base::data_types::Bytecode;
-use linera_witty::{wasmtime::EntrypointInstance, ExportTo, Instance};
+use linera_witty::{wasmtime::EntrypointInstance, ExportTo};
 use tokio::sync::Mutex;
-use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
+use wasmtime::{Config, Engine, Linker, Module, Store};
 
 use super::{
     module_cache::ModuleCache,
@@ -24,9 +24,7 @@ use crate::{
 /// An [`Engine`] instance configured to run application contracts.
 static CONTRACT_ENGINE: LazyLock<Engine> = LazyLock::new(|| {
     let mut config = Config::default();
-    config
-        .consume_fuel(true)
-        .cranelift_nan_canonicalization(true);
+    config.cranelift_nan_canonicalization(true);
 
     Engine::new(&config).expect("Failed to create Wasmtime `Engine` for contracts")
 });
@@ -50,42 +48,6 @@ where
 {
     /// The Wasm module instance.
     instance: EntrypointInstance<RuntimeApiData<Runtime>>,
-
-    /// The starting amount of fuel.
-    initial_fuel: u64,
-}
-
-// TODO(#1967): Remove once fuel consumption is instrumented in the bytecode
-impl<Runtime> WasmtimeContractInstance<Runtime>
-where
-    Runtime: ContractRuntime,
-{
-    fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
-        let runtime = &mut self.instance.user_data_mut().runtime_mut();
-        let fuel = runtime.remaining_fuel()?;
-        let mut context = self.instance.as_context_mut();
-
-        self.initial_fuel = fuel;
-
-        context
-            .set_fuel(fuel)
-            .expect("Fuel consumption should be enabled");
-
-        Ok(())
-    }
-
-    fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
-        let remaining_fuel = self
-            .instance
-            .as_context_mut()
-            .get_fuel()
-            .expect("Failed to read remaining fuel");
-        let runtime = &mut self.instance.user_data_mut().runtime_mut();
-
-        assert!(self.initial_fuel >= remaining_fuel);
-
-        runtime.consume_fuel(self.initial_fuel - remaining_fuel)
-    }
 }
 
 /// Type representing a running [Wasmtime](https://wasmtime.dev/) service.
@@ -126,7 +88,6 @@ where
 
         Ok(Self {
             instance: EntrypointInstance::new(instance, store),
-            initial_fuel: 0,
         })
     }
 }
@@ -176,10 +137,9 @@ where
         _context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).instantiate(argument);
-        self.persist_remaining_fuel()?;
-        result.map_err(WasmExecutionError::from)?;
+        ContractEntrypoints::new(&mut self.instance)
+            .instantiate(argument)
+            .map_err(WasmExecutionError::from)?;
         Ok(())
     }
 
@@ -188,10 +148,10 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).execute_operation(operation);
-        self.persist_remaining_fuel()?;
-        Ok(result.map_err(WasmExecutionError::from)?)
+        let result = ContractEntrypoints::new(&mut self.instance)
+            .execute_operation(operation)
+            .map_err(WasmExecutionError::from)?;
+        Ok(result)
     }
 
     fn execute_message(
@@ -199,18 +159,16 @@ where
         _context: MessageContext,
         message: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).execute_message(message);
-        self.persist_remaining_fuel()?;
-        result.map_err(WasmExecutionError::from)?;
+        ContractEntrypoints::new(&mut self.instance)
+            .execute_message(message)
+            .map_err(WasmExecutionError::from)?;
         Ok(())
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
-        self.configure_initial_fuel()?;
-        let result = ContractEntrypoints::new(&mut self.instance).finalize();
-        self.persist_remaining_fuel()?;
-        result.map_err(WasmExecutionError::from)?;
+        ContractEntrypoints::new(&mut self.instance)
+            .finalize()
+            .map_err(WasmExecutionError::from)?;
         Ok(())
     }
 }
