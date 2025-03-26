@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   remote-net-test:
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-22.04-16-cores
     timeout-minutes: 40
 
     steps:
@@ -70,7 +70,7 @@ jobs:
         cargo test -p linera-service remote_net_grpc --features remote-net
 
   execution-wasmtime-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     steps:
@@ -81,7 +81,7 @@ jobs:
         cargo test --locked -p linera-execution --features wasmtime
 
   metrics-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     steps:
@@ -92,7 +92,7 @@ jobs:
         cargo test --locked -p linera-base --features metrics
 
   wasm-application-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
 
     steps:
@@ -108,7 +108,7 @@ jobs:
         cargo test --locked
 
   default-features-and-witty-integration-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
 
     steps:
@@ -130,7 +130,7 @@ jobs:
         cargo test -p linera-witty --features wasmer,wasmtime
 
   check-outdated-cli-md:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     steps:
@@ -150,7 +150,7 @@ jobs:
         fi
 
   benchmark-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
@@ -169,7 +169,7 @@ jobs:
         cargo test --locked -p linera-service --features benchmark,storage-service benchmark
 
   ethereum-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
@@ -215,7 +215,7 @@ jobs:
         cargo test test_evm_end_to_end_counter --features revm,storage-service
 
   storage-service-tests:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-22.04-16-cores
     timeout-minutes: 40
     steps:
     - uses: actions/checkout@v3
@@ -234,7 +234,7 @@ jobs:
         cargo test --features storage-service -- storage_service --nocapture
 
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
 
     steps:
@@ -265,7 +265,7 @@ jobs:
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
 
   check-wit-files:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-22.04-16-cores
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -274,7 +274,7 @@ jobs:
         cargo run --bin wit-generator -- -c
 
   lint-unexpected-chain-load-operations:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 2
 
     steps:
@@ -284,7 +284,7 @@ jobs:
         ./scripts/check_chain_loads.sh
 
   lint-check-copyright-headers:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 2
 
     steps:
@@ -299,7 +299,7 @@ jobs:
         | xargs -0 scripts/target/release/check_copyright_header
 
   lint-cargo-machete:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 2
 
     steps:
@@ -316,7 +316,7 @@ jobs:
         cargo machete
 
   lint-cargo-fmt:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 2
 
     steps:
@@ -330,7 +330,7 @@ jobs:
         cargo fmt -- --check
 
   lint-taplo-fmt:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
 
     steps:
@@ -342,7 +342,7 @@ jobs:
       run: taplo fmt --check --diff
 
   lint-check-for-outdated-readme:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
 
     steps:
@@ -359,7 +359,7 @@ jobs:
         (set -e; for I in linera-*; do if [ -d "$I" ]; then echo $I; cargo rdme --check --no-fail-on-warnings -w $I; fi; done)
 
   lint-wasm-applications:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     steps:
@@ -382,7 +382,7 @@ jobs:
         cargo fmt -- --check
 
   lint-cargo-clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
 
     steps:
@@ -406,7 +406,7 @@ jobs:
           -p linera-views
 
   lint-cargo-doc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
 
     steps:
@@ -424,7 +424,7 @@ jobs:
         cargo doc --locked --all-features
 
   lint-check-linera-service-graphql-schema:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
 
     steps:
@@ -439,7 +439,7 @@ jobs:
         diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql
 
   lint-check-all-features:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-22.04-16-cores
     timeout-minutes: 40
 
     steps:
