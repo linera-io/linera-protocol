@@ -1007,11 +1007,11 @@ where
             authenticated_signer: posted_message.authenticated_signer,
             refund_grant_to: posted_message.refund_grant_to,
         };
+        let chain_execution_context =
+            ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
         let mut grant = posted_message.grant;
         match incoming_bundle.action {
             MessageAction::Accept => {
-                let chain_execution_context =
-                    ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
                 // Once a chain is closed, accepting incoming messages is not allowed.
                 ensure!(!self.is_closed(), ChainError::ClosedChain);
 
@@ -1045,13 +1045,13 @@ where
                     self.execution_state
                         .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
                         .await
-                        .with_execution_context(ChainExecutionContext::Block)?;
+                        .with_execution_context(chain_execution_context)?;
                 } else {
                     // Nothing to do except maybe refund the grant.
                     self.execution_state
                         .send_refund(context, grant, txn_tracker)
                         .await
-                        .with_execution_context(ChainExecutionContext::Block)?;
+                        .with_execution_context(chain_execution_context)?;
                 }
             }
         }
