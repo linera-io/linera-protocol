@@ -3108,14 +3108,17 @@ where
             (min_epoch, epoch.try_add_one()?)
         };
         let mut epoch_change_ops = Vec::new();
-        while self.has_admin_event(EPOCH_STREAM_NAME, next_epoch).await? {
+        while self
+            .has_admin_event(EPOCH_STREAM_NAME, next_epoch.0)
+            .await?
+        {
             epoch_change_ops.push(Operation::system(SystemOperation::ProcessNewEpoch(
                 next_epoch,
             )));
             next_epoch.try_add_assign_one()?;
         }
         while self
-            .has_admin_event(REMOVED_EPOCH_STREAM_NAME, min_epoch)
+            .has_admin_event(REMOVED_EPOCH_STREAM_NAME, min_epoch.0)
             .await?
         {
             epoch_change_ops.push(Operation::system(SystemOperation::ProcessRemovedEpoch(
@@ -3131,12 +3134,12 @@ where
     async fn has_admin_event(
         &self,
         stream_name: &[u8],
-        key: impl Serialize,
+        index: u32,
     ) -> Result<bool, ChainClientError> {
         let event_id = EventId {
             chain_id: self.admin_id,
             stream_id: StreamId::system(stream_name),
-            key: bcs::to_bytes(&key).unwrap(),
+            index,
         };
         match self.client.storage.read_event(event_id).await {
             Ok(_) => Ok(true),

@@ -40,11 +40,8 @@ impl Contract for MetaCounterContract {
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
         let this_chain = self.runtime.chain_id();
-        self.runtime.emit(
-            StreamName(b"announcements".to_vec()),
-            b"updates",
-            b"instantiated",
-        );
+        self.runtime
+            .emit(StreamName(b"announcements".to_vec()), 0, b"instantiated");
         self.runtime.send_message(this_chain, Message::Increment(0));
     }
 

@@ -467,7 +467,7 @@ Event:
   STRUCT:
     - stream_id:
         TYPENAME: StreamId
-    - key: BYTES
+    - index: U32
     - value: BYTES
 EventId:
   STRUCT:
@@ -475,8 +475,7 @@ EventId:
         TYPENAME: ChainId
     - stream_id:
         TYPENAME: StreamId
-    - key:
-        SEQ: U8
+    - index: U32
 GenericApplicationId:
   ENUM:
     0:

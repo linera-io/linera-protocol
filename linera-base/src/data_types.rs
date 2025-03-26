@@ -1188,10 +1188,8 @@ impl BcsHashable<'_> for Blob {}
 pub struct Event {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,
-    /// The event key.
-    #[debug(with = "hex_debug")]
-    #[serde(with = "serde_bytes")]
-    pub key: Vec<u8>,
+    /// The event index, i.e. the number of events in the stream before this one.
+    pub index: u32,
     /// The payload data.
     #[debug(with = "hex_debug")]
     #[serde(with = "serde_bytes")]
@@ -1204,7 +1202,7 @@ impl Event {
         EventId {
             chain_id,
             stream_id: self.stream_id.clone(),
-            key: self.key.clone(),
+            index: self.index,
         }
     }
 }

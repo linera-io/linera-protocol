@@ -576,13 +576,13 @@ where
     fn emit(
         caller: &mut Caller,
         name: StreamName,
-        key: Vec<u8>,
+        index: u32,
         value: Vec<u8>,
     ) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .emit(name, key, value)
+            .emit(name, index, value)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

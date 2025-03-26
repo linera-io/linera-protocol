@@ -349,7 +349,7 @@ where
                 application_id: application_id2.forget_abi().into(),
                 stream_name: StreamName(b"announcements".to_vec()),
             },
-            key: b"updates".to_vec(),
+            index: 0,
             value: b"instantiated".to_vec(),
         }]]
     );
