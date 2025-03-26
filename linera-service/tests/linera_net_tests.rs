@@ -331,24 +331,6 @@ impl AmmApp {
     }
 }
 
-fn value_to_vec_u8(value: Value) -> Vec<u8> {
-    let mut vec: Vec<u8> = Vec::new();
-    for val in value.as_array().unwrap() {
-        let val = val.as_u64().unwrap();
-        let val = val as u8;
-        vec.push(val);
-    }
-    vec
-}
-
-fn read_evm_u64_entry(value: Value) -> Result<u64> {
-    let vec = value_to_vec_u8(value);
-    let mut arr = [0_u8; 8];
-    arr.copy_from_slice(&vec[24..]);
-    let counter_value = u64::from_be_bytes(arr);
-    Ok(counter_value)
-}
-
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -360,7 +342,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        get_contract_service_paths, get_evm_example_counter,
+        get_contract_service_paths, get_evm_example_counter, read_evm_u64_entry,
     };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
