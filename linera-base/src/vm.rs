@@ -56,3 +56,12 @@ scalar!(VmRuntime);
 #[derive(Clone, Debug, Error)]
 #[error("{0:?} is not a valid virtual machine runtime")]
 pub struct InvalidVmRuntime(String);
+
+/// The possible types of queries for an Evm contract
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum EvmQuery {
+    /// The ordinary queries.
+    Query(Vec<u8>),
+    /// The operation being scheduled.
+    Operation(Vec<u8>),
+}

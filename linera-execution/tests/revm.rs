@@ -13,7 +13,7 @@ use linera_base::{
 use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
-        create_dummy_user_application_description, solidity::get_example_counter,
+        create_dummy_user_application_description, solidity::get_evm_example_counter,
         SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
@@ -21,21 +21,20 @@ use linera_execution::{
     TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
-use revm_primitives::U256;
 
 #[tokio::test]
 async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
-    let module = get_example_counter()?;
+    let module = get_evm_example_counter()?;
 
     sol! {
         struct ConstructorArgs {
-            uint256 initial_value;
+            uint64 initial_value;
         }
-        function increment(uint256 input);
+        function increment(uint64 input);
         function get_value();
     }
 
-    let initial_value = U256::from(10000);
+    let initial_value = 10000;
     let mut value = initial_value;
     let args = ConstructorArgs { initial_value };
     let instantiation_argument = args.abi_encode();
@@ -94,12 +93,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         local_time: Timestamp::from(0),
     };
 
-    let increments = [
-        U256::from(2),
-        U256::from(9),
-        U256::from(7),
-        U256::from(1000),
-    ];
+    let increments = [2_u64, 9_u64, 7_u64, 1000_u64];
     let policy = ResourceControlPolicy {
         fuel_unit: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
@@ -153,7 +147,9 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
         let result = result["data"].to_string();
         let result = hex::decode(&result[1..result.len() - 1])?;
-        let result = U256::from_be_slice(&result);
+        let mut arr = [0_u8; 8];
+        arr.copy_from_slice(&result[..8]);
+        let result = u64::from_be_bytes(arr);
         assert_eq!(result, value);
     }
     Ok(())
