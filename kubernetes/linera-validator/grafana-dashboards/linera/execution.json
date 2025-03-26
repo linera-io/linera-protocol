@@ -2141,9 +2141,35 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "Cache hit pct %"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -2173,8 +2199,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "((\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type)\n)\n/\n(\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type)\n  +\n  sum(rate(linera_value_cache_miss[1m])) by (key_type, value_type)\n)) * 100",
-          "legendFormat": "__auto",
+          "expr": "((\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type) or vector(0)\n)\n/\n(\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type) or vector(0)\n  +\n  sum(rate(linera_value_cache_miss[1m])) by (key_type, value_type) or vector(0)\n)) * 100",
+          "legendFormat": "Cache hit pct %",
           "range": true,
           "refId": "A"
         }

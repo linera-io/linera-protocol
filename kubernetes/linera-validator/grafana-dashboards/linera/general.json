@@ -719,11 +719,11 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "(\n    (\n        rate(linera_server_request_error[1m])\n    ) / (\n        (\n            (\n                rate(linera_server_request_success[1m])\n            ) + (\n                rate(linera_server_request_error[1m])\n            )\n        )\n    )\n) * 100",
+          "expr": "(\n    (\n        sum(rate(linera_server_request_error[1m])) by (method_name, pod)\n    ) / (\n        (\n            (\n                sum(rate(linera_server_request_success[1m])) by (method_name, pod)\n            ) + (\n                sum(rate(linera_server_request_error[1m])) by (method_name, pod)\n            )\n        )\n    )\n) * 100",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{pod}} - {{method_name}}",
           "range": true,
           "refId": "A",
           "useBackend": false
@@ -2045,7 +2045,7 @@
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{pod}} - {{failure_type}}",
           "range": true,
           "refId": "A",
           "useBackend": false
