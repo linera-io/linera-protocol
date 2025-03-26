@@ -124,7 +124,7 @@ pub fn get_contract_service_paths(module: Vec<u8>) -> anyhow::Result<(PathBuf, P
     Ok((evm_contract, evm_service, dir))
 }
 
-fn value_to_vec_u8(value: Value) -> Vec<u8> {
+pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();
     for val in value.as_array().unwrap() {
         let val = val.as_u64().unwrap();
@@ -134,7 +134,7 @@ fn value_to_vec_u8(value: Value) -> Vec<u8> {
     vec
 }
 
-fn read_evm_u64_entry(value: Value) -> anyhow::Result<u64> {
+pub fn read_evm_u64_entry(value: Value) -> anyhow::Result<u64> {
     let vec = value_to_vec_u8(value);
     let mut arr = [0_u8; 8];
     arr.copy_from_slice(&vec[24..]);
