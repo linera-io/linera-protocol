@@ -59,7 +59,7 @@ fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyho
     let json_data: serde_json::Value = serde_json::from_str(&contents)?;
     let contracts = json_data
         .get("contracts")
-        .context("failed to get contracts")?;
+        .with_context(|| format!("failed to get contracts in json_data={}", json_data))?;
     let file_name_contract = contracts
         .get(file_name)
         .context("failed to get {file_name}")?;
