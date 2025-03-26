@@ -18,6 +18,21 @@ then
     cargo update --package wasm-bindgen --precise "$wasm_bindgen_cli_version"
 fi
 
-cargo build --lib --target wasm32-unknown-unknown --release
+if [ "${1-}" = "--release" ]
+then
+    profile_flag=--release
+    profile_dir=release
+else
+    profile_flag=
+    profile_dir=debug
+fi
 
-wasm-bindgen target/wasm32-unknown-unknown/release/linera_web.wasm --out-dir pkg --typescript --target web --split-linked-modules
+cargo build --lib --target wasm32-unknown-unknown $profile_flag
+
+wasm-bindgen \
+    target/wasm32-unknown-unknown/$profile_dir/linera_web.wasm \
+    --out-dir dist \
+    --typescript \
+    --target web \
+    --split-linked-modules
+
