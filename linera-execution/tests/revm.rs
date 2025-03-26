@@ -23,7 +23,6 @@ use linera_execution::{
     TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
-use serde_json::Value;
 
 #[tokio::test]
 async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
