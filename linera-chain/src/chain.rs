@@ -938,22 +938,6 @@ where
                 .insert(&recipient, block.height)?;
         }
 
-        // Update the channels.
-        self.process_unsubscribes(unsubscribe).await?;
-        for txn_messages in &messages {
-            self.process_outgoing_messages(block.height, txn_messages)
-                .await?;
-        }
-        self.process_subscribes(subscribe).await?;
-
-        // Recompute the state hash.
-        let state_hash = self.update_execution_state_hash().await?;
-        // Last, reset the consensus state based on the current ownership.
-        self.reset_chain_manager(block.height.try_add_one()?, local_time)?;
-
-        #[cfg(with_metrics)]
-        Self::track_block_metrics(&resource_controller.tracker);
-
         let txn_count = block.incoming_bundles.len() + block.operations.len();
         assert_eq!(oracle_responses.len(), txn_count);
         assert_eq!(messages.len(), txn_count);
@@ -963,13 +947,39 @@ where
         let outcome = BlockExecutionOutcome {
             messages,
             previous_message_blocks,
-            state_hash,
+            state_hash: self.compute_execution_state_hash().await?,
             oracle_responses,
             events,
             blobs,
             operation_results,
         };
+
+        // Update the rest of the chain state.
+        self.process_unsubscribes(unsubscribe).await?;
+        self.apply_execution_outcome(&outcome, block.height, local_time)
+            .await?;
+        self.process_subscribes(subscribe).await?;
+
+        #[cfg(with_metrics)]
+        Self::track_block_metrics(&resource_controller.tracker);
+
         Ok(outcome)
+    }
+
+    /// Applies an executed block to the chain, updating the outboxes, state hash and chain
+    /// manager. This does not touch the execution state itself, which must be updated separately.
+    async fn apply_execution_outcome(
+        &mut self,
+        outcome: &BlockExecutionOutcome,
+        height: BlockHeight,
+        local_time: Timestamp,
+    ) -> Result<(), ChainError> {
+        self.execution_state_hash.set(Some(outcome.state_hash));
+        for txn_messages in &outcome.messages {
+            self.process_outgoing_messages(height, txn_messages).await?;
+        }
+        // Last, reset the consensus state based on the current ownership.
+        self.reset_chain_manager(height.try_add_one()?, local_time)
     }
 
     /// Executes a message as part of an incoming bundle in a block.
@@ -1089,14 +1099,10 @@ where
     }
 
     /// Computes, sets and returns the hash of the current execution state.
-    async fn update_execution_state_hash(&mut self) -> Result<CryptoHash, ChainError> {
-        let state_hash = {
-            #[cfg(with_metrics)]
-            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
-            self.execution_state.crypto_hash().await?
-        };
-        self.execution_state_hash.set(Some(state_hash));
-        Ok(state_hash)
+    async fn compute_execution_state_hash(&self) -> Result<CryptoHash, ChainError> {
+        #[cfg(with_metrics)]
+        let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+        Ok(self.execution_state.crypto_hash().await?)
     }
 
     /// Resets the chain manager for the next block height.
