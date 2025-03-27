@@ -89,6 +89,15 @@ enum CacheEntry {
     Value(Vec<u8>),
 }
 
+impl CacheEntry {
+    fn size(&self) -> usize {
+        match self {
+            CacheEntry::Value(vec) => vec.len(),
+            _ => 0,
+        }
+    }
+}
+
 /// Stores the data for simple `read_values` queries.
 ///
 /// This data structure is inspired by the crate `lru-cache` but was modified to support
@@ -114,8 +123,8 @@ impl LruPrefixCache {
         }
     }
 
-    /// Clear the entries of the queue within the specified constraints.
-    fn clear_queue(&mut self) {
+    /// Trim the cache so that it fits within the contraints.
+    fn trim_cache(&mut self) {
         while self.total_size > self.storage_cache_config.max_cache_size
             || self.queue.len() > self.storage_cache_config.max_cache_entries
         {
@@ -129,11 +138,7 @@ impl LruPrefixCache {
 
     /// Inserts an entry into the cache.
     pub fn insert(&mut self, key: Vec<u8>, cache_entry: CacheEntry) {
-        let key_value_size = key.len()
-            + match &cache_entry {
-                CacheEntry::Value(vec) => vec.len(),
-                _ => 0,
-            };
+        let key_value_size = key.len() + cache_entry.size();
         if (matches!(cache_entry, CacheEntry::DoesNotExist) && !self.has_exclusive_access)
             || key_value_size > self.storage_cache_config.max_entry_size
         {
@@ -161,7 +166,7 @@ impl LruPrefixCache {
                 self.total_size += key_value_size;
             }
         }
-        self.clear_queue();
+        self.trim_cache();
     }
 
     /// Inserts a read_value entry into the cache.
@@ -188,11 +193,7 @@ impl LruPrefixCache {
         if self.has_exclusive_access {
             for (key, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
                 *self.queue.get_mut(key).unwrap() = key.len();
-                let value_size = match value {
-                    CacheEntry::Value(vec) => vec.len(),
-                    _ => 0,
-                };
-                self.total_size -= value_size;
+                self.total_size -= value.size();
                 *value = CacheEntry::DoesNotExist;
             }
         } else {
@@ -461,8 +462,7 @@ where
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
-        let storage_cache_config = self.storage_cache_config();
-        let store = LruCachingStore::new(store, storage_cache_config);
+        let store = LruCachingStore::new(store, self.storage_cache_config());
         store.enable_exclusive_access();
         Ok(store)
     }

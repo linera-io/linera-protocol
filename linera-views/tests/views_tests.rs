@@ -131,8 +131,7 @@ impl StateStorage for LruMemoryStorage {
 
     async fn new() -> Self {
         let store = MemoryStore::new_test_store().await.unwrap();
-        let storage_cache_config = DEFAULT_STORAGE_CACHE_CONFIG;
-        let store = LruCachingStore::new(store, storage_cache_config);
+        let store = LruCachingStore::new(store, DEFAULT_STORAGE_CACHE_CONFIG);
         LruMemoryStorage {
             accessed_chains: BTreeSet::new(),
             store,
