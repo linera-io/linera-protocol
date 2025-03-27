@@ -827,3 +827,53 @@ doc_scalar!(
     Target,
     "The target of a message, relative to a particular application. Used to identify each outbox."
 );
+
+#[cfg(test)]
+mod signing {
+    use linera_base::{
+        crypto::{CryptoHash, TestString},
+        data_types::{BlockHeight, Round},
+        identifiers::ChainId,
+    };
+    use linera_execution::committee::Epoch;
+
+    use crate::data_types::{ProposalContent, ProposedBlock};
+
+    #[test]
+    fn proposal_content_singing() {
+        use alloy_signer::SignerSync;
+        use alloy_signer_local::PrivateKeySigner;
+
+        // Generated in metamask.
+        let pk = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
+
+        let signer: PrivateKeySigner = pk.parse().unwrap();
+
+        let proposed_block = ProposedBlock {
+            chain_id: ChainId(CryptoHash::new(&TestString::new("ChainId"))),
+            epoch: Epoch(11),
+            incoming_bundles: vec![],
+            operations: vec![],
+            height: BlockHeight(11),
+            timestamp: 190000000u64.into(),
+            authenticated_signer: None,
+            previous_block_hash: None,
+        };
+
+        let proposal = ProposalContent {
+            block: proposed_block,
+            round: Round::SingleLeader(11),
+            outcome: None,
+        };
+
+        let proposal_hash = CryptoHash::new(&proposal);
+
+        // personal_sign of the `proposal_hash` done via Metamask.
+        let metamask_signature = hex::decode("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap();
+
+        let signature = signer
+            .sign_message_sync(proposal_hash.as_bytes().0.as_slice())
+            .unwrap();
+        assert_eq!(signature.as_bytes().to_vec(), metamask_signature);
+    }
+}
