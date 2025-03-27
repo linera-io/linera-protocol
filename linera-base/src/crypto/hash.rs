@@ -46,6 +46,11 @@ impl CryptoHash {
         &self.0
     }
 
+    /// Force the last 12 bytes of the hash to be zeroes. This is currently used for EVM compatibility
+    pub fn make_evm_compatible(&mut self) {
+        self.0[20..32].fill(0);
+    }
+
     /// Returns the hash of `TestString(s)`, for testing purposes.
     #[cfg(with_testing)]
     pub fn test_hash(s: impl Into<String>) -> Self {

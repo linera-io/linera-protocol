@@ -39,6 +39,7 @@ use crate::{
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
+    vm::VmRuntime,
 };
 
 /// A non-negative amount of tokens.
@@ -845,9 +846,11 @@ pub struct ApplicationDescription {
 
 impl From<&ApplicationDescription> for ApplicationId {
     fn from(description: &ApplicationDescription) -> Self {
-        ApplicationId::new(CryptoHash::new(&BlobContent::new_application_description(
-            description,
-        )))
+        let mut hash = CryptoHash::new(&BlobContent::new_application_description(description));
+        if matches!(description.module_id.vm_runtime, VmRuntime::Evm) {
+            hash.make_evm_compatible();
+        }
+        ApplicationId::new(hash)
     }
 }
 
@@ -1076,7 +1079,14 @@ pub struct Blob {
 impl Blob {
     /// Computes the hash and returns the hashed blob for the given content.
     pub fn new(content: BlobContent) -> Self {
-        let hash = CryptoHash::new(&content);
+        let mut hash = CryptoHash::new(&content);
+        if matches!(content.blob_type, BlobType::ApplicationDescription) {
+            let application_description = bcs::from_bytes::<ApplicationDescription>(&content.bytes)
+                .expect("to obtain an application description");
+            if matches!(application_description.module_id.vm_runtime, VmRuntime::Evm) {
+                hash.make_evm_compatible();
+            }
+        }
         Blob { hash, content }
     }
 
