@@ -227,12 +227,12 @@ impl WitType for EvmPublicKey {
     type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
-        "secp256k1-public-key".into()
+        "evm-secp256k1-public-key".into()
     }
 
     fn wit_type_declaration() -> Cow<'static, str> {
         concat!(
-            "    record secp256k1-public-key {\n",
+            "    record evm-secp256k1-public-key {\n",
             "        part1: u64,\n",
             "        part2: u64,\n",
             "        part3: u64,\n",
