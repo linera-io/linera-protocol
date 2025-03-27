@@ -631,10 +631,11 @@ mod tests {
 
     #[test]
     fn metamask_alloy_equivalency() {
-        use super::EvmSecretKey;
         use std::str::FromStr;
 
         use alloy_signer::SignerSync;
+
+        use super::EvmSecretKey;
 
         // Generated in metamask.
         let pk = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";

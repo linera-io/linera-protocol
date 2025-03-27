@@ -15,8 +15,10 @@ use custom_debug_derive::Debug;
 pub use ed25519::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
 pub use hash::*;
 use linera_witty::{WitLoad, WitStore, WitType};
-pub use secp256k1::evm::{EvmPublicKey, EvmSecretKey, EvmSignature};
-pub use secp256k1::{Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature};
+pub use secp256k1::{
+    evm::{EvmPublicKey, EvmSecretKey, EvmSignature},
+    Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
