@@ -2450,7 +2450,7 @@ where
     let event_id = EventId {
         chain_id: admin_id,
         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-        key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+        index: 1,
     };
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     // `PublishCommitteeBlob` is tested e.g. in `client_tests::test_change_voting_rights`, so we
@@ -2470,7 +2470,7 @@ where
                 events: vec![
                     vec![Event {
                         stream_id: event_id.stream_id.clone(),
-                        key: event_id.key.clone(),
+                        index: event_id.index,
                         value: bcs::to_bytes(&blob_hash).unwrap(),
                     }],
                     Vec::new(),
@@ -2560,7 +2560,7 @@ where
                             EventId {
                                 chain_id: admin_id,
                                 stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                                key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                                index: 1,
                             },
                             bcs::to_bytes(&blob_hash).unwrap(),
                         ),
@@ -2698,7 +2698,7 @@ where
                 previous_message_blocks: BTreeMap::new(),
                 events: vec![vec![Event {
                     stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                    key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                    index: 1,
                     value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                 }]],
                 blobs: vec![Vec::new()],
@@ -2837,13 +2837,13 @@ where
                 events: vec![
                     vec![Event {
                         stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
-                        key: bcs::to_bytes(&Epoch::from(1)).unwrap(),
+                        index: 1,
                         value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                     }],
                     vec![Event {
-                        value: Vec::new(),
                         stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                        key: bcs::to_bytes(&Epoch::from(0)).unwrap(),
+                        index: 0,
+                        value: Vec::new(),
                     }],
                 ],
                 blobs: vec![Vec::new(); 2],

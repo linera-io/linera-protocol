@@ -4,7 +4,7 @@
 //! Runtime types to simulate interfacing with the host executing the contract.
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -60,7 +60,7 @@ where
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
-    events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
+    events: BTreeMap<StreamName, Vec<Vec<u8>>>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
@@ -109,7 +109,7 @@ where
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
-            events: Vec::new(),
+            events: BTreeMap::new(),
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
             expected_http_requests: VecDeque::new(),
@@ -809,9 +809,11 @@ where
             .expect("Failed to deserialize `Response` type from cross-application call")
     }
 
-    /// Adds a new item to an event stream.
-    pub fn emit(&mut self, name: StreamName, key: &[u8], value: &[u8]) {
-        self.events.push((name, key.to_vec(), value.to_vec()));
+    /// Adds a new item to an event stream. Returns the new event's index in the stream.
+    pub fn emit(&mut self, name: StreamName, value: &[u8]) -> u32 {
+        let entry = self.events.entry(name).or_default();
+        entry.push(value.to_vec());
+        entry.len() as u32 - 1
     }
 
     /// Adds an expected `query_service` call`, and the response it should return in the test.

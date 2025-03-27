@@ -77,8 +77,6 @@ pub use crate::{
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
 
-/// The maximum length of an event key in bytes.
-const MAX_EVENT_KEY_LEN: usize = 64;
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
 
@@ -262,8 +260,6 @@ pub enum ExecutionError {
         local_time: Timestamp,
     },
 
-    #[error("Event keys can be at most {MAX_EVENT_KEY_LEN} bytes.")]
-    EventKeyTooLong,
     #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
     StreamNameTooLong,
     #[error("Blob exceeds size limit")]
@@ -732,13 +728,8 @@ pub trait ContractRuntime: BaseRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Adds a new item to an event stream.
-    fn emit(
-        &mut self,
-        name: StreamName,
-        key: Vec<u8>,
-        value: Vec<u8>,
-    ) -> Result<(), ExecutionError>;
+    /// Adds a new item to an event stream. Returns the new event's index in the stream.
+    fn emit(&mut self, name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError>;
 
     /// Queries a service.
     fn query_service(

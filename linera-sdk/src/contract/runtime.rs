@@ -275,9 +275,9 @@ where
             .expect("Failed to deserialize `Response` type from cross-application call")
     }
 
-    /// Adds a new item to an event stream.
-    pub fn emit(&mut self, name: StreamName, key: &[u8], value: &[u8]) {
-        contract_wit::emit(&name.into(), key, value);
+    /// Adds a new item to an event stream. Returns the new event's index in the stream.
+    pub fn emit(&mut self, name: StreamName, value: &[u8]) -> u32 {
+        contract_wit::emit(&name.into(), value)
     }
 
     /// Queries an application service as an oracle and returns the response.

@@ -36,7 +36,7 @@ use crate::{
     FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation, OperationContext,
     OutgoingMessage, QueryContext, QueryOutcome, ServiceRuntime, TransactionTracker,
     UserContractCode, UserContractInstance, UserServiceCode, UserServiceInstance,
-    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -1284,17 +1284,8 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(value)
     }
 
-    fn emit(
-        &mut self,
-        stream_name: StreamName,
-        key: Vec<u8>,
-        value: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn emit(&mut self, stream_name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError> {
         let mut this = self.inner();
-        ensure!(
-            key.len() <= MAX_EVENT_KEY_LEN,
-            ExecutionError::EventKeyTooLong
-        );
         ensure!(
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
@@ -1304,8 +1295,15 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             stream_name,
             application_id,
         };
-        this.transaction_tracker.add_event(stream_id, key, value);
-        Ok(())
+        let index = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::NextEventIndex {
+                stream_id: stream_id.clone(),
+                callback,
+            })?
+            .recv_response()?;
+        this.transaction_tracker.add_event(stream_id, index, value);
+        Ok(index)
     }
 
     fn query_service(

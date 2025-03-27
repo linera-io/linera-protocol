@@ -533,9 +533,9 @@ type Event {
 	"""
 	streamId: StreamId!
 	"""
-	The event key.
+	The event index, i.e. the number of events in the stream before this one.
 	"""
-	key: [Int!]!
+	index: Int!
 	"""
 	The payload data.
 	"""

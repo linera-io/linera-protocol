@@ -569,12 +569,9 @@ where
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
-            for (log, index) in logs.iter().enumerate() {
-                let mut key = bcs::to_bytes(&contract_address)?;
-                bcs::serialize_into(&mut key, origin)?;
-                bcs::serialize_into(&mut key, index)?;
-                let value = bcs::to_bytes(&log)?;
-                runtime.emit(stream_name.clone(), key, value)?;
+            for log in &logs {
+                let value = bcs::to_bytes(&(origin, contract_address, log))?;
+                runtime.emit(stream_name.clone(), value)?;
             }
         }
         Ok(())

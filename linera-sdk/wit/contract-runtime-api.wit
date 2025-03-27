@@ -15,7 +15,7 @@ interface contract-runtime-api {
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
     create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
-    emit: func(name: stream-name, key: list<u8>, value: list<u8>);
+    emit: func(name: stream-name, value: list<u8>) -> u32;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     consume-fuel: func(fuel: u64);
     validation-round: func() -> option<u32>;

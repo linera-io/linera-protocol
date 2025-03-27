@@ -314,7 +314,7 @@ mod from {
         fn from(event: block::BlockBlockValueBlockBodyEvents) -> Self {
             Event {
                 stream_id: event.stream_id.into(),
-                key: event.key.into_iter().map(|byte| byte as u8).collect(),
+                index: event.index as u32,
                 value: event.value.into_iter().map(|byte| byte as u8).collect(),
             }
         }

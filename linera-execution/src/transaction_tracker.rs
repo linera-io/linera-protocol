@@ -128,10 +128,10 @@ impl TransactionTracker {
         Ok(())
     }
 
-    pub fn add_event(&mut self, stream_id: StreamId, key: Vec<u8>, value: Vec<u8>) {
+    pub fn add_event(&mut self, stream_id: StreamId, index: u32, value: Vec<u8>) {
         self.events.push(Event {
             stream_id,
-            key,
+            index,
             value,
         });
     }
