@@ -128,14 +128,15 @@ where
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
-        let executed_block =
-            Box::pin(
-                self.0
-                    .chain
-                    .execute_block(&block, local_time, round, published_blobs, None),
-            )
-            .await?
-            .with(block);
+        let executed_block = Box::pin(self.0.chain.execute_and_apply_block(
+            &block,
+            local_time,
+            round,
+            published_blobs,
+            None,
+        ))
+        .await?
+        .with(block);
 
         let mut response = ChainInfoResponse::new(&self.0.chain, None);
         if let Some(signer) = signer {
@@ -221,7 +222,7 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            Box::pin(chain.execute_block(
+            Box::pin(chain.execute_and_apply_block(
                 block,
                 local_time,
                 round.multi_leader(),
