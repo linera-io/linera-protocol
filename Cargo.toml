@@ -42,7 +42,8 @@ edition = "2021"
 [workspace.dependencies]
 alloy = { version = "0.9.2", default-features = false }
 alloy-primitives = { version = "0.8.25", default-features = false, features = [
-    "serde", "k256",
+    "serde",
+    "k256",
 ] }
 alloy-signer = "0.9.2"
 alloy-signer-local = "0.9.2"
