@@ -13,8 +13,8 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationDescription, ArithmeticError, Blob, BlockHeight, OracleResponse,
-        Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{
@@ -437,11 +437,6 @@ where
         self.execution_state.system.is_active()
     }
 
-    /// Returns whether this chain has been closed.
-    pub fn is_closed(&self) -> bool {
-        *self.execution_state.system.closed.get()
-    }
-
     /// Invariant for the states of active chains.
     pub fn ensure_is_active(&self) -> Result<(), ChainError> {
         if self.is_active() {
@@ -715,7 +710,7 @@ where
     /// Does not update chain state other than the execution state.
     #[allow(clippy::too_many_arguments)]
     pub async fn execute_block_inner(
-        state: &mut ExecutionStateView<C>,
+        chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
         previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
         block: &ProposedBlock,
@@ -734,14 +729,14 @@ where
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
-        assert_eq!(block.chain_id, state.context().extra().chain_id());
+        assert_eq!(block.chain_id, chain.context().extra().chain_id());
 
         ensure!(
-            *state.system.timestamp.get() <= block.timestamp,
+            *chain.system.timestamp.get() <= block.timestamp,
             ChainError::InvalidBlockTimestamp
         );
-        state.system.timestamp.set(block.timestamp);
-        let (_, committee) = state
+        chain.system.timestamp.set(block.timestamp);
+        let (_, committee) = chain
             .system
             .current_committee()
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
@@ -768,21 +763,21 @@ where
                 || blob_type == BlobType::ServiceBytecode
             {
                 resource_controller
-                    .with_state(&mut state.system)
+                    .with_state(&mut chain.system)
                     .await?
                     .track_blob_published(blob.content())
                     .with_execution_context(ChainExecutionContext::Block)?;
             }
-            state.system.used_blobs.insert(&blob.id())?;
+            chain.system.used_blobs.insert(&blob.id())?;
         }
 
-        if *state.system.closed.get() {
+        if *chain.system.closed.get() {
             ensure!(
                 !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
                 ChainError::ClosedChain
             );
         }
-        Self::check_app_permissions(state, block)?;
+        Self::check_app_permissions(chain.system.application_permissions.get(), block)?;
 
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
@@ -820,7 +815,7 @@ where
                         .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
                         Box::pin(Self::execute_message_in_block(
-                            state,
+                            chain,
                             message_id,
                             posted_message,
                             incoming_bundle,
@@ -846,7 +841,7 @@ where
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
                     };
-                    Box::pin(state.execute_operation(
+                    Box::pin(chain.execute_operation(
                         context,
                         operation.clone(),
                         &mut txn_tracker,
@@ -855,7 +850,7 @@ where
                     .await
                     .with_execution_context(chain_execution_context)?;
                     resource_controller
-                        .with_state(&mut state.system)
+                        .with_state(&mut chain.system)
                         .await?
                         .track_operation(operation)
                         .with_execution_context(chain_execution_context)?;
@@ -881,7 +876,7 @@ where
             ) {
                 for message_out in &txn_outcome.outgoing_messages {
                     resource_controller
-                        .with_state(&mut state.system)
+                        .with_state(&mut chain.system)
                         .await?
                         .track_message(&message_out.message)
                         .with_execution_context(chain_execution_context)?;
@@ -899,7 +894,7 @@ where
             for blob in &txn_outcome.blobs {
                 if blob.content().blob_type() == BlobType::Data {
                     resource_controller
-                        .with_state(&mut state.system)
+                        .with_state(&mut chain.system)
                         .await?
                         .track_blob_published(blob.content())
                         .with_execution_context(chain_execution_context)?;
@@ -920,9 +915,9 @@ where
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
         // always be able to reject incoming messages.
-        if !state.system.closed.get() {
+        if !chain.system.closed.get() {
             resource_controller
-                .with_state(&mut state.system)
+                .with_state(&mut chain.system)
                 .await?
                 .track_block()
                 .with_execution_context(ChainExecutionContext::Block)?;
@@ -958,7 +953,7 @@ where
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
-            state.crypto_hash().await?
+            chain.crypto_hash().await?
         };
 
         let outcome = BlockExecutionOutcome {
@@ -1065,7 +1060,7 @@ where
     /// Executes a message as part of an incoming bundle in a block.
     #[expect(clippy::too_many_arguments)]
     async fn execute_message_in_block(
-        state: &mut ExecutionStateView<C>,
+        chain: &mut ExecutionStateView<C>,
         message_id: MessageId,
         posted_message: &PostedMessage,
         incoming_bundle: &IncomingBundle,
@@ -1092,9 +1087,9 @@ where
                 let chain_execution_context =
                     ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
                 // Once a chain is closed, accepting incoming messages is not allowed.
-                ensure!(!state.system.closed.get(), ChainError::ClosedChain);
+                ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
 
-                Box::pin(state.execute_message(
+                Box::pin(chain.execute_message(
                     context,
                     posted_message.message.clone(),
                     (grant > Amount::ZERO).then_some(&mut grant),
@@ -1103,7 +1098,7 @@ where
                 ))
                 .await
                 .with_execution_context(chain_execution_context)?;
-                state
+                chain
                     .send_refund(context, grant, txn_tracker)
                     .await
                     .with_execution_context(chain_execution_context)?;
@@ -1112,7 +1107,7 @@ where
                 // If rejecting a message fails, the entire block proposal should be
                 // scrapped.
                 ensure!(
-                    !posted_message.is_protected() || *state.system.closed.get(),
+                    !posted_message.is_protected() || *chain.system.closed.get(),
                     ChainError::CannotRejectMessage {
                         chain_id: block.chain_id,
                         origin: Box::new(incoming_bundle.origin.clone()),
@@ -1121,13 +1116,13 @@ where
                 );
                 if posted_message.is_tracked() {
                     // Bounce the message.
-                    state
+                    chain
                         .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
                         .await
                         .with_execution_context(ChainExecutionContext::Block)?;
                 } else {
                     // Nothing to do except maybe refund the grant.
-                    state
+                    chain
                         .send_refund(context, grant, txn_tracker)
                         .await
                         .with_execution_context(ChainExecutionContext::Block)?;
@@ -1148,10 +1143,9 @@ where
 
     /// Verifies that the block is valid according to the chain's application permission settings.
     fn check_app_permissions(
-        state: &ExecutionStateView<C>,
+        app_permissions: &ApplicationPermissions,
         block: &ProposedBlock,
     ) -> Result<(), ChainError> {
-        let app_permissions = state.system.application_permissions.get();
         let mut mandatory = HashSet::<ApplicationId>::from_iter(
             app_permissions.mandatory_applications.iter().cloned(),
         );
