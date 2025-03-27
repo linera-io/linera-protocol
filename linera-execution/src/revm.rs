@@ -603,9 +603,7 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        tracing::info!("revm::handle_query, step 1");
         let evm_query: EvmQuery = serde_json::from_slice(&argument)?;
-        tracing::info!("revm::handle_query, step 2");
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
             EvmQuery::Operation(operation) => {
@@ -615,9 +613,7 @@ where
                 return Ok(Vec::new());
             }
         };
-        tracing::info!("revm::handle_query, step 3");
         let tx_data = Bytes::copy_from_slice(&query);
-        tracing::info!("revm::handle_query, step 4");
         let address = self.db.contract_address;
         let mut evm: Evm<'_, (), _> = Evm::builder()
             .with_ref_db(&mut self.db)
