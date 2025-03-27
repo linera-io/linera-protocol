@@ -946,10 +946,12 @@ where
         #[cfg(with_metrics)]
         Self::track_block_metrics(&resource_controller.tracker);
 
-        assert_eq!(
-            messages.len(),
-            block.incoming_bundles.len() + block.operations.len()
-        );
+        let txn_count = block.incoming_bundles.len() + block.operations.len();
+        assert_eq!(oracle_responses.len(), txn_count);
+        assert_eq!(messages.len(), txn_count);
+        assert_eq!(events.len(), txn_count);
+        assert_eq!(blobs.len(), txn_count);
+
         let outcome = BlockExecutionOutcome {
             messages,
             previous_message_blocks,
