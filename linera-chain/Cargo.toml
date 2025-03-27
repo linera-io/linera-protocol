@@ -43,8 +43,6 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-alloy-signer.workspace = true
-alloy-signer-local.workspace = true
 anyhow.workspace = true
 assert_matches.workspace = true
 bcs.workspace = true
