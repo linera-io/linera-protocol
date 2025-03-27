@@ -137,6 +137,21 @@ impl JsFaucet {
             .mutate(|wallet| wallet.set_default_chain(outcome.chain_id))
             .await??;
         context.client.track_chain(outcome.chain_id);
+        let chain_client = context.make_chain_client(outcome.chain_id)?;
+        wasm_bindgen_futures::spawn_local(async move {
+            let (listener, listen_handle, mut notifications) = chain_client.listen().await.unwrap();
+            wasm_bindgen_futures::spawn_local(async move {
+                while let Some(notification) = notifications.next().await {
+                    if let linera_core::worker::Reason::NewIncomingBundle { .. } =
+                        notification.reason
+                    {
+                        chain_client.process_inbox().await.unwrap();
+                    }
+                }
+            });
+            listener.await;
+            drop(listen_handle);
+        });
         Ok(outcome.chain_id.to_string())
     }
 }
@@ -185,6 +200,13 @@ pub struct Client {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct Frontend(Client);
+
+#[derive(serde::Deserialize)]
+struct TransferParams {
+    donor: Option<linera_base::identifiers::Owner>,
+    amount: u64,
+    recipient: linera_base::identifiers::Account,
+}
 
 #[wasm_bindgen]
 impl Client {
@@ -277,6 +299,30 @@ impl Client {
             .await?;
 
         result
+    }
+
+    #[wasm_bindgen]
+    pub async fn transfer(&self, options: wasm_bindgen::JsValue) -> JsResult<()> {
+        let params: TransferParams = serde_wasm_bindgen::from_value(options)?;
+        let chain_client = self.default_chain_client().await?;
+
+        let _hash = self
+            .apply_client_command(&chain_client, || {
+                chain_client.transfer(
+                    params.donor,
+                    linera_base::data_types::Amount::from_tokens(params.amount.into()),
+                    linera_execution::system::Recipient::Account(params.recipient),
+                )
+            })
+            .await??;
+
+        Ok(())
+    }
+
+    pub async fn identity(&self) -> JsResult<JsValue> {
+        Ok(serde_wasm_bindgen::to_value(
+            &self.default_chain_client().await?.identity().await?,
+        )?)
     }
 
     /// Gets an object implementing the API for Web frontends.
