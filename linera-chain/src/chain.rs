@@ -784,6 +784,8 @@ where
         let mut blobs = Vec::new();
         let mut messages = Vec::new();
         let mut operation_results = Vec::new();
+        let mut subscribe = Vec::new();
+        let mut unsubscribe = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
@@ -855,11 +857,9 @@ where
             next_message_index = txn_outcome.next_message_index;
             next_application_index = txn_outcome.next_application_index;
 
-            // Update the channels.
-            self.process_unsubscribes(txn_outcome.unsubscribe).await?;
-            self.process_outgoing_messages(block.height, &txn_outcome.outgoing_messages)
-                .await?;
-            self.process_subscribes(txn_outcome.subscribe).await?;
+            subscribe.extend(txn_outcome.subscribe);
+            unsubscribe.extend(txn_outcome.unsubscribe);
+
             if matches!(
                 transaction,
                 Transaction::ExecuteOperation(_)
@@ -937,6 +937,14 @@ where
             self.previous_message_blocks
                 .insert(&recipient, block.height)?;
         }
+
+        // Update the channels.
+        self.process_unsubscribes(unsubscribe).await?;
+        for txn_messages in &messages {
+            self.process_outgoing_messages(block.height, txn_messages)
+                .await?;
+        }
+        self.process_subscribes(subscribe).await?;
 
         // Recompute the state hash.
         let state_hash = self.update_execution_state_hash().await?;
