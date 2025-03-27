@@ -6,11 +6,12 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, AccountOwner, BlobType, Destination},
+    identifiers::{Account, AccountOwner, BlobType, Destination, StreamId},
 };
 use linera_views::{
     context::Context,
     key_value_store_view::KeyValueStoreView,
+    map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, View},
 };
@@ -41,6 +42,8 @@ pub struct ExecutionStateView<C> {
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
+    /// The number of events in the streams that this chain is writing to.
+    pub stream_event_counts: MapView<C, StreamId, u32>,
 }
 
 /// How to interact with a long-lived service runtime.

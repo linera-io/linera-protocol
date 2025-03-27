@@ -17,7 +17,7 @@ use linera_base::prometheus_util::{
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -433,6 +433,19 @@ where
                 callback.respond(self.system.blob_used(None, blob_id).await?)
             }
 
+            NextEventIndex {
+                stream_id,
+                callback,
+            } => {
+                let count = self
+                    .stream_event_counts
+                    .get_mut_or_default(&stream_id)
+                    .await?;
+                let index = *count;
+                *count += 1;
+                callback.respond(index)
+            }
+
             GetApplicationPermissions { callback } => {
                 let app_permissions = self.system.application_permissions.get();
                 callback.respond(app_permissions.clone());
@@ -687,6 +700,12 @@ pub enum ExecutionRequest {
         blob_id: BlobId,
         #[debug(skip)]
         callback: Sender<bool>,
+    },
+
+    NextEventIndex {
+        stream_id: StreamId,
+        #[debug(skip)]
+        callback: Sender<u32>,
     },
 
     GetApplicationPermissions {

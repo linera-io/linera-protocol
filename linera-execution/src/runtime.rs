@@ -1284,12 +1284,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(value)
     }
 
-    fn emit(
-        &mut self,
-        stream_name: StreamName,
-        index: u32,
-        value: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn emit(&mut self, stream_name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError> {
         let mut this = self.inner();
         ensure!(
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
@@ -1300,8 +1295,15 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             stream_name,
             application_id,
         };
+        let index = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::NextEventIndex {
+                stream_id: stream_id.clone(),
+                callback,
+            })?
+            .recv_response()?;
         this.transaction_tracker.add_event(stream_id, index, value);
-        Ok(())
+        Ok(index)
     }
 
     fn query_service(

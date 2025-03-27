@@ -729,7 +729,7 @@ pub trait ContractRuntime: BaseRuntime {
     ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Adds a new item to an event stream.
-    fn emit(&mut self, name: StreamName, index: u32, value: Vec<u8>) -> Result<(), ExecutionError>;
+    fn emit(&mut self, name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError>;
 
     /// Queries a service.
     fn query_service(
