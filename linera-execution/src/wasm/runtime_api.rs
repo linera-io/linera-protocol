@@ -572,7 +572,7 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Adds an item to an event stream.
+    /// Adds a new item to an event stream. Returns the new event's index in the stream.
     fn emit(caller: &mut Caller, name: StreamName, value: Vec<u8>) -> Result<u32, RuntimeError> {
         caller
             .user_data_mut()

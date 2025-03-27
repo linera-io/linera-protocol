@@ -275,7 +275,7 @@ where
             .expect("Failed to deserialize `Response` type from cross-application call")
     }
 
-    /// Adds a new item to an event stream.
+    /// Adds a new item to an event stream. Returns the new event's index in the stream.
     pub fn emit(&mut self, name: StreamName, value: &[u8]) -> u32 {
         contract_wit::emit(&name.into(), value)
     }
