@@ -46,6 +46,7 @@ tracing.workspace = true
 anyhow.workspace = true
 assert_matches.workspace = true
 bcs.workspace = true
+hex.workspace = true
 linera-chain = { path = ".", default-features = false, features = ["test"] }
 test-case.workspace = true
 

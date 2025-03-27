@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     le_bytes_to_u64_array, u64_array_to_le_bytes, BcsHashable, BcsSignable, CryptoError,
-    HasTypeName, Hashable,
+    CryptoHash, HasTypeName, Hashable,
 };
 use crate::doc_scalar;
 
@@ -284,9 +284,8 @@ impl Ed25519Signature {
     where
         T: BcsSignable<'de>,
     {
-        let mut message = Vec::new();
-        value.write(&mut message);
-        let signature = secret.0.sign(&message);
+        let preimage = CryptoHash::new(value).as_bytes().0;
+        let signature = secret.0.sign(&preimage);
         Ed25519Signature(signature)
     }
 
@@ -312,10 +311,9 @@ impl Ed25519Signature {
     where
         T: BcsSignable<'de>,
     {
-        let mut message = Vec::new();
-        value.write(&mut message);
+        let preimage = CryptoHash::new(value).as_bytes().0;
         let public_key = dalek::VerifyingKey::from_bytes(&author.0)?;
-        public_key.verify(&message, &self.0)
+        public_key.verify(&preimage, &self.0)
     }
 
     /// Checks a signature.
