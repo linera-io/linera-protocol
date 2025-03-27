@@ -592,4 +592,22 @@ mod tests {
         let sig2: Secp256k1Signature = serde_json::from_str(&s).unwrap();
         assert_eq!(sig, sig2);
     }
+
+    #[test]
+    fn metamask_alloy_equivalency() {
+        use alloy_signer::SignerSync;
+        use alloy_signer_local::PrivateKeySigner;
+
+        // Generated in metamask.
+        let pk = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
+
+        let signer: PrivateKeySigner = pk.parse().unwrap();
+
+        // Message and signatures from metamask.
+        let message = hex::decode("506c65617365207369676e2074686973206d65737361676520746f20636f6e6669726d20796f7572206964656e746974792e").unwrap();
+        let metamask_signature = hex::decode("6dbea6dabade2e932707b47c902308b76202a4be46bd0a165eb491e762210c7e1d0fb848f82d52d29010958394e0936fca75cb7681c71c5acd96102df6f1ab161c").unwrap();
+
+        let signature = signer.sign_message_sync(&message).unwrap();
+        assert_eq!(signature.as_bytes().to_vec(), metamask_signature);
+    }
 }

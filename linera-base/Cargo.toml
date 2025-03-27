@@ -31,6 +31,8 @@ web = [
 
 [dependencies]
 alloy-primitives.workspace = true
+alloy-signer.workspace = true
+alloy-signer-local.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true
 async-graphql-derive.workspace = true
