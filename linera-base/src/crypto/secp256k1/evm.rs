@@ -66,6 +66,17 @@ pub struct EvmKeyPair {
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct EvmSignature(pub(crate) PrimitiveSignature);
 
+#[cfg(with_testing)]
+impl FromStr for EvmSignature {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = hex::decode(s)?;
+        let sig = PrimitiveSignature::from_erc2098(&bytes);
+        Ok(EvmSignature(sig))
+    }
+}
+
 impl EvmPublicKey {
     /// A fake public key used for testing.
     #[cfg(with_testing)]
@@ -412,7 +423,7 @@ impl EvmSignature {
     {
         use k256::ecdsa::signature::hazmat::PrehashVerifier;
 
-        let message_hash = eip191_hash_message(&prehash).0;
+        let message_hash = eip191_hash_message(prehash).0;
 
         author
             .0

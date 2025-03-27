@@ -15,6 +15,7 @@ use custom_debug_derive::Debug;
 pub use ed25519::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
 pub use hash::*;
 use linera_witty::{WitLoad, WitStore, WitType};
+pub use secp256k1::evm::{EvmPublicKey, EvmSecretKey, EvmSignature};
 pub use secp256k1::{Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -35,6 +36,8 @@ pub enum SignatureScheme {
     Ed25519,
     /// secp256k1
     Secp256k1,
+    /// EVM secp256k1
+    EvmSecp256k1,
 }
 
 /// The public key of a chain owner.
@@ -60,6 +63,8 @@ pub enum AccountPublicKey {
     Ed25519(ed25519::Ed25519PublicKey),
     /// secp256k1 public key.
     Secp256k1(secp256k1::Secp256k1PublicKey),
+    /// EVM secp256k1 public key.
+    EvmSecp256k1(secp256k1::evm::EvmPublicKey),
 }
 
 /// The private key of a chain owner.
@@ -69,6 +74,8 @@ pub enum AccountSecretKey {
     Ed25519(ed25519::Ed25519SecretKey),
     /// secp256k1 secret key.
     Secp256k1(secp256k1::Secp256k1SecretKey),
+    /// EVM secp256k1 secret key.
+    EvmSecp256k1(secp256k1::evm::EvmSecretKey),
 }
 
 /// The signature of a chain owner.
@@ -78,6 +85,8 @@ pub enum AccountSignature {
     Ed25519(ed25519::Ed25519Signature),
     /// secp256k1 signature.
     Secp256k1(secp256k1::Secp256k1Signature),
+    /// EVM secp256k1 signature.
+    EvmSecp256k1(secp256k1::evm::EvmSignature),
 }
 
 impl AccountSecretKey {
@@ -86,6 +95,9 @@ impl AccountSecretKey {
         match self {
             AccountSecretKey::Ed25519(secret) => AccountPublicKey::Ed25519(secret.public()),
             AccountSecretKey::Secp256k1(secret) => AccountPublicKey::Secp256k1(secret.public()),
+            AccountSecretKey::EvmSecp256k1(secret) => {
+                AccountPublicKey::EvmSecp256k1(secret.public())
+            }
         }
     }
 
@@ -94,6 +106,7 @@ impl AccountSecretKey {
         match self {
             AccountSecretKey::Ed25519(secret) => AccountSecretKey::Ed25519(secret.copy()),
             AccountSecretKey::Secp256k1(secret) => AccountSecretKey::Secp256k1(secret.copy()),
+            AccountSecretKey::EvmSecp256k1(secret) => AccountSecretKey::EvmSecp256k1(secret.copy()),
         }
     }
 
@@ -111,6 +124,10 @@ impl AccountSecretKey {
                 let signature = secp256k1::Secp256k1Signature::new(value, secret);
                 AccountSignature::Secp256k1(signature)
             }
+            AccountSecretKey::EvmSecp256k1(secret) => {
+                let signature = secp256k1::evm::EvmSignature::new(value, secret);
+                AccountSignature::EvmSecp256k1(signature)
+            }
         }
     }
 
@@ -127,6 +144,7 @@ impl AccountPublicKey {
         match self {
             AccountPublicKey::Ed25519(_) => SignatureScheme::Ed25519,
             AccountPublicKey::Secp256k1(_) => SignatureScheme::Secp256k1,
+            AccountPublicKey::EvmSecp256k1(_) => SignatureScheme::EvmSecp256k1,
         }
     }
 
@@ -162,6 +180,10 @@ impl AccountSignature {
             (AccountSignature::Secp256k1(signature), AccountPublicKey::Secp256k1(public_key)) => {
                 signature.check(value, &public_key)
             }
+            (
+                AccountSignature::EvmSecp256k1(signature),
+                AccountPublicKey::EvmSecp256k1(public_key),
+            ) => signature.check(value, &public_key),
             (AccountSignature::Ed25519(_), _) => {
                 let type_name = std::any::type_name::<T>();
                 Err(CryptoError::InvalidSignature {
@@ -173,6 +195,13 @@ impl AccountSignature {
                 let type_name = std::any::type_name::<T>();
                 Err(CryptoError::InvalidSignature {
                     error: "invalid signature scheme. Expected secp256k1 signature.".to_string(),
+                    type_name: type_name.to_string(),
+                })
+            }
+            (AccountSignature::EvmSecp256k1(_), _) => {
+                let type_name = std::any::type_name::<T>();
+                Err(CryptoError::InvalidSignature {
+                    error: "invalid signature scheme. Expected EvmSecp256k1 signature.".to_string(),
                     type_name: type_name.to_string(),
                 })
             }
