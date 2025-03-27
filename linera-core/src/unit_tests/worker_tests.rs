@@ -18,7 +18,8 @@ use std::{
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, CryptoHash, Secp256k1SecretKey, ValidatorKeypair,
+        AccountPublicKey, AccountSecretKey, CryptoHash, EvmSecretKey, Secp256k1SecretKey,
+        ValidatorKeypair,
     },
     data_types::*,
     identifiers::{
@@ -406,8 +407,12 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
 fn generate_key_pairs(count: usize) -> Vec<AccountSecretKey> {
     let mut key_pairs = iter::repeat_with(Secp256k1SecretKey::generate)
         .map(AccountSecretKey::Secp256k1)
-        .take(count)
+        .take(count - 2)
         .collect::<Vec<_>>();
+    key_pairs.extend(vec![
+        AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()),
+        AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()),
+    ]);
     key_pairs.sort_by_key(|key_pair| AccountOwner::from(key_pair.public()));
     key_pairs
 }
