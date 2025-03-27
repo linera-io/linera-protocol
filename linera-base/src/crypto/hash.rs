@@ -46,11 +46,9 @@ impl CryptoHash {
         &self.0
     }
 
-    /// set the hash as the one from EVM by setting the last 12 bytes to zero.
-    pub fn set_as_evm(&mut self) {
-        for index in 20..32 {
-            self.0 .0[index] = 0;
-        }
+    /// Force the last 12 bytes of the hash to be zeroes. This is currently used for EVM compatibility
+    pub fn make_evm_compatible(&mut self) {
+        self.0[20..32].fill(0);
     }
 
     /// Returns the hash of `TestString(s)`, for testing purposes.

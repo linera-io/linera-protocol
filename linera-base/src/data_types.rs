@@ -848,7 +848,7 @@ impl From<&ApplicationDescription> for ApplicationId {
     fn from(description: &ApplicationDescription) -> Self {
         let mut hash = CryptoHash::new(&BlobContent::new_application_description(description));
         if matches!(description.module_id.vm_runtime, VmRuntime::Evm) {
-            hash.set_as_evm();
+            hash.make_evm_compatible();
         }
         ApplicationId::new(hash)
     }
@@ -1084,7 +1084,7 @@ impl Blob {
             let application_description = bcs::from_bytes::<ApplicationDescription>(&content.bytes)
                 .expect("to obtain an application description");
             if matches!(application_description.module_id.vm_runtime, VmRuntime::Evm) {
-                hash.set_as_evm();
+                hash.make_evm_compatible();
             }
         }
         Blob { hash, content }
