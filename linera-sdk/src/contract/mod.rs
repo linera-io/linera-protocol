@@ -64,7 +64,7 @@ macro_rules! contract {
 
                         let response = contract.execute_operation(operation).blocking_wait();
 
-                        <$contract as $crate::abi::ContractAbi>::serialize_response(operation)
+                        <$contract as $crate::abi::ContractAbi>::serialize_response(response)
                     },
                 )
             }
