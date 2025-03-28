@@ -472,7 +472,6 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let operation = bcs::from_bytes::<Vec<u8>>(&operation)?;
         ensure!(
             operation.len() >= 4,
             ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
@@ -489,7 +488,6 @@ where
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
         let output = output.as_ref().to_vec();
-        let output = bcs::to_bytes(&output)?;
         Ok(output)
     }
 
@@ -608,7 +606,6 @@ where
             EvmQuery::Query(vec) => vec,
             EvmQuery::Operation(operation) => {
                 let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-                let operation = bcs::to_bytes(&operation)?;
                 runtime.schedule_operation(operation)?;
                 return Ok(Vec::new());
             }
