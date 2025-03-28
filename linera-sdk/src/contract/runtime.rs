@@ -262,8 +262,7 @@ where
         application: ApplicationId<A>,
         call: &A::Operation,
     ) -> A::Response {
-        let call_bytes = bcs::to_bytes(call)
-            .expect("Failed to serialize `Operation` type for a cross-application call");
+        let call_bytes = A::serialize_operation(call).unwrap();
 
         let response_bytes = contract_wit::try_call_application(
             authenticated,
@@ -271,8 +270,7 @@ where
             &call_bytes,
         );
 
-        bcs::from_bytes(&response_bytes)
-            .expect("Failed to deserialize `Response` type from cross-application call")
+        A::deserialize_response(response_bytes).unwrap()
     }
 
     /// Adds a new item to an event stream. Returns the new event's index in the stream.
