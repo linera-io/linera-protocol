@@ -143,6 +143,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
+* `--tokio-blocking-threads <TOKIO_BLOCKING_THREADS>` — The number of Tokio blocking threads to use
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 
   Default value: `accept`

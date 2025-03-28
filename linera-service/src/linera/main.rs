@@ -1290,6 +1290,10 @@ fn main() -> anyhow::Result<()> {
         builder
     };
 
+    if let Some(blocking_threads) = options.tokio_blocking_threads {
+        runtime.max_blocking_threads(blocking_threads);
+    }
+
     let span = tracing::info_span!("linera::main");
     if let Some(wallet_id) = &options.with_wallet {
         span.record("wallet_id", wallet_id);
