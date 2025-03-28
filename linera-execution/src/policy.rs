@@ -147,8 +147,8 @@ impl fmt::Display for ResourceControlPolicy {
             {maximum_published_blobs} maximum number of blobs published per block\n\
             {maximum_bytecode_size} maximum size of service and contract bytecode\n\
             {maximum_block_proposal_size} maximum size of a block proposal\n\
-            {maximum_bytes_read_per_block} maximum number bytes read per block\n\
-            {maximum_bytes_written_per_block} maximum number bytes written per block\n\
+            {maximum_bytes_read_per_block} maximum number of bytes read per block\n\
+            {maximum_bytes_written_per_block} maximum number of bytes written per block\n\
             {maximum_oracle_response_bytes} maximum number of bytes of an oracle response\n\
             {maximum_http_response_bytes} maximum number of bytes of an HTTP response\n\
             {http_request_timeout_ms} ms timeout for HTTP requests\n\
