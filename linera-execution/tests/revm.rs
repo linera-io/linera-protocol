@@ -115,8 +115,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         ]);
         value += increment;
         let operation = incrementCall { input: *increment };
-        let operation = operation.abi_encode();
-        let bytes = bcs::to_bytes(&operation)?;
+        let bytes = operation.abi_encode();
         let operation = Operation::User {
             application_id: app_id,
             bytes,
