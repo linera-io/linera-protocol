@@ -1,0 +1,36 @@
+[package]
+name = "how-to-perform-http-requests"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-graphql.workspace = true
+linera-sdk.workspace = true
+serde.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+axum.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
+linera-sdk = { workspace = true, features = ["test"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+futures.workspace = true
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+test-log.workspace = true
+
+[[bin]]
+name = "how_to_perform_http_requests_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "how_to_perform_http_requests_service"
+path = "src/service.rs"
+
+[[bin]]
+name = "test_http_server"
+path = "src/test_http_server.rs"

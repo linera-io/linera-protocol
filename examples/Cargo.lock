@@ -2868,6 +2868,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "how-to-perform-http-requests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "async-graphql",
+ "axum",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "test-log",
+ "tokio",
+]
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
