@@ -14,49 +14,61 @@ use linera_sdk::{
 
 use self::state::Counter;
 
+// ANCHOR: contract_struct
+linera_sdk::contract!(CounterContract);
+
 pub struct CounterContract {
     state: Counter,
     runtime: ContractRuntime<Self>,
 }
+// ANCHOR_END: contract_struct
 
-linera_sdk::contract!(CounterContract);
-
+// ANCHOR: declare_abi
 impl WithContractAbi for CounterContract {
     type Abi = CounterAbi;
 }
+// ANCHOR_END: declare_abi
 
 impl Contract for CounterContract {
     type Message = ();
     type InstantiationArgument = u64;
     type Parameters = ();
 
+    // ANCHOR: load
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = Counter::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CounterContract { state, runtime }
     }
+    // ANCHOR_END: load
 
+    // ANCHOR: instantiate
     async fn instantiate(&mut self, value: u64) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
         self.state.value.set(value);
     }
+    // ANCHOR_END: instantiate
 
+    // ANCHOR: execute_operation
     async fn execute_operation(&mut self, operation: u64) -> u64 {
         let new_value = self.state.value.get() + operation;
         self.state.value.set(new_value);
         new_value
     }
+    // ANCHOR_END: execute_operation
 
     async fn execute_message(&mut self, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
+    // ANCHOR: store
     async fn store(mut self) {
         self.state.save().await.expect("Failed to save state");
     }
+    // ANCHOR_END: store
 }
 
 #[cfg(test)]
@@ -66,13 +78,22 @@ mod tests {
 
     use super::{Counter, CounterContract};
 
+    // ANCHOR: counter_test
     #[test]
     fn operation() {
+        let runtime = ContractRuntime::new().with_application_parameters(());
+        let state = Counter::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+        let mut counter = CounterContract { state, runtime };
+
         let initial_value = 72_u64;
-        let mut counter = create_and_instantiate_counter(initial_value);
+        counter
+            .instantiate(initial_value)
+            .now_or_never()
+            .expect("Initialization of counter state should not await anything");
 
         let increment = 42_308_u64;
-
         let response = counter
             .execute_operation(increment)
             .now_or_never()
@@ -83,6 +104,7 @@ mod tests {
         assert_eq!(response, expected_value);
         assert_eq!(*counter.state.value.get(), initial_value + increment);
     }
+    // ANCHOR_END: counter_test
 
     #[test]
     #[should_panic(expected = "Counter application doesn't support any cross-chain messages")]

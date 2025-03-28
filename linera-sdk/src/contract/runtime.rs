@@ -225,12 +225,15 @@ where
     }
 
     /// Calls another application.
+    // ANCHOR: call_application
     pub fn call_application<A: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
         application: ApplicationId<A>,
         call: &A::Operation,
-    ) -> A::Response {
+    ) -> A::Response
+// ANCHOR_END: call_application
+    {
         let call_bytes = bcs::to_bytes(call)
             .expect("Failed to serialize `Operation` type for a cross-application call");
 

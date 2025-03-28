@@ -117,14 +117,18 @@ echo "http://localhost:3000/$CHAIN_1?app=$APPLICATION_ID&owner=$OWNER_1&port=$PO
 use async_graphql::{Request, Response};
 use linera_sdk::base::{ContractAbi, ServiceAbi};
 
+// ANCHOR: contract_abi
 pub struct CounterAbi;
 
 impl ContractAbi for CounterAbi {
     type Operation = u64;
     type Response = u64;
 }
+// ANCHOR_END: contract_abi
 
+// ANCHOR: service_abi
 impl ServiceAbi for CounterAbi {
     type Query = Request;
     type QueryResponse = Response;
 }
+// ANCHOR_END: service_abi

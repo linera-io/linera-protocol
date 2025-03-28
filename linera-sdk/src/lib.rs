@@ -81,13 +81,25 @@ doc_scalar!(DataBlobHash, "Hash of a Data Blob");
 /// storage and is gas-metered.
 ///
 /// Below we use the word "transaction" to refer to the current operation or message being
-/// executed.
+/// executed. Operations are created by users and added to blocks, serving as the starting
+/// point for an application's execution. Messages are executed when a message created by
+/// the same application is received from another chain and accepted in a block.
+///
+/// `instantiate` is only called once when the application is created and only on the
+/// microchain that created the application. To share configuration data on every chain,
+/// use [`Contract::Parameters`] instead of [`Contract::InstantiationArgument`].
+///
+/// Messages are mean to be sent across chains. They are created and received by the same
+/// application. For a message to be executed, a user must mark it to be
+/// received in a block of the receiver chain.
+///
+/// `store` is called once at the end of the transaction, to allow all applications that
+/// participated in the transaction to perform any final operations, such as persisting their
+/// state. The application may also cancel the transaction by panicking if there are any pendencies.
 #[allow(async_fn_in_trait)]
+// ANCHOR: contract
 pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// The type of message executed by the application.
-    ///
-    /// Messages are executed when a message created by the same application is received
-    /// from another chain and accepted in a block.
     type Message: Serialize + DeserializeOwned + Debug;
 
     /// Immutable parameters specific to this application (e.g. the name of a token).
@@ -95,48 +107,24 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 
     /// Instantiation argument passed to a new application on the chain that created it
     /// (e.g. an initial amount of tokens minted).
-    ///
-    /// To share configuration data on every chain, use [`Contract::Parameters`]
-    /// instead.
     type InstantiationArgument: Serialize + DeserializeOwned + Debug;
 
     /// Creates a in-memory instance of the contract handler.
     async fn load(runtime: ContractRuntime<Self>) -> Self;
 
     /// Instantiates the application on the chain that created it.
-    ///
-    /// This is only called once when the application is created and only on the microchain that
-    /// created the application.
     async fn instantiate(&mut self, argument: Self::InstantiationArgument);
 
     /// Applies an operation from the current block.
-    ///
-    /// Operations are created by users and added to blocks, serving as the starting point for an
-    /// application's execution.
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response;
 
     /// Applies a message originating from a cross-chain message.
-    ///
-    /// Messages are messages sent across chains. These messages are created and received by
-    /// the same application. Messages can be either single-sender and single-receiver, or
-    /// single-sender and multiple-receivers. The former allows sending cross-chain messages to the
-    /// application on some other specific chain, while the latter uses broadcast channels to
-    /// send a message to multiple other chains where the application is subscribed to a
-    /// sender channel on this chain.
-    ///
-    /// For a message to be executed, a user must mark it to be received in a block of the receiver
-    /// chain.
     async fn execute_message(&mut self, message: Self::Message);
 
     /// Finishes the execution of the current transaction.
-    ///
-    /// This is called once at the end of the transaction, to allow all applications that
-    /// participated in the transaction to perform any final operations, such as persisting their
-    /// state.
-    ///
-    /// The application may also cancel the transaction by panicking if there are any pendencies.
     async fn store(self);
 }
+// ANCHOR_END: contract
 
 /// The service interface of a Linera application.
 ///
@@ -144,6 +132,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 /// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
 /// storage and is not gas-metered.
 #[allow(async_fn_in_trait)]
+// ANCHOR: service
 pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// Immutable parameters specific to this application.
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
@@ -154,3 +143,4 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse;
 }
+// ANCHOR_END: service

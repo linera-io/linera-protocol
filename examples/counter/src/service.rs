@@ -10,26 +10,33 @@ use linera_sdk::{base::WithServiceAbi, views::View, Service, ServiceRuntime};
 
 use self::state::Counter;
 
+// ANCHOR: service_struct
+linera_sdk::service!(CounterService);
+
 pub struct CounterService {
     state: Counter,
 }
+// ANCHOR_END: service_struct
 
-linera_sdk::service!(CounterService);
-
+// ANCHOR: declare_abi
 impl WithServiceAbi for CounterService {
     type Abi = counter::CounterAbi;
 }
+// ANCHOR_END: declare_abi
 
 impl Service for CounterService {
     type Parameters = ();
 
+    // ANCHOR: new
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = Counter::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CounterService { state }
     }
+    // ANCHOR_END: new
 
+    // ANCHOR: handle_query
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             QueryRoot {
@@ -41,8 +48,10 @@ impl Service for CounterService {
         .finish();
         schema.execute(request).await
     }
+    // ANCHOR_END: handle_query
 }
 
+// ANCHOR: mutation
 struct MutationRoot;
 
 #[Object]
@@ -51,7 +60,9 @@ impl MutationRoot {
         bcs::to_bytes(&value).unwrap()
     }
 }
+// ANCHOR_END: mutation
 
+// ANCHOR: query
 struct QueryRoot {
     value: u64,
 }
@@ -62,6 +73,7 @@ impl QueryRoot {
         &self.value
     }
 }
+// ANCHOR_END: query
 
 #[cfg(test)]
 mod tests {
