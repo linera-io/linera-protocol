@@ -29,6 +29,17 @@ pub trait ContractAbi {
 
     /// The response type of an application call.
     type Response: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+
+    /// How the `Operation` is deserialized
+    fn deserialize_operation(operation: Vec<u8>) -> Self::Operation {
+        bcs::from_bytes(&operation)
+            .unwrap_or_else(|_| panic!("Failed to deserialize operation {operation:?}"))
+    }
+
+    /// How the `Response` is serialized
+    fn serialize_response(response: Self::Response) -> Vec<u8> {
+        bcs::to_bytes(&response).expect("Failed to serialize contract's `Response`")
+    }
 }
 // ANCHOR_END: contract_abi
 
