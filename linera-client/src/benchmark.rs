@@ -26,7 +26,7 @@ use linera_sdk::abis::fungible;
 use linera_storage::Storage;
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
-use tokio::{runtime::Handle, task, time};
+use tokio::{runtime::Handle, sync::mpsc, task, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 
@@ -38,9 +38,9 @@ pub enum BenchmarkError {
     #[error("Proxy of validator {0} unhealthy! Latency p99 is too high: {1} ms")]
     ProxyUnhealthy(String, f64),
     #[error("Failed to send message: {0}")]
-    SendError(#[from] crossbeam_channel::SendError<()>),
+    CrossbeamSendError(#[from] crossbeam_channel::SendError<()>),
     #[error("Failed to join task: {0}")]
-    JoinError(#[from] tokio::task::JoinError),
+    JoinError(#[from] task::JoinError),
     #[error("Failed to parse validator metrics port: {0}")]
     ParseValidatorMetricsPort(#[from] std::num::ParseIntError),
     #[error("Failed to parse validator metrics address: {0}")]
@@ -73,6 +73,8 @@ pub enum BenchmarkError {
     NoDataYetForP99Calculation,
     #[error("Unexpected empty bucket")]
     UnexpectedEmptyBucket,
+    #[error("Failed to send message: {0}")]
+    TokioSendError(#[from] mpsc::error::SendError<()>),
 }
 
 #[derive(Debug)]
@@ -120,7 +122,7 @@ where
         // the desired BPS, the tasks would continue sending block proposals until the channel's
         // buffer is filled, which would cause us to not properly control the BPS rate.
         let (sender, receiver) = crossbeam_channel::bounded(0);
-        let bps_control_task = tokio::task::spawn_blocking(move || {
+        let bps_control_task = task::spawn_blocking(move || {
             handle.block_on(async move {
                 let mut recv_count = 0;
                 let mut start = time::Instant::now();
@@ -167,6 +169,19 @@ where
             })
         });
 
+        let (bps_tasks_logger_sender, mut bps_tasks_logger_receiver) = mpsc::channel(num_chains);
+        let bps_tasks_logger_task = task::spawn(async move {
+            let mut tasks_running = 0;
+            while let Some(()) = bps_tasks_logger_receiver.recv().await {
+                tasks_running += 1;
+                info!("{}/{} tasks running", tasks_running, num_chains);
+                if tasks_running == num_chains {
+                    info!("All tasks are running");
+                    break;
+                }
+            }
+        });
+
         let mut bps_remainder = bps.unwrap_or_default() % num_chains;
         let bps_share = bps.map(|bps| bps / num_chains);
 
@@ -185,6 +200,7 @@ where
             let committee = committee.clone();
             let local_node = local_node.clone();
             let chain_client = chain_clients[&chain_id].clone();
+            let bps_tasks_logger_sender = bps_tasks_logger_sender.clone();
             chain_client.process_inbox().await?;
             join_set.spawn_blocking(move || {
                 handle.block_on(
@@ -199,6 +215,7 @@ where
                             sender,
                             committee,
                             local_node,
+                            bps_tasks_logger_sender,
                         ))
                         .await?;
 
@@ -225,6 +242,7 @@ where
         if let Some(metrics_watcher) = metrics_watcher {
             metrics_watcher.await??;
         }
+        bps_tasks_logger_task.await?;
 
         Ok(())
     }
@@ -485,12 +503,14 @@ where
         sender: crossbeam_channel::Sender<()>,
         committee: Committee,
         local_node: LocalNodeClient<S>,
+        bps_tasks_logger_sender: mpsc::Sender<()>,
     ) -> Result<(), BenchmarkError> {
         let chain_id = chain_client.chain_id();
         info!(
             "Starting benchmark at target BPS of {:?}, for chain {:?}",
             bps, chain_id
         );
+        bps_tasks_logger_sender.send(()).await?;
         let cross_chain_message_delivery = chain_client.options().cross_chain_message_delivery;
         let mut num_sent_proposals = 0;
         let authenticated_signer = Some(AccountOwner::from(key_pair.public()));
