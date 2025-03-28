@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use clap::Parser as _;
 use linera_views::{
+    lru_caching::StorageCacheConfig,
     rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     store::{AdminKeyValueStore, CommonStoreConfig},
 };
@@ -20,17 +21,29 @@ pub struct RocksDbConfig {
     /// RocksDB storage path
     #[arg(long, default_value = "./indexer.db")]
     pub storage: PathBuf,
+
     #[arg(long, default_value = "linera")]
     pub namespace: String,
+
     /// The maximal number of simultaneous queries to the database
     #[arg(long)]
     max_concurrent_queries: Option<usize>,
+
     /// The maximal number of simultaneous stream queries to the database
     #[arg(long, default_value = "10")]
     pub max_stream_queries: usize,
+
+    /// The maximal memory used in the storage cache.
+    #[arg(long, default_value = "10000000")]
+    pub max_cache_size: usize,
+
+    /// The maximal size of an entry in the storage cache.
+    #[arg(long, default_value = "1000000")]
+    pub max_entry_size: usize,
+
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
-    cache_size: usize,
+    pub max_cache_entries: usize,
 }
 
 pub type RocksDbRunner = Runner<RocksDbStore, RocksDbConfig>;
@@ -38,10 +51,15 @@ pub type RocksDbRunner = Runner<RocksDbStore, RocksDbConfig>;
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<RocksDbConfig>::parse();
+        let storage_cache_config = StorageCacheConfig {
+            max_cache_size: config.client.max_cache_size,
+            max_entry_size: config.client.max_entry_size,
+            max_cache_entries: config.client.max_cache_entries,
+        };
         let common_config = CommonStoreConfig {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
-            cache_size: config.client.cache_size,
+            storage_cache_config,
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);

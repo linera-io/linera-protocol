@@ -13,6 +13,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound_option,
+    lru_caching::DEFAULT_STORAGE_CACHE_CONFIG,
     store::{
         CommonStoreConfig, KeyValueStoreError, LocalAdminKeyValueStore, LocalReadableKeyValueStore,
         LocalWritableKeyValueStore, WithError,
@@ -27,12 +28,12 @@ pub struct IndexedDbStoreConfig {
 }
 
 impl IndexedDbStoreConfig {
-    /// Creates a `IndexedDbStoreConfig`. `max_concurrent_queries` and `cache_size` are not used.
+    /// Creates a `IndexedDbStoreConfig`. `max_concurrent_queries` and `storage_cache_config` are not used.
     pub fn new(max_stream_queries: usize) -> Self {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
+            storage_cache_config: DEFAULT_STORAGE_CACHE_CONFIG,
         };
         Self { common_config }
     }

@@ -669,7 +669,7 @@ impl RocksDbStoreConfig {
         };
         RocksDbStoreConfig {
             inner_config,
-            cache_size: common_config.cache_size,
+            storage_cache_config: common_config.storage_cache_config,
         }
     }
 }

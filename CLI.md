@@ -125,7 +125,13 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--max-stream-queries <MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
 
   Default value: `10`
-* `--cache-size <CACHE_SIZE>` — The maximal number of entries in the storage cache
+* `--max-cache-size <MAX_CACHE_SIZE>` — The maximal memory used in the storage cache
+
+  Default value: `10000000`
+* `--max-entry-size <MAX_ENTRY_SIZE>` — The maximal size of an entry in the storage cache
+
+  Default value: `1000000`
+* `--max-cache-entries <MAX_CACHE_ENTRIES>` — The maximal number of entries in the storage cache
 
   Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator

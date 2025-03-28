@@ -22,7 +22,7 @@ use linera_views::{
     context::{Context, MemoryContext, ViewContext},
     key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
-    lru_caching::{LruCachingMemoryStore, LruCachingStore},
+    lru_caching::{LruCachingMemoryStore, LruCachingStore, DEFAULT_STORAGE_CACHE_CONFIG},
     map_view::{ByteMapView, HashedMapView},
     memory::MemoryStore,
     queue_view::HashedQueueView,
@@ -131,8 +131,7 @@ impl StateStorage for LruMemoryStorage {
 
     async fn new() -> Self {
         let store = MemoryStore::new_test_store().await.unwrap();
-        let cache_size = 1000;
-        let store = LruCachingStore::new(store, cache_size);
+        let store = LruCachingStore::new(store, DEFAULT_STORAGE_CACHE_CONFIG);
         LruMemoryStorage {
             accessed_chains: BTreeSet::new(),
             store,
