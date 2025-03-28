@@ -63,7 +63,7 @@ RUN cargo build --release \
     --bin linera \
     --bin linera-proxy \
     --bin linera-server \
-    --features scylladb,metrics
+    --features scylladb,rocksdb,metrics
 
 RUN mv \
     target/"$target"/release/linera \

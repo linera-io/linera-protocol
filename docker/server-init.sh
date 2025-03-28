@@ -1,7 +1,16 @@
 #!/bin/sh
 
+sudo apt update && sudo apt install mdadm --no-install-recommends
+find /dev/ | grep google-local-nvme-ssd
+sudo mdadm --create /dev/md0 --level=0 --raid-devices=$(find /dev/ -name 'google-local-nvme-ssd*' | wc -l) $(find /dev/ -name 'google-local-nvme-ssd*')
+sudo mdadm --detail --prefer=by-id /dev/md0
+sudo mkfs.ext4 -F /dev/md0
+sudo mkdir -p /mnt/disks/local-ssd
+sudo mount /dev/md0 /mnt/disks/local-ssd
+sudo chmod a+w /mnt/disks/local-ssd
+
 while true; do
-  ./linera storage check_existence --storage "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+  ./linera storage check_existence --storage "dualrocksdbscylladb:/mnt/disks/local-ssd/linera.db:spawn_blocking:tcp:scylla-client.scylla.svc.cluster.local:9042"
   status=$?
 
   if [ $status -eq 0 ]; then
@@ -10,7 +19,7 @@ while true; do
   elif [ $status -eq 1 ]; then
     echo "Database does not exist, attempting to initialize..."
     if ./linera-server initialize \
-      --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
+      --storage dualrocksdbscylladb:/mnt/disks/local-ssd/linera.db:spawn_blocking:tcp:scylla-client.scylla.svc.cluster.local:9042 \
       --genesis /config/genesis.json; then
       echo "Initialization successful."
       exit 0
