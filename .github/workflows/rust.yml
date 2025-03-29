@@ -276,7 +276,7 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install cargo-machete
       run: |
-        cargo install cargo-machete --locked
+        cargo install cargo-machete@0.7.0 --locked
     - name: Check for unused dependencies
       run: |
         cargo machete
