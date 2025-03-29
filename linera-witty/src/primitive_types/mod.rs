@@ -3,6 +3,7 @@
 
 //! Primitive WebAssembly and WIT types.
 
+mod array;
 mod flat_type;
 mod join_flat_types;
 mod maybe_flat_type;

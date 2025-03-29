@@ -3,25 +3,23 @@
 
 use std::borrow::Cow;
 
-use alloy_primitives::Address;
-
 use crate::{
     GuestPointer, HList, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
     WitLoad, WitStore, WitType,
 };
 
-impl WitType for Address {
+impl WitType for [u8; 20] {
     const SIZE: u32 = <(u64, u64, u64) as WitType>::SIZE;
     type Layout = <(u64, u64, u64) as WitType>::Layout;
     type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
-        "ethereum-address".into()
+        "array20".into()
     }
 
     fn wit_type_declaration() -> Cow<'static, str> {
         concat!(
-            "    record ethereum-address {\n",
+            "    record array20 {\n",
             "        part1: u64,\n",
             "        part2: u64,\n",
             "        part3: u64,\n",
@@ -31,7 +29,7 @@ impl WitType for Address {
     }
 }
 
-impl WitLoad for Address {
+impl WitLoad for [u8; 20] {
     fn load<Instance>(
         memory: &Memory<'_, Instance>,
         location: GuestPointer,
@@ -45,7 +43,7 @@ impl WitLoad for Address {
         dest[0..8].copy_from_slice(&part1.to_be_bytes());
         dest[8..16].copy_from_slice(&part2.to_be_bytes());
         dest[16..20].copy_from_slice(&part3.to_be_bytes());
-        Ok(Address::from(dest))
+        Ok(dest)
     }
 
     fn lift_from<Instance>(
@@ -61,11 +59,11 @@ impl WitLoad for Address {
         dest[0..8].copy_from_slice(&part1.to_be_bytes());
         dest[8..16].copy_from_slice(&part2.to_be_bytes());
         dest[16..20].copy_from_slice(&part3.to_be_bytes());
-        Ok(Address::from(dest))
+        Ok(dest)
     }
 }
 
-impl WitStore for Address {
+impl WitStore for [u8; 20] {
     fn store<Instance>(
         &self,
         memory: &mut Memory<'_, Instance>,
@@ -75,9 +73,9 @@ impl WitStore for Address {
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let part1 = u64::from_be_bytes(self.0[0..8].try_into().unwrap());
-        let part2 = u64::from_be_bytes(self.0[8..16].try_into().unwrap());
-        let part3 = u64::from_be_bytes(self.0[16..20].try_into().unwrap());
+        let part1 = u64::from_be_bytes(self[0..8].try_into().unwrap());
+        let part2 = u64::from_be_bytes(self[8..16].try_into().unwrap());
+        let part3 = u64::from_be_bytes(self[16..20].try_into().unwrap());
         (part1, part2, part3).store(memory, location)
     }
 
@@ -89,9 +87,9 @@ impl WitStore for Address {
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let part1 = u64::from_be_bytes(self.0[0..8].try_into().unwrap());
-        let part2 = u64::from_be_bytes(self.0[8..16].try_into().unwrap());
-        let part3 = u64::from_be_bytes(self.0[16..20].try_into().unwrap());
+        let part1 = u64::from_be_bytes(self[0..8].try_into().unwrap());
+        let part2 = u64::from_be_bytes(self[8..16].try_into().unwrap());
+        let part3 = u64::from_be_bytes(self[16..20].try_into().unwrap());
         (part1, part2, part3).lower(memory)
     }
 }

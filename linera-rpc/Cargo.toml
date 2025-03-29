@@ -42,7 +42,6 @@ web = [
 web-default = ["web"]
 
 [dependencies]
-alloy-primitives.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 bincode.workspace = true

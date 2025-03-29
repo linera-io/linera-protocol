@@ -33,7 +33,7 @@ interface base-runtime-api {
     variant account-owner {
         reserved(u8),
         address32(crypto-hash),
-        address20(ethereum-address),
+        address20(array20),
     }
 
     record amount {
@@ -42,6 +42,12 @@ interface base-runtime-api {
 
     record application-id {
         application-description-hash: crypto-hash,
+    }
+
+    record array20 {
+        part1: u64,
+        part2: u64,
+        part3: u64,
     }
 
     record block-height {
@@ -65,12 +71,6 @@ interface base-runtime-api {
         part2: u64,
         part3: u64,
         part4: u64,
-    }
-
-    record ethereum-address {
-        part1: u64,
-        part2: u64,
-        part3: u64,
     }
 
     record http-header {

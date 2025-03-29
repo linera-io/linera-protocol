@@ -14,8 +14,6 @@
 #[macro_use]
 mod macro_utils;
 
-/// Implementation of Witty traits for EVM types.
-mod ethereum;
 mod exported_function_interface;
 mod imported_function_interface;
 mod memory_layout;
