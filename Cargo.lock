@@ -4530,15 +4530,7 @@ dependencies = [
  "counter",
  "crossbeam-channel",
  "crowd-funding",
-<<<<<<< HEAD
- "derive_more",
-<<<<<<< HEAD
-=======
-=======
  "derive_more 1.0.0",
->>>>>>> 0135411fb2 (Update Cargo.lock)
- "dirs",
->>>>>>> 17fbdb9ad0 (Revert Cargo.lock)
  "ethereum-tracker",
  "flarch",
  "fs-err",

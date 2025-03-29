@@ -284,8 +284,8 @@ impl Ed25519Signature {
     where
         T: BcsSignable<'de>,
     {
-        let preimage = CryptoHash::new(value).as_bytes().0;
-        let signature = secret.0.sign(&preimage);
+        let prehash = CryptoHash::new(value).as_bytes().0;
+        let signature = secret.0.sign(&prehash);
         Ed25519Signature(signature)
     }
 
@@ -311,9 +311,9 @@ impl Ed25519Signature {
     where
         T: BcsSignable<'de>,
     {
-        let preimage = CryptoHash::new(value).as_bytes().0;
+        let prehash = CryptoHash::new(value).as_bytes().0;
         let public_key = dalek::VerifyingKey::from_bytes(&author.0)?;
-        public_key.verify(&preimage, &self.0)
+        public_key.verify(&prehash, &self.0)
     }
 
     /// Checks a signature.

@@ -41,7 +41,7 @@ fn get_registry() -> Result<Registry> {
         tracer.trace_value(&mut samples, &validator_keypair.public_key)?;
         tracer.trace_value(&mut samples, &validator_signature)?;
 
-        // We also record a separate samples for EVM-compatible keys,
+        // We also record separate samples for EVM-compatible keys,
         // as the generated ones are not valid.
         let evm_secret_key = linera_base::crypto::EvmSecretKey::generate();
         let evm_public_key = evm_secret_key.public();

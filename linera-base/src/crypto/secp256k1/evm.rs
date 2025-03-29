@@ -1,8 +1,7 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Defines secp256k1 signature primitives used by the Linera protocol.
+//! Defines EIP-191 compatible signature primitives used by the Linera protocol.
 
 use std::{
     borrow::Cow,
@@ -119,7 +118,7 @@ impl EvmPublicKey {
 
 impl fmt::Debug for EvmSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<redacted for Secp256k1 secret key>")
+        write!(f, "<redacted for secp256k1 secret key>")
     }
 }
 

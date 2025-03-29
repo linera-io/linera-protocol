@@ -65,12 +65,10 @@ async fn setup_native_token_balances(
     let validator = TestValidator::new().await;
     let chains = stream::iter(0..chain_count)
         .then(|idx| {
-            let key_pair = if idx % 2 == 0 {
-                AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate())
-            } else if idx % 3 == 0 {
-                AccountSecretKey::Ed25519(Ed25519SecretKey::generate())
-            } else {
-                AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate())
+            let key_pair = match idx % 3 {
+                0 => AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()),
+                1 => AccountSecretKey::Ed25519(Ed25519SecretKey::generate()),
+                _ => AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()),
             };
             validator.new_chain_with_keypair(key_pair)
         })

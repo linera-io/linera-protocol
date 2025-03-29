@@ -18,8 +18,8 @@ use std::{
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, CryptoHash, EvmSecretKey, Secp256k1SecretKey,
-        ValidatorKeypair,
+        AccountPublicKey, AccountSecretKey, CryptoHash, Ed25519SecretKey, EvmSecretKey,
+        Secp256k1SecretKey, ValidatorKeypair,
     },
     data_types::*,
     identifiers::{
@@ -405,14 +405,13 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
 
 /// Creates `count` key pairs and returns them, sorted by the `AccountOwner` created from their public key.
 fn generate_key_pairs(count: usize) -> Vec<AccountSecretKey> {
-    let mut key_pairs = iter::repeat_with(Secp256k1SecretKey::generate)
-        .map(AccountSecretKey::Secp256k1)
-        .take(count - 2)
-        .collect::<Vec<_>>();
-    key_pairs.extend(vec![
-        AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()),
-        AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()),
-    ]);
+    let mut key_pairs: Vec<AccountSecretKey> = (0..count)
+        .map(|idx| match idx % 3 {
+            0 => AccountSecretKey::Ed25519(Ed25519SecretKey::generate()),
+            1 => AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate()),
+            _ => AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()),
+        })
+        .collect();
     key_pairs.sort_by_key(|key_pair| AccountOwner::from(key_pair.public()));
     key_pairs
 }

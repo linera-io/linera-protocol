@@ -843,7 +843,7 @@ mod signing {
     fn proposal_content_singing() {
         use std::str::FromStr;
 
-        // Generated in metamask.
+        // Generated in MetaMask.
         let pk = "f77a21701522a03b01c111ad2d2cdaf2b8403b47507ee0aec3c2e52b765d7a66";
 
         let signer: AccountSecretKey = AccountSecretKey::EvmSecp256k1(
@@ -867,7 +867,7 @@ mod signing {
             outcome: None,
         };
 
-        // personal_sign of the `proposal_hash` done via Metamask.
+        // personal_sign of the `proposal_hash` done via MetaMask.
         // Wrap with proper variant so that bytes match (include the enum variant tag).
         let metamask_signature = AccountSignature::EvmSecp256k1(EvmSignature::from_str("f2d8afcd51d0f947f5c5e31ac1db73ec5306163af7949b3bb265ba53d03374b04b1e909007b555caf098da1aded29c600bee391c6ee8b4d0962a29044555796d1b").unwrap());
 

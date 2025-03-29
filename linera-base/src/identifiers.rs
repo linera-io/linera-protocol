@@ -385,7 +385,7 @@ impl From<Ed25519PublicKey> for AccountOwner {
 
 impl From<EvmPublicKey> for AccountOwner {
     fn from(public_key: EvmPublicKey) -> Self {
-        AccountOwner::Address32(CryptoHash::new(&public_key))
+        AccountOwner::Address20(alloy_primitives::Address::from_public_key(&public_key.0).into())
     }
 }
 
