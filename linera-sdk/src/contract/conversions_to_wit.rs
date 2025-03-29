@@ -38,6 +38,18 @@ impl From<ChainId> for wit_contract_api::CryptoHash {
     }
 }
 
+impl From<alloy_primitives::Address> for wit_contract_api::EthereumAddress {
+    fn from(ethereum_address: alloy_primitives::Address) -> Self {
+        let bytes = <[u8; 20]>::from(ethereum_address);
+
+        wit_contract_api::EthereumAddress {
+            part1: u64::from_be_bytes(bytes[0..8].try_into().unwrap()),
+            part2: u64::from_be_bytes(bytes[8..16].try_into().unwrap()),
+            part3: u64::from_be_bytes(bytes[16..20].try_into().unwrap()),
+        }
+    }
+}
+
 impl From<Amount> for wit_contract_api::Amount {
     fn from(host: Amount) -> Self {
         wit_contract_api::Amount {
@@ -61,6 +73,9 @@ impl From<AccountOwner> for wit_contract_api::AccountOwner {
             AccountOwner::Reserved(value) => wit_contract_api::AccountOwner::Reserved(value),
             AccountOwner::Address32(owner) => {
                 wit_contract_api::AccountOwner::Address32(owner.into())
+            }
+            AccountOwner::Address20(owner) => {
+                wit_contract_api::AccountOwner::Address20(owner.into())
             }
         }
     }

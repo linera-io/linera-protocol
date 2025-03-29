@@ -30,12 +30,27 @@ macro_rules! impl_to_wit {
             }
         }
 
+        impl From<alloy_primitives::Address> for $wit_base_api::EthereumAddress {
+            fn from(ethereum_address: alloy_primitives::Address) -> Self {
+                let bytes = <[u8; 20]>::from(ethereum_address);
+
+                $wit_base_api::EthereumAddress {
+                    part1: u64::from_be_bytes(bytes[0..8].try_into().unwrap()),
+                    part2: u64::from_be_bytes(bytes[8..16].try_into().unwrap()),
+                    part3: u64::from_be_bytes(bytes[16..20].try_into().unwrap()),
+                }
+            }
+        }
+
         impl From<AccountOwner> for $wit_base_api::AccountOwner {
             fn from(account_owner: AccountOwner) -> Self {
                 match account_owner {
                     AccountOwner::Reserved(value) => $wit_base_api::AccountOwner::Reserved(value),
                     AccountOwner::Address32(value) => {
                         $wit_base_api::AccountOwner::Address32(value.into())
+                    }
+                    AccountOwner::Address20(value) => {
+                        $wit_base_api::AccountOwner::Address20(value.into())
                     }
                 }
             }

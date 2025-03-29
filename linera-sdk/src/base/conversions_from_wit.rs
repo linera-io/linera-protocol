@@ -29,12 +29,25 @@ macro_rules! impl_from_wit {
             }
         }
 
+        impl From<$wit_base_api::EthereumAddress> for alloy_primitives::Address {
+            fn from(ethereum_address: $wit_base_api::EthereumAddress) -> Self {
+                let mut bytes = [0u8; 20];
+                bytes[0..8].copy_from_slice(&ethereum_address.part1.to_le_bytes());
+                bytes[8..16].copy_from_slice(&ethereum_address.part2.to_le_bytes());
+                bytes[16..20].copy_from_slice(&ethereum_address.part3.to_le_bytes());
+                alloy_primitives::Address::from(bytes)
+            }
+        }
+
         impl From<$wit_base_api::AccountOwner> for AccountOwner {
             fn from(account_owner: $wit_base_api::AccountOwner) -> Self {
                 match account_owner {
                     $wit_base_api::AccountOwner::Reserved(value) => AccountOwner::Reserved(value),
                     $wit_base_api::AccountOwner::Address32(value) => {
                         AccountOwner::Address32(value.into())
+                    }
+                    $wit_base_api::AccountOwner::Address20(value) => {
+                        AccountOwner::Address20(value.into())
                     }
                 }
             }

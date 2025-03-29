@@ -10,10 +10,13 @@ use std::{
     str::FromStr,
 };
 
+use alloy_primitives::Address;
 use anyhow::{anyhow, Context};
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
+#[cfg(with_testing)]
+use proptest::{collection::vec, prelude::*, strategy};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
@@ -29,12 +32,30 @@ use crate::{
 
 /// An account owner.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// Short addresses reserved for the protocol.
     Reserved(u8),
     /// 32-byte account address.
     Address32(CryptoHash),
+    /// 20-byte account EVM-compatible address.
+    Address20(Address),
+}
+
+#[cfg(with_testing)]
+impl Arbitrary for AccountOwner {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<AccountOwner>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        prop_oneof![
+            strategy::Just(AccountOwner::Reserved(0)),
+            vec(any::<u8>(), 32..=32)
+                .prop_map(|v| AccountOwner::Address32(CryptoHash::try_from(v.as_slice()).unwrap())),
+            vec(any::<u8>(), 20..=20)
+                .prop_map(|v| AccountOwner::Address20(Address::try_from(v.as_slice()).unwrap())),
+        ]
+        .boxed()
+    }
 }
 
 impl AccountOwner {
@@ -921,6 +942,7 @@ impl<A> ApplicationId<A> {
 enum SerializableAccountOwner {
     Reserved(u8),
     Address32(CryptoHash),
+    Address20([u8; 20]),
 }
 
 impl Serialize for AccountOwner {
@@ -931,6 +953,7 @@ impl Serialize for AccountOwner {
             match self {
                 AccountOwner::Reserved(value) => SerializableAccountOwner::Reserved(*value),
                 AccountOwner::Address32(value) => SerializableAccountOwner::Address32(*value),
+                AccountOwner::Address20(value) => SerializableAccountOwner::Address20(value.0 .0),
             }
             .serialize(serializer)
         }
@@ -948,6 +971,9 @@ impl<'de> Deserialize<'de> for AccountOwner {
             match value {
                 SerializableAccountOwner::Reserved(value) => Ok(AccountOwner::Reserved(value)),
                 SerializableAccountOwner::Address32(value) => Ok(AccountOwner::Address32(value)),
+                SerializableAccountOwner::Address20(value) => {
+                    Ok(AccountOwner::Address20(value.into()))
+                }
             }
         }
     }
@@ -960,6 +986,7 @@ impl Display for AccountOwner {
                 write!(f, "0x{}", hex::encode(&value.to_be_bytes()[..]))?
             }
             AccountOwner::Address32(value) => write!(f, "0x{}", value)?,
+            AccountOwner::Address20(value) => write!(f, "{}", value)?,
         };
 
         Ok(())
@@ -974,6 +1001,10 @@ impl FromStr for AccountOwner {
             if s.len() == 64 {
                 if let Ok(hash) = CryptoHash::from_str(s) {
                     return Ok(AccountOwner::Address32(hash));
+                }
+            } else if s.len() == 40 {
+                if let Ok(address) = Address::from_str(s) {
+                    return Ok(AccountOwner::Address20(address));
                 }
             }
             if s.len() == 2 {
@@ -1119,6 +1150,13 @@ mod tests {
         assert_eq!(
             address.to_string(),
             "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+        );
+
+        let address = AccountOwner::from_str("0x6E0ab7F37b667b7228D3a03116Ca21Be83213823").unwrap();
+        assert_matches!(address, AccountOwner::Address20(_));
+        assert_eq!(
+            address.to_string(),
+            "0x6E0ab7F37b667b7228D3a03116Ca21Be83213823"
         );
 
         assert!(AccountOwner::from_str("0x5487b7").is_err());

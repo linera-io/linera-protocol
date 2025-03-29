@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, TestString},
     data_types::{BlobContent, OracleResponse, Round},
@@ -41,6 +43,12 @@ fn get_registry() -> Result<Registry> {
         );
         tracer.trace_value(&mut samples, &validator_keypair.public_key)?;
         tracer.trace_value(&mut samples, &validator_signature)?;
+
+        tracer.trace_value(
+            &mut samples,
+            &alloy_primitives::Address::from_str("0x6E0ab7F37b667b7228D3a03116Ca21Be83213823")
+                .unwrap(),
+        )?;
     }
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<AccountPublicKey>(&samples)?;

@@ -33,6 +33,7 @@ interface base-runtime-api {
     variant account-owner {
         reserved(u8),
         address32(crypto-hash),
+        address20(ethereum-address),
     }
 
     record amount {
@@ -64,6 +65,12 @@ interface base-runtime-api {
         part2: u64,
         part3: u64,
         part4: u64,
+    }
+
+    record ethereum-address {
+        part1: u64,
+        part2: u64,
+        part3: u64,
     }
 
     record http-header {

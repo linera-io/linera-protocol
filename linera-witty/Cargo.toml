@@ -20,6 +20,7 @@ wasmer = ["dep:wasmer", "linera-witty-macros?/wasmer"]
 wasmtime = ["dep:wasmtime", "linera-witty-macros?/wasmtime"]
 
 [dependencies]
+alloy-primitives.workspace = true
 anyhow.workspace = true
 either.workspace = true
 frunk.workspace = true
