@@ -1092,102 +1092,6 @@
         "x": 0,
         "y": 42
       },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(linera_open_chain_count[1m]))",
-          "legendFormat": "Total",
-          "queryType": "range",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Total chains opened per second (averaged for the past minute)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 42
-      },
       "id": 56,
       "options": {
         "legend": {
@@ -1215,6 +1119,19 @@
           "queryType": "range",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_open_chain_count[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "queryType": "range",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Chains opened per second (averaged for the past minute)",
@@ -1281,107 +1198,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 50
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "disableTextWrap": false,
-          "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks[1m]))",
-          "fullMetaSearch": false,
-          "includeNullMetadata": true,
-          "legendFormat": "Total",
-          "range": true,
-          "refId": "A",
-          "useBackend": false
-        }
-      ],
-      "title": "Total blocks added to chains per second (averaged for the past minute)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 50
+        "y": 42
       },
       "id": 57,
       "options": {
@@ -1412,6 +1230,22 @@
           "legendFormat": "__auto",
           "range": true,
           "refId": "A",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "disableTextWrap": false,
+          "editorMode": "code",
+          "expr": "sum(rate(linera_num_blocks[1m]))",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B",
           "useBackend": false
         }
       ],
@@ -1480,102 +1314,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 58
-      },
-      "id": 58,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks_executed[1m]))",
-          "legendFormat": "Total",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Blocks executed per second (averaged for the past minute)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 58
+        "y": 50
       },
       "id": 7,
       "options": {
@@ -1603,6 +1342,18 @@
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_num_blocks_executed[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Blocks executed per second (averaged for the past minute)",
@@ -1669,103 +1420,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 66
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(linera_transaction_count[1m]))",
-          "legendFormat": "Total",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Transactions per second (averaged for the past minute)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 66
+        "y": 50
       },
       "id": 59,
       "options": {
@@ -1793,6 +1449,18 @@
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_transaction_count[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Transactions per second (averaged for the past minute)",
@@ -1860,7 +1528,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 74
+        "y": 58
       },
       "id": 55,
       "options": {
@@ -1959,7 +1627,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 74
+        "y": 58
       },
       "id": 54,
       "options": {
@@ -2054,7 +1722,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 82
+        "y": 66
       },
       "id": 9,
       "options": {
@@ -2175,7 +1843,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 82
+        "y": 66
       },
       "id": 14,
       "options": {
@@ -2200,7 +1868,7 @@
           },
           "editorMode": "code",
           "expr": "((\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type) or vector(0)\n)\n/\n(\n  sum(rate(linera_value_cache_hit[1m])) by (key_type, value_type) or vector(0)\n  +\n  sum(rate(linera_value_cache_miss[1m])) by (key_type, value_type) or vector(0)\n)) * 100",
-          "legendFormat": "Cache hit pct %",
+          "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
@@ -2214,7 +1882,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 90
+        "y": 74
       },
       "id": 13,
       "panels": [],
@@ -2283,7 +1951,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 75
       },
       "id": 40,
       "options": {
@@ -2313,7 +1981,7 @@
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{certificate_value}} - {{round_type}}",
           "range": true,
           "refId": "A",
           "useBackend": false
@@ -2384,7 +2052,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 91
+        "y": 75
       },
       "id": 41,
       "options": {
@@ -2479,7 +2147,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 99
+        "y": 83
       },
       "id": 44,
       "options": {
@@ -2580,7 +2248,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 99
+        "y": 83
       },
       "id": 45,
       "options": {
@@ -2675,7 +2343,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 107
+        "y": 91
       },
       "id": 46,
       "options": {
@@ -2776,7 +2444,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 107
+        "y": 91
       },
       "id": 47,
       "options": {
@@ -2871,7 +2539,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 115
+        "y": 99
       },
       "id": 48,
       "options": {
@@ -2972,7 +2640,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 115
+        "y": 99
       },
       "id": 49,
       "options": {
@@ -3067,7 +2735,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 123
+        "y": 107
       },
       "id": 52,
       "options": {
@@ -3168,7 +2836,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 123
+        "y": 107
       },
       "id": 53,
       "options": {
@@ -3263,7 +2931,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 131
+        "y": 115
       },
       "id": 50,
       "options": {
@@ -3364,7 +3032,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 131
+        "y": 115
       },
       "id": 51,
       "options": {
@@ -3459,7 +3127,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 139
+        "y": 123
       },
       "id": 42,
       "options": {
@@ -3560,7 +3228,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 139
+        "y": 123
       },
       "id": 43,
       "options": {
@@ -3631,7 +3299,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 147
+        "y": 131
       },
       "id": 10,
       "options": {
@@ -3674,7 +3342,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 155
+        "y": 139
       },
       "id": 25,
       "panels": [],
@@ -3743,7 +3411,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 156
+        "y": 140
       },
       "id": 36,
       "options": {
@@ -3844,7 +3512,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 156
+        "y": 140
       },
       "id": 37,
       "options": {
@@ -3945,7 +3613,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 164
+        "y": 148
       },
       "id": 38,
       "options": {
@@ -4046,7 +3714,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 164
+        "y": 148
       },
       "id": 39,
       "options": {
@@ -4147,7 +3815,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 172
+        "y": 156
       },
       "id": 26,
       "options": {
@@ -4242,7 +3910,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 172
+        "y": 156
       },
       "id": 27,
       "options": {
@@ -4337,7 +4005,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 180
+        "y": 164
       },
       "id": 28,
       "options": {
@@ -4432,7 +4100,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 180
+        "y": 164
       },
       "id": 29,
       "options": {
@@ -4527,7 +4195,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 188
+        "y": 172
       },
       "id": 30,
       "options": {
@@ -4622,7 +4290,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 188
+        "y": 172
       },
       "id": 31,
       "options": {
@@ -4717,7 +4385,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 196
+        "y": 180
       },
       "id": 32,
       "options": {
@@ -4812,7 +4480,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 196
+        "y": 180
       },
       "id": 33,
       "options": {
