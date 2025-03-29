@@ -10,6 +10,22 @@ pub struct EvmAbi;
 impl ContractAbi for EvmAbi {
     type Operation = Vec<u8>;
     type Response = Vec<u8>;
+
+    fn deserialize_operation(operation: Vec<u8>) -> Result<Self::Operation, String> {
+        Ok(operation)
+    }
+
+    fn serialize_operation(operation: &Self::Operation) -> Result<Vec<u8>, String> {
+        Ok(operation.to_vec())
+    }
+
+    fn deserialize_response(response: Vec<u8>) -> Result<Self::Response, String> {
+        Ok(response)
+    }
+
+    fn serialize_response(response: Self::Response) -> Result<Vec<u8>, String> {
+        Ok(response)
+    }
 }
 
 impl ServiceAbi for EvmAbi {

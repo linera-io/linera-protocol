@@ -26,7 +26,6 @@ use linera_execution::{
 };
 
 use super::TestValidator;
-use crate::ToBcsBytes;
 
 /// A helper type to build a block proposal using the builder pattern, and then signing them into
 /// [`ConfirmedBlockCertificate`]s using a [`TestValidator`].
@@ -144,12 +143,8 @@ impl BlockBuilder {
     where
         Abi: ContractAbi,
     {
-        self.with_raw_operation(
-            application_id.forget_abi(),
-            operation
-                .to_bcs_bytes()
-                .expect("Failed to serialize operation"),
-        )
+        let operation = Abi::serialize_operation(&operation).unwrap();
+        self.with_raw_operation(application_id.forget_abi(), operation)
     }
 
     /// Adds an already serialized user `operation` to this block.
