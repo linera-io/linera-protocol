@@ -30,12 +30,25 @@ macro_rules! impl_to_wit {
             }
         }
 
+        impl From<[u8; 20]> for $wit_base_api::Array20 {
+            fn from(bytes: [u8; 20]) -> Self {
+                $wit_base_api::Array20 {
+                    part1: u64::from_be_bytes(bytes[0..8].try_into().unwrap()),
+                    part2: u64::from_be_bytes(bytes[8..16].try_into().unwrap()),
+                    part3: u64::from_be_bytes(bytes[16..20].try_into().unwrap()),
+                }
+            }
+        }
+
         impl From<AccountOwner> for $wit_base_api::AccountOwner {
             fn from(account_owner: AccountOwner) -> Self {
                 match account_owner {
                     AccountOwner::Reserved(value) => $wit_base_api::AccountOwner::Reserved(value),
                     AccountOwner::Address32(value) => {
                         $wit_base_api::AccountOwner::Address32(value.into())
+                    }
+                    AccountOwner::Address20(value) => {
+                        $wit_base_api::AccountOwner::Address20(value.into())
                     }
                 }
             }

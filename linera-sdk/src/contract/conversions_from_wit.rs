@@ -24,12 +24,25 @@ impl From<wit_contract_api::CryptoHash> for CryptoHash {
     }
 }
 
+impl From<wit_contract_api::Array20> for [u8; 20] {
+    fn from(ethereum_address: wit_contract_api::Array20) -> Self {
+        let mut bytes = [0u8; 20];
+        bytes[0..8].copy_from_slice(&ethereum_address.part1.to_le_bytes());
+        bytes[8..16].copy_from_slice(&ethereum_address.part2.to_le_bytes());
+        bytes[16..20].copy_from_slice(&ethereum_address.part3.to_le_bytes());
+        bytes
+    }
+}
+
 impl From<wit_contract_api::AccountOwner> for AccountOwner {
     fn from(account_owner: wit_contract_api::AccountOwner) -> Self {
         match account_owner {
             wit_contract_api::AccountOwner::Reserved(value) => AccountOwner::Reserved(value),
             wit_contract_api::AccountOwner::Address32(value) => {
                 AccountOwner::Address32(value.into())
+            }
+            wit_contract_api::AccountOwner::Address20(value) => {
+                AccountOwner::Address20(value.into())
             }
         }
     }

@@ -17,6 +17,12 @@ AccountOwner:
       Address32:
         NEWTYPE:
           TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
 AccountPublicKey:
   ENUM:
     0:

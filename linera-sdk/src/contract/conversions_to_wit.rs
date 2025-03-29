@@ -38,6 +38,16 @@ impl From<ChainId> for wit_contract_api::CryptoHash {
     }
 }
 
+impl From<[u8; 20]> for wit_contract_api::Array20 {
+    fn from(bytes: [u8; 20]) -> Self {
+        wit_contract_api::Array20 {
+            part1: u64::from_be_bytes(bytes[0..8].try_into().unwrap()),
+            part2: u64::from_be_bytes(bytes[8..16].try_into().unwrap()),
+            part3: u64::from_be_bytes(bytes[16..20].try_into().unwrap()),
+        }
+    }
+}
+
 impl From<Amount> for wit_contract_api::Amount {
     fn from(host: Amount) -> Self {
         wit_contract_api::Amount {
@@ -61,6 +71,9 @@ impl From<AccountOwner> for wit_contract_api::AccountOwner {
             AccountOwner::Reserved(value) => wit_contract_api::AccountOwner::Reserved(value),
             AccountOwner::Address32(owner) => {
                 wit_contract_api::AccountOwner::Address32(owner.into())
+            }
+            AccountOwner::Address20(owner) => {
+                wit_contract_api::AccountOwner::Address20(owner.into())
             }
         }
     }

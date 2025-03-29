@@ -35,6 +35,8 @@ pub enum AccountOwner {
     Reserved(u8),
     /// 32-byte account address.
     Address32(CryptoHash),
+    /// 20-byte account EVM-compatible address.
+    Address20([u8; 20]),
 }
 
 impl AccountOwner {
@@ -921,6 +923,7 @@ impl<A> ApplicationId<A> {
 enum SerializableAccountOwner {
     Reserved(u8),
     Address32(CryptoHash),
+    Address20([u8; 20]),
 }
 
 impl Serialize for AccountOwner {
@@ -931,6 +934,7 @@ impl Serialize for AccountOwner {
             match self {
                 AccountOwner::Reserved(value) => SerializableAccountOwner::Reserved(*value),
                 AccountOwner::Address32(value) => SerializableAccountOwner::Address32(*value),
+                AccountOwner::Address20(value) => SerializableAccountOwner::Address20(*value),
             }
             .serialize(serializer)
         }
@@ -948,6 +952,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
             match value {
                 SerializableAccountOwner::Reserved(value) => Ok(AccountOwner::Reserved(value)),
                 SerializableAccountOwner::Address32(value) => Ok(AccountOwner::Address32(value)),
+                SerializableAccountOwner::Address20(value) => Ok(AccountOwner::Address20(value)),
             }
         }
     }
@@ -960,6 +965,7 @@ impl Display for AccountOwner {
                 write!(f, "0x{}", hex::encode(&value.to_be_bytes()[..]))?
             }
             AccountOwner::Address32(value) => write!(f, "0x{}", value)?,
+            AccountOwner::Address20(value) => write!(f, "0x{}", hex::encode(&value[..]))?,
         };
 
         Ok(())
@@ -975,6 +981,13 @@ impl FromStr for AccountOwner {
                 if let Ok(hash) = CryptoHash::from_str(s) {
                     return Ok(AccountOwner::Address32(hash));
                 }
+            } else if s.len() == 40 {
+                let address = hex::decode(s)?;
+                if address.len() != 20 {
+                    anyhow::bail!("Invalid address length: {}", s);
+                }
+                let address = <[u8; 20]>::try_from(address.as_slice()).unwrap();
+                return Ok(AccountOwner::Address20(address));
             }
             if s.len() == 2 {
                 let bytes = hex::decode(s)?;
@@ -1119,6 +1132,13 @@ mod tests {
         assert_eq!(
             address.to_string(),
             "0x5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+        );
+
+        let address = AccountOwner::from_str("0x6E0ab7F37b667b7228D3a03116Ca21Be83213823").unwrap();
+        assert_matches!(address, AccountOwner::Address20(_));
+        assert_eq!(
+            address.to_string(),
+            "0x6e0ab7f37b667b7228d3a03116ca21be83213823"
         );
 
         assert!(AccountOwner::from_str("0x5487b7").is_err());

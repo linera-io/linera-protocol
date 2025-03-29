@@ -29,6 +29,7 @@ interface contract-runtime-api {
     variant account-owner {
         reserved(u8),
         address32(crypto-hash),
+        address20(array20),
     }
 
     record amount {
@@ -46,6 +47,12 @@ interface contract-runtime-api {
         change-application-permissions: list<application-id>,
         call-service-as-oracle: option<list<application-id>>,
         make-http-requests: option<list<application-id>>,
+    }
+
+    record array20 {
+        part1: u64,
+        part2: u64,
+        part3: u64,
     }
 
     record block-height {
