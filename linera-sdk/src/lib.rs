@@ -89,7 +89,7 @@ doc_scalar!(DataBlobHash, "Hash of a Data Blob");
 /// microchain that created the application. To share configuration data on every chain,
 /// use [`Contract::Parameters`] instead of [`Contract::InstantiationArgument`].
 ///
-/// Messages are mean to be sent across chains. They are created and received by the same
+/// Messages are meant to be sent across chains. They are created and received by the same
 /// application. For a message to be executed, a user must mark it to be
 /// received in a block of the receiver chain.
 ///
