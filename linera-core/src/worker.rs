@@ -24,8 +24,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, ProposedBlock,
-        Target,
+        BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, ProposedBlock, Target,
     },
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
@@ -263,7 +262,7 @@ where
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -298,7 +297,7 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            executed_block_cache: Arc::new(ValueCache::default()),
+            block_cache: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -317,7 +316,7 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            executed_block_cache: Arc::new(ValueCache::default()),
+            block_cache: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -397,14 +396,14 @@ where
         &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
-        let executed_block = self
-            .executed_block_cache
+        let block = self
+            .block_cache
             .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
 
         match certificate.value.kind {
             linera_chain::types::CertificateKind::Confirmed => {
-                let value = ConfirmedBlock::from_hashed(executed_block);
+                let value = ConfirmedBlock::from_hashed(block);
                 Ok(Either::Left(
                     certificate
                         .with_value(Hashed::new(value))
@@ -412,7 +411,7 @@ where
                 ))
             }
             linera_chain::types::CertificateKind::Validated => {
-                let value = ValidatedBlock::from_hashed(executed_block);
+                let value = ValidatedBlock::from_hashed(block);
                 Ok(Either::Right(
                     certificate
                         .with_value(Hashed::new(value))
@@ -499,7 +498,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution {
                 block,
@@ -699,7 +698,7 @@ where
             let actor_task = ChainWorkerActor::run(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
-                self.executed_block_cache.clone(),
+                self.block_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,

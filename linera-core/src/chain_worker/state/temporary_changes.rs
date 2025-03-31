@@ -10,10 +10,11 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ExecutedBlock, IncomingBundle, MessageAction,
-        ProposalContent, ProposedBlock,
+        BlockExecutionOutcome, BlockProposal, IncomingBundle, MessageAction, ProposalContent,
+        ProposedBlock,
     },
     manager,
+    types::Block,
 };
 use linera_execution::{Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
@@ -124,9 +125,11 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
+        let (_, committee) = self.0.chain.current_committee()?;
+        block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
         let (outcome, _, _) =
             Box::pin(
@@ -135,7 +138,6 @@ where
                     .execute_block(&block, local_time, round, published_blobs, None),
             )
             .await?;
-        let executed_block = outcome.with(block);
 
         let mut response = ChainInfoResponse::new(&self.0.chain, None);
         if let Some(signer) = signer {
@@ -149,7 +151,7 @@ where
                 .await?;
         }
 
-        Ok((executed_block, response))
+        Ok((outcome.with(block), response))
     }
 
     /// Validates a proposal's signatures; returns `manager::Outcome::Skip` if we already voted
@@ -232,19 +234,15 @@ where
             .0
         };
 
-        let executed_block = outcome.with(block.clone());
         ensure!(
-            !round.is_fast() || !executed_block.outcome.has_oracle_responses(),
+            !round.is_fast() || !outcome.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
         // Check if the counters of tip_state would be valid.
-        chain
-            .tip_state
-            .get_mut()
-            .update_counters(block, &executed_block.outcome)?;
+        chain.tip_state.get_mut().update_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
-        Ok(Some((executed_block.outcome, local_time)))
+        Ok(Some((outcome, local_time)))
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].

@@ -21,7 +21,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, ProposedBlock, Target,
+        BlockExecutionOutcome, BlockProposal, Medium, MessageBundle, Origin, ProposedBlock, Target,
     },
     manager,
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
@@ -183,11 +183,12 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
+    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+        let (block, response) = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .stage_block_execution(block, round, published_blobs)
-            .await
+            .await?;
+        Ok((block, response))
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
@@ -411,16 +412,20 @@ where
     ///
     /// Chains that are not tracked are usually processed only because they sent some message
     /// to one of the tracked chains. In most use cases, their children won't be of interest.
-    fn track_newly_created_chains(&self, executed_block: &ExecutedBlock) {
+    fn track_newly_created_chains(
+        &self,
+        proposed_block: &ProposedBlock,
+        outcome: &BlockExecutionOutcome,
+    ) {
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
             if !tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`")
-                .contains(&executed_block.block.chain_id)
+                .contains(&proposed_block.chain_id)
             {
                 return; // The parent chain is not tracked; don't track the child.
             }
-            let messages = executed_block.messages().iter().flatten();
+            let messages = outcome.messages.iter().flatten();
             let open_chain_message_indices =
                 messages
                     .enumerate()
@@ -429,7 +434,7 @@ where
                         _ => None,
                     });
             let open_chain_message_ids =
-                open_chain_message_indices.map(|index| executed_block.message_id(index as u32));
+                open_chain_message_indices.map(|index| proposed_block.message_id(index as u32));
             let new_chain_ids = open_chain_message_ids.map(ChainId::child);
 
             tracked_chains

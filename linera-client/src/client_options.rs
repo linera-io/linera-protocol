@@ -596,9 +596,9 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_service_oracle_execution_ms: Option<u64>,
 
-        /// Set the maximum size of an executed block, in bytes.
+        /// Set the maximum size of a block, in bytes.
         #[arg(long)]
-        maximum_executed_block_size: Option<u64>,
+        maximum_block_size: Option<u64>,
 
         /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
         /// in bytes.
@@ -810,10 +810,10 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_service_oracle_execution_ms: Option<u64>,
 
-        /// Set the maximum size of an executed block.
+        /// Set the maximum size of a block.
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
-        maximum_executed_block_size: Option<u64>,
+        maximum_block_size: Option<u64>,
 
         /// Set the maximum size of decompressed contract or service bytecode, in bytes.
         /// (This will overwrite value from `--policy-config`)

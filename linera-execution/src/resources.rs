@@ -31,7 +31,7 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
 pub struct ResourceTracker {
     /// The number of blocks created.
     pub blocks: u32,
-    /// The total size of the executed block so far.
+    /// The total size of the block so far.
     pub block_size: u64,
     /// The fuel used so far.
     pub fuel: u64,
@@ -384,21 +384,21 @@ impl<Account, Tracker> ResourceController<Account, Tracker>
 where
     Tracker: AsMut<ResourceTracker>,
 {
-    /// Tracks the serialized size of an executed block, or parts of it.
+    /// Tracks the serialized size of a block, or parts of it.
     pub fn track_block_size_of(&mut self, data: &impl Serialize) -> Result<(), ExecutionError> {
         self.track_block_size(bcs::serialized_size(data)?)
     }
 
-    /// Tracks the serialized size of an executed block, or parts of it.
+    /// Tracks the serialized size of a block, or parts of it.
     pub fn track_block_size(&mut self, size: usize) -> Result<(), ExecutionError> {
         let tracker = self.tracker.as_mut();
         tracker.block_size = u64::try_from(size)
             .ok()
             .and_then(|size| tracker.block_size.checked_add(size))
-            .ok_or(ExecutionError::ExecutedBlockTooLarge)?;
+            .ok_or(ExecutionError::BlockTooLarge)?;
         ensure!(
-            tracker.block_size <= self.policy.maximum_executed_block_size,
-            ExecutionError::ExecutedBlockTooLarge
+            tracker.block_size <= self.policy.maximum_block_size,
+            ExecutionError::BlockTooLarge
         );
         Ok(())
     }

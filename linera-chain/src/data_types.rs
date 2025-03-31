@@ -26,13 +26,12 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::OpenChainConfig,
     Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::ValidatedBlock,
+    block::{Block, ValidatedBlock},
     types::{
         CertificateKind, CertificateValue, GenericCertificate, LiteCertificate,
         ValidatedBlockCertificate,
@@ -124,20 +123,6 @@ impl ProposedBlock {
         (0u32..).zip(bundles.chain(operations))
     }
 
-    /// If the block's first message is `OpenChain`, returns the bundle, the message and
-    /// the configuration for the new chain.
-    pub fn starts_with_open_chain_message(
-        &self,
-    ) -> Option<(&IncomingBundle, &PostedMessage, &OpenChainConfig)> {
-        let in_bundle = self.incoming_bundles.first()?;
-        if in_bundle.action != MessageAction::Accept {
-            return None;
-        }
-        let posted_message = in_bundle.bundle.messages.first()?;
-        let config = posted_message.message.matches_open_chain()?;
-        Some((in_bundle, posted_message, config))
-    }
-
     pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
         let size = bcs::serialized_size(self)?;
         ensure!(
@@ -145,6 +130,15 @@ impl ProposedBlock {
             ChainError::BlockProposalTooLarge
         );
         Ok(())
+    }
+
+    /// Returns the message ID belonging to the `index`th outgoing message in this block.
+    pub fn message_id(&self, index: u32) -> MessageId {
+        MessageId {
+            chain_id: self.chain_id,
+            height: self.height,
+            index,
+        }
     }
 }
 
@@ -374,13 +368,6 @@ doc_scalar!(
     "The execution result of a single operation."
 );
 
-/// A [`ProposedBlock`], together with the outcome from its execution.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
-pub struct ExecutedBlock {
-    pub block: ProposedBlock,
-    pub outcome: BlockExecutionOutcome,
-}
-
 /// The messages and the state hash resulting from a [`ProposedBlock`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
@@ -581,123 +568,9 @@ impl PostedMessage {
     }
 }
 
-impl ExecutedBlock {
-    pub fn messages(&self) -> &Vec<Vec<OutgoingMessage>> {
-        &self.outcome.messages
-    }
-
-    /// Returns the bundles of messages sent via the given medium to the specified
-    /// recipient. Messages originating from different transactions of the original block
-    /// are kept in separate bundles. If the medium is a channel, does not verify that the
-    /// recipient is actually subscribed to that channel.
-    pub fn message_bundles_for<'a>(
-        &'a self,
-        medium: &'a Medium,
-        recipient: ChainId,
-        certificate_hash: CryptoHash,
-    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
-        let mut index = 0u32;
-        let block_height = self.block.height;
-        let block_timestamp = self.block.timestamp;
-        let block_epoch = self.block.epoch;
-
-        (0u32..)
-            .zip(self.messages())
-            .filter_map(move |(transaction_index, txn_messages)| {
-                let messages = (index..)
-                    .zip(txn_messages)
-                    .filter(|(_, message)| message.has_destination(medium, recipient))
-                    .map(|(idx, message)| message.clone().into_posted(idx))
-                    .collect::<Vec<_>>();
-                index += txn_messages.len() as u32;
-                (!messages.is_empty()).then(|| {
-                    let bundle = MessageBundle {
-                        height: block_height,
-                        timestamp: block_timestamp,
-                        certificate_hash,
-                        transaction_index,
-                        messages,
-                    };
-                    (block_epoch, bundle)
-                })
-            })
-    }
-
-    /// Returns the `message_index`th outgoing message created by the `operation_index`th operation,
-    /// or `None` if there is no such operation or message.
-    pub fn message_id_for_operation(
-        &self,
-        operation_index: usize,
-        message_index: u32,
-    ) -> Option<MessageId> {
-        let block = &self.block;
-        let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
-        if message_index
-            >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
-        {
-            return None;
-        }
-        let first_message_index = u32::try_from(
-            self.outcome
-                .messages
-                .iter()
-                .take(transaction_index)
-                .map(Vec::len)
-                .sum::<usize>(),
-        )
-        .ok()?;
-        let index = first_message_index.checked_add(message_index)?;
-        Some(self.message_id(index))
-    }
-
-    pub fn message_by_id(&self, message_id: &MessageId) -> Option<&OutgoingMessage> {
-        let MessageId {
-            chain_id,
-            height,
-            index,
-        } = message_id;
-        if self.block.chain_id != *chain_id || self.block.height != *height {
-            return None;
-        }
-        let mut index = usize::try_from(*index).ok()?;
-        for messages in self.messages() {
-            if let Some(message) = messages.get(index) {
-                return Some(message);
-            }
-            index -= messages.len();
-        }
-        None
-    }
-
-    /// Returns the message ID belonging to the `index`th outgoing message in this block.
-    pub fn message_id(&self, index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.block.chain_id,
-            height: self.block.height,
-            index,
-        }
-    }
-
-    pub fn required_blob_ids(&self) -> HashSet<BlobId> {
-        let mut blob_ids = self.outcome.oracle_blob_ids();
-        blob_ids.extend(self.block.published_blob_ids());
-        blob_ids.extend(self.outcome.iter_created_blobs_ids());
-        blob_ids
-    }
-
-    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.outcome.oracle_blob_ids().contains(blob_id)
-            || self.block.published_blob_ids().contains(blob_id)
-            || self.outcome.created_blobs_ids().contains(blob_id)
-    }
-}
-
 impl BlockExecutionOutcome {
-    pub fn with(self, block: ProposedBlock) -> ExecutedBlock {
-        ExecutedBlock {
-            block,
-            outcome: self,
-        }
+    pub fn with(self, block: ProposedBlock) -> Block {
+        Block::new(block, self)
     }
 
     pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
@@ -717,13 +590,6 @@ impl BlockExecutionOutcome {
         self.oracle_responses
             .iter()
             .any(|responses| !responses.is_empty())
-    }
-
-    pub fn iter_created_blobs(&self) -> impl Iterator<Item = (BlobId, Blob)> + '_ {
-        self.blobs
-            .iter()
-            .flatten()
-            .map(|blob| (blob.id(), blob.clone()))
     }
 
     pub fn iter_created_blobs_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
@@ -770,11 +636,11 @@ impl BlockProposal {
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
-        let executed_block: ExecutedBlock = block.into();
+        let (block, outcome) = block.into_proposal();
         let content = ProposalContent {
-            block: executed_block.block,
+            block,
             round,
-            outcome: Some(executed_block.outcome),
+            outcome: Some(outcome),
         };
         let signature = secret.sign(&content);
         Self {
@@ -819,8 +685,8 @@ impl BlockProposal {
                      it contains the execution outcome from a previous round");
             }
             (Some(lite_certificate), Some(outcome)) => {
-                let executed_block = outcome.clone().with(self.content.block.clone());
-                let value = Hashed::new(ValidatedBlock::new(executed_block));
+                let block = outcome.clone().with(self.content.block.clone());
+                let value = Hashed::new(ValidatedBlock::new(block));
                 ensure!(
                     lite_certificate.check_value(&value),
                     "Lite certificate must match the given block and execution outcome"

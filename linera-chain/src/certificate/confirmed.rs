@@ -18,7 +18,7 @@ use crate::{
 };
 
 impl GenericCertificate<ConfirmedBlock> {
-    /// Returns reference to the `ExecutedBlock` contained in this certificate.
+    /// Returns reference to the `Block` contained in this certificate.
     pub fn block(&self) -> &Block {
         self.inner().block()
     }

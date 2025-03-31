@@ -216,7 +216,7 @@ async fn test_fee_consumption(
         service_as_oracle_query: Amount::from_millis(37),
         http_request: Amount::from_tokens(41),
         maximum_fuel_per_block: 4_868_145_137,
-        maximum_executed_block_size: 43,
+        maximum_block_size: 43,
         maximum_service_oracle_execution_ms: 47,
         maximum_blob_size: 53,
         maximum_published_blobs: 59,

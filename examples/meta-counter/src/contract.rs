@@ -67,7 +67,7 @@ impl Contract for MetaCounterContract {
             message = message.with_tracking();
         }
         if query_service {
-            // Make a service query: The result will be logged in the executed block.
+            // Make a service query: The result will be logged in the block.
             let counter_id = self.counter_id();
             let _ = self
                 .runtime

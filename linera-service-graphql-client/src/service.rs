@@ -145,7 +145,7 @@ mod from {
     use linera_base::{data_types::Event, hashed::Hashed, identifiers::StreamId};
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
-        data_types::{ExecutedBlock, IncomingBundle, MessageBundle, PostedMessage},
+        data_types::{IncomingBundle, MessageBundle, PostedMessage},
         types::ConfirmedBlock,
     };
     use linera_execution::OutgoingMessage;
@@ -229,7 +229,7 @@ mod from {
         }
     }
 
-    impl TryFrom<block::BlockBlockValueBlock> for ExecutedBlock {
+    impl TryFrom<block::BlockBlockValueBlock> for Block {
         type Error = serde_json::Error;
 
         fn try_from(val: block::BlockBlockValueBlock) -> Result<Self, Self::Error> {
@@ -305,8 +305,7 @@ mod from {
             Ok(Block {
                 header: block_header,
                 body: block_body,
-            }
-            .into())
+            })
         }
     }
 

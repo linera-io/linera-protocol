@@ -349,9 +349,9 @@ impl ActiveChain {
             )
             .await;
 
-        let executed_block = certificate.inner().block();
-        assert_eq!(executed_block.messages().len(), 1);
-        assert_eq!(executed_block.messages()[0].len(), 0);
+        let block = certificate.inner().block();
+        assert_eq!(block.messages().len(), 1);
+        assert_eq!(block.messages()[0].len(), 0);
 
         module_id.with_abi()
     }

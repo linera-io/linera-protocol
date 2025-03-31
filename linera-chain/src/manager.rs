@@ -93,8 +93,8 @@ use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{BlockProposal, ExecutedBlock, LiteVote, ProposedBlock, Vote},
+    block::{Block, ConfirmedBlock, Timeout, ValidatedBlock},
+    data_types::{BlockProposal, LiteVote, ProposedBlock, Vote},
     types::{TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
@@ -445,7 +445,7 @@ where
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        executed_block: ExecutedBlock,
+        block: Block,
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
@@ -460,7 +460,7 @@ where
                 .as_ref()
                 .is_none_or(|locking| locking.round() < lite_cert.round)
             {
-                let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
+                let value = Hashed::new(ValidatedBlock::new(block.clone()));
                 if let Some(certificate) = lite_cert.clone().with_value(value) {
                     self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
                 }
@@ -482,13 +482,13 @@ where
         // If this is a fast block, vote to confirm. Otherwise vote to validate.
         if round.is_fast() {
             self.validated_vote.set(None);
-            let value = Hashed::new(ConfirmedBlock::new(executed_block));
+            let value = Hashed::new(ConfirmedBlock::new(block));
             let vote = Vote::new(value, round, key_pair);
             Ok(Some(Either::Right(
                 self.confirmed_vote.get_mut().insert(vote),
             )))
         } else {
-            let value = Hashed::new(ValidatedBlock::new(executed_block));
+            let value = Hashed::new(ValidatedBlock::new(block));
             let vote = Vote::new(value, round, key_pair);
             Ok(Some(Either::Left(
                 self.validated_vote.get_mut().insert(vote),
@@ -505,7 +505,7 @@ where
         blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<(), ViewError> {
         let round = validated.round;
-        let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone().into());
+        let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone());
         self.update_locking(LockingBlock::Regular(validated), blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
@@ -796,9 +796,9 @@ impl ChainManagerInfo {
     }
 
     /// Returns whether a proposal with this content was already handled.
-    pub fn already_handled_proposal(&self, round: Round, block: &ProposedBlock) -> bool {
+    pub fn already_handled_proposal(&self, round: Round, proposed_block: &ProposedBlock) -> bool {
         self.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == round && proposal.content.block == *block
+            proposal.content.round == round && *proposed_block == proposal.content.block
         })
     }
 

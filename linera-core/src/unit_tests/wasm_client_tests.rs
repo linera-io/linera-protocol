@@ -361,8 +361,8 @@ where
         .await
         .unwrap()
         .unwrap();
-    let executed_block = cert.block();
-    let responses = &executed_block.body.oracle_responses;
+    let block = cert.block();
+    let responses = &block.body.oracle_responses;
     let [_, responses] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);
     };

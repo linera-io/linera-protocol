@@ -606,7 +606,7 @@ impl Runnable for Job {
                                     http_request,
                                     maximum_fuel_per_block,
                                     maximum_service_oracle_execution_ms,
-                                    maximum_executed_block_size,
+                                    maximum_block_size,
                                     maximum_blob_size,
                                     maximum_published_blobs,
                                     maximum_bytecode_size,
@@ -654,8 +654,8 @@ impl Runnable for Job {
                                             maximum_service_oracle_execution_ms.unwrap_or(
                                                 existing_policy.maximum_service_oracle_execution_ms,
                                             ),
-                                        maximum_executed_block_size: maximum_executed_block_size
-                                            .unwrap_or(existing_policy.maximum_executed_block_size),
+                                        maximum_block_size: maximum_block_size
+                                            .unwrap_or(existing_policy.maximum_block_size),
                                         maximum_bytecode_size: maximum_bytecode_size
                                             .unwrap_or(existing_policy.maximum_bytecode_size),
                                         maximum_blob_size: maximum_blob_size
@@ -1408,7 +1408,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             http_request_price,
             maximum_fuel_per_block,
             maximum_service_oracle_execution_ms,
-            maximum_executed_block_size,
+            maximum_block_size,
             maximum_blob_size,
             maximum_published_blobs,
             maximum_bytecode_size,
@@ -1450,8 +1450,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     .unwrap_or(existing_policy.maximum_fuel_per_block),
                 maximum_service_oracle_execution_ms: maximum_service_oracle_execution_ms
                     .unwrap_or(existing_policy.maximum_service_oracle_execution_ms),
-                maximum_executed_block_size: maximum_executed_block_size
-                    .unwrap_or(existing_policy.maximum_executed_block_size),
+                maximum_block_size: maximum_block_size
+                    .unwrap_or(existing_policy.maximum_block_size),
                 maximum_bytecode_size: maximum_bytecode_size
                     .unwrap_or(existing_policy.maximum_bytecode_size),
                 maximum_blob_size: maximum_blob_size.unwrap_or(existing_policy.maximum_blob_size),

@@ -14,8 +14,8 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, ChainId, MessageId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, ExecutedBlock, ProposedBlock},
-    types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    data_types::{BlockProposal, ProposedBlock},
+    types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{Query, QueryOutcome};
@@ -177,7 +177,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
+    ) -> Result<(Block, ChainInfoResponse), LocalNodeError> {
         Ok(self
             .node
             .state

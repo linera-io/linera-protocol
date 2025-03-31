@@ -121,7 +121,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 857;
+    let maximum_block_size = 857;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -137,7 +137,7 @@ async fn test_block_size_limit() {
                 },
             )]),
             ResourceControlPolicy {
-                maximum_executed_block_size,
+                maximum_block_size,
                 ..ResourceControlPolicy::default()
             },
         ),
@@ -179,7 +179,7 @@ async fn test_block_size_limit() {
         Err(ChainError::ExecutionError(
             execution_error,
             ChainExecutionContext::Operation(1),
-        )) if matches!(*execution_error, ExecutionError::ExecutedBlockTooLarge)
+        )) if matches!(*execution_error, ExecutionError::BlockTooLarge)
     );
 
     // The valid block is accepted...
@@ -192,7 +192,7 @@ async fn test_block_size_limit() {
     // ...because its size is at the allowed limit.
     assert_eq!(
         bcs::serialized_size(&block).unwrap(),
-        maximum_executed_block_size as usize
+        maximum_block_size as usize
     );
 }
 
@@ -263,11 +263,11 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let executed_block = chain
+    let block = chain
         .execute_and_apply_block(&valid_block, time, None, &[], None)
         .await?
         .with(valid_block);
-    let value = Hashed::new(ConfirmedBlock::new(executed_block));
+    let value = Hashed::new(ConfirmedBlock::new(block));
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value.clone())

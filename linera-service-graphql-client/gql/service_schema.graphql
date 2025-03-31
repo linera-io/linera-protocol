@@ -525,7 +525,7 @@ A number identifying the configuration of the chain (aka the committee)
 scalar Epoch
 
 """
-An event recorded in an executed block.
+An event recorded in a block.
 """
 type Event {
 	"""
@@ -1118,10 +1118,10 @@ input ResourceControlPolicy {
 	"""
 	maximumServiceOracleExecutionMs: Int!
 	"""
-	The maximum size of an executed block. This includes the block proposal itself as well as
+	The maximum size of a block. This includes the block proposal itself as well as
 	the execution outcome.
 	"""
-	maximumExecutedBlockSize: Int!
+	maximumBlockSize: Int!
 	"""
 	The maximum size of decompressed contract or service bytecode, in bytes.
 	"""

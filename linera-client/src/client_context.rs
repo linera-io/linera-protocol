@@ -441,10 +441,8 @@ where
             .certificate_for(&message_id)
             .await
             .context("looking for `OpenChain` message")?;
-        let executed_block = certificate.block();
-        let message = executed_block
-            .message_by_id(&message_id)
-            .map(|msg| &msg.message);
+        let block = certificate.block();
+        let message = block.message_by_id(&message_id).map(|msg| &msg.message);
         let Some(Message::System(SystemMessage::OpenChain(config))) = message else {
             tracing::error!(
                 "The message with the ID returned by the faucet is not OpenChain. \
@@ -462,9 +460,7 @@ where
         }
 
         self.wallet_mut()
-            .mutate(|w| {
-                w.assign_new_chain_to_owner(owner, chain_id, executed_block.header.timestamp)
-            })
+            .mutate(|w| w.assign_new_chain_to_owner(owner, chain_id, block.header.timestamp))
             .await
             .map_err(|e| error::Inner::Persistence(Box::new(e)))?
             .context("assigning new chain")?;

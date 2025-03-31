@@ -17,7 +17,7 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, ExecutedBlock, MessageBundle, Origin, ProposedBlock, Target},
+    data_types::{BlockProposal, MessageBundle, Origin, ProposedBlock, Target},
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
@@ -87,7 +87,7 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
+        callback: oneshot::Sender<Result<(Block, ChainInfoResponse), WorkerError>>,
     },
 
     /// Process a leader timeout issued for this multi-owner chain.
@@ -184,7 +184,7 @@ where
     pub async fn run(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -197,7 +197,7 @@ where
             let load_result = Self::load(
                 config.clone(),
                 storage.clone(),
-                executed_block_cache.clone(),
+                block_cache.clone(),
                 tracked_chains.clone(),
                 delivery_notifier.clone(),
                 chain_id,
@@ -222,7 +222,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -239,7 +239,7 @@ where
         let worker = ChainWorkerState::load(
             config,
             storage,
-            executed_block_cache,
+            block_cache,
             tracked_chains,
             delivery_notifier,
             chain_id,
