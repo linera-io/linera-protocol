@@ -2177,11 +2177,12 @@ where
         };
         let (block, _) = self
             .stage_block_execution_and_discard_failing_messages(
-                proposed_block.clone(),
+                proposed_block,
                 round,
                 blobs.clone(),
             )
             .await?;
+        let (proposed_block, _) = block.clone().into_proposal();
         self.state_mut().set_pending_proposal(proposed_block, blobs);
         Ok(Hashed::new(ConfirmedBlock::new(block)))
     }

@@ -2343,9 +2343,9 @@ where
     let result = client1.publish_data_blobs(blob_bytes).await;
     assert_matches!(
         result,
-        Err(ChainClientError::ChainError(
-            ChainError::BlockProposalTooLarge
-        ))
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(*chain_error, ChainError::BlockProposalTooLarge)
     );
 
     assert_matches!(
