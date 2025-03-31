@@ -1,0 +1,29 @@
+[package]
+name = "call-evm-counter"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
+alloy-sol-types.workspace = true
+futures.workspace = true
+linera-sdk = { workspace = true, features = [ "revm" ] }
+serde.workspace = true
+
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
+
+[dev-dependencies]
+assert_matches.workspace = true
+linera-sdk = { workspace = true, features = ["test"] }
+
+[[bin]]
+name = "call_evm_counter_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "call_evm_counter_service"
+path = "src/service.rs"
