@@ -1291,7 +1291,6 @@ dependencies = [
  "alloy",
  "alloy-sol-types",
  "assert_matches",
- "futures",
  "linera-sdk",
  "serde",
  "tokio",
