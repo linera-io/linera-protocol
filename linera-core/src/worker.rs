@@ -808,7 +808,15 @@ where
                 self.handle_confirmed_certificate(confirmed, notify_when_messages_are_delivered)
                     .await
             }
-            Either::Right(validated) => self.handle_validated_certificate(validated).await,
+            Either::Right(validated) => {
+                if let Some(notifier) = notify_when_messages_are_delivered {
+                    // Nothing to wait for.
+                    if let Err(()) = notifier.send(()) {
+                        warn!("Failed to notify message delivery to caller");
+                    }
+                }
+                self.handle_validated_certificate(validated).await
+            }
         }
     }
 
