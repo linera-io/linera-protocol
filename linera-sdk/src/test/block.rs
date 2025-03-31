@@ -143,7 +143,8 @@ impl BlockBuilder {
     where
         Abi: ContractAbi,
     {
-        let operation = Abi::serialize_operation(&operation).unwrap();
+        let operation = Abi::serialize_operation(&operation)
+            .expect("Failed to serialize `Operation` in BlockBuilder");
         self.with_raw_operation(application_id.forget_abi(), operation)
     }
 

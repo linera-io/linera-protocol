@@ -60,11 +60,13 @@ macro_rules! contract {
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
-                        let operation = <$contract as $crate::abi::ContractAbi>::deserialize_operation(operation).unwrap();
+                        let operation = <$contract as $crate::abi::ContractAbi>::deserialize_operation(operation)
+                            .expect("Failed to deserialize `Operation` in execute_operation");
 
                         let response = contract.execute_operation(operation).blocking_wait();
 
-                        <$contract as $crate::abi::ContractAbi>::serialize_response(response).unwrap()
+                        <$contract as $crate::abi::ContractAbi>::serialize_response(response)
+                            .expect("Failed to serialize `Response` in execute_operation")
                     },
                 )
             }
