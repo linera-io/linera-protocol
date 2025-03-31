@@ -328,7 +328,7 @@ where
             .await
             .map_err(DualStoreError::Second)?;
         if exists1 && exists2 {
-            return Err(DualStoreError::StoreAlreadyExist);
+            return Err(DualStoreError::StoreAlreadyExists);
         }
         if !exists1 {
             S1::create(&config.first_config, namespace)
@@ -378,7 +378,7 @@ where
 pub enum DualStoreError<E1, E2> {
     /// Store already exists during a create operation
     #[error("Store already exists during a create operation")]
-    StoreAlreadyExist,
+    StoreAlreadyExists,
 
     /// Serialization error with BCS.
     #[error(transparent)]
