@@ -796,8 +796,8 @@ where
         application: ApplicationId<A>,
         call: &A::Operation,
     ) -> A::Response {
-        let call_bytes = bcs::to_bytes(call)
-            .expect("Failed to serialize `Operation` type for a cross-application call");
+        let call_bytes = A::serialize_operation(call)
+            .expect("Failed to serialize `Operation` in test runtime cross-application call");
 
         let handler = self.call_application_handler.as_mut().expect(
             "Handler for `call_application` has not been mocked, \
@@ -805,8 +805,8 @@ where
         );
         let response_bytes = handler(authenticated, application.forget_abi(), call_bytes);
 
-        bcs::from_bytes(&response_bytes)
-            .expect("Failed to deserialize `Response` type from cross-application call")
+        A::deserialize_response(response_bytes)
+            .expect("Failed to deserialize `Response` in test runtime cross-application call")
     }
 
     /// Adds a new item to an event stream. Returns the new event's index in the stream.
