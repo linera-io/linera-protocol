@@ -173,6 +173,8 @@ pub enum BlobType {
     ContractBytecode,
     /// A blob containing compressed service bytecode.
     ServiceBytecode,
+    /// A blob containing compressed EVM bytecode.
+    EvmBytecode,
     /// A blob containing an application description.
     ApplicationDescription,
     /// A blob containing a committee of validators.

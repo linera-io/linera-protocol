@@ -388,7 +388,7 @@ impl ResourceControlPolicy {
             ExecutionError::BlobTooLarge
         );
         match content.blob_type() {
-            BlobType::ContractBytecode | BlobType::ServiceBytecode => {
+            BlobType::ContractBytecode | BlobType::ServiceBytecode | BlobType::EvmBytecode => {
                 ensure!(
                     CompressedBytecode::decompressed_size_at_most(
                         content.bytes(),

@@ -1026,6 +1026,14 @@ impl BlobContent {
         )
     }
 
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_evm_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::new(
+            BlobType::EvmBytecode,
+            compressed_bytecode.compressed_bytes,
+        )
+    }
+
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
     pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         BlobContent::new(
@@ -1109,6 +1117,11 @@ impl Blob {
     /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
     pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         Blob::new(BlobContent::new_contract_bytecode(compressed_bytecode))
+    }
+
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_evm_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        Blob::new(BlobContent::new_evm_bytecode(compressed_bytecode))
     }
 
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.

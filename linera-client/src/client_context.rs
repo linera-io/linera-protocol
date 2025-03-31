@@ -564,16 +564,15 @@ where
             .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
         info!("Publishing module");
-        let (contract_blob, service_blob, module_id) =
+        let (blobs, module_id) =
             create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
         let (module_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
-                let contract_blob = contract_blob.clone();
-                let service_blob = service_blob.clone();
+                let blobs = blobs.clone();
                 let chain_client = chain_client.clone();
                 async move {
                     chain_client
-                        .publish_module_blobs(contract_blob, service_blob, module_id)
+                        .publish_module_blobs(blobs, module_id)
                         .await
                         .context("Failed to publish module")
                 }
