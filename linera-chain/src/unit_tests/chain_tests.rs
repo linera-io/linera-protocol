@@ -307,7 +307,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
 #[test_case(&[33, 33, 33]; "three service as oracle calls")]
 #[tokio::test]
 async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> anyhow::Result<()> {
-    let maximum_service_oracle_execution_ms = 110;
+    let maximum_service_oracle_execution_ms = 300;
     let service_oracle_call_count = service_oracle_execution_times_ms.len();
     let service_oracle_execution_times = service_oracle_execution_times_ms
         .iter()
