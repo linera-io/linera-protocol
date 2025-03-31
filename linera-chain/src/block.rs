@@ -36,7 +36,7 @@ use crate::{
 pub struct ValidatedBlock(Hashed<Block>);
 
 impl ValidatedBlock {
-    /// Creates a new `ValidatedBlock` from an `Block`.
+    /// Creates a new `ValidatedBlock` from a `Block`.
     pub fn new(block: Block) -> Self {
         Self(Hashed::new(block))
     }
