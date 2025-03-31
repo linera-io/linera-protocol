@@ -11,6 +11,7 @@ use linera_sdk::test::TestValidator;
 ///
 /// Creates the application on a `chain`, initializing it with a 42 then add 15 and obtain 57.
 /// which is then checked.
+// ANCHOR: counter_integration_test
 #[tokio::test(flavor = "multi_thread")]
 async fn single_chain_test() {
     let (validator, bytecode_id) =
@@ -34,3 +35,4 @@ async fn single_chain_test() {
     let state_value = response["value"].as_u64().expect("Failed to get the u64");
     assert_eq!(state_value, final_value);
 }
+// ANCHOR_END: counter_integration_test
