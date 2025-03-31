@@ -299,6 +299,12 @@ where
         }
         if tip.next_block_height > height {
             // Block was already confirmed.
+            if let Some(notifier) = notify_when_messages_are_delivered {
+                // Nothing to wait for.
+                if let Err(()) = notifier.send(()) {
+                    warn!("Failed to notify message delivery to caller");
+                }
+            }
             let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
             let actions = self.state.create_network_actions().await?;
             return Ok((info, actions));
