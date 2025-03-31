@@ -407,26 +407,24 @@ where
                     }
                 }
             }
-            PublishModule { module_id } => {
-                match module_id.vm_runtime {
-                    VmRuntime::Wasm => {
-                        self.blob_published(&BlobId::new(
-                            module_id.contract_blob_hash,
-                            BlobType::ContractBytecode,
-                        ))?;
-                        self.blob_published(&BlobId::new(
-                            module_id.service_blob_hash,
-                            BlobType::ServiceBytecode,
-                        ))?;
-                    },
-                    VmRuntime::Evm => {
-                        self.blob_published(&BlobId::new(
-                            module_id.contract_blob_hash,
-                            BlobType::EvmBytecode,
-                        ))?;
-                    },
+            PublishModule { module_id } => match module_id.vm_runtime {
+                VmRuntime::Wasm => {
+                    self.blob_published(&BlobId::new(
+                        module_id.contract_blob_hash,
+                        BlobType::ContractBytecode,
+                    ))?;
+                    self.blob_published(&BlobId::new(
+                        module_id.service_blob_hash,
+                        BlobType::ServiceBytecode,
+                    ))?;
                 }
-            }
+                VmRuntime::Evm => {
+                    self.blob_published(&BlobId::new(
+                        module_id.contract_blob_hash,
+                        BlobType::EvmBytecode,
+                    ))?;
+                }
+            },
             CreateApplication {
                 module_id,
                 parameters,
@@ -931,20 +929,18 @@ where
                     BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
                     BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
                 ]
-            },
+            }
             VmRuntime::Evm => {
-                vec![BlobId::new(module_id.contract_blob_hash, BlobType::EvmBytecode)]
-            },
+                vec![BlobId::new(
+                    module_id.contract_blob_hash,
+                    BlobType::EvmBytecode,
+                )]
+            }
         };
 
         let mut missing_blobs = Vec::new();
         for blob_id in &blob_ids {
-            if !self
-                .context()
-                .extra()
-                .contains_blob(*blob_id)
-                .await?
-            {
+            if !self.context().extra().contains_blob(*blob_id).await? {
                 missing_blobs.push(*blob_id);
             }
         }

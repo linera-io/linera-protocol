@@ -17,9 +17,7 @@ use linera_base::{
         Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
     },
     hashed::Hashed,
-    identifiers::{
-        AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, EventId,
-    },
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, EventId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };

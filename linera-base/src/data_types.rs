@@ -865,18 +865,11 @@ impl ApplicationDescription {
     /// Gets the `BlobId` of the contract
     pub fn contract_bytecode_blob_id(&self) -> BlobId {
         match self.module_id.vm_runtime {
-            VmRuntime::Wasm => {
-                BlobId::new(
-                    self.module_id.contract_blob_hash,
-                    BlobType::ContractBytecode,
-                )
-            },
-            VmRuntime::Evm => {
-                BlobId::new(
-                    self.module_id.contract_blob_hash,
-                    BlobType::EvmBytecode,
-                )
-            },
+            VmRuntime::Wasm => BlobId::new(
+                self.module_id.contract_blob_hash,
+                BlobType::ContractBytecode,
+            ),
+            VmRuntime::Evm => BlobId::new(self.module_id.contract_blob_hash, BlobType::EvmBytecode),
         }
     }
 
@@ -884,17 +877,9 @@ impl ApplicationDescription {
     pub fn service_bytecode_blob_id(&self) -> BlobId {
         match self.module_id.vm_runtime {
             VmRuntime::Wasm => {
-                BlobId::new(
-                    self.module_id.service_blob_hash,
-                    BlobType::ServiceBytecode,
-                )
-            },
-            VmRuntime::Evm => {
-                BlobId::new(
-                    self.module_id.contract_blob_hash,
-                    BlobType::EvmBytecode,
-                )
-            },
+                BlobId::new(self.module_id.service_blob_hash, BlobType::ServiceBytecode)
+            }
+            VmRuntime::Evm => BlobId::new(self.module_id.contract_blob_hash, BlobType::EvmBytecode),
         }
     }
 }
@@ -1064,10 +1049,7 @@ impl BlobContent {
 
     /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
     pub fn new_evm_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
-        BlobContent::new(
-            BlobType::EvmBytecode,
-            compressed_bytecode.compressed_bytes,
-        )
+        BlobContent::new(BlobType::EvmBytecode, compressed_bytecode.compressed_bytes)
     }
 
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.

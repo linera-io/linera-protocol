@@ -758,19 +758,24 @@ pub async fn create_bytecode_blobs(
         VmRuntime::Wasm => {
             let (compressed_contract, compressed_service) =
                 tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
-                .await
-                .expect("Compression should not panic");
+                    .await
+                    .expect("Compression should not panic");
             let contract_blob = Blob::new_contract_bytecode(compressed_contract);
             let service_blob = Blob::new_service_bytecode(compressed_service);
-            let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+            let module_id =
+                ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
             (vec![contract_blob, service_blob], module_id)
-        },
+        }
         VmRuntime::Evm => {
             let compressed_contract = contract.compress();
             let evm_contract_blob = Blob::new_evm_bytecode(compressed_contract);
-            let module_id = ModuleId::new(evm_contract_blob.id().hash, evm_contract_blob.id().hash, vm_runtime);
+            let module_id = ModuleId::new(
+                evm_contract_blob.id().hash,
+                evm_contract_blob.id().hash,
+                vm_runtime,
+            );
             (vec![evm_contract_blob], module_id)
-        },
+        }
     }
 }
 
@@ -2897,10 +2902,8 @@ where
         service: Bytecode,
         vm_runtime: VmRuntime,
     ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, ChainClientError> {
-        let (blobs, module_id) =
-            create_bytecode_blobs(contract, service, vm_runtime).await;
-        self.publish_module_blobs(blobs, module_id)
-            .await
+        let (blobs, module_id) = create_bytecode_blobs(contract, service, vm_runtime).await;
+        self.publish_module_blobs(blobs, module_id).await
     }
 
     /// Publishes some module.
