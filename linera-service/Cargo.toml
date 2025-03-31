@@ -17,7 +17,6 @@ default = ["wasmer", "rocksdb", "storage-service"]
 revm = [
     "linera-execution/revm",
     "linera-storage/revm",
-    "linera-sdk/revm",
     "dep:alloy-sol-types",
 ]
 test = [
