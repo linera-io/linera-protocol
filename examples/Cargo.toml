@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "amm",
     "counter",
+    "call-evm-counter",
     "counter-no-graphql",
     "crowd-funding",
     "ethereum-tracker",
@@ -21,6 +22,7 @@ members = [
 
 [workspace.dependencies]
 alloy = { version = "0.9.2", default-features = false }
+alloy-sol-types = "0.8.18"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
 async-graphql = { version = "=7.0.2", default-features = false }
