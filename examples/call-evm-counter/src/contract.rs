@@ -3,6 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
+use alloy::primitives::U256;
 use alloy_sol_types::{sol, SolCall};
 use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use linera_sdk::{
@@ -46,10 +47,8 @@ impl Contract for CallCounterContract {
         let result = self
             .runtime
             .call_application(true, evm_counter_id, &operation);
-        let mut arr = [0_u8; 8];
-        arr.copy_from_slice(&result[24..]);
-        let counter_value = u64::from_be_bytes(arr);
-        counter_value
+        let arr: [u8; 32] = result.try_into().expect("result should have length 32");
+        U256::from_be_bytes(arr).to::<u64>()
     }
 
     async fn execute_message(&mut self, _message: ()) {

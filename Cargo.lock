@@ -1752,7 +1752,6 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "alloy-sol-types",
- "futures",
  "linera-sdk",
  "serde",
 ]
