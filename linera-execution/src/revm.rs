@@ -601,7 +601,7 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let evm_query: EvmQuery = serde_json::from_slice(&argument)?;
+        let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
             EvmQuery::Operation(operation) => {
