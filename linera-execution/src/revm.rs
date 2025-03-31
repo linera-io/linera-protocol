@@ -9,7 +9,7 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName};
+use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName, vm::EvmQuery};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::AccountState,
@@ -601,20 +601,16 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let argument: serde_json::Value = serde_json::from_slice(&argument)?;
-        let argument = argument["query"].to_string();
-        if let Some(residual) = argument.strip_prefix("\"mutation { v") {
-            let operation = &residual[0..residual.len() - 3];
-            let operation = hex::decode(operation).unwrap();
-            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-            runtime.schedule_operation(operation)?;
-            let answer = serde_json::json!({"data": ""});
-            let answer = serde_json::to_vec(&answer).unwrap();
-            return Ok(answer);
-        }
-        let argument = argument[10..argument.len() - 3].to_string();
-        let argument = hex::decode(&argument).unwrap();
-        let tx_data = Bytes::copy_from_slice(&argument);
+        let evm_query = serde_json::from_slice(&argument)?;
+        let query = match evm_query {
+            EvmQuery::Query(vec) => vec,
+            EvmQuery::Mutation(operation) => {
+                let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+                runtime.schedule_operation(operation)?;
+                return Ok(Vec::new());
+            }
+        };
+        let tx_data = Bytes::copy_from_slice(&query);
         let address = self.db.contract_address;
         let mut evm: Evm<'_, (), _> = Evm::builder()
             .with_ref_db(&mut self.db)
@@ -636,9 +632,7 @@ where
             unreachable!("It is impossible for a Choice::Call to lead to a Output::Create");
         };
         let answer = output.as_ref().to_vec();
-        let answer = hex::encode(&answer);
-        let answer: serde_json::Value = serde_json::json!({"data": answer});
-        let answer = serde_json::to_vec(&answer).unwrap();
+        let answer = serde_json::to_vec(&answer)?;
         Ok(answer)
     }
 }

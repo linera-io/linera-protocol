@@ -6,12 +6,13 @@
 use std::{
     fs::File,
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
 use anyhow::Context;
-use tempfile::tempdir;
+use serde_json::Value;
+use tempfile::{tempdir, TempDir};
 
 fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
     let mut source = File::create(path).unwrap();
@@ -84,23 +85,23 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
     get_bytecode_path(path, file_name, contract_name)
 }
 
-pub fn get_example_counter() -> anyhow::Result<Vec<u8>> {
+pub fn get_evm_example_counter() -> anyhow::Result<Vec<u8>> {
     let source_code = r#"
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 contract ExampleCounter {
-  uint256 value;
-  constructor(uint256 start_value) {
+  uint64 value;
+  constructor(uint64 start_value) {
     value = start_value;
   }
 
-  function increment(uint256 input) external returns (uint256) {
+  function increment(uint64 input) external returns (uint64) {
     value = value + input;
     return value;
   }
 
-  function get_value() external view returns (uint256) {
+  function get_value() external view returns (uint64) {
     return value;
   }
 
@@ -108,4 +109,34 @@ contract ExampleCounter {
 "#
     .to_string();
     get_bytecode(&source_code, "ExampleCounter")
+}
+
+pub fn get_contract_service_paths(module: Vec<u8>) -> anyhow::Result<(PathBuf, PathBuf, TempDir)> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path();
+    let app_file = "app.json";
+    let app_path = path.join(app_file);
+    {
+        std::fs::write(app_path.clone(), &module)?;
+    }
+    let evm_contract = app_path.to_path_buf();
+    let evm_service = app_path.to_path_buf();
+    Ok((evm_contract, evm_service, dir))
+}
+
+pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
+    let mut vec: Vec<u8> = Vec::new();
+    for val in value.as_array().unwrap() {
+        let val = val.as_u64().unwrap();
+        let val = val as u8;
+        vec.push(val);
+    }
+    vec
+}
+
+pub fn read_evm_u64_entry(value: Value) -> u64 {
+    let vec = value_to_vec_u8(value);
+    let mut arr = [0_u8; 8];
+    arr.copy_from_slice(&vec[24..]);
+    u64::from_be_bytes(arr)
 }

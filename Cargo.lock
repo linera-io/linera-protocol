@@ -5008,7 +5008,6 @@ dependencies = [
  "fungible",
  "futures",
  "heck 0.4.1",
- "hex",
  "http 1.2.0",
  "k8s-openapi",
  "kube",

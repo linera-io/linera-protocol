@@ -9,11 +9,13 @@ use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
     identifiers::ChainDescription,
+    vm::EvmQuery,
 };
 use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
-        create_dummy_user_application_description, solidity::get_example_counter,
+        create_dummy_user_application_description,
+        solidity::{get_evm_example_counter, read_evm_u64_entry},
         SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
@@ -21,21 +23,20 @@ use linera_execution::{
     TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
-use revm_primitives::U256;
 
 #[tokio::test]
 async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
-    let module = get_example_counter()?;
+    let module = get_evm_example_counter()?;
 
     sol! {
         struct ConstructorArgs {
-            uint256 initial_value;
+            uint64 initial_value;
         }
-        function increment(uint256 input);
+        function increment(uint64 input);
         function get_value();
     }
 
-    let initial_value = U256::from(10000);
+    let initial_value = 10000;
     let mut value = initial_value;
     let args = ConstructorArgs { initial_value };
     let instantiation_argument = args.abi_encode();
@@ -94,12 +95,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         local_time: Timestamp::from(0),
     };
 
-    let increments = [
-        U256::from(2),
-        U256::from(9),
-        U256::from(7),
-        U256::from(1000),
-    ];
+    let increments = [2_u64, 9_u64, 7_u64, 1000_u64];
     let policy = ResourceControlPolicy {
         fuel_unit: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
@@ -134,15 +130,12 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
 
         let query = get_valueCall {};
         let query = query.abi_encode();
-        let query = hex::encode(&query);
-        let query = format!("query {{ v{} }}", query);
-        let query = serde_json::json!({"query": query});
-        let query = serde_json::to_string(&query)?;
-        let query = query.into_bytes();
+        let query = EvmQuery::Query(query);
+        let bytes = serde_json::to_vec(&query)?;
 
         let query = Query::User {
             application_id: app_id,
-            bytes: query,
+            bytes,
         };
 
         let result = view.query_application(query_context, query, None).await?;
@@ -151,9 +144,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             anyhow::bail!("Wrong QueryResponse result");
         };
         let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-        let result = result["data"].to_string();
-        let result = hex::decode(&result[1..result.len() - 1])?;
-        let result = U256::from_be_slice(&result);
+        let result = read_evm_u64_entry(result);
         assert_eq!(result, value);
     }
     Ok(())

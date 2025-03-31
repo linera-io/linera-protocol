@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! An ABI for applications that implement an EVM runtime.
-use linera_base::abi::{ContractAbi, ServiceAbi};
+use linera_base::{
+    abi::{ContractAbi, ServiceAbi},
+    vm::EvmQuery,
+};
 
 /// An ABI for applications that implement an EVM runtime.
 pub struct EvmAbi;
@@ -29,6 +32,6 @@ impl ContractAbi for EvmAbi {
 }
 
 impl ServiceAbi for EvmAbi {
-    type Query = Vec<u8>;
+    type Query = EvmQuery;
     type QueryResponse = Vec<u8>;
 }
