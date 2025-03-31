@@ -5,11 +5,14 @@
 
 use std::sync::Arc;
 
-use linera_sdk::abis::evm::EvmAbi;
+use alloy::primitives::U256;
 use alloy_sol_types::{sol, SolCall};
 use call_evm_counter::{CallCounterOperation, CallCounterRequest};
-use linera_sdk::{linera_base_types::{ApplicationId, WithServiceAbi, EvmQuery}, Service, ServiceRuntime};
-use alloy::primitives::U256;
+use linera_sdk::{
+    abis::evm::EvmAbi,
+    linera_base_types::{ApplicationId, EvmQuery, WithServiceAbi},
+    Service, ServiceRuntime,
+};
 
 pub struct CallCounterService {
     runtime: Arc<ServiceRuntime<Self>>,
@@ -36,14 +39,14 @@ impl Service for CallCounterService {
                 sol! {
                     function get_value();
                 }
-                let query = get_valueCall { };
+                let query = get_valueCall {};
                 let query = query.abi_encode();
                 let query = EvmQuery::Query(query);
                 let evm_counter_id = self.runtime.application_parameters();
                 let result = self.runtime.query_application(evm_counter_id, &query);
-                let arr : [u8; 32] = result.try_into().expect("result should have length 32");
+                let arr: [u8; 32] = result.try_into().expect("result should have length 32");
                 U256::from_be_bytes(arr).to::<u64>()
-            },
+            }
             CallCounterRequest::Increment(value) => {
                 let operation = CallCounterOperation::Increment(value);
                 self.runtime.schedule_operation(&operation);

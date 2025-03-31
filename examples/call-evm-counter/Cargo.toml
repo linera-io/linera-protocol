@@ -7,7 +7,6 @@ edition = "2021"
 [dependencies]
 alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 alloy-sol-types.workspace = true
-futures.workspace = true
 linera-sdk = { workspace = true, features = [ "revm" ] }
 serde.workspace = true
 

@@ -3,10 +3,10 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use linera_sdk::abis::evm::EvmAbi;
-use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use alloy_sol_types::{sol, SolCall};
+use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use linera_sdk::{
+    abis::evm::EvmAbi,
     linera_base_types::{ApplicationId, WithContractAbi},
     Contract, ContractRuntime,
 };
@@ -43,7 +43,9 @@ impl Contract for CallCounterContract {
         let operation = incrementCall { input: increment };
         let operation = operation.abi_encode();
         let evm_counter_id = self.runtime.application_parameters();
-        let result = self.runtime.call_application(true, evm_counter_id, &operation);
+        let result = self
+            .runtime
+            .call_application(true, evm_counter_id, &operation);
         let mut arr = [0_u8; 8];
         arr.copy_from_slice(&result[24..]);
         let counter_value = u64::from_be_bytes(arr);
@@ -54,6 +56,5 @@ impl Contract for CallCounterContract {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {
-    }
+    async fn store(self) {}
 }
