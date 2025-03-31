@@ -716,8 +716,8 @@ impl<T> GrpcMessageLimiter<T> {
 mod proto_message_cap {
     use linera_base::hashed::Hashed;
     use linera_chain::{
-        data_types::{BlockExecutionOutcome, ExecutedBlock},
-        types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
+        data_types::BlockExecutionOutcome,
+        types::{Block, Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_sdk::linera_base_types::{
         ChainId, TestString, ValidatorKeypair, ValidatorSignature,
@@ -729,13 +729,13 @@ mod proto_message_cap {
         let keypair = ValidatorKeypair::generate();
         let validator = keypair.public_key;
         let signature = ValidatorSignature::new(&TestString::new("Test"), &keypair.secret_key);
-        let executed_block = ExecutedBlock {
-            block: linera_chain::test::make_first_block(ChainId::root(0)),
-            outcome: BlockExecutionOutcome::default(),
-        };
+        let block = Block::new(
+            linera_chain::test::make_first_block(ChainId::root(0)),
+            BlockExecutionOutcome::default(),
+        );
         let signatures = vec![(validator, signature)];
         Certificate::Confirmed(ConfirmedBlockCertificate::new(
-            Hashed::new(ConfirmedBlock::new(executed_block)),
+            Hashed::new(ConfirmedBlock::new(block)),
             Default::default(),
             signatures,
         ))

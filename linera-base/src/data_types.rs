@@ -1193,7 +1193,7 @@ impl<'a> Deserialize<'a> for Blob {
 
 impl BcsHashable<'_> for Blob {}
 
-/// An event recorded in an executed block.
+/// An event recorded in a block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct Event {
     /// The ID of the stream this event belongs to.

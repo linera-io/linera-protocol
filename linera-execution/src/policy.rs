@@ -60,9 +60,9 @@ pub struct ResourceControlPolicy {
     pub maximum_fuel_per_block: u64,
     /// The maximum time in milliseconds that a block can spend executing services as oracles.
     pub maximum_service_oracle_execution_ms: u64,
-    /// The maximum size of an executed block. This includes the block proposal itself as well as
+    /// The maximum size of a block. This includes the block proposal itself as well as
     /// the execution outcome.
-    pub maximum_executed_block_size: u64,
+    pub maximum_block_size: u64,
     /// The maximum size of decompressed contract or service bytecode, in bytes.
     pub maximum_bytecode_size: u64,
     /// The maximum size of a blob.
@@ -107,7 +107,7 @@ impl fmt::Display for ResourceControlPolicy {
             http_request,
             maximum_fuel_per_block,
             maximum_service_oracle_execution_ms,
-            maximum_executed_block_size,
+            maximum_block_size,
             maximum_blob_size,
             maximum_published_blobs,
             maximum_bytecode_size,
@@ -142,7 +142,7 @@ impl fmt::Display for ResourceControlPolicy {
             {maximum_fuel_per_block} maximum fuel per block\n\
             {maximum_service_oracle_execution_ms} ms maximum service-as-oracle execution time per \
                 block\n\
-            {maximum_executed_block_size} maximum size of an executed block\n\
+            {maximum_block_size} maximum size of a block\n\
             {maximum_blob_size} maximum size of a data blob, bytecode or other binary blob\n\
             {maximum_published_blobs} maximum number of blobs published per block\n\
             {maximum_bytecode_size} maximum size of service and contract bytecode\n\
@@ -189,7 +189,7 @@ impl ResourceControlPolicy {
             http_request: Amount::ZERO,
             maximum_fuel_per_block: u64::MAX,
             maximum_service_oracle_execution_ms: u64::MAX,
-            maximum_executed_block_size: u64::MAX,
+            maximum_block_size: u64::MAX,
             maximum_blob_size: u64::MAX,
             maximum_published_blobs: u64::MAX,
             maximum_bytecode_size: u64::MAX,
@@ -269,7 +269,7 @@ impl ResourceControlPolicy {
             http_request: Amount::from_micros(50),
             maximum_fuel_per_block: 100_000_000,
             maximum_service_oracle_execution_ms: 10_000,
-            maximum_executed_block_size: 1_000_000,
+            maximum_block_size: 1_000_000,
             maximum_blob_size: 1_000_000,
             maximum_published_blobs: 10,
             maximum_bytecode_size: 10_000_000,

@@ -158,7 +158,7 @@ pub enum ChainError {
     MissingMandatoryApplications(Vec<ApplicationId>),
     #[error("Can't use grant across different broadcast messages")]
     GrantUseOnBroadcast,
-    #[error("ExecutedBlock contains fewer oracle responses than requests")]
+    #[error("Executed block contains fewer oracle responses than requests")]
     MissingOracleResponseList,
     #[error("Unexpected hash for CertificateValue! Expected: {expected:?}, Actual: {actual:?}")]
     CertificateValueHashMismatch {

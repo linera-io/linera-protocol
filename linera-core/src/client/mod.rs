@@ -43,12 +43,11 @@ use linera_base::{
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
-        BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote, MessageAction,
-        ProposedBlock,
+        BlockProposal, ChainAndHeight, IncomingBundle, LiteVote, MessageAction, ProposedBlock,
     },
     manager::LockingBlock,
     types::{
-        CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
+        Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
@@ -1074,9 +1073,7 @@ where
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
-        let hashed_value = Hashed::new(ConfirmedBlock::new(
-            certificate.inner().block().clone().into(),
-        ));
+        let hashed_value = Hashed::new(ConfirmedBlock::new(certificate.inner().block().clone()));
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
@@ -1985,7 +1982,7 @@ where
         mut block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
+    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .stage_block_execution(block.clone(), round, published_blobs.clone())
@@ -2030,7 +2027,7 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: Vec<Blob>,
-    ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
+    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .client
@@ -2156,7 +2153,7 @@ where
                 self.next_timestamp(&incoming_bundles, state.timestamp()),
             )
         };
-        let block = ProposedBlock {
+        let proposed_block = ProposedBlock {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
@@ -2174,19 +2171,20 @@ where
         // Using the round number during execution counts as an oracle.
         // Accessing the round number in single-leader rounds where we are not the leader
         // is not currently supported.
-        let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
+        let round = match Self::round_for_new_proposal(&info, &identity, &proposed_block, true)? {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
-        let (executed_block, _) = self
-            .stage_block_execution_and_discard_failing_messages(block, round, blobs.clone())
+        let (block, _) = self
+            .stage_block_execution_and_discard_failing_messages(
+                proposed_block,
+                round,
+                blobs.clone(),
+            )
             .await?;
-        let block = &executed_block.block;
-        let committee = self.local_committee().await?;
-        let max_size = committee.policy().maximum_block_proposal_size;
-        block.check_proposal_size(max_size)?;
-        self.state_mut().set_pending_proposal(block.clone(), blobs);
-        Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
+        let (proposed_block, _) = block.clone().into_proposal();
+        self.state_mut().set_pending_proposal(proposed_block, blobs);
+        Ok(Hashed::new(ConfirmedBlock::new(block)))
     }
 
     /// Returns a suitable timestamp for the next block.
@@ -2496,8 +2494,8 @@ where
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
         let pending_proposal = self.state().pending_proposal().clone();
-        let (executed_block, blobs) = if let Some(locking) = &info.manager.requested_locking {
-            let (executed_block, blobs) = match &**locking {
+        let (block, blobs) = if let Some(locking) = &info.manager.requested_locking {
+            let (block, blobs) = match &**locking {
                 LockingBlock::Regular(certificate) => {
                     let blob_ids = certificate.block().required_blob_ids();
                     let blobs = local_node
@@ -2506,47 +2504,50 @@ where
                         .ok_or_else(|| {
                             ChainClientError::InternalError("Missing local locking blobs")
                         })?;
-                    (certificate.block().clone().into(), blobs)
+                    (certificate.block().clone(), blobs)
                 }
                 LockingBlock::Fast(proposal) => {
-                    let block = proposal.content.block.clone();
-                    let blob_ids = block.published_blob_ids();
+                    let proposed_block = proposal.content.block.clone();
+                    let blob_ids = proposed_block.published_blob_ids();
                     let blobs = local_node
                         .get_locking_blobs(&blob_ids, self.chain_id)
                         .await?
                         .ok_or_else(|| {
                             ChainClientError::InternalError("Missing local locking blobs")
                         })?;
-                    let executed_block = self
-                        .stage_block_execution(block, None, blobs.clone())
+                    let block = self
+                        .stage_block_execution(proposed_block, None, blobs.clone())
                         .await?
                         .0;
-                    (executed_block, blobs)
+                    (block, blobs)
                 }
             };
-            (executed_block, blobs)
+            (block, blobs)
         } else if let Some(pending_proposal) = pending_proposal {
             // Otherwise we are free to propose our own pending block.
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
-            let block = pending_proposal.block;
-            let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
+            let proposed_block = pending_proposal.block;
+            let round = match Self::round_for_new_proposal(&info, &identity, &proposed_block, true)?
+            {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
-            let (executed_block, _) = self
-                .stage_block_execution(block, round, pending_proposal.blobs.clone())
+            let (block, _) = self
+                .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
                 .await?;
-            (executed_block, pending_proposal.blobs)
+            (block, pending_proposal.blobs)
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
 
+        let has_oracle_responses = block.has_oracle_responses();
+        let (proposed_block, outcome) = block.into_proposal();
         let round = match Self::round_for_new_proposal(
             &info,
             &identity,
-            &executed_block.block,
-            executed_block.outcome.has_oracle_responses(),
+            &proposed_block,
+            has_oracle_responses,
         )? {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
@@ -2554,7 +2555,7 @@ where
 
         let already_handled_locally = info
             .manager
-            .already_handled_proposal(round, &executed_block.block);
+            .already_handled_proposal(round, &proposed_block);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
         let proposal = if let Some(locking) = info.manager.requested_locking {
@@ -2565,8 +2566,11 @@ where
                 }
             })
         } else {
-            let block = executed_block.block.clone();
-            Box::new(BlockProposal::new_initial(round, block, &key_pair))
+            Box::new(BlockProposal::new_initial(
+                round,
+                proposed_block.clone(),
+                &key_pair,
+            ))
         };
         if !already_handled_locally {
             // Check the final block proposal. This will be cheaper after #1401.
@@ -2583,13 +2587,14 @@ where
             }
         }
         let committee = self.local_committee().await?;
+        let block = Block::new(proposed_block, outcome);
         // Send the query to validators.
         let certificate = if round.is_fast() {
-            let hashed_value = Hashed::new(ConfirmedBlock::new(executed_block));
+            let hashed_value = Hashed::new(ConfirmedBlock::new(block));
             self.submit_block_proposal(&committee, proposal, hashed_value)
                 .await?
         } else {
-            let hashed_value = Hashed::new(ValidatedBlock::new(executed_block));
+            let hashed_value = Hashed::new(ValidatedBlock::new(block));
             let certificate = self
                 .submit_block_proposal(&committee, proposal, hashed_value.clone())
                 .await?;

@@ -217,13 +217,13 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (executed_block, _) = self
+        let (block, _) = self
             .validator
             .worker()
             .stage_block_execution(self.block, None, published_blobs)
             .await?;
 
-        let value = Hashed::new(ConfirmedBlock::new(executed_block));
+        let value = Hashed::new(ConfirmedBlock::new(block));
         let vote = LiteVote::new(
             LiteValue::new(&value),
             Round::Fast,

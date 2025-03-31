@@ -43,6 +43,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    block::Block,
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
         OperationResult, Origin, PostedMessage, ProposedBlock, Target, Transaction,
@@ -305,18 +306,18 @@ impl ChainTipState {
     /// Checks if the measurement counters would be valid.
     pub fn update_counters(
         &mut self,
-        new_block: &ProposedBlock,
+        proposed_block: &ProposedBlock,
         outcome: &BlockExecutionOutcome,
     ) -> Result<(), ChainError> {
-        let num_incoming_bundles = u32::try_from(new_block.incoming_bundles.len())
+        let num_incoming_bundles = u32::try_from(proposed_block.incoming_bundles.len())
             .map_err(|_| ArithmeticError::Overflow)?;
         self.num_incoming_bundles = self
             .num_incoming_bundles
             .checked_add(num_incoming_bundles)
             .ok_or(ArithmeticError::Overflow)?;
 
-        let num_operations =
-            u32::try_from(new_block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
+        let num_operations = u32::try_from(proposed_block.operations.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
         self.num_operations = self
             .num_operations
             .checked_add(num_operations)
@@ -580,12 +581,12 @@ where
     /// Verifies that the block's first message is `OpenChain`. Initializes the chain if necessary.
     pub async fn execute_init_message_from(
         &mut self,
-        block: &ProposedBlock,
+        block: &Block,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
         let (in_bundle, posted_message, config) = block
             .starts_with_open_chain_message()
-            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
+            .ok_or_else(|| ChainError::InactiveChain(block.header.chain_id))?;
         if self.is_active() {
             return Ok(()); // Already initialized.
         }
@@ -594,7 +595,7 @@ where
             height: in_bundle.bundle.height,
             index: posted_message.index,
         };
-        self.execute_init_message(message_id, config, block.timestamp, local_time)
+        self.execute_init_message(message_id, config, block.header.timestamp, local_time)
             .await
     }
 
@@ -1031,7 +1032,7 @@ where
         Ok(outcome)
     }
 
-    /// Applies an executed block to the chain, updating the outboxes, state hash and chain
+    /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
     /// manager. This does not touch the execution state itself, which must be updated separately.
     async fn apply_execution_outcome(
         &mut self,
@@ -1361,13 +1362,9 @@ where
 
 #[test]
 fn empty_block_size() {
-    let executed_block = crate::data_types::ExecutedBlock {
-        block: crate::test::make_first_block(ChainId::root(0)),
-        outcome: crate::data_types::BlockExecutionOutcome::default(),
-    };
     let size = bcs::serialized_size(&crate::block::Block::new(
-        executed_block.block,
-        executed_block.outcome,
+        crate::test::make_first_block(ChainId::root(0)),
+        crate::data_types::BlockExecutionOutcome::default(),
     ))
     .unwrap();
     assert_eq!(size, EMPTY_BLOCK_SIZE);

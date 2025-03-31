@@ -499,7 +499,7 @@ where
                 info!("Shutdown signal received, stopping benchmark");
                 break;
             }
-            let block = ProposedBlock {
+            let proposed_block = ProposedBlock {
                 epoch,
                 chain_id,
                 incoming_bundles: Vec::new(),
@@ -509,15 +509,18 @@ where
                 authenticated_signer,
                 timestamp: chain_client.timestamp().max(Timestamp::now()),
             };
-            let executed_block = local_node
-                .stage_block_execution(block.clone(), None, Vec::new())
+            let block = local_node
+                .stage_block_execution(proposed_block.clone(), None, Vec::new())
                 .await
                 .map_err(BenchmarkError::LocalNode)?
                 .0;
 
-            let value = Hashed::new(ConfirmedBlock::new(executed_block));
-            let proposal =
-                BlockProposal::new_initial(linera_base::data_types::Round::Fast, block, &key_pair);
+            let value = Hashed::new(ConfirmedBlock::new(block));
+            let proposal = BlockProposal::new_initial(
+                linera_base::data_types::Round::Fast,
+                proposed_block,
+                &key_pair,
+            );
 
             chain_client
                 .submit_block_proposal(&committee, Box::new(proposal), value)

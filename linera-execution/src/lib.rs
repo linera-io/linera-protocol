@@ -230,8 +230,8 @@ pub enum ExecutionError {
     MaximumServiceOracleExecutionTimeExceeded,
     #[error("Service running as an oracle produced a response that's too large")]
     ServiceOracleResponseTooLarge,
-    #[error("Serialized size of the executed block exceeds limit")]
-    ExecutedBlockTooLarge,
+    #[error("Serialized size of the block exceeds limit")]
+    BlockTooLarge,
     #[error("HTTP response exceeds the size limit of {limit} bytes, having at least {size} bytes")]
     HttpResponseSizeLimitExceeded { limit: u64, size: u64 },
     #[error("Runtime failed to respond to application")]

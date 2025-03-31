@@ -2327,9 +2327,9 @@ where
         .unwrap();
     // This read a new blob, so it cannot be a fast block.
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    let executed_block = certificate.block();
-    assert_eq!(executed_block.body.incoming_bundles.len(), 1);
-    assert_eq!(executed_block.required_blob_ids().len(), 1);
+    let block = certificate.block();
+    assert_eq!(block.body.incoming_bundles.len(), 1);
+    assert_eq!(block.required_blob_ids().len(), 1);
 
     // This will go way over the limit, because of the different overheads.
     let blob_bytes = (0..100)
@@ -2343,9 +2343,9 @@ where
     let result = client1.publish_data_blobs(blob_bytes).await;
     assert_matches!(
         result,
-        Err(ChainClientError::ChainError(
-            ChainError::BlockProposalTooLarge
-        ))
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(*chain_error, ChainError::BlockProposalTooLarge)
     );
 
     assert_matches!(
