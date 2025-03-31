@@ -134,10 +134,9 @@ pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
     vec
 }
 
-pub fn read_evm_u64_entry(value: Value) -> anyhow::Result<u64> {
+pub fn read_evm_u64_entry(value: Value) -> u64 {
     let vec = value_to_vec_u8(value);
     let mut arr = [0_u8; 8];
     arr.copy_from_slice(&vec[24..]);
-    let counter_value = u64::from_be_bytes(arr);
-    Ok(counter_value)
+    u64::from_be_bytes(arr)
 }

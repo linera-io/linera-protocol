@@ -604,7 +604,7 @@ where
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
-            EvmQuery::Operation(operation) => {
+            EvmQuery::Mutation(operation) => {
                 let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
                 runtime.schedule_operation(operation)?;
                 return Ok(Vec::new());

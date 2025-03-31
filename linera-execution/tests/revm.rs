@@ -144,7 +144,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             anyhow::bail!("Wrong QueryResponse result");
         };
         let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-        let result = read_evm_u64_entry(result)?;
+        let result = read_evm_u64_entry(result);
         assert_eq!(result, value);
     }
     Ok(())
