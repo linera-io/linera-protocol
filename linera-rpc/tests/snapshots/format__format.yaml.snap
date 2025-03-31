@@ -111,8 +111,10 @@ BlobType:
     2:
       ServiceBytecode: UNIT
     3:
-      ApplicationDescription: UNIT
+      EvmBytecode: UNIT
     4:
+      ApplicationDescription: UNIT
+    5:
       Committee: UNIT
 Block:
   STRUCT:

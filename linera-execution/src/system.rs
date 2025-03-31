@@ -25,6 +25,7 @@ use linera_base::{
         ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 use linera_views::{
     context::Context,
@@ -407,14 +408,24 @@ where
                 }
             }
             PublishModule { module_id } => {
-                self.blob_published(&BlobId::new(
-                    module_id.contract_blob_hash,
-                    BlobType::ContractBytecode,
-                ))?;
-                self.blob_published(&BlobId::new(
-                    module_id.service_blob_hash,
-                    BlobType::ServiceBytecode,
-                ))?;
+                match module_id.vm_runtime {
+                    VmRuntime::Wasm => {
+                        self.blob_published(&BlobId::new(
+                            module_id.contract_blob_hash,
+                            BlobType::ContractBytecode,
+                        ))?;
+                        self.blob_published(&BlobId::new(
+                            module_id.service_blob_hash,
+                            BlobType::ServiceBytecode,
+                        ))?;
+                    },
+                    VmRuntime::Evm => {
+                        self.blob_published(&BlobId::new(
+                            module_id.contract_blob_hash,
+                            BlobType::EvmBytecode,
+                        ))?;
+                    },
+                }
             }
             CreateApplication {
                 module_id,
@@ -763,14 +774,12 @@ where
     ) -> Result<CreateApplicationResult, ExecutionError> {
         let application_index = txn_tracker.next_application_index();
 
-        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-            self.check_bytecode_blobs(&module_id).await?;
+        let blob_ids = self.check_bytecode_blobs(&module_id).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
-        self.blob_used(Some(&mut txn_tracker), contract_bytecode_blob_id)
-            .await?;
-        self.blob_used(Some(&mut txn_tracker), service_bytecode_blob_id)
-            .await?;
+        for blob_id in blob_ids {
+            self.blob_used(Some(&mut txn_tracker), blob_id).await?;
+        }
 
         let application_description = ApplicationDescription {
             module_id,
@@ -820,14 +829,12 @@ where
         self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
         let description: ApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
-        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-            self.check_bytecode_blobs(&description.module_id).await?;
+        let blob_ids = self.check_bytecode_blobs(&description.module_id).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
-        self.blob_used(txn_tracker.as_deref_mut(), contract_bytecode_blob_id)
-            .await?;
-        self.blob_used(txn_tracker.as_deref_mut(), service_bytecode_blob_id)
-            .await?;
+        for blob_id in blob_ids {
+            self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
+        }
 
         self.check_required_applications(&description, txn_tracker)
             .await?;
@@ -917,36 +924,35 @@ where
     async fn check_bytecode_blobs(
         &mut self,
         module_id: &ModuleId,
-    ) -> Result<(BlobId, BlobId), ExecutionError> {
-        let contract_bytecode_blob_id =
-            BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode);
+    ) -> Result<Vec<BlobId>, ExecutionError> {
+        let blob_ids = match module_id.vm_runtime {
+            VmRuntime::Wasm => {
+                vec![
+                    BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
+                    BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
+                ]
+            },
+            VmRuntime::Evm => {
+                vec![BlobId::new(module_id.contract_blob_hash, BlobType::EvmBytecode)]
+            },
+        };
 
         let mut missing_blobs = Vec::new();
-        if !self
-            .context()
-            .extra()
-            .contains_blob(contract_bytecode_blob_id)
-            .await?
-        {
-            missing_blobs.push(contract_bytecode_blob_id);
+        for blob_id in &blob_ids {
+            if !self
+                .context()
+                .extra()
+                .contains_blob(*blob_id)
+                .await?
+            {
+                missing_blobs.push(*blob_id);
+            }
         }
-
-        let service_bytecode_blob_id =
-            BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode);
-        if !self
-            .context()
-            .extra()
-            .contains_blob(service_bytecode_blob_id)
-            .await?
-        {
-            missing_blobs.push(service_bytecode_blob_id);
-        }
-
         ensure!(
             missing_blobs.is_empty(),
             ExecutionError::BlobsNotFound(missing_blobs)
         );
 
-        Ok((contract_bytecode_blob_id, service_bytecode_blob_id))
+        Ok(blob_ids)
     }
 }

@@ -46,6 +46,7 @@ use linera_base::{
     },
     ownership::ChainOwnership,
     task,
+    vm::VmRuntime,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -1163,10 +1164,17 @@ impl Operation {
             Some(SystemOperation::Admin(AdminOperation::PublishCommitteeBlob { blob_hash })) => {
                 vec![BlobId::new(*blob_hash, BlobType::Committee)]
             }
-            Some(SystemOperation::PublishModule { module_id }) => vec![
-                BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
-                BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
-            ],
+            Some(SystemOperation::PublishModule { module_id }) => {
+                match module_id.vm_runtime {
+                    VmRuntime::Wasm => vec![
+                        BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
+                        BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
+                    ],
+                    VmRuntime::Evm => vec![
+                        BlobId::new(module_id.contract_blob_hash, BlobType::EvmBytecode),
+                    ]
+                }
+            }
             _ => vec![],
         }
     }

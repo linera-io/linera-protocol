@@ -756,6 +756,7 @@ where
             if blob_type == BlobType::Data
                 || blob_type == BlobType::ContractBytecode
                 || blob_type == BlobType::ServiceBytecode
+                || blob_type == BlobType::EvmBytecode
             {
                 resource_controller
                     .with_state(&mut self.execution_state.system)
