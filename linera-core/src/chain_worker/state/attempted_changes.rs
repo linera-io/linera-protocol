@@ -377,7 +377,7 @@ where
         let verified_outcome = self
             .state
             .chain
-            .execute_block(block, local_time, None, &published_blobs, oracle_responses)
+            .execute_and_apply_block(block, local_time, None, &published_blobs, oracle_responses)
             .await?;
         // We should always agree on the messages and state hash.
         ensure!(

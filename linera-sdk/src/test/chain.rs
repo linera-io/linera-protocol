@@ -517,12 +517,13 @@ impl ActiveChain {
 
     /// Returns whether this chain has been closed.
     pub async fn is_closed(&self) -> bool {
-        self.validator
+        let chain = self
+            .validator
             .worker()
             .chain_state_view(self.id())
             .await
-            .expect("Failed to load chain")
-            .is_closed()
+            .expect("Failed to load chain");
+        *chain.execution_state.system.closed.get()
     }
 
     /// Executes a `query` on an `application`'s state on this microchain.
