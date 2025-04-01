@@ -239,7 +239,11 @@ where
             WorkerError::FastBlockUsingOracles
         );
         // Check if the counters of tip_state would be valid.
-        chain.tip_state.get_mut().update_counters(block, &outcome)?;
+        chain.tip_state.get_mut().update_counters(
+            &block.incoming_bundles,
+            &block.operations,
+            &outcome.messages,
+        )?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
         Ok(Some((outcome, local_time)))

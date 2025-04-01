@@ -266,11 +266,8 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let (outcome, _, _) = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
-    chain
-        .apply_execution_outcome(&outcome, valid_block.height, time)
-        .await?;
-    let block = outcome.with(valid_block);
-    let value = Hashed::new(ConfirmedBlock::new(block));
+    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    chain.apply_confirmed_block(&value, time).await?;
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value.clone())
@@ -299,9 +296,8 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let (outcome, _, _) = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
-    chain
-        .apply_execution_outcome(&outcome, valid_block.height, time)
-        .await?;
+    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    chain.apply_confirmed_block(&value, time).await?;
 
     Ok(())
 }

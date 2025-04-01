@@ -367,15 +367,13 @@ where
             .collect::<Vec<_>>();
 
         // Execute the block and update inboxes.
-        self.state
-            .chain
+        let chain = &mut self.state.chain;
+        chain
             .remove_bundles_from_inboxes(block.header.timestamp, &block.body.incoming_bundles)
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let (verified_outcome, subscribe, unsubscribe) = self
-            .state
-            .chain
+        let (verified_outcome, subscribe, unsubscribe) = chain
             .execute_block(
                 &proposed_block,
                 local_time,
@@ -393,23 +391,16 @@ where
             }
         );
         // Update the rest of the chain state.
-        self.state.chain.process_unsubscribes(unsubscribe).await?;
-        self.state
-            .chain
-            .apply_execution_outcome(&outcome, block.header.height, local_time)
+        chain.process_unsubscribes(unsubscribe).await?;
+        chain
+            .apply_confirmed_block(certificate.value(), local_time)
             .await?;
-        self.state.chain.process_subscribes(subscribe).await?;
-        // Advance to next block height.
-        let tip = self.state.chain.tip_state.get_mut();
-        let hash = certificate.hash();
-        tip.block_hash = Some(hash);
-        tip.next_block_height.try_add_assign_one()?;
-        tip.update_counters(&proposed_block, &outcome)?;
-        self.state.chain.confirmed_log.push(hash);
+        chain.process_subscribes(subscribe).await?;
         self.state
             .track_newly_created_chains(&proposed_block, &outcome);
         let mut actions = self.state.create_network_actions().await?;
         trace!("Processed confirmed block {height} on chain {chain_id:.8}");
+        let hash = certificate.hash();
         actions.notifications.push(Notification {
             chain_id,
             reason: Reason::NewBlock { height, hash },
