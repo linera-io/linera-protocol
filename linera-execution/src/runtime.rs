@@ -1341,7 +1341,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.resource_controller
             .track_bytes_read(event.len() as u64)?;
         this.transaction_tracker
-            .add_oracle_response(OracleResponse::Event(event_id, event.clone()));
+            .replay_oracle_response(OracleResponse::Event(event_id, event.clone()))?;
         Ok(event)
     }
 

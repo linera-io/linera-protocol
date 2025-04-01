@@ -812,9 +812,10 @@ where
     }
 
     /// Adds a new item to an event stream. Returns the new event's index in the stream.
-    pub fn emit(&mut self, name: StreamName, value: &[u8]) -> u32 {
+    pub fn emit(&mut self, name: StreamName, value: &Application::EventValue) -> u32 {
+        let value = bcs::to_bytes(value).expect("Failed to serialize event value");
         let entry = self.created_events.entry(name).or_default();
-        entry.push(value.to_vec());
+        entry.push(value);
         entry.len() as u32 - 1
     }
 
@@ -824,10 +825,17 @@ where
     }
 
     /// Reads an event from a stream. Returns the event's value.
-    pub fn read_event(&mut self, chain_id: ChainId, name: StreamName, index: u32) -> &[u8] {
-        self.events
-            .get_mut(&(chain_id, name, index))
-            .expect("Event not found")
+    pub fn read_event(
+        &mut self,
+        chain_id: ChainId,
+        name: StreamName,
+        index: u32,
+    ) -> Application::EventValue {
+        let value = self
+            .events
+            .get(&(chain_id, name, index))
+            .expect("Event not found");
+        bcs::from_bytes(value).expect("Failed to deserialize event value")
     }
 
     /// Subscribes this application to an event stream.
