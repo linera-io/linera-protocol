@@ -787,7 +787,7 @@ impl ModuleId {
         }
     }
 
-    /// Gets the relevant `BlobId` of the module
+    /// Gets all bytecode `BlobId`s of the module
     pub fn bytecode_blob_ids(&self) -> Vec<BlobId> {
         match self.vm_runtime {
             VmRuntime::Wasm => vec![
