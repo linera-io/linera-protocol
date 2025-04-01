@@ -93,6 +93,8 @@ pub struct SystemExecutionStateView<C> {
     pub used_blobs: HashedSetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
     pub event_subscriptions: MapView<C, (ChainId, StreamId), BTreeSet<ApplicationId>>,
+    /// The event counts (i.e. next event index) for every stream this chain subscribes to.
+    pub stream_trackers: MapView<C, (ChainId, StreamId), u32>,
 }
 
 /// The configuration for a new chain.
@@ -174,6 +176,8 @@ pub enum SystemOperation {
     ProcessNewEpoch(Epoch),
     /// Processes an event about a removed epoch and committee.
     ProcessRemovedEpoch(Epoch),
+    /// Updates the event stream trackers.
+    UpdateStreams(Vec<(ChainId, StreamId, u32)>),
 }
 
 /// Operations that are only allowed on the admin chain.
@@ -500,6 +504,15 @@ where
                     Some(_) => return Err(ExecutionError::OracleResponseMismatch),
                 };
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
+            }
+            UpdateStreams(streams) => {
+                for (chain_id, stream_id, next_index) in streams {
+                    let tracker = self
+                        .stream_trackers
+                        .get_mut_or_default(&(chain_id, stream_id))
+                        .await?;
+                    *tracker = (*tracker).max(next_index);
+                }
             }
         }
 

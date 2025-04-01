@@ -10,8 +10,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, StreamName,
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination,
+        GenericApplicationId, MessageId, ModuleId, StreamName,
     },
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
@@ -289,7 +289,7 @@ where
     pub fn subscribe_to_events(
         &mut self,
         chain_id: ChainId,
-        application_id: ApplicationId,
+        application_id: GenericApplicationId,
         name: StreamName,
     ) {
         contract_wit::subscribe_to_events(chain_id.into(), application_id.into(), &name.into())
@@ -299,7 +299,7 @@ where
     pub fn unsubscribe_from_events(
         &mut self,
         chain_id: ChainId,
-        application_id: ApplicationId,
+        application_id: GenericApplicationId,
         name: StreamName,
     ) {
         contract_wit::unsubscribe_from_events(chain_id.into(), application_id.into(), &name.into())
