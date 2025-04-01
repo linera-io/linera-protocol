@@ -169,9 +169,9 @@ pub enum BlobType {
     /// A generic data blob.
     #[default]
     Data,
-    /// A blob containing compressed contract bytecode.
+    /// A blob containing compressed contract Wasm bytecode.
     ContractBytecode,
-    /// A blob containing compressed service bytecode.
+    /// A blob containing compressed service Wasm bytecode.
     ServiceBytecode,
     /// A blob containing compressed EVM bytecode.
     EvmBytecode,
@@ -770,6 +770,36 @@ impl ModuleId {
             _phantom: PhantomData,
         }
     }
+
+    /// Gets the `BlobId` of the contract
+    pub fn contract_bytecode_blob_id(&self) -> BlobId {
+        match self.vm_runtime {
+            VmRuntime::Wasm => BlobId::new(self.contract_blob_hash, BlobType::ContractBytecode),
+            VmRuntime::Evm => BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode),
+        }
+    }
+
+    /// Gets the `BlobId` of the service
+    pub fn service_bytecode_blob_id(&self) -> BlobId {
+	match self.vm_runtime {
+            VmRuntime::Wasm => BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode),
+            VmRuntime::Evm => BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode),
+        }
+    }
+
+    /// Gets the relevant `BlobId` of the module
+    pub fn bytecode_blob_ids(&self) -> Vec<BlobId> {
+	match self.vm_runtime {
+            VmRuntime::Wasm => vec![
+                BlobId::new(self.contract_blob_hash, BlobType::ContractBytecode),
+                BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode),
+            ],
+            VmRuntime::Evm => vec![
+                BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode),
+            ],
+        }
+    }
+
 }
 
 impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, InstantiationArgument> {

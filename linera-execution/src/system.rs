@@ -25,7 +25,6 @@ use linera_base::{
         ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
-    vm::VmRuntime,
 };
 use linera_views::{
     context::Context,
@@ -407,22 +406,9 @@ where
                     }
                 }
             }
-            PublishModule { module_id } => match module_id.vm_runtime {
-                VmRuntime::Wasm => {
-                    self.blob_published(&BlobId::new(
-                        module_id.contract_blob_hash,
-                        BlobType::ContractBytecode,
-                    ))?;
-                    self.blob_published(&BlobId::new(
-                        module_id.service_blob_hash,
-                        BlobType::ServiceBytecode,
-                    ))?;
-                }
-                VmRuntime::Evm => {
-                    self.blob_published(&BlobId::new(
-                        module_id.contract_blob_hash,
-                        BlobType::EvmBytecode,
-                    ))?;
+            PublishModule { module_id } => {
+                for blob_id in module_id.bytecode_blob_ids() {
+                    self.blob_published(&blob_id)?;
                 }
             },
             CreateApplication {
@@ -923,20 +909,7 @@ where
         &mut self,
         module_id: &ModuleId,
     ) -> Result<Vec<BlobId>, ExecutionError> {
-        let blob_ids = match module_id.vm_runtime {
-            VmRuntime::Wasm => {
-                vec![
-                    BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
-                    BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
-                ]
-            }
-            VmRuntime::Evm => {
-                vec![BlobId::new(
-                    module_id.contract_blob_hash,
-                    BlobType::EvmBytecode,
-                )]
-            }
-        };
+        let blob_ids = module_id.bytecode_blob_ids();
 
         let mut missing_blobs = Vec::new();
         for blob_id in &blob_ids {

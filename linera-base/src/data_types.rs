@@ -864,23 +864,12 @@ impl ApplicationDescription {
 
     /// Gets the `BlobId` of the contract
     pub fn contract_bytecode_blob_id(&self) -> BlobId {
-        match self.module_id.vm_runtime {
-            VmRuntime::Wasm => BlobId::new(
-                self.module_id.contract_blob_hash,
-                BlobType::ContractBytecode,
-            ),
-            VmRuntime::Evm => BlobId::new(self.module_id.contract_blob_hash, BlobType::EvmBytecode),
-        }
+        self.module_id.contract_bytecode_blob_id()
     }
 
     /// Gets the `BlobId` of the service
     pub fn service_bytecode_blob_id(&self) -> BlobId {
-        match self.module_id.vm_runtime {
-            VmRuntime::Wasm => {
-                BlobId::new(self.module_id.service_blob_hash, BlobType::ServiceBytecode)
-            }
-            VmRuntime::Evm => BlobId::new(self.module_id.contract_blob_hash, BlobType::EvmBytecode),
-        }
+        self.module_id.service_bytecode_blob_id()
     }
 }
 
