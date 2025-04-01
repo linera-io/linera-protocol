@@ -30,7 +30,11 @@ pub use {
 #[cfg(with_testing)]
 pub use self::mock_stubs::*;
 #[cfg(with_integration_testing)]
-pub use self::{block::BlockBuilder, chain::ActiveChain, validator::TestValidator};
+pub use self::{
+    block::BlockBuilder,
+    chain::{ActiveChain, TryQueryError},
+    validator::TestValidator,
+};
 use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 
 /// Creates a [`ContractRuntime`] to use in tests.

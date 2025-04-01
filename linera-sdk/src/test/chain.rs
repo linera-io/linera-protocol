@@ -537,7 +537,23 @@ impl ActiveChain {
     where
         Abi: ServiceAbi,
     {
-        let query_bytes = serde_json::to_vec(&query).expect("Failed to serialize query");
+        self.try_query(application_id, query)
+            .await
+            .expect("Failed to execute application service query")
+    }
+
+    /// Attempts to execute a `query` on an `application`'s state on this microchain.
+    ///
+    /// Returns the deserialized response from the `application`.
+    pub async fn try_query<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+        query: Abi::Query,
+    ) -> Result<QueryOutcome<Abi::QueryResponse>, TryQueryError>
+    where
+        Abi: ServiceAbi,
+    {
+        let query_bytes = serde_json::to_vec(&query)?;
 
         let QueryOutcome {
             response,
@@ -552,8 +568,7 @@ impl ActiveChain {
                     bytes: query_bytes,
                 },
             )
-            .await
-            .expect("Failed to query application");
+            .await?;
 
         let deserialized_response = match response {
             QueryResponse::User(bytes) => {
@@ -564,10 +579,10 @@ impl ActiveChain {
             }
         };
 
-        QueryOutcome {
+        Ok(QueryOutcome {
             response: deserialized_response,
             operations,
-        }
+        })
     }
 
     /// Executes a GraphQL `query` on an `application`'s state on this microchain.
@@ -635,4 +650,16 @@ impl ActiveChain {
         })
         .await
     }
+}
+
+/// Failure to query an application's service on a chain.
+#[derive(Debug, thiserror::Error)]
+pub enum TryQueryError {
+    /// The query request failed to serialize to JSON.
+    #[error("Failed to serialize query request")]
+    Serialization(#[from] serde_json::Error),
+
+    /// Executing the service to handle the query failed.
+    #[error("Failed to execute service query")]
+    Execution(#[from] WorkerError),
 }
