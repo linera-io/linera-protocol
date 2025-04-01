@@ -453,6 +453,36 @@ where
                 callback.respond(event_value);
             }
 
+            SubscribeToEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            } => {
+                let subscribers = self
+                    .system
+                    .event_subscriptions
+                    .get_mut_or_default(&(chain_id, stream_id))
+                    .await?;
+                subscribers.insert(subscriber_app_id);
+                callback.respond(());
+            }
+
+            UnsubscribeFromEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            } => {
+                let subscribers = self
+                    .system
+                    .event_subscriptions
+                    .get_mut_or_default(&(chain_id, stream_id))
+                    .await?;
+                subscribers.remove(&subscriber_app_id);
+                callback.respond(());
+            }
+
             GetApplicationPermissions { callback } => {
                 let app_permissions = self.system.application_permissions.get();
                 callback.respond(app_permissions.clone());
@@ -718,6 +748,22 @@ pub enum ExecutionRequest {
     ReadEvent {
         event_id: EventId,
         callback: oneshot::Sender<Vec<u8>>,
+    },
+
+    SubscribeToEvents {
+        chain_id: ChainId,
+        stream_id: StreamId,
+        subscriber_app_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    UnsubscribeFromEvents {
+        chain_id: ChainId,
+        stream_id: StreamId,
+        subscriber_app_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<()>,
     },
 
     GetApplicationPermissions {

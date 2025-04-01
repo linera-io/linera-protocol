@@ -1345,6 +1345,60 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(event)
     }
 
+    fn subscribe_to_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: GenericApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        ensure!(
+            stream_name.0.len() <= MAX_STREAM_NAME_LEN,
+            ExecutionError::StreamNameTooLong
+        );
+        let stream_id = StreamId {
+            stream_name,
+            application_id,
+        };
+        let subscriber_app_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::SubscribeToEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    fn unsubscribe_from_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: GenericApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        ensure!(
+            stream_name.0.len() <= MAX_STREAM_NAME_LEN,
+            ExecutionError::StreamNameTooLong
+        );
+        let stream_id = StreamId {
+            stream_name,
+            application_id,
+        };
+        let subscriber_app_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::UnsubscribeFromEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
     fn query_service(
         &mut self,
         application_id: ApplicationId,

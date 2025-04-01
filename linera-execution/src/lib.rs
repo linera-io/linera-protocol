@@ -739,6 +739,22 @@ pub trait ContractRuntime: BaseRuntime {
         index: u32,
     ) -> Result<Vec<u8>, ExecutionError>;
 
+    /// Subscribes this application to an event stream.
+    fn subscribe_to_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: GenericApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError>;
+
+    /// Unsubscribes this application from an event stream.
+    fn unsubscribe_from_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: GenericApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError>;
+
     /// Queries a service.
     fn query_service(
         &mut self,
