@@ -88,7 +88,7 @@ impl TestValidator {
         let clock = storage.clock().clone();
         let worker = WorkerState::new(
             "Single validator node".to_string(),
-            Some((validator_keypair.secret_key.copy(), account_secret.copy())),
+            Some(validator_keypair.secret_key.copy()),
             storage.clone(),
             NonZeroUsize::new(40).expect("Chain worker limit should not be zero"),
         );

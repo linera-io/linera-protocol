@@ -105,7 +105,7 @@ pub struct ValidatorState {
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, InputObject)]
 pub struct Committee {
     /// The validators in the committee.
-    validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
+    pub validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
     /// The sum of all voting rights.
     total_votes: u64,
     /// The threshold to form a quorum.
