@@ -9,7 +9,7 @@ mod tests;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     mem,
 };
 
@@ -28,7 +28,7 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
-    map_view::HashedMapView,
+    map_view::{HashedMapView, MapView},
     register_view::HashedRegisterView,
     set_view::HashedSetView,
     views::{ClonableView, HashableView, View, ViewError},
@@ -91,6 +91,8 @@ pub struct SystemExecutionStateView<C> {
     pub application_permissions: HashedRegisterView<C, ApplicationPermissions>,
     /// Blobs that have been used or published on this chain.
     pub used_blobs: HashedSetView<C, BlobId>,
+    /// The event stream subscriptions of applications on this chain.
+    pub event_subscriptions: MapView<C, (ChainId, StreamId), BTreeSet<ApplicationId>>,
 }
 
 /// The configuration for a new chain.
