@@ -236,7 +236,7 @@ impl ActiveChain {
     pub async fn try_add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> anyhow::Result<ConfirmedBlockCertificate> {
+    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
         self.try_add_block_with_blobs(block_builder, vec![]).await
     }
 
@@ -251,7 +251,7 @@ impl ActiveChain {
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
         blobs: Vec<Blob>,
-    ) -> anyhow::Result<ConfirmedBlockCertificate> {
+    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
