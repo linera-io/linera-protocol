@@ -735,18 +735,18 @@ where
             let validator_keypair = ValidatorKeypair::generate();
             let account_secret = AccountSecretKey::generate();
             validators.push((validator_keypair.public_key, account_secret.public()));
-            key_pairs.push((validator_keypair.secret_key, account_secret));
+            key_pairs.push(validator_keypair.secret_key);
         }
         let initial_committee = Committee::make_simple(validators);
         let mut validator_clients = Vec::new();
         let mut validator_storages = HashMap::new();
         let mut faulty_validators = HashSet::new();
-        for (i, (validator_secret, account_secret)) in key_pairs.into_iter().enumerate() {
+        for (i, validator_secret) in key_pairs.into_iter().enumerate() {
             let validator_public_key = validator_secret.public();
             let storage = storage_builder.build().await?;
             let state = WorkerState::new(
                 format!("Node {}", i),
-                Some((validator_secret, account_secret)),
+                Some(validator_secret),
                 storage.clone(),
                 NonZeroUsize::new(100).expect("Chain worker limit should not be zero"),
             )

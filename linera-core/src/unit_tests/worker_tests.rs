@@ -99,7 +99,7 @@ where
     )]);
     let worker = WorkerState::new(
         "Single validator node".to_string(),
-        Some((validator_keypair.secret_key, account_secret)),
+        Some(validator_keypair.secret_key),
         storage,
         NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
     )
@@ -3684,7 +3684,9 @@ where
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // At time 0 we don't vote for fallback mode.
-    let query = ChainInfoQuery::new(chain_id).with_fallback();
+    let query = ChainInfoQuery::new(chain_id)
+        .with_fallback()
+        .with_committees();
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let manager = response.info.manager;
     assert!(manager.fallback_vote.is_none());
@@ -3728,9 +3730,18 @@ where
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let manager = response.info.manager;
-    let account_key = worker.account_key();
+    let expected_key = response
+        .info
+        .requested_committees
+        .unwrap()
+        .get(&response.info.epoch.unwrap())
+        .unwrap()
+        .validators
+        .get(&vote.public_key)
+        .unwrap()
+        .account_public_key;
     assert_eq!(manager.current_round, Round::Validator(0));
-    assert_eq!(manager.leader, Some(AccountOwner::from(account_key)));
+    assert_eq!(manager.leader, Some(AccountOwner::from(expected_key)));
     Ok(())
 }
 

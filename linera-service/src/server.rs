@@ -70,10 +70,7 @@ impl ServerContext {
         );
         let state = WorkerState::new(
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
-            Some((
-                self.server_config.validator_secret.copy(),
-                self.server_config.account_secret.copy(),
-            )),
+            Some(self.server_config.validator_secret.copy()),
             storage,
             self.max_loaded_chains,
         )
@@ -358,7 +355,6 @@ fn make_server_config<R: CryptoRng>(
         ValidatorServerConfig {
             validator,
             validator_secret: validator_keypair.secret_key,
-            account_secret,
             internal_network,
         },
     )?)

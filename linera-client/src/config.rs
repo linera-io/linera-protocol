@@ -60,7 +60,6 @@ pub struct ValidatorConfig {
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
     pub validator_secret: ValidatorSecretKey,
-    pub account_secret: AccountSecretKey,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
 
