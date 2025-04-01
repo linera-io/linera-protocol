@@ -324,7 +324,8 @@ impl ChainTipState {
             .ok_or(ArithmeticError::Overflow)?;
 
         let num_outgoing_messages =
-            u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+            u32::try_from(outcome.messages.iter().map(Vec::len).sum::<usize>())
+                .map_err(|_| ArithmeticError::Overflow)?;
         self.num_outgoing_messages = self
             .num_outgoing_messages
             .checked_add(num_outgoing_messages)
