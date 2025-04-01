@@ -644,24 +644,44 @@ impl ActiveChain {
     where
         Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
     {
-        let QueryOutcome { operations, .. } = self.graphql_query(application_id, query).await;
+        self.try_graphql_mutation(application_id, query)
+            .await
+            .expect("Failed to execute service GraphQL mutation")
+    }
 
-        self.add_block(|block| {
-            for operation in operations {
-                match operation {
-                    Operation::User {
-                        application_id,
-                        bytes,
-                    } => {
-                        block.with_raw_operation(application_id, bytes);
-                    }
-                    Operation::System(system_operation) => {
-                        block.with_system_operation(*system_operation);
+    /// Attempts to execute a GraphQL `mutation` on an `application` and proposes a block with the
+    /// resulting scheduled operations.
+    ///
+    /// Returns the certificate of the new block.
+    pub async fn try_graphql_mutation<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+        query: impl Into<async_graphql::Request>,
+    ) -> Result<ConfirmedBlockCertificate, TryGraphQLMutationError>
+    where
+        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
+    {
+        let QueryOutcome { operations, .. } = self.try_graphql_query(application_id, query).await?;
+
+        let certificate = self
+            .try_add_block(|block| {
+                for operation in operations {
+                    match operation {
+                        Operation::User {
+                            application_id,
+                            bytes,
+                        } => {
+                            block.with_raw_operation(application_id, bytes);
+                        }
+                        Operation::System(system_operation) => {
+                            block.with_system_operation(*system_operation);
+                        }
                     }
                 }
-            }
-        })
-        .await
+            })
+            .await?;
+
+        Ok(certificate)
     }
 }
 
@@ -721,4 +741,16 @@ impl TryGraphQLQueryError {
 
         worker_error.expect_execution_error(ChainExecutionContext::Query)
     }
+}
+
+/// Failure to perform a GraphQL mutation on an application on a chain.
+#[derive(Debug, thiserror::Error)]
+pub enum TryGraphQLMutationError {
+    /// The GraphQL query for the mutation failed.
+    #[error(transparent)]
+    Query(#[from] TryGraphQLQueryError),
+
+    /// The block with the mutation's scheduled operations failed to be proposed.
+    #[error("Failed to propose block with operations scheduled by the GraphQL mutation")]
+    Proposal(#[from] WorkerError),
 }

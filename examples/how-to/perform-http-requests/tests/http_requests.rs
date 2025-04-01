@@ -107,7 +107,7 @@ async fn service_sends_valid_http_response_to_contract() -> anyhow::Result<()> {
 
 /// Tests if the contract rejects an invalid HTTP response sent by the service.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "Failed to execute block")]
+#[should_panic(expected = "Failed to execute service GraphQL mutation")]
 async fn contract_rejects_invalid_http_response_from_service() {
     const HTTP_RESPONSE_BODY: &str = "Untrusted response";
 
@@ -164,7 +164,7 @@ async fn contract_accepts_valid_http_response_it_obtains_by_itself() -> anyhow::
 
 /// Tests if the contract rejects an invalid HTTP response it obtains by itself.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "Failed to execute block")]
+#[should_panic(expected = "Failed to execute service GraphQL mutation")]
 async fn contract_rejects_invalid_http_response_it_obtains_by_itself() {
     const HTTP_RESPONSE_BODY: &str = "Untrusted response";
 
@@ -223,7 +223,7 @@ async fn contract_accepts_valid_http_response_from_oracle() -> anyhow::Result<()
 /// Tests if the contract rejects an invalid HTTP response it obtains from the service acting as an
 /// oracle.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "Failed to execute block")]
+#[should_panic(expected = "Failed to execute service GraphQL mutation")]
 async fn contract_rejects_invalid_http_response_from_oracle() {
     const HTTP_RESPONSE_BODY: &str = "Invalid response";
 

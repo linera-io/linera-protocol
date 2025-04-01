@@ -34,7 +34,7 @@ pub use self::mock_stubs::*;
 #[cfg(with_integration_testing)]
 pub use self::{
     block::BlockBuilder,
-    chain::{ActiveChain, TryGraphQLQueryError, TryQueryError},
+    chain::{ActiveChain, TryGraphQLMutationError, TryGraphQLQueryError, TryQueryError},
     validator::TestValidator,
 };
 use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
