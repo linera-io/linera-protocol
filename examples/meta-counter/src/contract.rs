@@ -29,7 +29,7 @@ impl Contract for MetaCounterContract {
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ApplicationId<counter::CounterAbi>;
-    type EventValue = Vec<u8>;
+    type EventValue = String;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         MetaCounterContract { runtime }
@@ -43,7 +43,7 @@ impl Contract for MetaCounterContract {
         let this_chain = self.runtime.chain_id();
         self.runtime.emit(
             StreamName(b"announcements".to_vec()),
-            &b"instantiated".to_vec(),
+            &"instantiated".to_string(),
         );
         self.runtime.send_message(this_chain, Message::Increment(0));
     }

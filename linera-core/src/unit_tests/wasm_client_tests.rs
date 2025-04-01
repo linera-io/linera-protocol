@@ -350,7 +350,7 @@ where
                 stream_name: StreamName(b"announcements".to_vec()),
             },
             index: 0,
-            value: bcs::to_bytes(&b"instantiated".to_vec()).unwrap(),
+            value: bcs::to_bytes(&"instantiated".to_string()).unwrap(),
         }]]
     );
 
