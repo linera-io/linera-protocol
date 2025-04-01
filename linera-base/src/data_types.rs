@@ -861,6 +861,16 @@ impl ApplicationDescription {
     pub fn to_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).expect("Serializing blob bytes should not fail!")
     }
+
+    /// Gets the `BlobId` of the contract
+    pub fn contract_bytecode_blob_id(&self) -> BlobId {
+        self.module_id.contract_bytecode_blob_id()
+    }
+
+    /// Gets the `BlobId` of the service
+    pub fn service_bytecode_blob_id(&self) -> BlobId {
+        self.module_id.service_bytecode_blob_id()
+    }
 }
 
 /// A WebAssembly module's bytecode.
@@ -1026,6 +1036,11 @@ impl BlobContent {
         )
     }
 
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_evm_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::new(BlobType::EvmBytecode, compressed_bytecode.compressed_bytes)
+    }
+
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
     pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         BlobContent::new(
@@ -1109,6 +1124,11 @@ impl Blob {
     /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
     pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         Blob::new(BlobContent::new_contract_bytecode(compressed_bytecode))
+    }
+
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_evm_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        Blob::new(BlobContent::new_evm_bytecode(compressed_bytecode))
     }
 
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.

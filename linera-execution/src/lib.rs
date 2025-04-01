@@ -1163,10 +1163,7 @@ impl Operation {
             Some(SystemOperation::Admin(AdminOperation::PublishCommitteeBlob { blob_hash })) => {
                 vec![BlobId::new(*blob_hash, BlobType::Committee)]
             }
-            Some(SystemOperation::PublishModule { module_id }) => vec![
-                BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
-                BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
-            ],
+            Some(SystemOperation::PublishModule { module_id }) => module_id.bytecode_blob_ids(),
             _ => vec![],
         }
     }

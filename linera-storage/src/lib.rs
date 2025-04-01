@@ -17,9 +17,7 @@ use linera_base::{
         Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
     },
     hashed::Hashed,
-    identifiers::{
-        AccountOwner, ApplicationId, BlobId, BlobType, ChainDescription, ChainId, EventId,
-    },
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, EventId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -260,10 +258,7 @@ pub trait Storage: Sized {
         &self,
         application_description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        let contract_bytecode_blob_id = BlobId::new(
-            application_description.module_id.contract_blob_hash,
-            BlobType::ContractBytecode,
-        );
+        let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
         let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
@@ -320,10 +315,7 @@ pub trait Storage: Sized {
         &self,
         application_description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        let service_bytecode_blob_id = BlobId::new(
-            application_description.module_id.service_blob_hash,
-            BlobType::ServiceBytecode,
-        );
+        let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
