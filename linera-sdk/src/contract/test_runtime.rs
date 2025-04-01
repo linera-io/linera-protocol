@@ -825,6 +825,8 @@ where
     }
 
     /// Reads an event from a stream. Returns the event's value.
+    ///
+    /// Panics if the event doesn't exist.
     pub fn read_event(
         &mut self,
         chain_id: ChainId,

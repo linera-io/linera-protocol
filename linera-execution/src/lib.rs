@@ -732,6 +732,8 @@ pub trait ContractRuntime: BaseRuntime {
     fn emit(&mut self, name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError>;
 
     /// Reads an event from a stream. Returns the event's value.
+    ///
+    /// Returns an error if the event doesn't exist.
     fn read_event(
         &mut self,
         chain_id: ChainId,
