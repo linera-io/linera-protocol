@@ -123,7 +123,7 @@ impl LruPrefixCache {
         }
     }
 
-    /// Trim the cache so that it fits within the contraints.
+    /// Trim the cache so that it fits within the constraints.
     fn trim_cache(&mut self) {
         while self.total_size > self.storage_cache_config.max_cache_size
             || self.queue.len() > self.storage_cache_config.max_cache_entries

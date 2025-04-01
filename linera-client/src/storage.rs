@@ -398,7 +398,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }?;
             let protocol = parts[2];
             if protocol != "tcp" {
-                return Err(Error::Format("The only alowed protocol is tcp".into()));
+                return Err(Error::Format("The only allowed protocol is tcp".into()));
             }
             let address = parts[3];
             let port_str = parts[4];
