@@ -581,6 +581,20 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Reads an event from a stream. Returns the event's value.
+    fn read_event(
+        caller: &mut Caller,
+        chain_id: ChainId,
+        name: StreamName,
+        index: u32,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_event(chain_id, name, index)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Queries a service and returns the response.
     fn query_service(
         caller: &mut Caller,

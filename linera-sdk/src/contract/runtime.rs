@@ -280,6 +280,11 @@ where
         contract_wit::emit(&name.into(), value)
     }
 
+    /// Reads an event from a stream. Returns the event's value.
+    pub fn read_event(&mut self, chain_id: ChainId, name: StreamName, index: u32) -> Vec<u8> {
+        contract_wit::read_event(chain_id.into(), &name.into(), index)
+    }
+
     /// Queries an application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute

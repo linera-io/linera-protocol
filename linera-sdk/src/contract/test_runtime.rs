@@ -60,7 +60,8 @@ where
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
-    events: BTreeMap<StreamName, Vec<Vec<u8>>>,
+    created_events: BTreeMap<StreamName, Vec<Vec<u8>>>,
+    events: BTreeMap<(ChainId, StreamName, u32), Vec<u8>>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
@@ -109,6 +110,7 @@ where
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
+            created_events: BTreeMap::new(),
             events: BTreeMap::new(),
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
@@ -811,9 +813,21 @@ where
 
     /// Adds a new item to an event stream. Returns the new event's index in the stream.
     pub fn emit(&mut self, name: StreamName, value: &[u8]) -> u32 {
-        let entry = self.events.entry(name).or_default();
+        let entry = self.created_events.entry(name).or_default();
         entry.push(value.to_vec());
         entry.len() as u32 - 1
+    }
+
+    /// Adds an event to a stream, so that it can be read using `read_event`.
+    pub fn add_event(&mut self, chain_id: ChainId, name: StreamName, index: u32, value: &[u8]) {
+        self.events.insert((chain_id, name, index), value.to_vec());
+    }
+
+    /// Reads an event from a stream. Returns the event's value.
+    pub fn read_event(&mut self, chain_id: ChainId, name: StreamName, index: u32) -> &[u8] {
+        self.events
+            .get_mut(&(chain_id, name, index))
+            .expect("Event not found")
     }
 
     /// Adds an expected `query_service` call`, and the response it should return in the test.

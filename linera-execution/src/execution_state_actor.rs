@@ -19,7 +19,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, StreamId},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, MessageId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -448,6 +448,11 @@ where
                 callback.respond(index)
             }
 
+            ReadEvent { event_id, callback } => {
+                let event_value = self.context().extra().get_event(event_id).await?;
+                callback.respond(event_value);
+            }
+
             GetApplicationPermissions { callback } => {
                 let app_permissions = self.system.application_permissions.get();
                 callback.respond(app_permissions.clone());
@@ -708,6 +713,11 @@ pub enum ExecutionRequest {
         stream_id: StreamId,
         #[debug(skip)]
         callback: Sender<u32>,
+    },
+
+    ReadEvent {
+        event_id: EventId,
+        callback: oneshot::Sender<Vec<u8>>,
     },
 
     GetApplicationPermissions {
