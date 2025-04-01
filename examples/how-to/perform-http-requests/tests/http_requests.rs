@@ -58,7 +58,7 @@ async fn service_query_performs_http_request() -> anyhow::Result<()> {
 
 /// Tests if service query can't perform HTTP requests to hosts that aren't allowed.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "UnauthorizedHttpRequest")]
+#[should_panic(expected = "Failed to execute service query")]
 async fn service_query_cant_send_http_request_to_unauthorized_host() {
     let url = "http://localhost/".to_owned();
 

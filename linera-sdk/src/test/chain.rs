@@ -598,25 +598,38 @@ impl ActiveChain {
     {
         let query = query.into();
         let query_str = query.query.clone();
+
+        self.try_graphql_query(application_id, query)
+            .await
+            .unwrap_or_else(|error| panic!("Service query {query_str:?} failed: {error}"))
+    }
+
+    /// Attempts to execute a GraphQL `query` on an `application`'s state on this microchain.
+    ///
+    /// Returns the deserialized GraphQL JSON response from the `application`.
+    pub async fn try_graphql_query<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+        query: impl Into<async_graphql::Request>,
+    ) -> Result<QueryOutcome<serde_json::Value>, TryGraphQLQueryError>
+    where
+        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
+    {
+        let query = query.into();
         let QueryOutcome {
             response,
             operations,
-        } = self.query(application_id, query).await;
-        if !response.errors.is_empty() {
-            panic!(
-                "GraphQL query:\n{}\nyielded errors:\n{:#?}",
-                query_str, response.errors
-            );
-        }
-        let json_response = response
-            .data
-            .into_json()
-            .expect("Unexpected non-JSON query response");
+        } = self.try_query(application_id, query).await?;
 
-        QueryOutcome {
+        if !response.errors.is_empty() {
+            return Err(TryGraphQLQueryError::Service(response.errors));
+        }
+        let json_response = response.data.into_json()?;
+
+        Ok(QueryOutcome {
             response: json_response,
             operations,
-        }
+        })
     }
 
     /// Executes a GraphQL `mutation` on an `application` and proposes a block with the resulting
@@ -662,4 +675,35 @@ pub enum TryQueryError {
     /// Executing the service to handle the query failed.
     #[error("Failed to execute service query")]
     Execution(#[from] WorkerError),
+}
+
+/// Failure to perform a GraphQL query on an application on a chain.
+#[derive(Debug, thiserror::Error)]
+pub enum TryGraphQLQueryError {
+    /// The [`async_graphql::Request`] failed to serialize to JSON.
+    #[error("Failed to serialize GraphQL query request")]
+    RequestSerialization(#[source] serde_json::Error),
+
+    /// Execution of the service failed.
+    #[error("Failed to execute service query")]
+    Execution(#[from] WorkerError),
+
+    /// The response returned from the service was not valid JSON.
+    #[error("Unexpected non-JSON service query response")]
+    ResponseDeserialization(#[from] serde_json::Error),
+
+    /// The service reported some errors.
+    #[error("Service returned errors: {_0:#?}")]
+    Service(Vec<async_graphql::ServerError>),
+}
+
+impl From<TryQueryError> for TryGraphQLQueryError {
+    fn from(query_error: TryQueryError) -> Self {
+        match query_error {
+            TryQueryError::Serialization(error) => {
+                TryGraphQLQueryError::RequestSerialization(error)
+            }
+            TryQueryError::Execution(error) => TryGraphQLQueryError::Execution(error),
+        }
+    }
 }
