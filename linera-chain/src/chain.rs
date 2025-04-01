@@ -1002,41 +1002,9 @@ where
         .await
     }
 
-    /// Executes a block: first the incoming messages, then the main operation.
-    /// * Modifies the state of outboxes and channels, if needed.
-    /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
-    ///   away.
-    /// * Returns the outcome of the execution.
-    pub async fn execute_and_apply_block(
-        &mut self,
-        block: &ProposedBlock,
-        local_time: Timestamp,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<BlockExecutionOutcome, ChainError> {
-        let (outcome, subscribe, unsubscribe) = self
-            .execute_block(
-                block,
-                local_time,
-                round,
-                published_blobs,
-                replaying_oracle_responses,
-            )
-            .await?;
-
-        // Update the rest of the chain state.
-        self.process_unsubscribes(unsubscribe).await?;
-        self.apply_execution_outcome(&outcome, block.height, local_time)
-            .await?;
-        self.process_subscribes(subscribe).await?;
-
-        Ok(outcome)
-    }
-
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
     /// manager. This does not touch the execution state itself, which must be updated separately.
-    async fn apply_execution_outcome(
+    pub async fn apply_execution_outcome(
         &mut self,
         outcome: &BlockExecutionOutcome,
         height: BlockHeight,
@@ -1292,7 +1260,7 @@ where
 
     /// Processes new subscriptions. Returns `true` if at least one new subscriber was added for
     /// which we have outgoing messages.
-    async fn process_subscribes(
+    pub async fn process_subscribes(
         &mut self,
         names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<bool, ChainError> {
@@ -1342,7 +1310,7 @@ where
         Ok(new_outbox_entries)
     }
 
-    async fn process_unsubscribes(
+    pub async fn process_unsubscribes(
         &mut self,
         names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<(), ChainError> {

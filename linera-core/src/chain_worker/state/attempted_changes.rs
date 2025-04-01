@@ -373,10 +373,10 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let verified_outcome = self
+        let (verified_outcome, subscribe, unsubscribe) = self
             .state
             .chain
-            .execute_and_apply_block(
+            .execute_block(
                 &proposed_block,
                 local_time,
                 None,
@@ -392,6 +392,13 @@ where
                 computed: Box::new(verified_outcome),
             }
         );
+        // Update the rest of the chain state.
+        self.state.chain.process_unsubscribes(unsubscribe).await?;
+        self.state
+            .chain
+            .apply_execution_outcome(&outcome, block.header.height, local_time)
+            .await?;
+        self.state.chain.process_subscribes(subscribe).await?;
         // Advance to next block height.
         let tip = self.state.chain.tip_state.get_mut();
         let hash = certificate.hash();
