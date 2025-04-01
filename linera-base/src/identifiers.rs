@@ -781,7 +781,7 @@ impl ModuleId {
 
     /// Gets the `BlobId` of the service
     pub fn service_bytecode_blob_id(&self) -> BlobId {
-	match self.vm_runtime {
+        match self.vm_runtime {
             VmRuntime::Wasm => BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode),
             VmRuntime::Evm => BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode),
         }
@@ -789,17 +789,14 @@ impl ModuleId {
 
     /// Gets the relevant `BlobId` of the module
     pub fn bytecode_blob_ids(&self) -> Vec<BlobId> {
-	match self.vm_runtime {
+        match self.vm_runtime {
             VmRuntime::Wasm => vec![
                 BlobId::new(self.contract_blob_hash, BlobType::ContractBytecode),
                 BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode),
             ],
-            VmRuntime::Evm => vec![
-                BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode),
-            ],
+            VmRuntime::Evm => vec![BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode)],
         }
     }
-
 }
 
 impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, InstantiationArgument> {

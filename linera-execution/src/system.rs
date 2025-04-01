@@ -410,7 +410,7 @@ where
                 for blob_id in module_id.bytecode_blob_ids() {
                     self.blob_published(&blob_id)?;
                 }
-            },
+            }
             CreateApplication {
                 module_id,
                 parameters,
