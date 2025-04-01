@@ -474,12 +474,17 @@ where
                 subscriber_app_id,
                 callback,
             } => {
+                let key = (chain_id, stream_id);
                 let subscribers = self
                     .system
                     .event_subscriptions
-                    .get_mut_or_default(&(chain_id, stream_id))
+                    .get_mut_or_default(&key)
                     .await?;
                 subscribers.remove(&subscriber_app_id);
+                if subscribers.is_empty() {
+                    self.system.event_subscriptions.remove(&key)?;
+                    self.system.stream_trackers.remove(&key)?;
+                }
                 callback.respond(());
             }
 
