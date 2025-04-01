@@ -24,7 +24,6 @@ ignored = ["base64ct"]
 
 [features]
 ethereum = ["async-trait", "linera-ethereum"]
-revm = ["linera-execution/revm"]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",

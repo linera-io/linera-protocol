@@ -1270,6 +1270,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "call-evm-counter"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-sol-types",
+ "assert_matches",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "camino"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

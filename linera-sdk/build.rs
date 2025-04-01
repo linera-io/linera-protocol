@@ -3,7 +3,6 @@
 
 fn main() {
     cfg_aliases::cfg_aliases! {
-        with_revm: { feature = "revm" },
         with_testing: { any(test, feature = "test") },
         with_wasm_runtime: { any(feature = "wasmer", feature = "wasmtime") },
         with_integration_testing: {

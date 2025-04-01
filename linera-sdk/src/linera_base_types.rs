@@ -4,5 +4,5 @@
 //! Types reexported from [`linera_base`].
 
 pub use linera_base::{
-    abi::*, crypto::*, data_types::*, identifiers::*, ownership::*, BcsHexParseError,
+    abi::*, crypto::*, data_types::*, identifiers::*, ownership::*, vm::EvmQuery, BcsHexParseError,
 };

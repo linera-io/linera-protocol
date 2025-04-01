@@ -250,6 +250,7 @@ linera-witty = { version = "0.14.0", path = "./linera-witty" }
 linera-witty-macros = { version = "0.14.0", path = "./linera-witty-macros" }
 
 amm = { path = "./examples/amm" }
+call-evm-counter = { path = "./examples/call-evm-counter" }
 counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }

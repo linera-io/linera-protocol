@@ -14,12 +14,7 @@ version.workspace = true
 [features]
 ethereum = []
 default = ["wasmer", "rocksdb", "storage-service"]
-revm = [
-    "linera-execution/revm",
-    "linera-storage/revm",
-    "linera-sdk/revm",
-    "dep:alloy-sol-types",
-]
+revm = ["linera-execution/revm", "linera-storage/revm", "dep:alloy-sol-types"]
 test = [
     "linera-base/test",
     "linera-execution/test",
@@ -147,6 +142,7 @@ alloy = { workspace = true, default-features = false, features = [
 ] }
 amm.workspace = true
 base64.workspace = true
+call-evm-counter.workspace = true
 counter.workspace = true
 counter-no-graphql.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
