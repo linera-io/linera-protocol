@@ -33,6 +33,7 @@ impl Contract for FungibleTokenContract {
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = FungibleTokenState::load(runtime.root_view_storage_context())

@@ -27,6 +27,7 @@ impl Contract for {project_name}Contract {{
     type Message = ();
     type Parameters = ();
     type InstantiationArgument = u64;
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {{
         let state = {project_name}State::load(runtime.root_view_storage_context())

@@ -29,6 +29,7 @@ impl Contract for CrowdFundingContract {
     type Message = Message;
     type InstantiationArgument = InstantiationArgument;
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CrowdFundingState::load(runtime.root_view_storage_context())

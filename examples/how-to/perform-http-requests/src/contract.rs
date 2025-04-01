@@ -20,6 +20,7 @@ impl linera_sdk::Contract for Contract {
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = String;
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         Contract { runtime }

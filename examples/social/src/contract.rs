@@ -31,6 +31,7 @@ impl Contract for SocialContract {
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = SocialState::load(runtime.root_view_storage_context())

@@ -32,6 +32,7 @@ impl Contract for GenNftContract {
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = GenNftState::load(runtime.root_view_storage_context())

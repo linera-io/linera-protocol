@@ -26,6 +26,7 @@ impl Contract for CallCounterContract {
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = ApplicationId<EvmAbi>;
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         CallCounterContract { runtime }

@@ -30,6 +30,7 @@ impl Contract for EthereumTrackerContract {
     type Message = ();
     type InstantiationArgument = InstantiationArgument;
     type Parameters = ();
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = EthereumTrackerState::load(runtime.root_view_storage_context())

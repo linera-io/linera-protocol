@@ -17,6 +17,7 @@ impl Contract for LlmContract {
     type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();
+    type EventValue = ();
 
     async fn load(_runtime: ContractRuntime<Self>) -> Self {
         LlmContract
