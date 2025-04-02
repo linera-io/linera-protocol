@@ -139,6 +139,5 @@ impl<T: CertificateValue + Eq + PartialEq> PartialEq for GenericCertificate<T> {
         self.hash() == other.hash()
             && self.round == other.round
             && self.signatures == other.signatures
-        // && self::KIND == other::KIND
     }
 }
