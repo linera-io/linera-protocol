@@ -24,6 +24,7 @@ impl Contract for NativeFungibleTokenContract {
     type Message = Message;
     type Parameters = Parameters;
     type InstantiationArgument = InitialState;
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         NativeFungibleTokenContract { runtime }

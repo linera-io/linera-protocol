@@ -31,6 +31,7 @@ impl Contract for SocialContract {
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
+    type EventValue = OwnPost;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = SocialState::load(runtime.root_view_storage_context())
@@ -101,7 +102,7 @@ impl SocialContract {
             text,
             image_url,
         };
-        let index = self.state.own_posts.count() as u64;
+        let index = self.runtime.emit(POSTS_CHANNEL_NAME.into(), &post);
         self.state.own_posts.push(post.clone());
         (
             ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
@@ -132,7 +133,11 @@ impl SocialContract {
         )
     }
 
-    fn execute_post_message(&mut self, message_id: MessageId, index: u64, post: OwnPost) {
+    fn execute_post_message(&mut self, message_id: MessageId, index: u32, post: OwnPost) {
+        let post_event =
+            self.runtime
+                .read_event(message_id.chain_id, POSTS_CHANNEL_NAME.into(), index);
+        assert_eq!(post_event, post);
         let key = Key {
             timestamp: post.timestamp,
             author: message_id.chain_id,

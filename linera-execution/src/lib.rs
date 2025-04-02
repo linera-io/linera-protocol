@@ -731,6 +731,32 @@ pub trait ContractRuntime: BaseRuntime {
     /// Adds a new item to an event stream. Returns the new event's index in the stream.
     fn emit(&mut self, name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError>;
 
+    /// Reads an event from a stream. Returns the event's value.
+    ///
+    /// Returns an error if the event doesn't exist.
+    fn read_event(
+        &mut self,
+        chain_id: ChainId,
+        stream_name: StreamName,
+        index: u32,
+    ) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Subscribes this application to an event stream.
+    fn subscribe_to_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError>;
+
+    /// Unsubscribes this application from an event stream.
+    fn unsubscribe_from_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError>;
+
     /// Queries a service.
     fn query_service(
         &mut self,

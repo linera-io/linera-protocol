@@ -33,6 +33,7 @@ impl Contract for HexContract {
     type Message = Message;
     type InstantiationArgument = Timeouts;
     type Parameters = ();
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = HexState::load(runtime.root_view_storage_context())

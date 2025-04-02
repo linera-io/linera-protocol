@@ -49,7 +49,7 @@ pub enum Message {
     /// The origin chain wants to unsubscribe from the target chain.
     Unsubscribe,
     /// The origin chain made a post, and the target chain is subscribed.
-    Post { index: u64, post: OwnPost },
+    Post { index: u32, post: OwnPost },
     /// A Chain liked a post
     Like { key: Key },
     /// A Chain commented on a post
@@ -104,7 +104,7 @@ pub struct Key {
     /// The owner of the chain on which the `Post` operation was included.
     pub author: ChainId,
     /// The number of posts by that author before this one.
-    pub index: u64,
+    pub index: u32,
 }
 
 // Serialize keys so that the lexicographic order of the serialized keys corresponds to reverse
@@ -124,7 +124,7 @@ impl CustomSerialize for Key {
         Ok(Self {
             timestamp: Timestamp::from(!u64::from_be_bytes(time_bytes)),
             author,
-            index: !u64::from_be_bytes(idx_bytes),
+            index: !u32::from_be_bytes(idx_bytes),
         })
     }
 }
@@ -143,7 +143,7 @@ mod tests {
         let key = Key {
             timestamp: Timestamp::from(0x123456789ABCDEF),
             author: ChainId([0x12345, 0x6789A, 0xBCDEF, 0x0248A].into()),
-            index: 0xFEDCBA9876543210,
+            index: 0x76543210,
         };
         let ser_key = key
             .to_custom_bytes()

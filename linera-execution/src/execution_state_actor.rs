@@ -19,7 +19,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, StreamId},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, MessageId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -448,6 +448,46 @@ where
                 callback.respond(index)
             }
 
+            ReadEvent { event_id, callback } => {
+                let event_value = self.context().extra().get_event(event_id).await?;
+                callback.respond(event_value);
+            }
+
+            SubscribeToEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            } => {
+                let subscribers = self
+                    .system
+                    .event_subscriptions
+                    .get_mut_or_default(&(chain_id, stream_id))
+                    .await?;
+                subscribers.insert(subscriber_app_id);
+                callback.respond(());
+            }
+
+            UnsubscribeFromEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            } => {
+                let key = (chain_id, stream_id);
+                let subscribers = self
+                    .system
+                    .event_subscriptions
+                    .get_mut_or_default(&key)
+                    .await?;
+                subscribers.remove(&subscriber_app_id);
+                if subscribers.is_empty() {
+                    self.system.event_subscriptions.remove(&key)?;
+                    self.system.stream_trackers.remove(&key)?;
+                }
+                callback.respond(());
+            }
+
             GetApplicationPermissions { callback } => {
                 let app_permissions = self.system.application_permissions.get();
                 callback.respond(app_permissions.clone());
@@ -708,6 +748,27 @@ pub enum ExecutionRequest {
         stream_id: StreamId,
         #[debug(skip)]
         callback: Sender<u32>,
+    },
+
+    ReadEvent {
+        event_id: EventId,
+        callback: oneshot::Sender<Vec<u8>>,
+    },
+
+    SubscribeToEvents {
+        chain_id: ChainId,
+        stream_id: StreamId,
+        subscriber_app_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    UnsubscribeFromEvents {
+        chain_id: ChainId,
+        stream_id: StreamId,
+        subscriber_app_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<()>,
     },
 
     GetApplicationPermissions {

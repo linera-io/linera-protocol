@@ -32,6 +32,7 @@ impl Contract for NonFungibleTokenContract {
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = NonFungibleTokenState::load(runtime.root_view_storage_context())

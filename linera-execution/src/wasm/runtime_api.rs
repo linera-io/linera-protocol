@@ -581,6 +581,50 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Reads an event from a stream. Returns the event's value.
+    ///
+    /// Returns an error if the event doesn't exist.
+    fn read_event(
+        caller: &mut Caller,
+        chain_id: ChainId,
+        name: StreamName,
+        index: u32,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_event(chain_id, name, index)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Subscribes this application to an event stream.
+    fn subscribe_to_events(
+        caller: &mut Caller,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        name: StreamName,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .subscribe_to_events(chain_id, application_id, name)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Unsubscribes this application from an event stream.
+    fn unsubscribe_from_events(
+        caller: &mut Caller,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        name: StreamName,
+    ) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .unsubscribe_from_events(chain_id, application_id, name)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Queries a service and returns the response.
     fn query_service(
         caller: &mut Caller,

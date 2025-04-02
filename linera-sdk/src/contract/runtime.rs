@@ -276,8 +276,44 @@ where
     }
 
     /// Adds a new item to an event stream. Returns the new event's index in the stream.
-    pub fn emit(&mut self, name: StreamName, value: &[u8]) -> u32 {
-        contract_wit::emit(&name.into(), value)
+    pub fn emit(&mut self, name: StreamName, value: &Application::EventValue) -> u32 {
+        contract_wit::emit(
+            &name.into(),
+            &bcs::to_bytes(value).expect("Failed to serialize event"),
+        )
+    }
+
+    /// Reads an event from a stream. Returns the event's value.
+    ///
+    /// Fails the block if the event doesn't exist.
+    pub fn read_event(
+        &mut self,
+        chain_id: ChainId,
+        name: StreamName,
+        index: u32,
+    ) -> Application::EventValue {
+        let event = contract_wit::read_event(chain_id.into(), &name.into(), index);
+        bcs::from_bytes(&event).expect("Failed to deserialize event")
+    }
+
+    /// Subscribes this application to an event stream.
+    pub fn subscribe_to_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        name: StreamName,
+    ) {
+        contract_wit::subscribe_to_events(chain_id.into(), application_id.into(), &name.into())
+    }
+
+    /// Unsubscribes this application from an event stream.
+    pub fn unsubscribe_from_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        name: StreamName,
+    ) {
+        contract_wit::unsubscribe_from_events(chain_id.into(), application_id.into(), &name.into())
     }
 
     /// Queries an application service as an oracle and returns the response.

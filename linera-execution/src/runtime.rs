@@ -18,7 +18,7 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName,
+        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, EventId,
         GenericApplicationId, MessageId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
@@ -1302,8 +1302,101 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 callback,
             })?
             .recv_response()?;
+        // TODO(#365): Consider separate event fee categories.
+        this.resource_controller
+            .track_bytes_written(value.len() as u64)?;
         this.transaction_tracker.add_event(stream_id, index, value);
         Ok(index)
+    }
+
+    fn read_event(
+        &mut self,
+        chain_id: ChainId,
+        stream_name: StreamName,
+        index: u32,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let mut this = self.inner();
+        ensure!(
+            stream_name.0.len() <= MAX_STREAM_NAME_LEN,
+            ExecutionError::StreamNameTooLong
+        );
+        let application_id = GenericApplicationId::User(this.current_application().id);
+        let stream_id = StreamId {
+            stream_name,
+            application_id,
+        };
+        let event_id = EventId {
+            stream_id,
+            index,
+            chain_id,
+        };
+        let event = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::ReadEvent {
+                event_id: event_id.clone(),
+                callback,
+            })?
+            .recv_response()?;
+        // TODO(#365): Consider separate event fee categories.
+        this.resource_controller
+            .track_bytes_read(event.len() as u64)?;
+        this.transaction_tracker
+            .replay_oracle_response(OracleResponse::Event(event_id, event.clone()))?;
+        Ok(event)
+    }
+
+    fn subscribe_to_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        ensure!(
+            stream_name.0.len() <= MAX_STREAM_NAME_LEN,
+            ExecutionError::StreamNameTooLong
+        );
+        let stream_id = StreamId {
+            stream_name,
+            application_id: application_id.into(),
+        };
+        let subscriber_app_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::SubscribeToEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    fn unsubscribe_from_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        stream_name: StreamName,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        ensure!(
+            stream_name.0.len() <= MAX_STREAM_NAME_LEN,
+            ExecutionError::StreamNameTooLong
+        );
+        let stream_id = StreamId {
+            stream_name,
+            application_id: application_id.into(),
+        };
+        let subscriber_app_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::UnsubscribeFromEvents {
+                chain_id,
+                stream_id,
+                subscriber_app_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
     }
 
     fn query_service(

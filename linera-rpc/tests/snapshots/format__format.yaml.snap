@@ -1171,6 +1171,14 @@ SystemOperation:
       ProcessRemovedEpoch:
         NEWTYPE:
           TYPENAME: Epoch
+    13:
+      UpdateStreams:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: ChainId
+              - TYPENAME: StreamId
+              - U32
 TimeDelta:
   NEWTYPESTRUCT: U64
 Timeout:

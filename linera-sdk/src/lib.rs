@@ -101,6 +101,9 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// instead.
     type InstantiationArgument: Serialize + DeserializeOwned + Debug;
 
+    /// Event values for streams created by this application.
+    type EventValue: Serialize + DeserializeOwned + Debug;
+
     /// Creates an in-memory instance of the contract handler.
     async fn load(runtime: ContractRuntime<Self>) -> Self;
 

@@ -60,7 +60,8 @@ where
     subscribe_requests: Vec<(ChainId, ChannelName)>,
     unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
-    events: BTreeMap<StreamName, Vec<Vec<u8>>>,
+    created_events: BTreeMap<StreamName, Vec<Vec<u8>>>,
+    events: BTreeMap<(ChainId, StreamName, u32), Vec<u8>>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
@@ -109,6 +110,7 @@ where
             subscribe_requests: Vec::new(),
             unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
+            created_events: BTreeMap::new(),
             events: BTreeMap::new(),
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
@@ -810,10 +812,52 @@ where
     }
 
     /// Adds a new item to an event stream. Returns the new event's index in the stream.
-    pub fn emit(&mut self, name: StreamName, value: &[u8]) -> u32 {
-        let entry = self.events.entry(name).or_default();
-        entry.push(value.to_vec());
+    pub fn emit(&mut self, name: StreamName, value: &Application::EventValue) -> u32 {
+        let value = bcs::to_bytes(value).expect("Failed to serialize event value");
+        let entry = self.created_events.entry(name).or_default();
+        entry.push(value);
         entry.len() as u32 - 1
+    }
+
+    /// Adds an event to a stream, so that it can be read using `read_event`.
+    pub fn add_event(&mut self, chain_id: ChainId, name: StreamName, index: u32, value: &[u8]) {
+        self.events.insert((chain_id, name, index), value.to_vec());
+    }
+
+    /// Reads an event from a stream. Returns the event's value.
+    ///
+    /// Panics if the event doesn't exist.
+    pub fn read_event(
+        &mut self,
+        chain_id: ChainId,
+        name: StreamName,
+        index: u32,
+    ) -> Application::EventValue {
+        let value = self
+            .events
+            .get(&(chain_id, name, index))
+            .expect("Event not found");
+        bcs::from_bytes(value).expect("Failed to deserialize event value")
+    }
+
+    /// Subscribes this application to an event stream.
+    pub fn subscribe_to_events(
+        &mut self,
+        _chain_id: ChainId,
+        _application_id: ApplicationId,
+        _name: StreamName,
+    ) {
+        // This is a no-op in the mock runtime.
+    }
+
+    /// Unsubscribes this application from an event stream.
+    pub fn unsubscribe_from_events(
+        &mut self,
+        _chain_id: ChainId,
+        _application_id: ApplicationId,
+        _name: StreamName,
+    ) {
+        // This is a no-op in the mock runtime.
     }
 
     /// Adds an expected `query_service` call`, and the response it should return in the test.
