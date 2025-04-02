@@ -60,7 +60,7 @@ impl Contract for MetaCounterContract {
         } = operation;
 
         let mut message = self.runtime.prepare_message(message).with_grant(Resources {
-            fuel: fuel_grant,
+            wasm_fuel: fuel_grant,
             ..Resources::default()
         });
         if authenticated {
