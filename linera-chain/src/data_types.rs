@@ -397,10 +397,10 @@ pub struct LiteValue {
 }
 
 impl LiteValue {
-    pub fn new<T: CertificateValue>(value: &Hashed<T>) -> Self {
+    pub fn new<T: CertificateValue>(value: &T) -> Self {
         LiteValue {
             value_hash: value.hash(),
-            chain_id: value.inner().chain_id(),
+            chain_id: value.chain_id(),
             kind: T::KIND,
         }
     }
@@ -413,7 +413,7 @@ struct VoteValue(CryptoHash, Round, CertificateKind);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "T: BcsHashable<'de>"))]
 pub struct Vote<T> {
-    pub value: Hashed<T>,
+    pub value: T,
     pub round: Round,
     pub public_key: ValidatorPublicKey,
     pub signature: ValidatorSignature,
@@ -421,7 +421,7 @@ pub struct Vote<T> {
 
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: Hashed<T>, round: Round, key_pair: &ValidatorSecretKey) -> Self
+    pub fn new(value: T, round: Round, key_pair: &ValidatorSecretKey) -> Self
     where
         T: CertificateValue,
     {
@@ -449,7 +449,7 @@ impl<T> Vote<T> {
     }
 
     /// Returns the value this vote is for.
-    pub fn value(&self) -> &Hashed<T> {
+    pub fn value(&self) -> &T {
         &self.value
     }
 }
@@ -467,7 +467,7 @@ pub struct LiteVote {
 impl LiteVote {
     /// Returns the full vote, with the value, if it matches.
     #[cfg(any(feature = "benchmark", with_testing))]
-    pub fn with_value<T>(self, value: Hashed<T>) -> Option<Vote<T>> {
+    pub fn with_value<T: CertificateValue>(self, value: T) -> Option<Vote<T>> {
         if self.value.value_hash != value.hash() {
             return None;
         }
@@ -717,16 +717,16 @@ impl LiteVote {
     }
 }
 
-pub struct SignatureAggregator<'a, T> {
+pub struct SignatureAggregator<'a, T: CertificateValue> {
     committee: &'a Committee,
     weight: u64,
     used_validators: HashSet<ValidatorPublicKey>,
     partial: GenericCertificate<T>,
 }
 
-impl<'a, T> SignatureAggregator<'a, T> {
+impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
     /// Starts aggregating signatures for the given value into a certificate.
-    pub fn new(value: Hashed<T>, round: Round, committee: &'a Committee) -> Self {
+    pub fn new(value: T, round: Round, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,

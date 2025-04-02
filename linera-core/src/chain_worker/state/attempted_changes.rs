@@ -73,11 +73,11 @@ where
         self.state.ensure_is_active()?;
         let (chain_epoch, committee) = self.state.chain.current_committee()?;
         ensure!(
-            certificate.inner().epoch == chain_epoch,
+            certificate.inner().epoch() == chain_epoch,
             WorkerError::InvalidEpoch {
-                chain_id: certificate.inner().chain_id,
+                chain_id: certificate.inner().chain_id(),
                 chain_epoch,
-                epoch: certificate.inner().epoch
+                epoch: certificate.inner().epoch()
             }
         );
         certificate.check(committee)?;
@@ -87,7 +87,7 @@ where
             .chain
             .tip_state
             .get()
-            .already_validated_block(certificate.inner().height)?
+            .already_validated_block(certificate.inner().height())?
         {
             return Ok((
                 ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair()),
@@ -95,8 +95,8 @@ where
             ));
         }
         let old_round = self.state.chain.manager.current_round();
-        let timeout_chain_id = certificate.inner().chain_id;
-        let timeout_height = certificate.inner().height;
+        let timeout_chain_id = certificate.inner().chain_id();
+        let timeout_height = certificate.inner().height();
         self.state
             .chain
             .manager
@@ -186,12 +186,12 @@ where
             Some(Either::Left(vote)) => {
                 self.state
                     .block_values
-                    .insert(Cow::Borrowed(vote.value.inner().inner()));
+                    .insert(Cow::Borrowed(vote.value.inner()));
             }
             Some(Either::Right(vote)) => {
                 self.state
                     .block_values
-                    .insert(Cow::Borrowed(vote.value.inner().inner()));
+                    .insert(Cow::Borrowed(vote.value.inner()));
             }
             None => (),
         }
@@ -349,7 +349,7 @@ where
         }
 
         // Update the blob state with last used certificate hash.
-        let blob_state = certificate.value().inner().to_blob_state();
+        let blob_state = certificate.value().to_blob_state();
         let overwrite = blobs_result.is_ok(); // Overwrite only if we wrote the certificate.
         let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
         self.state

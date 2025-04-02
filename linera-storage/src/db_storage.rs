@@ -14,7 +14,7 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, ChainId, EventId},
 };
 use linera_chain::{
-    types::{ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
+    types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -864,8 +864,9 @@ where
             .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
         let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
         let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
+        assert_eq!(value.hash(), hash);
         let certificate = cert
-            .with_value(value.with_hash_unchecked(hash))
+            .with_value(value)
             .ok_or(ViewError::InconsistentEntries)?;
         Ok(certificate)
     }

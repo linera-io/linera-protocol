@@ -77,7 +77,6 @@ use linera_base::{
     crypto::{AccountPublicKey, ValidatorSecretKey},
     data_types::{Blob, BlockHeight, Round, Timestamp},
     ensure,
-    hashed::Hashed,
     identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
 };
@@ -133,7 +132,7 @@ impl LockingBlock {
     pub fn chain_id(&self) -> ChainId {
         match self {
             Self::Fast(proposal) => proposal.content.block.chain_id,
-            Self::Regular(certificate) => certificate.value().inner().chain_id(),
+            Self::Regular(certificate) => certificate.value().chain_id(),
         }
     }
 }
@@ -347,7 +346,7 @@ where
                 if let Some(validated_cert) = proposal.validated_block_certificate.as_ref() {
                     vote.round <= validated_cert.round
                 } else {
-                    vote.round.is_fast() && vote.value().inner().matches_proposed_block(new_block)
+                    vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
                 },
                 ChainError::HasIncompatibleConfirmedVote(new_block.height, vote.round)
             );
@@ -379,7 +378,7 @@ where
                 return false; // We already signed this timeout.
             }
         }
-        let value = Hashed::new(Timeout::new(chain_id, height, epoch));
+        let value = Timeout::new(chain_id, height, epoch);
         self.timeout_vote
             .set(Some(Vote::new(value, current_round, key_pair)));
         true
@@ -402,7 +401,7 @@ where
         if self.fallback_vote.get().is_some() || self.current_round() >= Round::Validator(0) {
             return false; // We already signed this or are already in fallback mode.
         }
-        let value = Hashed::new(Timeout::new(chain_id, height, epoch));
+        let value = Timeout::new(chain_id, height, epoch);
         let last_regular_round = Round::SingleLeader(u32::MAX);
         self.fallback_vote
             .set(Some(Vote::new(value, last_regular_round, key_pair)));
@@ -417,7 +416,7 @@ where
         let new_block = certificate.block();
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = self.confirmed_vote.get() {
-            if value.inner().block() == new_block && *round == new_round {
+            if value.block() == new_block && *round == new_round {
                 return Ok(Outcome::Skip); // We already voted to confirm this block.
             }
         }
@@ -460,7 +459,7 @@ where
                 .as_ref()
                 .is_none_or(|locking| locking.round() < lite_cert.round)
             {
-                let value = Hashed::new(ValidatedBlock::new(block.clone()));
+                let value = ValidatedBlock::new(block.clone());
                 if let Some(certificate) = lite_cert.clone().with_value(value) {
                     self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
                 }
@@ -482,13 +481,13 @@ where
         // If this is a fast block, vote to confirm. Otherwise vote to validate.
         if round.is_fast() {
             self.validated_vote.set(None);
-            let value = Hashed::new(ConfirmedBlock::new(block));
+            let value = ConfirmedBlock::new(block);
             let vote = Vote::new(value, round, key_pair);
             Ok(Some(Either::Right(
                 self.confirmed_vote.get_mut().insert(vote),
             )))
         } else {
-            let value = Hashed::new(ValidatedBlock::new(block));
+            let value = ValidatedBlock::new(block);
             let vote = Vote::new(value, round, key_pair);
             Ok(Some(Either::Left(
                 self.validated_vote.get_mut().insert(vote),
@@ -513,7 +512,7 @@ where
                 return Ok(()); // We never vote in a past round.
             }
             // Vote to confirm.
-            let vote = Vote::new(Hashed::new(confirmed_block), round, key_pair);
+            let vote = Vote::new(confirmed_block, round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.confirmed_vote.set(Some(vote));
             self.validated_vote.set(None);
@@ -716,10 +715,10 @@ pub struct ChainManagerInfo {
     pub fallback_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
     #[debug(skip_if = Option::is_none)]
-    pub requested_confirmed: Option<Box<Hashed<ConfirmedBlock>>>,
+    pub requested_confirmed: Option<Box<ConfirmedBlock>>,
     /// The value we voted for, if requested.
     #[debug(skip_if = Option::is_none)]
-    pub requested_validated: Option<Box<Hashed<ValidatedBlock>>>,
+    pub requested_validated: Option<Box<ValidatedBlock>>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
     pub current_round: Round,
     /// The current leader, who is allowed to propose the next block.

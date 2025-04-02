@@ -6,7 +6,6 @@ use std::{collections::HashMap, iter};
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Timestamp},
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
     time::Instant,
@@ -515,7 +514,7 @@ where
                 .map_err(BenchmarkError::LocalNode)?
                 .0;
 
-            let value = Hashed::new(ConfirmedBlock::new(block));
+            let value = ConfirmedBlock::new(block);
             let proposal = BlockProposal::new_initial(
                 linera_base::data_types::Round::Fast,
                 proposed_block,

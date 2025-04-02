@@ -6,7 +6,6 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
-    hashed::Hashed,
 };
 use linera_execution::committee::Committee;
 
@@ -15,15 +14,15 @@ use crate::{data_types::LiteValue, ChainError};
 
 /// Generic type representing a certificate for `value` of type `T`.
 #[derive(Debug)]
-pub struct GenericCertificate<T> {
-    value: Hashed<T>,
+pub struct GenericCertificate<T: CertificateValue> {
+    value: T,
     pub round: Round,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
 
-impl<T> GenericCertificate<T> {
+impl<T: CertificateValue> GenericCertificate<T> {
     pub fn new(
-        value: Hashed<T>,
+        value: T,
         round: Round,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
@@ -37,23 +36,23 @@ impl<T> GenericCertificate<T> {
     }
 
     /// Returns a reference to the `Hashed` value contained in this certificate.
-    pub fn value(&self) -> &Hashed<T> {
+    pub fn value(&self) -> &T {
         &self.value
     }
 
     /// Consumes this certificate, returning the value it contains.
-    pub fn into_value(self) -> Hashed<T> {
+    pub fn into_value(self) -> T {
         self.value
     }
 
     /// Returns reference to the value contained in this certificate.
     pub fn inner(&self) -> &T {
-        self.value.inner()
+        &self.value
     }
 
     /// Consumes this certificate, returning the value it contains.
     pub fn into_inner(self) -> T {
-        self.value.into_inner()
+        self.value
     }
 
     /// Returns the certified value's hash.
@@ -61,13 +60,7 @@ impl<T> GenericCertificate<T> {
         self.value.hash()
     }
 
-    pub fn destructure(
-        self,
-    ) -> (
-        Hashed<T>,
-        Round,
-        Vec<(ValidatorPublicKey, ValidatorSignature)>,
-    ) {
+    pub fn destructure(self) -> (T, Round, Vec<(ValidatorPublicKey, ValidatorSignature)>) {
         (self.value, self.round, self.signatures)
     }
 
@@ -128,7 +121,7 @@ impl<T> GenericCertificate<T> {
     }
 }
 
-impl<T: Clone> Clone for GenericCertificate<T> {
+impl<T: CertificateValue> Clone for GenericCertificate<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -139,9 +132,9 @@ impl<T: Clone> Clone for GenericCertificate<T> {
 }
 
 #[cfg(with_testing)]
-impl<T: Eq + PartialEq> Eq for GenericCertificate<T> {}
+impl<T: CertificateValue + Eq + PartialEq> Eq for GenericCertificate<T> {}
 #[cfg(with_testing)]
-impl<T: Eq + PartialEq> PartialEq for GenericCertificate<T> {
+impl<T: CertificateValue + Eq + PartialEq> PartialEq for GenericCertificate<T> {
     fn eq(&self, other: &Self) -> bool {
         self.hash() == other.hash()
             && self.round == other.round

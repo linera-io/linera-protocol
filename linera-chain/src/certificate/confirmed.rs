@@ -5,7 +5,6 @@
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
-    hashed::Hashed,
     identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_execution::committee::Epoch;
@@ -90,7 +89,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ConfirmedBlock> {
         #[derive(Debug, Deserialize)]
         #[serde(rename = "ConfirmedBlockCertificate")]
         struct Helper {
-            value: Hashed<ConfirmedBlock>,
+            value: ConfirmedBlock,
             round: Round,
             signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
         }

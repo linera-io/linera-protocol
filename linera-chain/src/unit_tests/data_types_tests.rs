@@ -28,7 +28,7 @@ fn test_signed_values() {
         operation_results: vec![OperationResult::default()],
     }
     .with(make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE));
-    let confirmed_value = Hashed::new(ConfirmedBlock::new(block.clone()));
+    let confirmed_value = ConfirmedBlock::new(block.clone());
 
     let confirmed_vote = LiteVote::new(
         LiteValue::new(&confirmed_value),
@@ -37,7 +37,7 @@ fn test_signed_values() {
     );
     assert!(confirmed_vote.check().is_ok());
 
-    let validated_value = Hashed::new(ValidatedBlock::new(block));
+    let validated_value = ValidatedBlock::new(block);
     let validated_vote = LiteVote::new(
         LiteValue::new(&validated_value),
         Round::Fast,
@@ -118,7 +118,7 @@ fn test_certificates() {
         operation_results: vec![OperationResult::default()],
     }
     .with(make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE));
-    let value = Hashed::new(ConfirmedBlock::new(block));
+    let value = ConfirmedBlock::new(block);
 
     let v1 = LiteVote::new(
         LiteValue::new(&value),

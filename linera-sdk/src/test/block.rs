@@ -8,7 +8,6 @@
 use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
@@ -223,7 +222,7 @@ impl BlockBuilder {
             .stage_block_execution(self.block, None, published_blobs)
             .await?;
 
-        let value = Hashed::new(ConfirmedBlock::new(block));
+        let value = ConfirmedBlock::new(block);
         let vote = LiteVote::new(
             LiteValue::new(&value),
             Round::Fast,

@@ -8,7 +8,6 @@ use linera_base::{
     },
     data_types::{BlobContent, BlockHeight},
     ensure,
-    hashed::Hashed,
     identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
@@ -448,7 +447,7 @@ impl TryFrom<api::Certificate> for TimeoutCertificate {
         let cert_type = certificate.kind;
 
         if cert_type == api::CertificateKind::Timeout as i32 {
-            let value: Hashed<Timeout> = bincode::deserialize(&certificate.value)?;
+            let value: Timeout = bincode::deserialize(&certificate.value)?;
             Ok(TimeoutCertificate::new(value, round, signatures))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
@@ -465,7 +464,7 @@ impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
         let cert_type = certificate.kind;
 
         if cert_type == api::CertificateKind::Validated as i32 {
-            let value: Hashed<ValidatedBlock> = bincode::deserialize(&certificate.value)?;
+            let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
             Ok(ValidatedBlockCertificate::new(value, round, signatures))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
@@ -482,7 +481,7 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
         let cert_type = certificate.kind;
 
         if cert_type == api::CertificateKind::Confirmed as i32 {
-            let value: Hashed<ConfirmedBlock> = bincode::deserialize(&certificate.value)?;
+            let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             Ok(ConfirmedBlockCertificate::new(value, round, signatures))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
@@ -919,13 +918,13 @@ impl TryFrom<api::Certificate> for Certificate {
         let signatures = bincode::deserialize(&certificate.signatures)?;
 
         let value = if certificate.kind == api::CertificateKind::Confirmed as i32 {
-            let value: Hashed<ConfirmedBlock> = bincode::deserialize(&certificate.value)?;
+            let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             Certificate::Confirmed(ConfirmedBlockCertificate::new(value, round, signatures))
         } else if certificate.kind == api::CertificateKind::Validated as i32 {
-            let value: Hashed<ValidatedBlock> = bincode::deserialize(&certificate.value)?;
+            let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
             Certificate::Validated(ValidatedBlockCertificate::new(value, round, signatures))
         } else if certificate.kind == api::CertificateKind::Timeout as i32 {
-            let value: Hashed<Timeout> = bincode::deserialize(&certificate.value)?;
+            let value: Timeout = bincode::deserialize(&certificate.value)?;
             Certificate::Timeout(TimeoutCertificate::new(value, round, signatures))
         } else {
             return Err(GrpcProtoConversionError::InvalidCertificateType);
@@ -1152,13 +1151,13 @@ pub mod tests {
     pub fn test_certificate() {
         let key_pair = ValidatorKeypair::generate();
         let certificate = ValidatedBlockCertificate::new(
-            Hashed::new(ValidatedBlock::new(
+            ValidatedBlock::new(
                 BlockExecutionOutcome {
                     state_hash: CryptoHash::new(&Foo("test".into())),
                     ..BlockExecutionOutcome::default()
                 }
                 .with(get_block()),
-            )),
+            ),
             Round::MultiLeader(3),
             vec![(
                 key_pair.public_key,
@@ -1201,7 +1200,7 @@ pub mod tests {
             ..BlockExecutionOutcome::default()
         };
         let cert = ValidatedBlockCertificate::new(
-            Hashed::new(ValidatedBlock::new(outcome.clone().with(get_block()))),
+            ValidatedBlock::new(outcome.clone().with(get_block())),
             Round::SingleLeader(2),
             vec![(
                 key_pair.public_key,

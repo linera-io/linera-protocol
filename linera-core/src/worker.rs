@@ -404,7 +404,7 @@ where
                 let value = ConfirmedBlock::from_hashed(block);
                 Ok(Either::Left(
                     certificate
-                        .with_value(Hashed::new(value))
+                        .with_value(value)
                         .ok_or(WorkerError::InvalidLiteCertificate)?,
                 ))
             }
@@ -412,7 +412,7 @@ where
                 let value = ValidatedBlock::from_hashed(block);
                 Ok(Either::Right(
                     certificate
-                        .with_value(Hashed::new(value))
+                        .with_value(value)
                         .ok_or(WorkerError::InvalidLiteCertificate)?,
                 ))
             }
@@ -587,7 +587,7 @@ where
         &self,
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let chain_id = certificate.inner().chain_id;
+        let chain_id = certificate.value().chain_id();
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessTimeout {
                 certificate,
@@ -890,8 +890,8 @@ where
     /// Processes a timeout certificate
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.inner().chain_id),
-        height = %certificate.inner().height,
+        chain_id = format!("{:.8}", certificate.inner().chain_id()),
+        height = %certificate.inner().height(),
     ))]
     pub async fn handle_timeout_certificate(
         &self,
