@@ -239,9 +239,13 @@ pub enum ClientCommand {
         #[arg(long)]
         block: Option<Amount>,
 
-        /// Set the price per unit of fuel.
+        /// Set the price per unit of Wasm fuel.
         #[arg(long)]
-        fuel_unit: Option<Amount>,
+        wasm_fuel_unit: Option<Amount>,
+
+        /// Set the price per unit of EVM fuel.
+        #[arg(long)]
+        evm_fuel_unit: Option<Amount>,
 
         /// Set the price per read operation.
         #[arg(long)]
@@ -303,9 +307,13 @@ pub enum ClientCommand {
         #[arg(long)]
         http_request: Option<Amount>,
 
-        /// Set the maximum amount of fuel per block.
+        /// Set the maximum amount of Wasm fuel per block.
         #[arg(long)]
-        maximum_fuel_per_block: Option<u64>,
+        maximum_wasm_fuel_per_block: Option<u64>,
+
+        /// Set the maximum amount of EVM fuel per block.
+        #[arg(long)]
+        maximum_evm_fuel_per_block: Option<u64>,
 
         /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
         #[arg(long)]
@@ -442,10 +450,15 @@ pub enum ClientCommand {
         #[arg(long)]
         block_price: Option<Amount>,
 
-        /// Set the price per unit of fuel.
+        /// Set the price per unit of Wasm fuel.
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
-        fuel_unit_price: Option<Amount>,
+        wasm_fuel_unit_price: Option<Amount>,
+
+        /// Set the price per unit of EVM fuel.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        evm_fuel_unit_price: Option<Amount>,
 
         /// Set the price per read operation.
         /// (This will overwrite value from `--policy-config`)
@@ -520,10 +533,15 @@ pub enum ClientCommand {
         #[arg(long)]
         http_request_price: Option<Amount>,
 
-        /// Set the maximum amount of fuel per block.
+        /// Set the maximum amount of Wasm fuel per block.
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
-        maximum_fuel_per_block: Option<u64>,
+        maximum_wasm_fuel_per_block: Option<u64>,
+
+        /// Set the maximum amount of EVM fuel per block.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        maximum_evm_fuel_per_block: Option<u64>,
 
         /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
         #[arg(long)]

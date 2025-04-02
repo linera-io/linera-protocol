@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
     ensure,
     identifiers::{ApplicationId, ChainId, StreamName},
-    vm::EvmQuery,
+    vm::{EvmQuery, VmRuntime},
 };
 use num_enum::TryFromPrimitive;
 use revm::{
@@ -35,9 +35,10 @@ use {
 };
 
 use crate::{
-    evm::database::DatabaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError,
-    EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
-    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    evm::database::{DatabaseRuntime, StorageStats},
+    ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime, ExecutionError,
+    ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
+    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -287,6 +288,14 @@ enum PrecompileTag {
     MessageIsBouncing,
 }
 
+fn get_precompile_output(result: &[u8]) -> PrecompileOutput {
+    // The gas usage is set to zero since the proper accounting is done
+    // by the called application
+    let gas_used = 0;
+    let bytes = Bytes::copy_from_slice(result);
+    PrecompileOutput { gas_used, bytes }
+}
+
 struct GeneralContractCall;
 
 impl<Runtime: ContractRuntime>
@@ -382,11 +391,7 @@ impl GeneralContractCall {
                 _ => Err(format!("{tag:?} is not available in GeneralContractCall")),
             }
         }?;
-        // The gas usage count is done somewhere else.
-        let gas_used = 0;
-        let bytes = Bytes::copy_from_slice(&result);
-        let result = PrecompileOutput { gas_used, bytes };
-        Ok(result)
+        Ok(get_precompile_output(result))
     }
 }
 
@@ -434,11 +439,7 @@ impl GeneralServiceCall {
                     runtime.try_query_application(target, argument)
                 }
                 .map_err(|error| format!("{}", error))?;
-                // We do not know how much gas was used.
-                let gas_used = 0;
-                let bytes = Bytes::copy_from_slice(&result);
-                let result = PrecompileOutput { gas_used, bytes };
-                Ok(result)
+                Ok(get_precompile_output(result))
             }
             _ => Err(format!("{tag:?} is not available in GeneralServiceCall")),
         }
@@ -459,6 +460,17 @@ fn failing_outcome() -> CallOutcome {
         result,
         memory_offset,
     }
+}
+
+fn get_interpreter_result(
+    result: &[u8],
+    inputs: &mut CallInputs,
+) -> Result<InterpreterResult, ExecutionError> {
+    let mut result = bcs::from_bytes::<InterpreterResult>(result)?;
+    // This effectively means that no cost is incurred by the call to another contract.
+    // This is fine since the costs are incurred by the other contract itself.
+    result.gas = Gas::new(inputs.gas_limit);
+    Ok(result)
 }
 
 struct CallInterceptorContract<Runtime> {
@@ -506,9 +518,8 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.try_call_application(authenticated, target, argument)?
         };
-        let result = bcs::from_bytes::<InterpreterResult>(&result)?;
         let call_outcome = CallOutcome {
-            result,
+            result: get_interpreter_result(&result, inputs)?,
             memory_offset: inputs.return_memory_offset.clone(),
         };
         Ok(Some(call_outcome))
@@ -561,9 +572,8 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.try_query_application(target, evm_query)?
         };
-        let result = bcs::from_bytes::<InterpreterResult>(&result)?;
         let call_outcome = CallOutcome {
-            result,
+            result: get_interpreter_result(&result, inputs)?,
             memory_offset: inputs.return_memory_offset.clone(),
         };
         Ok(Some(call_outcome))
@@ -583,12 +593,13 @@ enum Choice {
 #[derive(Debug)]
 struct ExecutionResultSuccess {
     reason: SuccessReason,
+    gas_final: u64,
     logs: Vec<Log>,
     output: Output,
 }
 
 impl ExecutionResultSuccess {
-    fn interpreter_result_and_logs(self) -> Result<(Vec<u8>, Vec<Log>), ExecutionError> {
+    fn interpreter_result_and_logs(self) -> Result<(u64, Vec<u8>, Vec<Log>), ExecutionError> {
         let result: InstructionResult = self.reason.into();
         let Output::Call(output) = self.output else {
             unreachable!("The Output is not a call which is impossible");
@@ -600,15 +611,15 @@ impl ExecutionResultSuccess {
             gas,
         };
         let result = bcs::to_bytes(&result)?;
-        Ok((result, self.logs))
+        Ok((self.gas_final, result, self.logs))
     }
 
-    fn output_and_logs(self) -> (Vec<u8>, Vec<Log>) {
+    fn output_and_logs(self) -> (u64, Vec<u8>, Vec<Log>) {
         let Output::Call(output) = self.output else {
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
         let output = output.as_ref().to_vec();
-        (output, self.logs)
+        (self.gas_final, output, self.logs)
     }
 }
 
@@ -629,7 +640,7 @@ where
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         ensure_message_length(operation.len(), 4)?;
-        let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
+        let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
             let result = self.init_transact_commit(Choice::Call, &operation[4..])?;
@@ -640,6 +651,7 @@ where
             let result = self.init_transact_commit(Choice::Call, &operation)?;
             result.output_and_logs()
         };
+        self.consume_fuel(gas_final)?;
         self.write_logs(logs, "operation")?;
         Ok(output)
     }
@@ -664,20 +676,27 @@ where
 }
 
 fn process_execution_result(
+    storage_stats: StorageStats,
     result: ExecutionResult,
 ) -> Result<ExecutionResultSuccess, ExecutionError> {
     match result {
         ExecutionResult::Success {
             reason,
-            gas_used: _,
-            gas_refunded: _,
+            gas_used,
+            gas_refunded,
             logs,
             output,
-        } => Ok(ExecutionResultSuccess {
-            reason,
-            logs,
-            output,
-        }),
+        } => {
+            let mut gas_final = gas_used;
+            gas_final -= storage_stats.storage_costs();
+            assert_eq!(gas_refunded, storage_stats.storage_refund());
+            Ok(ExecutionResultSuccess {
+                reason,
+                gas_final,
+                logs,
+                output,
+            })
+        }
         ExecutionResult::Revert { gas_used, output } => {
             let error = EvmExecutionError::Revert { gas_used, output };
             Err(ExecutionError::EvmError(error))
@@ -774,8 +793,14 @@ where
                 ExecutionError::EvmError(error)
             })
         }?;
+        let storage_stats = self.db.reset_storage_stats();
         self.db.commit_changes()?;
-        process_execution_result(result)
+        process_execution_result(storage_stats, result)
+    }
+
+    fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
+        let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+        runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
     fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
@@ -824,16 +849,17 @@ where
         };
 
         ensure_message_length(query.len(), 4)?;
+        // We drop the logs since the "eth_call" execution does not return any log.
+        // Also, for handle_query, we do not have associated costs.
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
             let result = self.init_transact(&query[4..])?;
-            let (answer, _logs) = result.interpreter_result_and_logs()?;
+            let (_gas_final, answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
             let result = self.init_transact(&query)?;
-            let (output, _logs) = result.output_and_logs();
+            let (_gas_final, output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
-        // We drop the logs since the "eth_call" execution does not return any log.
         Ok(answer)
     }
 }
@@ -879,39 +905,42 @@ where
             db: self.db.clone(),
         };
 
-        let block_env = self.db.get_block_env()?;
-        let mut evm: Evm<'_, _, _> = Evm::builder()
-            .with_ref_db(&mut self.db)
-            .with_external_context(&mut inspector)
-            .modify_tx_env(|tx| {
-                tx.clear();
-                tx.transact_to = kind;
-                tx.data = tx_data;
-            })
-            .modify_block_env(|block| {
-                *block = block_env;
-            })
-            .append_handler_register(|handler| {
-                inspector_handle_register(handler);
-                let precompiles = handler.pre_execution.load_precompiles();
-                handler.pre_execution.load_precompiles = Arc::new(move || {
-                    let mut precompiles = precompiles.clone();
-                    precompiles.extend([(
-                        PRECOMPILE_ADDRESS,
-                        ContextPrecompile::ContextStateful(Arc::new(GeneralServiceCall)),
-                    )]);
-                    precompiles
-                });
-            })
-            .build();
+        let result_state = {
+            let block_env = self.db.get_block_env()?;
+            let mut evm: Evm<'_, _, _> = Evm::builder()
+                .with_ref_db(&mut self.db)
+                .with_external_context(&mut inspector)
+                .modify_tx_env(|tx| {
+                    tx.clear();
+                    tx.transact_to = kind;
+                    tx.data = tx_data;
+                })
+                .modify_block_env(|block| {
+                    *block = block_env;
+                })
+                .append_handler_register(|handler| {
+                    inspector_handle_register(handler);
+                    let precompiles = handler.pre_execution.load_precompiles();
+                    handler.pre_execution.load_precompiles = Arc::new(move || {
+                        let mut precompiles = precompiles.clone();
+                        precompiles.extend([(
+                            PRECOMPILE_ADDRESS,
+                            ContextPrecompile::ContextStateful(Arc::new(GeneralServiceCall)),
+                        )]);
+                        precompiles
+                    });
+                })
+                .build();
 
-        let result_state = evm.transact().map_err(|error| {
-            let error = format!("{:?}", error);
-            let error = EvmExecutionError::TransactError(error);
-            ExecutionError::EvmError(error)
-        })?;
+            evm.transact().map_err(|error| {
+                let error = format!("{:?}", error);
+                let error = EvmExecutionError::TransactError(error);
+                ExecutionError::EvmError(error)
+            })
+        }?;
+        let storage_stats = self.db.reset_storage_stats();
         Ok((
-            process_execution_result(result_state.result)?,
+            process_execution_result(storage_stats, result_state.result)?,
             result_state.state,
         ))
     }

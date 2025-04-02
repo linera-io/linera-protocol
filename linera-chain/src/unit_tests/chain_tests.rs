@@ -156,7 +156,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     let time = Timestamp::from(0);
 
     // The size of the executed valid block below.
-    let maximum_block_size = 260;
+    let maximum_block_size = 880;
 
     let mut config = env.make_open_chain_config();
     config.committees.insert(
@@ -314,7 +314,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     );
 
     // Also, blocks without an application operation or incoming message are forbidden.
-    let invalid_block = make_child_block(&value.clone());
+    let invalid_block = make_child_block(&value);
     let result = chain
         .execute_block(&invalid_block, time, None, &[], None)
         .await;

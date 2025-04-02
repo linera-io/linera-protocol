@@ -98,7 +98,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
 
     let increments = [2_u64, 9_u64, 7_u64, 1000_u64];
     let policy = ResourceControlPolicy {
-        fuel_unit: Amount::from_attos(1),
+        evm_fuel_unit: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
     };
     let amount = Amount::from_tokens(1);

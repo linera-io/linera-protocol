@@ -18,7 +18,67 @@ use revm::{
 };
 use revm_primitives::{address, BlobExcessGasAndPrice, BlockEnv, EvmState};
 
-use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ViewError};
+use crate::{BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ViewError};
+
+/// The cost of loading from storage
+const SLOAD_COST: u64 = 2100;
+
+/// The cost of storing a non-zero value in the storage
+const SSTORE_COST_SET: u64 = 20000;
+
+/// The cost of storing a zero value in the storage
+const SSTORE_COST_SET_ZERO: u64 = 100;
+
+/// The cost of storing the storage to the same value
+const SSTORE_COST_RESET_EQ: u64 = 100;
+
+/// The cost of storing the storage to a different value
+const SSTORE_COST_RESET_NEQ: u64 = 2900;
+
+/// The refund from releasing data
+const SSTORE_REFUND_RELEASE: u64 = 4800;
+
+#[derive(Clone, Default)]
+pub(crate) struct StorageStats {
+    number_key_reset_eq: u64,
+    number_key_reset_neq: u64,
+    number_key_set: u64,
+    number_key_set_zero: u64,
+    number_key_release: u64,
+    number_key_read: u64,
+}
+
+impl StorageStats {
+    pub fn storage_costs(&self) -> u64 {
+        let mut storage_costs = 0;
+        storage_costs += self.number_key_reset_eq * SSTORE_COST_RESET_EQ;
+        storage_costs += self.number_key_reset_neq * SSTORE_COST_RESET_NEQ;
+        storage_costs += self.number_key_set * SSTORE_COST_SET;
+        storage_costs += self.number_key_set_zero * SSTORE_COST_SET_ZERO;
+        storage_costs += self.number_key_read * SLOAD_COST;
+        storage_costs
+    }
+
+    pub fn storage_refund(&self) -> u64 {
+        self.number_key_release * SSTORE_REFUND_RELEASE
+    }
+}
+
+pub(crate) struct DatabaseRuntime<Runtime> {
+    commit_error: Option<Arc<ExecutionError>>,
+    storage_stats: Arc<Mutex<StorageStats>>,
+    pub runtime: Arc<Mutex<Runtime>>,
+}
+
+impl<Runtime> Clone for DatabaseRuntime<Runtime> {
+    fn clone(&self) -> Self {
+        Self {
+            commit_error: self.commit_error.clone(),
+            storage_stats: self.storage_stats.clone(),
+            runtime: self.runtime.clone(),
+        }
+    }
+}
 
 #[repr(u8)]
 enum KeyTag {
@@ -67,10 +127,22 @@ impl<Runtime> DatabaseRuntime<Runtime> {
     }
 
     pub fn new(runtime: Runtime) -> Self {
+        let storage_stats = StorageStats::default();
         Self {
+            storage_stats: Arc::new(Mutex::new(storage_stats)),
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
         }
+    }
+
+    pub fn reset_storage_stats(&self) -> StorageStats {
+        let mut storage_stats_read = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
+        let storage_stats = storage_stats_read.clone();
+        *storage_stats_read = StorageStats::default();
+        storage_stats
     }
 }
 
@@ -152,6 +224,13 @@ where
             panic!("There is no storage associated to externally owned account");
         };
         let key = Self::get_uint256_key(val, index)?;
+        {
+            let mut storage_stats = self
+                .storage_stats
+                .lock()
+                .expect("The lock should be possible");
+            storage_stats.number_key_read += 1;
+        }
         let result = {
             let mut runtime = self.runtime.lock().expect("The lock should be possible");
             let promise = runtime.read_value_bytes_new(key)?;
@@ -171,6 +250,11 @@ where
 {
     /// Effectively commits changes to storage.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
+        let mut number_key_reset_eq = 0;
+        let mut number_key_reset_neq = 0;
+        let mut number_key_set = 0;
+        let mut number_key_set_zero = 0;
+        let mut number_key_release = 0;
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let mut batch = Batch::new();
         let mut list_new_balances = Vec::new();
@@ -206,9 +290,26 @@ where
                         }
                     };
                     batch.put_key_value(key_state, &account_state)?;
-                    for (index, value) in &account.storage {
-                        let key = Self::get_uint256_key(val, *index)?;
-                        batch.put_key_value(key, &value.present_value())?;
+                    for (index, value) in account.storage {
+                        let key = Self::get_uint256_key(val, index)?;
+                        if value.original_value() == U256::ZERO {
+                            if value.present_value() != U256::ZERO {
+                                batch.put_key_value(key, &value.present_value())?;
+                                number_key_set += 1;
+                            } else {
+                                number_key_set_zero += 1;
+                            }
+                        } else if value.present_value() != U256::ZERO {
+                            if value.present_value() == value.original_value() {
+                                number_key_reset_eq += 1;
+                            } else {
+                                batch.put_key_value(key, &value.present_value())?;
+                                number_key_reset_neq += 1;
+                            }
+                        } else {
+                            batch.delete_key(key);
+                            number_key_release += 1;
+                        }
                     }
                 }
             } else {
@@ -225,6 +326,15 @@ where
             }
         }
         runtime.write_batch(batch)?;
+        let mut storage_stats = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
+        storage_stats.number_key_reset_eq += number_key_reset_eq;
+        storage_stats.number_key_reset_neq += number_key_reset_neq;
+        storage_stats.number_key_set += number_key_set;
+        storage_stats.number_key_set_zero += number_key_set_zero;
+        storage_stats.number_key_release += number_key_release;
         if !list_new_balances.is_empty() {
             panic!("The conversion Ethereum address / Linera address is not yet implemented");
         }

@@ -688,7 +688,8 @@ impl Runnable for Job {
                                 }
                                 ResourceControlPolicy {
                                     block,
-                                    fuel_unit,
+                                    wasm_fuel_unit,
+                                    evm_fuel_unit,
                                     read_operation,
                                     write_operation,
                                     byte_read,
@@ -704,7 +705,8 @@ impl Runnable for Job {
                                     message_byte,
                                     service_as_oracle_query,
                                     http_request,
-                                    maximum_fuel_per_block,
+                                    maximum_wasm_fuel_per_block,
+                                    maximum_evm_fuel_per_block,
                                     maximum_service_oracle_execution_ms,
                                     maximum_block_size,
                                     maximum_blob_size,
@@ -721,7 +723,10 @@ impl Runnable for Job {
                                     let existing_policy = policy.clone();
                                     policy = linera_execution::ResourceControlPolicy {
                                         block: block.unwrap_or(existing_policy.block),
-                                        fuel_unit: fuel_unit.unwrap_or(existing_policy.fuel_unit),
+                                        wasm_fuel_unit: wasm_fuel_unit
+                                            .unwrap_or(existing_policy.wasm_fuel_unit),
+                                        evm_fuel_unit: evm_fuel_unit
+                                            .unwrap_or(existing_policy.evm_fuel_unit),
                                         read_operation: read_operation
                                             .unwrap_or(existing_policy.read_operation),
                                         write_operation: write_operation
@@ -748,8 +753,10 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.service_as_oracle_query),
                                         http_request: http_request
                                             .unwrap_or(existing_policy.http_request),
-                                        maximum_fuel_per_block: maximum_fuel_per_block
-                                            .unwrap_or(existing_policy.maximum_fuel_per_block),
+                                        maximum_wasm_fuel_per_block: maximum_wasm_fuel_per_block
+                                            .unwrap_or(existing_policy.maximum_wasm_fuel_per_block),
+                                        maximum_evm_fuel_per_block: maximum_evm_fuel_per_block
+                                            .unwrap_or(existing_policy.maximum_evm_fuel_per_block),
                                         maximum_service_oracle_execution_ms:
                                             maximum_service_oracle_execution_ms.unwrap_or(
                                                 existing_policy.maximum_service_oracle_execution_ms,
@@ -1832,7 +1839,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             num_other_initial_chains,
             policy_config,
             block_price,
-            fuel_unit_price,
+            wasm_fuel_unit_price,
+            evm_fuel_unit_price,
             read_operation_price,
             write_operation_price,
             byte_read_price,
@@ -1848,7 +1856,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             message_byte_price,
             service_as_oracle_query_price,
             http_request_price,
-            maximum_fuel_per_block,
+            maximum_wasm_fuel_per_block,
+            maximum_evm_fuel_per_block,
             maximum_service_oracle_execution_ms,
             maximum_block_size,
             maximum_blob_size,
@@ -1870,7 +1879,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             let existing_policy = policy_config.into_policy();
             let policy = linera_execution::ResourceControlPolicy {
                 block: block_price.unwrap_or(existing_policy.block),
-                fuel_unit: fuel_unit_price.unwrap_or(existing_policy.fuel_unit),
+                wasm_fuel_unit: wasm_fuel_unit_price.unwrap_or(existing_policy.wasm_fuel_unit),
+                evm_fuel_unit: evm_fuel_unit_price.unwrap_or(existing_policy.evm_fuel_unit),
                 read_operation: read_operation_price.unwrap_or(existing_policy.read_operation),
                 write_operation: write_operation_price.unwrap_or(existing_policy.write_operation),
                 byte_read: byte_read_price.unwrap_or(existing_policy.byte_read),
@@ -1888,8 +1898,10 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 service_as_oracle_query: service_as_oracle_query_price
                     .unwrap_or(existing_policy.service_as_oracle_query),
                 http_request: http_request_price.unwrap_or(existing_policy.http_request),
-                maximum_fuel_per_block: maximum_fuel_per_block
-                    .unwrap_or(existing_policy.maximum_fuel_per_block),
+                maximum_wasm_fuel_per_block: maximum_wasm_fuel_per_block
+                    .unwrap_or(existing_policy.maximum_wasm_fuel_per_block),
+                maximum_evm_fuel_per_block: maximum_evm_fuel_per_block
+                    .unwrap_or(existing_policy.maximum_evm_fuel_per_block),
                 maximum_service_oracle_execution_ms: maximum_service_oracle_execution_ms
                     .unwrap_or(existing_policy.maximum_service_oracle_execution_ms),
                 maximum_block_size: maximum_block_size

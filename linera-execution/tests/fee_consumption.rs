@@ -11,7 +11,8 @@ use linera_base::{
     crypto::AccountPublicKey,
     data_types::{Amount, BlockHeight, OracleResponse},
     http,
-    identifiers::{Account, AccountOwner, MessageId},
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId},
+    vm::VmRuntime,
 };
 use linera_execution::{
     test_utils::{
@@ -206,7 +207,8 @@ async fn test_fee_consumption(
 
     let prices = ResourceControlPolicy {
         block: Amount::from_tokens(2),
-        fuel_unit: Amount::from_tokens(3),
+        wasm_fuel_unit: Amount::from_tokens(3),
+        evm_fuel_unit: Amount::from_tokens(3),
         read_operation: Amount::from_tokens(5),
         write_operation: Amount::from_tokens(7),
         byte_read: Amount::from_tokens(11),
@@ -218,7 +220,8 @@ async fn test_fee_consumption(
         message_byte: Amount::from_tokens(31),
         service_as_oracle_query: Amount::from_millis(37),
         http_request: Amount::from_tokens(41),
-        maximum_fuel_per_block: 4_868_145_137,
+        maximum_wasm_fuel_per_block: 4_868_145_137,
+        maximum_evm_fuel_per_block: 4_868_145_137,
         maximum_block_size: 43,
         maximum_service_oracle_execution_ms: 47,
         maximum_blob_size: 53,
@@ -381,7 +384,7 @@ impl FeeSpend {
     /// The fee amount required for this runtime operation.
     pub fn amount(&self, policy: &ResourceControlPolicy) -> Amount {
         match self {
-            FeeSpend::Fuel(units) => policy.fuel_unit.saturating_mul(*units as u128),
+            FeeSpend::Fuel(units) => policy.wasm_fuel_unit.saturating_mul(*units as u128),
             FeeSpend::Read(_key, value) => {
                 let value_read_fee = value
                     .as_ref()
@@ -398,7 +401,7 @@ impl FeeSpend {
     /// Executes the operation with the `runtime`
     pub fn execute(self, runtime: &mut impl ContractRuntime) -> Result<(), ExecutionError> {
         match self {
-            FeeSpend::Fuel(units) => runtime.consume_fuel(units),
+            FeeSpend::Fuel(units) => runtime.consume_fuel(units, VmRuntime::Wasm),
             FeeSpend::Read(key, value) => {
                 let promise = runtime.read_value_bytes_new(key)?;
                 let response = runtime.read_value_bytes_wait(&promise)?;
