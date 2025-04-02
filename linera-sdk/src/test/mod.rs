@@ -25,6 +25,7 @@ pub use {
         test::HttpServer,
         ChainError, ChainExecutionContext,
     },
+    linera_core::worker::WorkerError,
     linera_execution::{system::Recipient, ExecutionError, QueryOutcome, WasmExecutionError},
 };
 
