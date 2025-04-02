@@ -24,7 +24,7 @@ pub use {
         data_types::{Medium, MessageAction},
         test::HttpServer,
     },
-    linera_execution::{system::Recipient, QueryOutcome},
+    linera_execution::{system::Recipient, QueryOutcome, WasmExecutionError},
 };
 
 #[cfg(with_testing)]
