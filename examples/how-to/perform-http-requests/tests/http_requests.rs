@@ -5,9 +5,10 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use assert_matches::assert_matches;
 use axum::{routing::get, Router};
 use how_to_perform_http_requests::Abi;
-use linera_sdk::test::{HttpServer, QueryOutcome, TestValidator};
+use linera_sdk::test::{ExecutionError, HttpServer, QueryOutcome, TestValidator};
 
 /// Tests if service query performs HTTP request to allowed host.
 #[test_log::test(tokio::test)]
@@ -58,16 +59,22 @@ async fn service_query_performs_http_request() -> anyhow::Result<()> {
 
 /// Tests if service query can't perform HTTP requests to hosts that aren't allowed.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "Failed to execute service query")]
 async fn service_query_cant_send_http_request_to_unauthorized_host() {
     let url = "http://localhost/";
 
     let (_validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url.to_owned(), ()).await;
 
-    chain
-        .graphql_query(application_id, "query { performHttpRequest }")
-        .await;
+    let error = chain
+        .try_graphql_query(application_id, "query { performHttpRequest }")
+        .await
+        .expect_err("Expected GraphQL query to fail");
+
+    assert_matches!(
+        error.expect_execution_error(),
+        ExecutionError::UnauthorizedHttpRequest(attempted_url)
+            if attempted_url.to_string() == url
+    );
 }
 
 /// Tests if the service sends a valid HTTP response to the contract.
