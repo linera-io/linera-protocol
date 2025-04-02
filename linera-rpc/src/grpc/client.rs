@@ -33,7 +33,7 @@ use super::{
 };
 use crate::{
     HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
-    HandleValidatedCertificateRequest, NodeOptions,
+    HandleValidatedCertificateRequest,
 };
 
 #[derive(Clone)]
@@ -60,17 +60,6 @@ impl GrpcClient {
             retry_delay,
             max_retries,
         }
-    }
-
-    pub fn create(address: String, node_options: NodeOptions) -> Self {
-        let options = (&node_options).into();
-        let channel = transport::create_channel(address.clone(), &options).unwrap();
-        Self::new(
-            address,
-            channel,
-            node_options.retry_delay,
-            node_options.max_retries,
-        )
     }
 
     /// Returns whether this gRPC status means the server stream should be reconnected to, or not.
