@@ -223,7 +223,7 @@ impl EvmServiceModule {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct StorageStats {
     number_key_reset_eq: u64,
     number_key_reset_neq: u64,
@@ -291,6 +291,16 @@ impl<Runtime> DatabaseRuntime<Runtime> {
             return Err(ExecutionError::EvmError(error));
         }
         Ok(())
+    }
+
+    fn reset_storage_stats(&self) -> StorageStats {
+        let mut storage_stats_read = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
+        let storage_stats = storage_stats_read.clone();
+        *storage_stats_read = StorageStats::default();
+        storage_stats
     }
 }
 
@@ -511,10 +521,10 @@ where
         let mut vec = self.module.clone();
         vec.extend_from_slice(&argument);
         let tx_data = Bytes::copy_from_slice(&vec);
-        let (output, logs) = self.transact_commit_tx_data(Choice::Create, tx_data)?;
+        let result = self.transact_commit_tx_data(Choice::Create, tx_data)?;
         let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs, "deploy")?;
-        let Output::Create(_, Some(contract_address_used)) = output else {
+        self.write_logs(&contract_address, result.logs, "deploy")?;
+        let Output::Create(_, Some(contract_address_used)) = result.output else {
             unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
         };
         assert_eq!(contract_address_used, contract_address);
@@ -535,10 +545,10 @@ where
             ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
         );
         let tx_data = Bytes::copy_from_slice(&operation);
-        let (output, logs) = self.transact_commit_tx_data(Choice::Call, tx_data)?;
+        let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
         let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs, "operation")?;
-        let Output::Call(output) = output else {
+        self.write_logs(&contract_address, result.logs, "operation")?;
+        let Output::Call(output) = result.output else {
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
         let output = output.as_ref().to_vec();
@@ -558,15 +568,56 @@ where
     }
 }
 
-fn process_execution_result(result: ExecutionResult) -> Result<(Output, Vec<Log>), ExecutionError> {
+struct ProcessResultSuccess {
+    gas_final: u64,
+    output: Output,
+    logs: Vec<Log>,
+}
+
+/// The cost of loading from storage
+const SLOAD_COST: u64 = 2100;
+
+/// The cost of storing a non-zero value in the storage
+const SSTORE_COST_SET: u64 = 20000;
+
+/// The cost of storing a zero value in the storage
+const SSTORE_COST_SET_ZERO: u64 = 100;
+
+/// The cost of storing the storage to the same value
+const SSTORE_COST_RESET_EQ: u64 = 100;
+
+/// The cost of storing the storage to a different value
+const SSTORE_COST_RESET_NEQ: u64 = 2900;
+
+/// The refund from releasing data
+const SSTORE_REFUND_RELEASE: u64 = 4800;
+
+/// Process the storage results. and gas results.
+/// The gas used and gas refunded contain some contribution from the
+/// storage. But those contributions are already separately.
+/// So, they need to be subtracted from the gas being used.
+/// Note that in the EVM, the refund is limited to at most 20% of the
+/// gas used, but the rescaling come after the gas_used/gas_refunded
+/// that are obtained.
+fn process_execution_result(storage_stats: StorageStats, result: ExecutionResult) -> Result<ProcessResultSuccess, ExecutionError> {
     match result {
         ExecutionResult::Success {
             reason: _,
-            gas_used: _,
-            gas_refunded: _,
+            gas_used,
+            gas_refunded,
             logs,
             output,
-        } => Ok((output, logs)),
+        } => {
+            //
+            let mut gas_final = gas_used;
+            gas_final -= storage_stats.number_key_reset_eq * SSTORE_COST_RESET_EQ;
+            gas_final -= storage_stats.number_key_reset_neq * SSTORE_COST_RESET_NEQ;
+            gas_final -= storage_stats.number_key_set * SSTORE_COST_SET;
+            gas_final -= storage_stats.number_key_set_zero * SSTORE_COST_SET_ZERO;
+            gas_final -= storage_stats.number_key_read * SLOAD_COST;
+            assert_eq!(gas_refunded, storage_stats.number_key_release * SSTORE_REFUND_RELEASE);
+            Ok(ProcessResultSuccess { gas_final, output, logs })
+        },
         ExecutionResult::Revert { gas_used, output } => {
             let error = EvmExecutionError::Revert { gas_used, output };
             Err(ExecutionError::EvmError(error))
@@ -591,26 +642,29 @@ where
         &mut self,
         ch: Choice,
         tx_data: Bytes,
-    ) -> Result<(Output, Vec<Log>), ExecutionError> {
+    ) -> Result<ProcessResultSuccess, ExecutionError> {
         let kind = match ch {
             Choice::Create => TxKind::Create,
             Choice::Call => TxKind::Call(self.db.contract_address),
         };
-        let mut evm: Evm<'_, (), _> = Evm::builder()
-            .with_ref_db(&mut self.db)
-            .modify_tx_env(|tx| {
-                tx.clear();
-                tx.transact_to = kind;
-                tx.data = tx_data;
+        let result = {
+            let mut evm: Evm<'_, (), _> = Evm::builder()
+                .with_ref_db(&mut self.db)
+                .modify_tx_env(|tx| {
+                    tx.clear();
+                    tx.transact_to = kind;
+                    tx.data = tx_data;
+                })
+                .build();
+            evm.transact_commit().map_err(|error| {
+                let error = format!("{:?}", error);
+                let error = EvmExecutionError::TransactCommitError(error);
+                ExecutionError::EvmError(error)
             })
-            .build();
+        }?;
+        let storage_stats = self.db.reset_storage_stats();
 
-        let result = evm.transact_commit().map_err(|error| {
-            let error = format!("{:?}", error);
-            let error = EvmExecutionError::TransactCommitError(error);
-            ExecutionError::EvmError(error)
-        })?;
-        process_execution_result(result)
+        process_execution_result(storage_stats, result)
     }
 
     fn write_logs(
@@ -666,23 +720,27 @@ where
         };
         let tx_data = Bytes::copy_from_slice(&query);
         let address = self.db.contract_address;
-        let mut evm: Evm<'_, (), _> = Evm::builder()
-            .with_ref_db(&mut self.db)
-            .modify_tx_env(|tx| {
-                tx.clear();
-                tx.transact_to = TxKind::Call(address);
-                tx.data = tx_data;
-            })
-            .build();
+        let result_state = {
+            let mut evm: Evm<'_, (), _> = Evm::builder()
+                .with_ref_db(&mut self.db)
+                .modify_tx_env(|tx| {
+                    tx.clear();
+                    tx.transact_to = TxKind::Call(address);
+                    tx.data = tx_data;
+                })
+                .build();
 
-        let result_state = evm.transact().map_err(|error| {
-            let error = format!("{:?}", error);
-            let error = EvmExecutionError::TransactCommitError(error);
-            ExecutionError::EvmError(error)
-        })?;
-        let (output, _logs) = process_execution_result(result_state.result)?;
+            evm.transact().map_err(|error| {
+                let error = format!("{:?}", error);
+                let error = EvmExecutionError::TransactCommitError(error);
+                ExecutionError::EvmError(error)
+            })
+        }?;
+
+        let storage_stats = self.db.reset_storage_stats();
+        let result = process_execution_result(storage_stats, result_state.result)?;
         // We drop the logs since the "eth_call" execution does not return any log.
-        let Output::Call(output) = output else {
+        let Output::Call(output) = result.output else {
             unreachable!("It is impossible for a Choice::Call to lead to a Output::Create");
         };
         let answer = output.as_ref().to_vec();
