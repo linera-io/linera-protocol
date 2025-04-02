@@ -11,6 +11,7 @@ use linera_client::{
     client_options::ResourceControlPolicyConfig,
     storage::{StorageConfig, StorageConfigNamespace},
 };
+use linera_rpc::config::CrossChainConfig;
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
     ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
@@ -169,6 +170,7 @@ pub async fn handle_net_up_service(
     num_shards: usize,
     testing_prng_seed: Option<u64>,
     policy_config: ResourceControlPolicyConfig,
+    cross_chain_config: CrossChainConfig,
     path: &Option<String>,
     storage: &Option<String>,
     external_protocol: String,
@@ -210,6 +212,7 @@ pub async fn handle_net_up_service(
         num_initial_validators,
         num_shards,
         policy_config,
+        cross_chain_config,
         storage_config_builder,
         path_provider,
     };

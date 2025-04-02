@@ -1,13 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsString;
+
+use clap::Parser;
 use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
 use serde::{Deserialize, Serialize};
 
 #[cfg(with_simple_network)]
 use crate::simple;
 
-#[derive(Clone, Debug, clap::Parser)]
+#[derive(Clone, Debug, Parser)]
+#[cfg_attr(with_testing, derive(PartialEq))]
 pub struct CrossChainConfig {
     /// Number of cross-chain messages allowed before dropping them.
     #[arg(long = "cross-chain-queue-size", default_value = "1000")]
@@ -34,7 +38,32 @@ pub struct CrossChainConfig {
     pub(crate) max_concurrent_tasks: usize,
 }
 
-#[derive(Clone, Debug, clap::Parser)]
+impl Default for CrossChainConfig {
+    fn default() -> Self {
+        CrossChainConfig::parse_from::<[OsString; 1], OsString>(["".into()])
+    }
+}
+
+impl CrossChainConfig {
+    pub fn to_args(&self) -> Vec<String> {
+        vec![
+            "--cross-chain-queue-size".to_string(),
+            self.queue_size.to_string(),
+            "--cross-chain-max-retries".to_string(),
+            self.max_retries.to_string(),
+            "--cross-chain-retry-delay-ms".to_string(),
+            self.retry_delay_ms.to_string(),
+            "--cross-chain-sender-delay-ms".to_string(),
+            self.sender_delay_ms.to_string(),
+            "--cross-chain-sender-failure-rate".to_string(),
+            self.sender_failure_rate.to_string(),
+            "--cross-chain-max-tasks".to_string(),
+            self.max_concurrent_tasks.to_string(),
+        ]
+    }
+}
+
+#[derive(Clone, Debug, Parser)]
 pub struct NotificationConfig {
     /// Number of notifications allowed before blocking the main server loop
     #[arg(long = "notification-queue-size", default_value = "1000")]
@@ -257,4 +286,16 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
     pub fn get_shard_for(&self, chain_id: ChainId) -> &ShardConfig {
         self.shard(self.get_shard_id(chain_id))
     }
+}
+
+#[test]
+fn cross_chain_config_to_args() {
+    let config = CrossChainConfig::default();
+    let args = config.to_args();
+    let mut cmd = vec![String::new()];
+    cmd.extend(args.clone());
+    let config2 = CrossChainConfig::parse_from(cmd);
+    let args2 = config2.to_args();
+    assert_eq!(config, config2);
+    assert_eq!(args, args2);
 }

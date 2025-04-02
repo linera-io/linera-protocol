@@ -19,6 +19,7 @@ use linera_base::{
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::{ResourceControlPolicy, WasmRuntime, WithWasmDefault as _};
+use linera_rpc::config::CrossChainConfig;
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 
 #[cfg(feature = "fs")]
@@ -1197,6 +1198,10 @@ pub enum NetCommand {
         /// settings.
         #[arg(long, default_value = "no-fees")]
         policy_config: ResourceControlPolicyConfig,
+
+        /// The configuration for cross-chain messages.
+        #[clap(flatten)]
+        cross_chain_config: CrossChainConfig,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.

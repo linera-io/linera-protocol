@@ -24,6 +24,7 @@ use linera_client::{
     storage::{StorageConfig, StorageConfigNamespace},
 };
 use linera_core::node::ValidatorNodeProvider;
+use linera_rpc::config::CrossChainConfig;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
@@ -181,6 +182,7 @@ pub struct LocalNetConfig {
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub policy_config: ResourceControlPolicyConfig,
+    pub cross_chain_config: CrossChainConfig,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
 }
@@ -197,6 +199,7 @@ pub struct LocalNet {
     namespace: String,
     validators_with_initialized_storage: HashSet<usize>,
     storage_config: StorageConfig,
+    cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
 }
 
@@ -273,12 +276,14 @@ impl LocalNetConfig {
         let internal = network.drop_tls();
         let external = network;
         let network = NetworkConfig { internal, external };
+        let cross_chain_config = CrossChainConfig::default();
         Self {
             database,
             network,
             num_other_initial_chains: 2,
             initial_amount: Amount::from_tokens(1_000_000),
             policy_config: ResourceControlPolicyConfig::Testnet,
+            cross_chain_config,
             testing_prng_seed: Some(37),
             namespace: linera_views::random::generate_test_namespace(),
             num_initial_validators: 4,
@@ -294,14 +299,15 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let server_config = self.storage_config_builder.build(self.database).await?;
+        let storage_config = self.storage_config_builder.build(self.database).await?;
         let mut net = LocalNet::new(
             self.network,
             self.testing_prng_seed,
             self.namespace,
             self.num_initial_validators,
             self.num_shards,
-            server_config,
+            storage_config,
+            self.cross_chain_config,
             self.path_provider,
         )?;
         let client = net.make_client().await;
@@ -364,6 +370,7 @@ impl LocalNet {
         num_initial_validators: usize,
         num_shards: usize,
         storage_config: StorageConfig,
+        cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
     ) -> Result<Self> {
         Ok(Self {
@@ -377,6 +384,7 @@ impl LocalNet {
             namespace,
             validators_with_initialized_storage: HashSet::new(),
             storage_config,
+            cross_chain_config,
             path_provider,
         })
     }
@@ -646,13 +654,14 @@ impl LocalNet {
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
         }
-        command.arg("run");
-        let child = command
+        command
+            .arg("run")
             .args(["--storage", &storage])
             .args(["--server", &format!("server_{}.json", validator)])
             .args(["--shard", &shard.to_string()])
             .args(["--genesis", "genesis.json"])
-            .spawn_into()?;
+            .args(self.cross_chain_config.to_args());
+        let child = command.spawn_into()?;
 
         match self.network.internal {
             Network::Grpc => {

@@ -964,6 +964,24 @@ Start a Local Linera Network
 
   Possible values: `no-fees`, `testnet`
 
+* `--cross-chain-queue-size <QUEUE_SIZE>` — Number of cross-chain messages allowed before dropping them
+
+  Default value: `1000`
+* `--cross-chain-max-retries <MAX_RETRIES>` — Maximum number of retries for a cross-chain message
+
+  Default value: `10`
+* `--cross-chain-retry-delay-ms <RETRY_DELAY_MS>` — Delay before retrying of cross-chain message
+
+  Default value: `2000`
+* `--cross-chain-sender-delay-ms <SENDER_DELAY_MS>` — Introduce a delay before sending every cross-chain message (e.g. for testing purpose)
+
+  Default value: `0`
+* `--cross-chain-sender-failure-rate <SENDER_FAILURE_RATE>` — Drop cross-chain messages randomly at the given rate (0 <= rate < 1) (meant for testing)
+
+  Default value: `0.0`
+* `--cross-chain-max-tasks <MAX_CONCURRENT_TASKS>` — How many concurrent tasks to spawn for cross-chain message handling RPCs
+
+  Default value: `10`
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created
 * `--storage <STORAGE>` — Run with a specific storage. If none, then a linera-storage-service is started on a random free port
