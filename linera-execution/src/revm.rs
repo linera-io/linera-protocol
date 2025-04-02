@@ -400,18 +400,16 @@ where
                             } else {
                                 number_key_set_zero += 1;
                             }
-                        } else {
-                            if value.present_value() != U256::ZERO {
-                                if value.present_value() == value.original_value() {
-                                    number_key_reset_eq += 1;
-                                } else {
-                                    batch.put_key_value(key, &value.present_value())?;
-                                    number_key_reset_neq += 1;
-                                }
+                        } else if value.present_value() != U256::ZERO {
+                            if value.present_value() == value.original_value() {
+                                number_key_reset_eq += 1;
                             } else {
-                                batch.delete_key(key);
-                                number_key_release += 1;
+                                batch.put_key_value(key, &value.present_value())?;
+                                number_key_reset_neq += 1;
                             }
+                        } else {
+                            batch.delete_key(key);
+                            number_key_release += 1;
                         }
                     }
                 }
