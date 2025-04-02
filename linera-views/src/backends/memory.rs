@@ -362,7 +362,7 @@ impl AdminKeyValueStore for MemoryStore {
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
         if memory_stores.sync_exists(namespace) {
-            return Err(MemoryStoreError::StoreAlreadyExist);
+            return Err(MemoryStoreError::StoreAlreadyExists);
         }
         memory_stores.sync_create(namespace);
         Ok(())
@@ -401,7 +401,7 @@ pub fn create_test_memory_store() -> MemoryStore {
 pub enum MemoryStoreError {
     /// Store already exists during a create operation
     #[error("Store already exists during a create operation")]
-    StoreAlreadyExist,
+    StoreAlreadyExists,
 
     /// Serialization error with BCS.
     #[error(transparent)]
