@@ -754,3 +754,18 @@ pub enum TryGraphQLMutationError {
     #[error("Failed to propose block with operations scheduled by the GraphQL mutation")]
     Proposal(#[from] WorkerError),
 }
+
+impl TryGraphQLMutationError {
+    /// Returns the inner [`ExecutionError`] in this [`TryGraphQLMutationError::Proposal`] error.
+    ///
+    /// # Panics
+    ///
+    /// If this is not caused by an [`ExecutionError`] during a block proposal.
+    pub fn expect_proposal_execution_error(self, transaction_index: u32) -> ExecutionError {
+        let TryGraphQLMutationError::Proposal(proposal_error) = self else {
+            panic!("Expected an `ExecutionError` during the block proposal. Got: {self:#?}");
+        };
+
+        proposal_error.expect_execution_error(ChainExecutionContext::Operation(transaction_index))
+    }
+}
