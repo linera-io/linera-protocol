@@ -8,7 +8,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{lock::Mutex, stream, StreamExt};
+use futures::{future, lock::Mutex, stream, StreamExt};
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::Timestamp,
@@ -167,7 +167,10 @@ impl ChainListener {
         let admin_listener: NotificationStream = if client.admin_id() == chain_id {
             Box::pin(stream::pending())
         } else {
-            Box::pin(client.subscribe_to(client.admin_id()).await?)
+            let stream = client.subscribe_to(client.admin_id()).await?;
+            Box::pin(stream.filter(|notification: &Notification| {
+                future::ready(matches!(notification.reason, Reason::NewBlock { .. }))
+            }))
         };
         let mut admin_listener = admin_listener.fuse();
         client.synchronize_from_validators().await?;
@@ -188,9 +191,7 @@ impl ChainListener {
                 maybe_notification = admin_listener.next() => {
                     // A new block on the admin chain may mean a new committee. Set the timer to
                     // process the inbox.
-                    if let Some(
-                        Notification { reason: Reason::NewBlock { .. }, .. }
-                    ) = maybe_notification {
+                    if maybe_notification.is_some() {
                         timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
                     }
                     continue;
