@@ -659,8 +659,8 @@ impl LocalNet {
             .args(["--storage", &storage])
             .args(["--server", &format!("server_{}.json", validator)])
             .args(["--shard", &shard.to_string()])
-            .args(["--genesis", "genesis.json"]);
-        self.cross_chain_config.add_to(&mut command);
+            .args(["--genesis", "genesis.json"])
+            .args(self.cross_chain_config.to_args());
         let child = command.spawn_into()?;
 
         match self.network.internal {
