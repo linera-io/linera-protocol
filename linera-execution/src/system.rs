@@ -92,9 +92,17 @@ pub struct SystemExecutionStateView<C> {
     /// Blobs that have been used or published on this chain.
     pub used_blobs: HashedSetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
-    pub event_subscriptions: MapView<C, (ChainId, StreamId), BTreeSet<ApplicationId>>,
-    /// The event counts (i.e. next event index) for every stream this chain subscribes to.
-    pub stream_trackers: MapView<C, (ChainId, StreamId), u32>,
+    pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
+}
+
+/// The applications subscribing to a particular stream, and the next event index.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct EventSubscriptions {
+    /// The next event index, i.e. the total number of events in this stream that have already
+    /// been processed by this chain.
+    pub next_index: u32,
+    /// The applications that are subscribed to this stream.
+    pub applications: BTreeSet<ApplicationId>,
 }
 
 /// The configuration for a new chain.
@@ -507,11 +515,11 @@ where
             }
             UpdateStreams(streams) => {
                 for (chain_id, stream_id, next_index) in streams {
-                    let tracker = self
-                        .stream_trackers
+                    let subscriptions = self
+                        .event_subscriptions
                         .get_mut_or_default(&(chain_id, stream_id))
                         .await?;
-                    *tracker = (*tracker).max(next_index);
+                    subscriptions.next_index = subscriptions.next_index.max(next_index);
                 }
             }
         }
