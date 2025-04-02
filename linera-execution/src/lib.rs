@@ -745,7 +745,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn subscribe_to_events(
         &mut self,
         chain_id: ChainId,
-        application_id: GenericApplicationId,
+        application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError>;
 
@@ -753,7 +753,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn unsubscribe_from_events(
         &mut self,
         chain_id: ChainId,
-        application_id: GenericApplicationId,
+        application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError>;
 

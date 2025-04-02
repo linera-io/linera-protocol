@@ -17,8 +17,8 @@ interface contract-runtime-api {
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, value: list<u8>) -> u32;
     read-event: func(chain-id: chain-id, name: stream-name, index: u32) -> list<u8>;
-    subscribe-to-events: func(chain-id: chain-id, application-id: generic-application-id, name: stream-name);
-    unsubscribe-from-events: func(chain-id: chain-id, application-id: generic-application-id, name: stream-name);
+    subscribe-to-events: func(chain-id: chain-id, application-id: application-id, name: stream-name);
+    unsubscribe-from-events: func(chain-id: chain-id, application-id: application-id, name: stream-name);
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     consume-fuel: func(fuel: u64);
     validation-round: func() -> option<u32>;
@@ -96,11 +96,6 @@ interface contract-runtime-api {
     variant destination {
         recipient(chain-id),
         subscribers(channel-name),
-    }
-
-    variant generic-application-id {
-        system,
-        user(application-id),
     }
 
     record message-id {

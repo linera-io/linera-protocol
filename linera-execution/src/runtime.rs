@@ -1348,7 +1348,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn subscribe_to_events(
         &mut self,
         chain_id: ChainId,
-        application_id: GenericApplicationId,
+        application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError> {
         let this = self.inner();
@@ -1358,7 +1358,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         );
         let stream_id = StreamId {
             stream_name,
-            application_id,
+            application_id: application_id.into(),
         };
         let subscriber_app_id = this.current_application().id;
         this.execution_state_sender
@@ -1375,7 +1375,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn unsubscribe_from_events(
         &mut self,
         chain_id: ChainId,
-        application_id: GenericApplicationId,
+        application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError> {
         let this = self.inner();
@@ -1385,7 +1385,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         );
         let stream_id = StreamId {
             stream_name,
-            application_id,
+            application_id: application_id.into(),
         };
         let subscriber_app_id = this.current_application().id;
         this.execution_state_sender

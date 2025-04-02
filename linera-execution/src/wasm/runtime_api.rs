@@ -8,8 +8,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, GenericApplicationId,
-        MessageId, StreamName,
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -602,7 +601,7 @@ where
     fn subscribe_to_events(
         caller: &mut Caller,
         chain_id: ChainId,
-        application_id: GenericApplicationId,
+        application_id: ApplicationId,
         name: StreamName,
     ) -> Result<(), RuntimeError> {
         caller
@@ -616,7 +615,7 @@ where
     fn unsubscribe_from_events(
         caller: &mut Caller,
         chain_id: ChainId,
-        application_id: GenericApplicationId,
+        application_id: ApplicationId,
         name: StreamName,
     ) -> Result<(), RuntimeError> {
         caller
