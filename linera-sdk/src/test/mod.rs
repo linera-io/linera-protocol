@@ -23,6 +23,7 @@ pub use {
     linera_chain::{
         data_types::{Medium, MessageAction},
         test::HttpServer,
+        ChainError, ChainExecutionContext,
     },
     linera_execution::{system::Recipient, ExecutionError, QueryOutcome, WasmExecutionError},
 };
