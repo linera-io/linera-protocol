@@ -60,10 +60,10 @@ async fn service_query_performs_http_request() -> anyhow::Result<()> {
 #[test_log::test(tokio::test)]
 #[should_panic(expected = "Failed to execute service query")]
 async fn service_query_cant_send_http_request_to_unauthorized_host() {
-    let url = "http://localhost/".to_owned();
+    let url = "http://localhost/";
 
     let (_validator, application_id, chain) =
-        TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
+        TestValidator::with_current_application::<Abi, _, _>(url.to_owned(), ()).await;
 
     chain
         .graphql_query(application_id, "query { performHttpRequest }")

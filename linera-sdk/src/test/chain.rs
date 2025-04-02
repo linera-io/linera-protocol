@@ -19,12 +19,12 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
     vm::VmRuntime,
 };
-use linera_chain::types::ConfirmedBlockCertificate;
+use linera_chain::{types::ConfirmedBlockCertificate, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     committee::Epoch,
     system::{SystemOperation, SystemQuery, SystemResponse},
-    Operation, Query, QueryOutcome, QueryResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -705,5 +705,20 @@ impl From<TryQueryError> for TryGraphQLQueryError {
             }
             TryQueryError::Execution(error) => TryGraphQLQueryError::Execution(error),
         }
+    }
+}
+
+impl TryGraphQLQueryError {
+    /// Returns the inner [`ExecutionError`] in this error.
+    ///
+    /// # Panics
+    ///
+    /// If this is not caused by an [`ExecutionError`].
+    pub fn expect_execution_error(self) -> ExecutionError {
+        let TryGraphQLQueryError::Execution(worker_error) = self else {
+            panic!("Expected an `ExecutionError`. Got: {self:#?}");
+        };
+
+        worker_error.expect_execution_error(ChainExecutionContext::Query)
     }
 }
