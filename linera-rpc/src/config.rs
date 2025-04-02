@@ -1,13 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsString;
+
+use clap::Parser;
 use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
 use serde::{Deserialize, Serialize};
 
 #[cfg(with_simple_network)]
 use crate::simple;
 
-#[derive(Clone, Debug, clap::Parser)]
+#[derive(Clone, Debug, Parser)]
 pub struct CrossChainConfig {
     /// Number of cross-chain messages allowed before dropping them.
     #[arg(long = "cross-chain-queue-size", default_value = "1000")]
@@ -34,7 +37,37 @@ pub struct CrossChainConfig {
     pub(crate) max_concurrent_tasks: usize,
 }
 
-#[derive(Clone, Debug, clap::Parser)]
+impl Default for CrossChainConfig {
+    fn default() -> Self {
+        CrossChainConfig::parse_from::<[OsString; 0], OsString>([])
+    }
+}
+
+impl CrossChainConfig {
+    pub fn add_to(&self, command: &mut tokio::process::Command) {
+        command
+            .args(["--cross-chain-queue-size", &self.queue_size.to_string()])
+            .args(["--cross-chain-max-retries", &self.max_retries.to_string()])
+            .args([
+                "--cross-chain-retry-delay-ms",
+                &self.retry_delay_ms.to_string(),
+            ])
+            .args([
+                "--cross-chain-sender-delay-ms",
+                &self.sender_delay_ms.to_string(),
+            ])
+            .args([
+                "--cross-chain-sender-failure-rate",
+                &self.sender_failure_rate.to_string(),
+            ])
+            .args([
+                "--cross-chain-max-tasks",
+                &self.max_concurrent_tasks.to_string(),
+            ]);
+    }
+}
+
+#[derive(Clone, Debug, Parser)]
 pub struct NotificationConfig {
     /// Number of notifications allowed before blocking the main server loop
     #[arg(long = "notification-queue-size", default_value = "1000")]
