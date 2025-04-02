@@ -278,6 +278,13 @@ impl ChainListener {
         }
     }
 
+    /// Processes the inbox, unless `skip_process_inbox` is set.
+    ///
+    /// If no block can be produced because we are not the round leader, a timeout is returned
+    /// for when to retry; otherwise `u64::MAX` is returned.
+    ///
+    /// The wallet is persisted with any blocks that processing the inbox added. An error
+    /// is returned if persisting the wallet fails.
     async fn maybe_process_inbox<C>(
         config: &ChainListenerConfig,
         client: &ChainClient<C::ValidatorNodeProvider, C::Storage>,
