@@ -223,9 +223,20 @@ impl EvmServiceModule {
     }
 }
 
+#[derive(Default)]
+struct StorageStats {
+    number_key_reset_eq: u64,
+    number_key_reset_neq: u64,
+    number_key_set: u64,
+    number_key_set_zero: u64,
+    number_key_release: u64,
+    number_key_read: u64,
+}
+
 struct DatabaseRuntime<Runtime> {
     contract_address: Address,
     commit_error: Option<ExecutionError>,
+    storage_stats: Arc<Mutex<StorageStats>>,
     runtime: Arc<Mutex<Runtime>>,
 }
 
@@ -264,9 +275,11 @@ impl<Runtime> DatabaseRuntime<Runtime> {
     fn new(runtime: Runtime) -> Self {
         let nonce = 0;
         let contract_address = Address::ZERO.create(nonce);
+        let storage_stats = StorageStats::default();
         Self {
             contract_address,
             commit_error: None,
+            storage_stats: Arc::new(Mutex::new(storage_stats)),
             runtime: Arc::new(Mutex::new(runtime)),
         }
     }
@@ -328,6 +341,11 @@ where
         &mut self,
         changes: HashMap<Address, Account>,
     ) -> Result<(), ExecutionError> {
+        let mut number_key_reset_eq = 0;
+        let mut number_key_reset_neq = 0;
+        let mut number_key_set = 0;
+        let mut number_key_set_zero = 0;
+        let mut number_key_release = 0;
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let mut batch = Batch::new();
         let mut list_new_balances = Vec::new();
@@ -365,7 +383,26 @@ where
                     batch.put_key_value(key_state, &account_state)?;
                     for (index, value) in account.storage {
                         let key = Self::get_uint256_key(val, index)?;
-                        batch.put_key_value(key, &value.present_value())?;
+                        if value.original_value() == U256::ZERO {
+                            if value.present_value() != U256::ZERO {
+                                batch.put_key_value(key, &value.present_value())?;
+                                number_key_set += 1;
+                            } else {
+                                number_key_set_zero += 1;
+                            }
+                        } else {
+                            if value.present_value() != U256::ZERO {
+                                if value.present_value() == value.original_value() {
+                                    number_key_reset_eq += 1;
+                                } else {
+                                    batch.put_key_value(key, &value.present_value())?;
+                                    number_key_reset_neq += 1;
+                                }
+                            } else {
+                                batch.delete_key(key);
+                                number_key_release += 1;
+                            }
+                        }
                     }
                 }
             } else {
@@ -379,6 +416,16 @@ where
             }
         }
         runtime.write_batch(batch)?;
+        let mut storage_stats = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
+        storage_stats.number_key_reset_eq += number_key_reset_eq;
+        storage_stats.number_key_reset_neq += number_key_reset_neq;
+        storage_stats.number_key_set += number_key_set;
+        storage_stats.number_key_set_zero += number_key_set_zero;
+        storage_stats.number_key_release += number_key_release;
+
         if !list_new_balances.is_empty() {
             panic!("The conversion Ethereum address / Linera address is not yet implemented");
         }
@@ -419,6 +466,13 @@ where
         let Some(val) = val else {
             panic!("There is no storage associated to Externally Owned Account");
         };
+        {
+            let mut storage_stats = self
+                .storage_stats
+                .lock()
+                .expect("The lock should be possible");
+            storage_stats.number_key_read += 1;
+        }
         let key = Self::get_uint256_key(val, index)?;
         let result = {
             let mut runtime = self.runtime.lock().expect("The lock should be possible");
