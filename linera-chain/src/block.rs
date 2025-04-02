@@ -175,8 +175,13 @@ impl ConfirmedBlock {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
-pub struct Timeout {
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Timeout(Hashed<TimeoutInner>);
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(rename = "Timeout")]
+pub struct TimeoutInner {
     pub chain_id: ChainId,
     pub height: BlockHeight,
     pub epoch: Epoch,
@@ -184,11 +189,12 @@ pub struct Timeout {
 
 impl Timeout {
     pub fn new(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> Self {
-        Self {
+        let inner = TimeoutInner {
             chain_id,
             height,
             epoch,
-        }
+        };
+        Self(Hashed::new(inner))
     }
 
     pub fn to_log_str(&self) -> &'static str {
@@ -196,19 +202,24 @@ impl Timeout {
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.chain_id
+        self.0.inner().chain_id
     }
 
     pub fn height(&self) -> BlockHeight {
-        self.height
+        self.0.inner().height
     }
 
     pub fn epoch(&self) -> Epoch {
-        self.epoch
+        self.0.inner().epoch
+    }
+
+    pub fn inner(&self) -> &Hashed<TimeoutInner> {
+        &self.0
     }
 }
 
 impl BcsHashable<'_> for Timeout {}
+impl BcsHashable<'_> for TimeoutInner {}
 
 /// Failure to convert a `Certificate` into one of the expected certificate types.
 #[derive(Clone, Copy, Debug, Error)]

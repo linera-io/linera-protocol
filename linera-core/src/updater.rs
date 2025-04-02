@@ -370,7 +370,7 @@ where
             }
         }
         if let Some(cert) = timeout {
-            if cert.inner().chain_id == chain_id {
+            if cert.value().chain_id() == chain_id {
                 // Timeouts are small and don't have blobs, so we can call `handle_certificate`
                 // directly.
                 self.remote_node.handle_timeout_certificate(cert).await?;

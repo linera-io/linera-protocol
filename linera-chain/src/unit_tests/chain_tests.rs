@@ -17,7 +17,6 @@ use linera_base::{
         Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
         Timestamp,
     },
-    hashed::Hashed,
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
@@ -266,7 +265,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let (outcome, _, _) = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
-    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    let value = ConfirmedBlock::new(outcome.with(valid_block));
     chain.apply_confirmed_block(&value, time).await?;
 
     // In the second block, other operations are still not allowed.
@@ -296,7 +295,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let (outcome, _, _) = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
-    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    let value = ConfirmedBlock::new(outcome.with(valid_block));
     chain.apply_confirmed_block(&value, time).await?;
 
     Ok(())

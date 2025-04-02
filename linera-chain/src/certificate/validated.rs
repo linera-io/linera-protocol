@@ -5,7 +5,6 @@
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
-    hashed::Hashed,
     identifiers::BlobId,
 };
 use serde::{
@@ -67,7 +66,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
         #[derive(Deserialize)]
         #[serde(rename = "ValidatedBlockCertificate")]
         struct Inner {
-            value: Hashed<ValidatedBlock>,
+            value: ValidatedBlock,
             round: Round,
             signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
         }

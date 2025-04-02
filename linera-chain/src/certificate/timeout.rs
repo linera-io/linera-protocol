@@ -5,7 +5,6 @@
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
-    hashed::Hashed,
 };
 use serde::{
     ser::{Serialize, SerializeStruct, Serializer},
@@ -50,7 +49,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<Timeout> {
         #[derive(Deserialize)]
         #[serde(rename = "TimeoutCertificate")]
         struct Inner {
-            value: Hashed<Timeout>,
+            value: Timeout,
             round: Round,
             signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
         }

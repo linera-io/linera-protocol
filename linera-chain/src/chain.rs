@@ -17,7 +17,6 @@ use linera_base::{
         OracleResponse, Timestamp,
     },
     ensure,
-    hashed::Hashed,
     identifiers::{
         AccountOwner, ApplicationId, BlobType, ChainId, ChannelFullName, Destination,
         GenericApplicationId, MessageId,
@@ -1007,11 +1006,11 @@ where
     /// manager. This does not touch the execution state itself, which must be updated separately.
     pub async fn apply_confirmed_block(
         &mut self,
-        block: &Hashed<ConfirmedBlock>,
+        block: &ConfirmedBlock,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let hash = block.hash();
-        let block = block.inner().inner().inner();
+        let hash = block.inner().hash();
+        let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
         for txn_messages in &block.body.messages {
             self.process_outgoing_messages(block.header.height, txn_messages)

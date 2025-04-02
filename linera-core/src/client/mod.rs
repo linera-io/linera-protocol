@@ -1088,7 +1088,7 @@ where
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
-        let hashed_value = Hashed::new(ConfirmedBlock::new(certificate.inner().block().clone()));
+        let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
@@ -1110,11 +1110,11 @@ where
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
-        value: Hashed<T>,
+        value: T,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,
-            blob_ids: value.inner().required_blob_ids().into_iter().collect(),
+            blob_ids: value.required_blob_ids().into_iter().collect(),
         };
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
@@ -1203,7 +1203,7 @@ where
         &self,
         committee: &Committee,
         action: CommunicateAction,
-        value: Hashed<T>,
+        value: T,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
@@ -1712,7 +1712,7 @@ where
             round,
             chain_id,
         };
-        let value: Hashed<Timeout> = Hashed::new(Timeout::new(chain_id, height, epoch));
+        let value = Timeout::new(chain_id, height, epoch);
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -2605,11 +2605,11 @@ where
         let block = Block::new(proposed_block, outcome);
         // Send the query to validators.
         let certificate = if round.is_fast() {
-            let hashed_value = Hashed::new(ConfirmedBlock::new(block));
+            let hashed_value = ConfirmedBlock::new(block);
             self.submit_block_proposal(&committee, proposal, hashed_value)
                 .await?
         } else {
-            let hashed_value = Hashed::new(ValidatedBlock::new(block));
+            let hashed_value = ValidatedBlock::new(block);
             let certificate = self
                 .submit_block_proposal(&committee, proposal, hashed_value.clone())
                 .await?;

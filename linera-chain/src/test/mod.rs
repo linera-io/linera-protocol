@@ -8,7 +8,6 @@ mod http_server;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, BlockHeight, Round, Timestamp},
-    hashed::Hashed,
     identifiers::{AccountOwner, ChainId},
 };
 use linera_execution::{
@@ -27,9 +26,8 @@ use crate::{
 };
 
 /// Creates a new child of the given block, with the same timestamp.
-pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> ProposedBlock {
-    let parent_value = parent.inner();
-    let parent_header = &parent_value.block().header;
+pub fn make_child_block(parent: &ConfirmedBlock) -> ProposedBlock {
+    let parent_header = &parent.block().header;
     ProposedBlock {
         epoch: parent_header.epoch,
         chain_id: parent_header.chain_id,
@@ -132,7 +130,7 @@ impl BlockTestExt for ProposedBlock {
     }
 }
 
-pub trait VoteTestExt<T>: Sized {
+pub trait VoteTestExt<T: CertificateValue>: Sized {
     /// Returns a certificate for a committee consisting only of this validator.
     fn into_certificate(self) -> GenericCertificate<T>;
 }

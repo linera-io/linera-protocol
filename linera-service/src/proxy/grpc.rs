@@ -714,7 +714,6 @@ impl<T> GrpcMessageLimiter<T> {
 
 #[cfg(test)]
 mod proto_message_cap {
-    use linera_base::hashed::Hashed;
     use linera_chain::{
         data_types::BlockExecutionOutcome,
         types::{Block, Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
@@ -735,7 +734,7 @@ mod proto_message_cap {
         );
         let signatures = vec![(validator, signature)];
         Certificate::Confirmed(ConfirmedBlockCertificate::new(
-            Hashed::new(ConfirmedBlock::new(block)),
+            ConfirmedBlock::new(block),
             Default::default(),
             signatures,
         ))
