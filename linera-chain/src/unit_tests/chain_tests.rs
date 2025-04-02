@@ -172,7 +172,7 @@ async fn test_block_size_limit() {
         });
 
     let result = chain
-        .execute_and_apply_block(&invalid_block, time, None, &[], None)
+        .execute_block(&invalid_block, time, None, &[], None)
         .await;
     assert_matches!(
         result,
@@ -183,8 +183,8 @@ async fn test_block_size_limit() {
     );
 
     // The valid block is accepted...
-    let outcome = chain
-        .execute_and_apply_block(&valid_block, time, None, &[], None)
+    let (outcome, _, _) = chain
+        .execute_block(&valid_block, time, None, &[], None)
         .await
         .unwrap();
     let block = Block::new(valid_block, outcome);
@@ -247,7 +247,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .with_incoming_bundle(bundle.clone())
         .with_simple_transfer(chain_id, Amount::ONE);
     let result = chain
-        .execute_and_apply_block(&invalid_block, time, None, &[], None)
+        .execute_block(&invalid_block, time, None, &[], None)
         .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id]
@@ -263,18 +263,18 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let block = chain
-        .execute_and_apply_block(&valid_block, time, None, &[], None)
-        .await?
-        .with(valid_block);
-    let value = Hashed::new(ConfirmedBlock::new(block));
+    let (outcome, _, _) = chain
+        .execute_block(&valid_block, time, None, &[], None)
+        .await?;
+    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    chain.apply_confirmed_block(&value, time).await?;
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value.clone())
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_operation(app_operation.clone());
     let result = chain
-        .execute_and_apply_block(&invalid_block, time, None, &[], None)
+        .execute_block(&invalid_block, time, None, &[], None)
         .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id]
@@ -283,7 +283,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     // Also, blocks without an application operation or incoming message are forbidden.
     let invalid_block = make_child_block(&value.clone());
     let result = chain
-        .execute_and_apply_block(&invalid_block, time, None, &[], None)
+        .execute_block(&invalid_block, time, None, &[], None)
         .await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
         if app_ids == vec![application_id]
@@ -293,9 +293,11 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
-    chain
-        .execute_and_apply_block(&valid_block, time, None, &[], None)
+    let (outcome, _, _) = chain
+        .execute_block(&valid_block, time, None, &[], None)
         .await?;
+    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    chain.apply_confirmed_block(&value, time).await?;
 
     Ok(())
 }
@@ -337,9 +339,7 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain
-        .execute_and_apply_block(&block, time, None, &[], None)
-        .await?;
+    chain.execute_block(&block, time, None, &[], None).await?;
 
     Ok(())
 }
@@ -384,9 +384,7 @@ async fn test_service_as_oracle_exceeding_time_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    let result = chain
-        .execute_and_apply_block(&block, time, None, &[], None)
-        .await;
+    let result = chain.execute_block(&block, time, None, &[], None).await;
 
     let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
         result
@@ -451,9 +449,7 @@ async fn test_service_as_oracle_timeout_early_stop(
     application.expect_call(ExpectedCall::default_finalize());
 
     let execution_start = Instant::now();
-    let result = chain
-        .execute_and_apply_block(&block, time, None, &[], None)
-        .await;
+    let result = chain.execute_block(&block, time, None, &[], None).await;
     let execution_time = execution_start.elapsed();
 
     let Err(ChainError::ExecutionError(execution_error, ChainExecutionContext::Operation(0))) =
@@ -505,8 +501,9 @@ async fn test_service_as_oracle_response_size_limit(
     application.expect_call(ExpectedCall::default_finalize());
 
     chain
-        .execute_and_apply_block(&block, time, None, &[], None)
+        .execute_block(&block, time, None, &[], None)
         .await
+        .map(|(outcome, _, _)| outcome)
 }
 
 /// Tests contract HTTP response size limit.
@@ -563,8 +560,9 @@ async fn test_contract_http_response_size_limit(
     application.expect_call(ExpectedCall::default_finalize());
 
     chain
-        .execute_and_apply_block(&block, time, None, &[], None)
+        .execute_block(&block, time, None, &[], None)
         .await
+        .map(|(outcome, _, _)| outcome)
 }
 
 /// Tests service HTTP response size limit.
@@ -621,8 +619,9 @@ async fn test_service_http_response_size_limit(
     application.expect_call(ExpectedCall::default_finalize());
 
     chain
-        .execute_and_apply_block(&block, time, None, &[], None)
+        .execute_block(&block, time, None, &[], None)
         .await
+        .map(|(outcome, _, _)| outcome)
 }
 
 /// Sets up a test with a dummy [`MockApplication`].

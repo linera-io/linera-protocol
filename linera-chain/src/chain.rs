@@ -17,6 +17,7 @@ use linera_base::{
         OracleResponse, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{
         AccountOwner, ApplicationId, BlobType, ChainId, ChannelFullName, Destination,
         GenericApplicationId, MessageId,
@@ -43,7 +44,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::Block,
+    block::{Block, ConfirmedBlock},
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
         OperationResult, Origin, PostedMessage, ProposedBlock, Target, Transaction,
@@ -306,26 +307,26 @@ impl ChainTipState {
     /// Checks if the measurement counters would be valid.
     pub fn update_counters(
         &mut self,
-        proposed_block: &ProposedBlock,
-        outcome: &BlockExecutionOutcome,
+        incoming_bundles: &[IncomingBundle],
+        operations: &[Operation],
+        messages: &[Vec<OutgoingMessage>],
     ) -> Result<(), ChainError> {
-        let num_incoming_bundles = u32::try_from(proposed_block.incoming_bundles.len())
-            .map_err(|_| ArithmeticError::Overflow)?;
+        let num_incoming_bundles =
+            u32::try_from(incoming_bundles.len()).map_err(|_| ArithmeticError::Overflow)?;
         self.num_incoming_bundles = self
             .num_incoming_bundles
             .checked_add(num_incoming_bundles)
             .ok_or(ArithmeticError::Overflow)?;
 
-        let num_operations = u32::try_from(proposed_block.operations.len())
-            .map_err(|_| ArithmeticError::Overflow)?;
+        let num_operations =
+            u32::try_from(operations.len()).map_err(|_| ArithmeticError::Overflow)?;
         self.num_operations = self
             .num_operations
             .checked_add(num_operations)
             .ok_or(ArithmeticError::Overflow)?;
 
-        let num_outgoing_messages =
-            u32::try_from(outcome.messages.iter().map(Vec::len).sum::<usize>())
-                .map_err(|_| ArithmeticError::Overflow)?;
+        let num_outgoing_messages = u32::try_from(messages.iter().map(Vec::len).sum::<usize>())
+            .map_err(|_| ArithmeticError::Overflow)?;
         self.num_outgoing_messages = self
             .num_outgoing_messages
             .checked_add(num_outgoing_messages)
@@ -1002,62 +1003,46 @@ where
         .await
     }
 
-    /// Executes a block: first the incoming messages, then the main operation.
-    /// * Modifies the state of outboxes and channels, if needed.
-    /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
-    ///   away.
-    /// * Returns the outcome of the execution.
-    pub async fn execute_and_apply_block(
-        &mut self,
-        block: &ProposedBlock,
-        local_time: Timestamp,
-        round: Option<u32>,
-        published_blobs: &[Blob],
-        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<BlockExecutionOutcome, ChainError> {
-        let (outcome, subscribe, unsubscribe) = self
-            .execute_block(
-                block,
-                local_time,
-                round,
-                published_blobs,
-                replaying_oracle_responses,
-            )
-            .await?;
-
-        // Update the rest of the chain state.
-        self.process_unsubscribes(unsubscribe).await?;
-        self.apply_execution_outcome(&outcome, block.height, local_time)
-            .await?;
-        self.process_subscribes(subscribe).await?;
-
-        Ok(outcome)
-    }
-
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
     /// manager. This does not touch the execution state itself, which must be updated separately.
-    async fn apply_execution_outcome(
+    pub async fn apply_confirmed_block(
         &mut self,
-        outcome: &BlockExecutionOutcome,
-        height: BlockHeight,
+        block: &Hashed<ConfirmedBlock>,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        self.execution_state_hash.set(Some(outcome.state_hash));
-        for txn_messages in &outcome.messages {
-            self.process_outgoing_messages(height, txn_messages).await?;
+        let hash = block.hash();
+        let block = block.inner().inner().inner();
+        self.execution_state_hash.set(Some(block.header.state_hash));
+        for txn_messages in &block.body.messages {
+            self.process_outgoing_messages(block.header.height, txn_messages)
+                .await?;
         }
 
-        let recipients = outcome
+        let recipients = block
+            .body
             .messages
             .iter()
             .flatten()
             .flat_map(|message| message.destination.recipient())
             .collect::<BTreeSet<_>>();
         for recipient in recipients {
-            self.previous_message_blocks.insert(&recipient, height)?;
+            self.previous_message_blocks
+                .insert(&recipient, block.header.height)?;
         }
         // Last, reset the consensus state based on the current ownership.
-        self.reset_chain_manager(height.try_add_one()?, local_time)
+        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
+
+        // Advance to next block height.
+        let tip = self.tip_state.get_mut();
+        tip.block_hash = Some(hash);
+        tip.next_block_height.try_add_assign_one()?;
+        tip.update_counters(
+            &block.body.incoming_bundles,
+            &block.body.operations,
+            &block.body.messages,
+        )?;
+        self.confirmed_log.push(hash);
+        Ok(())
     }
 
     /// Executes a message as part of an incoming bundle in a block.
@@ -1292,7 +1277,7 @@ where
 
     /// Processes new subscriptions. Returns `true` if at least one new subscriber was added for
     /// which we have outgoing messages.
-    async fn process_subscribes(
+    pub async fn process_subscribes(
         &mut self,
         names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<bool, ChainError> {
@@ -1342,7 +1327,7 @@ where
         Ok(new_outbox_entries)
     }
 
-    async fn process_unsubscribes(
+    pub async fn process_unsubscribes(
         &mut self,
         names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<(), ChainError> {
