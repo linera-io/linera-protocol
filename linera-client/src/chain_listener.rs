@@ -8,7 +8,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{lock::Mutex, stream, StreamExt};
+use futures::{future, lock::Mutex, stream, StreamExt};
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::Timestamp,
@@ -167,12 +167,15 @@ impl ChainListener {
         let admin_listener: NotificationStream = if client.admin_id() == chain_id {
             Box::pin(stream::pending())
         } else {
-            Box::pin(client.subscribe_to(client.admin_id()).await?)
+            let stream = client.subscribe_to(client.admin_id()).await?;
+            Box::pin(stream.filter(|notification: &Notification| {
+                future::ready(matches!(notification.reason, Reason::NewBlock { .. }))
+            }))
         };
         let mut admin_listener = admin_listener.fuse();
         client.synchronize_from_validators().await?;
         drop(linera_base::task::spawn(listener.in_current_span()));
-        let mut timeout = storage.clock().current_time();
+        let mut timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
         loop {
             let mut sleep = Box::pin(futures::FutureExt::fuse(
                 storage.clock().sleep_until(timeout),
@@ -188,36 +191,13 @@ impl ChainListener {
                 maybe_notification = admin_listener.next() => {
                     // A new block on the admin chain may mean a new committee. Set the timer to
                     // process the inbox.
-                    if let Some(
-                        Notification { reason: Reason::NewBlock { .. }, .. }
-                    ) = maybe_notification {
-                        timeout = storage.clock().current_time();
+                    if maybe_notification.is_some() {
+                        timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
                     }
                     continue;
                 }
                 () = sleep => {
-                    timeout = Timestamp::from(u64::MAX);
-                    if config.skip_process_inbox {
-                        debug!("Not processing inbox due to listener configuration");
-                        continue;
-                    }
-                    debug!("Processing inbox");
-                    match client.process_inbox_without_prepare().await {
-                        Err(ChainClientError::CannotFindKeyForChain(_)) => {}
-                        Err(error) => warn!(%error, "Failed to process inbox."),
-                        Ok((certs, None)) => {
-                            info!("Done processing inbox. {} blocks created.", certs.len());
-                        }
-                        Ok((certs, Some(new_timeout))) => {
-                            info!(
-                                "{} blocks created. Will try processing the inbox later based \
-                                 on the given round timeout: {new_timeout:?}",
-                                certs.len(),
-                            );
-                            timeout = new_timeout.timestamp;
-                        }
-                    }
-                    context.lock().await.update_wallet(&client).await?;
+                    timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
                     continue;
                 }
             };
@@ -296,5 +276,45 @@ impl ChainListener {
         if delay_ms > 0 {
             linera_base::time::timer::sleep(Duration::from_millis(delay_ms)).await;
         }
+    }
+
+    /// Processes the inbox, unless `skip_process_inbox` is set.
+    ///
+    /// If no block can be produced because we are not the round leader, a timeout is returned
+    /// for when to retry; otherwise `u64::MAX` is returned.
+    ///
+    /// The wallet is persisted with any blocks that processing the inbox added. An error
+    /// is returned if persisting the wallet fails.
+    async fn maybe_process_inbox<C>(
+        config: &ChainListenerConfig,
+        client: &ChainClient<C::ValidatorNodeProvider, C::Storage>,
+        context: &Arc<Mutex<C>>,
+    ) -> Result<Timestamp, Error>
+    where
+        C: ClientContext,
+    {
+        let mut timeout = Timestamp::from(u64::MAX);
+        if config.skip_process_inbox {
+            debug!("Not processing inbox due to listener configuration");
+            return Ok(timeout);
+        }
+        debug!("Processing inbox");
+        match client.process_inbox_without_prepare().await {
+            Err(ChainClientError::CannotFindKeyForChain(_)) => {}
+            Err(error) => warn!(%error, "Failed to process inbox."),
+            Ok((certs, None)) => {
+                info!("Done processing inbox. {} blocks created.", certs.len());
+            }
+            Ok((certs, Some(new_timeout))) => {
+                info!(
+                    "{} blocks created. Will try processing the inbox later based \
+                     on the given round timeout: {new_timeout:?}",
+                    certs.len(),
+                );
+                timeout = new_timeout.timestamp;
+            }
+        }
+        context.lock().await.update_wallet(client).await?;
+        Ok(timeout)
     }
 }
