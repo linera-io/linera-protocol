@@ -14,8 +14,7 @@ use futures::{
 use graphql_client::reqwest::post_graphql;
 use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder};
 use linera_base::{
-    crypto::CryptoHash, data_types::BlockHeight, hashed::Hashed, identifiers::ChainId,
-    time::Duration,
+    crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, time::Duration,
 };
 use linera_chain::types::ConfirmedBlock;
 use linera_core::worker::Reason;
@@ -87,7 +86,7 @@ impl Service {
         &self,
         chain_id: ChainId,
         hash: Option<CryptoHash>,
-    ) -> Result<Hashed<ConfirmedBlock>, IndexerError> {
+    ) -> Result<ConfirmedBlock, IndexerError> {
         let client = reqwest_client();
         let variables = block::Variables { hash, chain_id };
         let response = post_graphql::<Block, _>(&client, &self.http(), variables).await?;

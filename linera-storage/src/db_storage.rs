@@ -10,7 +10,6 @@ use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, TimeDelta, Timestamp},
-    hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -89,9 +88,9 @@ static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
 /// The metric counting how often a hashed certificate value is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_HASHED_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+pub static READ_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "read_hashed_confirmed_block",
+        "read_confirmed_block",
         "The metric counting how often a hashed confirmed block is read from storage",
         &[],
     )
@@ -545,18 +544,13 @@ where
         Ok(test)
     }
 
-    async fn read_hashed_confirmed_block(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
+    async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError> {
         let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         let maybe_value = self.store.read_value::<ConfirmedBlock>(&block_key).await?;
         #[cfg(with_metrics)]
-        READ_HASHED_CONFIRMED_BLOCK_COUNTER
-            .with_label_values(&[])
-            .inc();
+        READ_CONFIRMED_BLOCK_COUNTER.with_label_values(&[]).inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        Ok(value.with_hash_unchecked(hash))
+        Ok(value)
     }
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
@@ -625,19 +619,19 @@ where
         Ok(blob_states)
     }
 
-    async fn read_hashed_confirmed_blocks_downward(
+    async fn read_confirmed_blocks_downward(
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<Hashed<ConfirmedBlock>>, ViewError> {
+    ) -> Result<Vec<ConfirmedBlock>, ViewError> {
         let mut hash = Some(from);
         let mut values = Vec::new();
         for _ in 0..limit {
             let Some(next_hash) = hash else {
                 break;
             };
-            let value = self.read_hashed_confirmed_block(next_hash).await?;
-            hash = value.inner().block().header.previous_block_hash;
+            let value = self.read_confirmed_block(next_hash).await?;
+            hash = value.block().header.previous_block_hash;
             values.push(value);
         }
         Ok(values)

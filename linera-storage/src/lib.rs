@@ -16,7 +16,6 @@ use linera_base::{
     data_types::{
         Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
     },
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, EventId},
     ownership::ChainOwnership,
     vm::VmRuntime,
@@ -49,7 +48,7 @@ pub use crate::db_storage::{
 };
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
-    READ_CERTIFICATE_COUNTER, READ_HASHED_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
+    READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
 };
 
 /// The default namespace to be used when none is specified
@@ -87,10 +86,7 @@ pub trait Storage: Sized {
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     /// Reads the hashed certificate value with the given hash.
-    async fn read_hashed_confirmed_block(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<Hashed<ConfirmedBlock>, ViewError>;
+    async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError>;
 
     /// Reads the blob with the given blob ID.
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
@@ -105,11 +101,11 @@ pub trait Storage: Sized {
     async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError>;
 
     /// Reads the hashed certificate values in descending order from the given hash.
-    async fn read_hashed_confirmed_blocks_downward(
+    async fn read_confirmed_blocks_downward(
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<Hashed<ConfirmedBlock>>, ViewError>;
+    ) -> Result<Vec<ConfirmedBlock>, ViewError>;
 
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;

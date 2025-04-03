@@ -8,10 +8,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_graphql::{EmptyMutation, EmptySubscription, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{extract::Extension, routing::get, Router};
-use linera_base::{
-    crypto::CryptoHash, data_types::BlockHeight, hashed::Hashed, identifiers::ChainId,
-};
-use linera_chain::types::ConfirmedBlock;
+use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+use linera_chain::types::{CertificateValue as _, ConfirmedBlock};
 use linera_views::{
     context::{Context, ViewContext},
     map_view::MapView,
@@ -84,18 +82,18 @@ where
     pub async fn process_value(
         &self,
         state: &mut StateView<ViewContext<(), S>>,
-        value: &Hashed<ConfirmedBlock>,
+        value: &ConfirmedBlock,
     ) -> Result<(), IndexerError> {
         for plugin in self.plugins.values() {
             plugin.register(value).await?
         }
-        let chain_id = value.inner().chain_id();
+        let chain_id = value.chain_id();
         let hash = value.hash();
-        let height = value.inner().height();
+        let height = value.height();
         info!("save {:?}: {:?} ({})", chain_id, hash, height);
         state
             .chains
-            .insert(&chain_id, (value.hash(), value.inner().height()))?;
+            .insert(&chain_id, (value.hash(), value.height()))?;
         state.save().await.map_err(IndexerError::ViewError)
     }
 
@@ -104,11 +102,11 @@ where
     pub async fn process(
         &self,
         listener: &Listener,
-        value: &Hashed<ConfirmedBlock>,
+        value: &ConfirmedBlock,
     ) -> Result<(), IndexerError> {
-        let chain_id = value.inner().chain_id();
+        let chain_id = value.chain_id();
         let hash = value.hash();
-        let height = value.inner().height();
+        let height = value.height();
         let state = &mut self.state.0.lock().await;
         if height < listener.start {
             return Ok(());
@@ -127,7 +125,7 @@ where
         let mut values = Vec::new();
         let mut value = value.clone();
         loop {
-            let header = &value.inner().block().header;
+            let header = &value.block().header;
             values.push(value.clone());
             if let Some(hash) = header.previous_block_hash {
                 match latest_block {

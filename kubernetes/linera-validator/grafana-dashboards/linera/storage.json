@@ -1938,7 +1938,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(linera_read_hashed_confirmed_block[1m])",
+          "expr": "rate(linera_read_confirmed_block[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"

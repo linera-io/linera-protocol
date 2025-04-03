@@ -16,9 +16,7 @@ use linera_base::{
         CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Round, Timestamp},
-    doc_scalar, ensure,
-    hashed::Hashed,
-    hex_debug,
+    doc_scalar, ensure, hex_debug,
     identifiers::{
         Account, AccountOwner, BlobId, ChainId, ChannelFullName, Destination, GenericApplicationId,
         MessageId,
@@ -411,7 +409,7 @@ struct VoteValue(CryptoHash, Round, CertificateKind);
 
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "T: BcsHashable<'de>"))]
+#[serde(bound(deserialize = "T: Deserialize<'de>"))]
 pub struct Vote<T> {
     pub value: T,
     pub round: Round,
@@ -686,7 +684,7 @@ impl BlockProposal {
             }
             (Some(lite_certificate), Some(outcome)) => {
                 let block = outcome.clone().with(self.content.block.clone());
-                let value = Hashed::new(ValidatedBlock::new(block));
+                let value = ValidatedBlock::new(block);
                 ensure!(
                     lite_certificate.check_value(&value),
                     "Lite certificate must match the given block and execution outcome"

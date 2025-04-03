@@ -226,68 +226,66 @@ query Applications($chainId: ChainId!) {
 
 query Block($hash: CryptoHash, $chainId: ChainId!) {
   block(hash: $hash, chainId: $chainId) {
+    status
     hash
-    value {
-      status
-      block {
-        header {
-          chainId
-          epoch
-          height
-          timestamp
-          stateHash
-          previousBlockHash
+    block {
+      header {
+        chainId
+        epoch
+        height
+        timestamp
+        stateHash
+        previousBlockHash
+        authenticatedSigner
+        bundlesHash
+        operationsHash
+        messagesHash
+        previousMessageBlocksHash
+        oracleResponsesHash
+        eventsHash
+        blobsHash
+        operationResultsHash
+      }
+      body {
+        incomingBundles {
+          origin
+          bundle {
+            height
+            timestamp
+            certificateHash
+            transactionIndex
+            messages {
+              authenticatedSigner
+              grant
+              refundGrantTo
+              kind
+              index
+              message
+            }
+          }
+          action
+        }
+        operations
+        messages {
+          destination
           authenticatedSigner
-          bundlesHash
-          operationsHash
-          messagesHash
-          previousMessageBlocksHash
-          oracleResponsesHash
-          eventsHash
-          blobsHash
-          operationResultsHash
+          grant
+          refundGrantTo
+          kind
+          message
         }
-        body {
-          incomingBundles {
-            origin
-            bundle {
-              height
-              timestamp
-              certificateHash
-              transactionIndex
-              messages {
-                authenticatedSigner
-                grant
-                refundGrantTo
-                kind
-                index
-                message
-              }
-            }
-            action
+        previousMessageBlocks
+        oracleResponses
+        events {
+          streamId {
+            applicationId
+            streamName
           }
-          operations
-          messages {
-            destination
-            authenticatedSigner
-            grant
-            refundGrantTo
-            kind
-            message
-          }
-          previousMessageBlocks
-          oracleResponses
-          events {
-            streamId {
-              applicationId
-              streamName
-            }
-            index
-            value
-          }
-          blobs
-          operationResults
+          index
+          value
         }
+        blobs
+        operationResults
       }
     }
   }
@@ -295,68 +293,66 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
 
 query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
   blocks(from: $from, chainId: $chainId, limit: $limit) {
+    status
     hash
-    value {
-      status
-      block {
-        header {
-          chainId
-          epoch
-          height
-          timestamp
-          stateHash
-          previousBlockHash
+    block {
+      header {
+        chainId
+        epoch
+        height
+        timestamp
+        stateHash
+        previousBlockHash
+        authenticatedSigner
+        bundlesHash
+        operationsHash
+        messagesHash
+        previousMessageBlocksHash
+        oracleResponsesHash
+        eventsHash
+        blobsHash
+        operationResultsHash
+      }
+      body {
+        incomingBundles {
+          origin
+          bundle {
+            height
+            timestamp
+            certificateHash
+            transactionIndex
+            messages {
+              authenticatedSigner
+              grant
+              refundGrantTo
+              kind
+              index
+              message
+            }
+          }
+          action
+        }
+        operations
+        messages {
+          destination
           authenticatedSigner
-          bundlesHash
-          operationsHash
-          messagesHash
-          previousMessageBlocksHash
-          oracleResponsesHash
-          eventsHash
-          blobsHash
-          operationResultsHash
+          grant
+          refundGrantTo
+          kind
+          message
         }
-        body {
-          incomingBundles {
-            origin
-            bundle {
-              height
-              timestamp
-              certificateHash
-              transactionIndex
-              messages {
-                authenticatedSigner
-                grant
-                refundGrantTo
-                kind
-                index
-                message
-              }
-            }
-            action
+        previousMessageBlocks
+        oracleResponses
+        events {
+          streamId {
+            applicationId
+            streamName
           }
-          operations
-          messages {
-            destination
-            authenticatedSigner
-            grant
-            refundGrantTo
-            kind
-            message
-          }
-          previousMessageBlocks
-          oracleResponses
-          events {
-            streamId {
-              applicationId
-              streamName
-            }
-            index
-            value
-          }
-          blobs
-          operationResults
+          index
+          value
         }
+        blobs
+        operationResults
       }
     }
   }

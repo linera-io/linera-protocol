@@ -27,7 +27,6 @@ use crate::{
         OperationResult, OutgoingMessageExt, PostedMessage, ProposedBlock,
     },
     types::CertificateValue,
-    ChainError,
 };
 
 /// Wrapper around a `Block` that has been validated.
@@ -76,8 +75,6 @@ impl ValidatedBlock {
     }
 }
 
-impl BcsHashable<'_> for ValidatedBlock {}
-
 /// Wrapper around a `Block` that has been confirmed.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -93,9 +90,11 @@ impl ConfirmedBlock {
     async fn status(&self) -> String {
         "confirmed".to_string()
     }
-}
 
-impl BcsHashable<'_> for ConfirmedBlock {}
+    async fn hash(&self) -> CryptoHash {
+        self.0.hash()
+    }
+}
 
 impl ConfirmedBlock {
     pub fn new(block: Block) -> Self {
@@ -134,29 +133,6 @@ impl ConfirmedBlock {
 
     pub fn to_log_str(&self) -> &'static str {
         "confirmed_block"
-    }
-
-    /// Creates a `HashedCertificateValue` without checking that this is the correct hash!
-    pub fn with_hash_unchecked(self, hash: CryptoHash) -> Hashed<ConfirmedBlock> {
-        Hashed::unchecked_new(self, hash)
-    }
-
-    fn with_hash(self) -> Hashed<Self> {
-        let hash = CryptoHash::new(&self);
-        Hashed::unchecked_new(self, hash)
-    }
-
-    /// Creates a `HashedCertificateValue` checking that this is the correct hash.
-    pub fn with_hash_checked(self, hash: CryptoHash) -> Result<Hashed<ConfirmedBlock>, ChainError> {
-        let hashed_certificate_value = self.with_hash();
-        if hashed_certificate_value.hash() == hash {
-            Ok(hashed_certificate_value)
-        } else {
-            Err(ChainError::CertificateValueHashMismatch {
-                expected: hash,
-                actual: hashed_certificate_value.hash(),
-            })
-        }
     }
 
     /// Returns whether this block matches the proposal.

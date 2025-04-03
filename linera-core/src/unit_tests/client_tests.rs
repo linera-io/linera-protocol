@@ -1429,14 +1429,13 @@ where
         .unwrap()
         .unwrap();
 
-    let hashed_certificate_values = client2_b
-        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 2)
+    let certificate_values = client2_b
+        .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
     // Latest block should be the burn
-    assert!(hashed_certificate_values[0]
-        .inner()
+    assert!(certificate_values[0]
         .block()
         .body
         .operations
@@ -1448,7 +1447,7 @@ where
 
     // Block before that should be b0
     assert_eq!(
-        hashed_certificate_values[1].inner().block().body.operations,
+        certificate_values[1].block().body.operations,
         blob_0_1_operations,
     );
 
@@ -1556,14 +1555,13 @@ where
         .unwrap()
         .unwrap();
 
-    let hashed_certificate_values = client2_b
-        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 2)
+    let certificate_values = client2_b
+        .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
     // Latest block should be the burn
-    assert!(hashed_certificate_values[0]
-        .inner()
+    assert!(certificate_values[0]
         .block()
         .body
         .operations
@@ -1574,8 +1572,7 @@ where
         })));
 
     // Previous should be the `ChangeOwnership` operation, as the blob operations shouldn't be executed here.
-    assert!(hashed_certificate_values[1]
-        .inner()
+    assert!(certificate_values[1]
         .block()
         .body
         .operations
@@ -1799,14 +1796,13 @@ where
         .unwrap()
         .unwrap();
 
-    let hashed_certificate_values = client3_c
-        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 3)
+    let certificate_values = client3_c
+        .read_confirmed_blocks_downward(bt_certificate.hash(), 3)
         .await
         .unwrap();
 
     // Latest block should be the burn
-    assert!(hashed_certificate_values[0]
-        .inner()
+    assert!(certificate_values[0]
         .block()
         .body
         .operations
@@ -1816,13 +1812,12 @@ where
 
     // Block before that should be b1
     assert_eq!(
-        hashed_certificate_values[1].inner().block().body.operations,
+        certificate_values[1].block().body.operations,
         blob_2_3_operations,
     );
 
     // Previous should be the `ChangeOwnership` operation
-    assert!(hashed_certificate_values[2]
-        .inner()
+    assert!(certificate_values[2]
         .block()
         .body
         .operations
