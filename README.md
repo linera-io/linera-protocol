@@ -12,6 +12,15 @@
 [Linera](https://linera.io) is a decentralized blockchain infrastructure designed for highly scalable,
 low-latency Web3 applications.
 
+## Key Features
+
+- **High Scalability**: Process thousands of transactions per second with sub-second confirmation times
+- **Microchain Architecture**: Each user operates their own chain, eliminating global bottlenecks
+- **Low Fees**: Efficient consensus mechanism keeps transaction costs minimal
+- **Developer Friendly**: Build applications using familiar Rust and WebAssembly tools
+
+## Documentation
+
 Visit our [developer page](https://linera.dev) and read our
 [whitepaper](https://linera.io/whitepaper) to learn more about the Linera protocol.
 
@@ -64,6 +73,13 @@ from low to high levels in the dependency graph)
 
 
 ## Quickstart with the Linera CLI tool
+
+### Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install) (version 1.70 or higher)
+- [Git](https://git-scm.com/downloads) 
+- Approximately 2GB of free disk space
+- Linux or macOS (Windows users should use WSL2)
 
 The following commands set up a local test network and run some transfers between the
 microchains owned by a single wallet.
@@ -129,3 +145,15 @@ linera query-balance "$CHAIN2:$ACCOUNT2"
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well
 as the [example applications](./examples) in this repository.
+
+## Contributing
+
+We welcome contributions from the community! If you'd like to contribute to the Linera protocol:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+For detailed guidelines, see our [contribution guide](https://linera.dev/getting-started/contributing).
