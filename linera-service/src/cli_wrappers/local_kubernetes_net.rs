@@ -301,7 +301,7 @@ impl LineraNet for LocalKubernetesNet {
 }
 
 impl LocalKubernetesNet {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         network: Network,
         testing_prng_seed: Option<u64>,

@@ -261,7 +261,6 @@ where
     }
 
     /// Test if a data blob is readable from a transaction in the current chain.
-    #[allow(clippy::too_many_arguments)]
     // TODO(#2490): Consider removing or renaming this.
     async fn read_data_blob(
         &self,

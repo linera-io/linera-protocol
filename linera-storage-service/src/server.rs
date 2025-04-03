@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::blocks_in_conditions)]
-
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_lock::RwLock;

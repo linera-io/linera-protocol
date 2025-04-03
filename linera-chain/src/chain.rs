@@ -710,7 +710,7 @@ where
 
     /// Executes a block: first the incoming messages, then the main operation.
     /// Does not update chain state other than the execution state.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,

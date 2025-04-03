@@ -3,7 +3,6 @@
 
 // `tracing::instrument` is not compatible with this nightly Clippy lint
 #![allow(unknown_lints)]
-#![allow(clippy::blocks_in_conditions)]
 
 #[cfg(with_metrics)]
 use std::sync::LazyLock;

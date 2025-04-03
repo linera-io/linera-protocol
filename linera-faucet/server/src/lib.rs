@@ -222,7 +222,7 @@ where
     C: ClientContext,
 {
     /// Creates a new instance of the faucet service.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn new(
         port: NonZeroU16,
         chain_id: ChainId,

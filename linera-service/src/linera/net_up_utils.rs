@@ -247,7 +247,6 @@ async fn wait_for_shutdown(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn print_messages_and_create_faucet(
     client: ClientWrapper,
     with_faucet: bool,
