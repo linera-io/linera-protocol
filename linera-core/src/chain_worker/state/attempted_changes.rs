@@ -369,15 +369,22 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let (verified_outcome, subscribe, unsubscribe) = chain
-            .execute_block(
-                &proposed_block,
-                local_time,
-                None,
-                &published_blobs,
-                oracle_responses,
-            )
-            .await?;
+        let (verified_outcome, subscribe, unsubscribe) = if let Some(execution_state) =
+            self.state.execution_state_cache.remove(&outcome.state_hash)
+        {
+            chain.execution_state = execution_state;
+            (outcome.clone(), Vec::new(), Vec::new())
+        } else {
+            chain
+                .execute_block(
+                    &proposed_block,
+                    local_time,
+                    None,
+                    &published_blobs,
+                    oracle_responses,
+                )
+                .await?
+        };
         // We should always agree on the messages and state hash.
         ensure!(
             outcome == verified_outcome,

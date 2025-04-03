@@ -28,8 +28,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
-    SystemMessage,
+    committee::Epoch, ExecutionStateView, Message, Query, QueryContext, QueryOutcome,
+    ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -59,6 +59,7 @@ where
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -74,6 +75,10 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+
+        execution_state_cache: Arc<
+            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
+        >,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -88,6 +93,7 @@ where
             shared_chain_view: None,
             service_runtime_endpoint,
             block_values,
+            execution_state_cache,
             tracked_chains,
             delivery_notifier,
             knows_chain_is_active: false,
