@@ -9,7 +9,7 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName, vm::EvmQuery};
+use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName, vm::{EvmQuery, VmRuntime}};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::AccountState,
@@ -520,6 +520,7 @@ where
         vec.extend_from_slice(&argument);
         let tx_data = Bytes::copy_from_slice(&vec);
         let result = self.transact_commit_tx_data(Choice::Create, tx_data)?;
+        self.consume_fuel(result.gas_final)?;
         let contract_address = self.db.contract_address;
         self.write_logs(&contract_address, result.logs, "deploy")?;
         let Output::Create(_, Some(contract_address_used)) = result.output else {
@@ -544,6 +545,7 @@ where
         );
         let tx_data = Bytes::copy_from_slice(&operation);
         let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
+        self.consume_fuel(result.gas_final)?;
         let contract_address = self.db.contract_address;
         self.write_logs(&contract_address, result.logs, "operation")?;
         let Output::Call(output) = result.output else {
@@ -663,6 +665,14 @@ where
         let storage_stats = self.db.reset_storage_stats();
 
         process_execution_result(storage_stats, result)
+    }
+
+    fn consume_fuel(
+        &mut self,
+        gas_final: u64,
+    ) -> Result<(), ExecutionError> {
+        let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+        runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
     fn write_logs(
