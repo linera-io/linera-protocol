@@ -48,6 +48,7 @@ pub struct LocalKubernetesNetConfig {
     pub binaries: BuildArg,
     pub no_build: bool,
     pub docker_image_name: String,
+    pub build_mode: String,
     pub policy_config: ResourceControlPolicyConfig,
 }
 
@@ -66,6 +67,7 @@ pub struct LocalKubernetesNet {
     binaries: BuildArg,
     no_build: bool,
     docker_image_name: String,
+    build_mode: String,
     kubectl_instance: Arc<Mutex<KubectlInstance>>,
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
@@ -102,6 +104,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             binaries,
             no_build: false,
             docker_image_name: String::from("linera:latest"),
+            build_mode: String::from("release"),
             policy_config: ResourceControlPolicyConfig::Testnet,
         })
     }
@@ -130,6 +133,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             self.binaries,
             self.no_build,
             self.docker_image_name,
+            self.build_mode,
             KubectlInstance::new(Vec::new()),
             clusters,
             self.num_initial_validators,
@@ -308,6 +312,7 @@ impl LocalKubernetesNet {
         binaries: BuildArg,
         no_build: bool,
         docker_image_name: String,
+        build_mode: String,
         kubectl_instance: KubectlInstance,
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
@@ -321,6 +326,7 @@ impl LocalKubernetesNet {
             binaries,
             no_build,
             docker_image_name,
+            build_mode,
             kubectl_instance: Arc::new(Mutex::new(kubectl_instance)),
             kind_clusters,
             num_initial_validators,
@@ -401,7 +407,13 @@ impl LocalKubernetesNet {
         let docker_image_name = if self.no_build {
             self.docker_image_name.clone()
         } else {
-            DockerImage::build(&self.docker_image_name, &self.binaries, &github_root).await?;
+            DockerImage::build(
+                &self.docker_image_name,
+                &self.binaries,
+                &github_root,
+                &self.build_mode,
+            )
+            .await?;
             self.docker_image_name.clone()
         };
 

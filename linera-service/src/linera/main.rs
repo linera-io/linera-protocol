@@ -1807,17 +1807,16 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 shards,
                 testing_prng_seed,
                 policy_config,
-                cross_chain_config: _,
                 kubernetes: true,
                 binaries,
                 no_build,
                 docker_image_name,
-                path: _,
-                external_protocol: _,
+                build_mode,
                 with_faucet,
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                ..
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *other_initial_chains,
@@ -1828,6 +1827,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     binaries,
                     *no_build,
                     docker_image_name.clone(),
+                    build_mode.clone(),
                     *policy_config,
                     *with_faucet,
                     *faucet_chain,
