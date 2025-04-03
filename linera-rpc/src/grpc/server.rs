@@ -441,16 +441,20 @@ where
             .await;
     }
 
-    fn log_request_success_and_latency(start: Instant, method_name: &str) {
+    fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
         #![allow(unused_variables)]
         #[cfg(with_metrics)]
         {
             SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
                 .with_label_values(&[method_name])
                 .observe(start.elapsed().as_secs_f64() * 1000.0);
-            SERVER_REQUEST_SUCCESS
-                .with_label_values(&[method_name])
-                .inc();
+            if success {
+                SERVER_REQUEST_SUCCESS
+                    .with_label_values(&[method_name])
+                    .inc();
+            } else {
+                SERVER_REQUEST_ERROR.with_label_values(&[method_name]).inc();
+            }
         }
     }
 }
@@ -479,17 +483,12 @@ where
         Ok(Response::new(
             match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
-                    Self::log_request_success_and_latency(start, "handle_block_proposal");
+                    Self::log_request_outcome_and_latency(start, true, "handle_block_proposal");
                     self.handle_network_actions(actions);
                     info.try_into()?
                 }
                 Err(error) => {
-                    #[cfg(with_metrics)]
-                    {
-                        SERVER_REQUEST_ERROR
-                            .with_label_values(&["handle_block_proposal"])
-                            .inc();
-                    }
+                    Self::log_request_outcome_and_latency(start, false, "handle_block_proposal");
                     let nickname = self.state.nickname();
                     warn!(nickname, %error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
@@ -526,7 +525,7 @@ where
         .await
         {
             Ok((info, actions)) => {
-                Self::log_request_success_and_latency(start, "handle_lite_certificate");
+                Self::log_request_outcome_and_latency(start, true, "handle_lite_certificate");
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -536,12 +535,7 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_lite_certificate"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "handle_lite_certificate");
                 let nickname = self.state.nickname();
                 if let WorkerError::MissingCertificateValue = &error {
                     debug!(nickname, %error, "Failed to handle lite certificate");
@@ -580,7 +574,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_success_and_latency(start, "handle_confirmed_certificate");
+                Self::log_request_outcome_and_latency(start, true, "handle_confirmed_certificate");
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -590,12 +584,7 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_confirmed_certificate"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "handle_confirmed_certificate");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
@@ -626,17 +615,12 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_success_and_latency(start, "handle_validated_certificate");
+                Self::log_request_outcome_and_latency(start, true, "handle_validated_certificate");
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_validated_certificate"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "handle_validated_certificate");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
@@ -667,16 +651,11 @@ where
             .await
         {
             Ok((info, _actions)) => {
-                Self::log_request_success_and_latency(start, "handle_timeout_certificate");
+                Self::log_request_outcome_and_latency(start, true, "handle_timeout_certificate");
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_timeout_certificate"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "handle_timeout_certificate");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
@@ -702,17 +681,12 @@ where
         trace!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
-                Self::log_request_success_and_latency(start, "handle_chain_info_query");
+                Self::log_request_outcome_and_latency(start, true, "handle_chain_info_query");
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_chain_info_query"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "handle_chain_info_query");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
@@ -743,16 +717,11 @@ where
             .await
         {
             Ok(blob) => {
-                Self::log_request_success_and_latency(start, "download_pending_blob");
+                Self::log_request_outcome_and_latency(start, true, "download_pending_blob");
                 Ok(Response::new(blob.into_content().try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["download_pending_blob"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "download_pending_blob");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to download pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
@@ -780,16 +749,11 @@ where
         trace!(?chain_id, ?blob_id, "Handle pending blob");
         match self.state.clone().handle_pending_blob(chain_id, blob).await {
             Ok(info) => {
-                Self::log_request_success_and_latency(start, "handle_pending_blob");
+                Self::log_request_outcome_and_latency(start, true, "handle_pending_blob");
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_pending_blob"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "handle_pending_blob");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
@@ -815,16 +779,11 @@ where
         trace!(?request, "Handling cross-chain request");
         match self.state.clone().handle_cross_chain_request(request).await {
             Ok(actions) => {
-                Self::log_request_success_and_latency(start, "handle_cross_chain_request");
+                Self::log_request_outcome_and_latency(start, true, "handle_cross_chain_request");
                 self.handle_network_actions(actions)
             }
             Err(error) => {
-                #[cfg(with_metrics)]
-                {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_cross_chain_request"])
-                        .inc();
-                }
+                Self::log_request_outcome_and_latency(start, false, "handle_cross_chain_request");
                 let nickname = self.state.nickname();
                 error!(nickname, %error, "Failed to handle cross-chain request");
             }
