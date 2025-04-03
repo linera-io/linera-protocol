@@ -76,26 +76,6 @@ fn test_signed_values() {
 }
 
 #[test]
-fn test_hashes() {
-    // Test that hash of confirmed and validated blocks are different,
-    // even if the blocks are the same.
-    let block = BlockExecutionOutcome {
-        messages: vec![Vec::new()],
-        previous_message_blocks: BTreeMap::new(),
-        state_hash: CryptoHash::test_hash("state"),
-        oracle_responses: vec![Vec::new()],
-        events: vec![Vec::new()],
-        blobs: vec![Vec::new()],
-        operation_results: vec![OperationResult::default()],
-    }
-    .with(make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE));
-    let confirmed_hashed = Hashed::new(ConfirmedBlock::new(block.clone()));
-    let validated_hashed = Hashed::new(ValidatedBlock::new(block));
-
-    assert_eq!(confirmed_hashed.hash(), validated_hashed.hash());
-}
-
-#[test]
 fn test_certificates() {
     let validator1_key_pair = ValidatorKeypair::generate();
     let account1_secret = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());

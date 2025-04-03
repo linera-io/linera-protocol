@@ -13,7 +13,6 @@ use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -614,7 +613,7 @@ where
         &self,
         hash: Option<CryptoHash>,
         chain_id: ChainId,
-    ) -> Result<Option<Hashed<ConfirmedBlock>>, Error> {
+    ) -> Result<Option<ConfirmedBlock>, Error> {
         let client = self.context.lock().await.make_chain_client(chain_id)?;
         let hash = match hash {
             Some(hash) => Some(hash),
@@ -624,7 +623,7 @@ where
             }
         };
         if let Some(hash) = hash {
-            let block = client.read_hashed_confirmed_block(hash).await?;
+            let block = client.read_confirmed_block(hash).await?;
             Ok(Some(block))
         } else {
             Ok(None)
@@ -636,7 +635,7 @@ where
         from: Option<CryptoHash>,
         chain_id: ChainId,
         limit: Option<u32>,
-    ) -> Result<Vec<Hashed<ConfirmedBlock>>, Error> {
+    ) -> Result<Vec<ConfirmedBlock>, Error> {
         let client = self.context.lock().await.make_chain_client(chain_id)?;
         let limit = limit.unwrap_or(10);
         let from = match from {
@@ -647,9 +646,7 @@ where
             }
         };
         if let Some(from) = from {
-            let values = client
-                .read_hashed_confirmed_blocks_downward(from, limit)
-                .await?;
+            let values = client.read_confirmed_blocks_downward(from, limit).await?;
             Ok(values)
         } else {
             Ok(vec![])

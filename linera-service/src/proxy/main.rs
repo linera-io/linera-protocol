@@ -335,14 +335,9 @@ where
                 let content = self.storage.read_blob(*blob_id).await?.into_content();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
-            DownloadConfirmedBlock(hash) => {
-                Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
-                    self.storage
-                        .read_hashed_confirmed_block(*hash)
-                        .await?
-                        .into_inner(),
-                ))))
-            }
+            DownloadConfirmedBlock(hash) => Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(
+                Box::new(self.storage.read_confirmed_block(*hash).await?),
+            ))),
             DownloadCertificates(hashes) => {
                 let certificates = self.storage.read_certificates(hashes).await?;
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))

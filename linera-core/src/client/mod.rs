@@ -32,7 +32,6 @@ use linera_base::{
         Timestamp,
     },
     ensure,
-    hashed::Hashed,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId,
         ModuleId, StreamId,
@@ -2125,7 +2124,7 @@ where
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
-                if certificate.block() == confirmed_value.inner().block() =>
+                if certificate.block() == confirmed_value.block() =>
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
@@ -2152,7 +2151,7 @@ where
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
         identity: AccountOwner,
-    ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
+    ) -> Result<ConfirmedBlock, ChainClientError> {
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
             ensure!(
@@ -2199,7 +2198,7 @@ where
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
         self.state_mut().set_pending_proposal(proposed_block, blobs);
-        Ok(Hashed::new(ConfirmedBlock::new(block)))
+        Ok(ConfirmedBlock::new(block))
     }
 
     /// Returns a suitable timestamp for the next block.
@@ -3210,13 +3209,13 @@ where
     }
 
     #[instrument(level = "trace", skip(hash))]
-    pub async fn read_hashed_confirmed_block(
+    pub async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
+    ) -> Result<ConfirmedBlock, ViewError> {
         self.client
             .storage_client()
-            .read_hashed_confirmed_block(hash)
+            .read_confirmed_block(hash)
             .await
     }
 
@@ -3231,14 +3230,14 @@ where
     }
 
     #[instrument(level = "trace", skip(from, limit))]
-    pub async fn read_hashed_confirmed_blocks_downward(
+    pub async fn read_confirmed_blocks_downward(
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<Hashed<ConfirmedBlock>>, ViewError> {
+    ) -> Result<Vec<ConfirmedBlock>, ViewError> {
         self.client
             .storage_client()
-            .read_hashed_confirmed_blocks_downward(from, limit)
+            .read_confirmed_blocks_downward(from, limit)
             .await
     }
 

@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
-use linera_base::hashed::Hashed;
 use linera_chain::types::ConfirmedBlock;
 use linera_views::{context::ViewContext, store::KeyValueStore, views::View};
 use tokio::sync::Mutex;
@@ -31,7 +30,7 @@ where
         Self: Sized;
 
     /// Main function of the plugin: registers the information required for a hashed value
-    async fn register(&self, value: &Hashed<ConfirmedBlock>) -> Result<(), IndexerError>;
+    async fn register(&self, value: &ConfirmedBlock) -> Result<(), IndexerError>;
 
     /// Produces the GraphQL schema for the plugin
     fn sdl(&self) -> String;
