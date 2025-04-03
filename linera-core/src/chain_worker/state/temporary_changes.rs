@@ -18,7 +18,7 @@ use linera_chain::{
 };
 use linera_execution::{Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::View;
+use linera_views::views::{ClonableView, View};
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
@@ -131,12 +131,8 @@ where
         let (_, committee) = self.0.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
-        let (outcome, _, _) =
-            Box::pin(
-                self.0
-                    .chain
-                    .execute_block(&block, local_time, round, published_blobs, None),
-            )
+        let outcome = self
+            .execute_block(&block, local_time, round, published_blobs)
             .await?;
 
         let mut response = ChainInfoResponse::new(&self.0.chain, None);
@@ -216,28 +212,22 @@ where
         self.0.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.0.storage.clock().current_time();
 
-        let chain = &mut self.0.chain;
-        chain
+        self.0
+            .chain
             .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
             .await?;
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            Box::pin(chain.execute_block(
-                block,
-                local_time,
-                round.multi_leader(),
-                published_blobs,
-                None,
-            ))
-            .await?
-            .0
+            self.execute_block(block, local_time, round.multi_leader(), published_blobs)
+                .await?
         };
 
         ensure!(
             !round.is_fast() || !outcome.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
+        let chain = &mut self.0.chain;
         // Check if the counters of tip_state would be valid.
         chain.tip_state.get_mut().update_counters(
             &block.incoming_bundles,
@@ -318,6 +308,30 @@ where
             info.manager.add_values(&chain.manager);
         }
         Ok(ChainInfoResponse::new(info, self.0.config.key_pair()))
+    }
+
+    /// Executes a block, caches the result, and returns the outcome.
+    async fn execute_block(
+        &mut self,
+        block: &ProposedBlock,
+        local_time: Timestamp,
+        round: Option<u32>,
+        published_blobs: &[Blob],
+    ) -> Result<BlockExecutionOutcome, WorkerError> {
+        let (outcome, subscribe, unsubscribe) =
+            Box::pin(
+                self.0
+                    .chain
+                    .execute_block(block, local_time, round, published_blobs, None),
+            )
+            .await?;
+        if subscribe.is_empty() && unsubscribe.is_empty() {
+            self.0.execution_state_cache.insert_owned(
+                &outcome.state_hash,
+                self.0.chain.execution_state.clone_unchecked()?,
+            );
+        }
+        Ok(outcome)
     }
 }
 

@@ -32,7 +32,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{committee::Epoch, ExecutionError, Query, QueryOutcome};
+use linera_execution::{committee::Epoch, ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -273,7 +273,6 @@ impl WorkerError {
 }
 
 /// State of a worker in a validator or a local node.
-#[derive(Clone)]
 pub struct WorkerState<StorageClient>
 where
     StorageClient: Storage,
@@ -285,6 +284,7 @@ where
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
     block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -294,6 +294,25 @@ where
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
     chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
+}
+
+impl<StorageClient> Clone for WorkerState<StorageClient>
+where
+    StorageClient: Storage + Clone,
+{
+    fn clone(&self) -> Self {
+        WorkerState {
+            nickname: self.nickname.clone(),
+            storage: self.storage.clone(),
+            chain_worker_config: self.chain_worker_config.clone(),
+            block_cache: self.block_cache.clone(),
+            execution_state_cache: self.execution_state_cache.clone(),
+            tracked_chains: self.tracked_chains.clone(),
+            delivery_notifiers: self.delivery_notifiers.clone(),
+            chain_worker_tasks: self.chain_worker_tasks.clone(),
+            chain_workers: self.chain_workers.clone(),
+        }
+    }
 }
 
 /// The sender endpoint for [`ChainWorkerRequest`]s.
@@ -320,6 +339,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             block_cache: Arc::new(ValueCache::default()),
+            execution_state_cache: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -339,6 +359,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
             block_cache: Arc::new(ValueCache::default()),
+            execution_state_cache: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -721,6 +742,7 @@ where
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.block_cache.clone(),
+                self.execution_state_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,

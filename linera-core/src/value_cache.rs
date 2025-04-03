@@ -43,7 +43,6 @@ static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
 pub struct ValueCache<K, V>
 where
     K: Hash + Eq + PartialEq + Copy,
-    V: Clone,
 {
     cache: Mutex<LruCache<K, V>>,
 }
@@ -51,7 +50,6 @@ where
 impl<K, V> Default for ValueCache<K, V>
 where
     K: Hash + Eq + PartialEq + Copy,
-    V: Clone,
 {
     fn default() -> Self {
         let size = NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE)
@@ -66,7 +64,6 @@ where
 impl<K, V> ValueCache<K, V>
 where
     K: Hash + Eq + PartialEq + Copy,
-    V: Clone,
 {
     /// Returns a `Collection` of the hashes in the cache.
     pub fn keys<Collection>(&self) -> Collection
@@ -110,10 +107,34 @@ where
             .collect()
     }
 
-    /// Returns a `V` from the cache, if present.
-    pub fn get(&self, hash: &K) -> Option<V> {
-        let maybe_value = self.cache.lock().unwrap().get(hash).cloned();
+    /// Inserts a `V` into the cache, if it's not already present.
+    pub fn insert_owned(&self, key: &K, value: V) -> bool {
+        let mut cache = self.cache.lock().unwrap();
+        if cache.contains(key) {
+            // Promote the re-inserted value in the cache, as if it was accessed again.
+            cache.promote(key);
+            false
+        } else {
+            // Cache the value so that clients don't have to send it again.
+            cache.push(*key, value);
+            true
+        }
+    }
 
+    /// Removes a `V` from the cache and returns it, if present.
+    pub fn remove(&self, hash: &K) -> Option<V> {
+        Self::track_cache_usage(self.cache.lock().unwrap().pop(hash))
+    }
+
+    /// Returns a `V` from the cache, if present.
+    pub fn get(&self, hash: &K) -> Option<V>
+    where
+        V: Clone,
+    {
+        Self::track_cache_usage(self.cache.lock().unwrap().get(hash).cloned())
+    }
+
+    fn track_cache_usage(maybe_value: Option<V>) -> Option<V> {
         #[cfg(with_metrics)]
         {
             let metric = if maybe_value.is_some() {
@@ -126,7 +147,6 @@ where
                 .with_label_values(&[type_name::<K>(), type_name::<V>()])
                 .inc();
         }
-
         maybe_value
     }
 
@@ -139,6 +159,7 @@ where
         keys: NotFoundCollection,
     ) -> (FoundCollection, NotFoundCollection)
     where
+        V: Clone,
         FoundCollection: FromIterator<(K, V)>,
         NotFoundCollection: IntoIterator<Item = K> + FromIterator<K> + Default + Extend<K>,
     {

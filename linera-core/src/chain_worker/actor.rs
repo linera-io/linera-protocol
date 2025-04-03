@@ -22,7 +22,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    committee::Epoch, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -181,10 +182,14 @@ where
     ///
     /// If loading the chain state fails the next request will receive the error reported by the
     /// `storage`, and the actor will then try again to load the state.
+    #[allow(clippy::too_many_arguments)]
     pub async fn run(
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        execution_state_cache: Arc<
+            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
+        >,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -198,6 +203,7 @@ where
                 config.clone(),
                 storage.clone(),
                 block_cache.clone(),
+                execution_state_cache.clone(),
                 tracked_chains.clone(),
                 delivery_notifier.clone(),
                 chain_id,
@@ -223,6 +229,9 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        execution_state_cache: Arc<
+            ValueCache<CryptoHash, ExecutionStateView<StorageClient::Context>>,
+        >,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -240,6 +249,7 @@ where
             config,
             storage,
             block_cache,
+            execution_state_cache,
             tracked_chains,
             delivery_notifier,
             chain_id,
