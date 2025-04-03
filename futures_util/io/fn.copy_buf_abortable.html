@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a future which copies all the bytes from one object to another, with its `AbortHandle`."><title>copy_buf_abortable in futures_util::io - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="futures_util" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../futures_util/index.html">futures_<wbr>util</a><span class="version">0.3.31</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">copy_<wbr>buf_<wbr>abortable</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In futures_<wbr>util::<wbr>io</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../index.html">futures_util</a>::<wbr><a href="index.html">io</a></span><h1>Function <span class="fn">copy_buf_abortable</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/futures_util/io/copy_buf_abortable.rs.html#47-57">Source</a> </span></div><pre class="rust item-decl"><code>pub fn copy_buf_abortable&lt;R, W&gt;(
+    reader: R,
+    writer: <a class="primitive" href="https://doc.rust-lang.org/1.85.0/std/primitive.reference.html">&amp;mut W</a>,
+) -&gt; (<a class="struct" href="struct.CopyBufAbortable.html" title="struct futures_util::io::CopyBufAbortable">CopyBufAbortable</a>&lt;'_, R, W&gt;, <a class="struct" href="../future/struct.AbortHandle.html" title="struct futures_util::future::AbortHandle">AbortHandle</a>)<div class="where">where
+    R: <a class="trait" href="trait.AsyncBufRead.html" title="trait futures_util::io::AsyncBufRead">AsyncBufRead</a>,
+    W: <a class="trait" href="trait.AsyncWrite.html" title="trait futures_util::io::AsyncWrite">AsyncWrite</a> + <a class="trait" href="https://doc.rust-lang.org/1.85.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.85.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a future which copies all the bytes from one object to another, with its <code>AbortHandle</code>.</p>
+<p>The returned future will copy all the bytes read from this <code>AsyncBufRead</code> into the
+<code>writer</code> specified. This future will only complete once abort has been requested or the <code>reader</code> has hit
+EOF and all bytes have been written to and flushed from the <code>writer</code>
+provided.</p>
+<p>On success the number of bytes is returned. If aborted, <code>Aborted</code> is returned. Otherwise, the underlying error is returned.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::io::{<span class="self">self</span>, AsyncWriteExt, Cursor};
+<span class="kw">use </span>futures::future::Aborted;
+
+<span class="kw">let </span>reader = Cursor::new([<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>writer = Cursor::new(<span class="macro">vec!</span>[<span class="number">0u8</span>; <span class="number">5</span>]);
+
+<span class="kw">let </span>(fut, abort_handle) = io::copy_buf_abortable(reader, <span class="kw-2">&amp;mut </span>writer);
+<span class="kw">let </span>bytes = fut.<span class="kw">await</span>;
+abort_handle.abort();
+writer.close().<span class="kw">await</span>.unwrap();
+<span class="kw">match </span>bytes {
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(n)) =&gt; {
+        <span class="macro">assert_eq!</span>(n, <span class="number">4</span>);
+        <span class="macro">assert_eq!</span>(writer.into_inner(), [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">0</span>]);
+        <span class="prelude-val">Ok</span>(n)
+    },
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(a)) =&gt; {
+        <span class="prelude-val">Err</span>::&lt;u64, Aborted&gt;(a)
+    }
+    <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">"{}"</span>, e)
+}</code></pre></div>
+</div></details></section></div></main></body></html>

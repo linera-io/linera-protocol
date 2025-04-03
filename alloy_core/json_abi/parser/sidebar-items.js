@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["IDENT_REGEX"],"enum":["StateMutability","Storage","TypeStem"],"fn":["is_id_continue","is_id_start","is_valid_identifier","new_input"],"mod":["serde_state_mutability_compat"],"struct":["Error","ParameterSpecifier","Parameters","RootType","TupleSpecifier","TypeSpecifier"],"type":["Input","Result"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AccountPermissionError","ChangeApplicationPermissionsError","CloseChainError"],"struct":["ChainOwnership","TimeoutConfig"]};

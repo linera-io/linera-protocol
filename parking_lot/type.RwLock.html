@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A reader-writer lock"><title>RwLock in parking_lot - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="parking_lot" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../parking_lot/index.html">parking_<wbr>lot</a><span class="version">0.12.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">RwLock</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#fairness" title="Fairness">Fairness</a></li><li><a href="#differences-from-the-standard-library-rwlock" title="Differences from the standard library `RwLock`">Differences from the standard library <code>RwLock</code></a></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#aliased-type">Aliased type</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate parking_<wbr>lot</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">parking_lot</a></span><h1>Type Alias <span class="type">RwLock</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/parking_lot/rwlock.rs.html#88">Source</a> </span></div><pre class="rust item-decl"><code>pub type RwLock&lt;T&gt; = <a class="struct" href="../lock_api/rwlock/struct.RwLock.html" title="struct lock_api::rwlock::RwLock">RwLock</a>&lt;<a class="struct" href="struct.RawRwLock.html" title="struct parking_lot::RawRwLock">RawRwLock</a>, T&gt;;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A reader-writer lock</p>
+<p>This type of lock allows a number of readers or at most one writer at any
+point in time. The write portion of this lock typically allows modification
+of the underlying data (exclusive access) and the read portion of this lock
+typically allows for read-only access (shared access).</p>
+<p>This lock uses a task-fair locking policy which avoids both reader and
+writer starvation. This means that readers trying to acquire the lock will
+block even if the lock is unlocked when there are writers waiting to acquire
+the lock. Because of this, attempts to recursively acquire a read lock
+within a single thread may result in a deadlock.</p>
+<p>The type parameter <code>T</code> represents the data that this lock protects. It is
+required that <code>T</code> satisfies <code>Send</code> to be shared across threads and <code>Sync</code> to
+allow concurrent access through readers. The RAII guards returned from the
+locking methods implement <code>Deref</code> (and <code>DerefMut</code> for the <code>write</code> methods)
+to allow access to the contained of the lock.</p>
+<h2 id="fairness"><a class="doc-anchor" href="#fairness">§</a>Fairness</h2>
+<p>A typical unfair lock can often end up in a situation where a single thread
+quickly acquires and releases the same lock in succession, which can starve
+other threads waiting to acquire the rwlock. While this improves throughput
+because it doesn’t force a context switch when a thread tries to re-acquire
+a rwlock it has just released, this can starve other threads.</p>
+<p>This rwlock uses <a href="https://trac.webkit.org/changeset/203350">eventual fairness</a>
+to ensure that the lock will be fair on average without sacrificing
+throughput. This is done by forcing a fair unlock on average every 0.5ms,
+which will force the lock to go to the next thread waiting for the rwlock.</p>
+<p>Additionally, any critical section longer than 1ms will always use a fair
+unlock, which has a negligible impact on throughput considering the length
+of the critical section.</p>
+<p>You can also force a fair unlock by calling <code>RwLockReadGuard::unlock_fair</code>
+or <code>RwLockWriteGuard::unlock_fair</code> when unlocking a mutex instead of simply
+dropping the guard.</p>
+<h2 id="differences-from-the-standard-library-rwlock"><a class="doc-anchor" href="#differences-from-the-standard-library-rwlock">§</a>Differences from the standard library <code>RwLock</code></h2>
+<ul>
+<li>Supports atomically downgrading a write lock into a read lock.</li>
+<li>Task-fair locking policy instead of an unspecified platform default.</li>
+<li>No poisoning, the lock is released normally on panic.</li>
+<li>Only requires 1 word of space, whereas the standard library boxes the
+<code>RwLock</code> due to platform limitations.</li>
+<li>Can be statically constructed.</li>
+<li>Does not require any drop glue when dropped.</li>
+<li>Inline fast path for the uncontended case.</li>
+<li>Efficient handling of micro-contention using adaptive spinning.</li>
+<li>Allows raw locking &amp; unlocking without a guard.</li>
+<li>Supports eventual fairness so that the rwlock is fair on average.</li>
+<li>Optionally allows making the rwlock fair by calling
+<code>RwLockReadGuard::unlock_fair</code> and <code>RwLockWriteGuard::unlock_fair</code>.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>parking_lot::RwLock;
+
+<span class="kw">let </span>lock = RwLock::new(<span class="number">5</span>);
+
+<span class="comment">// many reader locks can be held at once
+</span>{
+    <span class="kw">let </span>r1 = lock.read();
+    <span class="kw">let </span>r2 = lock.read();
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>r1, <span class="number">5</span>);
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>r2, <span class="number">5</span>);
+} <span class="comment">// read locks are dropped at this point
+
+// only one write lock may be held, however
+</span>{
+    <span class="kw">let </span><span class="kw-2">mut </span>w = lock.write();
+    <span class="kw-2">*</span>w += <span class="number">1</span>;
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>w, <span class="number">6</span>);
+} <span class="comment">// write lock is dropped here</span></code></pre></div>
+</div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>struct RwLock&lt;T&gt; { <span class="comment">/* private fields */</span> }</code></pre><script src="../type.impl/lock_api/rwlock/struct.RwLock.js" data-self-path="parking_lot::rwlock::RwLock" async></script></section></div></main></body></html>

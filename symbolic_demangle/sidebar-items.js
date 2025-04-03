@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["demangle"],"struct":["DemangleOptions"],"trait":["Demangle"]};

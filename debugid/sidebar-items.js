@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BreakpadFormat","CodeId","DebugId","ParseCodeIdError","ParseDebugIdError"]};

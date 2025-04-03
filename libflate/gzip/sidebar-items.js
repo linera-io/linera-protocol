@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CompressionLevel","Os"],"struct":["Decoder","EncodeOptions","Encoder","ExtraField","ExtraSubField","Header","HeaderBuilder","MultiDecoder"]};

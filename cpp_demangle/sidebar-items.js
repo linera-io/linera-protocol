@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DemangleNodeType"],"mod":["ast","error"],"struct":["DemangleOptions","ParseOptions","Symbol"],"trait":["DemangleWrite"],"type":["BorrowedSymbol","OwnedSymbol"]};
