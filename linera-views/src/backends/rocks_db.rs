@@ -186,7 +186,7 @@ impl RocksDbStoreExecutor {
         Ok(keys)
     }
 
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn find_key_values_by_prefix_internal(
         &self,
         key_prefix: Vec<u8>,

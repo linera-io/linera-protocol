@@ -344,7 +344,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera wallet publish-and-create`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn publish_and_create<
         A: ContractAbi,
         Parameters: Serialize,

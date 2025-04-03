@@ -92,7 +92,7 @@ impl<S> Benchmark<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn run_benchmark(
         num_chains: usize,
         transactions_per_block: usize,
@@ -473,7 +473,7 @@ where
         Err(BenchmarkError::CouldNotComputeQuantile)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn run_benchmark_internal(
         bps: Option<usize>,
         operations: Vec<Operation>,

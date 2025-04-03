@@ -182,7 +182,7 @@ where
     ///
     /// If loading the chain state fails the next request will receive the error reported by the
     /// `storage`, and the actor will then try again to load the state.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn run(
         config: ChainWorkerConfig,
         storage: StorageClient,

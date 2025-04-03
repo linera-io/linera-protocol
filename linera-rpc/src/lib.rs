@@ -7,7 +7,6 @@
 #![deny(clippy::large_futures)]
 // `tracing::instrument` is not compatible with this nightly Clippy lint
 #![allow(unknown_lints)]
-#![allow(clippy::blocks_in_conditions)]
 
 pub mod config;
 pub mod node_provider;

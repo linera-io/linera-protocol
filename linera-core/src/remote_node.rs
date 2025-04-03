@@ -34,7 +34,6 @@ pub struct RemoteNode<N> {
     pub node: N,
 }
 
-#[allow(clippy::result_large_err)]
 impl<N: ValidatorNode> RemoteNode<N> {
     pub(crate) async fn handle_chain_info_query(
         &self,

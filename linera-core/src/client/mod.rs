@@ -180,7 +180,7 @@ where
 
 impl<P, S: Storage + Clone> Client<P, S> {
     /// Creates a new `Client` with a new cache and notifiers.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         validator_node_provider: P,

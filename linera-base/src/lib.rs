@@ -142,7 +142,7 @@ pub fn hex_debug<T: AsRef<[u8]>>(bytes: &T, f: &mut fmt::Formatter) -> fmt::Resu
 ///     "Messages { byte_vecs: [12345678, 9a] }"
 /// );
 /// ```
-#[allow(clippy::ptr_arg)] // This only works with custom_debug_derive if it's &Vec.
+#[expect(clippy::ptr_arg)] // This only works with custom_debug_derive if it's &Vec.
 pub fn hex_vec_debug(list: &Vec<Vec<u8>>, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "[")?;
     for (i, bytes) in list.iter().enumerate() {

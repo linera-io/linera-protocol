@@ -123,7 +123,6 @@ impl GrpcClient {
         }
     }
 
-    #[allow(clippy::result_large_err)]
     fn try_into_chain_info(
         result: api::ChainInfoResult,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
