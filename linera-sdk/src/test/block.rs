@@ -18,6 +18,7 @@ use linera_chain::{
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
+use linera_core::worker::WorkerError;
 use linera_execution::{
     committee::Epoch,
     system::{Recipient, SystemOperation},
@@ -203,7 +204,7 @@ impl BlockBuilder {
     pub(crate) async fn try_sign(
         self,
         blobs: &[Blob],
-    ) -> anyhow::Result<ConfirmedBlockCertificate> {
+    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
         let published_blobs = self
             .block
             .published_blob_ids()

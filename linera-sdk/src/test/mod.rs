@@ -23,14 +23,20 @@ pub use {
     linera_chain::{
         data_types::{Medium, MessageAction},
         test::HttpServer,
+        ChainError, ChainExecutionContext,
     },
-    linera_execution::{system::Recipient, QueryOutcome},
+    linera_core::worker::WorkerError,
+    linera_execution::{system::Recipient, ExecutionError, QueryOutcome, WasmExecutionError},
 };
 
 #[cfg(with_testing)]
 pub use self::mock_stubs::*;
 #[cfg(with_integration_testing)]
-pub use self::{block::BlockBuilder, chain::ActiveChain, validator::TestValidator};
+pub use self::{
+    block::BlockBuilder,
+    chain::{ActiveChain, TryGraphQLMutationError, TryGraphQLQueryError, TryQueryError},
+    validator::TestValidator,
+};
 use crate::{Contract, ContractRuntime, Service, ServiceRuntime};
 
 /// Creates a [`ContractRuntime`] to use in tests.

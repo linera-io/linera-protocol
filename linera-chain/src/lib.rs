@@ -179,6 +179,7 @@ impl From<ViewError> for ChainError {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum ChainExecutionContext {
     Query,
     DescribeApplication,

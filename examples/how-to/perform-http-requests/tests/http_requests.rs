@@ -5,9 +5,12 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use assert_matches::assert_matches;
 use axum::{routing::get, Router};
 use how_to_perform_http_requests::Abi;
-use linera_sdk::test::{HttpServer, QueryOutcome, TestValidator};
+use linera_sdk::test::{
+    ExecutionError, HttpServer, QueryOutcome, TestValidator, WasmExecutionError,
+};
 
 /// Tests if service query performs HTTP request to allowed host.
 #[test_log::test(tokio::test)]
@@ -58,16 +61,22 @@ async fn service_query_performs_http_request() -> anyhow::Result<()> {
 
 /// Tests if service query can't perform HTTP requests to hosts that aren't allowed.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "UnauthorizedHttpRequest")]
 async fn service_query_cant_send_http_request_to_unauthorized_host() {
-    let url = "http://localhost/".to_owned();
+    let url = "http://localhost/";
 
     let (_validator, application_id, chain) =
-        TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
+        TestValidator::with_current_application::<Abi, _, _>(url.to_owned(), ()).await;
 
-    chain
-        .graphql_query(application_id, "query { performHttpRequest }")
-        .await;
+    let error = chain
+        .try_graphql_query(application_id, "query { performHttpRequest }")
+        .await
+        .expect_err("Expected GraphQL query to fail");
+
+    assert_matches!(
+        error.expect_execution_error(),
+        ExecutionError::UnauthorizedHttpRequest(attempted_url)
+            if attempted_url.to_string() == url
+    );
 }
 
 /// Tests if the service sends a valid HTTP response to the contract.
@@ -100,7 +109,6 @@ async fn service_sends_valid_http_response_to_contract() -> anyhow::Result<()> {
 
 /// Tests if the contract rejects an invalid HTTP response sent by the service.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "Failed to execute block")]
 async fn contract_rejects_invalid_http_response_from_service() {
     const HTTP_RESPONSE_BODY: &str = "Untrusted response";
 
@@ -112,7 +120,7 @@ async fn contract_rejects_invalid_http_response_from_service() {
     let url = format!("http://localhost:{port}/");
 
     let (validator, application_id, chain) =
-        TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
+        TestValidator::with_current_application::<Abi, _, _>(url.clone(), ()).await;
 
     validator
         .change_resource_control_policy(|policy| {
@@ -122,9 +130,15 @@ async fn contract_rejects_invalid_http_response_from_service() {
         })
         .await;
 
-    chain
-        .graphql_mutation(application_id, "mutation { performHttpRequest }")
-        .await;
+    let error = chain
+        .try_graphql_mutation(application_id, "mutation { performHttpRequest }")
+        .await
+        .expect_err("Expected GraphQL mutation to fail");
+
+    assert_matches!(
+        error.expect_proposal_execution_error(0),
+        ExecutionError::WasmError(WasmExecutionError::ExecuteModule(_))
+    );
 }
 
 /// Tests if the contract accepts a valid HTTP response it obtains by itself.
@@ -157,7 +171,6 @@ async fn contract_accepts_valid_http_response_it_obtains_by_itself() -> anyhow::
 
 /// Tests if the contract rejects an invalid HTTP response it obtains by itself.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "Failed to execute block")]
 async fn contract_rejects_invalid_http_response_it_obtains_by_itself() {
     const HTTP_RESPONSE_BODY: &str = "Untrusted response";
 
@@ -179,9 +192,15 @@ async fn contract_rejects_invalid_http_response_it_obtains_by_itself() {
         })
         .await;
 
-    chain
-        .graphql_mutation(application_id, "mutation { performHttpRequestInContract }")
-        .await;
+    let error = chain
+        .try_graphql_mutation(application_id, "mutation { performHttpRequestInContract }")
+        .await
+        .expect_err("Expected GraphQL mutation to fail");
+
+    assert_matches!(
+        error.expect_proposal_execution_error(0),
+        ExecutionError::WasmError(WasmExecutionError::ExecuteModule(_))
+    );
 }
 
 /// Tests if the contract accepts a valid HTTP response it obtains from the service acting as an
@@ -216,7 +235,6 @@ async fn contract_accepts_valid_http_response_from_oracle() -> anyhow::Result<()
 /// Tests if the contract rejects an invalid HTTP response it obtains from the service acting as an
 /// oracle.
 #[test_log::test(tokio::test)]
-#[should_panic(expected = "Failed to execute block")]
 async fn contract_rejects_invalid_http_response_from_oracle() {
     const HTTP_RESPONSE_BODY: &str = "Invalid response";
 
@@ -238,7 +256,13 @@ async fn contract_rejects_invalid_http_response_from_oracle() {
         })
         .await;
 
-    chain
-        .graphql_mutation(application_id, "mutation { performHttpRequestAsOracle }")
-        .await;
+    let error = chain
+        .try_graphql_mutation(application_id, "mutation { performHttpRequestAsOracle }")
+        .await
+        .expect_err("Expected GraphQL mutation to fail");
+
+    assert_matches!(
+        error.expect_proposal_execution_error(0),
+        ExecutionError::WasmError(WasmExecutionError::ExecuteModule(_))
+    );
 }

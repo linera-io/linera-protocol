@@ -20,6 +20,8 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
     time::timer::{sleep, timeout},
 };
+#[cfg(with_testing)]
+use linera_chain::ChainExecutionContext;
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, ProposedBlock, Target,
@@ -245,6 +247,28 @@ impl From<ViewError> for WorkerError {
             ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             error => Self::ViewError(error),
         }
+    }
+}
+
+#[cfg(with_testing)]
+impl WorkerError {
+    /// Returns the inner [`ExecutionError`] in this error.
+    ///
+    /// # Panics
+    ///
+    /// If this is not caused by an [`ExecutionError`].
+    pub fn expect_execution_error(self, expected_context: ChainExecutionContext) -> ExecutionError {
+        let WorkerError::ChainError(chain_error) = self else {
+            panic!("Expected an `ExecutionError`. Got: {self:#?}");
+        };
+
+        let ChainError::ExecutionError(execution_error, context) = *chain_error else {
+            panic!("Expected an `ExecutionError`. Got: {chain_error:#?}");
+        };
+
+        assert_eq!(context, expected_context);
+
+        *execution_error
     }
 }
 
