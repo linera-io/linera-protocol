@@ -3,10 +3,13 @@
 
 #![allow(clippy::blocks_in_conditions)]
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::VecDeque,
+    pin::Pin,
+    sync::{Arc, Weak},
+};
 
-use async_lock::RwLock;
-use linera_storage_service::common::{KeyPrefix, MAX_PAYLOAD_SIZE};
+use futures::stream::Stream;
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
@@ -17,49 +20,53 @@ use linera_views::{
     rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     store::AdminKeyValueStore as _,
 };
-use serde::Serialize;
+use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{info, instrument};
-use tracing_subscriber::fmt::format::FmtSpan;
 
-use crate::key_value_store::{
-    statement::Operation,
-    store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
-    ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
-    ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
-    RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace, RequestExistsNamespace,
-    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListRootKeys,
-    RequestReadMultiValues, RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
+use crate::{
+    common::{KeyPrefix, MAX_PAYLOAD_SIZE},
+    key_value_store::{
+        store_processor_server::{StoreProcessor, StoreProcessorServer},
+        OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
+        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
+        ReplyReadMultiValues, ReplyReadValue, RequestContainsKey, RequestContainsKeys,
+        RequestCreateNamespace, RequestDeleteNamespace, RequestExistsNamespace,
+        RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListRootKeys,
+        RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
+    },
 };
 
 pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
 }
 
-enum ServiceStoreServerInternal {
+pub enum ServiceStoreServerInternal {
     Memory(MemoryStore),
     /// The RocksDB key value store
     #[cfg(with_rocksdb)]
     RocksDb(RocksDbStore),
 }
 
-#[derive(Default)]
-struct BigRead {
-    num_processed_chunks: usize,
-    chunks: Vec<Vec<u8>>,
-}
-
-#[derive(Default)]
-struct PendingBigReads {
-    index: i64,
-    big_reads: BTreeMap<i64, BigRead>,
-}
-
-struct ServiceStoreServer {
+pub struct ServiceStoreServer {
     store: ServiceStoreServerInternal,
-    pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
-    pending_big_reads: Arc<RwLock<PendingBigReads>>,
+    // Its basically free, since tonic holds an Arc
+    // internally anyway.
+    // Another way is to cast &self to raw pointers and use unsafe rust
+    // that also will completely be ok as tasks are either scoped, joining
+    // themselves at their functions end or else even then the raw pointers
+    // will be backed by the tonic's internal Arc.
+    self_ref: Weak<Self>,
+}
+
+impl ServiceStoreServer {
+    pub fn new_from_store(store: ServiceStoreServerInternal) -> Arc<ServiceStoreServer> {
+        Arc::new_cyclic(|weak| ServiceStoreServer {
+            store,
+            self_ref: weak.clone(),
+        })
+    }
 }
 
 impl ServiceStoreServer {
@@ -224,24 +231,6 @@ impl ServiceStoreServer {
         batch.delete_key_prefix(key_prefix);
         self.write_batch(batch).await
     }
-
-    pub async fn insert_pending_read<S: Serialize>(&self, value: S) -> (i64, i32) {
-        let value = bcs::to_bytes(&value).unwrap();
-        let chunks = value
-            .chunks(MAX_PAYLOAD_SIZE)
-            .map(|x| x.to_vec())
-            .collect::<Vec<_>>();
-        let num_chunks = chunks.len() as i32;
-        let mut pending_big_reads = self.pending_big_reads.write().await;
-        let message_index = pending_big_reads.index;
-        pending_big_reads.index += 1;
-        let big_read = BigRead {
-            num_processed_chunks: 0,
-            chunks,
-        };
-        pending_big_reads.big_reads.insert(message_index, big_read);
-        (message_index, num_chunks)
-    }
 }
 
 #[derive(clap::Parser)]
@@ -250,7 +239,7 @@ impl ServiceStoreServer {
     version = linera_version::VersionInfo::default_clap_str(),
     about = "A server providing storage service",
 )]
-enum ServiceStoreServerOptions {
+pub enum ServiceStoreServerOptions {
     #[command(name = "memory")]
     Memory {
         #[arg(long = "endpoint")]
@@ -269,33 +258,63 @@ enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
+    type ProcessReadValueStream =
+        Pin<Box<dyn Stream<Item = Result<ReplyReadValue, Status>> + Send + Sync + 'static>>;
+    type ProcessReadMultiValuesStream =
+        UnboundedReceiverStream<Result<ReplyReadMultiValues, Status>>;
+    type ProcessFindKeysByPrefixStream =
+        futures::stream::Iter<std::vec::IntoIter<Result<ReplyFindKeysByPrefix, Status>>>;
+    type ProcessFindKeyValuesByPrefixStream =
+        UnboundedReceiverStream<Result<ReplyFindKeyValuesByPrefix, Status>>;
+    type ProcessListAllStream =
+        futures::stream::Iter<std::vec::IntoIter<Result<ReplyListAll, Status>>>;
+
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
-    ) -> Result<Response<ReplyReadValue>, Status> {
+    ) -> Result<Response<Self::ProcessReadValueStream>, Status> {
         let request = request.into_inner();
         let RequestReadValue { key } = request;
         let value = self.read_value_bytes(&key).await?;
-        let size = match &value {
-            None => 0,
-            Some(value) => value.len(),
-        };
-        let response = if size < MAX_PAYLOAD_SIZE {
-            ReplyReadValue {
-                value,
-                message_index: 0,
-                num_chunks: 0,
+
+        let stream = match value {
+            None => {
+                let mut counter = 0;
+                let closure = move || {
+                    if 0 == counter {
+                        counter = 1;
+                        Some(Ok(ReplyReadValue { value: None }))
+                    } else {
+                        None
+                    }
+                };
+                let closure: Box<
+                    dyn FnMut() -> Option<Result<ReplyReadValue, Status>> + Send + Sync,
+                > = Box::new(closure);
+                std::iter::from_fn(closure)
             }
-        } else {
-            let (message_index, num_chunks) = self.insert_pending_read(value).await;
-            ReplyReadValue {
-                value: None,
-                message_index,
-                num_chunks,
+
+            Some(inner) => {
+                let mut inner = VecDeque::from(inner);
+                let closure = move || {
+                    let chunk = inner
+                        .drain(..MAX_PAYLOAD_SIZE.min(inner.len()))
+                        .collect::<Vec<_>>();
+                    if chunk.is_empty() {
+                        return None;
+                    }
+
+                    Some(Ok(ReplyReadValue { value: Some(chunk) }))
+                };
+                let closure: Box<
+                    dyn FnMut() -> Option<Result<ReplyReadValue, Status>> + Send + Sync,
+                > = Box::new(closure);
+                std::iter::from_fn(closure)
             }
         };
-        Ok(Response::new(response))
+
+        Ok(Response::new(Box::pin(tokio_stream::iter(stream))))
     }
 
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
@@ -310,181 +329,369 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().keys.len()))]
+    #[instrument(target = "store_server", skip_all, err)]
     async fn process_contains_keys(
         &self,
-        request: Request<RequestContainsKeys>,
+        request: Request<tonic::Streaming<RequestContainsKeys>>,
     ) -> Result<Response<ReplyContainsKeys>, Status> {
-        let request = request.into_inner();
-        let RequestContainsKeys { keys } = request;
-        let tests = self.contains_keys(keys).await?;
+        let mut streamer = request.into_inner();
+        let self_ref = self.self_ref.upgrade().unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let producer_task = |self_ref: Arc<ServiceStoreServer>,
+                             keys,
+                             feedback: UnboundedSender<Status>| async move {
+            let tests = self_ref.contains_keys(keys).await;
+            match tests {
+                Err(e) => {
+                    let _ = feedback.send(e);
+                    vec![]
+                }
+                Ok(tests) => tests,
+            }
+        };
+
+        let consumer_task = async move {
+            let mut handles = Vec::new();
+            while let Some(message) = match streamer.message().await {
+                Ok(Some(msg)) => Some(msg),
+                Ok(None) => None,
+                Err(err) => {
+                    let _ = tx.send(err);
+                    return vec![];
+                }
+            } {
+                let RequestContainsKeys { keys } = message;
+                let moved_self_ref = Arc::clone(&self_ref);
+                let handle = tokio::task::spawn(producer_task(moved_self_ref, keys, tx.clone()));
+                handles.push(handle);
+            }
+
+            let mut tests = Vec::new();
+            for handle in handles {
+                let some_tests = handle.await;
+                match some_tests {
+                    Err(e) => {
+                        let _ = tx.send(Status::from_error(Box::new(e)));
+                    }
+                    Ok(mut some_tests) => tests.append(&mut some_tests),
+                }
+            }
+
+            tests
+        };
+
+        let consumer_handle = tokio::task::spawn(consumer_task);
+        if let Some(status) = rx.recv().await {
+            return Err(status);
+        }
+
+        let tests = match consumer_handle.await {
+            Err(e) => return Err(Status::from_error(Box::new(e))),
+            Ok(tests) => tests,
+        };
+        tracing::info!(target = "store_server", key_len = tests.len());
         let response = ReplyContainsKeys { tests };
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(n_keys = ?request.get_ref().keys.len()))]
+    // This function can be greatly compressed in a seperate pull request
+    // TODO encode, merge and compress messages for efficiency
+    #[instrument(target = "store_server", skip_all, err)]
     async fn process_read_multi_values(
         &self,
-        request: Request<RequestReadMultiValues>,
-    ) -> Result<Response<ReplyReadMultiValues>, Status> {
-        let request = request.into_inner();
-        let RequestReadMultiValues { keys } = request;
-        let values = self.read_multi_values_bytes(keys.clone()).await?;
-        let size = values
-            .iter()
-            .map(|x| match x {
-                None => 0,
-                Some(entry) => entry.len(),
-            })
-            .sum::<usize>();
-        let response = if size < MAX_PAYLOAD_SIZE {
-            let values = values
-                .into_iter()
-                .map(|value| OptValue { value })
-                .collect::<Vec<_>>();
-            ReplyReadMultiValues {
-                values,
-                message_index: 0,
-                num_chunks: 0,
-            }
-        } else {
-            let (message_index, num_chunks) = self.insert_pending_read(values).await;
-            ReplyReadMultiValues {
-                values: Vec::default(),
-                message_index,
-                num_chunks,
+        request: Request<tonic::Streaming<RequestReadMultiValues>>,
+    ) -> Result<Response<Self::ProcessReadMultiValuesStream>, Status> {
+        let mut incoming_stream = request.into_inner();
+
+        let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel();
+        let (task_tx, mut task_rx) = mpsc::unbounded_channel();
+        let mut stream = Vec::new();
+
+        let outgoing_task = async move {
+            let streamer = |stream| {
+                let _ = outgoing_tx.send(Ok(ReplyReadMultiValues { values: stream }));
+            };
+
+            while let Some(response) = task_rx.recv().await {
+                let values: Vec<Option<Vec<u8>>> = match response {
+                    Err(e) => {
+                        let _ = outgoing_tx.send(Err(e));
+                        return;
+                    }
+                    Ok(handle) => {
+                        let result = handle.await;
+                        match result {
+                            Err(e) => {
+                                let _ = outgoing_tx.send(Err(Status::from_error(Box::new(e))));
+                                break;
+                            }
+                            Ok(Err(e)) => {
+                                let _ = outgoing_tx.send(Err(e));
+                                return;
+                            }
+                            Ok(Ok(values)) => values,
+                        }
+                    }
+                };
+
+                for value in values {
+                    match value {
+                        Some(mut value) => {
+                            if MAX_PAYLOAD_SIZE > value.len() {
+                                stream.push(OptValue {
+                                    value: Some(1usize.to_be_bytes().to_vec()),
+                                });
+                                stream.push(OptValue { value: Some(value) });
+                                streamer(stream);
+                                stream = Vec::new();
+                                continue;
+                            }
+
+                            let num_messages = value.len().div_ceil(MAX_PAYLOAD_SIZE);
+                            stream.push(OptValue {
+                                value: Some(num_messages.to_be_bytes().to_vec()),
+                            });
+                            for _ in 0..num_messages {
+                                let drain_amount = MAX_PAYLOAD_SIZE.min(value.len());
+                                stream.push(OptValue {
+                                    value: Some(value.drain(..drain_amount).collect()),
+                                });
+                                streamer(stream);
+                                stream = Vec::new();
+                            }
+                        }
+
+                        None => streamer(vec![OptValue { value: None }]),
+                    }
+                }
             }
         };
-        Ok(Response::new(response))
+
+        let self_ref = self.self_ref.upgrade().unwrap();
+        let producer_task = |self_ref: Arc<ServiceStoreServer>, keys| async move {
+            self_ref.read_multi_values_bytes(keys).await
+        };
+
+        let consumer_task = async move {
+            while let Some(message) = incoming_stream.message().await.transpose() {
+                match message {
+                    Err(status) => {
+                        let _ = task_tx.send(Err(status));
+                        break;
+                    }
+                    Ok(RequestReadMultiValues { keys }) => {
+                        let moved_self_ref = self_ref.clone();
+                        let handle = tokio::task::spawn(producer_task(moved_self_ref, keys));
+                        if task_tx.send(Ok(handle)).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        };
+
+        std::mem::drop(tokio::task::spawn(consumer_task));
+        std::mem::drop(tokio::task::spawn(outgoing_task));
+
+        Ok(Response::new(UnboundedReceiverStream::new(outgoing_rx)))
     }
 
     #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_keys_by_prefix(
         &self,
         request: Request<RequestFindKeysByPrefix>,
-    ) -> Result<Response<ReplyFindKeysByPrefix>, Status> {
+    ) -> Result<Response<Self::ProcessFindKeysByPrefixStream>, Status> {
         let request = request.into_inner();
         let RequestFindKeysByPrefix { key_prefix } = request;
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
-        let size = keys.iter().map(|x| x.len()).sum::<usize>();
-        let response = if size < MAX_PAYLOAD_SIZE {
-            ReplyFindKeysByPrefix {
-                keys,
-                message_index: 0,
-                num_chunks: 0,
+
+        let mut stream = Vec::new();
+        let mut grouped_keys = Vec::new();
+        let mut chunk_size = 0;
+        for key in keys {
+            if MAX_PAYLOAD_SIZE > key.len() + chunk_size {
+                chunk_size += key.len();
+                grouped_keys.push(key);
+                continue;
             }
-        } else {
-            let (message_index, num_chunks) = self.insert_pending_read(keys).await;
-            ReplyFindKeysByPrefix {
-                keys: Vec::default(),
-                message_index,
-                num_chunks,
-            }
-        };
-        Ok(Response::new(response))
+
+            stream.push(Ok(ReplyFindKeysByPrefix { keys: grouped_keys }));
+            grouped_keys = Vec::new();
+            chunk_size = key.len();
+            grouped_keys.push(key);
+        }
+
+        if !grouped_keys.is_empty() {
+            stream.push(Ok(ReplyFindKeysByPrefix { keys: grouped_keys }));
+        }
+
+        Ok(Response::new(futures::stream::iter(stream)))
     }
 
     #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
     async fn process_find_key_values_by_prefix(
         &self,
         request: Request<RequestFindKeyValuesByPrefix>,
-    ) -> Result<Response<ReplyFindKeyValuesByPrefix>, Status> {
+    ) -> Result<Response<Self::ProcessFindKeyValuesByPrefixStream>, Status> {
         let request = request.into_inner();
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
         let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
-        let size = key_values
-            .iter()
-            .map(|x| x.0.len() + x.1.len())
-            .sum::<usize>();
-        let response = if size < MAX_PAYLOAD_SIZE {
-            let key_values = key_values
-                .into_iter()
-                .map(|x| KeyValue {
-                    key: x.0,
-                    value: x.1,
-                })
-                .collect::<Vec<_>>();
-            ReplyFindKeyValuesByPrefix {
-                key_values,
-                message_index: 0,
-                num_chunks: 0,
+
+        // TODO Discuss the usage of bounded channels for backpressure.
+        let (tx, rx) = mpsc::unbounded_channel();
+        let mut stream = Vec::new();
+
+        let spawner = move || {
+            let streamer = |stream| {
+                let _ = tx.send(Ok(ReplyFindKeyValuesByPrefix { key_values: stream }));
+            };
+
+            let extend_stream = |mut stream: Vec<u8>, mut value: Vec<u8>| {
+                if MAX_PAYLOAD_SIZE - stream.len() >= value.len() {
+                    stream.append(&mut value);
+                    return stream;
+                }
+
+                stream.append(
+                    &mut value
+                        .drain(..MAX_PAYLOAD_SIZE - stream.len())
+                        .collect::<Vec<_>>(),
+                );
+                streamer(stream);
+                stream = Vec::new();
+
+                loop {
+                    if MAX_PAYLOAD_SIZE >= value.len() {
+                        stream.append(&mut value);
+                        break;
+                    }
+
+                    stream.append(&mut value.drain(..MAX_PAYLOAD_SIZE).collect::<Vec<_>>());
+                    streamer(stream);
+                    stream = Vec::new();
+                }
+
+                stream
+            };
+
+            for (key, value) in key_values {
+                stream = extend_stream(stream, key.len().to_be_bytes().to_vec());
+                stream = extend_stream(stream, value.len().to_be_bytes().to_vec());
+                stream = extend_stream(stream, key);
+                stream = extend_stream(stream, value);
             }
-        } else {
-            let (message_index, num_chunks) = self.insert_pending_read(key_values).await;
-            ReplyFindKeyValuesByPrefix {
-                key_values: Vec::default(),
-                message_index,
-                num_chunks,
-            }
+
+            streamer(stream);
         };
-        Ok(Response::new(response))
+
+        let _ = std::thread::spawn(spawner);
+
+        Ok(Response::new(UnboundedReceiverStream::new(rx)))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(n_statements = ?request.get_ref().statements.len()))]
-    async fn process_write_batch_extended(
+    // Encoding for this takes place in a pattern that mimics bcs serialization.
+    // just using simple numbers for Operation's 3 variants.
+    // simple length prefixed vectors.
+    // and a stack state based depth first de-serialization.
+    #[instrument(target = "store_server", skip_all, err)]
+    async fn process_write_batch(
         &self,
-        request: Request<RequestWriteBatchExtended>,
+        request: Request<tonic::Streaming<RequestWriteBatch>>,
     ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-        let RequestWriteBatchExtended { statements } = request;
+        let mut incoming_stream = request.into_inner();
         let mut batch = Batch::default();
-        for statement in statements {
-            match statement.operation.unwrap() {
-                Operation::Delete(key) => {
-                    batch.delete_key(key);
-                }
-                Operation::Put(key_value) => {
-                    batch.put_key_value_bytes(key_value.key, key_value.value);
-                }
-                Operation::Append(key_value_append) => {
-                    let mut pending_big_puts = self.pending_big_puts.write().await;
-                    match pending_big_puts.get_mut(&key_value_append.key) {
-                        None => {
-                            pending_big_puts
-                                .insert(key_value_append.key.clone(), key_value_append.value);
-                        }
-                        Some(value) => {
-                            value.extend(key_value_append.value);
+
+        let mut state = Vec::new();
+        let mut key = Vec::new();
+        let mut value = Vec::new();
+        let mut len_bytes = Vec::with_capacity(8);
+        while let Some(RequestWriteBatch { stream: message }) = incoming_stream.message().await? {
+            let mut message = VecDeque::from(message);
+            while !message.is_empty() || state.get(2).is_some_and(|len| 0 == *len) {
+                match state.len() {
+                    0 => {
+                        let op_kind = message.pop_front().unwrap() as usize;
+                        state.push(op_kind);
+                        state.push(0);
+                    }
+
+                    2 => {
+                        len_bytes.append(
+                            &mut message
+                                .drain(..(8 - len_bytes.len()).min(message.len()))
+                                .collect::<Vec<u8>>(),
+                        );
+                        if 8 == len_bytes.len() {
+                            state.push(usize::from_be_bytes(len_bytes.clone().try_into().unwrap()));
+                            len_bytes.clear();
                         }
                     }
-                    if key_value_append.last {
-                        let value = pending_big_puts.remove(&key_value_append.key).unwrap();
-                        batch.put_key_value_bytes(key_value_append.key, value);
+
+                    3 if 3 == state[0] && 1 == state[1] => {
+                        value.append(
+                            &mut message
+                                .drain(..(state[2] - value.len()).min(message.len()))
+                                .collect::<Vec<_>>(),
+                        );
+                        if state[2] == value.len() {
+                            batch.put_key_value_bytes(key, value);
+                            key = Vec::new();
+                            value = Vec::new();
+                            let _ = state.pop();
+                            let _ = state.pop();
+                            let _ = state.pop();
+                        }
                     }
-                }
-                Operation::DeletePrefix(key_prefix) => {
-                    batch.delete_key_prefix(key_prefix);
+
+                    3 => {
+                        key.append(
+                            &mut message
+                                .drain(..(state[2] - key.len()).min(message.len()))
+                                .collect::<Vec<_>>(),
+                        );
+                        match (state[0], state[2] == key.len()) {
+                            (1, true) => {
+                                batch.delete_key(key);
+                                key = Vec::new();
+                                let _ = state.pop();
+                                let _ = state.pop();
+                                let _ = state.pop();
+                            }
+
+                            (2, true) => {
+                                batch.delete_key_prefix(key);
+                                key = Vec::new();
+                                let _ = state.pop();
+                                let _ = state.pop();
+                                let _ = state.pop();
+                            }
+
+                            (3, true) => {
+                                state[1] = 1;
+                                let _ = state.pop();
+                            }
+
+                            (_, false) => {}
+                            (_, true) => unreachable!(),
+                        }
+                    }
+
+                    _ => unreachable!(),
                 }
             }
         }
+
+        tracing::info!(
+            target = "store_server",
+            n_statements = batch.operations.len()
+        );
+
         if !batch.is_empty() {
             self.write_batch(batch).await?;
         }
-        Ok(Response::new(()))
-    }
 
-    #[instrument(target = "store_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
-    async fn process_specific_chunk(
-        &self,
-        request: Request<RequestSpecificChunk>,
-    ) -> Result<Response<ReplySpecificChunk>, Status> {
-        let request = request.into_inner();
-        let RequestSpecificChunk {
-            message_index,
-            index,
-        } = request;
-        let mut pending_big_reads = self.pending_big_reads.write().await;
-        let Some(entry) = pending_big_reads.big_reads.get_mut(&message_index) else {
-            return Err(Status::not_found("process_specific_chunk"));
-        };
-        let index = index as usize;
-        let chunk = entry.chunks[index].clone();
-        entry.num_processed_chunks += 1;
-        if entry.chunks.len() == entry.num_processed_chunks {
-            pending_big_reads.big_reads.remove(&message_index);
-        }
-        let response = ReplySpecificChunk { chunk };
-        Ok(Response::new(response))
+        Ok(Response::new(()))
     }
 
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
@@ -525,10 +732,34 @@ impl StoreProcessor for ServiceStoreServer {
     async fn process_list_all(
         &self,
         _request: Request<()>,
-    ) -> Result<Response<ReplyListAll>, Status> {
+    ) -> Result<Response<Self::ProcessListAllStream>, Status> {
         let namespaces = self.list_all().await?;
-        let response = ReplyListAll { namespaces };
-        Ok(Response::new(response))
+
+        let mut stream = Vec::new();
+        let mut grouped_namespaces = Vec::new();
+        let mut chunk_size = 0;
+        for namespace in namespaces {
+            if MAX_PAYLOAD_SIZE > namespace.len() + chunk_size {
+                chunk_size += namespace.len();
+                grouped_namespaces.push(namespace);
+                continue;
+            }
+
+            stream.push(Ok(ReplyListAll {
+                namespaces: grouped_namespaces,
+            }));
+            grouped_namespaces = Vec::new();
+            chunk_size = namespace.len();
+            grouped_namespaces.push(namespace);
+        }
+
+        if !grouped_namespaces.is_empty() {
+            stream.push(Ok(ReplyListAll {
+                namespaces: grouped_namespaces,
+            }));
+        }
+
+        Ok(Response::new(futures::stream::iter(stream)))
     }
 
     #[instrument(
@@ -560,44 +791,10 @@ impl StoreProcessor for ServiceStoreServer {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-    let internal_event_filter = {
-        match std::env::var_os("RUST_LOG_SPAN_EVENTS") {
-            Some(mut value) => {
-                value.make_ascii_lowercase();
-                let value = value
-                    .to_str()
-                    .expect("test-log: RUST_LOG_SPAN_EVENTS must be valid UTF-8");
-                value
-                    .split(',')
-                    .map(|filter| match filter.trim() {
-                        "new" => FmtSpan::NEW,
-                        "enter" => FmtSpan::ENTER,
-                        "exit" => FmtSpan::EXIT,
-                        "close" => FmtSpan::CLOSE,
-                        "active" => FmtSpan::ACTIVE,
-                        "full" => FmtSpan::FULL,
-                        _ => panic!("test-log: RUST_LOG_SPAN_EVENTS must contain filters separated by `,`.\n\t\
-                                     For example: `active` or `new,close`\n\t\
-                                     Supported filters: new, enter, exit, close, active, full\n\t\
-                                     Got: {}", value),
-                    })
-                    .fold(FmtSpan::NONE, |acc, filter| filter | acc)
-            }
-            None => FmtSpan::NONE,
-        }
+pub async fn server(endpoint: &str) {
+    let options = ServiceStoreServerOptions::Memory {
+        endpoint: endpoint.to_owned(),
     };
-    tracing_subscriber::fmt()
-        .with_span_events(internal_event_filter)
-        .with_writer(std::io::stderr)
-        .with_env_filter(env_filter)
-        .init();
-
-    let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
     let namespace = "linera_storage_service";
     let (store, endpoint) = match options {
@@ -620,17 +817,16 @@ async fn main() {
             (store, endpoint)
         }
     };
-    let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
-    let pending_big_reads = Arc::new(RwLock::new(PendingBigReads::default()));
-    let store = ServiceStoreServer {
+
+    let heaped_store = Arc::new_cyclic(|weak| ServiceStoreServer {
         store,
-        pending_big_puts,
-        pending_big_reads,
-    };
+        self_ref: weak.clone(),
+    });
+
     let endpoint = endpoint.parse().unwrap();
     info!("Starting linera_storage_service on endpoint={}", endpoint);
     Server::builder()
-        .add_service(StoreProcessorServer::new(store))
+        .add_service(StoreProcessorServer::from_arc(heaped_store))
         .serve(endpoint)
         .await
         .expect("a successful running of the server");

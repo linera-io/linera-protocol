@@ -19,7 +19,7 @@ test = ["linera-views/test"]
 
 [[bin]]
 name = "linera-storage-server"
-path = "src/server.rs"
+path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
@@ -34,6 +34,7 @@ prost.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-stream.workspace = true
 tonic = { workspace = true, features = ["codegen", "prost", "transport"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
