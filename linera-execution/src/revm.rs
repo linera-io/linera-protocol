@@ -9,7 +9,12 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName, vm::{EvmQuery, VmRuntime}};
+use linera_base::{
+    data_types::Bytecode,
+    ensure,
+    identifiers::StreamName,
+    vm::{EvmQuery, VmRuntime},
+};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::AccountState,
@@ -599,7 +604,10 @@ const SSTORE_REFUND_RELEASE: u64 = 4800;
 /// Note that in the EVM, the refund is limited to at most 20% of the
 /// gas used, but the rescaling come after the gas_used/gas_refunded
 /// that are obtained.
-fn process_execution_result(storage_stats: StorageStats, result: ExecutionResult) -> Result<ProcessResultSuccess, ExecutionError> {
+fn process_execution_result(
+    storage_stats: StorageStats,
+    result: ExecutionResult,
+) -> Result<ProcessResultSuccess, ExecutionError> {
     match result {
         ExecutionResult::Success {
             reason: _,
@@ -615,9 +623,16 @@ fn process_execution_result(storage_stats: StorageStats, result: ExecutionResult
             gas_final -= storage_stats.number_key_set * SSTORE_COST_SET;
             gas_final -= storage_stats.number_key_set_zero * SSTORE_COST_SET_ZERO;
             gas_final -= storage_stats.number_key_read * SLOAD_COST;
-            assert_eq!(gas_refunded, storage_stats.number_key_release * SSTORE_REFUND_RELEASE);
-            Ok(ProcessResultSuccess { gas_final, output, logs })
-        },
+            assert_eq!(
+                gas_refunded,
+                storage_stats.number_key_release * SSTORE_REFUND_RELEASE
+            );
+            Ok(ProcessResultSuccess {
+                gas_final,
+                output,
+                logs,
+            })
+        }
         ExecutionResult::Revert { gas_used, output } => {
             let error = EvmExecutionError::Revert { gas_used, output };
             Err(ExecutionError::EvmError(error))
@@ -667,10 +682,7 @@ where
         process_execution_result(storage_stats, result)
     }
 
-    fn consume_fuel(
-        &mut self,
-        gas_final: u64,
-    ) -> Result<(), ExecutionError> {
+    fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
         let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
         runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }

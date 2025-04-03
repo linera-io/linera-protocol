@@ -623,8 +623,10 @@ impl Runnable for Job {
                                     let existing_policy = policy.clone();
                                     policy = linera_execution::ResourceControlPolicy {
                                         block: block.unwrap_or(existing_policy.block),
-                                        wasm_fuel_unit: wasm_fuel_unit.unwrap_or(existing_policy.wasm_fuel_unit),
-                                        evm_fuel_unit: evm_fuel_unit.unwrap_or(existing_policy.evm_fuel_unit),
+                                        wasm_fuel_unit: wasm_fuel_unit
+                                            .unwrap_or(existing_policy.wasm_fuel_unit),
+                                        evm_fuel_unit: evm_fuel_unit
+                                            .unwrap_or(existing_policy.evm_fuel_unit),
                                         read_operation: read_operation
                                             .unwrap_or(existing_policy.read_operation),
                                         write_operation: write_operation

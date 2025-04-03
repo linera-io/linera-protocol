@@ -83,8 +83,6 @@ impl ResourceTracker {
     }
 }
 
-
-
 /// How to access the balance of an account.
 pub trait BalanceHolder {
     fn balance(&self) -> Result<Amount, ArithmeticError>;
@@ -221,7 +219,11 @@ where
     }
 
     /// Tracks a number of fuel units used.
-    pub(crate) fn track_fuel(&mut self, fuel: u64, vm_runtime: VmRuntime) -> Result<(), ExecutionError> {
+    pub(crate) fn track_fuel(
+        &mut self,
+        fuel: u64,
+        vm_runtime: VmRuntime,
+    ) -> Result<(), ExecutionError> {
         match vm_runtime {
             VmRuntime::Wasm => {
                 self.tracker.as_mut().wasm_fuel = self
@@ -234,7 +236,7 @@ where
                     self.tracker.as_ref().wasm_fuel <= self.policy.maximum_wasm_fuel_per_block,
                     ExecutionError::MaximumFuelExceeded(vm_runtime)
                 );
-            },
+            }
             VmRuntime::Evm => {
                 self.tracker.as_mut().evm_fuel = self
                     .tracker
@@ -246,7 +248,7 @@ where
                     self.tracker.as_ref().evm_fuel <= self.policy.maximum_evm_fuel_per_block,
                     ExecutionError::MaximumFuelExceeded(vm_runtime)
                 );
-            },
+            }
         }
         self.update_balance(self.policy.fuel_price(fuel, vm_runtime)?)
     }

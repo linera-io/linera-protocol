@@ -403,7 +403,11 @@ impl ResourceControlPolicy {
         }
     }
 
-    pub(crate) fn fuel_price(&self, fuel: u64, vm_runtime: VmRuntime) -> Result<Amount, ArithmeticError> {
+    pub(crate) fn fuel_price(
+        &self,
+        fuel: u64,
+        vm_runtime: VmRuntime,
+    ) -> Result<Amount, ArithmeticError> {
         self.fuel_unit(vm_runtime).try_mul(u128::from(fuel))
     }
 
