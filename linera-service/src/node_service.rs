@@ -766,7 +766,7 @@ where
     C: ClientContext,
 {
     config: ChainListenerConfig,
-    port: NonZeroU16,
+    port: Option<NonZeroU16>,
     default_chain: Option<ChainId>,
     storage: C::Storage,
     context: Arc<Mutex<C>>,
@@ -794,7 +794,7 @@ where
     /// Creates a new instance of the node service given a client chain and a port.
     pub async fn new(
         config: ChainListenerConfig,
-        port: NonZeroU16,
+        port: Option<NonZeroU16>,
         default_chain: Option<ChainId>,
         storage: C::Storage,
         context: C,
@@ -831,7 +831,7 @@ where
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip(self), fields(port = ?self.port))]
     pub async fn run(self) -> Result<(), anyhow::Error> {
-        let requested_port = self.port.get();
+        let requested_port = self.port.map(NonZeroU16::get).unwrap_or_default();
         let listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], requested_port)))
                 .await?;

@@ -890,8 +890,8 @@ pub enum ClientCommand {
         config: ChainListenerConfig,
 
         /// The port on which to run the server
-        #[arg(long, default_value = "8080")]
-        port: NonZeroU16,
+        #[arg(long)]
+        port: Option<NonZeroU16>,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

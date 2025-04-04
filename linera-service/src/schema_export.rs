@@ -217,7 +217,7 @@ async fn main() -> std::io::Result<()> {
         _phantom: std::marker::PhantomData,
     };
     let port = std::num::NonZeroU16::new(8080).unwrap();
-    let service = NodeService::new(config, port, None, storage, context).await;
+    let service = NodeService::new(config, Some(port), None, storage, context).await;
     let schema = service.schema(port).sdl();
     print!("{}", schema);
     Ok(())
