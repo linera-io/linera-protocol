@@ -21,7 +21,7 @@ use chrono::Utc;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
+    crypto::{CryptoHash, CryptoRng, InMemSigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
     ownership::ChainOwnership,
@@ -129,11 +129,11 @@ impl Runnable for Job {
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
-                let (new_owner, key_pair) = match owner {
-                    Some(owner) => (owner, None),
+                let new_owner = match owner {
+                    Some(owner) => owner,
                     None => {
-                        let key_pair = context.wallet.generate_key_pair();
-                        (key_pair.public().into(), Some(key_pair))
+                        let public_key = context.wallet.generate_key_pair();
+                        public_key.into()
                     }
                 };
                 info!("Opening a new chain from existing chain {}", chain_id);
@@ -153,7 +153,7 @@ impl Runnable for Job {
                 let id = ChainId::child(message_id);
                 let timestamp = certificate.block().header.timestamp;
                 context
-                    .update_wallet_for_new_chain(id, key_pair, timestamp)
+                    .update_wallet_for_new_chain(id, Some(new_owner), timestamp)
                     .await?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -768,6 +768,7 @@ impl Runnable for Job {
                     .await?;
 
                 linera_client::benchmark::Benchmark::<S>::run_benchmark(
+                    context.wallet().signer().clone(),
                     num_chains,
                     transactions_per_block,
                     bps,
@@ -1116,15 +1117,15 @@ impl Runnable for Job {
                 ..
             }) => {
                 let start_time = Instant::now();
-                let key_pair = context.wallet.generate_key_pair();
-                let owner = key_pair.public().into();
+                let public_key = context.wallet.generate_key_pair();
+                let owner: AccountOwner = public_key.into();
                 info!(
                     "Requesting a new chain for owner {owner} using the faucet at address \
                     {faucet_url}",
                 );
                 context
                     .wallet_mut()
-                    .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                    .mutate(|w| w.add_unassigned_key_pair(public_key))
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&owner).await?;
@@ -1161,15 +1162,15 @@ impl Runnable for Job {
                 set_default,
             }) => {
                 let start_time = Instant::now();
-                let key_pair = context.wallet.generate_key_pair();
-                let owner = key_pair.public().into();
+                let public_key = context.wallet.generate_key_pair();
+                let owner = public_key.into();
                 info!(
                     "Requesting a new chain for owner {owner} using the faucet at address \
                     {faucet_url}",
                 );
                 context
                     .wallet_mut()
-                    .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                    .mutate(|w| w.add_unassigned_key_pair(public_key))
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&owner).await?;
@@ -1492,20 +1493,24 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             )?;
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
+            let mut signer = Box::new(InMemSigner::new());
             for i in 0..=*num_other_initial_chains {
                 let description = ChainDescription::Root(i);
                 // Create keys.
-                let key_pair = AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(&mut rng));
-                let chain = UserChain::make_initial(key_pair, description, timestamp);
-                // Public "genesis" state.
-                let key = chain.key_pair.as_ref().unwrap().public();
-                genesis_config.chains.push((key, *initial_funding));
+                let public_key = signer.generate_new();
+                let chain = UserChain::make_initial(
+                    public_key.into(),
+                    signer.clone(),
+                    description,
+                    timestamp,
+                );
+                genesis_config.chains.push((public_key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }
             genesis_config.persist().await?;
             options
-                .create_wallet(genesis_config.into_value(), *testing_prng_seed)?
+                .create_wallet(genesis_config.into_value(), *testing_prng_seed, signer)?
                 .mutate(|wallet| wallet.extend(chains))
                 .await?;
             options.initialize_storage().boxed().await?;
@@ -1550,11 +1555,12 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
 
         ClientCommand::Keygen => {
             let start_time = Instant::now();
-            let mut wallet = options.wallet().await?;
-            let key_pair = wallet.generate_key_pair();
-            let owner = AccountOwner::from(key_pair.public());
+            let mut wallet: linera_client::config::WalletState<persistent::File<Wallet>> =
+                options.wallet().await?;
+            let public_key = wallet.generate_key_pair();
+            let owner = AccountOwner::from(public_key);
             wallet
-                .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                .mutate(|w| w.add_unassigned_key_pair(public_key))
                 .await?;
             println!("{}", owner);
             info!("Key generated in {} ms", start_time.elapsed().as_millis());
@@ -1856,8 +1862,9 @@ Make sure to use a Linera client compatible with this network.
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;
+                let signer: Box<dyn Signer> = Box::new(InMemSigner::new());
                 options
-                    .create_wallet(genesis_config, *testing_prng_seed)?
+                    .create_wallet(genesis_config, *testing_prng_seed, signer)?
                     .mutate(|wallet| {
                         wallet.extend(
                             with_other_chains

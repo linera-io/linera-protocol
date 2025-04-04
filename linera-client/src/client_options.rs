@@ -10,7 +10,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -290,6 +290,7 @@ impl ClientOptions {
         &self,
         genesis_config: GenesisConfig,
         testing_prng_seed: Option<u64>,
+        signer: Box<dyn Signer>,
     ) -> Result<WalletState<persistent::File<Wallet>>, Error> {
         let wallet_path = self.wallet_path()?;
         if wallet_path.exists() {
@@ -297,7 +298,7 @@ impl ClientOptions {
         }
         Ok(WalletState::create_from_file(
             &wallet_path,
-            Wallet::new(genesis_config, testing_prng_seed),
+            Wallet::new(genesis_config, testing_prng_seed, signer),
         )?)
     }
 }

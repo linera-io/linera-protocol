@@ -8,7 +8,7 @@ use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, Secp256k1SecretKey},
+    crypto::{AccountPublicKey, InMemSigner, Signer},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::{AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -57,15 +57,10 @@ impl chain_listener::ClientContext for ClientContext {
             .wallet
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        let known_key_pairs = chain
-            .key_pair
-            .as_ref()
-            .map(|kp| kp.copy())
-            .into_iter()
-            .collect();
+        let signer = self.wallet.signer.clone();
         Ok(self.client.create_chain_client(
             chain_id,
-            known_key_pairs,
+            signer,
             self.wallet.genesis_admin_chain(),
             chain.block_hash,
             chain.timestamp,
@@ -77,13 +72,14 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.wallet.insert(UserChain {
                 chain_id,
-                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                owner,
+                signer: Some(self.wallet.signer.clone()),
                 block_hash: None,
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
@@ -109,10 +105,11 @@ impl chain_listener::ClientContext for ClientContext {
 async fn test_chain_listener() -> anyhow::Result<()> {
     // Create two chains.
     let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+    let signer: Box<dyn Signer> = Box::new(InMemSigner::new());
     let config = ChainListenerConfig::default();
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
@@ -122,7 +119,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let storage = builder.make_storage().await?;
     let delivery = CrossChainMessageDelivery::NonBlocking;
     let mut context = ClientContext {
-        wallet: Wallet::new(genesis_config, Some(37)),
+        wallet: Wallet::new(genesis_config, Some(37), builder.signer.clone()),
         client: Arc::new(Client::new(
             builder.make_node_provider(),
             storage.clone(),
@@ -136,10 +133,10 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             Duration::from_secs(1),
         )),
     };
-    let key_pair = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate_from(&mut rng));
-    let owner = key_pair.public().into();
+    let key_pair = context.wallet.signer.generate_new();
+    let owner: AccountOwner = key_pair.into();
     context
-        .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
+        .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time())
         .await?;
     let context = Arc::new(Mutex::new(context));
     let listener = ChainListener::new(config);

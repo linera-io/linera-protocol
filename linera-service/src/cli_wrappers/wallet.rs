@@ -856,8 +856,7 @@ impl ClientWrapper {
     pub fn get_owner(&self) -> Option<AccountOwner> {
         let wallet = self.load_wallet().ok()?;
         let chain_id = wallet.default_chain()?;
-        let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
-        Some(public_key.into())
+        wallet.get(chain_id)?.owner
     }
 
     pub async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {

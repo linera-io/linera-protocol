@@ -4512,6 +4512,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-web",
+ "trait-variant",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm_thread",

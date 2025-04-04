@@ -12,8 +12,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
-        CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
+        AccountPublicKey, AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash,
+        SignableBytes, Signer, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
@@ -612,16 +612,19 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: ProposedBlock, secret: &AccountSecretKey) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, signer: &Box<dyn Signer>) -> Self {
+        let owner = block
+            .authenticated_signer
+            .expect("Block author is required for new block proposals");
         let content = ProposalContent {
             round,
             block,
             outcome: None,
         };
-        let signature = secret.sign(&content);
+        let signature = signer.sign(&owner, &SignableBytes::from(&content)).unwrap();
         Self {
             content,
-            public_key: secret.public(),
+            public_key: signer.get_public(&owner).unwrap(),
             signature,
             validated_block_certificate: None,
         }
@@ -630,20 +633,23 @@ impl BlockProposal {
     pub fn new_retry(
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
-        secret: &AccountSecretKey,
+        signer: &Box<dyn Signer>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
         let (block, outcome) = block.into_proposal();
+        let owner = block
+            .authenticated_signer
+            .expect("Block author is required for new block proposals");
         let content = ProposalContent {
             block,
             round,
             outcome: Some(outcome),
         };
-        let signature = secret.sign(&content);
+        let signature = signer.sign(&owner, &SignableBytes::from(&content)).unwrap();
         Self {
             content,
-            public_key: secret.public(),
+            public_key: signer.get_public(&owner).unwrap(),
             signature,
             validated_block_certificate: Some(lite_cert),
         }
@@ -808,6 +814,12 @@ pub(crate) fn check_signatures(
 }
 
 impl BcsSignable<'_> for ProposalContent {}
+
+impl From<&ProposalContent> for SignableBytes {
+    fn from(content: &ProposalContent) -> Self {
+        SignableBytes::new(bcs::to_bytes(content).expect("Proposal content should be serializable"))
+    }
+}
 
 impl BcsSignable<'_> for VoteValue {}
 

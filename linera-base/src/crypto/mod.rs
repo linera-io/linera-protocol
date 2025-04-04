@@ -8,6 +8,7 @@ mod ed25519;
 mod hash;
 #[allow(dead_code)]
 mod secp256k1;
+mod signer;
 use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
 use alloy_primitives::FixedBytes;
@@ -17,6 +18,7 @@ pub use hash::*;
 use linera_witty::{WitLoad, WitStore, WitType};
 pub use secp256k1::{Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature};
 use serde::{Deserialize, Serialize};
+pub use signer::*;
 use thiserror::Error;
 
 /// The public key of a validator.
@@ -118,6 +120,12 @@ impl AccountSecretKey {
     /// Generates a new key pair using the operating system's RNG.
     pub fn generate() -> Self {
         AccountSecretKey::Ed25519(Ed25519SecretKey::generate())
+    }
+
+    #[cfg(with_getrandom)]
+    /// Generates a new key pair from the given RNG. Use with care.
+    pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
+        AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(rng))
     }
 }
 

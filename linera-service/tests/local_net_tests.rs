@@ -625,7 +625,8 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
 
     let (mut net, client) = config.instantiate().await?;
 
-    let wallet_state = WalletState::read_from_file(client.wallet_path().as_path())?;
+    let wallet_state: WalletState<linera_client::persistent::File<linera_client::wallet::Wallet>> =
+        WalletState::read_from_file(client.wallet_path().as_path())?;
     let chain_id = wallet_state.default_chain().unwrap();
 
     let lock = wallet_state;

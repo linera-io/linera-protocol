@@ -10,10 +10,11 @@ use web_sys::DomException;
 use super::{dirty::Dirty, LocalPersist};
 
 /// An implementation of [`Persist`] based on an IndexedDB record with a given key.
-#[derive(derive_more::Deref)]
+#[derive(derive_more::Deref, derive_more::DerefMut)]
 pub struct IndexedDb<T> {
     key: String,
     #[deref]
+    #[deref_mut]
     value: T,
     database: IdbDatabase,
     dirty: Dirty,
