@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     mem,
     path::{Path, PathBuf},
+    process::Stdio,
     str::FromStr,
     sync,
     time::Duration,
@@ -34,7 +35,10 @@ use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
 use tempfile::TempDir;
-use tokio::process::{Child, Command};
+use tokio::{
+    io::{AsyncBufReadExt as _, BufReader},
+    process::{Child, ChildStdout, Command},
+};
 use tracing::{error, info, warn};
 
 use crate::{
@@ -450,9 +454,17 @@ impl ClientWrapper {
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
         }
-        let child = command
+        let mut child = command
             .args(["--port".to_string(), port.to_string()])
+            .stdout(Stdio::piped())
             .spawn_into()?;
+        let port = Self::parse_node_service_port(
+            child
+                .stdout
+                .take()
+                .expect("Spawned process should have its stdout configured"),
+        )
+        .await?;
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
@@ -468,6 +480,28 @@ impl ClientWrapper {
             }
         }
         bail!("Failed to start node service");
+    }
+
+    /// Parses the `linera service`'s output until it finds the port the service is
+    /// listening on.
+    ///
+    /// Searches the output until it finds the line that starts with "http://", and parses the
+    /// port from that address.
+    async fn parse_node_service_port(node_service_output: ChildStdout) -> Result<u16> {
+        let mut output = BufReader::new(node_service_output).lines();
+
+        while let Some(line) = output.next_line().await? {
+            if line.starts_with("http://") {
+                let port_string = line.rsplit(':').next().ok_or_else(|| {
+                    anyhow::anyhow!("`linera service` did not print port on the expected line")
+                })?;
+                return Ok(port_string.parse()?);
+            }
+        }
+
+        Err(anyhow::anyhow!(
+            "`linera service` did not print out the port it was listening on"
+        ))
     }
 
     /// Runs `linera query-validator`
