@@ -19,17 +19,20 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, MessageBundle, Origin, ProposedBlock, Target},
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
-    ChainStateView,
 };
 use linera_execution::{
     committee::Epoch, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
-use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, instrument, trace, warn, Instrument as _};
 
-use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
+use super::{
+    config::ChainWorkerConfig,
+    state::{ChainWorkerState, SharedChainStateView},
+    DeliveryNotifier,
+};
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     value_cache::ValueCache,
@@ -64,8 +67,7 @@ where
     /// Request a read-only view of the [`ChainStateView`].
     GetChainStateView {
         #[debug(skip)]
-        callback:
-            oneshot::Sender<Result<OwnedRwLockReadGuard<ChainStateView<Context>>, WorkerError>>,
+        callback: oneshot::Sender<Result<SharedChainStateView<Context>, WorkerError>>,
     },
 
     /// Query an application's state.
