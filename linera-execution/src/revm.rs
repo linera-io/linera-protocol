@@ -291,7 +291,7 @@ fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
     for (i, chunk) in vec.chunks_exact(8).enumerate() {
         output[i] = u64::from_be_bytes(chunk.try_into().unwrap());
     }
-    let hash = <[u64; 4]>::from(output).into();
+    let hash = output.into();
     ApplicationId::new(hash)
 }
 
@@ -923,14 +923,12 @@ where
             forbid_execute_operation_origin(&query[4..8])?;
             let tx_data = Bytes::copy_from_slice(&query[4..]);
             let result = self.transact_tx_data(tx_data)?;
-            let result = process_execution_result(result)?;
             let (answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
             forbid_execute_operation_origin(&query[..4])?;
             let tx_data = Bytes::copy_from_slice(&query);
             let result = self.transact_tx_data(tx_data)?;
-            let result = process_execution_result(result)?;
             let (output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
@@ -943,7 +941,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    fn transact_tx_data(&mut self, tx_data: Bytes) -> Result<ExecutionResult, ExecutionError> {
+    fn transact_tx_data(&mut self, tx_data: Bytes) -> Result<ExecutionResultSuccess, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
         let mut inspector = CallInterceptorService {
             db: self.db.clone(),
@@ -976,6 +974,6 @@ where
             let error = EvmExecutionError::TransactCommitError(error);
             ExecutionError::EvmError(error)
         })?;
-        Ok(result_state.result)
+        process_execution_result(result_state.result)
     }
 }
