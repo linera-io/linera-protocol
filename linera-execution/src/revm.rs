@@ -10,7 +10,7 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{crypto::CryptoHash, data_types::Bytecode, ensure, identifiers::{StreamName, ApplicationId}, vm::EvmQuery};
+use linera_base::{data_types::Bytecode, ensure, identifiers::{StreamName, ApplicationId}, vm::EvmQuery};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::{AccountState, WrapDatabaseRef},
@@ -269,6 +269,22 @@ fn precompile_address() -> Address {
     address!("000000000000000000000000000000000000000b")
 }
 
+fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
+    let mut output = [0u64; 4];
+    for (i, chunk) in vec.chunks_exact(8).enumerate() {
+        output[i] = u64::from_be_bytes(chunk.try_into().unwrap());
+    }
+    let hash = <[u64; 4]>::from(output).into();
+    ApplicationId::new(hash)
+}
+
+fn address_to_user_application_id(address: Address) -> ApplicationId {
+    let address: Vec<u8> = address.to_vec();
+    let mut vec = vec![0_u8; 32];
+    vec[..20].copy_from_slice(&address[..20]);
+    u8_slice_to_application_id(&vec)
+}
+
 struct GeneralContractCall;
 
 impl<Runtime: ContractRuntime>
@@ -282,9 +298,7 @@ impl<Runtime: ContractRuntime>
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
         let vec = input.to_vec();
-        let target = B256::from_slice(&vec[0..32]);
-        let target = CryptoHash::build_from_b256(target);
-        let target = ApplicationId::new(target);
+        let target = u8_slice_to_application_id(&vec[0..32]);
         let argument: Vec<u8> = vec[32..].to_vec();
         let result = {
             let authenticated = true;
@@ -320,9 +334,7 @@ impl<Runtime: ServiceRuntime>
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
         let vec = input.to_vec();
-        let target = B256::from_slice(&vec[0..32]);
-        let target = CryptoHash::build_from_b256(target);
-        let target = ApplicationId::new(target);
+        let target = u8_slice_to_application_id(&vec[0..32]);
         let argument: Vec<u8> = vec[32..].to_vec();
         let result = {
             let mut runtime = context
@@ -342,15 +354,6 @@ impl<Runtime: ServiceRuntime>
         let result = PrecompileOutput { gas_used, bytes };
         Ok(result)
     }
-}
-
-fn address_to_user_application_id(address: Address) -> ApplicationId {
-    let address: Vec<u8> = address.to_vec();
-    let mut vec = vec![0_u8; 32];
-    vec[..20].copy_from_slice(&address[..20]);
-    let target = B256::from_slice(&vec);
-    let application_description_hash = CryptoHash::build_from_b256(target);
-    ApplicationId::new(application_description_hash)
 }
 
 fn failing_outcome() -> CallOutcome {

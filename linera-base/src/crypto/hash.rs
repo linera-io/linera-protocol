@@ -58,11 +58,6 @@ impl CryptoHash {
 
         CryptoHash::new(&TestString::new(s))
     }
-
-    /// Build a raw CryptoHash
-    pub fn build_from_b256(v: B256) -> Self {
-        Self(v)
-    }
 }
 
 /// Temporary struct to extend `Keccak256` with `io::Write`.
