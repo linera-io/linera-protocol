@@ -745,8 +745,7 @@ where
         let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         let mut vec = self.module.clone();
         vec.extend_from_slice(&argument);
-        let tx_data = Bytes::copy_from_slice(&vec);
-        let result = self.transact_commit_tx_data(Choice::Create, tx_data)?;
+        let result = self.transact_commit_tx_data(Choice::Create, &vec)?;
         self.write_logs(result.logs, "deploy")?;
         let Output::Create(_, _) = result.output else {
             unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
@@ -761,18 +760,11 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         assert_message_length(operation.len() >= 4)?;
         let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
-            assert_message_length(operation.len() >= 8)?;
-            forbid_execute_operation_origin(&operation[4..8])?;
-            let tx_data = Bytes::copy_from_slice(&operation[4..]);
-            let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
-            let (output, logs) = result.interpreter_result_and_logs()?;
-            (output, logs)
+            let result = self.transact_commit_tx_data(Choice::Call, &operation[4..])?;
+            result.interpreter_result_and_logs()?
         } else {
-            forbid_execute_operation_origin(&operation[..4])?;
-            let tx_data = Bytes::copy_from_slice(&operation);
-            let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
-            let (output, logs) = result.output_and_logs();
-            (output, logs)
+            let result = self.transact_commit_tx_data(Choice::Call, &operation)?;
+            result.output_and_logs()
         };
         self.write_logs(logs, "operation")?;
         Ok(output)
@@ -827,11 +819,16 @@ where
     fn transact_commit_tx_data(
         &mut self,
         ch: Choice,
-        tx_data: Bytes,
+        vec: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        let kind = match ch {
-            Choice::Create => TxKind::Create,
-            Choice::Call => TxKind::Call(Address::ZERO.create(0)),
+        let (kind, tx_data) = match ch {
+            Choice::Create => (TxKind::Create, Bytes::copy_from_slice(&vec)),
+            Choice::Call => {
+                assert_message_length(vec.len() >= 4)?;
+                forbid_execute_operation_origin(&vec[..4])?;
+                let tx_data = Bytes::copy_from_slice(&vec);
+                (TxKind::Call(Address::ZERO.create(0)), tx_data)
+            },
         };
         let mut inspector = CallInterceptorContract {
             db: self.db.clone(),
@@ -919,16 +916,11 @@ where
 
         assert_message_length(query.len() >= 4)?;
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
-            assert_message_length(query.len() >= 8)?;
-            forbid_execute_operation_origin(&query[4..8])?;
-            let tx_data = Bytes::copy_from_slice(&query[4..]);
-            let result = self.transact_tx_data(tx_data)?;
+            let result = self.transact_tx_data(&query[4..])?;
             let (answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
-            forbid_execute_operation_origin(&query[..4])?;
-            let tx_data = Bytes::copy_from_slice(&query);
-            let result = self.transact_tx_data(tx_data)?;
+            let result = self.transact_tx_data(&query)?;
             let (output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
@@ -941,7 +933,10 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    fn transact_tx_data(&mut self, tx_data: Bytes) -> Result<ExecutionResultSuccess, ExecutionError> {
+    fn transact_tx_data(&mut self, vec: &[u8]) -> Result<ExecutionResultSuccess, ExecutionError> {
+        assert_message_length(vec.len() >= 4)?;
+        forbid_execute_operation_origin(&vec[..4])?;
+        let tx_data = Bytes::copy_from_slice(&vec);
         let contract_address = Address::ZERO.create(0);
         let mut inspector = CallInterceptorService {
             db: self.db.clone(),
@@ -968,8 +963,8 @@ where
                 });
             })
             .build();
-        let result_state = evm.transact();
-        let result_state = result_state.map_err(|error| {
+
+        let result_state = evm.transact().map_err(|error| {
             let error = format!("{:?}", error);
             let error = EvmExecutionError::TransactCommitError(error);
             ExecutionError::EvmError(error)
