@@ -4,6 +4,7 @@
 //! The state and functionality of a chain worker.
 
 mod attempted_changes;
+mod shared_chain_state_view;
 mod temporary_changes;
 
 use std::{
@@ -37,6 +38,7 @@ use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
 
 #[cfg(test)]
 pub(crate) use self::attempted_changes::CrossChainUpdateHelper;
+pub use self::shared_chain_state_view::SharedChainStateView;
 use self::{
     attempted_changes::ChainWorkerStateWithAttemptedChanges,
     temporary_changes::ChainWorkerStateWithTemporaryChanges,
