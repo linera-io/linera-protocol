@@ -507,8 +507,6 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     Ok(())
 }
 
-
-
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -520,7 +518,8 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        get_contract_service_paths, get_evm_call_evm_example_counter, get_evm_example_counter, read_evm_u64_entry,
+        get_contract_service_paths, get_evm_call_evm_example_counter, get_evm_example_counter,
+        read_evm_u64_entry,
     };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -723,9 +722,6 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
 
     Ok(())
 }
-
-
-
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
