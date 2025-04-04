@@ -641,11 +641,14 @@ where
         // That means that when the write-lock is acquired, no readers will be waiting to acquire
         // the lock. This is important because otherwise readers could have a stale view of the
         // chain state.
+        let chain_id = self.state.chain.chain_id();
         let maybe_shared_chain_view = self.state.shared_chain_view.take();
+        debug!("Waiting for `shared_chain_view` write lock for {chain_id}");
         let _maybe_write_guard = match &maybe_shared_chain_view {
             Some(shared_chain_view) => Some(shared_chain_view.write().await),
             None => None,
         };
+        debug!("Acquired `shared_chain_view` write lock for {chain_id}");
 
         self.state.chain.save().await?;
         self.succeeded = true;
