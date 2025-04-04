@@ -28,7 +28,7 @@ use linera_faucet::ClaimOutcome;
 use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
+        local_net::{Database, LocalNet, LocalNetConfig, ProcessInbox},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
@@ -86,10 +86,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let chain_2 = client
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
-    let port = get_node_port().await;
     let node_service_2 = match network {
         Network::Grpc | Network::Grpcs => {
-            Some(client_2.run_node_service(port, ProcessInbox::Skip).await?)
+            Some(client_2.run_node_service(None, ProcessInbox::Skip).await?)
         }
         Network::Tcp | Network::Udp => None,
     };
@@ -456,8 +455,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     client2.wallet_init(&[chain], FaucetOption::None).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let port = get_node_port().await;
-    let mut node_service2 = client2.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(None, ProcessInbox::Skip).await?;
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -570,8 +568,7 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
         .project_publish(project_dir, vec![], None, &0)
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     node_service.ensure_is_running()?;
 
@@ -601,8 +598,7 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
         .project_publish(example_dir, vec![], None, &0)
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     node_service.ensure_is_running()?;
 
@@ -892,8 +888,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
             None,
         )
         .await?;
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     let app = EthereumTrackerApp(
         node_service
