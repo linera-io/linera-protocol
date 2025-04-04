@@ -401,7 +401,6 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-
         if inputs.target_address != precompile_address()
             && inputs.target_address != contract_address
         {
@@ -411,7 +410,6 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             argument.extend(&vec);
             let authenticated = true;
             let result = {
-                let argument = bcs::to_bytes(&argument)?;
                 let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
                 runtime.try_call_application(authenticated, target, argument)?
             };
