@@ -445,7 +445,6 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         process_inbox: ProcessInbox,
     ) -> Result<NodeService> {
-        let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
         if let ProcessInbox::Skip = process_inbox {
@@ -454,10 +453,10 @@ impl ClientWrapper {
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
         }
-        let mut child = command
-            .args(["--port".to_string(), port.to_string()])
-            .stdout(Stdio::piped())
-            .spawn_into()?;
+        if let Some(requested_port) = port.into() {
+            command.args(["--port".to_string(), requested_port.to_string()]);
+        }
+        let mut child = command.stdout(Stdio::piped()).spawn_into()?;
         let port = Self::parse_node_service_port(
             child
                 .stdout
