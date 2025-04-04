@@ -120,7 +120,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_block_size = 857;
+    let maximum_block_size = 881;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -159,7 +159,7 @@ async fn test_block_size_limit() {
         action: MessageAction::Accept,
     };
 
-    let valid_block = make_first_block(chain_id).with_incoming_bundle(open_chain_bundle.clone());
+    let valid_block = make_first_block(chain_id).with_incoming_bundle(open_chain_bundle);
 
     // Any block larger than the valid block is rejected.
     let invalid_block = valid_block
@@ -280,7 +280,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     );
 
     // Also, blocks without an application operation or incoming message are forbidden.
-    let invalid_block = make_child_block(&value.clone());
+    let invalid_block = make_child_block(&value);
     let result = chain
         .execute_block(&invalid_block, time, None, &[], None)
         .await;

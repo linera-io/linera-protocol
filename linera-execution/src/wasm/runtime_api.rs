@@ -11,6 +11,7 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
+    vm::VmRuntime,
 };
 use linera_views::batch::{Batch, WriteOperation};
 use linera_witty::{wit_export, Instance, RuntimeError};
@@ -646,7 +647,7 @@ where
         caller
             .user_data_mut()
             .runtime_mut()
-            .consume_fuel(fuel)
+            .consume_fuel(fuel, VmRuntime::Wasm)
             .map_err(|e| RuntimeError::Custom(e.into()))
     }
 
