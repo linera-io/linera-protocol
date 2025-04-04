@@ -10,22 +10,30 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{data_types::Bytecode, ensure, identifiers::{StreamName, ApplicationId}, vm::EvmQuery};
+use linera_base::{
+    data_types::Bytecode,
+    ensure,
+    identifiers::{ApplicationId, StreamName},
+    vm::EvmQuery,
+};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::{AccountState, WrapDatabaseRef},
+    inspector_handle_register,
     primitives::{
         keccak256,
         state::{Account, AccountInfo},
         Bytes,
     },
-    ContextStatefulPrecompile,
-    ContextPrecompile,
-    Database, DatabaseCommit, DatabaseRef, Evm, EvmContext, InnerEvmContext, Inspector, inspector_handle_register,
+    ContextPrecompile, ContextStatefulPrecompile, Database, DatabaseCommit, DatabaseRef, Evm,
+    EvmContext, InnerEvmContext, Inspector,
 };
-use revm_precompile::{PrecompileResult};
-use revm_primitives::{address, ExecutionResult, HaltReason, Log, Output, PrecompileErrors, PrecompileOutput, SuccessReason, TxKind};
 use revm_interpreter::{CallInputs, CallOutcome, Gas, InstructionResult, InterpreterResult};
+use revm_precompile::PrecompileResult;
+use revm_primitives::{
+    address, ExecutionResult, HaltReason, Log, Output, PrecompileErrors, PrecompileOutput,
+    SuccessReason, TxKind,
+};
 use thiserror::Error;
 #[cfg(with_metrics)]
 use {
@@ -62,7 +70,6 @@ fn assert_message_length(value: bool) -> Result<(), ExecutionError> {
     );
     Ok(())
 }
-
 
 /// This the selector when calling for `InterpreterResult` this is a fictional
 /// selector that does not correspond to a real function.
@@ -713,7 +720,7 @@ impl ExecutionResultSuccess {
         let result: InstructionResult = self.reason.into();
         let Output::Call(output) = self.output else {
             unreachable!("The Output is not a call which is impossible");
-	};
+        };
         let gas = Gas::new(100000);
         let result = InterpreterResult {
             result,
@@ -732,9 +739,6 @@ impl ExecutionResultSuccess {
         (output, self.logs)
     }
 }
-
-
-
 
 impl<Runtime> UserContract for RevmContractInstance<Runtime>
 where
@@ -786,7 +790,9 @@ where
     }
 }
 
-fn process_execution_result(result: ExecutionResult) -> Result<ExecutionResultSuccess, ExecutionError> {
+fn process_execution_result(
+    result: ExecutionResult,
+) -> Result<ExecutionResultSuccess, ExecutionError> {
     match result {
         ExecutionResult::Success {
             reason,
@@ -825,13 +831,13 @@ where
         vec: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         let (kind, tx_data) = match ch {
-            Choice::Create => (TxKind::Create, Bytes::copy_from_slice(&vec)),
+            Choice::Create => (TxKind::Create, Bytes::copy_from_slice(vec)),
             Choice::Call => {
                 assert_message_length(vec.len() >= 4)?;
                 forbid_execute_operation_origin(&vec[..4])?;
-                let tx_data = Bytes::copy_from_slice(&vec);
+                let tx_data = Bytes::copy_from_slice(vec);
                 (TxKind::Call(Address::ZERO.create(0)), tx_data)
-            },
+            }
         };
         let mut inspector = CallInterceptorContract {
             db: self.db.clone(),
@@ -866,11 +872,7 @@ where
         process_execution_result(result)
     }
 
-    fn write_logs(
-        &mut self,
-        logs: Vec<Log>,
-        origin: &str,
-    ) -> Result<(), ExecutionError> {
+    fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
         if !logs.is_empty() {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             let stream_name = bcs::to_bytes("ethereum_event")?;
@@ -939,7 +941,7 @@ where
     fn transact_tx_data(&mut self, vec: &[u8]) -> Result<ExecutionResultSuccess, ExecutionError> {
         assert_message_length(vec.len() >= 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
-        let tx_data = Bytes::copy_from_slice(&vec);
+        let tx_data = Bytes::copy_from_slice(vec);
         let contract_address = Address::ZERO.create(0);
         let mut inspector = CallInterceptorService {
             db: self.db.clone(),
