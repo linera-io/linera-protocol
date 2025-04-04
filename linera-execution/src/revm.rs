@@ -282,6 +282,8 @@ pub enum KeyCategory {
     Storage,
 }
 
+// This is the precompile address that contains the LINERA specific
+// functionalities accessed from the EVM.
 fn precompile_address() -> Address {
     address!("000000000000000000000000000000000000000b")
 }
