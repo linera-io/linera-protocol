@@ -8,7 +8,6 @@ mod guard;
 
 use std::{env, path::PathBuf};
 
-use guard::INTEGRATION_TEST_GUARD;
 use linera_client::{
     client_options::{
         DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
@@ -36,7 +35,6 @@ use tokio::process::Command;
 #[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]
 async fn test_script_in_readme(path: &str) -> std::io::Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {} for path {}", test_name!(), path);
 
     let file = Markdown::new(PathBuf::from(path).join("README.md"))?;
