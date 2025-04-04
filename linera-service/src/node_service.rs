@@ -828,7 +828,14 @@ where
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip(self), fields(port = ?self.port))]
     pub async fn run(self) -> Result<(), anyhow::Error> {
-        let port = self.port.get();
+        let requested_port = self.port.get();
+        let listener =
+            tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], requested_port)))
+                .await?;
+        let port = listener.local_addr()?.port();
+
+        info!("GraphiQL IDE: http://localhost:{}", port);
+
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
             axum::routing::get(util::graphiql).post(Self::application_handler);
@@ -845,16 +852,11 @@ where
             // TODO(#551): Provide application authentication.
             .layer(CorsLayer::permissive());
 
-        info!("GraphiQL IDE: http://localhost:{}", port);
-
         ChainListener::new(self.config)
             .run(Arc::clone(&self.context), self.storage.clone())
             .await;
-        let serve_fut = axum::serve(
-            tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
-            app,
-        );
-        serve_fut.await?;
+
+        axum::serve(listener, app).await?;
 
         Ok(())
     }
