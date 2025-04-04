@@ -30,7 +30,7 @@ use linera_chain::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError, ChainStateView,
+    ChainError,
 };
 use linera_execution::{committee::Epoch, ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
@@ -38,7 +38,7 @@ use linera_views::views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
+use tokio::sync::{mpsc, oneshot};
 use tracing::{error, instrument, trace, warn};
 #[cfg(with_metrics)]
 use {
@@ -50,7 +50,10 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
+    chain_worker::{
+        ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier,
+        SharedChainStateView,
+    },
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
@@ -682,7 +685,7 @@ where
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
+    ) -> Result<SharedChainStateView<StorageClient::Context>, WorkerError> {
         self.query_chain_worker(chain_id, |callback| ChainWorkerRequest::GetChainStateView {
             callback,
         })

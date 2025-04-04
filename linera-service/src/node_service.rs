@@ -24,6 +24,7 @@ use linera_chain::{
 };
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
+    chain_worker::SharedChainStateView,
     client::{ChainClient, ChainClientError},
     data_types::ClientOutcome,
     worker::Notification,
@@ -38,7 +39,6 @@ use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error as ThisError;
-use tokio::sync::OwnedRwLockReadGuard;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, trace};
 
@@ -677,9 +677,8 @@ where
     C: linera_views::context::Context + Clone + Send + Sync + 'static,
     C::Extra: linera_execution::ExecutionRuntimeContext;
 
-/// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind an
-/// [`OwnedRwLockReadGuard`].
-pub struct ReadOnlyChainStateView<C>(OwnedRwLockReadGuard<ChainStateView<C>>)
+/// A wrapper type that allows proxying GraphQL queries to a [`SharedChainStateView`].
+pub struct ReadOnlyChainStateView<C>(SharedChainStateView<C>)
 where
     C: linera_views::context::Context + Clone + Send + Sync + 'static;
 
@@ -721,7 +720,7 @@ where
     C: linera_views::context::Context + Clone + Send + Sync + 'static,
     C::Extra: linera_execution::ExecutionRuntimeContext,
 {
-    fn new(view: OwnedRwLockReadGuard<ChainStateView<C>>) -> Self {
+    fn new(view: SharedChainStateView<C>) -> Self {
         Self(
             ChainStateViewExtension(view.chain_id()),
             ReadOnlyChainStateView(view),

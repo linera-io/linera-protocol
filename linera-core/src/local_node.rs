@@ -16,16 +16,15 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
     types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
-    ChainStateView,
 };
 use linera_execution::{Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
-use tokio::sync::OwnedRwLockReadGuard;
 use tracing::{instrument, warn};
 
 use crate::{
+    chain_worker::SharedChainStateView,
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     notifier::Notifier,
     worker::{ProcessableCertificate, WorkerError, WorkerState},
@@ -257,7 +256,7 @@ where
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
+    ) -> Result<SharedChainStateView<S::Context>, LocalNodeError> {
         Ok(self.node.state.chain_state_view(chain_id).await?)
     }
 
