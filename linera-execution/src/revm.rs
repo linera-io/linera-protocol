@@ -47,6 +47,23 @@ use crate::{
 /// only from a submitted message
 const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 
+fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), ExecutionError> {
+    ensure!(
+        vec != EXECUTE_MESSAGE_SELECTOR,
+        ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
+    );
+    Ok(())
+}
+
+fn assert_message_length(value: bool) -> Result<(), ExecutionError> {
+    ensure!(
+        value,
+        ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
+    );
+    Ok(())
+}
+
+
 /// This the selector when calling for `InterpreterResult` this is a fictional
 /// selector that does not correspond to a real function.
 const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
@@ -742,24 +759,16 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        ensure!(
-            operation.len() >= 4,
-            ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
-        );
-        ensure!(
-            &operation[..4] != EXECUTE_MESSAGE_SELECTOR,
-            ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
-        );
+        assert_message_length(operation.len() >= 4)?;
         let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
-            ensure!(
-                &operation[4..8] != EXECUTE_MESSAGE_SELECTOR,
-                ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
-            );
+            assert_message_length(operation.len() >= 8)?;
+            forbid_execute_operation_origin(&operation[4..8])?;
             let tx_data = Bytes::copy_from_slice(&operation[4..]);
             let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
             let (output, logs) = result.interpreter_result_and_logs()?;
             (output, logs)
         } else {
+            forbid_execute_operation_origin(&operation[..4])?;
             let tx_data = Bytes::copy_from_slice(&operation);
             let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
             let (output, logs) = result.output_and_logs();
@@ -908,17 +917,17 @@ where
             }
         };
 
+        assert_message_length(query.len() >= 4)?;
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
-            ensure!(
-                &query[4..8] != EXECUTE_MESSAGE_SELECTOR,
-                ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
-            );
+            assert_message_length(query.len() >= 8)?;
+            forbid_execute_operation_origin(&query[4..8])?;
             let tx_data = Bytes::copy_from_slice(&query[4..]);
             let result = self.transact_tx_data(tx_data)?;
             let result = process_execution_result(result)?;
             let (answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
+            forbid_execute_operation_origin(&query[..4])?;
             let tx_data = Bytes::copy_from_slice(&query);
             let result = self.transact_tx_data(tx_data)?;
             let result = process_execution_result(result)?;
