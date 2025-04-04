@@ -271,8 +271,6 @@ pub enum KeyTag {
     ZeroContractAddress,
     /// Key prefix for the storage of the contract address.
     ContractAddress,
-    /// Address that would be dropped later on.
-    DropAddress,
 }
 
 #[repr(u8)]
@@ -518,7 +516,7 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         if address == &Address::ZERO.create(0) {
             return Some(KeyTag::ContractAddress as u8);
         }
-        Some(KeyTag::DropAddress as u8)
+        None
     }
 
     fn new(runtime: Runtime) -> Self {
@@ -631,8 +629,10 @@ where
                 }
                 // The only allowed operations are the ones for the
                 // account balances.
-                let new_balance = (address, account.info.balance);
-                list_new_balances.push(new_balance);
+                if account.info.balance != U256::ZERO {
+                    let new_balance = (address, account.info.balance);
+                    list_new_balances.push(new_balance);
+                }
             }
         }
         runtime.write_batch(batch)?;
@@ -658,9 +658,10 @@ where
             let promise = runtime.read_value_bytes_new(key)?;
             let result = runtime.read_value_bytes_wait(&promise)?;
             let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
-            return Ok(account_info);
+            Ok(account_info)
+        } else {
+            Ok(Some(AccountInfo::default()))
         }
-        panic!("only contract address are supported thus far address={address:?}");
     }
 
     fn code_by_hash_ref(
