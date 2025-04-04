@@ -111,10 +111,6 @@ contract ExampleCounter {
     get_bytecode(&source_code, "ExampleCounter")
 }
 
-
-
-
-
 pub fn get_evm_call_wasm_example_counter() -> anyhow::Result<Vec<u8>> {
     let source_code = r#"
 // SPDX-License-Identifier: MIT
@@ -254,9 +250,6 @@ contract ExampleCallWasmCounter {
     .to_string();
     get_bytecode(&source_code, "ExampleCallWasmCounter")
 }
-
-
-
 
 pub fn get_evm_call_evm_example_counter() -> anyhow::Result<Vec<u8>> {
     let source_code = r#"
