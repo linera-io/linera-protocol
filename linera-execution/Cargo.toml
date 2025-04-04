@@ -16,6 +16,8 @@ test = ["tokio/macros", "linera-base/test", "linera-views/test", "proptest"]
 revm = [
     "dep:revm",
     "dep:revm-primitives",
+    "dep:revm-precompile",
+    "dep:revm-interpreter",
     "dep:alloy",
     "dep:alloy-sol-types",
     "dep:hex",
@@ -55,6 +57,8 @@ prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json", "stream"] }
 revm = { workspace = true, optional = true, features = ["serde"] }
+revm-interpreter = { workspace = true, optional = true, features = ["serde"] }
+revm-precompile = { workspace = true, optional = true }
 revm-primitives = { workspace = true, optional = true }
 serde.workspace = true
 serde_bytes.workspace = true
