@@ -216,15 +216,9 @@ async fn main() -> std::io::Result<()> {
     let context = DummyContext::<DummyValidatorNodeProvider, _> {
         _phantom: std::marker::PhantomData,
     };
-    let service = NodeService::new(
-        config,
-        std::num::NonZeroU16::new(8080).unwrap(),
-        None,
-        storage,
-        context,
-    )
-    .await;
-    let schema = service.schema().sdl();
+    let port = std::num::NonZeroU16::new(8080).unwrap();
+    let service = NodeService::new(config, port, None, storage, context).await;
+    let schema = service.schema(port).sdl();
     print!("{}", schema);
     Ok(())
 }

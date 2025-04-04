@@ -808,11 +808,14 @@ where
         }
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
+    pub fn schema(
+        &self,
+        port: NonZeroU16,
+    ) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
         Schema::build(
             QueryRoot {
                 context: Arc::clone(&self.context),
-                port: self.port,
+                port,
                 default_chain: self.default_chain,
             },
             MutationRoot {
@@ -832,11 +835,16 @@ where
         let listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], requested_port)))
                 .await?;
-        let port = listener.local_addr()?.port();
+        let port = NonZeroU16::try_from(listener.local_addr()?.port())
+            .expect("Sockets should never bind to port zero");
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
+        let schema = self.schema(port);
+        let index_handler = axum::routing::get(util::graphiql).post({
+            let schema = schema.clone();
+            move |request| Self::index_handler(schema, request)
+        });
         let application_handler =
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
@@ -847,7 +855,7 @@ where
                 application_handler,
             )
             .route("/ready", axum::routing::get(|| async { "ready!" }))
-            .route_service("/ws", GraphQLSubscription::new(self.schema()))
+            .route_service("/ws", GraphQLSubscription::new(self.schema(port)))
             .layer(Extension(self.clone()))
             // TODO(#551): Provide application authentication.
             .layer(CorsLayer::permissive());
@@ -939,13 +947,11 @@ where
     }
 
     /// Executes a GraphQL query and generates a response for our `Schema`.
-    async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
-        service
-            .0
-            .schema()
-            .execute(request.into_inner())
-            .await
-            .into()
+    async fn index_handler(
+        schema: Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>>,
+        request: GraphQLRequest,
+    ) -> GraphQLResponse {
+        schema.execute(request.into_inner()).await.into()
     }
 
     /// Executes a GraphQL query against an application.
