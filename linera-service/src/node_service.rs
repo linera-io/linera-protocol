@@ -838,7 +838,8 @@ where
         let port = NonZeroU16::try_from(listener.local_addr()?.port())
             .expect("Sockets should never bind to port zero");
 
-        info!("GraphiQL IDE: http://localhost:{}", port);
+        info!("Starting GraphQL service");
+        println!("http://localhost:{port}");
 
         let schema = self.schema(port);
         let index_handler = axum::routing::get(util::graphiql).post({
