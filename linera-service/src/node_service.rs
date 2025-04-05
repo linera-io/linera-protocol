@@ -763,7 +763,7 @@ where
     C: ClientContext,
 {
     config: ChainListenerConfig,
-    port: NonZeroU16,
+    port: Option<NonZeroU16>,
     default_chain: Option<ChainId>,
     storage: C::Storage,
     context: Arc<Mutex<C>>,
@@ -791,7 +791,7 @@ where
     /// Creates a new instance of the node service given a client chain and a port.
     pub async fn new(
         config: ChainListenerConfig,
-        port: NonZeroU16,
+        port: Option<NonZeroU16>,
         default_chain: Option<ChainId>,
         storage: C::Storage,
         context: C,
@@ -805,11 +805,14 @@ where
         }
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
+    pub fn schema(
+        &self,
+        port: NonZeroU16,
+    ) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
         Schema::build(
             QueryRoot {
                 context: Arc::clone(&self.context),
-                port: self.port,
+                port,
                 default_chain: self.default_chain,
             },
             MutationRoot {
@@ -825,8 +828,21 @@ where
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip(self), fields(port = ?self.port))]
     pub async fn run(self) -> Result<(), anyhow::Error> {
-        let port = self.port.get();
-        let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
+        let requested_port = self.port.map(NonZeroU16::get).unwrap_or_default();
+        let listener =
+            tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], requested_port)))
+                .await?;
+        let port = NonZeroU16::try_from(listener.local_addr()?.port())
+            .expect("Sockets should never bind to port zero");
+
+        info!("Starting GraphQL service");
+        println!("http://localhost:{port}");
+
+        let schema = self.schema(port);
+        let index_handler = axum::routing::get(util::graphiql).post({
+            let schema = schema.clone();
+            move |request| Self::index_handler(schema, request)
+        });
         let application_handler =
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
@@ -837,21 +853,16 @@ where
                 application_handler,
             )
             .route("/ready", axum::routing::get(|| async { "ready!" }))
-            .route_service("/ws", GraphQLSubscription::new(self.schema()))
+            .route_service("/ws", GraphQLSubscription::new(self.schema(port)))
             .layer(Extension(self.clone()))
             // TODO(#551): Provide application authentication.
             .layer(CorsLayer::permissive());
 
-        info!("GraphiQL IDE: http://localhost:{}", port);
-
         ChainListener::new(self.config)
             .run(Arc::clone(&self.context), self.storage.clone())
             .await;
-        let serve_fut = axum::serve(
-            tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
-            app,
-        );
-        serve_fut.await?;
+
+        axum::serve(listener, app).await?;
 
         Ok(())
     }
@@ -934,13 +945,11 @@ where
     }
 
     /// Executes a GraphQL query and generates a response for our `Schema`.
-    async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
-        service
-            .0
-            .schema()
-            .execute(request.into_inner())
-            .await
-            .into()
+    async fn index_handler(
+        schema: Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>>,
+        request: GraphQLRequest,
+    ) -> GraphQLResponse {
+        schema.execute(request.into_inner()).await.into()
     }
 
     /// Executes a GraphQL query against an application.
