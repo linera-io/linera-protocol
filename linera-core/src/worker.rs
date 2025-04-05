@@ -38,7 +38,7 @@ use linera_views::views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
+use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn};
 #[cfg(with_metrics)]
 use {
@@ -293,7 +293,7 @@ where
     /// The set of spawned [`ChainWorkerActor`] tasks.
     chain_worker_tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
-    chain_workers: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    chain_workers: Arc<AsyncMutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
 }
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
@@ -343,7 +343,7 @@ where
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
+            chain_workers: Arc::new(AsyncMutex::new(LruCache::new(chain_worker_limit))),
         }
     }
 
@@ -363,7 +363,7 @@ where
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
-            chain_workers: Arc::new(Mutex::new(LruCache::new(chain_worker_limit))),
+            chain_workers: Arc::new(AsyncMutex::new(LruCache::new(chain_worker_limit))),
         }
     }
 
@@ -430,7 +430,7 @@ where
     #[cfg(test)]
     pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<ValidatorSecretKey>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
-        self.chain_workers.lock().unwrap().clear();
+        self.chain_workers.lock().await.clear();
         self
     }
 
@@ -719,7 +719,7 @@ where
     ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
         let (sender, new_receiver) = timeout(Duration::from_secs(3), async move {
             loop {
-                match self.try_get_chain_worker_endpoint(chain_id) {
+                match self.try_get_chain_worker_endpoint(chain_id).await {
                     Some(endpoint) => break endpoint,
                     None => sleep(Duration::from_millis(250)).await,
                 }
@@ -764,7 +764,7 @@ where
     /// Returns [`None`] if the cache is full and no candidate for eviction was found.
     #[instrument(level = "trace", skip(self))]
     #[expect(clippy::type_complexity)]
-    fn try_get_chain_worker_endpoint(
+    async fn try_get_chain_worker_endpoint(
         &self,
         chain_id: ChainId,
     ) -> Option<(
@@ -773,7 +773,7 @@ where
             mpsc::UnboundedReceiver<(ChainWorkerRequest<StorageClient::Context>, tracing::Span)>,
         >,
     )> {
-        let mut chain_workers = self.chain_workers.lock().unwrap();
+        let mut chain_workers = self.chain_workers.lock().await;
 
         if let Some(endpoint) = chain_workers.get(&chain_id) {
             Some((endpoint.clone(), None))
