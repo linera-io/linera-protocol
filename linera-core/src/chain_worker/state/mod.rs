@@ -4,6 +4,7 @@
 //! The state and functionality of a chain worker.
 
 mod attempted_changes;
+mod shared_chain_state_view;
 mod temporary_changes;
 
 use std::{
@@ -33,10 +34,11 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
-use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
+use tokio::sync::{oneshot, RwLock};
 
 #[cfg(test)]
 pub(crate) use self::attempted_changes::CrossChainUpdateHelper;
+pub use self::shared_chain_state_view::SharedChainStateView;
 use self::{
     attempted_changes::ChainWorkerStateWithAttemptedChanges,
     temporary_changes::ChainWorkerStateWithTemporaryChanges,
@@ -120,18 +122,20 @@ where
     /// it.
     pub(super) async fn chain_state_view(
         &mut self,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<StorageClient::Context>>, WorkerError> {
+    ) -> Result<SharedChainStateView<StorageClient::Context>, WorkerError> {
         if self.shared_chain_view.is_none() {
             self.shared_chain_view = Some(Arc::new(RwLock::new(self.chain.clone_unchecked()?)));
         }
 
-        Ok(self
-            .shared_chain_view
-            .as_ref()
-            .expect("`shared_chain_view` should be initialized above")
-            .clone()
-            .read_owned()
-            .await)
+        let shared_view_guard = SharedChainStateView::read_lock(
+            self.shared_chain_view
+                .as_ref()
+                .expect("`shared_chain_view` should be initialized above")
+                .clone(),
+        )
+        .await;
+
+        Ok(shared_view_guard)
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
