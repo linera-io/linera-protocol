@@ -4,6 +4,8 @@
 
 //! Defines secp256k1 signature primitives used by the Linera protocol.
 
+pub mod evm;
+
 use std::{
     borrow::Cow,
     fmt,
