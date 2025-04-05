@@ -142,7 +142,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     .await
     .unwrap()
     .block
-    .unwrap_or_else(|| panic!("no block found"));
+    .expect("no block found");
     let last_hash = last_block.clone().hash;
 
     let indexer_state = request::<State, _>(&req_client, "http://localhost:8081", state::Variables)
