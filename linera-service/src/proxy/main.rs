@@ -47,11 +47,17 @@ pub struct ProxyOptions {
     config_path: PathBuf,
 
     /// Timeout for sending queries (ms)
-    #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
+    #[arg(long = "send-timeout-ms",
+          default_value = "4000",
+          value_parser = util::parse_millis,
+          env = "LINERA_PROXY_SEND_TIMEOUT")]
     send_timeout: Duration,
 
     /// Timeout for receiving responses (ms)
-    #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
+    #[arg(long = "recv-timeout-ms",
+          default_value = "4000",
+          value_parser = util::parse_millis,
+          env = "LINERA_PROXY_RECV_TIMEOUT")]
     recv_timeout: Duration,
 
     /// The number of Tokio worker threads to use.
