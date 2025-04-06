@@ -33,9 +33,9 @@ use linera_rpc::{
     grpc, simple,
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
-use linera_service::util;
 #[cfg(with_metrics)]
-use linera_service::{prometheus_server, pyroscope_server};
+use linera_service::prometheus_server;
+use linera_service::util;
 use linera_storage::Storage;
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use serde::Deserialize;
@@ -86,7 +86,7 @@ impl ServerContext {
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
         shutdown_signal: CancellationToken,
-    ) -> anyhow::Result<JoinSet<()>>
+    ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
@@ -105,20 +105,7 @@ impl ServerContext {
 
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                prometheus_server::start_metrics(
-                    (listen_address.clone(), port),
-                    shutdown_signal.clone(),
-                );
-            }
-
-            #[cfg(with_metrics)]
-            if let Some(port) = shard.pyroscope_port {
-                pyroscope_server::start_pyroscope(
-                    self.pyroscope_address(shard.pyroscope_host, port),
-                    "server".to_string(),
-                    shutdown_signal.clone(),
-                    shard.pyroscope_sample_rate,
-                )?;
+                Self::start_metrics(&listen_address, port, shutdown_signal.clone());
             }
 
             let server_handle = simple::Server::new(
@@ -143,7 +130,7 @@ impl ServerContext {
 
         join_set.spawn_task(handles.collect::<()>());
 
-        Ok(join_set)
+        join_set
     }
 
     fn spawn_grpc<S>(
@@ -151,7 +138,7 @@ impl ServerContext {
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         shutdown_signal: CancellationToken,
-    ) -> anyhow::Result<JoinSet<()>>
+    ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
@@ -161,20 +148,7 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                prometheus_server::start_metrics(
-                    (listen_address.to_owned(), port),
-                    shutdown_signal.clone(),
-                );
-            }
-
-            #[cfg(with_metrics)]
-            if let Some(port) = shard.pyroscope_port {
-                pyroscope_server::start_pyroscope(
-                    self.pyroscope_address(shard.pyroscope_host, port),
-                    "server".to_string(),
-                    shutdown_signal.clone(),
-                    shard.pyroscope_sample_rate,
-                )?;
+                Self::start_metrics(listen_address, port, shutdown_signal.clone());
             }
 
             let server_handle = grpc::GrpcServer::spawn(
@@ -201,22 +175,17 @@ impl ServerContext {
 
         join_set.spawn_task(handles.collect::<()>());
 
-        Ok(join_set)
+        join_set
+    }
+
+    #[cfg(with_metrics)]
+    fn start_metrics(host: &str, port: u16, shutdown_signal: CancellationToken) {
+        prometheus_server::start_metrics((host.to_owned(), port), shutdown_signal);
     }
 
     fn get_listen_address(&self) -> String {
         // Allow local IP address to be different from the public one.
         "0.0.0.0".to_string()
-    }
-
-    #[cfg(with_metrics)]
-    fn pyroscope_address(&self, host: String, port: u16) -> String {
-        format!(
-            "{}://{}:{}",
-            self.server_config.internal_network.protocol.scheme(),
-            host,
-            port
-        )
     }
 }
 
@@ -250,12 +219,10 @@ impl Runnable for ServerContext {
 
         let mut join_set = match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)?
+                self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)
             }
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => {
-                    self.spawn_grpc(&listen_address, states, shutdown_notifier)?
-                }
+                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states, shutdown_notifier),
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
@@ -296,15 +263,6 @@ struct ValidatorOptions {
     /// The port for the metrics endpoint
     metrics_port: u16,
 
-    /// The host for the pyroscope endpoint
-    pyroscope_host: String,
-
-    /// The port for the pyroscope endpoint
-    pyroscope_port: u16,
-
-    /// The sample rate for pyroscope.
-    pyroscope_sample_rate: u32,
-
     /// The host of the proxy in the internal network.
     internal_host: String,
 
@@ -341,9 +299,6 @@ fn make_server_config<R: CryptoRng>(
         host: options.internal_host,
         port: options.internal_port,
         metrics_port: options.metrics_port,
-        pyroscope_host: options.pyroscope_host,
-        pyroscope_port: options.pyroscope_port,
-        pyroscope_sample_rate: options.pyroscope_sample_rate,
     };
     let validator = ValidatorConfig {
         network,
@@ -499,20 +454,6 @@ enum ServerCommand {
         /// shard number.
         #[arg(long)]
         metrics_port: Option<String>,
-
-        /// The host for the pyroscope endpoint, possibly containing `%` for digits of the
-        /// shard number.
-        #[arg(long)]
-        pyroscope_host: String,
-
-        /// The port for the pyroscope endpoint, possibly containing `%` for digits of the
-        /// shard number.
-        #[arg(long)]
-        pyroscope_port: Option<String>,
-
-        /// The sample rate for pyroscope.
-        #[arg(long, default_value = "100")]
-        pyroscope_sample_rate: u32,
     },
 }
 
@@ -704,23 +645,12 @@ async fn run(options: ServerOptions) {
             host,
             port,
             metrics_port,
-            pyroscope_host,
-            pyroscope_port,
-            pyroscope_sample_rate,
         } => {
             let mut server_config =
                 persistent::File::<ValidatorServerConfig>::read(&server_config_path)
                     .expect("Failed to read server config");
-            let shards = generate_shard_configs(
-                num_shards,
-                host,
-                port,
-                metrics_port,
-                pyroscope_host,
-                pyroscope_port,
-                pyroscope_sample_rate,
-            )
-            .expect("Failed to generate shard configs");
+            let shards = generate_shard_configs(num_shards, host, port, metrics_port)
+                .expect("Failed to generate shard configs");
             server_config.internal_network.shards = shards;
             Persist::persist(&mut server_config)
                 .await
@@ -734,9 +664,6 @@ fn generate_shard_configs(
     host: String,
     port: String,
     metrics_port: Option<String>,
-    pyroscope_host: String,
-    pyroscope_port: Option<String>,
-    pyroscope_sample_rate: u32,
 ) -> anyhow::Result<Vec<ShardConfig>> {
     let mut shards = Vec::new();
     let len = num_shards.len();
@@ -760,22 +687,10 @@ fn generate_shard_configs(
                     .context("Failed to decode metrics port into an integers")
             })
             .transpose()?;
-        let pyroscope_host = pyroscope_host.replacen(&pattern, &index, 1);
-        let pyroscope_port = pyroscope_port
-            .as_ref()
-            .map(|port| {
-                port.replacen(&pattern, &index, 1)
-                    .parse()
-                    .context("Failed to decode metrics port into an integers")
-            })
-            .transpose()?;
         let shard = ShardConfig {
             host,
             port,
             metrics_port,
-            pyroscope_host,
-            pyroscope_port,
-            pyroscope_sample_rate,
         };
         shards.push(shard);
     }
@@ -797,9 +712,6 @@ mod test {
             internal_host = "internal_host"
             internal_port = 10000
             metrics_port = 5000
-            pyroscope_host = "pyroscope_host"
-            pyroscope_port = 4000
-            pyroscope_sample_rate = 100
             external_protocol = { Simple = "Tcp" }
             internal_protocol = { Simple = "Udp" }
 
@@ -807,17 +719,11 @@ mod test {
             host = "host1"
             port = 9001
             metrics_port = 5001
-            pyroscope_host = "pyroscope_host"
-            pyroscope_port = 4001
-            pyroscope_sample_rate = 100
 
             [[shards]]
             host = "host2"
             port = 9002
             metrics_port = 5002
-            pyroscope_host = "pyroscope_host"
-            pyroscope_port = 4002
-            pyroscope_sample_rate = 100
         "#;
         let options: ValidatorOptions = toml::from_str(toml_str).unwrap();
         assert_eq!(
@@ -831,25 +737,16 @@ mod test {
                 internal_host: "internal_host".into(),
                 internal_port: 10000,
                 metrics_port: 5000,
-                pyroscope_host: "pyroscope_host".into(),
-                pyroscope_port: 4000,
-                pyroscope_sample_rate: 100,
                 shards: vec![
                     ShardConfig {
                         host: "host1".into(),
                         port: 9001,
                         metrics_port: Some(5001),
-                        pyroscope_host: "pyroscope_host".into(),
-                        pyroscope_port: Some(4001),
-                        pyroscope_sample_rate: 100,
                     },
                     ShardConfig {
                         host: "host2".into(),
                         port: 9002,
                         metrics_port: Some(5002),
-                        pyroscope_host: "pyroscope_host".into(),
-                        pyroscope_port: Some(4002),
-                        pyroscope_sample_rate: 100,
                     },
                 ],
             }
@@ -863,10 +760,7 @@ mod test {
                 "02".into(),
                 "host%%".into(),
                 "10%%".into(),
-                Some("11%%".into()),
-                "pyroscope_host".into(),
-                Some("40%%".into()),
-                100,
+                Some("11%%".into())
             )
             .unwrap(),
             vec![
@@ -874,17 +768,11 @@ mod test {
                     host: "host01".into(),
                     port: 1001,
                     metrics_port: Some(1101),
-                    pyroscope_host: "pyroscope_host".into(),
-                    pyroscope_port: Some(4001),
-                    pyroscope_sample_rate: 100,
                 },
                 ShardConfig {
                     host: "host02".into(),
                     port: 1002,
                     metrics_port: Some(1102),
-                    pyroscope_host: "pyroscope_host".into(),
-                    pyroscope_port: Some(4002),
-                    pyroscope_sample_rate: 100,
                 },
             ],
         );
@@ -893,10 +781,7 @@ mod test {
             "2".into(),
             "host%%".into(),
             "10%%".into(),
-            Some("11%%".into()),
-            "pyroscope_host".into(),
-            Some("40%%".into()),
-            100,
+            Some("11%%".into())
         )
         .is_err());
     }

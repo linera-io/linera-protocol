@@ -11,7 +11,5 @@ pub mod node_service;
 pub mod project;
 #[cfg(with_metrics)]
 pub mod prometheus_server;
-#[cfg(with_metrics)]
-pub mod pyroscope_server;
 pub mod util;
 pub mod wallet;
