@@ -15,10 +15,11 @@ use std::{
     time::Instant,
 };
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
 use chrono::Utc;
 use colored::Colorize;
+use command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand};
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
@@ -29,28 +30,28 @@ use linera_base::{
 use linera_client::{
     chain_listener::ClientContext as _,
     client_context::ClientContext,
-    client_options::{
-        ClientCommand, ClientOptions, DatabaseToolCommand, NetCommand, ProjectCommand,
-        WalletCommand,
-    },
-    config::{CommitteeConfig, GenesisConfig},
+    client_options::ClientContextOptions,
+    config::{CommitteeConfig, GenesisConfig, WalletState},
     persistent::{self, Persist},
-    storage::Runnable,
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
     data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason, JoinSetExt as _,
 };
-use linera_execution::committee::{Committee, ValidatorState};
+use linera_execution::{
+    committee::{Committee, ValidatorState},
+    WithWasmDefault as _,
+};
 use linera_faucet_server::FaucetService;
 use linera_service::{
     cli_wrappers,
     node_service::NodeService,
     project::{self, Project},
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util, wallet,
 };
 use linera_storage::Storage;
-use linera_views::store::CommonStoreConfig;
+use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn, Instrument as _};
@@ -61,6 +62,7 @@ use {
     linera_core::client::ChainClientError,
 };
 
+mod command;
 mod net_up_utils;
 
 use crate::persistent::PersistExt as _;
@@ -90,7 +92,7 @@ impl Runnable for Job {
     {
         let Job(options) = self;
         let wallet = options.wallet().await?;
-        let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
+        let mut context = ClientContext::new(storage.clone(), options.inner.clone(), wallet);
         let command = options.command;
 
         use ClientCommand::*;
@@ -1273,17 +1275,162 @@ impl Job {
     }
 }
 
+#[derive(Clone, clap::Parser)]
+#[command(
+    name = "linera",
+    version = linera_version::VersionInfo::default_clap_str(),
+    about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput",
+)]
+struct ClientOptions {
+    /// Storage configuration for the blockchain history.
+    #[arg(long = "storage")]
+    pub storage_config: Option<String>,
+
+    /// Common options.
+    #[command(flatten)]
+    inner: ClientContextOptions,
+
+    /// Subcommand.
+    #[command(subcommand)]
+    command: ClientCommand,
+}
+
+impl ClientOptions {
+    fn init() -> Result<Self, Error> {
+        let mut options = <ClientOptions as clap::Parser>::parse();
+        let suffix = options
+            .inner
+            .with_wallet
+            .as_ref()
+            .map(|x| format!("_{}", x))
+            .unwrap_or_default();
+        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
+        let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
+        if let (None, Some(wallet_path)) = (&options.inner.wallet_state_path, wallet_env_var) {
+            options.inner.wallet_state_path = Some(wallet_path.parse()?);
+        }
+        if let (None, Some(storage_path)) = (&options.storage_config, storage_env_var) {
+            options.storage_config = Some(storage_path.parse()?);
+        }
+        Ok(options)
+    }
+
+    fn common_config(&self) -> CommonStoreConfig {
+        let storage_cache_config = StorageCacheConfig {
+            max_cache_size: self.inner.max_cache_size,
+            max_entry_size: self.inner.max_entry_size,
+            max_cache_entries: self.inner.max_cache_entries,
+        };
+        CommonStoreConfig {
+            max_concurrent_queries: self.inner.max_concurrent_queries,
+            max_stream_queries: self.inner.max_stream_queries,
+            storage_cache_config,
+        }
+    }
+
+    async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
+        let genesis_config = self.wallet().await?.genesis_config().clone();
+        let output = Box::pin(run_with_storage(
+            self.storage_config()?
+                .add_common_config(self.common_config())
+                .await?,
+            &genesis_config,
+            self.inner.wasm_runtime.with_wasm_default(),
+            job,
+        ))
+        .await?;
+        Ok(output)
+    }
+
+    fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
+        if let Some(config) = &self.storage_config {
+            Ok(config.parse()?)
+        } else {
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "rocksdb")] {
+                    let spawn_mode =
+                        linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
+                    let storage_config = linera_service::storage::StorageConfig::RocksDb {
+                        path: self.config_path()?.join("wallet.db"),
+                        spawn_mode,
+                    };
+                    let namespace = "default".to_string();
+                    Ok(StorageConfigNamespace {
+                        storage_config,
+                        namespace,
+                    })
+                } else {
+                    bail!("Cannot apply default storage because the feature 'rocksdb' was not selected")
+                }
+            }
+        }
+    }
+
+    async fn initialize_storage(&self) -> Result<(), Error> {
+        let wallet = self.wallet().await?;
+        full_initialize_storage(
+            self.storage_config()?
+                .add_common_config(self.common_config())
+                .await?,
+            wallet.genesis_config(),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
+        let wallet = persistent::File::read(&self.wallet_path()?)?;
+        Ok(WalletState::new(wallet))
+    }
+
+    fn wallet_path(&self) -> Result<PathBuf, Error> {
+        self.inner
+            .wallet_state_path
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(|| Ok(self.config_path()?.join("wallet.json")))
+    }
+
+    fn config_path(&self) -> Result<PathBuf, Error> {
+        let mut config_dir = dirs::config_dir().ok_or(anyhow!(
+            "default configuration directory not supported: please specify a path"
+        ))?;
+        config_dir.push("linera");
+        if !config_dir.exists() {
+            tracing::debug!("{} does not exist, creating", config_dir.display());
+            fs_err::create_dir(&config_dir)?;
+            tracing::debug!("{} created.", config_dir.display());
+        }
+        Ok(config_dir)
+    }
+
+    pub fn create_wallet(
+        &self,
+        genesis_config: GenesisConfig,
+        testing_prng_seed: Option<u64>,
+    ) -> Result<WalletState<persistent::File<Wallet>>, Error> {
+        let wallet_path = self.wallet_path()?;
+        if wallet_path.exists() {
+            bail!("Wallet already exists: {}", wallet_path.display());
+        }
+        Ok(WalletState::create_from_file(
+            &wallet_path,
+            Wallet::new(genesis_config, testing_prng_seed),
+        )?)
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let options = ClientOptions::init()?;
 
     linera_base::tracing::init(&log_file_name_for(&options.command));
 
-    let mut runtime = if options.tokio_threads == Some(1) {
+    let mut runtime = if options.inner.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
     } else {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
 
-        if let Some(threads) = options.tokio_threads {
+        if let Some(threads) = options.inner.tokio_threads {
             builder.worker_threads(threads);
         }
 
@@ -1291,7 +1438,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let span = tracing::info_span!("linera::main");
-    if let Some(wallet_id) = &options.with_wallet {
+    if let Some(wallet_id) = &options.inner.with_wallet {
         span.record("wallet_id", wallet_id);
     }
 
@@ -1359,7 +1506,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
     }
 }
 
-async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
+async fn run(options: &ClientOptions) -> Result<i32, Error> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();

@@ -21,7 +21,6 @@ use linera_base::{
 use linera_client::{
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
     persistent::{self, Persist},
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
 };
 use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{WasmRuntime, WithWasmDefault};
@@ -35,7 +34,10 @@ use linera_rpc::{
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
-use linera_service::util;
+use linera_service::{
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
+    util,
+};
 use linera_storage::Storage;
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use serde::Deserialize;

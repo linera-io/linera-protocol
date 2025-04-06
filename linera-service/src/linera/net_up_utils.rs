@@ -7,14 +7,14 @@ use colored::Colorize as _;
 use linera_base::{
     data_types::Amount, identifiers::ChainId, listen_for_shutdown_signals, time::Duration,
 };
-use linera_client::{
-    client_options::ResourceControlPolicyConfig,
-    storage::{StorageConfig, StorageConfigNamespace},
-};
+use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_rpc::config::CrossChainConfig;
-use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-    ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
+use linera_service::{
+    cli_wrappers::{
+        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+        ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
+    },
+    storage::{StorageConfig, StorageConfigNamespace},
 };
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{

@@ -18,6 +18,10 @@ use linera_base::data_types::TimeDelta;
 pub use linera_client::util::*;
 use tracing::debug;
 
+// Exported for readme e2e tests.
+pub static DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS: &str = "3";
+pub static DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS: &str = "3";
+
 /// Extension trait for [`tokio::process::Child`].
 pub trait ChildExt: std::fmt::Debug {
     fn ensure_is_running(&mut self) -> Result<()>;

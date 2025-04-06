@@ -9,13 +9,13 @@ mod guard;
 use std::{env, path::PathBuf};
 
 use guard::INTEGRATION_TEST_GUARD;
-use linera_client::{
-    client_options::{
-        DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
+use linera_service::{
+    test_name,
+    util::{
+        parse_secs, Markdown, DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS,
+        DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
     },
-    util::parse_secs,
 };
-use linera_service::{test_name, util::Markdown};
 use tempfile::tempdir;
 use tokio::process::Command;
 

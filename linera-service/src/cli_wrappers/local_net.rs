@@ -19,10 +19,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_client::{
-    client_options::ResourceControlPolicyConfig,
-    storage::{StorageConfig, StorageConfigNamespace},
-};
+use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::node::ValidatorNodeProvider;
 use linera_rpc::config::CrossChainConfig;
 #[cfg(all(feature = "storage-service", with_testing))]
@@ -43,6 +40,7 @@ use crate::{
     cli_wrappers::{
         ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
     },
+    storage::{StorageConfig, StorageConfigNamespace},
     util::ChildExt,
 };
 

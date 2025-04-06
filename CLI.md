@@ -105,8 +105,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 ###### **Options:**
 
-* `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+* `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
 * `--send-timeout-ms <SEND_TIMEOUT>` — Timeout for sending queries (milliseconds)
 

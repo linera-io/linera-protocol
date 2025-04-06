@@ -32,7 +32,6 @@ wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb"]
 dynamodb = ["linera-views/dynamodb"]
 scylladb = ["linera-views/scylladb"]
-storage-service = ["linera-storage-service"]
 kubernetes = []
 fs = ["fs-err", "fs4", "linera-execution/fs"]
 metrics = [
@@ -63,11 +62,9 @@ anyhow = { workspace = true, optional = true }
 async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
-chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 crossbeam-channel = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["deref", "deref_mut"] }
-dirs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
@@ -76,8 +73,6 @@ linera-execution.workspace = true
 linera-rpc.workspace = true
 linera-sdk = { workspace = true, optional = true }
 linera-storage.workspace = true
-linera-storage-service = { workspace = true, optional = true }
-linera-version.workspace = true
 linera-views.workspace = true
 num-format = { workspace = true, optional = true }
 prometheus-parse = { workspace = true, optional = true }
