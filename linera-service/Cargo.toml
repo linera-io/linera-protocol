@@ -37,28 +37,10 @@ wasmtime = [
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",
 ]
-rocksdb = [
-    "linera-client/rocksdb",
-    "linera-views/rocksdb",
-    "linera-core/rocksdb",
-]
-dynamodb = [
-    "linera-client/dynamodb",
-    "linera-views/dynamodb",
-    "linera-core/dynamodb",
-]
-scylladb = [
-    "linera-client/scylladb",
-    "linera-views/scylladb",
-    "linera-core/scylladb",
-]
-kubernetes = [
-    "linera-client/kubernetes",
-    "dep:k8s-openapi",
-    "dep:kube",
-    "dep:pathdiff",
-    "dep:fs_extra",
-]
+rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
+dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
+scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
+kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote-net = []
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 storage-service = ["linera-storage-service"]
