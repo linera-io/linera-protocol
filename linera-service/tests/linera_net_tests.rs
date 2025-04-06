@@ -10,8 +10,6 @@
     feature = "remote-net"
 ))]
 
-mod guard;
-
 use std::{
     env,
     time::{Duration, Instant},
@@ -24,7 +22,6 @@ use futures::{
     future::{self, Either},
     SinkExt, StreamExt,
 };
-use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
@@ -59,8 +56,8 @@ use linera_service::cli_wrappers::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, ProcessInbox},
-        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig,
+        local_net::ProcessInbox, ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet,
+        LineraNetConfig,
     },
     test_name,
 };
@@ -345,7 +342,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         get_contract_service_paths, get_evm_example_counter, read_evm_u64_entry,
     };
     use linera_sdk::abis::evm::EvmAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -385,8 +381,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         )
         .await?;
 
-    let port = get_node_port().await;
-    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -429,7 +424,6 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
         get_contract_service_paths, get_evm_example_counter,
     };
     use linera_sdk::abis::evm::EvmAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -482,8 +476,7 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
         )
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     let wasm_application = node_service
         .make_application(&chain, &wasm_application_id)
@@ -517,7 +510,6 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -539,8 +531,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
             None,
         )
         .await?;
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -571,7 +562,6 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter_no_graphql(config: impl LineraNetConfig) -> Result<()> {
     use counter_no_graphql::{CounterNoGraphQlAbi, CounterRequest};
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -593,8 +583,7 @@ async fn test_wasm_end_to_end_counter_no_graphql(config: impl LineraNetConfig) -
             None,
         )
         .await?;
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -631,7 +620,6 @@ async fn test_wasm_end_to_end_counter_no_graphql(config: impl LineraNetConfig) -
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -648,8 +636,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let application_id = client
         .create_application(&module_id, &(), &original_counter_value, &[], None)
         .await?;
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -681,7 +668,6 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::time::Instant;
     use social::SocialAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -699,13 +685,11 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .create_application(&module_id, &(), &(), &[], None)
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
     let mut node_service1 = client1
-        .run_node_service(port1, ProcessInbox::Automatic)
+        .run_node_service(None, ProcessInbox::Automatic)
         .await?;
     let mut node_service2 = client2
-        .run_node_service(port2, ProcessInbox::Automatic)
+        .run_node_service(None, ProcessInbox::Automatic)
         .await?;
 
     let app2 = node_service2
@@ -784,7 +768,6 @@ async fn test_wasm_end_to_end_fungible(
 
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -824,10 +807,8 @@ async fn test_wasm_end_to_end_fungible(
         )
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
-    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut node_service1 = client1.run_node_service(None, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(None, ProcessInbox::Skip).await?;
 
     let app1 = FungibleApp(
         node_service1
@@ -956,7 +937,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -1004,8 +984,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         )
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client1.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client1.run_node_service(None, ProcessInbox::Skip).await?;
 
     let app1 = FungibleApp(
         node_service
@@ -1080,7 +1059,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -1109,10 +1087,8 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         )
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
-    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut node_service1 = client1.run_node_service(None, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(None, ProcessInbox::Skip).await?;
 
     let app1 = NonFungibleApp(
         node_service1
@@ -1371,7 +1347,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
     use linera_base::data_types::Timestamp;
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -1426,10 +1401,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         )
         .await?;
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
-    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut node_service1 = client1.run_node_service(None, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(None, ProcessInbox::Skip).await?;
 
     let app_fungible1 = FungibleApp(
         node_service1
@@ -1499,7 +1472,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
 
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client_admin) = config.instantiate().await?;
@@ -1561,14 +1533,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .await?;
 
     // Now creating the service and exporting the applications
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let port3 = get_node_port().await;
     let mut node_service_admin = client_admin
-        .run_node_service(port1, ProcessInbox::Skip)
+        .run_node_service(None, ProcessInbox::Skip)
         .await?;
-    let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
-    let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
+    let mut node_service_a = client_a.run_node_service(None, ProcessInbox::Skip).await?;
+    let mut node_service_b = client_b.run_node_service(None, ProcessInbox::Skip).await?;
 
     let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await?);
     let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1).await?);
@@ -1758,7 +1727,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use amm::{AmmAbi, Parameters};
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client_amm) = config.instantiate().await?;
@@ -1785,14 +1753,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let owner0 = get_fungible_account_owner(&client0);
     let owner1 = get_fungible_account_owner(&client1);
 
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
-    let port3 = get_node_port().await;
     let mut node_service_amm = client_amm
-        .run_node_service(port1, ProcessInbox::Skip)
+        .run_node_service(None, ProcessInbox::Skip)
         .await?;
-    let mut node_service0 = client0.run_node_service(port2, ProcessInbox::Skip).await?;
-    let mut node_service1 = client1.run_node_service(port3, ProcessInbox::Skip).await?;
+    let mut node_service0 = client0.run_node_service(None, ProcessInbox::Skip).await?;
+    let mut node_service1 = client1.run_node_service(None, ProcessInbox::Skip).await?;
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
@@ -2494,7 +2459,6 @@ async fn test_resolve_binary() -> Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -2530,9 +2494,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
         .await
         ?;
 
-    let port = get_node_port().await;
     let node_service = client
-        .run_node_service(port, ProcessInbox::Automatic)
+        .run_node_service(None, ProcessInbox::Automatic)
         .await?;
 
     // Open a new chain with the same public key.
@@ -2618,7 +2581,6 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create net and two clients.
@@ -2664,7 +2626,6 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create runner and two clients.
@@ -2734,7 +2695,6 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::crypto::AccountPublicKey;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create runner and client.
@@ -2773,7 +2733,6 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create runner and two clients.
@@ -2819,7 +2778,6 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_publish_data_blob_in_cli(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create runner and two clients.
@@ -2851,7 +2809,6 @@ async fn test_end_to_end_publish_data_blob_in_cli(config: impl LineraNetConfig) 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create runner and two clients.
@@ -2942,7 +2899,6 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 #[test_log::test(tokio::test)]
 #[ignore = "This test takes a long time to run"]
 async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let chain_count = test_iterations().unwrap_or(3_000);
@@ -3004,7 +2960,6 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
     use linera_base::command::CommandExt;
     use tokio::process::Command;
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create runner and two clients.
@@ -3051,7 +3006,6 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
         thread,
     };
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     use tokio::task::JoinHandle;
@@ -3161,7 +3115,6 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let transfer_count = test_iterations().unwrap_or(100);
@@ -3173,15 +3126,13 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
     let chain_id2 = client1.open_and_assign(&client2, Amount::ONE).await?;
-    let port1 = get_node_port().await;
-    let port2 = get_node_port().await;
     let node_service2 = client2
-        .run_node_service(port2, ProcessInbox::Automatic)
+        .run_node_service(None, ProcessInbox::Automatic)
         .await?;
 
     // Make sure all incoming messages are processed, and get both chains' heights.
     let mut next_height1 = {
-        let node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+        let node_service1 = client1.run_node_service(None, ProcessInbox::Skip).await?;
         node_service1.process_inbox(&chain_id1).await?;
         let mut chain = node_service1
             .query_node(&format!(

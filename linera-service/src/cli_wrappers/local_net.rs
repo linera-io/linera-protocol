@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_testing)]
-use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
     env,
@@ -12,8 +10,6 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
-#[cfg(with_testing)]
-use async_lock::RwLock;
 use async_trait::async_trait;
 use linera_base::{
     command::{resolve_binary, CommandExt},
@@ -49,20 +45,6 @@ use crate::{
 pub enum ProcessInbox {
     Skip,
     Automatic,
-}
-
-#[cfg(with_testing)]
-static PORT_PROVIDER: LazyLock<RwLock<u16>> = LazyLock::new(|| RwLock::new(7080));
-
-/// Provides a port for the node service. Increment the port numbers.
-#[cfg(with_testing)]
-pub async fn get_node_port() -> u16 {
-    let mut port = PORT_PROVIDER.write().await;
-    let port_ret = *port;
-    *port += 1;
-    info!("get_node_port returning port_ret={}", port_ret);
-    assert!(port_selector::is_free(port_ret));
-    port_ret
 }
 
 #[cfg(with_testing)]

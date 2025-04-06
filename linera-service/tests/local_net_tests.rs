@@ -9,12 +9,10 @@
 ))]
 
 mod common;
-mod guard;
 
 use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
-use guard::INTEGRATION_TEST_GUARD;
 #[cfg(any(feature = "benchmark", feature = "ethereum"))]
 use linera_base::vm::VmRuntime;
 use linera_base::{
@@ -28,7 +26,7 @@ use linera_faucet::ClaimOutcome;
 use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
+        local_net::{Database, LocalNet, LocalNetConfig, ProcessInbox},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
@@ -56,7 +54,6 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
-    let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let network = config.network.external;
@@ -86,10 +83,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let chain_2 = client
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
-    let port = get_node_port().await;
     let node_service_2 = match network {
         Network::Grpc | Network::Grpcs => {
-            Some(client_2.run_node_service(port, ProcessInbox::Skip).await?)
+            Some(client_2.run_node_service(None, ProcessInbox::Skip).await?)
         }
         Network::Tcp | Network::Udp => None,
     };
@@ -232,7 +228,6 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 async fn test_end_to_end_receipt_of_old_create_committee_messages(
     config: LocalNetConfig,
 ) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let network = config.network.external;
@@ -324,7 +319,6 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     config: LocalNetConfig,
 ) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let network = config.network.external;
@@ -445,7 +439,6 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
@@ -456,8 +449,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     client2.wallet_init(&[chain], FaucetOption::None).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let port = get_node_port().await;
-    let mut node_service2 = client2.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(None, ProcessInbox::Skip).await?;
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -506,7 +498,6 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Create runner and client.
@@ -547,7 +538,6 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_project_publish(database: Database, network: Network) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let _rustflags_override = common::override_disable_warnings_as_errors();
@@ -570,8 +560,7 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
         .project_publish(project_dir, vec![], None, &0)
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     node_service.ensure_is_running()?;
 
@@ -586,7 +575,6 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_example_publish(database: Database, network: Network) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let config = LocalNetConfig {
@@ -601,8 +589,7 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
         .project_publish(example_dir, vec![], None, &0)
         .await?;
 
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     node_service.ensure_is_running()?;
 
@@ -620,7 +607,6 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
 
     use linera_client::config::WalletState;
     let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -648,7 +634,6 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
         process::Stdio,
     };
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let port = get_free_port().await?;
@@ -729,7 +714,6 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
     config.num_other_initial_chains = 2;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
@@ -777,7 +761,6 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
 // #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     const BLOCKS_TO_CREATE: usize = 5;
@@ -843,7 +826,6 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         client::EthereumQueries,
         test_utils::{get_anvil, SimpleTokenContractFunction},
     };
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     // Setting up the Ethereum smart contract
@@ -892,8 +874,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
             None,
         )
         .await?;
-    let port = get_node_port().await;
-    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(None, ProcessInbox::Skip).await?;
 
     let app = EthereumTrackerApp(
         node_service
