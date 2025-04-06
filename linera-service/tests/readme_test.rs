@@ -4,8 +4,6 @@
 
 #![cfg(feature = "storage-service")]
 
-mod guard;
-
 use std::{env, path::PathBuf};
 
 use linera_client::{

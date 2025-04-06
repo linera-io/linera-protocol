@@ -10,8 +10,6 @@
     feature = "remote-net"
 ))]
 
-mod guard;
-
 use std::{
     env,
     time::{Duration, Instant},

@@ -9,7 +9,6 @@
 ))]
 
 mod common;
-mod guard;
 
 use std::{env, path::PathBuf, time::Duration};
 
