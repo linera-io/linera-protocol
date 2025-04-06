@@ -47,11 +47,14 @@ use linera_service::{
     cli_wrappers,
     node_service::NodeService,
     project::{self, Project},
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
+    storage::{Runnable, RunnableWithStore, StorageConfigNamespace},
     util, wallet,
 };
-use linera_storage::Storage;
-use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
+use linera_storage::{DbStorage, Storage};
+use linera_views::{
+    lru_caching::StorageCacheConfig,
+    store::{CommonStoreConfig, KeyValueStore},
+};
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn, Instrument as _};
@@ -1283,7 +1286,7 @@ impl Job {
 )]
 struct ClientOptions {
     /// Storage configuration for the blockchain history.
-    #[arg(long = "storage")]
+    #[arg(long = "storage", global = true)]
     storage_config: Option<String>,
 
     /// Common options.
@@ -1358,15 +1361,25 @@ impl ClientOptions {
 
     async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
         let genesis_config = self.wallet().await?.genesis_config().clone();
-        let output = Box::pin(run_with_storage(
-            self.storage_config()?
-                .add_common_config(self.common_config())
-                .await?,
+        let store_config = self
+            .storage_config()?
+            .add_common_config(self.common_config())
+            .await?;
+        let output = Box::pin(store_config.run_with_storage(
             &genesis_config,
             self.wasm_runtime.with_wasm_default(),
             job,
         ))
         .await?;
+        Ok(output)
+    }
+
+    async fn run_with_store<R: RunnableWithStore>(&self, job: R) -> Result<R::Output, Error> {
+        let store_config = self
+            .storage_config()?
+            .add_common_config(self.common_config())
+            .await?;
+        let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)
     }
 
@@ -1396,13 +1409,11 @@ impl ClientOptions {
 
     async fn initialize_storage(&self) -> Result<(), Error> {
         let wallet = self.wallet().await?;
-        full_initialize_storage(
-            self.storage_config()?
-                .add_common_config(self.common_config())
-                .await?,
-            wallet.genesis_config(),
-        )
-        .await?;
+        let store_config = self
+            .storage_config()?
+            .add_common_config(self.common_config())
+            .await?;
+        store_config.initialize(wallet.genesis_config()).await?;
         Ok(())
     }
 
@@ -1445,6 +1456,110 @@ impl ClientOptions {
             &wallet_path,
             Wallet::new(genesis_config, testing_prng_seed),
         )?)
+    }
+}
+
+struct DatabaseToolJob<'a>(&'a DatabaseToolCommand);
+
+#[async_trait]
+impl RunnableWithStore for DatabaseToolJob<'_> {
+    type Output = i32;
+
+    async fn run<S>(
+        self,
+        config: S::Config,
+        namespace: String,
+    ) -> Result<Self::Output, anyhow::Error>
+    where
+        S: KeyValueStore + Clone + Send + Sync + 'static,
+        S::Error: Send + Sync,
+    {
+        match self.0 {
+            DatabaseToolCommand::DeleteAll => {
+                let start_time = Instant::now();
+                S::delete_all(&config).await?;
+                info!(
+                    "All namespaces deleted in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+            DatabaseToolCommand::DeleteNamespace => {
+                let start_time = Instant::now();
+                S::delete(&config, &namespace).await?;
+                info!(
+                    "Namespace deleted in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+            DatabaseToolCommand::CheckExistence => {
+                let start_time = Instant::now();
+                let test = S::exists(&config, &namespace).await?;
+                info!(
+                    "Existence of a namespace checked in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                if test {
+                    println!("The database does exist");
+                    return Ok(0);
+                } else {
+                    println!("The database does not exist");
+                    return Ok(1);
+                }
+            }
+            DatabaseToolCommand::CheckAbsence => {
+                let start_time = Instant::now();
+                let test = S::exists(&config, &namespace).await?;
+                info!(
+                    "Absence of a namespace checked in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                if test {
+                    println!("The database does exist");
+                    return Ok(1);
+                } else {
+                    println!("The database does not exist");
+                    return Ok(0);
+                }
+            }
+            DatabaseToolCommand::Initialize {
+                genesis_config_path,
+            } => {
+                let start_time = Instant::now();
+                let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
+                let mut storage =
+                    DbStorage::<S, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                genesis_config.initialize_storage(&mut storage).await?;
+                info!(
+                    "Initialization done in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+            DatabaseToolCommand::ListNamespaces => {
+                let start_time = Instant::now();
+                let namespaces = S::list_all(&config).await?;
+                info!(
+                    "Namespaces listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                println!("The list of namespaces is {:?}", namespaces);
+            }
+            DatabaseToolCommand::ListBlobIds => {
+                let start_time = Instant::now();
+                let blob_ids = DbStorage::<S, _>::list_blob_ids(&config, &namespace).await?;
+                info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
+                println!("The list of blob IDs is {:?}", blob_ids);
+            }
+            DatabaseToolCommand::ListChainIds => {
+                let start_time = Instant::now();
+                let chain_ids = DbStorage::<S, _>::list_chain_ids(&config, &namespace).await?;
+                info!(
+                    "Chain IDs listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                println!("The list of chain IDs is {:?}", chain_ids);
+            }
+        }
+        Ok(0)
     }
 }
 
@@ -1828,83 +1943,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         },
 
         ClientCommand::Storage(command) => {
-            let storage_config = command.storage_config()?;
-            let common_config = CommonStoreConfig::default();
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
-            let start_time = Instant::now();
-            match command {
-                DatabaseToolCommand::DeleteAll { .. } => {
-                    full_storage_config.delete_all().await?;
-                    info!(
-                        "All namespaces deleted in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                }
-                DatabaseToolCommand::DeleteNamespace { .. } => {
-                    full_storage_config.delete_namespace().await?;
-                    info!(
-                        "Namespace deleted in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                }
-                DatabaseToolCommand::CheckExistence { .. } => {
-                    let test = full_storage_config.test_existence().await?;
-                    info!(
-                        "Existence of a namespace checked in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    if test {
-                        println!("The database does exist");
-                        return Ok(0);
-                    } else {
-                        println!("The database does not exist");
-                        return Ok(1);
-                    }
-                }
-                DatabaseToolCommand::CheckAbsence { .. } => {
-                    let test = full_storage_config.test_existence().await?;
-                    info!(
-                        "Absence of a namespace checked in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    if test {
-                        println!("The database does exist");
-                        return Ok(1);
-                    } else {
-                        println!("The database does not exist");
-                        return Ok(0);
-                    }
-                }
-                DatabaseToolCommand::Initialize { .. } => {
-                    full_storage_config.initialize().await?;
-                    info!(
-                        "Initialization done in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                }
-                DatabaseToolCommand::ListNamespaces { .. } => {
-                    let namespaces = full_storage_config.list_all().await?;
-                    info!(
-                        "Namespaces listed in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    println!("The list of namespaces is {:?}", namespaces);
-                }
-                DatabaseToolCommand::ListBlobIds { .. } => {
-                    let blob_ids = Box::pin(full_storage_config.list_blob_ids()).await?;
-                    info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
-                    println!("The list of blob IDs is {:?}", blob_ids);
-                }
-                DatabaseToolCommand::ListChainIds { .. } => {
-                    let chain_ids = Box::pin(full_storage_config.list_chain_ids()).await?;
-                    info!(
-                        "Chain IDs listed in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    println!("The list of chain IDs is {:?}", chain_ids);
-                }
-            }
-            Ok(0)
+            Ok(options.run_with_store(DatabaseToolJob(command)).await?)
         }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {

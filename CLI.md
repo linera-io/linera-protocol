@@ -51,14 +51,14 @@ This document contains the help content for the `linera` command-line program.
 * [`linera net up`↴](#linera-net-up)
 * [`linera net helper`↴](#linera-net-helper)
 * [`linera storage`↴](#linera-storage)
-* [`linera storage delete_all`↴](#linera-storage-delete_all)
-* [`linera storage delete_namespace`↴](#linera-storage-delete_namespace)
-* [`linera storage check_existence`↴](#linera-storage-check_existence)
-* [`linera storage check_absence`↴](#linera-storage-check_absence)
+* [`linera storage delete-all`↴](#linera-storage-delete-all)
+* [`linera storage delete-namespace`↴](#linera-storage-delete-namespace)
+* [`linera storage check-existence`↴](#linera-storage-check-existence)
+* [`linera storage check-absence`↴](#linera-storage-check-absence)
 * [`linera storage initialize`↴](#linera-storage-initialize)
-* [`linera storage list_namespaces`↴](#linera-storage-list_namespaces)
-* [`linera storage list_blob_ids`↴](#linera-storage-list_blob_ids)
-* [`linera storage list_chain_ids`↴](#linera-storage-list_chain_ids)
+* [`linera storage list-namespaces`↴](#linera-storage-list-namespaces)
+* [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
+* [`linera storage list-chain-ids`↴](#linera-storage-list-chain-ids)
 
 ## `linera`
 
@@ -1015,62 +1015,46 @@ Operation on the storage
 
 ###### **Subcommands:**
 
-* `delete_all` — Delete all the namespaces in the database
-* `delete_namespace` — Delete a single namespace from the database
-* `check_existence` — Check existence of a namespace in the database
-* `check_absence` — Check absence of a namespace in the database
+* `delete-all` — Delete all the namespaces in the database
+* `delete-namespace` — Delete a single namespace from the database
+* `check-existence` — Check existence of a namespace in the database
+* `check-absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
-* `list_namespaces` — List the namespaces in the database
-* `list_blob_ids` — List the blob IDs in the database
-* `list_chain_ids` — List the chain IDs in the database
+* `list-namespaces` — List the namespaces in the database
+* `list-blob-ids` — List the blob IDs in the database
+* `list-chain-ids` — List the chain IDs in the database
 
 
 
-## `linera storage delete_all`
+## `linera storage delete-all`
 
 Delete all the namespaces in the database
 
-**Usage:** `linera storage delete_all --storage <STORAGE_CONFIG>`
-
-###### **Options:**
-
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+**Usage:** `linera storage delete-all`
 
 
 
-## `linera storage delete_namespace`
+## `linera storage delete-namespace`
 
 Delete a single namespace from the database
 
-**Usage:** `linera storage delete_namespace --storage <STORAGE_CONFIG>`
-
-###### **Options:**
-
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+**Usage:** `linera storage delete-namespace`
 
 
 
-## `linera storage check_existence`
+## `linera storage check-existence`
 
 Check existence of a namespace in the database
 
-**Usage:** `linera storage check_existence --storage <STORAGE_CONFIG>`
-
-###### **Options:**
-
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+**Usage:** `linera storage check-existence`
 
 
 
-## `linera storage check_absence`
+## `linera storage check-absence`
 
 Check absence of a namespace in the database
 
-**Usage:** `linera storage check_absence --storage <STORAGE_CONFIG>`
-
-###### **Options:**
-
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+**Usage:** `linera storage check-absence`
 
 
 
@@ -1078,47 +1062,35 @@ Check absence of a namespace in the database
 
 Initialize a namespace in the database
 
-**Usage:** `linera storage initialize --storage <STORAGE_CONFIG>`
+**Usage:** `linera storage initialize <GENESIS_CONFIG_PATH>`
 
-###### **Options:**
+###### **Arguments:**
 
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+* `<GENESIS_CONFIG_PATH>`
 
 
 
-## `linera storage list_namespaces`
+## `linera storage list-namespaces`
 
 List the namespaces in the database
 
-**Usage:** `linera storage list_namespaces --storage <STORAGE_CONFIG>`
-
-###### **Options:**
-
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+**Usage:** `linera storage list-namespaces`
 
 
 
-## `linera storage list_blob_ids`
+## `linera storage list-blob-ids`
 
 List the blob IDs in the database
 
-**Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
-
-###### **Options:**
-
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+**Usage:** `linera storage list-blob-ids`
 
 
 
-## `linera storage list_chain_ids`
+## `linera storage list-chain-ids`
 
 List the chain IDs in the database
 
-**Usage:** `linera storage list_chain_ids --storage <STORAGE_CONFIG>`
-
-###### **Options:**
-
-* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+**Usage:** `linera storage list-chain-ids`
 
 
 

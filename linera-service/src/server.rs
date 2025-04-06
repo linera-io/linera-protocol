@@ -35,7 +35,7 @@ use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::{
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
+    storage::{Runnable, StorageConfigNamespace},
     util,
 };
 use linera_storage::Storage;
@@ -552,11 +552,12 @@ async fn run(options: ServerOptions) {
                 max_stream_queries,
                 storage_cache_config,
             };
-            let full_storage_config = storage_config
+            let store_config = storage_config
                 .add_common_config(common_config)
                 .await
                 .unwrap();
-            run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
+            store_config
+                .run_with_storage(&genesis_config, wasm_runtime, job)
                 .boxed()
                 .await
                 .unwrap()
@@ -625,7 +626,7 @@ async fn run(options: ServerOptions) {
                 max_stream_queries,
                 storage_cache_config,
             };
-            let full_storage_config = storage_config
+            let store_config = storage_config
                 .add_common_config(common_config)
                 .await
                 .unwrap();
@@ -636,9 +637,7 @@ async fn run(options: ServerOptions) {
             tracing::info!(
                 "server::ServerCommand::Initialize, call full_initialize_storage, step 1"
             );
-            full_initialize_storage(full_storage_config, &genesis_config)
-                .await
-                .unwrap();
+            store_config.initialize(&genesis_config).await.unwrap();
         }
 
         ServerCommand::EditShards {

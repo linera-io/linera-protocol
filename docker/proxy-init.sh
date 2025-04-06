@@ -1,7 +1,7 @@
 #!/bin/sh
 
 while true; do
-  ./linera storage check_existence --storage "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+  ./linera storage check-existence --storage "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
   status=$?
 
   if [ "$status" -eq 0 ]; then

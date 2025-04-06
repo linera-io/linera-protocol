@@ -315,37 +315,6 @@ mod tests {
     }
 }
 
-/// Lists the blob IDs of the storage.
-pub async fn list_all_blob_ids<S: KeyValueStore>(store: &S) -> Result<Vec<BlobId>, ViewError> {
-    let prefix = &[INDEX_BLOB_ID];
-    let keys = store.find_keys_by_prefix(prefix).await?;
-    let mut blob_ids = Vec::new();
-    for key in keys.iterator() {
-        let key = key?;
-        let key_red = &key[..BLOB_ID_LENGTH];
-        let blob_id = bcs::from_bytes(key_red)?;
-        blob_ids.push(blob_id);
-    }
-    Ok(blob_ids)
-}
-
-/// Lists the chain IDs of the storage.
-pub async fn list_all_chain_ids<S: AdminKeyValueStore>(
-    config: &S::Config,
-    namespace: &str,
-) -> Result<Vec<ChainId>, ViewError> {
-    let root_keys = S::list_root_keys(config, namespace).await?;
-    let mut chain_ids = Vec::new();
-    for root_key in root_keys {
-        if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == INDEX_CHAIN_ID {
-            let root_key_red = &root_key[1..1 + CHAIN_ID_LENGTH];
-            let chain_id = bcs::from_bytes(root_key_red)?;
-            chain_ids.push(chain_id);
-        }
-    }
-    Ok(chain_ids)
-}
-
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
 /// chain states into the first store.
 #[derive(Clone, Copy)]
@@ -870,7 +839,7 @@ where
         Ok(())
     }
 
-    fn create(store: Store, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+    fn new(store: Store, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
             store: Arc::new(store),
             clock,
@@ -887,22 +856,63 @@ where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
     Store::Error: Send + Sync,
 {
-    pub async fn initialize(
-        config: Store::Config,
+    pub async fn maybe_create_and_connect(
+        config: &Store::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::maybe_create_and_connect(&config, namespace).await?;
-        Ok(Self::create(store, wasm_runtime, WallClock))
+        let store = Store::maybe_create_and_connect(config, namespace).await?;
+        Ok(Self::new(store, wasm_runtime, WallClock))
     }
 
-    pub async fn new(
-        config: Store::Config,
+    pub async fn connect(
+        config: &Store::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
-        let store = Store::connect(&config, namespace).await?;
-        Ok(Self::create(store, wasm_runtime, WallClock))
+        let store = Store::connect(config, namespace).await?;
+        Ok(Self::new(store, wasm_runtime, WallClock))
+    }
+
+    /// Lists the blob IDs of the storage.
+    pub async fn list_blob_ids(
+        config: &Store::Config,
+        namespace: &str,
+    ) -> Result<Vec<BlobId>, ViewError> {
+        let store = Store::maybe_create_and_connect(config, namespace).await?;
+        let prefix = &[INDEX_BLOB_ID];
+        let keys = store.find_keys_by_prefix(prefix).await?;
+        let mut blob_ids = Vec::new();
+        for key in keys.iterator() {
+            let key = key?;
+            let key_red = &key[..BLOB_ID_LENGTH];
+            let blob_id = bcs::from_bytes(key_red)?;
+            blob_ids.push(blob_id);
+        }
+        Ok(blob_ids)
+    }
+}
+
+impl<Store> DbStorage<Store, WallClock>
+where
+    Store: AdminKeyValueStore + Clone + Send + Sync + 'static,
+    Store::Error: Send + Sync,
+{
+    /// Lists the chain IDs of the storage.
+    pub async fn list_chain_ids(
+        config: &Store::Config,
+        namespace: &str,
+    ) -> Result<Vec<ChainId>, ViewError> {
+        let root_keys = Store::list_root_keys(config, namespace).await?;
+        let mut chain_ids = Vec::new();
+        for root_key in root_keys {
+            if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == INDEX_CHAIN_ID {
+                let root_key_red = &root_key[1..1 + CHAIN_ID_LENGTH];
+                let chain_id = bcs::from_bytes(root_key_red)?;
+                chain_ids.push(chain_id);
+            }
+        }
+        Ok(chain_ids)
     }
 }
 
@@ -932,6 +942,6 @@ where
         clock: TestClock,
     ) -> Result<Self, Store::Error> {
         let store = Store::recreate_and_connect(&config, namespace).await?;
-        Ok(Self::create(store, wasm_runtime, clock))
+        Ok(Self::new(store, wasm_runtime, clock))
     }
 }

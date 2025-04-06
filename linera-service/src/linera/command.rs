@@ -19,9 +19,8 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
-use linera_service::{
-    storage::StorageConfigNamespace,
-    util::{DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS},
+use linera_service::util::{
+    DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
 
 #[derive(Clone, clap::Subcommand)]
@@ -787,84 +786,28 @@ pub enum ClientCommand {
 #[derive(Clone, clap::Parser)]
 pub enum DatabaseToolCommand {
     /// Delete all the namespaces in the database
-    #[command(name = "delete_all")]
-    DeleteAll {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    DeleteAll,
 
     /// Delete a single namespace from the database
-    #[command(name = "delete_namespace")]
-    DeleteNamespace {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    DeleteNamespace,
 
     /// Check existence of a namespace in the database
-    #[command(name = "check_existence")]
-    CheckExistence {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    CheckExistence,
 
     /// Check absence of a namespace in the database
-    #[command(name = "check_absence")]
-    CheckAbsence {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    CheckAbsence,
 
     /// Initialize a namespace in the database
-    #[command(name = "initialize")]
-    Initialize {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    Initialize { genesis_config_path: PathBuf },
 
     /// List the namespaces in the database
-    #[command(name = "list_namespaces")]
-    ListNamespaces {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    ListNamespaces,
 
     /// List the blob IDs in the database
-    #[command(name = "list_blob_ids")]
-    ListBlobIds {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    ListBlobIds,
 
     /// List the chain IDs in the database
-    #[command(name = "list_chain_ids")]
-    ListChainIds {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
-}
-
-impl DatabaseToolCommand {
-    pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
-        let storage_config = match self {
-            DatabaseToolCommand::DeleteAll { storage_config } => storage_config,
-            DatabaseToolCommand::DeleteNamespace { storage_config } => storage_config,
-            DatabaseToolCommand::CheckExistence { storage_config } => storage_config,
-            DatabaseToolCommand::CheckAbsence { storage_config } => storage_config,
-            DatabaseToolCommand::Initialize { storage_config } => storage_config,
-            DatabaseToolCommand::ListNamespaces { storage_config } => storage_config,
-            DatabaseToolCommand::ListBlobIds { storage_config } => storage_config,
-            DatabaseToolCommand::ListChainIds { storage_config } => storage_config,
-        };
-        storage_config.parse::<StorageConfigNamespace>()
-    }
+    ListChainIds,
 }
 
 #[allow(clippy::large_enum_variant)]
