@@ -81,12 +81,6 @@ pub struct ShardConfig {
     pub port: u16,
     /// The port on which metrics are served.
     pub metrics_port: Option<u16>,
-    /// The host name of the pyroscope server.
-    pub pyroscope_host: String,
-    /// The port on which pyroscope is served.
-    pub pyroscope_port: Option<u16>,
-    /// The sample rate for pyroscope.
-    pub pyroscope_sample_rate: u32,
 }
 
 impl ShardConfig {
@@ -114,7 +108,7 @@ pub enum TlsConfig {
 }
 
 impl NetworkProtocol {
-    pub fn scheme(&self) -> &'static str {
+    fn scheme(&self) -> &'static str {
         match self {
             #[cfg(with_simple_network)]
             NetworkProtocol::Simple(transport) => transport.scheme(),
@@ -148,12 +142,6 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     pub port: u16,
     /// The port of the proxy's metrics endpoint.
     pub metrics_port: u16,
-    /// The host name of the pyroscope server.
-    pub pyroscope_host: String,
-    /// The port of the pyroscope server.
-    pub pyroscope_port: u16,
-    /// The sample rate for pyroscope.
-    pub pyroscope_sample_rate: u32,
 }
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
@@ -165,9 +153,6 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
             host: self.host.clone(),
             port: self.port,
             metrics_port: self.metrics_port,
-            pyroscope_host: self.pyroscope_host.clone(),
-            pyroscope_port: self.pyroscope_port,
-            pyroscope_sample_rate: self.pyroscope_sample_rate,
         }
     }
 }

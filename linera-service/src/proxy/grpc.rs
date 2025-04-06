@@ -62,7 +62,7 @@ use {
 };
 
 #[cfg(with_metrics)]
-use crate::{prometheus_server, pyroscope_server};
+use crate::prometheus_server;
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -201,15 +201,6 @@ where
         SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.metrics_port))
     }
 
-    fn pyroscope_address(&self) -> String {
-        format!(
-            "{}://{}:{}",
-            self.0.internal_config.protocol.scheme(),
-            self.0.internal_config.host,
-            self.0.internal_config.pyroscope_port
-        )
-    }
-
     fn internal_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
     }
@@ -245,7 +236,6 @@ where
             public_address = %self.public_address(),
             internal_address = %self.internal_address(),
             metrics_address = %self.metrics_address(),
-            pyroscope_address = %self.pyroscope_address(),
         ),
         err,
     )]
@@ -254,15 +244,7 @@ where
         let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]
-        {
-            prometheus_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
-            pyroscope_server::start_pyroscope(
-                self.pyroscope_address(),
-                "proxy".to_string(),
-                shutdown_signal.clone(),
-                self.0.internal_config.pyroscope_sample_rate,
-            )?;
-        }
+        prometheus_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter
