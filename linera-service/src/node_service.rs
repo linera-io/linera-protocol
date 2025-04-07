@@ -858,8 +858,8 @@ where
             // TODO(#551): Provide application authentication.
             .layer(CorsLayer::permissive());
 
-        ChainListener::new(self.config)
-            .run(Arc::clone(&self.context), self.storage.clone())
+        ChainListener::new(self.config, Arc::clone(&self.context), self.storage.clone())
+            .run()
             .await;
 
         axum::serve(listener, app).await?;
