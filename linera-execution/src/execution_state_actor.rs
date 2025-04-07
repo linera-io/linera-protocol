@@ -459,12 +459,12 @@ where
                 subscriber_app_id,
                 callback,
             } => {
-                let subscribers = self
+                let subscriptions = self
                     .system
                     .event_subscriptions
                     .get_mut_or_default(&(chain_id, stream_id))
                     .await?;
-                subscribers.insert(subscriber_app_id);
+                subscriptions.applications.insert(subscriber_app_id);
                 callback.respond(());
             }
 
@@ -475,15 +475,14 @@ where
                 callback,
             } => {
                 let key = (chain_id, stream_id);
-                let subscribers = self
+                let subscriptions = self
                     .system
                     .event_subscriptions
                     .get_mut_or_default(&key)
                     .await?;
-                subscribers.remove(&subscriber_app_id);
-                if subscribers.is_empty() {
+                subscriptions.applications.remove(&subscriber_app_id);
+                if subscriptions.applications.is_empty() {
                     self.system.event_subscriptions.remove(&key)?;
-                    self.system.stream_trackers.remove(&key)?;
                 }
                 callback.respond(());
             }
