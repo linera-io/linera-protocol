@@ -10,7 +10,7 @@ use std::{
 use async_trait::async_trait;
 use futures::{channel::mpsc, lock::Mutex, SinkExt as _, StreamExt};
 use linera_base::{
-    crypto::AccountSecretKey,
+    crypto::{AccountSecretKey, CryptoHash},
     data_types::Timestamp,
     identifiers::{ChainId, Destination},
 };
@@ -174,88 +174,91 @@ impl<C: ClientContext> ChainListener<C> {
             let mut sleep = Box::pin(futures::FutureExt::fuse(
                 self.storage.clock().sleep_until(timeout),
             ));
-            let notification = futures::select! {
-                maybe_notification = local_stream.next() => {
-                    if let Some(notification) = maybe_notification {
-                        notification
-                    } else {
-                        break;
-                    }
+            futures::select! {
+                () = sleep => {
+                    timeout = self.maybe_process_inbox(&client).await?;
                 }
                 maybe_event_msg = event_rx.next() => {
                     if maybe_event_msg == Some(()) {
                         // A new block on a publisher chain may have created a new event.
-                    timeout = self.maybe_process_inbox(&client).await?;
-                        continue;
+                        timeout = self.maybe_process_inbox(&client).await?;
                     } else {
                         break;
                     }
                 }
-                () = sleep => {
-                    timeout = self.maybe_process_inbox(&client).await?;
-                    continue;
-                }
-            };
-            info!("Received new notification: {:?}", notification);
-            Self::maybe_sleep(self.config.delay_before_ms).await;
-            match &notification.reason {
-                Reason::NewIncomingBundle { .. } => timeout = self.storage.clock().current_time(),
-                Reason::NewBlock { .. } | Reason::NewRound { .. } => {
-                    if let Err(error) = client.update_validators(None).await {
-                        warn!(
-                            "Failed to update validators about the local chain after \
-                            receiving notification {:?} with error: {:?}",
-                            notification, error
-                        );
+                maybe_notification = local_stream.next() => {
+                    let Some(notification) = maybe_notification else {
+                        break;
+                    };
+                    info!("Received new notification: {:?}", notification);
+                    Self::maybe_sleep(self.config.delay_before_ms).await;
+                    match &notification.reason {
+                        Reason::NewIncomingBundle { .. } => {
+                            timeout = self.maybe_process_inbox(&client).await?;
+                        }
+                        Reason::NewBlock { .. } | Reason::NewRound { .. } => {
+                            if let Err(error) = client.update_validators(None).await {
+                                warn!(
+                                    "Failed to update validators about the local chain after \
+                                     receiving {notification:?} with error: {error:?}"
+                                );
+                            }
+                        }
                     }
+                    Self::maybe_sleep(self.config.delay_after_ms).await;
+                    if let Reason::NewBlock { hash, .. } = notification.reason {
+                        self.process_new_block(&client, hash).await?;
+                    };
                 }
             }
-            Self::maybe_sleep(self.config.delay_after_ms).await;
-            let Reason::NewBlock { hash, .. } = notification.reason else {
-                continue;
-            };
-            {
-                self.context.lock().await.update_wallet(&client).await?;
-            }
-            let value = self.storage.read_confirmed_block(hash).await?;
-            let block = value.block();
-            let new_chains = block
-                .messages()
+        }
+        Ok(())
+    }
+
+    async fn process_new_block(
+        &self,
+        client: &ContextChainClient<C>,
+        hash: CryptoHash,
+    ) -> Result<(), Error> {
+        self.context.lock().await.update_wallet(client).await?;
+        let value = self.storage.read_confirmed_block(hash).await?;
+        let block = value.block();
+        let new_chains = block
+            .messages()
+            .iter()
+            .flatten()
+            .filter_map(|outgoing_message| {
+                if let OutgoingMessage {
+                    destination: Destination::Recipient(new_id),
+                    message: Message::System(SystemMessage::OpenChain(open_chain_config)),
+                    ..
+                } = outgoing_message
+                {
+                    let owners = open_chain_config
+                        .ownership
+                        .all_owners()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let timestamp = block.header.timestamp;
+                    Some((new_id, owners, timestamp))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if new_chains.is_empty() {
+            return Ok(());
+        }
+        let mut context_guard = self.context.lock().await;
+        for (new_id, owners, timestamp) in new_chains {
+            let key_pair = owners
                 .iter()
-                .flatten()
-                .filter_map(|outgoing_message| {
-                    if let OutgoingMessage {
-                        destination: Destination::Recipient(new_id),
-                        message: Message::System(SystemMessage::OpenChain(open_chain_config)),
-                        ..
-                    } = outgoing_message
-                    {
-                        let owners = open_chain_config
-                            .ownership
-                            .all_owners()
-                            .cloned()
-                            .collect::<Vec<_>>();
-                        let timestamp = block.header.timestamp;
-                        Some((new_id, owners, timestamp))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if new_chains.is_empty() {
-                continue;
-            }
-            let mut context_guard = self.context.lock().await;
-            for (new_id, owners, timestamp) in new_chains {
-                let key_pair = owners
-                    .iter()
-                    .find_map(|owner| context_guard.wallet().key_pair_for_owner(owner));
-                if key_pair.is_some() {
-                    context_guard
-                        .update_wallet_for_new_chain(*new_id, key_pair, timestamp)
-                        .await?;
-                    self.run_with_chain_id(*new_id);
-                }
+                .find_map(|owner| context_guard.wallet().key_pair_for_owner(owner));
+            if key_pair.is_some() {
+                context_guard
+                    .update_wallet_for_new_chain(*new_id, key_pair, timestamp)
+                    .await?;
+                self.run_with_chain_id(*new_id);
             }
         }
         Ok(())
