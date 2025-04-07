@@ -296,26 +296,6 @@ where
         bcs::from_bytes(&event).expect("Failed to deserialize event")
     }
 
-    /// Subscribes this application to an event stream.
-    pub fn subscribe_to_events(
-        &mut self,
-        chain_id: ChainId,
-        application_id: ApplicationId,
-        name: StreamName,
-    ) {
-        contract_wit::subscribe_to_events(chain_id.into(), application_id.into(), &name.into())
-    }
-
-    /// Unsubscribes this application from an event stream.
-    pub fn unsubscribe_from_events(
-        &mut self,
-        chain_id: ChainId,
-        application_id: ApplicationId,
-        name: StreamName,
-    ) {
-        contract_wit::unsubscribe_from_events(chain_id.into(), application_id.into(), &name.into())
-    }
-
     /// Queries an application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute

@@ -840,26 +840,6 @@ where
         bcs::from_bytes(value).expect("Failed to deserialize event value")
     }
 
-    /// Subscribes this application to an event stream.
-    pub fn subscribe_to_events(
-        &mut self,
-        _chain_id: ChainId,
-        _application_id: ApplicationId,
-        _name: StreamName,
-    ) {
-        // This is a no-op in the mock runtime.
-    }
-
-    /// Unsubscribes this application from an event stream.
-    pub fn unsubscribe_from_events(
-        &mut self,
-        _chain_id: ChainId,
-        _application_id: ApplicationId,
-        _name: StreamName,
-    ) {
-        // This is a no-op in the mock runtime.
-    }
-
     /// Adds an expected `query_service` call`, and the response it should return in the test.
     pub fn add_expected_service_query<A: ServiceAbi + Send>(
         &mut self,
