@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{num::NonZeroU16, path::PathBuf};
+use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -783,6 +783,53 @@ pub enum ClientCommand {
     },
 }
 
+impl ClientCommand {
+    /// Returns the log file name to use based on the [`ClientCommand`] that will run.
+    pub fn log_file_name(&self) -> Cow<'static, str> {
+        match self {
+            ClientCommand::Transfer { .. }
+            | ClientCommand::OpenChain { .. }
+            | ClientCommand::OpenMultiOwnerChain { .. }
+            | ClientCommand::ChangeOwnership { .. }
+            | ClientCommand::ChangeApplicationPermissions { .. }
+            | ClientCommand::CloseChain { .. }
+            | ClientCommand::LocalBalance { .. }
+            | ClientCommand::QueryBalance { .. }
+            | ClientCommand::SyncBalance { .. }
+            | ClientCommand::Sync { .. }
+            | ClientCommand::ProcessInbox { .. }
+            | ClientCommand::QueryValidator { .. }
+            | ClientCommand::QueryValidators { .. }
+            | ClientCommand::SyncValidator { .. }
+            | ClientCommand::SetValidator { .. }
+            | ClientCommand::RemoveValidator { .. }
+            | ClientCommand::ResourceControlPolicy { .. }
+            | ClientCommand::FinalizeCommittee
+            | ClientCommand::CreateGenesisConfig { .. }
+            | ClientCommand::PublishModule { .. }
+            | ClientCommand::PublishDataBlob { .. }
+            | ClientCommand::ReadDataBlob { .. }
+            | ClientCommand::CreateApplication { .. }
+            | ClientCommand::PublishAndCreate { .. }
+            | ClientCommand::Keygen
+            | ClientCommand::Assign { .. }
+            | ClientCommand::Wallet { .. }
+            | ClientCommand::RetryPendingBlock { .. } => "client".into(),
+            #[cfg(feature = "benchmark")]
+            ClientCommand::Benchmark { .. } => "benchmark".into(),
+            ClientCommand::Net { .. } => "net".into(),
+            ClientCommand::Project { .. } => "project".into(),
+            ClientCommand::Watch { .. } => "watch".into(),
+            ClientCommand::Storage { .. } => "storage".into(),
+            ClientCommand::Service { port, .. } => format!("service-{port}").into(),
+            ClientCommand::Faucet { .. } => "faucet".into(),
+            ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
+                "tool".into()
+            }
+        }
+    }
+}
+
 #[derive(Clone, clap::Parser)]
 pub enum DatabaseToolCommand {
     /// Delete all the namespaces in the database
@@ -875,11 +922,6 @@ pub enum NetCommand {
         /// If none, then a temporary directory is created.
         #[arg(long)]
         path: Option<String>,
-
-        /// Run with a specific storage.
-        /// If none, then a linera-storage-service is started on a random free port.
-        #[arg(long)]
-        storage: Option<String>,
 
         /// External protocol used, either `grpc` or `grpcs`.
         #[arg(long, default_value = "grpc")]

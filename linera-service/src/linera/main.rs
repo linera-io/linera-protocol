@@ -6,7 +6,6 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    borrow::Cow,
     collections::{BTreeSet, HashMap},
     env,
     path::PathBuf,
@@ -1327,23 +1326,8 @@ struct ClientOptions {
 }
 
 impl ClientOptions {
-    fn init() -> Result<Self, Error> {
-        let mut options = <ClientOptions as clap::Parser>::parse();
-        let suffix = options
-            .inner
-            .with_wallet
-            .as_ref()
-            .map(|x| format!("_{}", x))
-            .unwrap_or_default();
-        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
-        let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
-        if let (None, Some(wallet_path)) = (&options.inner.wallet_state_path, wallet_env_var) {
-            options.inner.wallet_state_path = Some(wallet_path.parse()?);
-        }
-        if let (None, Some(storage_path)) = (&options.storage_config, storage_env_var) {
-            options.storage_config = Some(storage_path.parse()?);
-        }
-        Ok(options)
+    fn init() -> Self {
+        <ClientOptions as clap::Parser>::parse()
     }
 
     fn common_config(&self) -> CommonStoreConfig {
@@ -1383,30 +1367,6 @@ impl ClientOptions {
         Ok(output)
     }
 
-    fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
-        if let Some(config) = &self.storage_config {
-            Ok(config.parse()?)
-        } else {
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "rocksdb")] {
-                    let spawn_mode =
-                        linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
-                    let storage_config = linera_service::storage::StorageConfig::RocksDb {
-                        path: self.config_path()?.join("wallet.db"),
-                        spawn_mode,
-                    };
-                    let namespace = "default".to_string();
-                    Ok(StorageConfigNamespace {
-                        storage_config,
-                        namespace,
-                    })
-                } else {
-                    bail!("Cannot apply default storage because the feature 'rocksdb' was not selected")
-                }
-            }
-        }
-    }
-
     async fn initialize_storage(&self) -> Result<(), Error> {
         let wallet = self.wallet().await?;
         let store_config = self
@@ -1422,25 +1382,66 @@ impl ClientOptions {
         Ok(WalletState::new(wallet))
     }
 
-    fn wallet_path(&self) -> Result<PathBuf, Error> {
+    fn suffix(&self) -> String {
         self.inner
-            .wallet_state_path
-            .clone()
-            .map(Ok)
-            .unwrap_or_else(|| Ok(self.config_path()?.join("wallet.json")))
+            .with_wallet
+            .as_ref()
+            .map(|x| format!("_{}", x))
+            .unwrap_or_default()
     }
 
     fn config_path(&self) -> Result<PathBuf, Error> {
         let mut config_dir = dirs::config_dir().ok_or(anyhow!(
-            "default configuration directory not supported: please specify a path"
+            "Default wallet directory is not supported in this platform: please specify storage and wallet paths"
         ))?;
         config_dir.push("linera");
         if !config_dir.exists() {
-            tracing::debug!("{} does not exist, creating", config_dir.display());
+            tracing::debug!("Creating default wallet directory {}", config_dir.display());
             fs_err::create_dir(&config_dir)?;
-            tracing::debug!("{} created.", config_dir.display());
         }
+        tracing::info!("Using default wallet directory {}", config_dir.display());
         Ok(config_dir)
+    }
+
+    fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
+        if let Some(config) = &self.storage_config {
+            return config.parse();
+        }
+        let suffix = self.suffix();
+        let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
+        if let Some(config) = storage_env_var {
+            return config.parse();
+        }
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "rocksdb")] {
+                let spawn_mode =
+                    linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
+                let storage_config = linera_service::storage::StorageConfig::RocksDb {
+                    path: self.config_path()?.join("wallet.db"),
+                    spawn_mode,
+                };
+                let namespace = "default".to_string();
+                Ok(StorageConfigNamespace {
+                    storage_config,
+                    namespace,
+                })
+            } else {
+                bail!("Cannot apply default storage because the feature 'rocksdb' was not selected");
+            }
+        }
+    }
+
+    fn wallet_path(&self) -> Result<PathBuf, Error> {
+        if let Some(path) = &self.inner.wallet_state_path {
+            return Ok(path.clone());
+        }
+        let suffix = self.suffix();
+        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
+        if let Some(path) = wallet_env_var {
+            return Ok(path.parse()?);
+        }
+        let config_path = self.config_path()?;
+        Ok(config_path.join("wallet.json"))
     }
 
     pub fn create_wallet(
@@ -1564,9 +1565,9 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let options = ClientOptions::init()?;
+    let options = ClientOptions::init();
 
-    linera_base::tracing::init(&log_file_name_for(&options.command));
+    linera_base::tracing::init(&options.command.log_file_name());
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -1599,51 +1600,6 @@ fn main() -> anyhow::Result<()> {
         }
     };
     process::exit(error_code);
-}
-
-/// Returns the log file name to use based on the [`ClientCommand`] that will run.
-fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
-    match command {
-        ClientCommand::Transfer { .. }
-        | ClientCommand::OpenChain { .. }
-        | ClientCommand::OpenMultiOwnerChain { .. }
-        | ClientCommand::ChangeOwnership { .. }
-        | ClientCommand::ChangeApplicationPermissions { .. }
-        | ClientCommand::CloseChain { .. }
-        | ClientCommand::LocalBalance { .. }
-        | ClientCommand::QueryBalance { .. }
-        | ClientCommand::SyncBalance { .. }
-        | ClientCommand::Sync { .. }
-        | ClientCommand::ProcessInbox { .. }
-        | ClientCommand::QueryValidator { .. }
-        | ClientCommand::QueryValidators { .. }
-        | ClientCommand::SyncValidator { .. }
-        | ClientCommand::SetValidator { .. }
-        | ClientCommand::RemoveValidator { .. }
-        | ClientCommand::ResourceControlPolicy { .. }
-        | ClientCommand::FinalizeCommittee
-        | ClientCommand::CreateGenesisConfig { .. }
-        | ClientCommand::PublishModule { .. }
-        | ClientCommand::PublishDataBlob { .. }
-        | ClientCommand::ReadDataBlob { .. }
-        | ClientCommand::CreateApplication { .. }
-        | ClientCommand::PublishAndCreate { .. }
-        | ClientCommand::Keygen
-        | ClientCommand::Assign { .. }
-        | ClientCommand::Wallet { .. }
-        | ClientCommand::RetryPendingBlock { .. } => "client".into(),
-        #[cfg(feature = "benchmark")]
-        ClientCommand::Benchmark { .. } => "benchmark".into(),
-        ClientCommand::Net { .. } => "net".into(),
-        ClientCommand::Project { .. } => "project".into(),
-        ClientCommand::Watch { .. } => "watch".into(),
-        ClientCommand::Storage { .. } => "storage".into(),
-        ClientCommand::Service { port, .. } => format!("service-{port}").into(),
-        ClientCommand::Faucet { .. } => "faucet".into(),
-        ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
-            "tool".into()
-        }
-    }
 }
 
 async fn run(options: &ClientOptions) -> Result<i32, Error> {
@@ -1866,7 +1822,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 no_build,
                 docker_image_name,
                 path: _,
-                storage: _,
                 external_protocol: _,
                 with_faucet,
                 faucet_chain,
@@ -1902,7 +1857,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 policy_config,
                 cross_chain_config,
                 path,
-                storage,
                 external_protocol,
                 with_faucet,
                 faucet_chain,
@@ -1919,7 +1873,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *policy_config,
                     cross_chain_config.clone(),
                     path,
-                    storage,
+                    // Not using the default value for storage
+                    &options.storage_config,
                     external_protocol.clone(),
                     *with_faucet,
                     *faucet_chain,
