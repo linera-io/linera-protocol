@@ -10,7 +10,7 @@ use linera_base::{
     time::Duration,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
-use linera_execution::{ResourceControlPolicy, WasmRuntime};
+use linera_execution::ResourceControlPolicy;
 
 #[cfg(any(with_indexed_db, not(with_persist)))]
 use crate::{config::WalletState, wallet::Wallet};
@@ -63,33 +63,9 @@ pub struct ClientContextOptions {
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
 
-    /// The WebAssembly runtime to use.
-    #[arg(long)]
-    pub wasm_runtime: Option<WasmRuntime>,
-
     /// The maximal number of chains loaded in memory at a given time.
     #[arg(long, default_value = "40")]
     pub max_loaded_chains: NonZeroUsize,
-
-    /// The maximal number of simultaneous queries to the database
-    #[arg(long)]
-    pub max_concurrent_queries: Option<usize>,
-
-    /// The maximal number of simultaneous stream queries to the database
-    #[arg(long, default_value = "10")]
-    pub max_stream_queries: usize,
-
-    /// The maximal memory used in the storage cache.
-    #[arg(long, default_value = "10000000")]
-    pub max_cache_size: usize,
-
-    /// The maximal size of an entry in the storage cache.
-    #[arg(long, default_value = "1000000")]
-    pub max_entry_size: usize,
-
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    pub max_cache_entries: usize,
 
     /// Delay increment for retrying to connect to a validator.
     #[arg(
@@ -111,10 +87,6 @@ pub struct ClientContextOptions {
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
     pub long_lived_services: bool,
-
-    /// The number of Tokio worker threads to use.
-    #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
-    pub tokio_threads: Option<usize>,
 
     /// The policy for handling incoming messages.
     #[arg(long, default_value = "accept")]

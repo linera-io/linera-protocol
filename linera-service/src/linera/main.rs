@@ -40,7 +40,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    WithWasmDefault as _,
+    WasmRuntime, WithWasmDefault as _,
 };
 use linera_faucet_server::FaucetService;
 use linera_service::{
@@ -1284,11 +1284,39 @@ impl Job {
 struct ClientOptions {
     /// Storage configuration for the blockchain history.
     #[arg(long = "storage")]
-    pub storage_config: Option<String>,
+    storage_config: Option<String>,
 
     /// Common options.
     #[command(flatten)]
     inner: ClientContextOptions,
+
+    /// The maximal number of simultaneous queries to the database
+    #[arg(long)]
+    max_concurrent_queries: Option<usize>,
+
+    /// The maximal number of simultaneous stream queries to the database
+    #[arg(long, default_value = "10")]
+    max_stream_queries: usize,
+
+    /// The maximal memory used in the storage cache.
+    #[arg(long, default_value = "10000000")]
+    max_cache_size: usize,
+
+    /// The maximal size of an entry in the storage cache.
+    #[arg(long, default_value = "1000000")]
+    max_entry_size: usize,
+
+    /// The maximal number of entries in the storage cache.
+    #[arg(long, default_value = "1000")]
+    max_cache_entries: usize,
+
+    /// The WebAssembly runtime to use.
+    #[arg(long)]
+    wasm_runtime: Option<WasmRuntime>,
+
+    /// The number of Tokio worker threads to use.
+    #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
+    tokio_threads: Option<usize>,
 
     /// Subcommand.
     #[command(subcommand)]
@@ -1317,13 +1345,13 @@ impl ClientOptions {
 
     fn common_config(&self) -> CommonStoreConfig {
         let storage_cache_config = StorageCacheConfig {
-            max_cache_size: self.inner.max_cache_size,
-            max_entry_size: self.inner.max_entry_size,
-            max_cache_entries: self.inner.max_cache_entries,
+            max_cache_size: self.max_cache_size,
+            max_entry_size: self.max_entry_size,
+            max_cache_entries: self.max_cache_entries,
         };
         CommonStoreConfig {
-            max_concurrent_queries: self.inner.max_concurrent_queries,
-            max_stream_queries: self.inner.max_stream_queries,
+            max_concurrent_queries: self.max_concurrent_queries,
+            max_stream_queries: self.max_stream_queries,
             storage_cache_config,
         }
     }
@@ -1335,7 +1363,7 @@ impl ClientOptions {
                 .add_common_config(self.common_config())
                 .await?,
             &genesis_config,
-            self.inner.wasm_runtime.with_wasm_default(),
+            self.wasm_runtime.with_wasm_default(),
             job,
         ))
         .await?;
@@ -1425,12 +1453,12 @@ fn main() -> anyhow::Result<()> {
 
     linera_base::tracing::init(&log_file_name_for(&options.command));
 
-    let mut runtime = if options.inner.tokio_threads == Some(1) {
+    let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
     } else {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
 
-        if let Some(threads) = options.inner.tokio_threads {
+        if let Some(threads) = options.tokio_threads {
             builder.worker_threads(threads);
         }
 
