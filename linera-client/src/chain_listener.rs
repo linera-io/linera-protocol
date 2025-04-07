@@ -8,7 +8,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{future, lock::Mutex, stream, StreamExt};
+use futures::{channel::mpsc, lock::Mutex, SinkExt as _, StreamExt};
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::Timestamp,
@@ -16,8 +16,8 @@ use linera_base::{
 };
 use linera_core::{
     client::{ChainClient, ChainClientError},
-    node::{NotificationStream, ValidatorNodeProvider},
-    worker::{Notification, Reason},
+    node::ValidatorNodeProvider,
+    worker::Reason,
 };
 use linera_execution::{Message, OutgoingMessage, SystemMessage};
 use linera_storage::{Clock as _, Storage};
@@ -164,15 +164,20 @@ impl ChainListener {
         let client = context.lock().await.make_chain_client(chain_id)?;
         let (listener, _listen_handle, local_stream) = client.listen().await?;
         let mut local_stream = local_stream.fuse();
-        let admin_listener: NotificationStream = if client.admin_id() == chain_id {
-            Box::pin(stream::pending())
-        } else {
-            let stream = client.subscribe_to(client.admin_id()).await?;
-            Box::pin(stream.filter(|notification: &Notification| {
-                future::ready(matches!(notification.reason, Reason::NewBlock { .. }))
-            }))
-        };
-        let mut admin_listener = admin_listener.fuse();
+        let (event_tx, mut event_rx) = mpsc::channel(1);
+        let mut admin_event_tx = event_tx.clone();
+        let mut admin_stream = client.subscribe_to(client.admin_id()).await?;
+        if client.admin_id() != chain_id {
+            linera_base::task::spawn(async move {
+                while let Some(notification) = admin_stream.next().await {
+                    if let Reason::NewBlock { .. } = notification.reason {
+                        if admin_event_tx.send(()).await.is_err() {
+                            return; // The receiver was dropped.
+                        }
+                    }
+                }
+            });
+        }
         client.synchronize_from_validators().await?;
         drop(linera_base::task::spawn(listener.in_current_span()));
         let mut timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
@@ -188,13 +193,14 @@ impl ChainListener {
                         break;
                     }
                 }
-                maybe_notification = admin_listener.next() => {
-                    // A new block on the admin chain may mean a new committee. Set the timer to
-                    // process the inbox.
-                    if maybe_notification.is_some() {
+                maybe_event_msg = event_rx.next() => {
+                    if maybe_event_msg == Some(()) {
+                        // A new block on a publisher chain may have created a new event.
                         timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
+                        continue;
+                    } else {
+                        break;
                     }
-                    continue;
                 }
                 () = sleep => {
                     timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
