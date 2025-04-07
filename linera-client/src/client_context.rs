@@ -57,7 +57,7 @@ use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
 use crate::persistent::{Persist, PersistExt as _};
 use crate::{
     chain_listener,
-    client_options::{ChainOwnershipConfig, ClientOptions},
+    client_options::{ChainOwnershipConfig, ClientContextOptions},
     config::WalletState,
     error, util,
     wallet::{UserChain, Wallet},
@@ -138,7 +138,7 @@ where
             .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    pub fn new(storage: S, options: ClientOptions, wallet: W) -> Self {
+    pub fn new(storage: S, options: ClientContextOptions, wallet: W) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,

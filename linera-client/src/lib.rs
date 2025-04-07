@@ -12,7 +12,6 @@ pub mod client_options;
 pub mod config;
 mod error;
 pub mod persistent;
-pub mod storage;
 pub mod util;
 pub mod wallet;
 

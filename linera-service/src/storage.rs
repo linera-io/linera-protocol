@@ -3,11 +3,11 @@
 
 use std::{fmt, str::FromStr};
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use linera_base::identifiers::{BlobId, ChainId};
+use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
-#[cfg(with_storage)]
-use linera_storage::{list_all_blob_ids, list_all_chain_ids};
 use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -16,8 +16,6 @@ use linera_storage_service::{
 };
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig};
-#[cfg(with_storage)]
-use linera_views::store::LocalAdminKeyValueStore as _;
 use linera_views::{
     memory::{MemoryStore, MemoryStoreConfig},
     store::CommonStoreConfig,
@@ -25,10 +23,16 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
+#[allow(unused_imports)]
+use {
+    anyhow::bail,
+    linera_storage::{list_all_blob_ids, list_all_chain_ids},
+    linera_views::store::LocalAdminKeyValueStore as _,
+};
 #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
 use {
     linera_storage::ChainStatesFirstAssignment,
-    linera_views::backends::dual::{DualStore, DualStoreConfig, DualStoreError},
+    linera_views::backends::dual::{DualStore, DualStoreConfig},
     std::path::Path,
 };
 #[cfg(feature = "rocksdb")]
@@ -42,32 +46,6 @@ use {
     std::num::NonZeroU16,
     tracing::debug,
 };
-
-use crate::{config::GenesisConfig, util};
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("invalid storage specification format: {0}")]
-    Format(String),
-    #[error("invalid operation: {0}")]
-    InvalidOperation(String),
-    #[error("backend error: {0}")]
-    Backend(Box<dyn std::error::Error + Send + Sync>),
-    #[error("config error: {0}")]
-    Config(#[from] crate::config::Error),
-}
-
-util::impl_from_dynamic!(Error:Backend, linera_views::memory::MemoryStoreError);
-#[cfg(feature = "storage-service")]
-util::impl_from_dynamic!(Error:Backend, linera_storage_service::common::ServiceStoreError);
-#[cfg(feature = "rocksdb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::rocks_db::RocksDbStoreError);
-#[cfg(feature = "dynamodb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreError);
-#[cfg(feature = "scylladb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
-#[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-util::impl_from_dynamic!(Error:Backend, DualStoreError<linera_views::rocks_db::RocksDbStoreError, linera_views::scylla_db::ScyllaDbStoreError>);
 
 /// The configuration of the key value store in use.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -199,7 +177,7 @@ const SCYLLA_DB: &str = "scylladb:";
 const DUAL_ROCKS_DB_SCYLLA_DB: &str = "dualrocksdbscylladb:";
 
 impl FromStr for StorageConfigNamespace {
-    type Err = Error;
+    type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         if input == MEMORY {
@@ -221,21 +199,18 @@ impl FromStr for StorageConfigNamespace {
         #[cfg(feature = "storage-service")]
         if let Some(s) = input.strip_prefix(STORAGE_SERVICE) {
             if s.is_empty() {
-                return Err(Error::Format(
+                bail!(
                     "For Storage service, the formatting has to be service:endpoint:namespace,\
 example service:tcp:127.0.0.1:7878:table_do_my_test"
-                        .into(),
-                ));
+                );
             }
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() != 4 {
-                return Err(Error::Format(
-                    "We should have one endpoint and one namespace".into(),
-                ));
+                bail!("We should have one endpoint and one namespace");
             }
             let protocol = parts[0];
             if protocol != "tcp" {
-                return Err(Error::Format("Only allowed protocol is tcp".into()));
+                bail!("Only allowed protocol is tcp");
             }
             let endpoint = parts[1];
             let port = parts[2];
@@ -253,9 +228,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         #[cfg(feature = "rocksdb")]
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
             if s.is_empty() {
-                return Err(Error::Format(
-                    "For RocksDB, the formatting has to be rocksdb:directory or rocksdb:directory:spawn_mode:namespace".into(),
-                ));
+                bail!(
+                    "For RocksDB, the formatting has to be rocksdb:directory or rocksdb:directory:spawn_mode:namespace");
             }
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() == 1 {
@@ -274,10 +248,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                     "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                    _ => Err(Error::Format(format!(
-                        "Failed to parse {} as a spawn_mode",
-                        parts[1]
-                    ))),
+                    _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
                 }?;
                 let namespace = if parts.len() == 2 {
                     DEFAULT_NAMESPACE.to_string()
@@ -290,29 +261,23 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     namespace,
                 });
             }
-            return Err(Error::Format(
-                "We should have one, two or three parts".into(),
-            ));
+            bail!("We should have one, two or three parts");
         }
         #[cfg(feature = "dynamodb")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
             let mut parts = s.splitn(2, ':');
             let namespace = parts
                 .next()
-                .ok_or_else(|| {
-                    Error::Format(format!(
-                        "Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"
-                    ))
-                })?
+                .ok_or_else(|| anyhow!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"))?
                 .to_string();
             let use_localstack = match parts.next() {
                 None | Some("env") => false,
                 Some("localstack") => true,
                 Some(unknown) => {
-                    return Err(Error::Format(format!(
+                    bail!(
                         "Invalid DynamoDB endpoint {unknown:?}. \
                         Expected {DYNAMO_DB}TABLE:[env|localstack]"
-                    )));
+                    );
                 }
             };
             let storage_config = StorageConfig::DynamoDb { use_localstack };
@@ -332,37 +297,29 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     match part {
                         "tcp" => {
                             let address = parts.next().ok_or_else(|| {
-                                Error::Format(format!(
-                                    "Failed to find address for {s}. {parse_error}"
-                                ))
+                                anyhow!("Failed to find address for {s}. {parse_error}")
                             })?;
                             let port_str = parts.next().ok_or_else(|| {
-                                Error::Format(format!("Failed to find port for {s}. {parse_error}"))
+                                anyhow!("Failed to find port for {s}. {parse_error}")
                             })?;
                             let port = NonZeroU16::from_str(port_str).map_err(|_| {
-                                Error::Format(format!(
+                                anyhow!(
                                     "Failed to find parse port {port_str} for {s}. {parse_error}",
-                                ))
+                                )
                             })?;
                             if uri.is_some() {
-                                return Err(Error::Format(
-                                    "The uri has already been assigned".into(),
-                                ));
+                                bail!("The uri has already been assigned");
                             }
                             uri = Some(format!("{}:{}", &address, port));
                         }
                         _ if part.starts_with("table") => {
                             if namespace.is_some() {
-                                return Err(Error::Format(
-                                    "The namespace has already been assigned".into(),
-                                ));
+                                bail!("The namespace has already been assigned");
                             }
                             namespace = Some(part.to_string());
                         }
                         _ => {
-                            return Err(Error::Format(format!(
-                                "the entry \"{part}\" is not matching"
-                            )));
+                            bail!("the entry \"{part}\" is not matching");
                         }
                     }
                 }
@@ -380,9 +337,9 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         if let Some(s) = input.strip_prefix(DUAL_ROCKS_DB_SCYLLA_DB) {
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() != 5 && parts.len() != 6 {
-                return Err(Error::Format(
-                    "For DualRocksDbScyllaDb, the formatting has to be dualrocksdbscylladb:directory:mode:tcp:hostname:port:namespace".into(),
-                ));
+                bail!(
+                    "For DualRocksDbScyllaDb, the formatting has to be dualrocksdbscylladb:directory:mode:tcp:hostname:port:namespace"
+                );
             }
             let path = Path::new(parts[0]);
             let path = path.to_path_buf();
@@ -391,20 +348,16 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                 "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                _ => Err(Error::Format(format!(
-                    "Failed to parse {} as a spawn_mode",
-                    parts[1]
-                ))),
+                _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
             }?;
             let protocol = parts[2];
             if protocol != "tcp" {
-                return Err(Error::Format("The only allowed protocol is tcp".into()));
+                bail!("The only allowed protocol is tcp");
             }
             let address = parts[3];
             let port_str = parts[4];
-            let port = NonZeroU16::from_str(port_str).map_err(|_| {
-                Error::Format(format!("Failed to find parse port {port_str} for {s}",))
-            })?;
+            let port = NonZeroU16::from_str(port_str)
+                .map_err(|_| anyhow!("Failed to find parse port {port_str} for {s}"))?;
             let uri = format!("{}:{}", &address, port);
             let storage_config = StorageConfig::DualRocksDbScyllaDb {
                 path_with_guard,
@@ -432,7 +385,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         error!("Also available is ScyllaDB");
         #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
         error!("Also available is DualRocksDbScyllaDb");
-        Err(Error::Format(format!("The input has not matched: {input}")))
+        Err(anyhow!("The input has not matched: {input}"))
     }
 }
 
@@ -441,7 +394,7 @@ impl StorageConfigNamespace {
     pub async fn add_common_config(
         &self,
         common_config: CommonStoreConfig,
-    ) -> Result<StoreConfig, Error> {
+    ) -> Result<StoreConfig, anyhow::Error> {
         let namespace = self.namespace.clone();
         match &self.storage_config {
             #[cfg(feature = "storage-service")]
@@ -821,7 +774,7 @@ pub async fn run_with_storage<Job>(
     genesis_config: &GenesisConfig,
     wasm_runtime: Option<WasmRuntime>,
     job: Job,
-) -> Result<Job::Output, Error>
+) -> Result<Job::Output, anyhow::Error>
 where
     Job: Runnable,
 {
@@ -873,10 +826,10 @@ where
 pub async fn full_initialize_storage(
     config: StoreConfig,
     genesis_config: &GenesisConfig,
-) -> Result<(), Error> {
+) -> Result<(), anyhow::Error> {
     match config {
-        StoreConfig::Memory(_, _) => Err(Error::InvalidOperation(
-            "The initialization should not be called for memory".into(),
+        StoreConfig::Memory(_, _) => Err(anyhow!(
+            "The initialization should not be called for memory"
         )),
         #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {

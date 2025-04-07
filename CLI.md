@@ -105,8 +105,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 ###### **Options:**
 
-* `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+* `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
 * `--send-timeout-ms <SEND_TIMEOUT>` — Timeout for sending queries (milliseconds)
 
@@ -117,23 +117,9 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
   Default value: `10`
-* `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--max-loaded-chains <MAX_LOADED_CHAINS>` — The maximal number of chains loaded in memory at a given time
 
   Default value: `40`
-* `--max-concurrent-queries <MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
-* `--max-stream-queries <MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
-
-  Default value: `10`
-* `--max-cache-size <MAX_CACHE_SIZE>` — The maximal memory used in the storage cache
-
-  Default value: `10000000`
-* `--max-entry-size <MAX_ENTRY_SIZE>` — The maximal size of an entry in the storage cache
-
-  Default value: `1000000`
-* `--max-cache-entries <MAX_CACHE_ENTRIES>` — The maximal number of entries in the storage cache
-
-  Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
 
   Default value: `1000`
@@ -142,7 +128,6 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
-* `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 
   Default value: `accept`
@@ -162,6 +147,21 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
 
   Default value: `1000`
+* `--max-concurrent-queries <MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
+* `--max-stream-queries <MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
+
+  Default value: `10`
+* `--max-cache-size <MAX_CACHE_SIZE>` — The maximal memory used in the storage cache
+
+  Default value: `10000000`
+* `--max-entry-size <MAX_ENTRY_SIZE>` — The maximal size of an entry in the storage cache
+
+  Default value: `1000000`
+* `--max-cache-entries <MAX_CACHE_ENTRIES>` — The maximal number of entries in the storage cache
+
+  Default value: `1000`
+* `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
+* `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 
 
 

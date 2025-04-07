@@ -9,10 +9,7 @@ use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
 use linera_base::listen_for_shutdown_signals;
-use linera_client::{
-    config::{GenesisConfig, ValidatorServerConfig},
-    storage::{run_with_storage, Runnable, StorageConfigNamespace},
-};
+use linera_client::config::{GenesisConfig, ValidatorServerConfig};
 use linera_core::{node::NodeError, JoinSetExt as _};
 use linera_rpc::{
     config::{
@@ -25,7 +22,10 @@ use linera_rpc::{
 use linera_sdk::linera_base_types::Blob;
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
-use linera_service::util;
+use linera_service::{
+    storage::{run_with_storage, Runnable, StorageConfigNamespace},
+    util,
+};
 use linera_storage::Storage;
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 use tokio::task::JoinSet;
