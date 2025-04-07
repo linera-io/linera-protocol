@@ -161,15 +161,18 @@ impl<C: ClientContext> ChainListener<C> {
         if client.admin_id() != chain_id {
             let mut admin_event_tx = event_tx.clone();
             let mut admin_stream = client.subscribe_to(client.admin_id()).await?;
-            let _handle = linera_base::task::spawn(async move {
-                while let Some(notification) = admin_stream.next().await {
-                    if let Reason::NewBlock { .. } = notification.reason {
-                        if admin_event_tx.send(()).await.is_err() {
-                            return; // The receiver was dropped.
+            let _handle = linera_base::task::spawn(
+                async move {
+                    while let Some(notification) = admin_stream.next().await {
+                        if let Reason::NewBlock { .. } = notification.reason {
+                            if admin_event_tx.send(()).await.is_err() {
+                                return; // The receiver was dropped.
+                            }
                         }
                     }
                 }
-            });
+                .in_current_span(),
+            );
         }
         let (listener, _listen_handle, local_stream) = client.listen().await?;
         client.synchronize_from_validators().await?;
