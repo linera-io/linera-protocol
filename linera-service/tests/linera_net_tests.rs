@@ -701,9 +701,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
-    let mut node_service1 = client1
-        .run_node_service(port1, ProcessInbox::Automatic)
-        .await?;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2
         .run_node_service(port2, ProcessInbox::Automatic)
         .await?;
