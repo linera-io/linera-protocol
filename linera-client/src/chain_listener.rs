@@ -85,57 +85,55 @@ pub trait ClientContext: 'static {
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
-pub struct ChainListener {
-    config: ChainListenerConfig,
+#[derive(Debug)]
+pub struct ChainListener<C: ClientContext> {
+    context: Arc<Mutex<C>>,
+    storage: C::Storage,
+    config: Arc<ChainListenerConfig>,
     listening: Arc<Mutex<HashSet<ChainId>>>,
 }
 
-impl ChainListener {
-    /// Creates a new chain listener given client chains.
-    pub fn new(config: ChainListenerConfig) -> Self {
+impl<C: ClientContext> Clone for ChainListener<C> {
+    fn clone(&self) -> Self {
         Self {
-            config,
+            context: self.context.clone(),
+            storage: self.storage.clone(),
+            config: self.config.clone(),
+            listening: self.listening.clone(),
+        }
+    }
+}
+
+impl<C: ClientContext> ChainListener<C> {
+    /// Creates a new chain listener given client chains.
+    pub fn new(config: ChainListenerConfig, context: Arc<Mutex<C>>, storage: C::Storage) -> Self {
+        Self {
+            storage,
+            context,
+            config: Arc::new(config),
             listening: Default::default(),
         }
     }
 
     /// Runs the chain listener.
-    pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: C::Storage)
-    where
-        C: ClientContext,
-    {
+    pub async fn run(self) {
         let chain_ids = {
-            let guard = context.lock().await;
+            let guard = self.context.lock().await;
             let mut chain_ids = BTreeSet::from_iter(guard.wallet().chain_ids());
             chain_ids.insert(guard.wallet().genesis_admin_chain());
             chain_ids
         };
         for chain_id in chain_ids {
-            Self::run_with_chain_id(
-                chain_id,
-                context.clone(),
-                storage.clone(),
-                self.config.clone(),
-                self.listening.clone(),
-            );
+            self.run_with_chain_id(chain_id);
         }
     }
 
     #[instrument(level = "trace", skip_all, fields(?chain_id))]
-    fn run_with_chain_id<C>(
-        chain_id: ChainId,
-        context: Arc<Mutex<C>>,
-        storage: C::Storage,
-        config: ChainListenerConfig,
-        listening: Arc<Mutex<HashSet<ChainId>>>,
-    ) where
-        C: ClientContext,
-    {
+    fn run_with_chain_id(&self, chain_id: ChainId) {
+        let listener = self.clone();
         let _handle = linera_base::task::spawn(
             async move {
-                if let Err(err) =
-                    Self::run_client_stream(chain_id, context, storage, config, listening).await
-                {
+                if let Err(err) = listener.run_client_stream(chain_id).await {
                     error!("Stream for chain {} failed: {}", chain_id, err);
                 }
             }
@@ -144,24 +142,15 @@ impl ChainListener {
     }
 
     #[instrument(level = "trace", skip_all, fields(?chain_id))]
-    async fn run_client_stream<C>(
-        chain_id: ChainId,
-        context: Arc<Mutex<C>>,
-        storage: C::Storage,
-        config: ChainListenerConfig,
-        listening: Arc<Mutex<HashSet<ChainId>>>,
-    ) -> Result<(), Error>
-    where
-        C: ClientContext,
-    {
-        if !listening.lock().await.insert(chain_id) {
+    async fn run_client_stream(&self, chain_id: ChainId) -> Result<(), Error> {
+        if !self.listening.lock().await.insert(chain_id) {
             // If we are already listening to notifications, there's nothing to do.
             // This can happen if we download a child before the parent
             // chain, and then process the OpenChain message in the parent.
             return Ok(());
         }
         // If the client is not present, we can request it.
-        let client = context.lock().await.make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let (listener, _listen_handle, local_stream) = client.listen().await?;
         let mut local_stream = local_stream.fuse();
         let (event_tx, mut event_rx) = mpsc::channel(1);
@@ -180,10 +169,10 @@ impl ChainListener {
         }
         client.synchronize_from_validators().await?;
         drop(linera_base::task::spawn(listener.in_current_span()));
-        let mut timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
+        let mut timeout = self.maybe_process_inbox(&client).await?;
         loop {
             let mut sleep = Box::pin(futures::FutureExt::fuse(
-                storage.clock().sleep_until(timeout),
+                self.storage.clock().sleep_until(timeout),
             ));
             let notification = futures::select! {
                 maybe_notification = local_stream.next() => {
@@ -196,21 +185,21 @@ impl ChainListener {
                 maybe_event_msg = event_rx.next() => {
                     if maybe_event_msg == Some(()) {
                         // A new block on a publisher chain may have created a new event.
-                        timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
+                    timeout = self.maybe_process_inbox(&client).await?;
                         continue;
                     } else {
                         break;
                     }
                 }
                 () = sleep => {
-                    timeout = Self::maybe_process_inbox(&config, &client, &context).await?;
+                    timeout = self.maybe_process_inbox(&client).await?;
                     continue;
                 }
             };
             info!("Received new notification: {:?}", notification);
-            Self::maybe_sleep(config.delay_before_ms).await;
+            Self::maybe_sleep(self.config.delay_before_ms).await;
             match &notification.reason {
-                Reason::NewIncomingBundle { .. } => timeout = storage.clock().current_time(),
+                Reason::NewIncomingBundle { .. } => timeout = self.storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
                     if let Err(error) = client.update_validators(None).await {
                         warn!(
@@ -221,14 +210,14 @@ impl ChainListener {
                     }
                 }
             }
-            Self::maybe_sleep(config.delay_after_ms).await;
+            Self::maybe_sleep(self.config.delay_after_ms).await;
             let Reason::NewBlock { hash, .. } = notification.reason else {
                 continue;
             };
             {
-                context.lock().await.update_wallet(&client).await?;
+                self.context.lock().await.update_wallet(&client).await?;
             }
-            let value = storage.read_confirmed_block(hash).await?;
+            let value = self.storage.read_confirmed_block(hash).await?;
             let block = value.block();
             let new_chains = block
                 .messages()
@@ -256,7 +245,7 @@ impl ChainListener {
             if new_chains.is_empty() {
                 continue;
             }
-            let mut context_guard = context.lock().await;
+            let mut context_guard = self.context.lock().await;
             for (new_id, owners, timestamp) in new_chains {
                 let key_pair = owners
                     .iter()
@@ -265,13 +254,7 @@ impl ChainListener {
                     context_guard
                         .update_wallet_for_new_chain(*new_id, key_pair, timestamp)
                         .await?;
-                    Self::run_with_chain_id(
-                        *new_id,
-                        context.clone(),
-                        storage.clone(),
-                        config.clone(),
-                        listening.clone(),
-                    );
+                    self.run_with_chain_id(*new_id);
                 }
             }
         }
@@ -291,16 +274,12 @@ impl ChainListener {
     ///
     /// The wallet is persisted with any blocks that processing the inbox added. An error
     /// is returned if persisting the wallet fails.
-    async fn maybe_process_inbox<C>(
-        config: &ChainListenerConfig,
+    async fn maybe_process_inbox(
+        &self,
         client: &ChainClient<C::ValidatorNodeProvider, C::Storage>,
-        context: &Arc<Mutex<C>>,
-    ) -> Result<Timestamp, Error>
-    where
-        C: ClientContext,
-    {
+    ) -> Result<Timestamp, Error> {
         let mut timeout = Timestamp::from(u64::MAX);
-        if config.skip_process_inbox {
+        if self.config.skip_process_inbox {
             debug!("Not processing inbox due to listener configuration");
             return Ok(timeout);
         }
@@ -320,7 +299,7 @@ impl ChainListener {
                 timeout = new_timeout.timestamp;
             }
         }
-        context.lock().await.update_wallet(client).await?;
+        self.context.lock().await.update_wallet(client).await?;
         Ok(timeout)
     }
 }
