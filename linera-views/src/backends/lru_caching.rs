@@ -153,9 +153,7 @@ impl LruPrefixCache {
             btree_map::Entry::Occupied(mut entry) => {
                 entry.insert(cache_entry);
                 // Put it on first position for LRU
-                let Some(old_key_value_size) = self.queue.remove(&key) else {
-                    unreachable!("The entry should be present in the queue");
-                };
+                let old_key_value_size = self.queue.remove(&key).expect("old_key_value_size");
                 self.total_size -= old_key_value_size;
                 self.queue.insert(key, key_value_size);
                 self.total_size += key_value_size;
@@ -215,23 +213,36 @@ impl LruPrefixCache {
     /// Returns the cached value, or `Some(None)` if the entry does not exist in the
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.
-    pub fn query_read_value(&self, key: &[u8]) -> Option<Option<Vec<u8>>> {
-        match self.map.get(key) {
+    pub fn query_read_value(&mut self, key: &[u8]) -> Option<Option<Vec<u8>>> {
+        let result = match self.map.get(key) {
             None => None,
             Some(entry) => match entry {
                 CacheEntry::DoesNotExist => Some(None),
                 CacheEntry::Exists => None,
                 CacheEntry::Value(vec) => Some(Some(vec.clone())),
             },
+        };
+        if result.is_some() {
+            // Put back the key on top
+            let key_value_size = self.queue.remove(key).expect("key_value_size");
+            self.queue.insert(key.to_vec(), key_value_size);
         }
+        result
     }
 
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
     /// exist in the database. Returns `None` if that information is not in the cache.
-    pub fn query_contains_key(&self, key: &[u8]) -> Option<bool> {
-        self.map
+    pub fn query_contains_key(&mut self, key: &[u8]) -> Option<bool> {
+        let result = self
+            .map
             .get(key)
-            .map(|entry| !matches!(entry, CacheEntry::DoesNotExist))
+            .map(|entry| !matches!(entry, CacheEntry::DoesNotExist));
+        if result.is_some() {
+            // Put back the key on top
+            let key_value_size = self.queue.remove(key).expect("key_value_size");
+            self.queue.insert(key.to_vec(), key_value_size);
+        }
+        result
     }
 }
 
@@ -270,7 +281,7 @@ where
         };
         // First inquiring in the read_value_bytes LRU
         {
-            let cache = cache.lock().unwrap();
+            let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_read_value(key) {
                 #[cfg(with_metrics)]
                 READ_VALUE_CACHE_HIT_COUNT.with_label_values(&[]).inc();
@@ -290,7 +301,7 @@ where
             return self.store.contains_key(key).await;
         };
         {
-            let cache = cache.lock().unwrap();
+            let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_contains_key(key) {
                 #[cfg(with_metrics)]
                 CONTAINS_KEY_CACHE_HIT_COUNT.with_label_values(&[]).inc();
@@ -314,7 +325,7 @@ where
         let mut indices = Vec::new();
         let mut key_requests = Vec::new();
         {
-            let cache = cache.lock().unwrap();
+            let mut cache = cache.lock().unwrap();
             for i in 0..size {
                 if let Some(value) = cache.query_contains_key(&keys[i]) {
                     #[cfg(with_metrics)]
@@ -351,7 +362,7 @@ where
         let mut cache_miss_indices = Vec::new();
         let mut miss_keys = Vec::new();
         {
-            let cache = cache.lock().unwrap();
+            let mut cache = cache.lock().unwrap();
             for (i, key) in keys.into_iter().enumerate() {
                 if let Some(value) = cache.query_read_value(&key) {
                     #[cfg(with_metrics)]
