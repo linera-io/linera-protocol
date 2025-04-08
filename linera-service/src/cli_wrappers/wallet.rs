@@ -8,7 +8,6 @@ use std::{
     marker::PhantomData,
     mem,
     path::{Path, PathBuf},
-    process::Stdio,
     str::FromStr,
     sync,
     time::Duration,
@@ -35,10 +34,7 @@ use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
 use tempfile::TempDir;
-use tokio::{
-    io::{AsyncBufReadExt as _, BufReader},
-    process::{Child, ChildStdout, Command},
-};
+use tokio::process::{Child, Command};
 use tracing::{error, info, warn};
 
 use crate::{
@@ -445,6 +441,7 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         process_inbox: ProcessInbox,
     ) -> Result<NodeService> {
+        let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
         if let ProcessInbox::Skip = process_inbox {
@@ -453,17 +450,9 @@ impl ClientWrapper {
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
         }
-        if let Some(requested_port) = port.into() {
-            command.args(["--port".to_string(), requested_port.to_string()]);
-        }
-        let mut child = command.stdout(Stdio::piped()).spawn_into()?;
-        let port = Self::parse_node_service_port(
-            child
-                .stdout
-                .take()
-                .expect("Spawned process should have its stdout configured"),
-        )
-        .await?;
+        let child = command
+            .args(["--port".to_string(), port.to_string()])
+            .spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
@@ -479,28 +468,6 @@ impl ClientWrapper {
             }
         }
         bail!("Failed to start node service");
-    }
-
-    /// Parses the `linera service`'s output until it finds the port the service is
-    /// listening on.
-    ///
-    /// Searches the output until it finds the line that starts with "http://", and parses the
-    /// port from that address.
-    async fn parse_node_service_port(node_service_output: ChildStdout) -> Result<u16> {
-        let mut output = BufReader::new(node_service_output).lines();
-
-        while let Some(line) = output.next_line().await? {
-            if line.starts_with("http://") {
-                let port_string = line.rsplit(':').next().ok_or_else(|| {
-                    anyhow::anyhow!("`linera service` did not print port on the expected line")
-                })?;
-                return Ok(port_string.parse()?);
-            }
-        }
-
-        Err(anyhow::anyhow!(
-            "`linera service` did not print out the port it was listening on"
-        ))
     }
 
     /// Runs `linera query-validator`

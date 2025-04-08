@@ -593,7 +593,7 @@ pub enum ClientCommand {
 
         /// The port on which to run the server
         #[arg(long)]
-        port: Option<NonZeroU16>,
+        port: NonZeroU16,
     },
 
     /// Run a GraphQL service that exposes a faucet where users can claim tokens.

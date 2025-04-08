@@ -571,7 +571,7 @@ Watch the network for notifications
 
 Run a GraphQL service to explore and extend the chains of the wallet
 
-**Usage:** `linera service [OPTIONS]`
+**Usage:** `linera service [OPTIONS] --port <PORT>`
 
 ###### **Options:**
 

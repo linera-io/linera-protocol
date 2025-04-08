@@ -1523,10 +1523,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         ClientCommand::Project { .. } => "project".into(),
         ClientCommand::Watch { .. } => "watch".into(),
         ClientCommand::Storage { .. } => "storage".into(),
-        ClientCommand::Service {
-            port: Some(port), ..
-        } => format!("service-{port}").into(),
-        ClientCommand::Service { port: None, .. } => "service".into(),
+        ClientCommand::Service { port, .. } => format!("service-{port}").into(),
         ClientCommand::Faucet { .. } => "faucet".into(),
         ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
             "tool".into()
