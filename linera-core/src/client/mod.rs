@@ -940,6 +940,15 @@ where
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 
+    /// Obtains the committee for the latest epoch.
+    #[instrument(level = "trace")]
+    pub async fn latest_committee(&self) -> Result<Committee, LocalNodeError> {
+        let (mut committees, epoch) = self.known_committees().await?;
+        committees
+            .remove(&epoch)
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+    }
+
     /// Obtains all the committees trusted by either the local chain or its admin chain. Also
     /// return the latest trusted epoch.
     #[instrument(level = "trace")]
@@ -963,19 +972,11 @@ where
             .collect())
     }
 
-    /// Obtains the validators trusted by the local chain.
+    /// Obtains the validators for the latest epoch.
     #[instrument(level = "trace")]
     async fn validator_nodes(&self) -> Result<Vec<RemoteNode<P::Node>>, ChainClientError> {
-        match self.local_committee().await {
-            Ok(committee) => Ok(self.make_nodes(&committee)?),
-            Err(LocalNodeError::InactiveChain(_)) => Ok(Vec::new()),
-            Err(LocalNodeError::WorkerError(WorkerError::ChainError(error)))
-                if matches!(*error, ChainError::InactiveChain(_)) =>
-            {
-                Ok(Vec::new())
-            }
-            Err(e) => Err(e.into()),
-        }
+        let committee = self.latest_committee().await?;
+        Ok(self.make_nodes(&committee)?)
     }
 
     /// Obtains the current epoch of the local chain.
