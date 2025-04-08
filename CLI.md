@@ -1051,11 +1051,11 @@ Check existence of a namespace in the database
 
 Initialize a namespace in the database
 
-**Usage:** `linera storage initialize <GENESIS_CONFIG_PATH>`
+**Usage:** `linera storage initialize --genesis <GENESIS_CONFIG_PATH>`
 
-###### **Arguments:**
+###### **Options:**
 
-* `<GENESIS_CONFIG_PATH>`
+* `--genesis <GENESIS_CONFIG_PATH>`
 
 
 

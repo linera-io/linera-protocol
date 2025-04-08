@@ -842,7 +842,10 @@ pub enum DatabaseToolCommand {
     CheckExistence,
 
     /// Initialize a namespace in the database
-    Initialize { genesis_config_path: PathBuf },
+    Initialize {
+        #[arg(long = "genesis")]
+        genesis_config_path: PathBuf,
+    },
 
     /// List the namespaces in the database
     ListNamespaces,
