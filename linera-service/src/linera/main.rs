@@ -1475,9 +1475,9 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
         S: KeyValueStore + Clone + Send + Sync + 'static,
         S::Error: Send + Sync,
     {
+        let start_time = Instant::now();
         match self.0 {
             DatabaseToolCommand::DeleteAll => {
-                let start_time = Instant::now();
                 S::delete_all(&config).await?;
                 info!(
                     "All namespaces deleted in {} ms",
@@ -1485,79 +1485,67 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 );
             }
             DatabaseToolCommand::DeleteNamespace => {
-                let start_time = Instant::now();
                 S::delete(&config, &namespace).await?;
                 info!(
-                    "Namespace deleted in {} ms",
+                    "Namespace {namespace} deleted in {} ms",
                     start_time.elapsed().as_millis()
                 );
             }
             DatabaseToolCommand::CheckExistence => {
-                let start_time = Instant::now();
                 let test = S::exists(&config, &namespace).await?;
                 info!(
-                    "Existence of a namespace checked in {} ms",
+                    "Existence of a namespace {namespace} checked in {} ms",
                     start_time.elapsed().as_millis()
                 );
                 if test {
-                    println!("The database does exist");
+                    info!("The namespace {namespace} does exist in storage");
                     return Ok(0);
                 } else {
-                    println!("The database does not exist");
+                    info!("The namespace {namespace} does not exist in storage");
                     return Ok(1);
-                }
-            }
-            DatabaseToolCommand::CheckAbsence => {
-                let start_time = Instant::now();
-                let test = S::exists(&config, &namespace).await?;
-                info!(
-                    "Absence of a namespace checked in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-                if test {
-                    println!("The database does exist");
-                    return Ok(1);
-                } else {
-                    println!("The database does not exist");
-                    return Ok(0);
                 }
             }
             DatabaseToolCommand::Initialize {
                 genesis_config_path,
             } => {
-                let start_time = Instant::now();
                 let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
                 let mut storage =
                     DbStorage::<S, _>::maybe_create_and_connect(&config, &namespace, None).await?;
                 genesis_config.initialize_storage(&mut storage).await?;
                 info!(
-                    "Initialization done in {} ms",
+                    "Namespace {namespace} was initialized in {} ms",
                     start_time.elapsed().as_millis()
                 );
             }
             DatabaseToolCommand::ListNamespaces => {
-                let start_time = Instant::now();
                 let namespaces = S::list_all(&config).await?;
                 info!(
                     "Namespaces listed in {} ms",
                     start_time.elapsed().as_millis()
                 );
-                println!("The list of namespaces is {:?}", namespaces);
+                info!("The list of namespaces is:");
+                for namespace in namespaces {
+                    println!("{}", namespace);
+                }
             }
             DatabaseToolCommand::ListBlobIds => {
-                let start_time = Instant::now();
                 let blob_ids = DbStorage::<S, _>::list_blob_ids(&config, &namespace).await?;
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
-                println!("The list of blob IDs is {:?}", blob_ids);
+                info!("The list of blob IDs is:");
+                for id in blob_ids {
+                    println!("{}", id);
+                }
             }
             DatabaseToolCommand::ListChainIds => {
-                let start_time = Instant::now();
                 let chain_ids = DbStorage::<S, _>::list_chain_ids(&config, &namespace).await?;
                 info!(
                     "Chain IDs listed in {} ms",
                     start_time.elapsed().as_millis()
                 );
-                println!("The list of chain IDs is {:?}", chain_ids);
+                info!("The list of chain IDs is:");
+                for id in chain_ids {
+                    println!("{}", id);
+                }
             }
         }
         Ok(0)

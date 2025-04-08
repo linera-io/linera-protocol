@@ -54,7 +54,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage delete-all`↴](#linera-storage-delete-all)
 * [`linera storage delete-namespace`↴](#linera-storage-delete-namespace)
 * [`linera storage check-existence`↴](#linera-storage-check-existence)
-* [`linera storage check-absence`↴](#linera-storage-check-absence)
 * [`linera storage initialize`↴](#linera-storage-initialize)
 * [`linera storage list-namespaces`↴](#linera-storage-list-namespaces)
 * [`linera storage list-blob-ids`↴](#linera-storage-list-blob-ids)
@@ -1017,7 +1016,6 @@ Operation on the storage
 * `delete-all` — Delete all the namespaces in the database
 * `delete-namespace` — Delete a single namespace from the database
 * `check-existence` — Check existence of a namespace in the database
-* `check-absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
 * `list-namespaces` — List the namespaces in the database
 * `list-blob-ids` — List the blob IDs in the database
@@ -1046,14 +1044,6 @@ Delete a single namespace from the database
 Check existence of a namespace in the database
 
 **Usage:** `linera storage check-existence`
-
-
-
-## `linera storage check-absence`
-
-Check absence of a namespace in the database
-
-**Usage:** `linera storage check-absence`
 
 
 

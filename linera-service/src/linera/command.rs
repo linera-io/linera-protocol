@@ -841,9 +841,6 @@ pub enum DatabaseToolCommand {
     /// Check existence of a namespace in the database
     CheckExistence,
 
-    /// Check absence of a namespace in the database
-    CheckAbsence,
-
     /// Initialize a namespace in the database
     Initialize { genesis_config_path: PathBuf },
 
