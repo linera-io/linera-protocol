@@ -40,6 +40,17 @@ fn get_registry() -> Result<Registry> {
         );
         tracer.trace_value(&mut samples, &validator_keypair.public_key)?;
         tracer.trace_value(&mut samples, &validator_signature)?;
+
+        // We also record separate samples for EVM-compatible keys,
+        // as the generated ones are not valid.
+        let evm_secret_key = linera_base::crypto::EvmSecretKey::generate();
+        let evm_public_key = evm_secret_key.public();
+        tracer.trace_value(&mut samples, &evm_public_key)?;
+        let evm_signature = linera_base::crypto::EvmSignature::new(
+            &TestString::new("signature".to_string()),
+            &evm_secret_key,
+        );
+        tracer.trace_value(&mut samples, &evm_signature)?;
     }
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<AccountPublicKey>(&samples)?;

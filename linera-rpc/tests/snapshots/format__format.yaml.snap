@@ -33,6 +33,10 @@ AccountPublicKey:
       Secp256k1:
         NEWTYPE:
           TYPENAME: Secp256k1PublicKey
+    2:
+      EvmSecp256k1:
+        NEWTYPE:
+          TYPENAME: EvmPublicKey
 AccountSignature:
   ENUM:
     0:
@@ -43,6 +47,10 @@ AccountSignature:
       Secp256k1:
         NEWTYPE:
           TYPENAME: Secp256k1Signature
+    2:
+      EvmSecp256k1:
+        NEWTYPE:
+          TYPENAME: EvmSignature
 AdminOperation:
   ENUM:
     0:
@@ -484,6 +492,16 @@ EventId:
     - stream_id:
         TYPENAME: StreamId
     - index: U32
+EvmPublicKey:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 33
+EvmSignature:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
 GenericApplicationId:
   ENUM:
     0:

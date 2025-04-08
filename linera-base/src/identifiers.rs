@@ -19,7 +19,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     bcs_scalar,
     crypto::{
-        AccountPublicKey, BcsHashable, CryptoError, CryptoHash, Ed25519PublicKey,
+        AccountPublicKey, BcsHashable, CryptoError, CryptoHash, Ed25519PublicKey, EvmPublicKey,
         Secp256k1PublicKey,
     },
     data_types::BlockHeight,
@@ -360,6 +360,7 @@ impl From<AccountPublicKey> for AccountOwner {
         match public_key {
             AccountPublicKey::Ed25519(public_key) => public_key.into(),
             AccountPublicKey::Secp256k1(public_key) => public_key.into(),
+            AccountPublicKey::EvmSecp256k1(public_key) => public_key.into(),
         }
     }
 }
@@ -379,6 +380,12 @@ impl From<Secp256k1PublicKey> for AccountOwner {
 impl From<Ed25519PublicKey> for AccountOwner {
     fn from(public_key: Ed25519PublicKey) -> Self {
         AccountOwner::Address32(CryptoHash::new(&public_key))
+    }
+}
+
+impl From<EvmPublicKey> for AccountOwner {
+    fn from(public_key: EvmPublicKey) -> Self {
+        AccountOwner::Address20(alloy_primitives::Address::from_public_key(&public_key.0).into())
     }
 }
 
