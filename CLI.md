@@ -584,6 +584,8 @@ Run a GraphQL service to explore and extend the chains of the wallet
   Default value: `0`
 * `--port <PORT>` — The port on which to run the server
 
+  Default value: `8080`
+
 
 
 ## `linera faucet`
