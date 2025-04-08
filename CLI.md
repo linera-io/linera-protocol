@@ -571,7 +571,7 @@ Watch the network for notifications
 
 Run a GraphQL service to explore and extend the chains of the wallet
 
-**Usage:** `linera service [OPTIONS]`
+**Usage:** `linera service [OPTIONS] --port <PORT>`
 
 ###### **Options:**
 
@@ -583,8 +583,6 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
   Default value: `0`
 * `--port <PORT>` — The port on which to run the server
-
-  Default value: `8080`
 
 
 
