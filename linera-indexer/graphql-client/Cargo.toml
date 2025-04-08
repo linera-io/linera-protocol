@@ -21,6 +21,7 @@ serde_json.workspace = true
 linera-execution.workspace = true
 
 [dev-dependencies]
+linera-base = { workspace = true, features = ["test"] }
 linera-service.workspace = true
 tempfile.workspace = true
 test-log = { workspace = true, features = ["trace"] }

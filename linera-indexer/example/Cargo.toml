@@ -34,7 +34,7 @@ tracing-subscriber = { workspace = true, features = ["fmt"] }
 [dev-dependencies]
 anyhow.workspace = true
 async-graphql.workspace = true
-linera-base.workspace = true
+linera-base = { workspace = true, features = ["test"] }
 linera-indexer-graphql-client.workspace = true
 linera-service = { workspace = true, features = ["rocksdb", "test"] }
 linera-service-graphql-client.workspace = true
