@@ -183,10 +183,7 @@ pub enum BlobType {
 
 impl Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match serde_json::to_string(self) {
-            Ok(s) => write!(f, "{}", s),
-            Err(_) => Err(fmt::Error),
-        }
+        write!(f, "{:?}", self)
     }
 }
 
@@ -194,7 +191,8 @@ impl FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(s).with_context(|| format!("Invalid BlobType: {}", s))
+        serde_json::from_str(&format!("\"{s}\""))
+            .with_context(|| format!("Invalid BlobType: {}", s))
     }
 }
 
@@ -1124,7 +1122,7 @@ mod tests {
 
     use assert_matches::assert_matches;
 
-    use super::{AccountOwner, ChainId};
+    use super::{AccountOwner, BlobType, ChainId};
 
     /// Verifies that chain IDs that are explicitly used in some example and test scripts don't
     /// change.
@@ -1149,6 +1147,15 @@ mod tests {
         assert_eq!(
             &ChainId::root(999).to_string(),
             "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+        );
+    }
+
+    #[test]
+    fn blob_types() {
+        assert_eq!("ContractBytecode", BlobType::ContractBytecode.to_string());
+        assert_eq!(
+            BlobType::ContractBytecode,
+            BlobType::from_str("ContractBytecode").unwrap()
         );
     }
 
