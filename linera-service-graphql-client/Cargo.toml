@@ -32,8 +32,8 @@ linera-core.workspace = true
 linera-execution.workspace = true
 
 [dev-dependencies]
-linera-base = { workspace = true, features = ["test"] }
 fungible.workspace = true
+linera-base = { workspace = true, features = ["test"] }
 linera-service = { workspace = true, features = ["test"] }
 tempfile.workspace = true
 test-case.workspace = true
