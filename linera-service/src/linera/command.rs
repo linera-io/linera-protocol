@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{num::NonZeroU16, path::PathBuf};
+use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -19,9 +19,8 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
-use linera_service::{
-    storage::StorageConfigNamespace,
-    util::{DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS},
+use linera_service::util::{
+    DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
 
 #[derive(Clone, clap::Subcommand)]
@@ -784,87 +783,78 @@ pub enum ClientCommand {
     },
 }
 
+impl ClientCommand {
+    /// Returns the log file name to use based on the [`ClientCommand`] that will run.
+    pub fn log_file_name(&self) -> Cow<'static, str> {
+        match self {
+            ClientCommand::Transfer { .. }
+            | ClientCommand::OpenChain { .. }
+            | ClientCommand::OpenMultiOwnerChain { .. }
+            | ClientCommand::ChangeOwnership { .. }
+            | ClientCommand::ChangeApplicationPermissions { .. }
+            | ClientCommand::CloseChain { .. }
+            | ClientCommand::LocalBalance { .. }
+            | ClientCommand::QueryBalance { .. }
+            | ClientCommand::SyncBalance { .. }
+            | ClientCommand::Sync { .. }
+            | ClientCommand::ProcessInbox { .. }
+            | ClientCommand::QueryValidator { .. }
+            | ClientCommand::QueryValidators { .. }
+            | ClientCommand::SyncValidator { .. }
+            | ClientCommand::SetValidator { .. }
+            | ClientCommand::RemoveValidator { .. }
+            | ClientCommand::ResourceControlPolicy { .. }
+            | ClientCommand::FinalizeCommittee
+            | ClientCommand::CreateGenesisConfig { .. }
+            | ClientCommand::PublishModule { .. }
+            | ClientCommand::PublishDataBlob { .. }
+            | ClientCommand::ReadDataBlob { .. }
+            | ClientCommand::CreateApplication { .. }
+            | ClientCommand::PublishAndCreate { .. }
+            | ClientCommand::Keygen
+            | ClientCommand::Assign { .. }
+            | ClientCommand::Wallet { .. }
+            | ClientCommand::RetryPendingBlock { .. } => "client".into(),
+            #[cfg(feature = "benchmark")]
+            ClientCommand::Benchmark { .. } => "benchmark".into(),
+            ClientCommand::Net { .. } => "net".into(),
+            ClientCommand::Project { .. } => "project".into(),
+            ClientCommand::Watch { .. } => "watch".into(),
+            ClientCommand::Storage { .. } => "storage".into(),
+            ClientCommand::Service { port, .. } => format!("service-{port}").into(),
+            ClientCommand::Faucet { .. } => "faucet".into(),
+            ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
+                "tool".into()
+            }
+        }
+    }
+}
+
 #[derive(Clone, clap::Parser)]
 pub enum DatabaseToolCommand {
     /// Delete all the namespaces in the database
-    #[command(name = "delete_all")]
-    DeleteAll {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    DeleteAll,
 
     /// Delete a single namespace from the database
-    #[command(name = "delete_namespace")]
-    DeleteNamespace {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    DeleteNamespace,
 
     /// Check existence of a namespace in the database
-    #[command(name = "check_existence")]
-    CheckExistence {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
-
-    /// Check absence of a namespace in the database
-    #[command(name = "check_absence")]
-    CheckAbsence {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    CheckExistence,
 
     /// Initialize a namespace in the database
-    #[command(name = "initialize")]
     Initialize {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
+        #[arg(long = "genesis")]
+        genesis_config_path: PathBuf,
     },
 
     /// List the namespaces in the database
-    #[command(name = "list_namespaces")]
-    ListNamespaces {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    ListNamespaces,
 
     /// List the blob IDs in the database
-    #[command(name = "list_blob_ids")]
-    ListBlobIds {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
+    ListBlobIds,
 
     /// List the chain IDs in the database
-    #[command(name = "list_chain_ids")]
-    ListChainIds {
-        /// Storage configuration for the blockchain history.
-        #[arg(long = "storage")]
-        storage_config: String,
-    },
-}
-
-impl DatabaseToolCommand {
-    pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
-        let storage_config = match self {
-            DatabaseToolCommand::DeleteAll { storage_config } => storage_config,
-            DatabaseToolCommand::DeleteNamespace { storage_config } => storage_config,
-            DatabaseToolCommand::CheckExistence { storage_config } => storage_config,
-            DatabaseToolCommand::CheckAbsence { storage_config } => storage_config,
-            DatabaseToolCommand::Initialize { storage_config } => storage_config,
-            DatabaseToolCommand::ListNamespaces { storage_config } => storage_config,
-            DatabaseToolCommand::ListBlobIds { storage_config } => storage_config,
-            DatabaseToolCommand::ListChainIds { storage_config } => storage_config,
-        };
-        storage_config.parse::<StorageConfigNamespace>()
-    }
+    ListChainIds,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -932,11 +922,6 @@ pub enum NetCommand {
         /// If none, then a temporary directory is created.
         #[arg(long)]
         path: Option<String>,
-
-        /// Run with a specific storage.
-        /// If none, then a linera-storage-service is started on a random free port.
-        #[arg(long)]
-        storage: Option<String>,
 
         /// External protocol used, either `grpc` or `grpcs`.
         #[arg(long, default_value = "grpc")]

@@ -5,7 +5,6 @@ use std::{fmt, str::FromStr};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use linera_base::identifiers::{BlobId, ChainId};
 use linera_client::config::GenesisConfig;
 use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE};
@@ -18,17 +17,12 @@ use linera_storage_service::{
 use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig};
 use linera_views::{
     memory::{MemoryStore, MemoryStoreConfig},
-    store::CommonStoreConfig,
-    views::ViewError,
+    store::{CommonStoreConfig, KeyValueStore},
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
 #[allow(unused_imports)]
-use {
-    anyhow::bail,
-    linera_storage::{list_all_blob_ids, list_all_chain_ids},
-    linera_views::store::LocalAdminKeyValueStore as _,
-};
+use {anyhow::bail, linera_views::store::LocalAdminKeyValueStore as _};
 #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
 use {
     linera_storage::ChainStatesFirstAssignment,
@@ -499,262 +493,6 @@ impl fmt::Display for StorageConfigNamespace {
     }
 }
 
-impl StoreConfig {
-    /// Deletes all the entries in the database
-    pub async fn delete_all(self) -> Result<(), ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "delete_all does not make sense for memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, _namespace) => {
-                ServiceStoreClient::delete_all(&config).await?;
-                Ok(())
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, _namespace) => {
-                RocksDbStore::delete_all(&config).await?;
-                Ok(())
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, _namespace) => {
-                DynamoDbStore::delete_all(&config).await?;
-                Ok(())
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, _namespace) => {
-                ScyllaDbStore::delete_all(&config).await?;
-                Ok(())
-            }
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, _namespace) => {
-                DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::delete_all(
-                    &config,
-                )
-                .await?;
-                Ok(())
-            }
-        }
-    }
-
-    /// Deletes only one table of the database
-    pub async fn delete_namespace(self) -> Result<(), ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "delete_namespace does not make sense for memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
-                ServiceStoreClient::delete(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
-                RocksDbStore::delete(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
-                DynamoDbStore::delete(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
-                ScyllaDbStore::delete(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-                DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::delete(
-                    &config, &namespace,
-                )
-                .await?;
-                Ok(())
-            }
-        }
-    }
-
-    /// Test existence of one table in the database
-    pub async fn test_existence(self) -> Result<bool, ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "test_existence does not make sense for memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
-                Ok(ServiceStoreClient::exists(&config, &namespace).await?)
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
-                Ok(RocksDbStore::exists(&config, &namespace).await?)
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
-                Ok(DynamoDbStore::exists(&config, &namespace).await?)
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
-                Ok(ScyllaDbStore::exists(&config, &namespace).await?)
-            }
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-                Ok(
-                    DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::exists(
-                        &config, &namespace,
-                    )
-                    .await?,
-                )
-            }
-        }
-    }
-
-    /// Initializes the database
-    pub async fn initialize(self) -> Result<(), ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "initialize does not make sense for memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
-                ServiceStoreClient::maybe_create_and_connect(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
-                RocksDbStore::maybe_create_and_connect(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
-                DynamoDbStore::maybe_create_and_connect(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
-                ScyllaDbStore::maybe_create_and_connect(&config, &namespace).await?;
-                Ok(())
-            }
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-                DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::maybe_create_and_connect(&config, &namespace).await?;
-                Ok(())
-            }
-        }
-    }
-
-    /// Lists all the namespaces of the storage
-    pub async fn list_all(self) -> Result<Vec<String>, ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "list_all is not supported for the memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, _namespace) => {
-                let tables = ServiceStoreClient::list_all(&config).await?;
-                Ok(tables)
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, _namespace) => {
-                let tables = RocksDbStore::list_all(&config).await?;
-                Ok(tables)
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, _namespace) => {
-                let tables = DynamoDbStore::list_all(&config).await?;
-                Ok(tables)
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, _namespace) => {
-                let tables = ScyllaDbStore::list_all(&config).await?;
-                Ok(tables)
-            }
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, _namespace) => {
-                let tables =
-                    DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::list_all(
-                        &config,
-                    )
-                    .await?;
-                Ok(tables)
-            }
-        }
-    }
-
-    /// Lists all the blobs of the storage
-    pub async fn list_blob_ids(self) -> Result<Vec<BlobId>, ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "list_blob_ids is not supported for the memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
-                let store =
-                    ServiceStoreClient::maybe_create_and_connect(&config, &namespace).await?;
-                list_all_blob_ids(&store).await
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
-                let store = RocksDbStore::maybe_create_and_connect(&config, &namespace).await?;
-                list_all_blob_ids(&store).await
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
-                let store = DynamoDbStore::maybe_create_and_connect(&config, &namespace).await?;
-                list_all_blob_ids(&store).await
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
-                let store = ScyllaDbStore::maybe_create_and_connect(&config, &namespace).await?;
-                list_all_blob_ids(&store).await
-            }
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-                let store = DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::maybe_create_and_connect(&config, &namespace).await?;
-                list_all_blob_ids(&store).await
-            }
-        }
-    }
-
-    /// Lists all the chain IDs of the storage
-    pub async fn list_chain_ids(self) -> Result<Vec<ChainId>, ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "list_chain_ids is not supported for the memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
-                Ok(list_all_chain_ids::<ServiceStoreClient>(&config, &namespace).await?)
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
-                Ok(list_all_chain_ids::<RocksDbStore>(&config, &namespace).await?)
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
-                Ok(list_all_chain_ids::<DynamoDbStore>(&config, &namespace).await?)
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
-                Ok(list_all_chain_ids::<ScyllaDbStore>(&config, &namespace).await?)
-            }
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-                Ok(list_all_chain_ids::<
-                    DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
-                >(&config, &namespace)
-                .await?)
-            }
-        }
-    }
-}
-
 #[async_trait]
 pub trait Runnable {
     type Output;
@@ -764,112 +502,142 @@ pub trait Runnable {
         S: Storage + Clone + Send + Sync + 'static;
 }
 
-// The design is that the initialization of the accounts should be separate
-// from the running of the database.
-// However, that does not apply to the memory storage which must be initialized
-// in the same context in which it is used.
-#[allow(unused_variables)]
-pub async fn run_with_storage<Job>(
-    config: StoreConfig,
-    genesis_config: &GenesisConfig,
-    wasm_runtime: Option<WasmRuntime>,
-    job: Job,
-) -> Result<Job::Output, anyhow::Error>
-where
-    Job: Runnable,
-{
-    match config {
-        StoreConfig::Memory(config, namespace) => {
-            let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
-            let mut storage =
-                DbStorage::<MemoryStore, _>::new(store_config, &namespace, wasm_runtime).await?;
-            genesis_config.initialize_storage(&mut storage).await?;
-            Ok(job.run(storage).await)
+#[async_trait]
+pub trait RunnableWithStore {
+    type Output;
+
+    async fn run<S>(
+        self,
+        config: S::Config,
+        namespace: String,
+    ) -> Result<Self::Output, anyhow::Error>
+    where
+        S: KeyValueStore + Clone + Send + Sync + 'static,
+        S::Error: Send + Sync;
+}
+
+impl StoreConfig {
+    #[allow(unused_variables)]
+    pub async fn run_with_storage<Job>(
+        self,
+        genesis_config: &GenesisConfig,
+        wasm_runtime: Option<WasmRuntime>,
+        job: Job,
+    ) -> Result<Job::Output, anyhow::Error>
+    where
+        Job: Runnable,
+    {
+        match self {
+            StoreConfig::Memory(config, namespace) => {
+                let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
+                let mut storage = DbStorage::<MemoryStore, _>::maybe_create_and_connect(
+                    &store_config,
+                    &namespace,
+                    wasm_runtime,
+                )
+                .await?;
+                // Memory storage must be initialized every time.
+                genesis_config.initialize_storage(&mut storage).await?;
+                Ok(job.run(storage).await)
+            }
+            #[cfg(feature = "storage-service")]
+            StoreConfig::Service(config, namespace) => {
+                let storage =
+                    DbStorage::<ServiceStoreClient, _>::connect(&config, &namespace, wasm_runtime)
+                        .await?;
+                Ok(job.run(storage).await)
+            }
+            #[cfg(feature = "rocksdb")]
+            StoreConfig::RocksDb(config, namespace) => {
+                let storage =
+                    DbStorage::<RocksDbStore, _>::connect(&config, &namespace, wasm_runtime)
+                        .await?;
+                Ok(job.run(storage).await)
+            }
+            #[cfg(feature = "dynamodb")]
+            StoreConfig::DynamoDb(config, namespace) => {
+                let storage =
+                    DbStorage::<DynamoDbStore, _>::connect(&config, &namespace, wasm_runtime)
+                        .await?;
+                Ok(job.run(storage).await)
+            }
+            #[cfg(feature = "scylladb")]
+            StoreConfig::ScyllaDb(config, namespace) => {
+                let storage =
+                    DbStorage::<ScyllaDbStore, _>::connect(&config, &namespace, wasm_runtime)
+                        .await?;
+                Ok(job.run(storage).await)
+            }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+                let storage = DbStorage::<
+                    DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
+                    _,
+                >::connect(&config, &namespace, wasm_runtime)
+                .await?;
+                Ok(job.run(storage).await)
+            }
         }
-        #[cfg(feature = "storage-service")]
-        StoreConfig::Service(config, namespace) => {
-            let storage =
-                DbStorage::<ServiceStoreClient, _>::new(config, &namespace, wasm_runtime).await?;
-            Ok(job.run(storage).await)
+    }
+
+    #[allow(unused_variables)]
+    pub async fn run_with_store<Job>(self, job: Job) -> Result<Job::Output, anyhow::Error>
+    where
+        Job: RunnableWithStore,
+    {
+        match self {
+            StoreConfig::Memory(_, _) => {
+                Err(anyhow!("Cannot run admin operations on the memory store"))
+            }
+            #[cfg(feature = "storage-service")]
+            StoreConfig::Service(config, namespace) => {
+                Ok(job.run::<ServiceStoreClient>(config, namespace).await?)
+            }
+            #[cfg(feature = "rocksdb")]
+            StoreConfig::RocksDb(config, namespace) => {
+                Ok(job.run::<RocksDbStore>(config, namespace).await?)
+            }
+            #[cfg(feature = "dynamodb")]
+            StoreConfig::DynamoDb(config, namespace) => {
+                Ok(job.run::<DynamoDbStore>(config, namespace).await?)
+            }
+            #[cfg(feature = "scylladb")]
+            StoreConfig::ScyllaDb(config, namespace) => {
+                Ok(job.run::<ScyllaDbStore>(config, namespace).await?)
+            }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, namespace) => Ok(job
+                .run::<DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>>(
+                    config, namespace,
+                )
+                .await?),
         }
-        #[cfg(feature = "rocksdb")]
-        StoreConfig::RocksDb(config, namespace) => {
-            let storage =
-                DbStorage::<RocksDbStore, _>::new(config, &namespace, wasm_runtime).await?;
-            Ok(job.run(storage).await)
-        }
-        #[cfg(feature = "dynamodb")]
-        StoreConfig::DynamoDb(config, namespace) => {
-            let storage =
-                DbStorage::<DynamoDbStore, _>::new(config, &namespace, wasm_runtime).await?;
-            Ok(job.run(storage).await)
-        }
-        #[cfg(feature = "scylladb")]
-        StoreConfig::ScyllaDb(config, namespace) => {
-            let storage =
-                DbStorage::<ScyllaDbStore, _>::new(config, &namespace, wasm_runtime).await?;
-            Ok(job.run(storage).await)
-        }
-        #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-        StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-            let storage = DbStorage::<
-                DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
-                _,
-            >::new(config, &namespace, wasm_runtime)
-            .await?;
-            Ok(job.run(storage).await)
-        }
+    }
+
+    pub async fn initialize(self, config: &GenesisConfig) -> Result<(), anyhow::Error> {
+        self.run_with_store(InitializeStorageJob(config)).await
     }
 }
 
-#[allow(unused_variables)]
-pub async fn full_initialize_storage(
-    config: StoreConfig,
-    genesis_config: &GenesisConfig,
-) -> Result<(), anyhow::Error> {
-    match config {
-        StoreConfig::Memory(_, _) => Err(anyhow!(
-            "The initialization should not be called for memory"
-        )),
-        #[cfg(feature = "storage-service")]
-        StoreConfig::Service(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage =
-                DbStorage::<ServiceStoreClient, _>::initialize(config, &namespace, wasm_runtime)
-                    .await?;
-            Ok(genesis_config.initialize_storage(&mut storage).await?)
-        }
-        #[cfg(feature = "rocksdb")]
-        StoreConfig::RocksDb(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage =
-                DbStorage::<RocksDbStore, _>::initialize(config, &namespace, wasm_runtime).await?;
-            Ok(genesis_config.initialize_storage(&mut storage).await?)
-        }
-        #[cfg(feature = "dynamodb")]
-        StoreConfig::DynamoDb(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage =
-                DbStorage::<DynamoDbStore, _>::initialize(config, &namespace, wasm_runtime).await?;
-            Ok(genesis_config.initialize_storage(&mut storage).await?)
-        }
-        #[cfg(feature = "scylladb")]
-        StoreConfig::ScyllaDb(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage =
-                DbStorage::<ScyllaDbStore, _>::initialize(config, &namespace, wasm_runtime).await?;
-            Ok(genesis_config.initialize_storage(&mut storage).await?)
-        }
-        #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-        StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage = DbStorage::<
-                DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
-                _,
-            >::initialize(config, &namespace, wasm_runtime)
-            .await?;
-            Ok(genesis_config.initialize_storage(&mut storage).await?)
-        }
+struct InitializeStorageJob<'a>(&'a GenesisConfig);
+
+#[async_trait]
+impl RunnableWithStore for InitializeStorageJob<'_> {
+    type Output = ();
+
+    async fn run<S>(
+        self,
+        config: S::Config,
+        namespace: String,
+    ) -> Result<Self::Output, anyhow::Error>
+    where
+        S: KeyValueStore + Clone + Send + Sync + 'static,
+        S::Error: Send + Sync,
+    {
+        let mut storage =
+            DbStorage::<S, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+        self.0.initialize_storage(&mut storage).await?;
+        Ok(())
     }
 }
 

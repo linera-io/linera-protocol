@@ -6,7 +6,6 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    borrow::Cow,
     collections::{BTreeSet, HashMap},
     env,
     path::PathBuf,
@@ -47,11 +46,14 @@ use linera_service::{
     cli_wrappers,
     node_service::NodeService,
     project::{self, Project},
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
+    storage::{Runnable, RunnableWithStore, StorageConfigNamespace},
     util, wallet,
 };
-use linera_storage::Storage;
-use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
+use linera_storage::{DbStorage, Storage};
+use linera_views::{
+    lru_caching::StorageCacheConfig,
+    store::{CommonStoreConfig, KeyValueStore},
+};
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn, Instrument as _};
@@ -264,7 +266,7 @@ impl Runnable for Job {
                 let certificate = match result {
                     Ok(Some(certificate)) => certificate,
                     Ok(None) => {
-                        tracing::info!("Chain is already closed; nothing to do.");
+                        info!("Chain is already closed; nothing to do.");
                         return Ok(());
                     }
                     Err(error) => Err(error).context("Failed to close chain")?,
@@ -1283,7 +1285,7 @@ impl Job {
 )]
 struct ClientOptions {
     /// Storage configuration for the blockchain history.
-    #[arg(long = "storage")]
+    #[arg(long = "storage", global = true)]
     storage_config: Option<String>,
 
     /// Common options.
@@ -1324,23 +1326,8 @@ struct ClientOptions {
 }
 
 impl ClientOptions {
-    fn init() -> Result<Self, Error> {
-        let mut options = <ClientOptions as clap::Parser>::parse();
-        let suffix = options
-            .inner
-            .with_wallet
-            .as_ref()
-            .map(|x| format!("_{}", x))
-            .unwrap_or_default();
-        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
-        let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
-        if let (None, Some(wallet_path)) = (&options.inner.wallet_state_path, wallet_env_var) {
-            options.inner.wallet_state_path = Some(wallet_path.parse()?);
-        }
-        if let (None, Some(storage_path)) = (&options.storage_config, storage_env_var) {
-            options.storage_config = Some(storage_path.parse()?);
-        }
-        Ok(options)
+    fn init() -> Self {
+        <ClientOptions as clap::Parser>::parse()
     }
 
     fn common_config(&self) -> CommonStoreConfig {
@@ -1357,11 +1344,13 @@ impl ClientOptions {
     }
 
     async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
+        let storage_config = self.storage_config()?;
+        debug!("Running command using storage configuration: {storage_config}");
+        let store_config = storage_config
+            .add_common_config(self.common_config())
+            .await?;
         let genesis_config = self.wallet().await?.genesis_config().clone();
-        let output = Box::pin(run_with_storage(
-            self.storage_config()?
-                .add_common_config(self.common_config())
-                .await?,
+        let output = Box::pin(store_config.run_with_storage(
             &genesis_config,
             self.wasm_runtime.with_wasm_default(),
             job,
@@ -1370,39 +1359,24 @@ impl ClientOptions {
         Ok(output)
     }
 
-    fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
-        if let Some(config) = &self.storage_config {
-            Ok(config.parse()?)
-        } else {
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "rocksdb")] {
-                    let spawn_mode =
-                        linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
-                    let storage_config = linera_service::storage::StorageConfig::RocksDb {
-                        path: self.config_path()?.join("wallet.db"),
-                        spawn_mode,
-                    };
-                    let namespace = "default".to_string();
-                    Ok(StorageConfigNamespace {
-                        storage_config,
-                        namespace,
-                    })
-                } else {
-                    bail!("Cannot apply default storage because the feature 'rocksdb' was not selected")
-                }
-            }
-        }
+    async fn run_with_store<R: RunnableWithStore>(&self, job: R) -> Result<R::Output, Error> {
+        let storage_config = self.storage_config()?;
+        debug!("Running command using storage configuration: {storage_config}");
+        let store_config = storage_config
+            .add_common_config(self.common_config())
+            .await?;
+        let output = Box::pin(store_config.run_with_store(job)).await?;
+        Ok(output)
     }
 
     async fn initialize_storage(&self) -> Result<(), Error> {
+        let storage_config = self.storage_config()?;
+        debug!("Initializing storage using configuration: {storage_config}");
+        let store_config = storage_config
+            .add_common_config(self.common_config())
+            .await?;
         let wallet = self.wallet().await?;
-        full_initialize_storage(
-            self.storage_config()?
-                .add_common_config(self.common_config())
-                .await?,
-            wallet.genesis_config(),
-        )
-        .await?;
+        store_config.initialize(wallet.genesis_config()).await?;
         Ok(())
     }
 
@@ -1411,25 +1385,66 @@ impl ClientOptions {
         Ok(WalletState::new(wallet))
     }
 
-    fn wallet_path(&self) -> Result<PathBuf, Error> {
+    fn suffix(&self) -> String {
         self.inner
-            .wallet_state_path
-            .clone()
-            .map(Ok)
-            .unwrap_or_else(|| Ok(self.config_path()?.join("wallet.json")))
+            .with_wallet
+            .as_ref()
+            .map(|x| format!("_{}", x))
+            .unwrap_or_default()
     }
 
     fn config_path(&self) -> Result<PathBuf, Error> {
         let mut config_dir = dirs::config_dir().ok_or(anyhow!(
-            "default configuration directory not supported: please specify a path"
+            "Default wallet directory is not supported in this platform: please specify storage and wallet paths"
         ))?;
         config_dir.push("linera");
         if !config_dir.exists() {
-            tracing::debug!("{} does not exist, creating", config_dir.display());
+            debug!("Creating default wallet directory {}", config_dir.display());
             fs_err::create_dir(&config_dir)?;
-            tracing::debug!("{} created.", config_dir.display());
         }
+        info!("Using default wallet directory {}", config_dir.display());
         Ok(config_dir)
+    }
+
+    fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
+        if let Some(config) = &self.storage_config {
+            return config.parse();
+        }
+        let suffix = self.suffix();
+        let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
+        if let Some(config) = storage_env_var {
+            return config.parse();
+        }
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "rocksdb")] {
+                let spawn_mode =
+                    linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
+                let storage_config = linera_service::storage::StorageConfig::RocksDb {
+                    path: self.config_path()?.join("wallet.db"),
+                    spawn_mode,
+                };
+                let namespace = "default".to_string();
+                Ok(StorageConfigNamespace {
+                    storage_config,
+                    namespace,
+                })
+            } else {
+                bail!("Cannot apply default storage because the feature 'rocksdb' was not selected");
+            }
+        }
+    }
+
+    fn wallet_path(&self) -> Result<PathBuf, Error> {
+        if let Some(path) = &self.inner.wallet_state_path {
+            return Ok(path.clone());
+        }
+        let suffix = self.suffix();
+        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
+        if let Some(path) = wallet_env_var {
+            return Ok(path.parse()?);
+        }
+        let config_path = self.config_path()?;
+        Ok(config_path.join("wallet.json"))
     }
 
     pub fn create_wallet(
@@ -1448,10 +1463,102 @@ impl ClientOptions {
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    let options = ClientOptions::init()?;
+struct DatabaseToolJob<'a>(&'a DatabaseToolCommand);
 
-    linera_base::tracing::init(&log_file_name_for(&options.command));
+#[async_trait]
+impl RunnableWithStore for DatabaseToolJob<'_> {
+    type Output = i32;
+
+    async fn run<S>(
+        self,
+        config: S::Config,
+        namespace: String,
+    ) -> Result<Self::Output, anyhow::Error>
+    where
+        S: KeyValueStore + Clone + Send + Sync + 'static,
+        S::Error: Send + Sync,
+    {
+        let start_time = Instant::now();
+        match self.0 {
+            DatabaseToolCommand::DeleteAll => {
+                S::delete_all(&config).await?;
+                info!(
+                    "All namespaces deleted in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+            DatabaseToolCommand::DeleteNamespace => {
+                S::delete(&config, &namespace).await?;
+                info!(
+                    "Namespace {namespace} deleted in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+            DatabaseToolCommand::CheckExistence => {
+                let test = S::exists(&config, &namespace).await?;
+                info!(
+                    "Existence of a namespace {namespace} checked in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                if test {
+                    info!("The namespace {namespace} does exist in storage");
+                    return Ok(0);
+                } else {
+                    info!("The namespace {namespace} does not exist in storage");
+                    return Ok(1);
+                }
+            }
+            DatabaseToolCommand::Initialize {
+                genesis_config_path,
+            } => {
+                let genesis_config: GenesisConfig = util::read_json(genesis_config_path)?;
+                let mut storage =
+                    DbStorage::<S, _>::maybe_create_and_connect(&config, &namespace, None).await?;
+                genesis_config.initialize_storage(&mut storage).await?;
+                info!(
+                    "Namespace {namespace} was initialized in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+            DatabaseToolCommand::ListNamespaces => {
+                let namespaces = S::list_all(&config).await?;
+                info!(
+                    "Namespaces listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                info!("The list of namespaces is:");
+                for namespace in namespaces {
+                    println!("{}", namespace);
+                }
+            }
+            DatabaseToolCommand::ListBlobIds => {
+                let blob_ids = DbStorage::<S, _>::list_blob_ids(&config, &namespace).await?;
+                info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
+                info!("The list of blob IDs is:");
+                for id in blob_ids {
+                    println!("{}", id);
+                }
+            }
+            DatabaseToolCommand::ListChainIds => {
+                let chain_ids = DbStorage::<S, _>::list_chain_ids(&config, &namespace).await?;
+                info!(
+                    "Chain IDs listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                info!("The list of chain IDs is:");
+                for id in chain_ids {
+                    println!("{}", id);
+                }
+            }
+        }
+        Ok(0)
+    }
+}
+
+fn main() -> anyhow::Result<()> {
+    let options = ClientOptions::init();
+
+    linera_base::tracing::init(&options.command.log_file_name());
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -1479,56 +1586,11 @@ fn main() -> anyhow::Result<()> {
     let error_code = match result {
         Ok(code) => code,
         Err(msg) => {
-            tracing::error!("Error is {:?}", msg);
+            error!("Error is {:?}", msg);
             2
         }
     };
     process::exit(error_code);
-}
-
-/// Returns the log file name to use based on the [`ClientCommand`] that will run.
-fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
-    match command {
-        ClientCommand::Transfer { .. }
-        | ClientCommand::OpenChain { .. }
-        | ClientCommand::OpenMultiOwnerChain { .. }
-        | ClientCommand::ChangeOwnership { .. }
-        | ClientCommand::ChangeApplicationPermissions { .. }
-        | ClientCommand::CloseChain { .. }
-        | ClientCommand::LocalBalance { .. }
-        | ClientCommand::QueryBalance { .. }
-        | ClientCommand::SyncBalance { .. }
-        | ClientCommand::Sync { .. }
-        | ClientCommand::ProcessInbox { .. }
-        | ClientCommand::QueryValidator { .. }
-        | ClientCommand::QueryValidators { .. }
-        | ClientCommand::SyncValidator { .. }
-        | ClientCommand::SetValidator { .. }
-        | ClientCommand::RemoveValidator { .. }
-        | ClientCommand::ResourceControlPolicy { .. }
-        | ClientCommand::FinalizeCommittee
-        | ClientCommand::CreateGenesisConfig { .. }
-        | ClientCommand::PublishModule { .. }
-        | ClientCommand::PublishDataBlob { .. }
-        | ClientCommand::ReadDataBlob { .. }
-        | ClientCommand::CreateApplication { .. }
-        | ClientCommand::PublishAndCreate { .. }
-        | ClientCommand::Keygen
-        | ClientCommand::Assign { .. }
-        | ClientCommand::Wallet { .. }
-        | ClientCommand::RetryPendingBlock { .. } => "client".into(),
-        #[cfg(feature = "benchmark")]
-        ClientCommand::Benchmark { .. } => "benchmark".into(),
-        ClientCommand::Net { .. } => "net".into(),
-        ClientCommand::Project { .. } => "project".into(),
-        ClientCommand::Watch { .. } => "watch".into(),
-        ClientCommand::Storage { .. } => "storage".into(),
-        ClientCommand::Service { port, .. } => format!("service-{port}").into(),
-        ClientCommand::Faucet { .. } => "faucet".into(),
-        ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
-            "tool".into()
-        }
-    }
 }
 
 async fn run(options: &ClientOptions) -> Result<i32, Error> {
@@ -1751,7 +1813,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 no_build,
                 docker_image_name,
                 path: _,
-                storage: _,
                 external_protocol: _,
                 with_faucet,
                 faucet_chain,
@@ -1787,7 +1848,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 policy_config,
                 cross_chain_config,
                 path,
-                storage,
                 external_protocol,
                 with_faucet,
                 faucet_chain,
@@ -1804,7 +1864,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *policy_config,
                     cross_chain_config.clone(),
                     path,
-                    storage,
+                    // Not using the default value for storage
+                    &options.storage_config,
                     external_protocol.clone(),
                     *with_faucet,
                     *faucet_chain,
@@ -1828,83 +1889,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         },
 
         ClientCommand::Storage(command) => {
-            let storage_config = command.storage_config()?;
-            let common_config = CommonStoreConfig::default();
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
-            let start_time = Instant::now();
-            match command {
-                DatabaseToolCommand::DeleteAll { .. } => {
-                    full_storage_config.delete_all().await?;
-                    info!(
-                        "All namespaces deleted in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                }
-                DatabaseToolCommand::DeleteNamespace { .. } => {
-                    full_storage_config.delete_namespace().await?;
-                    info!(
-                        "Namespace deleted in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                }
-                DatabaseToolCommand::CheckExistence { .. } => {
-                    let test = full_storage_config.test_existence().await?;
-                    info!(
-                        "Existence of a namespace checked in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    if test {
-                        println!("The database does exist");
-                        return Ok(0);
-                    } else {
-                        println!("The database does not exist");
-                        return Ok(1);
-                    }
-                }
-                DatabaseToolCommand::CheckAbsence { .. } => {
-                    let test = full_storage_config.test_existence().await?;
-                    info!(
-                        "Absence of a namespace checked in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    if test {
-                        println!("The database does exist");
-                        return Ok(1);
-                    } else {
-                        println!("The database does not exist");
-                        return Ok(0);
-                    }
-                }
-                DatabaseToolCommand::Initialize { .. } => {
-                    full_storage_config.initialize().await?;
-                    info!(
-                        "Initialization done in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                }
-                DatabaseToolCommand::ListNamespaces { .. } => {
-                    let namespaces = full_storage_config.list_all().await?;
-                    info!(
-                        "Namespaces listed in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    println!("The list of namespaces is {:?}", namespaces);
-                }
-                DatabaseToolCommand::ListBlobIds { .. } => {
-                    let blob_ids = Box::pin(full_storage_config.list_blob_ids()).await?;
-                    info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
-                    println!("The list of blob IDs is {:?}", blob_ids);
-                }
-                DatabaseToolCommand::ListChainIds { .. } => {
-                    let chain_ids = Box::pin(full_storage_config.list_chain_ids()).await?;
-                    info!(
-                        "Chain IDs listed in {} ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    println!("The list of chain IDs is {:?}", chain_ids);
-                }
-            }
-            Ok(0)
+            Ok(options.run_with_store(DatabaseToolJob(command)).await?)
         }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {

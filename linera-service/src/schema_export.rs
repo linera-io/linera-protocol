@@ -209,9 +209,10 @@ async fn main() -> std::io::Result<()> {
 
     let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
     let namespace = "schema_export";
-    let storage = DbStorage::<MemoryStore, _>::initialize(store_config, namespace, None)
-        .await
-        .expect("storage");
+    let storage =
+        DbStorage::<MemoryStore, _>::maybe_create_and_connect(&store_config, namespace, None)
+            .await
+            .expect("storage");
     let config = ChainListenerConfig::default();
     let context = DummyContext::<DummyValidatorNodeProvider, _> {
         _phantom: std::marker::PhantomData,

@@ -58,7 +58,7 @@ jobs:
       run: |
         cargo build --features storage-service
         mkdir /tmp/local-linera-net
-        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config testnet --path /tmp/local-linera-net --validators 4 --shards 4 &
+        cargo run --features storage-service --bin linera -- net up --storage service:tcp:$LINERA_STORAGE_SERVICE:table --policy-config testnet --path /tmp/local-linera-net --validators 4 --shards 4 &
     - name: Create two epochs and run the faucet
       run: |
         cargo build --bin linera

@@ -23,7 +23,7 @@ use linera_sdk::linera_base_types::Blob;
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::{
-    storage::{run_with_storage, Runnable, StorageConfigNamespace},
+    storage::{Runnable, StorageConfigNamespace},
     util,
 };
 use linera_storage::Storage;
@@ -401,15 +401,11 @@ impl ProxyOptions {
             max_stream_queries: self.max_stream_queries,
             storage_cache_config,
         };
-        let full_storage_config = self.storage_config.add_common_config(common_config).await?;
         let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
-        run_with_storage(
-            full_storage_config,
-            &genesis_config,
-            None,
-            ProxyContext::from_options(self)?,
-        )
-        .boxed()
-        .await?
+        let store_config = self.storage_config.add_common_config(common_config).await?;
+        store_config
+            .run_with_storage(&genesis_config, None, ProxyContext::from_options(self)?)
+            .boxed()
+            .await?
     }
 }
