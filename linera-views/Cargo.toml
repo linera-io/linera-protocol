@@ -45,7 +45,6 @@ linera-base.workspace = true
 linera-views-derive.workspace = true
 linera-witty.workspace = true
 linked-hash-map.workspace = true
-num_cpus.workspace = true
 prometheus.workspace = true
 rand = { workspace = true, features = ["small_rng"] }
 rocksdb = { workspace = true, optional = true }
@@ -53,6 +52,7 @@ scylla = { workspace = true, optional = true }
 serde.workspace = true
 sha3.workspace = true
 static_assertions.workspace = true
+sysinfo.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
