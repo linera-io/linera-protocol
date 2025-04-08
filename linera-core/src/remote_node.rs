@@ -174,20 +174,24 @@ impl<N: ValidatorNode> RemoteNode<N> {
             limit: Some(limit),
         };
         let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
-        if let Ok(info) = self.handle_chain_info_query(query).await {
-            let certificates = self
-                .node
-                .download_certificates(info.requested_sent_certificate_hashes)
-                .await?
-                .into_iter()
-                .map(|c| {
-                    ConfirmedBlockCertificate::try_from(c)
-                        .map_err(|_| NodeError::InvalidChainInfoResponse)
-                })
-                .collect::<Result<_, _>>()?;
-            Ok(Some(certificates))
-        } else {
-            Ok(None)
+        match self.handle_chain_info_query(query).await {
+            Ok(info) => {
+                let certificates = self
+                    .node
+                    .download_certificates(info.requested_sent_certificate_hashes)
+                    .await?
+                    .into_iter()
+                    .map(|c| {
+                        ConfirmedBlockCertificate::try_from(c)
+                            .map_err(|_| NodeError::InvalidChainInfoResponse)
+                    })
+                    .collect::<Result<_, _>>()?;
+                Ok(Some(certificates))
+            }
+            Err(error) => {
+                tracing::warn!("Failed to query certificates: {error}");
+                Ok(None)
+            }
         }
     }
 
