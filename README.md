@@ -125,6 +125,17 @@ linera transfer 2 --from "$CHAIN1:$ACCOUNT1" --to "$CHAIN2:$ACCOUNT2"
 # Query user balances again.
 linera query-balance "$CHAIN1:$ACCOUNT1"
 linera query-balance "$CHAIN2:$ACCOUNT2"
+
+
+rm -rf "$LINERA_TMP_DIR/client.db"  # OOPS
+
+cat "$LINERA_WALLET" | jq .genesis_config > "$LINERA_TMP_DIR/genesis_config.json"
+
+linera-server initialize --storage "$LINERA_STORAGE" --genesis "$LINERA_TMP_DIR/genesis_config.json"
+
+linera sync
+linera query-balance
+
 ```
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well
