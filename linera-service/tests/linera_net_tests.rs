@@ -26,7 +26,6 @@ use futures::{
 };
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
-    command::resolve_binary,
     crypto::CryptoHash,
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
@@ -2475,17 +2474,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
-async fn test_resolve_binary() -> Result<()> {
-    resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
-    resolve_binary("linera-proxy", env!("CARGO_PKG_NAME")).await?;
-    assert!(resolve_binary("linera-spaceship", env!("CARGO_PKG_NAME"))
-        .await
-        .is_err());
-
-    Ok(())
-}
-
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -3015,7 +3003,8 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
     let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE).await?;
     let faucet = faucet_service.instance();
 
-    let path = resolve_binary("linera-benchmark", env!("CARGO_PKG_NAME")).await?;
+    let path =
+        linera_base::command::resolve_binary("linera-benchmark", env!("CARGO_PKG_NAME")).await?;
     // The benchmark looks for examples/fungible, so it needs to run in the project root.
     let current_dir = std::env::current_exe()?;
     let dir = current_dir.ancestors().nth(4).unwrap();

@@ -4,6 +4,7 @@
 use std::{path::PathBuf, process::Command};
 
 use anyhow::Result;
+use linera_base::command::resolve_binary;
 use linera_service::cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop};
 
 mod common;
@@ -59,6 +60,17 @@ async fn test_project_test() -> Result<()> {
     client
         .project_test(&ClientWrapper::example_path("counter")?)
         .await?;
+
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn test_resolve_binary() -> Result<()> {
+    resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
+    resolve_binary("linera-proxy", env!("CARGO_PKG_NAME")).await?;
+    assert!(resolve_binary("linera-spaceship", env!("CARGO_PKG_NAME"))
+        .await
+        .is_err());
 
     Ok(())
 }
