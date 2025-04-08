@@ -266,7 +266,7 @@ impl Runnable for Job {
                 let certificate = match result {
                     Ok(Some(certificate)) => certificate,
                     Ok(None) => {
-                        tracing::info!("Chain is already closed; nothing to do.");
+                        info!("Chain is already closed; nothing to do.");
                         return Ok(());
                     }
                     Err(error) => Err(error).context("Failed to close chain")?,
@@ -1344,11 +1344,12 @@ impl ClientOptions {
     }
 
     async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
-        let genesis_config = self.wallet().await?.genesis_config().clone();
-        let store_config = self
-            .storage_config()?
+        let storage_config = self.storage_config()?;
+        debug!("Running command using storage configuration: {storage_config}");
+        let store_config = storage_config
             .add_common_config(self.common_config())
             .await?;
+        let genesis_config = self.wallet().await?.genesis_config().clone();
         let output = Box::pin(store_config.run_with_storage(
             &genesis_config,
             self.wasm_runtime.with_wasm_default(),
@@ -1359,8 +1360,9 @@ impl ClientOptions {
     }
 
     async fn run_with_store<R: RunnableWithStore>(&self, job: R) -> Result<R::Output, Error> {
-        let store_config = self
-            .storage_config()?
+        let storage_config = self.storage_config()?;
+        debug!("Running command using storage configuration: {storage_config}");
+        let store_config = storage_config
             .add_common_config(self.common_config())
             .await?;
         let output = Box::pin(store_config.run_with_store(job)).await?;
@@ -1368,11 +1370,12 @@ impl ClientOptions {
     }
 
     async fn initialize_storage(&self) -> Result<(), Error> {
-        let wallet = self.wallet().await?;
-        let store_config = self
-            .storage_config()?
+        let storage_config = self.storage_config()?;
+        debug!("Initializing storage using configuration: {storage_config}");
+        let store_config = storage_config
             .add_common_config(self.common_config())
             .await?;
+        let wallet = self.wallet().await?;
         store_config.initialize(wallet.genesis_config()).await?;
         Ok(())
     }
@@ -1396,10 +1399,10 @@ impl ClientOptions {
         ))?;
         config_dir.push("linera");
         if !config_dir.exists() {
-            tracing::debug!("Creating default wallet directory {}", config_dir.display());
+            debug!("Creating default wallet directory {}", config_dir.display());
             fs_err::create_dir(&config_dir)?;
         }
-        tracing::info!("Using default wallet directory {}", config_dir.display());
+        info!("Using default wallet directory {}", config_dir.display());
         Ok(config_dir)
     }
 
@@ -1583,7 +1586,7 @@ fn main() -> anyhow::Result<()> {
     let error_code = match result {
         Ok(code) => code,
         Err(msg) => {
-            tracing::error!("Error is {:?}", msg);
+            error!("Error is {:?}", msg);
             2
         }
     };
