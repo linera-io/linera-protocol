@@ -69,7 +69,7 @@ Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wa
 
 ### Creating the Game Chain
 
-We open a new chain owned by both `$OWNER_2` and `$OWNER_2`, create the application on it, and
+We open a new chain owned by both `$OWNER_1` and `$OWNER_2`, create the application on it, and
 start the node service.
 
 ```bash
