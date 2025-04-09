@@ -87,17 +87,13 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
 
 pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     let source_code = std::fs::read_to_string(path)?;
-    tracing::info!("source_code={}", source_code);
     let contract_name: &str = source_code.lines()
         .find(|line| line.trim_start().starts_with("contract "))
         .ok_or(anyhow::anyhow!("Not matching"))?;
-    tracing::info!("contract_line={}", contract_name);
     let contract_name: &str = contract_name.strip_prefix("contract ")
         .ok_or(anyhow::anyhow!("Not matching"))?;
-    tracing::info!("contract_line={}", contract_name);
     let contract_name: &str = contract_name.strip_suffix(" {")
         .ok_or(anyhow::anyhow!("Not matching"))?;
-    tracing::info!("contract_name={}", contract_name);
     get_bytecode(&source_code, contract_name)
 }
 
