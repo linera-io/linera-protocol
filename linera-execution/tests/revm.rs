@@ -12,7 +12,7 @@ use linera_base::{
     vm::EvmQuery,
 };
 use linera_execution::{
-    revm::{EvmContractModule, EvmServiceModule},
+    evm::revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
         create_dummy_user_application_description,
         solidity::{load_solidity_example, read_evm_u64_entry},

@@ -14,7 +14,12 @@ version.workspace = true
 [features]
 ethereum = []
 default = ["wasmer", "rocksdb", "storage-service"]
-revm = ["linera-base/revm", "linera-execution/revm", "linera-storage/revm", "dep:alloy-sol-types"]
+revm = [
+    "linera-base/revm",
+    "linera-execution/revm",
+    "linera-storage/revm",
+    "dep:alloy-sol-types",
+]
 test = [
     "linera-base/test",
     "linera-execution/test",

@@ -7,13 +7,12 @@
 #![deny(clippy::large_futures)]
 
 pub mod committee;
+pub mod evm;
 mod execution;
 mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
-#[cfg(with_revm)]
-pub mod revm;
 mod runtime;
 pub mod system;
 #[cfg(with_testing)]
@@ -53,7 +52,7 @@ use system::{AdminOperation, OpenChainConfig};
 use thiserror::Error;
 
 #[cfg(with_revm)]
-use crate::revm::EvmExecutionError;
+use crate::evm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
