@@ -773,18 +773,26 @@ impl Runnable for Job {
                     )
                     .await?;
 
-                linera_client::benchmark::Benchmark::<S>::run_benchmark(
-                    num_chains,
-                    transactions_per_block,
-                    bps,
-                    chain_clients.clone(),
-                    epoch,
-                    blocks_infos,
-                    committee,
-                    context.client.local_node().clone(),
-                    health_check_endpoints,
-                )
-                .await?;
+                info!("Ready to start benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
+                if std::io::stdin()
+                    .lines()
+                    .next()
+                    .unwrap()?
+                    .eq_ignore_ascii_case("yes")
+                {
+                    linera_client::benchmark::Benchmark::<S>::run_benchmark(
+                        num_chains,
+                        transactions_per_block,
+                        bps,
+                        chain_clients.clone(),
+                        epoch,
+                        blocks_infos,
+                        committee,
+                        context.client.local_node().clone(),
+                        health_check_endpoints,
+                    )
+                    .await?;
+                }
 
                 if close_chains {
                     info!("Closing chains...");
