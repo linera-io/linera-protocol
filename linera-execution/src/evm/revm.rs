@@ -51,15 +51,15 @@ fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), ExecutionError> {
     Ok(())
 }
 
-fn assert_message_length(value: bool) -> Result<(), ExecutionError> {
+fn ensure_message_length(actual_length: usize, min_length: usize) -> Result<(), ExecutionError> {
     ensure!(
-        value,
+        actual_length >= min_length,
         ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
     );
     Ok(())
 }
 
-/// This the selector when calling for `InterpreterResult` this is a fictional
+/// The selector when calling for `InterpreterResult`. This is a fictional
 /// selector that does not correspond to a real function.
 const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
 
@@ -219,7 +219,7 @@ impl UserServiceModule for EvmServiceModule {
     }
 }
 
-// This is the precompile address that contains the LINERA specific
+// This is the precompile address that contains the Linera specific
 // functionalities accessed from the EVM.
 fn precompile_address() -> Address {
     address!("000000000000000000000000000000000000000b")
@@ -344,7 +344,7 @@ impl<Runtime: ContractRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Ru
         match result {
             Err(_error) => {
                 // An alternative way would be to return None, which would induce
-                // REVM to call the smart contract in its database, where it is
+                // Revm to call the smart contract in its database, where it is
                 // non-existent.
                 Some(failing_outcome())
             }
@@ -400,7 +400,7 @@ impl<Runtime: ServiceRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Run
         match result {
             Err(_error) => {
                 // An alternative way would be to return None, which would induce
-                // REVM to call the smart contract in its database, where it is
+                // Revm to call the smart contract in its database, where it is
                 // non-existent.
                 Some(failing_outcome())
             }
@@ -507,7 +507,7 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        assert_message_length(operation.len() >= 4)?;
+        ensure_message_length(operation.len(), 4)?;
         let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             let result = self.transact_commit_tx_data(Choice::Call, &operation[4..])?;
             result.interpreter_result_and_logs()?
@@ -524,7 +524,7 @@ where
         _context: MessageContext,
         _message: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        panic!("The execute_message part of the Ethereum smart contract has not yet been coded");
+        todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
@@ -575,7 +575,7 @@ where
         let (kind, tx_data) = match ch {
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(vec)),
             Choice::Call => {
-                assert_message_length(vec.len() >= 4)?;
+                ensure_message_length(vec.len(), 4)?;
                 forbid_execute_operation_origin(&vec[..4])?;
                 let tx_data = Bytes::copy_from_slice(vec);
                 (TxKind::Call(Address::ZERO.create(0)), tx_data)
@@ -661,7 +661,7 @@ where
             }
         };
 
-        assert_message_length(query.len() >= 4)?;
+        ensure_message_length(query.len(), 4)?;
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
             let result = self.transact_tx_data(&query[4..])?;
             let (answer, _logs) = result.interpreter_result_and_logs()?;
@@ -681,7 +681,7 @@ where
     Runtime: ServiceRuntime,
 {
     fn transact_tx_data(&mut self, vec: &[u8]) -> Result<ExecutionResultSuccess, ExecutionError> {
-        assert_message_length(vec.len() >= 4)?;
+        ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
         let tx_data = Bytes::copy_from_slice(vec);
         let contract_address = Address::ZERO.create(0);
