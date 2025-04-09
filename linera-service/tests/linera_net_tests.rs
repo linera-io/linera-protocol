@@ -341,7 +341,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        get_contract_service_paths, get_evm_example_counter, read_evm_u64_entry,
+        get_evm_contract_path, read_evm_u64_entry,
     };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -366,16 +366,15 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let increment = 5;
 
     let chain = client.load_wallet()?.default_chain().unwrap();
-    let module = get_evm_example_counter()?;
 
-    let (contract, service, _dir) = get_contract_service_paths(module)?;
+    let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_counter.sol")?;
     type Parameter = ();
     type InstantiationArgument = Vec<u8>;
 
     let application_id = client
         .publish_and_create::<EvmAbi, Parameter, InstantiationArgument>(
-            contract,
-            service,
+            evm_contract.clone(),
+            evm_contract,
             VmRuntime::Evm,
             &(),
             &instantiation_argument,
@@ -424,9 +423,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolValue};
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
-    use linera_execution::test_utils::solidity::{
-        get_contract_service_paths, get_evm_example_counter,
-    };
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -435,8 +432,6 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     // Creating the EVM contract
-
-    let module = get_evm_example_counter()?;
 
     sol! {
         struct ConstructorArgs {
@@ -450,13 +445,13 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     };
     let evm_instantiation_argument = evm_instantiation_argument.abi_encode();
 
-    let (evm_contract, evm_service, _dir) = get_contract_service_paths(module)?;
+    let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_counter.sol")?;
     type InstantiationArgument = Vec<u8>;
 
     let evm_application_id = client
         .publish_and_create::<EvmAbi, (), InstantiationArgument>(
+            evm_contract.clone(),
             evm_contract,
-            evm_service,
             VmRuntime::Evm,
             &(),
             &evm_instantiation_argument,
@@ -518,7 +513,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        get_contract_service_paths, get_evm_call_evm_example_counter, get_evm_example_counter,
+        get_evm_contract_path,
         read_evm_u64_entry,
     };
     use linera_sdk::abis::evm::EvmAbi;
@@ -532,8 +527,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
 
     // Creating the EVM contract
 
-    let module = get_evm_example_counter()?;
-    let (contract, service, _dir) = get_contract_service_paths(module)?;
+    let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_counter.sol")?;
 
     let evm_instantiation_argument = {
         sol! {
@@ -552,8 +546,8 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
 
     let evm_application_id = client
         .publish_and_create::<EvmAbi, (), InstantiationArgument>(
-            contract,
-            service,
+            evm_contract.clone(),
+            evm_contract,
             VmRuntime::Evm,
             &(),
             &evm_instantiation_argument,
@@ -576,14 +570,13 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     let nest_instantiation_argument = ConstructorArgs { evm_contract };
     let nest_instantiation_argument = nest_instantiation_argument.abi_encode();
 
-    let module = get_evm_call_evm_example_counter()?;
-    let (nest_contract, nest_service, _dir) = get_contract_service_paths(module)?;
+    let (nest_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_call_evm_example_counter.sol")?;
 
     type NestInstantiationArgument = Vec<u8>;
     let nest_application_id = client
         .publish_and_create::<EvmAbi, (), NestInstantiationArgument>(
+            nest_contract.clone(),
             nest_contract,
-            nest_service,
             VmRuntime::Evm,
             &(),
             &nest_instantiation_argument,
@@ -635,7 +628,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     use counter_no_graphql::CounterNoGraphQlAbi;
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{
-        get_contract_service_paths, get_evm_call_wasm_example_counter, read_evm_u64_entry,
+        get_evm_contract_path, read_evm_u64_entry,
     };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -675,14 +668,13 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let nest_instantiation_argument = ConstructorArgs { wasm_contract };
     let nest_instantiation_argument = nest_instantiation_argument.abi_encode();
 
-    let module = get_evm_call_wasm_example_counter()?;
-    let (nest_contract, nest_service, _dir) = get_contract_service_paths(module)?;
+    let (nest_contract, _dir) = get_evm_contract_path("test/fixtures/evm_call_wasm_example_counter.sol")?;
 
     type NestInstantiationArgument = Vec<u8>;
     let nest_application_id = client
         .publish_and_create::<EvmAbi, (), NestInstantiationArgument>(
+            nest_contract.clone(),
             nest_contract,
-            nest_service,
             VmRuntime::Evm,
             &(),
             &nest_instantiation_argument,

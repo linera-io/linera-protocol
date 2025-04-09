@@ -15,7 +15,7 @@ use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
         create_dummy_user_application_description,
-        solidity::{get_evm_example_counter, read_evm_u64_entry},
+        solidity::{load_solidity_example, read_evm_u64_entry},
         SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
@@ -26,7 +26,7 @@ use linera_views::{context::Context as _, views::View};
 
 #[tokio::test]
 async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
-    let module = get_evm_example_counter()?;
+    let module = load_solidity_example("tests/fixtures/evm_example_counter.sol")?;
 
     sol! {
         struct ConstructorArgs {
