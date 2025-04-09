@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: MIT
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
 // The BCS conversion code used below has been generated
