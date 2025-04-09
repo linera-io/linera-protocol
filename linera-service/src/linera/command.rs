@@ -388,6 +388,10 @@ pub enum ClientCommand {
         /// closing chains.
         #[arg(long, default_value = "5")]
         wrap_up_max_in_flight: usize,
+
+        /// Confirm before starting the benchmark.
+        #[arg(long)]
+        confirm_before_start: bool,
     },
 
     /// Create genesis configuration for a Linera deployment.
