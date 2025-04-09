@@ -115,13 +115,6 @@ MATCHING_ENGINE=$(linera --wait-for-outgoing-messages \
     --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
 
-And make sure chain 2 also has it:
-
-```bash
-linera --wait-for-outgoing-messages request-application \
-    --requester-chain-id $CHAIN_2 $MATCHING_ENGINE
-```
-
 ### Using the Matching Engine Application
 
 First, a node service for the current wallet has to be started:

@@ -110,14 +110,6 @@ APP_RFQ=$(linera -w 0 --wait-for-outgoing-messages \
     --required-application-ids $APP_ID_0 $APP_ID_1)
 ```
 
-We also need to make sure that both users can access the RFQ application, so we have to request it
-on the second user's chain.
-
-```bash
-linera -w 1 request-application $APP_RFQ
-sleep 2
-```
-
 ## Using the RFQ Application
 
 First, node services for both users' wallets have to be started:

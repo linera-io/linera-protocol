@@ -58,18 +58,18 @@ export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
 export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
 export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
 
+linera --with-wallet 0 wallet init --faucet $FAUCET_URL
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
-linera --with-wallet 2 wallet init --faucet $FAUCET_URL
 
+INFO_0=($(linera --with-wallet 0 wallet request-chain --faucet $FAUCET_URL))
 INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
-INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
+CHAIN_0="${INFO_0[0]}"
 CHAIN_1="${INFO_1[0]}"
-CHAIN_2="${INFO_2[0]}"
+OWNER_0="${INFO_0[3]}"
 OWNER_1="${INFO_1[3]}"
-OWNER_2="${INFO_2[3]}"
 ```
 
-Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1"
+Note that `linera --with-wallet 0` is equivalent to `linera --wallet "$LINERA_WALLET_1"
 --storage "$LINERA_STORAGE_1"`.
 
 Compile the `social` example and create an application with it:
@@ -99,14 +99,14 @@ to print the URL to navigate to, then subscribe to the other chain using the fol
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID
 mutation {
   subscribe(
-    chainId: "$CHAIN_2"
+    chainId: "$CHAIN_0"
   )
 }
 ```
 
-Run `echo "http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID"` to print the URL to navigate to, then make a post:
+Run `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID"` to print the URL to navigate to, then make a post:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID
 mutation {
   post(
     text: "Linera Social is the new Mastodon!"
@@ -127,7 +127,7 @@ entry, we can see the posted text as well as other values:
 ```gql
 query {
   receivedPosts {
-    entry(key: { timestamp: 1705504131018960, author: "$CHAIN_2", index: 0 }) {
+    entry(key: { timestamp: 1705504131018960, author: "$CHAIN_0", index: 0 }) {
       value {
         key {
           timestamp
@@ -155,7 +155,7 @@ query {
         "value": {
           "key": {
             "timestamp": 1705504131018960,
-            "author": "$CHAIN_2",
+            "author": "$CHAIN_0",
             "index": 0
           },
           "text": "Linera Social is the new Mastodon!",
