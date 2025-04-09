@@ -87,12 +87,15 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
 
 pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     let source_code = std::fs::read_to_string(path)?;
-    let contract_name: &str = source_code.lines()
+    let contract_name: &str = source_code
+        .lines()
         .find(|line| line.trim_start().starts_with("contract "))
         .ok_or(anyhow::anyhow!("Not matching"))?;
-    let contract_name: &str = contract_name.strip_prefix("contract ")
+    let contract_name: &str = contract_name
+        .strip_prefix("contract ")
         .ok_or(anyhow::anyhow!("Not matching"))?;
-    let contract_name: &str = contract_name.strip_suffix(" {")
+    let contract_name: &str = contract_name
+        .strip_suffix(" {")
         .ok_or(anyhow::anyhow!("Not matching"))?;
     get_bytecode(&source_code, contract_name)
 }
@@ -109,12 +112,10 @@ pub fn temporary_write_evm_module(module: Vec<u8>) -> anyhow::Result<(PathBuf, T
     Ok((evm_contract, dir))
 }
 
-
 pub fn get_evm_contract_path(path: &str) -> anyhow::Result<(PathBuf, TempDir)> {
     let module = load_solidity_example(path)?;
     temporary_write_evm_module(module)
 }
-
 
 pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();

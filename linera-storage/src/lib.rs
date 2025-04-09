@@ -31,7 +31,7 @@ use linera_execution::{
 };
 #[cfg(with_revm)]
 use linera_execution::{
-    revm::{EvmContractModule, EvmServiceModule},
+    evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
 };
 #[cfg(with_wasm_runtime)]
