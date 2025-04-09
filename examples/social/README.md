@@ -53,10 +53,10 @@ linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
 Create the user wallets and add chains to them:
 
 ```bash
-export LINERA_WALLET_0="$LINERA_TMP_DIR/wallet_0.json"
-export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
 export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
 export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
+export LINERA_WALLET_2="$LINERA_TMP_DIR/wallet_2.json"
+export LINERA_STORAGE_2="rocksdb:$LINERA_TMP_DIR/client_2.db"
 
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
 linera --with-wallet 2 wallet init --faucet $FAUCET_URL
@@ -75,38 +75,38 @@ Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WA
 Compile the `social` example and create an application with it:
 
 ```bash
-APP_ID=$(linera --with-wallet 0 project publish-and-create examples/social)
+APP_ID=$(linera --with-wallet 1 project publish-and-create examples/social)
 ```
 
 Now start a node service for each wallet, using two different ports:
 
 ```bash
-linera --with-wallet 0 service --port 8080 &
+linera --with-wallet 1 service --port 8080 &
 
 # Wait for it to complete
 sleep 2
 
-linera --with-wallet 1 service --port 8081 &
+linera --with-wallet 2 service --port 8081 &
 
 # Wait for it to complete
 sleep 2
 ```
 
 Open both URLs under the entry `link`. Now you can use the application on each chain.
-For the 8081 tab, you can run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID"`
+For the 8081 tab, you can run `echo "http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID"`
 to print the URL to navigate to, then subscribe to the other chain using the following query:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID
 mutation {
   subscribe(
-    chainId: "$CHAIN_2"
+    chainId: "$CHAIN_1"
   )
 }
 ```
 
-Run `echo "http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID"` to print the URL to navigate to, then make a post:
+Run `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID"` to print the URL to navigate to, then make a post:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 mutation {
   post(
     text: "Linera Social is the new Mastodon!"
@@ -117,7 +117,7 @@ mutation {
 
 Since 8081 is a subscriber. Let's see if it received any posts: # You can see the post on running the [web-frontend](./web-frontend/), or follow the steps below.
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID
 query { receivedPosts { keys { timestamp author index } } }
 ```
 
@@ -127,7 +127,7 @@ entry, we can see the posted text as well as other values:
 ```gql
 query {
   receivedPosts {
-    entry(key: { timestamp: 1705504131018960, author: "$CHAIN_2", index: 0 }) {
+    entry(key: { timestamp: 1705504131018960, author: "$CHAIN_1", index: 0 }) {
       value {
         key {
           timestamp
@@ -155,7 +155,7 @@ query {
         "value": {
           "key": {
             "timestamp": 1705504131018960,
-            "author": "$CHAIN_2",
+            "author": "$CHAIN_1",
             "index": 0
           },
           "text": "Linera Social is the new Mastodon!",

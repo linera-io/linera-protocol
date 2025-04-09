@@ -65,31 +65,31 @@ linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
 Create the user wallets and add chains to them:
 
 ```bash
-export LINERA_WALLET_0="$LINERA_TMP_DIR/wallet_0.json"
-export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
 export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
 export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
+export LINERA_WALLET_2="$LINERA_TMP_DIR/wallet_2.json"
+export LINERA_STORAGE_2="rocksdb:$LINERA_TMP_DIR/client_2.db"
 
-linera --with-wallet 0 wallet init --faucet $FAUCET_URL
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
+linera --with-wallet 2 wallet init --faucet $FAUCET_URL
 
-INFO_0=($(linera --with-wallet 0 wallet request-chain --faucet $FAUCET_URL))
 INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
-CHAIN_0="${INFO_0[0]}"
+INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
-OWNER_0="${INFO_0[3]}"
+CHAIN_2="${INFO_2[0]}"
 OWNER_1="${INFO_1[3]}"
+OWNER_2="${INFO_2[3]}"
 ```
 
-Note that `linera --with-wallet 0` is equivalent to `linera --wallet "$LINERA_WALLET_0"
---storage "$LINERA_STORAGE_0"`.
+Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1"
+--storage "$LINERA_STORAGE_1"`.
 
 The command below can be used to list the chains created for the test as known by each
 wallet:
 
 ```bash
-linera --with-wallet 0 wallet show
 linera --with-wallet 1 wallet show
+linera --with-wallet 2 wallet show
 ```
 
 A table will be shown with the chains registered in the wallet and their meta-data:
@@ -108,8 +108,8 @@ A table will be shown with the chains registered in the wallet and their meta-da
 
 The default chain of each wallet should be highlighted in green. Each chain has an
 `Owner` field, and that is what is used for the account. Let's pick the owners of the
-default chain of each wallet and call them `$OWNER_0` and `$OWNER_1`. Remember the corresponding
-chain IDs as `$CHAIN_0` (the chain where we just published the application) and `$CHAIN_1`
+default chain of each wallet and call them `$OWNER_1` and `$OWNER_2`. Remember the corresponding
+chain IDs as `$CHAIN_1` (the chain where we just published the application) and `$CHAIN_2`
 (some user chain in wallet 2).
 
 ### Creating tokens
@@ -124,9 +124,9 @@ Create a fungible token application where two accounts start with the minted tok
 with 100 of them and another with 200 of them:
 
 ```bash
-APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
+APP_ID_0=$(linera --with-wallet 1 project publish-and-create \
            examples/fungible \
-           --json-argument '{ "accounts": { "'$OWNER_0'": "100", "'$OWNER_1'": "200" } }' \
+           --json-argument '{ "accounts": { "'$OWNER_1'": "100", "'$OWNER_2'": "200" } }' \
            --json-parameters "{ \"ticker_symbol\": \"FUN\" }")
 
 # Wait for it to fully complete
@@ -141,12 +141,12 @@ Similarly, we're going to create a crowd-funding campaign on the default chain. 
 to specify our fungible application as a dependency and a parameter:
 
 ```bash
-APP_ID_1=$(linera --with-wallet 0 \
+APP_ID_1=$(linera --with-wallet 1 \
            project publish-and-create \
            examples/crowd-funding \
            crowd_funding \
            --required-application-ids $APP_ID_0 \
-           --json-argument '{ "owner": "'$OWNER_0'", "deadline": 4102473600000000, "target": "100." }' \
+           --json-argument '{ "owner": "'$OWNER_1'", "deadline": 4102473600000000, "target": "100." }' \
            --json-parameters '"'"$APP_ID_0"'"')
 
 # Wait for it to fully complete
@@ -158,12 +158,12 @@ sleep 5
 First, a node service has to be started for each wallet, using two different ports:
 
 ```bash
-linera --with-wallet 0 service --port 8080 &
+linera --with-wallet 1 service --port 8080 &
 
 # Wait for it to fully complete
 sleep 2
 
-linera --with-wallet 1 service --port 8081 &
+linera --with-wallet 2 service --port 8081 &
 
 # Wait for it to fully complete
 sleep 2
@@ -175,7 +175,7 @@ Point your browser to http://localhost:8080, and enter the query:
 
 ```gql,uri=http://localhost:8080
 query { applications(
-  chainId: "$CHAIN_0"
+  chainId: "$CHAIN_1"
 ) { id link } }
 ```
 
@@ -186,56 +186,56 @@ application by its ID. The entry also has a field `link`. If you open that in a 
 see the GraphQL API for that application on that chain.
 
 Let's pledge 30 tokens by the campaign creator themselves.
-For `$OWNER_0` on 8080, run `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1"` to get the URL, open it
+For `$OWNER_1` on 8080, run `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_1"` to get the URL, open it
 and run the following query:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_1
 mutation { pledge(
-  owner:"$OWNER_0",
+  owner:"$OWNER_1",
   amount:"30."
 ) }
 ```
 
 This will make the owner show up if we list everyone who has made a pledge so far:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_1
 query { pledges { keys } }
 ```
 
-To also have `$OWNER_1` make a pledge, they first need to claim their tokens. Those are still
+To also have `$OWNER_2` make a pledge, they first need to claim their tokens. Those are still
 on the other chain, where the application was created. To get the link on 8081
-for the fungible application, run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0"`,
+for the fungible application, run `echo "http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_0"`,
 open it and run the following query:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_0
 mutation { claim(
   sourceAccount: {
-    owner: "$OWNER_1",
-    chainId: "$CHAIN_0"
+    owner: "$OWNER_2",
+    chainId: "$CHAIN_1"
   },
   amount: "200.",
   targetAccount: {
-    owner: "$OWNER_1",
-    chainId: "$CHAIN_1"
+    owner: "$OWNER_2",
+    chainId: "$CHAIN_2"
   }
 ) }
 ```
 
 You can check that the 200 tokens have arrived:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_0
 query {
-  accounts { entry(key: "$OWNER_1") { value } }
+  accounts { entry(key: "$OWNER_2") { value } }
 }
 ```
 
 Now, also on 8081, you can open the link for the crowd-funding
-application you get when you run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"`
+application you get when you run `echo "http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_1"`
 and run:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_1
 mutation { pledge(
-  owner:"$OWNER_1",
+  owner:"$OWNER_2",
   amount:"80."
 ) }
 ```
@@ -243,17 +243,17 @@ mutation { pledge(
 This pledges another 80 tokens. With 110 pledged in total, we have now reached the campaign
 goal. Now the campaign owner (on 8080) can collect the funds:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_1
 mutation { collect }
 ```
 
 Get the fungible application on
-8080 URL by running `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0"`,
+8080 URL by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_0"`,
 then check that we have received 110 tokens, in addition to the
 70 that we had left after pledging 30 by running the following query:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_0
 query {
-  accounts { entry(key: "$OWNER_0") { value } }
+  accounts { entry(key: "$OWNER_1") { value } }
 }
 ```

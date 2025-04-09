@@ -233,6 +233,26 @@ jobs:
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
         cargo test --features storage-service -- storage_service --nocapture
 
+  test-readme-scripts:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 40
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build example applications
+      run: |
+        cd examples
+        cargo build --locked --release --target wasm32-unknown-unknown
+        cd ..
+        cargo build --locked -p linera-storage-service
+    - name: Run the storage-service instance and the README script tests
+      run: |
+        cargo test --locked -p linera-service --features storage-service -- test_script_in_readme --nocapture
+
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 20

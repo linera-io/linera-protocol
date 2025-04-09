@@ -65,38 +65,38 @@ linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
 Create the user wallets and add chains to them:
 
 ```bash
-export LINERA_WALLET_0="$LINERA_TMP_DIR/wallet_0.json"
-export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
 export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
 export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
+export LINERA_WALLET_2="$LINERA_TMP_DIR/wallet_2.json"
+export LINERA_STORAGE_2="rocksdb:$LINERA_TMP_DIR/client_2.db"
 
-linera --with-wallet 0 wallet init --faucet $FAUCET_URL
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
+linera --with-wallet 2 wallet init --faucet $FAUCET_URL
 
-INFO_0=($(linera --with-wallet 0 wallet request-chain --faucet $FAUCET_URL))
 INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
-CHAIN_0="${INFO_0[0]}"
+INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
-OWNER_0="${INFO_0[3]}"
+CHAIN_2="${INFO_2[0]}"
 OWNER_1="${INFO_1[3]}"
+OWNER_2="${INFO_2[3]}"
 ```
 
-Note that `linera --with-wallet 0` is equivalent to `linera --wallet "$LINERA_WALLET_0"
---storage "$LINERA_STORAGE_0"`.
+Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1"
+--storage "$LINERA_STORAGE_1"`.
 
 Now, we can publish the fungible module and create the fungible applications.
 
 ```bash
 (cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)
 
-APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
+APP_ID_0=$(linera --with-wallet 1 project publish-and-create \
            examples/fungible \
-           --json-argument '{ "accounts": { "'$OWNER_0'": "500", "'$OWNER_1'": "500" } }' \
+           --json-argument '{ "accounts": { "'$OWNER_1'": "500", "'$OWNER_2'": "500" } }' \
            --json-parameters "{ \"ticker_symbol\": \"FUN1\" }")
 
-APP_ID_1=$(linera --with-wallet 0 project publish-and-create \
+APP_ID_1=$(linera --with-wallet 1 project publish-and-create \
            examples/fungible \
-           --json-argument '{ "accounts": { "'$OWNER_0'": "500", "'$OWNER_1'": "500" } }' \
+           --json-argument '{ "accounts": { "'$OWNER_1'": "500", "'$OWNER_2'": "500" } }' \
            --json-parameters "{ \"ticker_symbol\": \"FUN2\" }")
 ```
 
@@ -105,17 +105,9 @@ Each user is granted 500 tokens of each type.
 Lastly, we have to create the RFQ application.
 
 ```bash
-APP_RFQ=$(linera -w 0 --wait-for-outgoing-messages \
+APP_RFQ=$(linera -w 1 --wait-for-outgoing-messages \
     project publish-and-create examples/rfq \
     --required-application-ids $APP_ID_0 $APP_ID_1)
-```
-
-We also need to make sure that both users can access the RFQ application, so we have to request it
-on the second user's chain.
-
-```bash
-linera -w 1 request-application $APP_RFQ
-sleep 2
 ```
 
 ## Using the RFQ Application
@@ -123,8 +115,8 @@ sleep 2
 First, node services for both users' wallets have to be started:
 
 ```bash
-linera -w 0 service --port 8080 &
-linera -w 1 service --port 8081 &
+linera -w 1 service --port 8080 &
+linera -w 2 service --port 8081 &
 sleep 5
 ```
 
@@ -135,41 +127,41 @@ values that we've defined above.
 
 First, user B has to claim their tokens on their chain, since they were created on user A's chain.
 
-Claim 500 FUN1 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0"` to print the URL
+Claim 500 FUN1 from `$OWNER_2` in `$CHAIN_1` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain.
+Run `echo "http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_0"` to print the URL
 of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_0
 mutation {
   claim(
     sourceAccount: {
-      chainId: "$CHAIN_0",
-      owner: "$OWNER_1",
+      chainId: "$CHAIN_1",
+      owner: "$OWNER_2",
     }
     amount: "500.",
     targetAccount: {
-      chainId: "$CHAIN_1",
-      owner: "$OWNER_1"
+      chainId: "$CHAIN_2",
+      owner: "$OWNER_2"
     }
   )
 }
 ```
 
-Claim 500 FUN2 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"` to print the URL
+Claim 500 FUN2 from `$OWNER_2` in `$CHAIN_1` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain.
+Run `echo "http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_1"` to print the URL
 of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter the same request:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_1
 mutation {
   claim(
     sourceAccount: {
-      chainId: "$CHAIN_0",
-      owner: "$OWNER_1",
+      chainId: "$CHAIN_1",
+      owner: "$OWNER_2",
     }
     amount: "500.",
     targetAccount: {
-      chainId: "$CHAIN_1",
-      owner: "$OWNER_1"
+      chainId: "$CHAIN_2",
+      owner: "$OWNER_2"
     }
   )
 }
@@ -180,18 +172,18 @@ for 50 FUN2 tokens.
 
 First, it will be convenient to open GraphiQL interfaces for both users in two browser tabs.
 
-For user A's tab, run `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ"` to print
+For user A's tab, run `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_RFQ"` to print
 the URL for the interface and navigate to that URL.
 
-For user B's tab, run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ"` to print
+For user B's tab, run `echo "http://localhost:8081/chains/$CHAIN_2/applications/$APP_RFQ"` to print
 the URL for the interface and navigate to that URL.
 
 In user B's tab, perform the following mutation:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_RFQ
 mutation {
   requestQuote(
-    target: "$CHAIN_0",
+    target: "$CHAIN_1",
     tokenPair: {
       tokenAsked: "$APP_ID_0",
       tokenOffered: "$APP_ID_1",
@@ -204,16 +196,16 @@ mutation {
 User A will now provide a quote to user B - they are willing to exchange 50 FUN2 for 100 FUN1.
 In user A's tab, perform the following mutation:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
   provideQuote(
     requestId: {
-      otherChainId:"$CHAIN_1",
+      otherChainId:"$CHAIN_2",
       seqNum:0,
       weRequested:false
     },
     quote: "100",
-    quoterOwner: "$OWNER_0",
+    quoterOwner: "$OWNER_1",
   )
 }
 ```
@@ -221,15 +213,15 @@ mutation {
 User B can now accept the quote. In user B's tab, perform the following mutation. This will create
 the temporary chain and send tokens to it.
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_RFQ
 mutation {
   acceptQuote(
     requestId:{
-      otherChainId:"$CHAIN_0",
+      otherChainId:"$CHAIN_1",
       seqNum:0,
       weRequested:true
     },
-    owner:"$OWNER_1",
+    owner:"$OWNER_2",
     feeBudget:"0",
   )
 }
@@ -237,11 +229,11 @@ mutation {
 
 In order to finalize the exchange, user A has to run the following mutation:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
   finalizeDeal(
     requestId: {
-      otherChainId:"$CHAIN_1",
+      otherChainId:"$CHAIN_2",
       seqNum:0,
       weRequested:false
     },
@@ -253,38 +245,38 @@ At this point, the RFQ application should have performed the swap and closed the
 check whether the amounts of tokens are correct by navigating to the following URLs and performing
 the following queries:
 
-`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0` - user A's FUN1 account should have
+`http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_0` - user A's FUN1 account should have
 400 tokens:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_0
 query {
-  accounts { entry(key: "$OWNER_0") { value } }
+  accounts { entry(key: "$OWNER_1") { value } }
 }
 ```
 
-`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1` - user A's FUN2 account should have
+`http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_1` - user A's FUN2 account should have
 550 tokens:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID_1
 query {
-  accounts { entry(key: "$OWNER_0") { value } }
+  accounts { entry(key: "$OWNER_1") { value } }
 }
 ```
 
-`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0` - user B's FUN1 account should have
+`http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_0` - user B's FUN1 account should have
 600 tokens:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_0
 query {
-  accounts { entry(key: "$OWNER_1") { value } }
+  accounts { entry(key: "$OWNER_2") { value } }
 }
 ```
 
-`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1` - user B's FUN2 account should have
+`http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_1` - user B's FUN2 account should have
 450 tokens:
 
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
+```gql,uri=http://localhost:8081/chains/$CHAIN_2/applications/$APP_ID_1
 query {
-  accounts { entry(key: "$OWNER_1") { value } }
+  accounts { entry(key: "$OWNER_2") { value } }
 }
 ```
