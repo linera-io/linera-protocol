@@ -956,14 +956,14 @@ impl<A> ApplicationId<A> {
 
 #[cfg(with_revm)]
 impl<A> ApplicationId<A> {
-    /// Convert the `ApplicationId` into an Ethereum Address.
+    /// Converts the `ApplicationId` into an Ethereum Address.
     pub fn evm_address(&self) -> Address {
         let bytes = self.application_description_hash.as_bytes();
         let bytes = bytes.0.as_ref();
         Address::from_slice(&bytes[0..20])
     }
 
-    /// Convert the `ApplicationId` into an Ethereum Address.
+    /// Converts the `ApplicationId` into an Ethereum-compatible 32-byte array.
     pub fn bytes32(&self) -> B256 {
         *self.application_description_hash.as_bytes()
     }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
-//! Here we implement the Database traits of REVM.
+//! Here we implement the Database traits of Revm.
 
 use std::{
     collections::HashMap,
