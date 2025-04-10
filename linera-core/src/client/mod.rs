@@ -2032,7 +2032,7 @@ where
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
             // TODO(#2066): Remove boxing once the call-stack is shallower
-            match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await? {
+            match Box::pin(self.execute_block(operations.clone(), vec![], blobs.clone())).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
@@ -2065,6 +2065,7 @@ where
     async fn execute_block(
         &self,
         operations: Vec<Operation>,
+        incoming_bundles: Vec<IncomingBundle>,
         blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         #[cfg(with_metrics)]
@@ -2082,7 +2083,6 @@ where
             ClientOutcome::Committed(None) => {}
         }
 
-        let incoming_bundles = self.pending_message_bundles().await?;
         let identity = self.identity().await?;
         let confirmed_value = self
             .new_pending_block(incoming_bundles, operations, blobs, identity)
@@ -2758,7 +2758,7 @@ where
                 open_multi_leader_rounds: ownership.open_multi_leader_rounds,
                 timeout_config: ownership.timeout_config,
             })];
-            match self.execute_block(operations, vec![]).await? {
+            match self.execute_block(operations, vec![], vec![]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
@@ -2824,7 +2824,7 @@ where
                 application_permissions: application_permissions.clone(),
             };
             let operation = Operation::system(SystemOperation::OpenChain(config));
-            let certificate = match self.execute_block(vec![operation], vec![]).await? {
+            let certificate = match self.execute_block(vec![operation], vec![], vec![]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
@@ -3060,7 +3060,10 @@ where
             if incoming_bundles.is_empty() && block_operations.is_empty() {
                 return Ok((certificates, None));
             }
-            match self.execute_block(block_operations, vec![]).await {
+            match self
+                .execute_block(block_operations, incoming_bundles, vec![])
+                .await
+            {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
