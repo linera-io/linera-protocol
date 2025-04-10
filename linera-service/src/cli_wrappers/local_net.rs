@@ -19,7 +19,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_client::client_options::ResourceControlPolicyConfig;
+use linera_client::{client_options::ResourceControlPolicyConfig, config::BlockExporterConfig};
 use linera_core::node::ValidatorNodeProvider;
 use linera_rpc::config::CrossChainConfig;
 #[cfg(all(feature = "storage-service", with_testing))]
@@ -183,6 +183,7 @@ pub struct LocalNetConfig {
     pub cross_chain_config: CrossChainConfig,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
+    pub block_exporter_config_path: Option<Option<PathBuf>>,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -199,6 +200,7 @@ pub struct LocalNet {
     storage_config: StorageConfig,
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
+    block_exporter_config_path: Option<Option<PathBuf>>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -218,6 +220,7 @@ pub enum Database {
 struct Validator {
     proxy: Child,
     servers: Vec<Child>,
+    exporter: Option<Child>,
 }
 
 impl Validator {
@@ -225,6 +228,7 @@ impl Validator {
         Self {
             proxy,
             servers: vec![],
+            exporter: None,
         }
     }
 
@@ -246,6 +250,10 @@ impl Validator {
         self.servers.push(server)
     }
 
+    fn add_block_exporter(&mut self, exporter: Child) {
+        self.exporter = Some(exporter)
+    }
+
     #[cfg(with_testing)]
     async fn terminate_server(&mut self, index: usize) -> Result<()> {
         let mut server = self.servers.remove(index);
@@ -261,6 +269,11 @@ impl Validator {
         for child in &mut self.servers {
             child.ensure_is_running()?;
         }
+
+        if let Some(exporter) = self.exporter.as_mut() {
+            exporter.ensure_is_running()?;
+        }
+
         Ok(())
     }
 }
@@ -288,7 +301,15 @@ impl LocalNetConfig {
             num_shards,
             storage_config_builder,
             path_provider,
+            block_exporter_config_path: None,
         }
+    }
+
+    /// The config_path is the path of the toml file which has configuration options for the linera-exporter.
+    /// The config_path is optional to start the linera exporter.
+    pub fn with_block_exporter(mut self, config_path: Option<PathBuf>) -> Self {
+        self.block_exporter_config_path = Some(config_path);
+        self
     }
 }
 
@@ -307,6 +328,7 @@ impl LineraNetConfig for LocalNetConfig {
             storage_config,
             self.cross_chain_config,
             self.path_provider,
+            self.block_exporter_config_path,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -370,6 +392,7 @@ impl LocalNet {
         storage_config: StorageConfig,
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
+        block_exporter_config_path: Option<Option<PathBuf>>,
     ) -> Result<Self> {
         Ok(Self {
             network,
@@ -384,6 +407,7 @@ impl LocalNet {
             storage_config,
             cross_chain_config,
             path_provider,
+            block_exporter_config_path,
         })
     }
 
@@ -402,6 +426,10 @@ impl LocalNet {
 
     pub fn proxy_port(validator: usize) -> usize {
         9000 + validator * 100
+    }
+
+    fn block_exporter_port(validator: usize) -> usize {
+        19000 + validator * 100
     }
 
     fn shard_port(validator: usize, shard: usize) -> usize {
@@ -445,6 +473,7 @@ impl LocalNet {
                 internal_protocol = {internal_protocol}
             "#
         );
+
         for k in 0..self.num_shards {
             let shard_port = Self::shard_port(n, k);
             let shard_metrics_port = Self::shard_metrics_port(n, k);
@@ -458,6 +487,33 @@ impl LocalNet {
                 "#
             ));
         }
+
+        if let Some(provided_config_path) = &self.block_exporter_config_path {
+            let host = Network::Grpc.localhost();
+            let port = Self::block_exporter_port(n);
+            let config_content = format!(
+                r#"
+
+                [exporter_config]
+                host = "{host}"
+                port = "{port}"
+                "#
+            );
+
+            content.push_str(&config_content);
+            let optional_config = provided_config_path
+                .as_ref()
+                .map(fs_err::read_to_string)
+                .transpose()?;
+            let exporter_config = self.generate_block_exporter_config(optional_config, n)?;
+            let config_path = self
+                .path_provider
+                .path()
+                .join(format!("exporter_config_{n}.toml"));
+
+            fs_err::write(&config_path, &exporter_config)?;
+        }
+
         fs_err::write(&path, content)?;
         path.into_os_string().into_string().map_err(|error| {
             anyhow!(
@@ -465,6 +521,34 @@ impl LocalNet {
                 error.to_string_lossy()
             )
         })
+    }
+
+    fn generate_block_exporter_config(
+        &self,
+        optional_config: Option<String>,
+        validator: usize,
+    ) -> Result<String> {
+        let n = validator;
+        let host = Network::Grpc.localhost();
+        let port = Self::block_exporter_port(n);
+        let config = format!(
+            r#"
+            [exporter_config]
+            host = "{host}"
+            port = "{port}"
+            "#
+        );
+
+        match optional_config {
+            None => Ok(config),
+            Some(config_string) => {
+                let mut parsed_config = toml::from_str::<BlockExporterConfig>(&config_string)?;
+                parsed_config.service_config.host = String::from(host);
+                parsed_config.service_config.port = port as u16;
+                let exporter_config = toml::to_string_pretty(&parsed_config)?;
+                Ok(exporter_config)
+            }
+        }
     }
 
     async fn generate_initial_validator_config(&mut self) -> Result<()> {
@@ -525,7 +609,37 @@ impl LocalNet {
         Ok(child)
     }
 
-    async fn ensure_grpc_server_has_started(
+    async fn run_exporter(&mut self, validator: usize) -> Result<Child> {
+        let storage = self.initialize_shared_storage(validator).await?;
+        let config_path = format!("exporter_config_{validator}.toml");
+
+        let child = self
+            .command_for_binary("linera-exporter")
+            .await?
+            .arg(config_path)
+            .args(["--storage", &storage])
+            .spawn_into()?;
+
+        match self.network.internal {
+            Network::Grpc => {
+                let port = Self::block_exporter_port(validator);
+                let nickname = format!("block exporter {validator}");
+                Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
+            }
+            Network::Grpcs => {
+                let port = Self::block_exporter_port(validator);
+                let nickname = format!("block exporter  {validator}");
+                Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
+            }
+            Network::Tcp | Network::Udp => {
+                unreachable!("Only allowed options are grpc and grpcs")
+            }
+        }
+
+        Ok(child)
+    }
+
+    pub async fn ensure_grpc_server_has_started(
         nickname: &str,
         port: usize,
         scheme: &str,
@@ -676,6 +790,12 @@ impl LocalNet {
             let server = self.run_server(validator, shard).await?;
             validator_proxy.add_server(server);
         }
+
+        if self.block_exporter_config_path.is_some() {
+            let exporter = self.run_exporter(validator).await?;
+            validator_proxy.add_block_exporter(exporter);
+        }
+
         self.running_validators.insert(validator, validator_proxy);
         Ok(())
     }

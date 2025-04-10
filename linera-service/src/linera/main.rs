@@ -1853,6 +1853,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                block_exporter,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1871,6 +1872,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    block_exporter.clone(),
                 )
                 .boxed()
                 .await?;

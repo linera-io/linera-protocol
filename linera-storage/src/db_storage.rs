@@ -268,14 +268,13 @@ pub struct DbStorage<Store, Clock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum BaseKey {
+pub enum BaseKey {
     ChainState(ChainId),
     Certificate(CryptoHash),
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
     Event(EventId),
-    BlockExporterState(u32),
 }
 
 const INDEX_CHAIN_ID: u8 = 0;
@@ -891,15 +890,6 @@ where
             blob_ids.push(blob_id);
         }
         Ok(blob_ids)
-    }
-
-    pub async fn block_exporter_context(
-        &self,
-        block_exporter_id: u32,
-    ) -> Result<ViewContext<u32, Store>, ViewError> {
-        let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
-        Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
 }
 

@@ -26,8 +26,8 @@ use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
-        CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,
-        ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        CrossChainConfig, ExporterConfig, NetworkProtocol, NotificationConfig, ShardConfig,
+        ShardId, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     grpc, simple,
 };
@@ -262,6 +262,9 @@ struct ValidatorOptions {
     /// The port of the validator
     port: u16,
 
+    /// The server configuration for the linera-exporter.
+    exporter_config: Option<ExporterConfig>,
+
     /// The port for the metrics endpoint
     metrics_port: u16,
 
@@ -300,6 +303,7 @@ fn make_server_config<R: CryptoRng>(
         shards: options.shards,
         host: options.internal_host,
         port: options.internal_port,
+        exporter_config: options.exporter_config,
         metrics_port: options.metrics_port,
     };
     let validator = ValidatorConfig {
@@ -725,6 +729,10 @@ mod test {
             host = "host2"
             port = 9002
             metrics_port = 5002
+
+            [exporter_config]
+            host = "exporter"
+            port = 12000
         "#;
         let options: ValidatorOptions = toml::from_str(toml_str).unwrap();
         assert_eq!(
@@ -735,6 +743,10 @@ mod test {
                 internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
+                exporter_config: Some(ExporterConfig {
+                    host: "exporter".into(),
+                    port: 12000
+                }),
                 internal_host: "internal_host".into(),
                 internal_port: 10000,
                 metrics_port: 5000,

@@ -4960,6 +4960,7 @@ dependencies = [
  "async-tungstenite",
  "axum",
  "base64 0.22.1",
+ "bincode",
  "call-evm-counter",
  "cargo_toml",
  "cfg-if",

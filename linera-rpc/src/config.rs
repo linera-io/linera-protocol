@@ -140,6 +140,9 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     pub host: String,
     /// The port the proxy listens on the internal network.
     pub port: u16,
+    /// The server configuration for the linera-exporter.
+    /// It can be used as a optional location to forward notifications to other than the proxy, by the workers.
+    pub exporter_config: Option<ExporterConfig>,
     /// The port of the proxy's metrics endpoint.
     pub metrics_port: u16,
 }
@@ -152,6 +155,7 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
             shards: self.shards.clone(),
             host: self.host.clone(),
             port: self.port,
+            exporter_config: self.exporter_config.clone(),
             metrics_port: self.metrics_port,
         }
     }
@@ -160,6 +164,14 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
 impl ValidatorInternalNetworkConfig {
     pub fn proxy_address(&self) -> String {
         format!("{}://{}:{}", self.protocol.scheme(), self.host, self.port)
+    }
+
+    pub fn exporter_address(&self) -> Option<String> {
+        self.exporter_config
+            .clone()
+            .map(|ExporterConfig { host, port }| {
+                format!("{}://{}:{}", self.protocol.scheme(), host, port)
+            })
     }
 }
 
@@ -271,6 +283,15 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
     pub fn get_shard_for(&self, chain_id: ChainId) -> &ShardConfig {
         self.shard(self.get_shard_id(chain_id))
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// The server configuration for the linera-exporter.
+pub struct ExporterConfig {
+    /// The host name of the server (IP or hostname).
+    pub host: String,
+    /// The port for the server to listen on.
+    pub port: u16,
 }
 
 #[test]
