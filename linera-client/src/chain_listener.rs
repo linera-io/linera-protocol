@@ -166,6 +166,7 @@ impl<C: ClientContext> ChainListener<C> {
                 self.update_validators(&notification).await?;
                 self.update_wallet(notification.chain_id).await?;
                 self.add_new_chains(*hash).await?;
+                self.process_new_events(notification.chain_id).await?;
             }
         }
         Self::sleep(self.config.delay_after_ms).await;
@@ -211,6 +212,21 @@ impl<C: ClientContext> ChainListener<C> {
         drop(context_guard);
         for new_id in new_ids {
             self.listen(new_id).await?;
+        }
+        Ok(())
+    }
+
+    /// Processes the inboxes of all chains that are subscribed to streams with new events.
+    async fn process_new_events(&mut self, chain_id: ChainId) -> Result<(), Error> {
+        // TODO(#365): Support subscriptions to chains other than the admin chain.
+        let admin_id = self.context.lock().await.wallet().genesis_admin_chain();
+        if chain_id == admin_id {
+            let chain_ids = self.listening.keys().cloned().collect::<Vec<_>>();
+            for chain_id in chain_ids {
+                if chain_id != admin_id {
+                    self.maybe_process_inbox(chain_id).await?;
+                }
+            }
         }
         Ok(())
     }
