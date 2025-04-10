@@ -87,7 +87,7 @@ pub trait ClientContext: 'static {
 struct ListeningClient<C: ClientContext> {
     client: ContextChainClient<C>,
     _abort_handle: AbortOnDrop,
-    notification_stream: NotificationStream,
+    notification_stream: Arc<Mutex<NotificationStream>>,
     timeout: Timestamp,
 }
 
@@ -100,7 +100,7 @@ impl<C: ClientContext> ListeningClient<C> {
         Self {
             client,
             _abort_handle,
-            notification_stream,
+            notification_stream: Arc::new(Mutex::new(notification_stream)),
             timeout: Timestamp::from(u64::MAX),
         }
     }
@@ -228,7 +228,11 @@ impl<C: ClientContext> ChainListener<C> {
             let notification_futures = self
                 .listening
                 .values_mut()
-                .map(|client| client.notification_stream.next());
+                .map(|client| {
+                    let stream = client.notification_stream.clone();
+                    Box::pin(async move { stream.lock().await.next().await })
+                })
+                .collect::<Vec<_>>();
             futures::select! {
                 () = self.storage.clock().sleep_until(timeout).fuse() => {
                     return Ok(Action::ProcessInbox(timeout_chain_id));
