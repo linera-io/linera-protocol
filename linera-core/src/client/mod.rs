@@ -221,41 +221,6 @@ impl<P, S: Storage + Clone> Client<P, S> {
         }
     }
 
-    /// Returns a clone with a different set of tracked chains.
-    pub fn clone_with(
-        &self,
-        validator_node_provider: P,
-        name: impl Into<String>,
-        tracked_chains: impl IntoIterator<Item = ChainId>,
-        long_lived_services: bool,
-    ) -> Self {
-        let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
-        let state = WorkerState::new_for_client(
-            name.into(),
-            self.storage.clone(),
-            tracked_chains.clone(),
-            self.max_loaded_chains,
-        )
-        .with_long_lived_services(long_lived_services)
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true);
-        let local_node = LocalNodeClient::new(state);
-        Self {
-            validator_node_provider,
-            local_node,
-            chains: DashMap::new(),
-            max_pending_message_bundles: self.max_pending_message_bundles,
-            message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
-            cross_chain_message_delivery: self.cross_chain_message_delivery,
-            grace_period: self.grace_period,
-            tracked_chains,
-            notifier: Arc::new(ChannelNotifier::default()),
-            storage: self.storage.clone(),
-            max_loaded_chains: self.max_loaded_chains,
-            blob_download_timeout: self.blob_download_timeout,
-        }
-    }
-
     /// Returns the storage client used by this client's local node.
     #[instrument(level = "trace", skip(self))]
     pub fn storage_client(&self) -> &S {
