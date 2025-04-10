@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{borrow::Cow, future::IntoFuture, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
     futures_util::Stream, resolver_utils::ContainerType, Error, MergedObject, OutputType,
@@ -9,7 +9,7 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
-use futures::{lock::Mutex, Future};
+use futures::{lock::Mutex, Future, FutureExt as _};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
@@ -843,14 +843,15 @@ where
             .layer(CorsLayer::permissive());
 
         info!("GraphiQL IDE: http://localhost:{}", port);
-        let listener =
-            ChainListener::new(self.config, Arc::clone(&self.context), self.storage.clone());
-        listener.run().await?;
-        let serve_fut = axum::serve(
-            tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
-            app,
-        );
-        serve_fut.await?;
+
+        let chain_listener = ChainListener::new(self.config, self.context, self.storage).run();
+        let tcp_listener =
+            tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
+        let server = axum::serve(tcp_listener, app).into_future();
+        futures::select! {
+            result = Box::pin(chain_listener).fuse() => result?,
+            result = Box::pin(server).fuse() => result?,
+        };
 
         Ok(())
     }

@@ -3,12 +3,12 @@
 
 //! The server component of the Linera faucet.
 
-use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{future::IntoFuture, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, Router};
-use futures::lock::Mutex;
+use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
@@ -284,15 +284,14 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let context = Arc::clone(&self.context);
-        let listener = ChainListener::new(self.config.clone(), context, self.storage.clone());
-        listener.run().await?;
-
-        axum::serve(
-            tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?,
-            app,
-        )
-        .await?;
+        let chain_listener = ChainListener::new(self.config, self.context, self.storage).run();
+        let tcp_listener =
+            tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
+        let server = axum::serve(tcp_listener, app).into_future();
+        futures::select! {
+            result = Box::pin(chain_listener).fuse() => result?,
+            result = Box::pin(server).fuse() => result?,
+        };
 
         Ok(())
     }
