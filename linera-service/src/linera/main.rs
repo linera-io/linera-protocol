@@ -1753,11 +1753,11 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name),
             )?;
             let mut chains = vec![];
-            let mut signer = Box::new(InMemSigner::new(*testing_prng_seed));
+            let mut signer = options.create_keystore(*testing_prng_seed)?;
             for i in 0..=*num_other_initial_chains {
                 let description = ChainDescription::Root(i);
                 // Create keys.
-                let public_key = signer.generate_new();
+                let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let chain = UserChain::make_initial(public_key.into(), description, timestamp);
                 genesis_config.chains.push((public_key, *initial_funding));
                 // Private keys.
@@ -2048,7 +2048,8 @@ Make sure to use a Linera client compatible with this network.
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;
-                options.create_keystore(*testing_prng_seed)?;
+                let mut keystore = options.create_keystore(*testing_prng_seed)?;
+                keystore.persist().await?;
                 options
                     .create_wallet(genesis_config)?
                     .mutate(|wallet| {
