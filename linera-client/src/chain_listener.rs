@@ -147,13 +147,6 @@ impl<C: ClientContext> ChainListener<C> {
         for chain_id in chain_ids {
             self.listen(chain_id).await?;
         }
-        let _handler = linera_base::task::spawn(self.run_notification_loop().in_current_span());
-        Ok(())
-    }
-
-    /// Processes notifications and timeouts in a loop.
-    #[instrument(skip(self))]
-    async fn run_notification_loop(mut self) -> Result<(), Error> {
         loop {
             match self.next_action().await? {
                 Action::ProcessInbox(chain_id) => self.maybe_process_inbox(chain_id).await?,
