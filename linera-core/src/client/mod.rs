@@ -1695,7 +1695,7 @@ where
 
     /// Downloads and processes any certificates we are missing for the given chain.
     #[instrument(level = "trace", skip_all)]
-    async fn synchronize_chain_state(
+    pub async fn synchronize_chain_state(
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
@@ -3312,6 +3312,15 @@ where
                 }
             }
         }
+    }
+
+    /// Returns whether this chain is tracked by the client, i.e. we are updating its inbox.
+    pub fn is_tracked(&self) -> bool {
+        self.client
+            .tracked_chains
+            .read()
+            .unwrap()
+            .contains(&self.chain_id)
     }
 
     /// Spawns a task that listens to notifications about the current chain from all validators,

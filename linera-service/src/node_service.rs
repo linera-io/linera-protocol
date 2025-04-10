@@ -843,9 +843,9 @@ where
             .layer(CorsLayer::permissive());
 
         info!("GraphiQL IDE: http://localhost:{}", port);
-        ChainListener::new(self.config, Arc::clone(&self.context), self.storage.clone())
-            .run()
-            .await;
+        let listener =
+            ChainListener::new(self.config, Arc::clone(&self.context), self.storage.clone());
+        listener.run().await?;
         let serve_fut = axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
             app,

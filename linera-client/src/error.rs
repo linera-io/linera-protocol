@@ -39,6 +39,8 @@ pub(crate) enum Inner {
     #[cfg(feature = "benchmark")]
     #[error("Benchmark error: {0}")]
     Benchmark(#[from] BenchmarkError),
+    #[error("internal error; this is a bug: {0}")]
+    Internal(String),
 }
 
 thiserror_context::impl_context!(Error(Inner));
