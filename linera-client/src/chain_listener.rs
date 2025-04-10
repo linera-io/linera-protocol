@@ -24,7 +24,7 @@ use linera_execution::{Message, OutgoingMessage, SystemMessage};
 use linera_storage::{Clock as _, Storage};
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
-use crate::{error::Inner, wallet::Wallet, Error};
+use crate::{wallet::Wallet, Error};
 
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct ChainListenerConfig {
@@ -295,16 +295,14 @@ impl<C: ClientContext> ChainListener<C> {
             .listening
             .iter()
             .min_by_key(|(_, client)| client.timeout)
-            .ok_or_else(|| Inner::Internal("No chains left to listen to".into()))?;
+            .expect("No chains left to listen to");
         Ok((*chain_id, client.timeout))
     }
 
     /// Updates the validators about the chain.
     async fn update_validators(&self, notification: &Notification) -> Result<(), Error> {
         let chain_id = notification.chain_id;
-        let Some(listening_client) = self.listening.get(&chain_id) else {
-            return Err(Inner::Internal(format!("Client for {chain_id} not found")).into());
-        };
+        let listening_client = self.listening.get(&chain_id).expect("missing client");
         if let Err(error) = listening_client.client.update_validators(None).await {
             warn!(
                 "Failed to update validators about the local chain after \
@@ -316,9 +314,11 @@ impl<C: ClientContext> ChainListener<C> {
 
     /// Updates the wallet based on the client for this chain.
     async fn update_wallet(&self, chain_id: ChainId) -> Result<(), Error> {
-        let Some(ListeningClient { client, .. }) = self.listening.get(&chain_id) else {
-            return Err(Inner::Internal(format!("Client for {chain_id} not found")).into());
-        };
+        let client = &self
+            .listening
+            .get(&chain_id)
+            .expect("missing client")
+            .client;
         self.context.lock().await.update_wallet(client).await?;
         Ok(())
     }
@@ -335,9 +335,7 @@ impl<C: ClientContext> ChainListener<C> {
             debug!("Not processing inbox due to listener configuration");
             return Ok(());
         }
-        let Some(listening_client) = self.listening.get_mut(&chain_id) else {
-            return Err(Inner::Internal(format!("Client for {chain_id} not found")).into());
-        };
+        let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
         debug!("Processing inbox");
         listening_client.timeout = Timestamp::from(u64::MAX);
         match listening_client
