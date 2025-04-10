@@ -456,6 +456,7 @@ where
 {
     type Context = ViewContext<ChainRuntimeContext<Self>, Store>;
     type Clock = C;
+    type BlockExporterContext = ViewContext<u32, Store>;
 
     fn clock(&self) -> &C {
         &self.clock
@@ -797,6 +798,15 @@ where
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
         self.wasm_runtime
     }
+
+    async fn block_exporter_context(
+        &self,
+        block_exporter_id: u32,
+    ) -> Result<Self::BlockExporterContext, ViewError> {
+        let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
+        let store = self.store.clone_with_root_key(&root_key)?;
+        Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
+    }
 }
 
 impl<Store, C> DbStorage<Store, C>
@@ -891,15 +901,6 @@ where
             blob_ids.push(blob_id);
         }
         Ok(blob_ids)
-    }
-
-    pub async fn block_exporter_context(
-        &self,
-        block_exporter_id: u32,
-    ) -> Result<ViewContext<u32, Store>, ViewError> {
-        let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
-        Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
 }
 
