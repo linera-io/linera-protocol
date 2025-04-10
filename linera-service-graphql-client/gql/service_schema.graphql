@@ -207,6 +207,14 @@ A block height to identify blocks in a chain
 scalar BlockHeight
 
 
+type BucketQueueView_BlockHeight_e824a938 {
+	entries(count: Int): [BlockHeight!]!
+}
+
+type BucketQueueView_TimestampedBundleInInbox_5a630c55 {
+	entries(count: Int): [TimestampedBundleInInbox!]!
+}
+
 """
 An origin and cursor of a unskippable bundle that is no longer in our inbox.
 """
@@ -335,7 +343,7 @@ type ChainStateExtendedView {
 	"""
 	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
-	unskippableBundles: QueueView_TimestampedBundleInInbox_5a630c55!
+	unskippableBundles: BucketQueueView_TimestampedBundleInInbox_5a630c55!
 	"""
 	Unskippable bundles that have been removed but are still in the queue.
 	"""
@@ -895,7 +903,7 @@ type OutboxStateView {
 	Keep sending these certified blocks of ours until they are acknowledged by
 	receivers.
 	"""
-	queue: QueueView_BlockHeight_e824a938!
+	queue: BucketQueueView_BlockHeight_e824a938!
 }
 
 """
@@ -992,16 +1000,8 @@ type QueryRoot {
 	version: VersionInfo!
 }
 
-type QueueView_BlockHeight_e824a938 {
-	entries(count: Int): [BlockHeight!]!
-}
-
 type QueueView_MessageBundle_f4399f0b {
 	entries(count: Int): [MessageBundle!]!
-}
-
-type QueueView_TimestampedBundleInInbox_5a630c55 {
-	entries(count: Int): [TimestampedBundleInInbox!]!
 }
 
 """
