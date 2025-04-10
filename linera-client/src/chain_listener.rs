@@ -84,10 +84,19 @@ pub trait ClientContext: 'static {
     }
 }
 
+/// A chain client together with the stream of notifications from the local node.
+///
+/// A background task listens to the validators and updates the local node, so any updates to
+/// this chain will trigger a notification. The background task is terminated when this gets
+/// dropped.
 struct ListeningClient<C: ClientContext> {
+    /// The chain client.
     client: ContextChainClient<C>,
+    /// The abort handle for the task that listens to the validators.
     _abort_handle: AbortOnDrop,
+    /// The stream of notifications from the local node.
     notification_stream: Arc<Mutex<NotificationStream>>,
+    /// This is only `< u64::MAX` when the client is waiting for a timeout to process the inbox.
     timeout: Timestamp,
 }
 
