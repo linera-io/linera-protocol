@@ -133,6 +133,7 @@ impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
     }
 
     async fn persist(&mut self) -> Result<(), W::Error> {
+        self.wallet.persist().await?;
         tracing::trace!("Persisted user chains");
         Ok(())
     }
