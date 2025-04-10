@@ -267,7 +267,6 @@ where
 
         Ok(self.make_chain_client_internal(
             chain_id,
-            self.signer.clone(),
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
@@ -278,7 +277,6 @@ where
     fn make_chain_client_internal(
         &self,
         chain_id: ChainId,
-        signer: Box<dyn Signer>,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
@@ -286,7 +284,7 @@ where
     ) -> ChainClient<NodeProvider, S> {
         let mut chain_client = self.client.create_chain_client(
             chain_id,
-            signer,
+            self.signer.clone(),
             self.wallet.genesis_admin_chain(),
             block_hash,
             timestamp,
@@ -844,7 +842,6 @@ where
 
                 let chain_client = self.make_chain_client_internal(
                     chain_id,
-                    self.signer.clone(),
                     None,
                     certificate.block().header.timestamp,
                     BlockHeight::ZERO,

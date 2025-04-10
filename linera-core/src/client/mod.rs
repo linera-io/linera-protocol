@@ -259,7 +259,6 @@ impl<P, S: Storage + Clone> Client<P, S> {
         // the arguments: If they were read from the wallet file, they might be stale.
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
             e.insert(ChainClientState::new(
-                signer,
                 block_hash,
                 timestamp,
                 next_block_height,
@@ -278,6 +277,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 grace_period: self.grace_period,
                 blob_download_timeout: self.blob_download_timeout,
             },
+            signer,
         }
     }
 }
@@ -503,6 +503,9 @@ where
     /// The client options.
     #[debug(skip)]
     options: ChainClientOptions,
+    /// A reference to the Signer used to sign messages.
+    #[debug(skip)]
+    signer: Box<dyn Signer>,
 }
 
 impl<P, S> Clone for ChainClient<P, S>
@@ -515,6 +518,7 @@ where
             chain_id: self.chain_id,
             admin_id: self.admin_id,
             options: self.options.clone(),
+            signer: self.signer.clone(),
         }
     }
 }
@@ -818,7 +822,7 @@ where
         {
             let state = self.state();
             ensure!(
-                state.has_other_owners(&info.manager.ownership)
+                state.has_other_owners(&info.manager.ownership, &self.signer)
                     || info.next_block_height == state.next_block_height(),
                 ChainClientError::WalletSynchronizationError
             );
@@ -962,12 +966,11 @@ where
             manager.ownership.is_active(),
             LocalNodeError::InactiveChain(self.chain_id)
         );
-        let state = self.state();
         let mut our_identities = manager
             .ownership
             .all_owners()
             .chain(&manager.leader)
-            .filter(|owner| state.signer().contains_key(owner));
+            .filter(|owner| self.signer.contains_key(owner));
         let Some(identity) = our_identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
@@ -982,7 +985,7 @@ where
     /// Returns whether the client has a signer for the current identity.
     pub async fn has_signer(&self) -> Result<bool, ChainClientError> {
         let chain_owner = self.identity().await?;
-        Ok(self.state().signer().contains_key(&chain_owner))
+        Ok(self.signer.contains_key(&chain_owner))
     }
 
     /// Obtains the public key associated to the current identity.
@@ -990,8 +993,7 @@ where
     pub async fn public_key(&self) -> Result<AccountPublicKey, ChainClientError> {
         let id = self.identity().await?;
         Ok(self
-            .state()
-            .signer()
+            .signer
             .get_public(&id)
             .expect("key should be known at this point"))
     }
@@ -1005,7 +1007,10 @@ where
 
         let mut info = self.synchronize_until(self.next_block_height()).await?;
 
-        if self.state().has_other_owners(&info.manager.ownership) {
+        if self
+            .state()
+            .has_other_owners(&info.manager.ownership, &self.signer)
+        {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -2540,18 +2545,16 @@ where
         // Create the final block proposal.
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
-                LockingBlock::Regular(cert) => {
-                    BlockProposal::new_retry(round, cert, self.state().signer())
-                }
+                LockingBlock::Regular(cert) => BlockProposal::new_retry(round, cert, &self.signer),
                 LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_initial(round, proposal.content.block, self.state().signer())
+                    BlockProposal::new_initial(round, proposal.content.block, &self.signer)
                 }
             })
         } else {
             Box::new(BlockProposal::new_initial(
                 round,
                 proposed_block.clone(),
-                self.state().signer(),
+                &self.signer,
             ))
         };
         if !already_handled_locally {

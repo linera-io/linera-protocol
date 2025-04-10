@@ -30,8 +30,6 @@ pub struct ChainClientState {
     ///
     /// This is always at the same height as `next_block_height`.
     pending_proposal: Option<PendingProposal>,
-    /// Signer object capable of signing messages for multiple identities.
-    signer: Box<dyn Signer>,
 
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.
@@ -40,14 +38,12 @@ pub struct ChainClientState {
 
 impl ChainClientState {
     pub fn new(
-        signer: Box<dyn Signer>,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
     ) -> ChainClientState {
         ChainClientState {
-            signer,
             block_hash,
             timestamp,
             next_block_height,
@@ -89,20 +85,11 @@ impl ChainClientState {
         }
     }
 
-    pub fn signer(&self) -> &dyn Signer {
-        &self.signer
-    }
-
-    #[cfg(test)]
-    pub fn signer_mut(&mut self) -> &mut impl Signer {
-        &mut self.signer
-    }
-
     /// Returns whether the given ownership includes anyone whose secret key we don't have.
-    pub fn has_other_owners(&self, ownership: &ChainOwnership) -> bool {
+    pub fn has_other_owners(&self, ownership: &ChainOwnership, signer: &impl Signer) -> bool {
         ownership
             .all_owners()
-            .any(|owner| !self.signer.contains_key(owner))
+            .any(|owner| !signer.contains_key(owner))
     }
 
     pub(super) fn update_from_info(&mut self, info: &ChainInfo) {

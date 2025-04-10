@@ -270,8 +270,8 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let new_public_key = sender.state_mut().signer_mut().generate_new();
+    let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let new_public_key = sender.signer.generate_new();
     let new_owner = AccountOwner::from(new_public_key);
     let certificate = sender
         .rotate_key_pair(new_public_key)
