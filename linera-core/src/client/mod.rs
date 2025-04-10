@@ -3054,20 +3054,32 @@ where
         let mut epoch_change_ops = self.collect_epoch_changes().await?.into_iter();
 
         let mut certificates = Vec::new();
+        let mut failed_incoming_bundles = None;
         loop {
             let incoming_bundles = self.pending_message_bundles().await?;
+            if failed_incoming_bundles.as_ref() == Some(&incoming_bundles) {
+                return Err(ChainClientError::BlockProposalError(
+                    "Failed to process inbox",
+                ));
+            }
             let block_operations = epoch_change_ops.next().into_iter().collect::<Vec<_>>();
             if incoming_bundles.is_empty() && block_operations.is_empty() {
                 return Ok((certificates, None));
             }
             match self
-                .execute_block(block_operations, incoming_bundles, vec![])
+                .execute_block(block_operations, incoming_bundles.clone(), vec![])
                 .await
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
+                }
+                Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                    WorkerError::ChainError(chain_error),
+                ))) if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. }) => {
+                    debug!("Failed to receive incoming message bundles: {chain_error}");
+                    failed_incoming_bundles = Some(incoming_bundles);
                 }
                 Err(error) => return Err(error),
             };
