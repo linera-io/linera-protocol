@@ -64,7 +64,9 @@ impl Signer for Box<dyn Signer> {
 
 /// In-memory implementatio of the [`Signer`] trait.
 mod in_mem {
-    use std::collections::BTreeMap;
+    #[cfg(with_getrandom)]
+    use std::sync::Mutex;
+    use std::{collections::BTreeMap, sync::Arc};
 
     use serde::{Deserialize, Serialize};
 
@@ -109,9 +111,9 @@ mod in_mem {
 
     /// In-memory signer.
     pub struct InMemSigner {
-        keys: BTreeMap<AccountOwner, AccountSecretKey>,
+        keys: Arc<BTreeMap<AccountOwner, AccountSecretKey>>,
         #[cfg(with_getrandom)]
-        rng_state: RngState,
+        rng_state: Arc<Mutex<RngState>>,
     }
 
     impl InMemSigner {
@@ -121,8 +123,8 @@ mod in_mem {
         pub fn new(prng_seed: Option<u64>) -> Self {
             let rng_state = RngState::new(prng_seed, 0);
             InMemSigner {
-                keys: BTreeMap::new(),
-                rng_state,
+                keys: Arc::new(BTreeMap::new()),
+                rng_state: Arc::new(Mutex::new(rng_state)),
             }
         }
 
@@ -130,7 +132,7 @@ mod in_mem {
         #[cfg(not(with_getrandom))]
         pub fn new() -> Self {
             InMemSigner {
-                keys: BTreeMap::new(),
+                keys: Arc::new(BTreeMap::new()),
             }
         }
 
@@ -151,14 +153,15 @@ mod in_mem {
         /// Generates a new key pair from Signer's RNG. Use with care.
         #[cfg(with_getrandom)]
         fn generate_new(&mut self) -> AccountPublicKey {
-            let secret = AccountSecretKey::generate_from(&mut self.rng_state.prng);
-            self.rng_state
+            let mut rng_state = self.rng_state.lock().unwrap();
+            let secret = AccountSecretKey::generate_from(&mut rng_state.prng);
+            rng_state
                 .keys_generated
                 .checked_add(1)
                 .expect("too many keys generated");
             let public = secret.public();
             let owner = AccountOwner::from(public);
-            self.keys.insert(owner, secret);
+            Arc::get_mut(&mut self.keys).unwrap().insert(owner, secret);
             public
         }
 
@@ -191,9 +194,9 @@ mod in_mem {
             T: IntoIterator<Item = (AccountOwner, AccountSecretKey)>,
         {
             InMemSigner {
-                keys: BTreeMap::from_iter(input),
+                keys: Arc::new(BTreeMap::from_iter(input)),
                 #[cfg(with_getrandom)]
-                rng_state: RngState::new(None, 0),
+                rng_state: Arc::new(Mutex::new(RngState::new(None, 0))),
             }
         }
     }
@@ -210,12 +213,8 @@ mod in_mem {
 
     impl Clone for InMemSigner {
         fn clone(&self) -> Self {
-            let mut keys = BTreeMap::new();
-            for (owner, secret) in self.keys.iter() {
-                keys.insert(*owner, secret.copy());
-            }
             InMemSigner {
-                keys,
+                keys: self.keys.clone(),
                 #[cfg(with_getrandom)]
                 rng_state: self.rng_state.clone(),
             }
@@ -236,12 +235,15 @@ mod in_mem {
                 keys_generated: u64,
             }
 
+            #[cfg(with_getrandom)]
+            let rng_state = self.rng_state.lock().unwrap();
+
             let inner = Inner {
                 keys: &self.keys(),
                 #[cfg(with_getrandom)]
-                prng_seed: self.rng_state.initial_prng_seed,
+                prng_seed: rng_state.initial_prng_seed,
                 #[cfg(with_getrandom)]
-                keys_generated: self.rng_state.keys_generated,
+                keys_generated: rng_state.keys_generated,
             };
 
             Inner::serialize(&inner, serializer)
@@ -275,9 +277,12 @@ mod in_mem {
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
 
             let signer = InMemSigner {
-                keys,
+                keys: Arc::new(keys),
                 #[cfg(with_getrandom)]
-                rng_state: RngState::new(inner.prng_seed, inner.keys_generated),
+                rng_state: Arc::new(Mutex::new(RngState::new(
+                    inner.prng_seed,
+                    inner.keys_generated,
+                ))),
             };
             Ok(signer)
         }
