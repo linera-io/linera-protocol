@@ -2474,7 +2474,7 @@ where
         {
             return self.finalize_locking_block(info).await;
         }
-        let identity = self.identity().await?;
+        let owner = self.identity().await?;
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
@@ -2513,8 +2513,7 @@ where
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match Self::round_for_new_proposal(&info, &identity, &proposed_block, true)?
-            {
+            let round = match Self::round_for_new_proposal(&info, &owner, &proposed_block, true)? {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
@@ -2530,7 +2529,7 @@ where
         let (proposed_block, outcome) = block.into_proposal();
         let round = match Self::round_for_new_proposal(
             &info,
-            &identity,
+            &owner,
             &proposed_block,
             has_oracle_responses,
         )? {
@@ -2541,17 +2540,19 @@ where
         let already_handled_locally = info
             .manager
             .already_handled_proposal(round, &proposed_block);
-        // let signer = self.signer();
         // Create the final block proposal.
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
-                LockingBlock::Regular(cert) => BlockProposal::new_retry(round, cert, &self.signer),
+                LockingBlock::Regular(cert) => {
+                    BlockProposal::new_retry(owner, round, cert, &self.signer)
+                }
                 LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_initial(round, proposal.content.block, &self.signer)
+                    BlockProposal::new_initial(owner, round, proposal.content.block, &self.signer)
                 }
             })
         } else {
             Box::new(BlockProposal::new_initial(
+                owner,
                 round,
                 proposed_block.clone(),
                 &self.signer,

@@ -79,13 +79,18 @@ pub trait BlockTestExt: Sized {
 
     /// Returns a block proposal in the first round in a default ownership configuration
     /// (`Round::MultiLeader(0)`) without any hashed certificate values or validated block.
-    fn into_first_proposal(self, signer: &(impl Signer + ?Sized)) -> BlockProposal {
-        self.into_proposal_with_round(signer, Round::MultiLeader(0))
+    fn into_first_proposal(
+        self,
+        owner: AccountOwner,
+        signer: &(impl Signer + ?Sized),
+    ) -> BlockProposal {
+        self.into_proposal_with_round(owner, signer, Round::MultiLeader(0))
     }
 
     /// Returns a block proposal without any hashed certificate values or validated block.
     fn into_proposal_with_round(
         self,
+        owner: AccountOwner,
         signer: &(impl Signer + ?Sized),
         round: Round,
     ) -> BlockProposal;
@@ -131,10 +136,11 @@ impl BlockTestExt for ProposedBlock {
 
     fn into_proposal_with_round(
         self,
+        owner: AccountOwner,
         signer: &(impl Signer + ?Sized),
         round: Round,
     ) -> BlockProposal {
-        BlockProposal::new_initial(round, self, signer)
+        BlockProposal::new_initial(owner, round, self, signer)
     }
 }
 

@@ -613,13 +613,11 @@ pub struct ProposalContent {
 
 impl BlockProposal {
     pub fn new_initial(
+        owner: AccountOwner,
         round: Round,
         block: ProposedBlock,
         signer: &(impl Signer + ?Sized),
     ) -> Self {
-        let owner = block
-            .authenticated_signer
-            .expect("Block author is required for new block proposals");
         let content = ProposalContent {
             round,
             block,
@@ -635,6 +633,7 @@ impl BlockProposal {
     }
 
     pub fn new_retry(
+        owner: AccountOwner,
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
         signer: &(impl Signer + ?Sized),
@@ -642,9 +641,6 @@ impl BlockProposal {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
         let (block, outcome) = block.into_proposal();
-        let owner = block
-            .authenticated_signer
-            .expect("Block author is required for new block proposals");
         let content = ProposalContent {
             block,
             round,

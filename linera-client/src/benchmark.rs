@@ -540,6 +540,7 @@ where
 
             let value = ConfirmedBlock::new(block);
             let proposal = BlockProposal::new_initial(
+                signer,
                 linera_base::data_types::Round::Fast,
                 proposed_block,
                 &keys,
