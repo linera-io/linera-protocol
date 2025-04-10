@@ -205,11 +205,8 @@ impl BundleInInbox {
     }
 }
 
-// The number of timestamp in a bucket
-// The `TimestampedBundleInInbox` type contains 4 cryptohashes, 1 blockheight
-// an index, two enums and the ChannelName. Only the ChannelName has an unbounded
-// size but we can expect the size to be reasonably small, so a total size of 100
-// seems reasonable for the storing of the data.
+// The `TimestampedBundleInInbox` is a relatively small type, so a total
+// of 100 seems reasonable for the storing of the data.
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 
 /// A view accessing the state of a chain.

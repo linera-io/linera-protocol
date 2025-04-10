@@ -38,7 +38,7 @@ static OUTBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
 // The `BlockHeight` has just 8 bytes so the size is constant.
 // This means that by choosing a size of 1000, we have a
 // reasonable size that will not create any memory issues.
-const BLOCKHEIGHT_BUCKET_SIZE: usize = 1000;
+const BLOCK_HEIGHT_BUCKET_SIZE: usize = 1000;
 
 /// The state of an outbox
 /// * An outbox is used to send messages to another chain.
@@ -56,7 +56,7 @@ where
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,
     /// Keep sending these certified blocks of ours until they are acknowledged by
     /// receivers.
-    pub queue: BucketQueueView<C, BlockHeight, BLOCKHEIGHT_BUCKET_SIZE>,
+    pub queue: BucketQueueView<C, BlockHeight, BLOCK_HEIGHT_BUCKET_SIZE>,
 }
 
 impl<C> OutboxStateView<C>
