@@ -109,6 +109,7 @@ impl<C: ClientContext> ListeningClient<C> {
         Self {
             client,
             _abort_handle,
+            #[allow(clippy::arc_with_non_send_sync)] // Only `Send` with `futures-util/alloc`.
             notification_stream: Arc::new(Mutex::new(notification_stream)),
             timeout: Timestamp::from(u64::MAX),
         }
