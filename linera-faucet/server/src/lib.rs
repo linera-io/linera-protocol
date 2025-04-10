@@ -286,7 +286,7 @@ where
 
         let context = Arc::clone(&self.context);
         let listener = ChainListener::new(self.config.clone(), context, self.storage.clone());
-        listener.run().await;
+        listener.run().await?;
 
         axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?,

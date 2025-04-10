@@ -143,7 +143,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         .await?;
     let context = Arc::new(Mutex::new(context));
     let listener = ChainListener::new(config, context, storage);
-    listener.run().await;
+    listener.run().await?;
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.
