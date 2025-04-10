@@ -10,6 +10,8 @@ use std::{
     str::FromStr,
 };
 
+#[cfg(with_revm)]
+use alloy_primitives::{Address, B256};
 use anyhow::{anyhow, Context};
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
@@ -949,6 +951,21 @@ impl<A> ApplicationId<A> {
             application_description_hash: self.application_description_hash,
             _phantom: PhantomData,
         }
+    }
+}
+
+#[cfg(with_revm)]
+impl<A> ApplicationId<A> {
+    /// Converts the `ApplicationId` into an Ethereum Address.
+    pub fn evm_address(&self) -> Address {
+        let bytes = self.application_description_hash.as_bytes();
+        let bytes = bytes.0.as_ref();
+        Address::from_slice(&bytes[0..20])
+    }
+
+    /// Converts the `ApplicationId` into an Ethereum-compatible 32-byte array.
+    pub fn bytes32(&self) -> B256 {
+        *self.application_description_hash.as_bytes()
     }
 }
 
