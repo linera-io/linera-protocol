@@ -918,6 +918,11 @@ pub enum NetCommand {
         #[arg(long, default_value = "linera:latest")]
         docker_image_name: String,
 
+        /// The build mode to use.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "release")]
+        build_mode: String,
+
         /// Run with a specific path where the wallet and validator input files are.
         /// If none, then a temporary directory is created.
         #[arg(long)]

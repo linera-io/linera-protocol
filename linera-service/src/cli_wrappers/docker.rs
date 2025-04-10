@@ -17,7 +17,12 @@ impl DockerImage {
         &self.name
     }
 
-    pub async fn build(name: &str, binaries: &BuildArg, github_root: &PathBuf) -> Result<Self> {
+    pub async fn build(
+        name: &str,
+        binaries: &BuildArg,
+        github_root: &PathBuf,
+        build_mode: &str,
+    ) -> Result<Self> {
         let build_arg = match binaries {
             BuildArg::Directory(bin_path) => {
                 // Get the binaries from the specified path
@@ -56,6 +61,19 @@ impl DockerImage {
             .arg("build")
             .args(["-f", "docker/Dockerfile"])
             .args(["--build-arg", &build_arg]);
+
+        match build_mode {
+            "release" => {
+                command.args(["--build-arg", "build_flag=--release"]);
+                command.args(["--build-arg", "build_folder=release"]);
+            }
+            "debug" => {
+                command.args(["--build-arg", "build_folder=debug"]);
+            }
+            _ => {
+                return Err(anyhow::anyhow!("Invalid build mode: {}", build_mode));
+            }
+        }
 
         #[cfg(not(with_testing))]
         command

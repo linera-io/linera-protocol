@@ -115,6 +115,7 @@ pub async fn handle_net_up_kubernetes(
     binaries: &Option<Option<PathBuf>>,
     no_build: bool,
     docker_image_name: String,
+    build_mode: String,
     policy_config: ResourceControlPolicyConfig,
     with_faucet: bool,
     faucet_chain: Option<u32>,
@@ -147,6 +148,7 @@ pub async fn handle_net_up_kubernetes(
         binaries: binaries.clone().into(),
         no_build,
         docker_image_name,
+        build_mode,
         policy_config,
     };
     let (mut net, client) = config.instantiate().await?;
