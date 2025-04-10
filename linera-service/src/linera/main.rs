@@ -22,7 +22,7 @@ use colored::Colorize;
 use command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand};
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    crypto::{CryptoHash, Signer},
+    crypto::{CryptoHash, InMemSigner, Signer},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
     ownership::ChainOwnership,
@@ -35,8 +35,7 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client::InMemSigner, data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason,
-    JoinSetExt as _,
+    data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason, JoinSetExt as _,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},

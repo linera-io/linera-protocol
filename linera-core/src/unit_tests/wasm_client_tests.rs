@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    crypto::Signer,
+    crypto::{InMemSigner, Signer},
     data_types::{Amount, Bytecode, Event, OracleResponse},
     identifiers::{ApplicationId, BlobId, BlobType, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -45,7 +45,7 @@ use crate::client::client_tests::ServiceStorageBuilder;
 use crate::{
     client::{
         client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
-        ChainClientError, InMemSigner,
+        ChainClientError,
     },
     local_node::LocalNodeError,
     worker::WorkerError,

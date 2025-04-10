@@ -17,7 +17,9 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, Signer, ValidatorKeypair},
+    crypto::{
+        AccountPublicKey, AccountSecretKey, CryptoHash, InMemSigner, Signer, ValidatorKeypair,
+    },
     data_types::*,
     identifiers::{
         Account, AccountOwner, ChainDescription, ChainId, Destination, EventId, MessageId, StreamId,
@@ -66,7 +68,6 @@ use crate::test_utils::RocksDbStorageBuilder;
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
     chain_worker::CrossChainUpdateHelper,
-    client::InMemSigner,
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -619,7 +620,7 @@ where
     )
     .await;
     let unknown_key = AccountSecretKey::generate();
-    let new_signer: Box<dyn Signer> = Box::new(InMemSigner::from(vec![(
+    let new_signer: Box<dyn Signer> = Box::new(InMemSigner::from_iter(vec![(
         unknown_key.public().into(),
         unknown_key,
     )]));

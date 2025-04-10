@@ -9,7 +9,7 @@ mod wasm;
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
-    crypto::{AccountSecretKey, Signer},
+    crypto::{AccountSecretKey, InMemSigner, Signer},
     data_types::*,
     identifiers::{Account, AccountOwner, ChainId, MessageId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -45,8 +45,8 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
-        BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, InMemSigner,
-        MessageAction, MessagePolicy,
+        BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, MessageAction,
+        MessagePolicy,
     },
     local_node::LocalNodeError,
     node::{

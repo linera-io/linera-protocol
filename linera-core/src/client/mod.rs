@@ -87,8 +87,6 @@ mod chain_client_state;
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
-mod signer;
-pub use signer::InMemSigner;
 
 #[cfg(with_metrics)]
 mod metrics {

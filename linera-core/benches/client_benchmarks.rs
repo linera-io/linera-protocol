@@ -3,14 +3,13 @@
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
 use linera_base::{
-    crypto::Signer,
+    crypto::{InMemSigner, Signer},
     data_types::Amount,
     identifiers::{Account, AccountOwner},
     time::Duration,
 };
 use linera_core::{
     client,
-    client::InMemSigner,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
 };
 use linera_execution::system::Recipient;

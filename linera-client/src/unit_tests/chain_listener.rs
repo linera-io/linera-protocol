@@ -8,13 +8,13 @@ use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
-    crypto::{AccountPublicKey, Signer},
+    crypto::{AccountPublicKey, InMemSigner, Signer},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::{AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client, InMemSigner},
+    client::{ChainClient, Client},
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
     DEFAULT_GRACE_PERIOD,

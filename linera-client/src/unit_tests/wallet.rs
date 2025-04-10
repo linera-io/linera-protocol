@@ -3,13 +3,13 @@
 
 use anyhow::anyhow;
 use linera_base::{
-    crypto::Signer,
+    crypto::{InMemSigner, Signer},
     data_types::{Amount, Blob, BlockHeight},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::data_types::ProposedBlock;
 use linera_core::{
-    client::{InMemSigner, PendingProposal},
+    client::PendingProposal,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
 use linera_execution::committee::Epoch;

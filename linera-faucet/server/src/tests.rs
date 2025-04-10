@@ -8,13 +8,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{AccountPublicKey, Signer},
+    crypto::{AccountPublicKey, InMemSigner, Signer},
     data_types::{Amount, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
 use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
-    client::{ChainClient, InMemSigner},
+    client::ChainClient,
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
 use linera_storage::{DbStorage, TestClock};

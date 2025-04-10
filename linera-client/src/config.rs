@@ -8,11 +8,13 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
+    crypto::{
+        AccountPublicKey, BcsSignable, CryptoHash, InMemSigner, ValidatorPublicKey,
+        ValidatorSecretKey,
+    },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
-use linera_core::client::InMemSigner;
 use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
