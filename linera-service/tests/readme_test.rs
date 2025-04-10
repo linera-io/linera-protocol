@@ -25,8 +25,7 @@ use tokio::process::Command;
 #[test_case::test_case("../examples/crowd-funding" ; "crowd funding")]
 #[test_case::test_case("../examples/fungible" ; "fungible")]
 #[test_case::test_case("../examples/gen-nft" ; "gen-nft")]
-// TODO(#3743): Fix this test and re-enable it.
-// #[test_case::test_case("../examples/how-to/perform-http-requests" ; "how-to-perform-http-requests")]
+#[test_case::test_case("../examples/how-to/perform-http-requests" ; "how-to-perform-http-requests")]
 #[test_case::test_case("../examples/hex-game" ; "hex-game")]
 #[test_case::test_case("../examples/llm" ; "llm")]
 #[test_case::test_case("../examples/native-fungible" ; "native-fungible")]
