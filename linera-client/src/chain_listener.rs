@@ -137,26 +137,39 @@ impl<C: ClientContext> ChainListener<C> {
         for chain_id in chain_ids {
             self.listen(chain_id).await?;
         }
+        let _handler = linera_base::task::spawn(self.run_notification_loop().in_current_span());
+        Ok(())
+    }
+
+    /// Processes notifications and timeouts in a loop.
+    #[instrument(skip(self))]
+    async fn run_notification_loop(mut self) -> Result<(), Error> {
         loop {
             match self.next_action().await? {
                 Action::ProcessInbox(chain_id) => self.maybe_process_inbox(chain_id).await?,
                 Action::Notification(notification) => {
-                    Self::sleep(self.config.delay_before_ms).await;
-                    match &notification.reason {
-                        Reason::NewIncomingBundle { .. } => {
-                            self.maybe_process_inbox(notification.chain_id).await?;
-                        }
-                        Reason::NewRound { .. } => self.update_validators(&notification).await?,
-                        Reason::NewBlock { hash, .. } => {
-                            self.update_validators(&notification).await?;
-                            self.update_wallet(notification.chain_id).await?;
-                            self.add_new_chains(*hash).await?;
-                        }
-                    }
-                    Self::sleep(self.config.delay_after_ms).await;
+                    self.process_notification(notification).await?
                 }
             }
         }
+    }
+
+    /// Processes a notification, updating local chains and validators as needed.
+    async fn process_notification(&mut self, notification: Notification) -> Result<(), Error> {
+        Self::sleep(self.config.delay_before_ms).await;
+        match &notification.reason {
+            Reason::NewIncomingBundle { .. } => {
+                self.maybe_process_inbox(notification.chain_id).await?;
+            }
+            Reason::NewRound { .. } => self.update_validators(&notification).await?,
+            Reason::NewBlock { hash, .. } => {
+                self.update_validators(&notification).await?;
+                self.update_wallet(notification.chain_id).await?;
+                self.add_new_chains(*hash).await?;
+            }
+        }
+        Self::sleep(self.config.delay_after_ms).await;
+        Ok(())
     }
 
     /// If any new chains were created by the given block, and we have a key pair for them,
