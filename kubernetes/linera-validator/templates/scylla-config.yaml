@@ -6,3 +6,9 @@ metadata:
 data:
   scylla.yaml: |
     query_tombstone_page_limit: 200000
+
+    # Add storage locations pointing to local SSD
+    data_file_directories:
+      - /mnt/stateful_partition/kube-ephemeral-ssd/scylla/data
+    commitlog_directory: /mnt/stateful_partition/kube-ephemeral-ssd/scylla/commitlog
+    saved_caches_directory: /mnt/stateful_partition/kube-ephemeral-ssd/scylla/saved_caches

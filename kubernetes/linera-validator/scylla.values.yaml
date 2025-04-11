@@ -15,3 +15,24 @@ racks:
       requests:
         cpu: 1
         memory: 2Gi
+    initContainers:
+      - name: prepare-ssd
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            mkdir -p /mnt/stateful_partition/kube-ephemeral-ssd/scylla/data
+            mkdir -p /mnt/stateful_partition/kube-ephemeral-ssd/scylla/commitlog
+            mkdir -p /mnt/stateful_partition/kube-ephemeral-ssd/scylla/saved_caches
+            chown -R 999:999 /mnt/stateful_partition/kube-ephemeral-ssd/scylla
+        volumeMounts:
+          - name: local-ssd
+            mountPath: /mnt/stateful_partition/kube-ephemeral-ssd
+    volumeMounts:
+      - name: local-ssd
+        mountPath: /mnt/stateful_partition/kube-ephemeral-ssd/scylla
+    volumes:
+      - name: local-ssd
+        hostPath:
+          path: /mnt/stateful_partition/kube-ephemeral-ssd/scylla
+          type: DirectoryOrCreate
