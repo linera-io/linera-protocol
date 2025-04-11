@@ -23,15 +23,6 @@ pub trait Signer {
 
     /// Returnes whether the given `owner` is a known signer.
     fn contains_key(&self, owner: &AccountOwner) -> bool;
-
-    /// Returns a clone of the `Signer` as a boxed trait object.
-    fn clone_box(&self) -> Box<dyn Signer>;
-}
-
-impl Clone for Box<dyn Signer> {
-    fn clone(&self) -> Box<dyn Signer> {
-        self.clone_box()
-    }
 }
 
 impl Signer for Box<dyn Signer> {
@@ -45,10 +36,6 @@ impl Signer for Box<dyn Signer> {
 
     fn contains_key(&self, owner: &AccountOwner) -> bool {
         (**self).contains_key(owner)
-    }
-
-    fn clone_box(&self) -> Box<dyn Signer> {
-        (**self).clone_box()
     }
 }
 
@@ -187,10 +174,6 @@ mod in_mem {
         fn contains_key(&self, owner: &AccountOwner) -> bool {
             let inner = self.0.read().unwrap();
             inner.keys.contains_key(owner)
-        }
-
-        fn clone_box(&self) -> Box<dyn Signer> {
-            Box::new(self.clone())
         }
     }
 
