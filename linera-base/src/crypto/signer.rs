@@ -64,9 +64,10 @@ impl Signer for Box<dyn Signer> {
 
 /// In-memory implementatio of the [`Signer`] trait.
 mod in_mem {
-    #[cfg(with_getrandom)]
-    use std::sync::Mutex;
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::{
+        collections::BTreeMap,
+        sync::{Arc, RwLock},
+    };
 
     use serde::{Deserialize, Serialize};
 
@@ -76,6 +77,32 @@ mod in_mem {
         crypto::{AccountPublicKey, AccountSecretKey, AccountSignature, CryptoHash, Signer},
         identifiers::AccountOwner,
     };
+
+    /// In-memory signer.
+    #[derive(Clone)]
+    pub struct InMemSigner(Arc<RwLock<InMemSignerInner>>);
+
+    impl InMemSigner {
+        /// Creates a new `InMemSigner` seeded with `prng_seed`.
+        /// If `prng_seed` is `None`, an `OsRng` will be used.
+        #[cfg(with_getrandom)]
+        pub fn new(prng_seed: Option<u64>) -> Self {
+            InMemSigner(Arc::new(RwLock::new(InMemSignerInner::new(prng_seed))))
+        }
+
+        /// Creates a new `InMemSigner`.
+        #[cfg(not(with_getrandom))]
+        pub fn new() -> Self {
+            InMemSigner(Arc::new(RwLock::new(InMemSignerInner::new())))
+        }
+    }
+
+    /// In-memory signer.
+    struct InMemSignerInner {
+        keys: BTreeMap<AccountOwner, AccountSecretKey>,
+        #[cfg(with_getrandom)]
+        rng_state: RngState,
+    }
 
     #[cfg(with_getrandom)]
     struct RngState {
@@ -102,37 +129,22 @@ mod in_mem {
         }
     }
 
-    #[cfg(with_getrandom)]
-    impl Clone for RngState {
-        fn clone(&self) -> Self {
-            RngState::new(self.initial_prng_seed, self.keys_generated)
-        }
-    }
-
-    /// In-memory signer.
-    pub struct InMemSigner {
-        keys: Arc<BTreeMap<AccountOwner, AccountSecretKey>>,
-        #[cfg(with_getrandom)]
-        rng_state: Arc<Mutex<RngState>>,
-    }
-
-    impl InMemSigner {
-        /// Creates a new `InMemSigner` seeded with `prng_seed`.
+    impl InMemSignerInner {
+        /// Creates a new `InMemSignerInner` seeded with `prng_seed`.
         /// If `prng_seed` is `None`, an `OsRng` will be used.
         #[cfg(with_getrandom)]
         pub fn new(prng_seed: Option<u64>) -> Self {
-            let rng_state = RngState::new(prng_seed, 0);
-            InMemSigner {
-                keys: Arc::new(BTreeMap::new()),
-                rng_state: Arc::new(Mutex::new(rng_state)),
+            InMemSignerInner {
+                keys: BTreeMap::new(),
+                rng_state: RngState::new(prng_seed, 0),
             }
         }
 
-        /// Creates a new `InMemSigner`.
+        /// Creates a new `InMemSignerInner`.
         #[cfg(not(with_getrandom))]
         pub fn new() -> Self {
-            InMemSigner {
-                keys: Arc::new(BTreeMap::new()),
+            InMemSignerInner {
+                keys: BTreeMap::new(),
             }
         }
 
@@ -153,34 +165,38 @@ mod in_mem {
         /// Generates a new key pair from Signer's RNG. Use with care.
         #[cfg(with_getrandom)]
         fn generate_new(&mut self) -> AccountPublicKey {
-            let mut rng_state = self.rng_state.lock().unwrap();
-            let secret = AccountSecretKey::generate_from(&mut rng_state.prng);
-            rng_state
+            let mut inner = self.0.write().unwrap();
+            let secret = AccountSecretKey::generate_from(&mut inner.rng_state.prng);
+            inner
+                .rng_state
                 .keys_generated
                 .checked_add(1)
                 .expect("too many keys generated");
             let public = secret.public();
             let owner = AccountOwner::from(public);
-            Arc::get_mut(&mut self.keys).unwrap().insert(owner, secret);
+            inner.keys.insert(owner, secret);
             public
         }
 
         /// Creates a signature for the given `value` using the provided `owner`.
         fn sign(&self, owner: &AccountOwner, value: &CryptoHash) -> Option<AccountSignature> {
-            let secret = self.keys.get(owner)?;
+            let inner = self.0.read().unwrap();
+            let secret = inner.keys.get(owner)?;
             let signature = secret.sign_prehash(*value);
             Some(signature)
         }
 
         /// Returns the public key corresponding to the given `owner`.
         fn get_public(&self, owner: &AccountOwner) -> Option<AccountPublicKey> {
-            let secret = self.keys.get(owner)?;
+            let inner = self.0.read().unwrap();
+            let secret = inner.keys.get(owner)?;
             Some(secret.public())
         }
 
         /// Returnes whether the given `owner` is a known signer.
         fn contains_key(&self, owner: &AccountOwner) -> bool {
-            self.keys.contains_key(owner)
+            let inner = self.0.read().unwrap();
+            inner.keys.contains_key(owner)
         }
 
         fn clone_box(&self) -> Box<dyn Signer> {
@@ -193,35 +209,45 @@ mod in_mem {
         where
             T: IntoIterator<Item = (AccountOwner, AccountSecretKey)>,
         {
-            InMemSigner {
-                keys: Arc::new(BTreeMap::from_iter(input)),
+            InMemSigner(Arc::new(RwLock::new(InMemSignerInner {
+                keys: BTreeMap::from_iter(input),
                 #[cfg(with_getrandom)]
-                rng_state: Arc::new(Mutex::new(RngState::new(None, 0))),
-            }
+                rng_state: RngState::new(None, 0),
+            })))
         }
     }
 
-    impl Default for InMemSigner {
+    impl Default for InMemSignerInner {
         fn default() -> Self {
             #[cfg(with_getrandom)]
-            let signer = InMemSigner::new(None);
+            let signer = InMemSignerInner::new(None);
             #[cfg(not(with_getrandom))]
-            let signer = InMemSigner::new();
+            let signer = InMemSignerInner::new();
             signer
         }
     }
 
-    impl Clone for InMemSigner {
-        fn clone(&self) -> Self {
-            InMemSigner {
-                keys: self.keys.clone(),
-                #[cfg(with_getrandom)]
-                rng_state: self.rng_state.clone(),
-            }
+    impl Serialize for InMemSigner {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let inner = self.0.read().unwrap();
+            InMemSignerInner::serialize(&*inner, serializer)
         }
     }
 
-    impl Serialize for InMemSigner {
+    impl<'de> Deserialize<'de> for InMemSigner {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let inner = InMemSignerInner::deserialize(deserializer)?;
+            Ok(InMemSigner(Arc::new(RwLock::new(inner))))
+        }
+    }
+
+    impl Serialize for InMemSignerInner {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
@@ -235,22 +261,19 @@ mod in_mem {
                 keys_generated: u64,
             }
 
-            #[cfg(with_getrandom)]
-            let rng_state = self.rng_state.lock().unwrap();
-
             let inner = Inner {
                 keys: &self.keys(),
                 #[cfg(with_getrandom)]
-                prng_seed: rng_state.initial_prng_seed,
+                prng_seed: self.rng_state.initial_prng_seed,
                 #[cfg(with_getrandom)]
-                keys_generated: rng_state.keys_generated,
+                keys_generated: self.rng_state.keys_generated,
             };
 
             Inner::serialize(&inner, serializer)
         }
     }
 
-    impl<'de> Deserialize<'de> for InMemSigner {
+    impl<'de> Deserialize<'de> for InMemSignerInner {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: serde::Deserializer<'de>,
@@ -276,13 +299,10 @@ mod in_mem {
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-            let signer = InMemSigner {
-                keys: Arc::new(keys),
+            let signer = InMemSignerInner {
+                keys,
                 #[cfg(with_getrandom)]
-                rng_state: Arc::new(Mutex::new(RngState::new(
-                    inner.prng_seed,
-                    inner.keys_generated,
-                ))),
+                rng_state: RngState::new(inner.prng_seed, inner.keys_generated),
             };
             Ok(signer)
         }
