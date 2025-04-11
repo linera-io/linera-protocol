@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bridge","bridge_producer_consumer","bridge_unindexed"],"trait":["Consumer","Folder","Producer","ProducerCallback","Reducer","UnindexedConsumer","UnindexedProducer"]};

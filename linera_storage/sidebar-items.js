@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_NAMESPACE"],"struct":["ChainRuntimeContext","ChainStatesFirstAssignment","DbStorage","TestClock","WallClock"],"trait":["Clock","Storage"]};

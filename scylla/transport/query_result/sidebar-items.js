@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FirstRowError","IntoRowsResultError","MaybeFirstRowError","RowsError","SingleRowError"],"struct":["ColumnSpecView","ColumnSpecs","QueryResult","QueryRowsResult","ResultNotRowsError","TableSpecView"]};

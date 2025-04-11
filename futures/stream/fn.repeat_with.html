@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a new stream that repeats elements of type `A` endlessly by applying the provided closure, the repeater, `F: FnMut() -&#62; A`."><title>repeat_with in futures::stream - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="futures" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../futures/index.html">futures</a><span class="version">0.3.31</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">repeat_<wbr>with</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In futures::<wbr>stream</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../index.html">futures</a>::<wbr><a href="index.html">stream</a></span><h1>Function <span class="fn">repeat_with</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/futures_util/stream/repeat_with.rs.html#91">Source</a> </span></div><pre class="rust item-decl"><code>pub fn repeat_with&lt;A, F&gt;(repeater: F) -&gt; <a class="struct" href="struct.RepeatWith.html" title="struct futures::stream::RepeatWith">RepeatWith</a>&lt;F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.85.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>() -&gt; A,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a new stream that repeats elements of type <code>A</code> endlessly by
+applying the provided closure, the repeater, <code>F: FnMut() -&gt; A</code>.</p>
+<p>The <code>repeat_with()</code> function calls the repeater over and over again.</p>
+<p>Infinite stream like <code>repeat_with()</code> are often used with adapters like
+[<code>stream.take()</code>], in order to make them finite.</p>
+<p>If the element type of the stream you need implements <a href="https://doc.rust-lang.org/1.85.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>, and
+it is OK to keep the source element in memory, you should instead use
+the [<code>stream.repeat()</code>] function.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt};
+
+<span class="comment">// let's assume we have some value of a type that is not `Clone`
+// or which don't want to have in memory just yet because it is expensive:
+</span><span class="attr">#[derive(PartialEq, Debug)]
+</span><span class="kw">struct </span>Expensive;
+
+<span class="comment">// a particular value forever:
+</span><span class="kw">let </span><span class="kw-2">mut </span>things = stream::repeat_with(|| Expensive);
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Expensive), things.next().<span class="kw">await</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Expensive), things.next().<span class="kw">await</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Expensive), things.next().<span class="kw">await</span>);</code></pre></div>
+<p>Using mutation and going finite:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt};
+
+<span class="comment">// From the zeroth to the third power of two:
+</span><span class="kw">let </span><span class="kw-2">mut </span>curr = <span class="number">1</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>pow2 = stream::repeat_with(|| { <span class="kw">let </span>tmp = curr; curr <span class="kw-2">*</span>= <span class="number">2</span>; tmp })
+                    .take(<span class="number">4</span>);
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">1</span>), pow2.next().<span class="kw">await</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">2</span>), pow2.next().<span class="kw">await</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">4</span>), pow2.next().<span class="kw">await</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">8</span>), pow2.next().<span class="kw">await</span>);
+
+<span class="comment">// ... and now we're done
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, pow2.next().<span class="kw">await</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

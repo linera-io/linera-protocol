@@ -1,0 +1,1 @@
+searchState.loadedDescShard("fast_chemail", 0, "Package fast_chemail validates the email as it is defined …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\n<code>is_valid_email</code> checks wheter an email address is valid.\n<code>parse_email</code> scans an email address to check wheter it is …")
