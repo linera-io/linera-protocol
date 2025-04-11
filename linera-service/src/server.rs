@@ -249,6 +249,10 @@ struct ServerOptions {
     /// The number of Tokio worker threads to use.
     #[arg(long, env = "LINERA_SERVER_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
+
+    /// The number of Tokio blocking threads to use.
+    #[arg(long, env = "LINERA_SERVER_TOKIO_BLOCKING_THREADS")]
+    tokio_blocking_threads: Option<usize>,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -475,6 +479,10 @@ fn main() {
 
         builder
     };
+
+    if let Some(blocking_threads) = options.tokio_blocking_threads {
+        runtime.max_blocking_threads(blocking_threads);
+    }
 
     runtime
         .enable_all()
