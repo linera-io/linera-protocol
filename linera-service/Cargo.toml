@@ -55,6 +55,7 @@ async-lock.workspace = true
 async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
+bincode.workspace = true
 cargo_toml.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
@@ -168,6 +169,10 @@ path = "src/schema_export.rs"
 name = "linera-benchmark"
 path = "src/benchmark.rs"
 required-features = ["benchmark"]
+
+[[bin]]
+name = "linera-exporter"
+path = "src/linera-exporter/main.rs"
 
 [[bench]]
 name = "transfers"
