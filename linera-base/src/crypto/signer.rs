@@ -12,11 +12,6 @@ use crate::{
 /// A trait for signing keys.
 #[trait_variant::make(Send + Sync)]
 pub trait Signer {
-    /// Generates a new signing key for the Self type.
-    /// New secret key is inserted into Signer's memory and the `AccountPublicKey` is returned.
-    #[cfg(with_getrandom)]
-    fn generate_new(&mut self) -> AccountPublicKey;
-
     /// Creates a signature for the given `value` using the provided `owner`.
     // DEV: We sign `CryptoHash` type, rather than `&[u8]` to make sure we don't sign
     // things accidentally. See [`CryptoHash::new`] for how the type's name is included
@@ -40,11 +35,6 @@ impl Clone for Box<dyn Signer> {
 }
 
 impl Signer for Box<dyn Signer> {
-    #[cfg(with_getrandom)]
-    fn generate_new(&mut self) -> AccountPublicKey {
-        (**self).generate_new()
-    }
-
     fn sign(&self, owner: &AccountOwner, value: &CryptoHash) -> Option<AccountSignature> {
         (**self).sign(owner, value)
     }
@@ -94,6 +84,22 @@ mod in_mem {
         #[cfg(not(with_getrandom))]
         pub fn new() -> Self {
             InMemSigner(Arc::new(RwLock::new(InMemSignerInner::new())))
+        }
+
+        /// Generates a new key pair from Signer's RNG. Use with care.
+        #[cfg(with_getrandom)]
+        pub fn generate_new(&mut self) -> AccountPublicKey {
+            let mut inner = self.0.write().unwrap();
+            let secret = AccountSecretKey::generate_from(&mut inner.rng_state.prng);
+            inner
+                .rng_state
+                .keys_generated
+                .checked_add(1)
+                .expect("too many keys generated");
+            let public = secret.public();
+            let owner = AccountOwner::from(public);
+            inner.keys.insert(owner, secret);
+            public
         }
     }
 
@@ -162,22 +168,6 @@ mod in_mem {
     }
 
     impl Signer for InMemSigner {
-        /// Generates a new key pair from Signer's RNG. Use with care.
-        #[cfg(with_getrandom)]
-        fn generate_new(&mut self) -> AccountPublicKey {
-            let mut inner = self.0.write().unwrap();
-            let secret = AccountSecretKey::generate_from(&mut inner.rng_state.prng);
-            inner
-                .rng_state
-                .keys_generated
-                .checked_add(1)
-                .expect("too many keys generated");
-            let public = secret.public();
-            let owner = AccountOwner::from(public);
-            inner.keys.insert(owner, secret);
-            public
-        }
-
         /// Creates a signature for the given `value` using the provided `owner`.
         fn sign(&self, owner: &AccountOwner, value: &CryptoHash) -> Option<AccountSignature> {
             let inner = self.0.read().unwrap();

@@ -3,7 +3,7 @@
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
 use linera_base::{
-    crypto::{InMemSigner, Signer},
+    crypto::InMemSigner,
     data_types::Amount,
     identifiers::{Account, AccountOwner},
     time::Duration,
@@ -34,7 +34,7 @@ where
     B: StorageBuilder + Default,
 {
     let storage_builder = B::default();
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     // Criterion doesn't allow setup functions to be async, but it runs them inside an async
     // context. But our setup uses async functions:
     let handle = runtime::Handle::current();

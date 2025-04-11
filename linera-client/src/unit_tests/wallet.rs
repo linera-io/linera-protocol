@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use linera_base::{
-    crypto::{InMemSigner, Signer},
+    crypto::InMemSigner,
     data_types::{Amount, Blob, BlockHeight},
     identifiers::{ChainDescription, ChainId},
 };
@@ -26,7 +26,7 @@ use crate::{
 async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     //TODO: make persistable
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(Some(42)));
+    let mut signer = InMemSigner::new(Some(42));
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let chain_id = ChainId::root(0);
@@ -69,7 +69,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         },
         blobs: vec![Blob::new_data(b"blob".to_vec())],
     });
-    let mut context = ClientContext::new_test_client_context(storage, wallet, signer);
+    let mut context = ClientContext::new_test_client_context(storage, wallet, Box::new(signer));
     context.save_wallet().await?;
     Ok(())
 }

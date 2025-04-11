@@ -9,7 +9,7 @@ mod wasm;
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
-    crypto::{AccountSecretKey, InMemSigner, Signer},
+    crypto::{AccountSecretKey, InMemSigner},
     data_types::*,
     identifiers::{Account, AccountOwner, ChainId, MessageId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -93,7 +93,7 @@ async fn test_initiating_valid_transfer_with_notifications<B>(
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
@@ -146,7 +146,7 @@ async fn test_claim_amount<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
@@ -266,7 +266,7 @@ async fn test_rotate_key_pair<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let new_public_key = signer.generate_new();
     let new_owner = AccountOwner::from(new_public_key);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
@@ -311,7 +311,7 @@ async fn test_transfer_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
@@ -357,7 +357,7 @@ async fn test_share_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let new_owner = signer.generate_new().into();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
@@ -464,7 +464,7 @@ async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let new_public_key = signer.generate_new();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     // New chains use the admin chain to verify their creation certificate.
@@ -516,7 +516,7 @@ async fn test_transfer_then_open_chain<B>(storage_builder: B) -> anyhow::Result<
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     // New chains use the admin chain to verify their creation certificate.
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
@@ -608,7 +608,7 @@ async fn test_open_chain_must_be_first<B>(storage_builder: B) -> anyhow::Result<
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     // New chains use the admin chain to verify their creation certificate.
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
@@ -688,7 +688,7 @@ async fn test_open_chain_then_transfer<B>(storage_builder: B) -> anyhow::Result<
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     // New chains use the admin chain to verify their creation certificate.
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
@@ -750,7 +750,7 @@ async fn test_close_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -850,7 +850,7 @@ async fn test_initiating_valid_transfer_too_many_faults<B>(storage_builder: B) -
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 2, &mut signer).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let result = sender
@@ -886,7 +886,7 @@ async fn test_bidirectional_transfer<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -994,7 +994,7 @@ async fn test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> anyhow::R
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
@@ -1043,7 +1043,7 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -1139,7 +1139,7 @@ where
     // To test that no fees are paid for reading or publishing committee blobs, we set the price
     // higher than the chain balance.
     let initial_balance = Amount::from_tokens(3);
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy {
@@ -1249,7 +1249,7 @@ async fn test_insufficient_balance<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
@@ -1277,7 +1277,7 @@ async fn test_finalize_locked_block_with_blobs<B>(storage_builder: B) -> anyhow:
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
     let client1_a = builder.add_root_chain(1, Amount::ZERO).await?;
     let chain_id1 = client1_a.chain_id();
@@ -1457,7 +1457,7 @@ async fn test_handle_existing_proposal_with_blobs<B>(storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
     let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
@@ -1579,7 +1579,7 @@ async fn test_re_propose_locked_block_with_blobs<B>(storage_builder: B) -> anyho
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -1815,7 +1815,7 @@ async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
@@ -1931,7 +1931,7 @@ where
     B: StorageBuilder,
 {
     // Configure a chain with two regular and no super owners.
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
@@ -2037,7 +2037,7 @@ async fn test_propose_pending_block<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
 
@@ -2077,7 +2077,7 @@ where
     B: StorageBuilder,
 {
     // Configure a chain with two regular and no super owners.
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
@@ -2181,7 +2181,7 @@ async fn test_message_policy<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
@@ -2245,7 +2245,7 @@ where
         maximum_block_proposal_size: (blob_bytes.len() * 100) as u64,
         ..ResourceControlPolicy::default()
     };
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer)
         .await?
         .with_policy(policy.clone());
@@ -2344,7 +2344,7 @@ where
         blob_byte_published: Amount::from_attos(100),
         ..ResourceControlPolicy::default()
     };
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(policy.clone());

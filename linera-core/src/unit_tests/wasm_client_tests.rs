@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    crypto::{InMemSigner, Signer},
+    crypto::InMemSigner,
     data_types::{Amount, Bytecode, Event, OracleResponse},
     identifiers::{ApplicationId, BlobId, BlobType, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -98,7 +98,7 @@ async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
-    let mut keys: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
@@ -263,7 +263,7 @@ async fn run_test_run_application_with_dependency<B>(storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let mut keys: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
@@ -531,7 +531,7 @@ async fn run_test_cross_chain_message<B>(storage_builder: B) -> anyhow::Result<(
 where
     B: StorageBuilder,
 {
-    let mut keys: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
@@ -713,7 +713,7 @@ async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> anyhow::Result
 where
     B: StorageBuilder,
 {
-    let mut keys: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
@@ -879,7 +879,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         blob_byte_published: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
     };
-    let mut keys: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut keys = InMemSigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
         .with_policy(policy.clone());

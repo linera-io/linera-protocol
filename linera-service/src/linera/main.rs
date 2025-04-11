@@ -843,6 +843,10 @@ impl Runnable for Job {
                 health_check_endpoints,
                 wrap_up_max_in_flight,
             } => {
+                let pub_keys = std::iter::repeat_with(|| signer.generate_new())
+                    .take(num_chains)
+                    .collect();
+
                 let mut context = ClientContext::new(
                     storage.clone(),
                     options.inner.clone(),
@@ -868,6 +872,7 @@ impl Runnable for Job {
                         transactions_per_block,
                         tokens_per_chain,
                         fungible_application_id,
+                        pub_keys,
                     )
                     .await?;
 

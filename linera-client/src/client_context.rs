@@ -31,7 +31,7 @@ use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
     crate::benchmark::Benchmark,
-    linera_base::{data_types::Amount, identifiers::ApplicationId},
+    linera_base::{crypto::AccountPublicKey, data_types::Amount, identifiers::ApplicationId},
     linera_execution::{
         committee::{Committee, Epoch},
         system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
@@ -658,6 +658,7 @@ where
         transactions_per_block: usize,
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
+        pub_keys: Vec<AccountPublicKey>,
     ) -> Result<
         (
             HashMap<ChainId, ChainClient<NodeProvider, S>>,
@@ -679,7 +680,7 @@ where
 
         let start = Instant::now();
         let (key_pairs, chain_clients) = self
-            .make_benchmark_chains(num_chains, tokens_per_chain)
+            .make_benchmark_chains(num_chains, tokens_per_chain, pub_keys)
             .await?;
         info!(
             "Got {} chains in {} ms",
@@ -764,6 +765,7 @@ where
         &mut self,
         num_chains: usize,
         balance: Amount,
+        pub_keys: Vec<AccountPublicKey>,
     ) -> Result<
         (
             HashMap<ChainId, AccountOwner>,
@@ -809,11 +811,7 @@ where
             .expect("should have default chain");
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
-        let mut pub_keys = Vec::new();
-        for _ in (0..num_chains_to_create).step_by(operations_per_block) {
-            pub_keys.push(self.signer_mut().generate_new());
-        }
-        let mut pub_keys_iter = pub_keys.into_iter();
+        let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
         let admin_id = self.wallet.genesis_admin_chain();
         let default_chain_client = self.make_chain_client(default_chain_id)?;
 

@@ -16,7 +16,7 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorKeypair, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, InMemSigner, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId},
 };
@@ -662,7 +662,7 @@ pub struct TestBuilder<'a, B: StorageBuilder> {
     validator_clients: Vec<LocalValidatorClient<B::Storage>>,
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
-    pub signer: &'a mut Box<dyn Signer>,
+    pub signer: &'a mut InMemSigner,
 }
 
 #[async_trait]
@@ -728,7 +728,7 @@ where
         mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
-        signer: &'signer mut Box<dyn Signer>,
+        signer: &'signer mut InMemSigner,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -914,7 +914,7 @@ where
         let builder = Arc::new(Client::new(
             provider,
             storage,
-            self.signer.clone(),
+            Box::new(self.signer.clone()),
             10,
             CrossChainMessageDelivery::NonBlocking,
             false,

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{AccountPublicKey, InMemSigner, Signer},
+    crypto::{AccountPublicKey, InMemSigner},
     data_types::{Amount, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
@@ -69,7 +69,7 @@ impl chain_listener::ClientContext for ClientContext {
 #[tokio::test]
 async fn test_faucet_rate_limiting() {
     let storage_builder = MemoryStorageBuilder::default();
-    let mut keys: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut keys = InMemSigner::new(None);
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)

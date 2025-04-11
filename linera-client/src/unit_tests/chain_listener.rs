@@ -8,7 +8,7 @@ use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
-    crypto::{AccountPublicKey, InMemSigner, Signer},
+    crypto::{AccountPublicKey, InMemSigner},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::{AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -100,7 +100,7 @@ impl chain_listener::ClientContext for ClientContext {
 #[test_log::test(tokio::test)]
 async fn test_chain_listener() -> anyhow::Result<()> {
     // Create two chains.
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(Some(42)));
+    let mut signer = InMemSigner::new(Some(42));
     let key_pair = signer.generate_new();
     let owner: AccountOwner = key_pair.into();
     let config = ChainListenerConfig::default();
@@ -121,7 +121,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         client: Arc::new(Client::new(
             builder.make_node_provider(),
             storage.clone(),
-            signer,
+            Box::new(signer),
             10,
             delivery,
             false,

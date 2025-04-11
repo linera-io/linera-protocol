@@ -403,7 +403,7 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
 }
 
 /// Creates `count` key pairs and returns them, sorted by the `AccountOwner` created from their public key.
-fn generate_key_pairs(signer: &mut Box<dyn Signer>, count: usize) -> Vec<AccountPublicKey> {
+fn generate_key_pairs(signer: &mut InMemSigner, count: usize) -> Vec<AccountPublicKey> {
     let mut public_keys = iter::repeat_with(|| signer.generate_new())
         .take(count)
         .collect::<Vec<_>>();
@@ -434,7 +434,7 @@ async fn test_handle_block_proposal_bad_signature<B>(mut storage_builder: B) -> 
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
     let (_, worker) = init_worker_with_chains(
@@ -481,7 +481,7 @@ async fn test_handle_block_proposal_zero_amount<B>(mut storage_builder: B) -> an
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_owner = signer.generate_new().into();
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
@@ -530,7 +530,7 @@ async fn test_handle_block_proposal_ticks<B>(mut storage_builder: B) -> anyhow::
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
     let public_key = signer.generate_new();
@@ -603,7 +603,7 @@ async fn test_handle_block_proposal_unknown_sender<B>(mut storage_builder: B) ->
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_public_key = signer.generate_new();
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
@@ -650,7 +650,7 @@ async fn test_handle_block_proposal_with_chaining<B>(mut storage_builder: B) -> 
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
     let (committee, worker) = init_worker_with_chain(
@@ -762,7 +762,7 @@ async fn test_handle_block_proposal_with_incoming_bundles<B>(
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
     let recipient_public_key = signer.generate_new();
@@ -1125,7 +1125,7 @@ async fn test_handle_block_proposal_exceed_balance<B>(mut storage_builder: B) ->
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_owner = signer.generate_new().into();
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
@@ -1171,7 +1171,7 @@ async fn test_handle_block_proposal<B>(mut storage_builder: B) -> anyhow::Result
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_owner = signer.generate_new().into();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
@@ -1224,7 +1224,7 @@ async fn test_handle_block_proposal_replay<B>(mut storage_builder: B) -> anyhow:
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_owner = signer.generate_new().into();
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
@@ -1267,7 +1267,7 @@ async fn test_handle_certificate_unknown_sender<B>(mut storage_builder: B) -> an
 where
     B: StorageBuilder,
 {
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let sender_pubkey = signer.generate_new();
     let test_pubkey = signer.generate_new();
     let (committee, worker) = init_worker_with_chains(
@@ -3188,7 +3188,7 @@ where
     B: StorageBuilder,
 {
     let storage = storage_builder.build().await?;
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(&mut signer, 2);
@@ -3408,7 +3408,7 @@ where
     B: StorageBuilder,
 {
     let storage = storage_builder.build().await?;
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(&mut signer, 2);
@@ -3502,7 +3502,7 @@ where
 {
     let storage = storage_builder.build().await?;
     let chain_id = ChainId::root(0);
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let description = ChainDescription::Root(0);
@@ -3571,7 +3571,7 @@ where
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let key_pairs = generate_key_pairs(&mut signer, 2);
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
@@ -3693,7 +3693,7 @@ where
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(1);
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let public_key = signer.generate_new();
     let balance = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), public_key.into(), balance)];
@@ -3781,7 +3781,7 @@ where
     let clock = storage_builder.clock();
     let chain_description = ChainDescription::Root(1);
     let chain_id = ChainId::from(chain_description);
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let public_key = signer.generate_new();
     let balance = Amount::ZERO;
 
@@ -3872,7 +3872,7 @@ where
     let clock = storage_builder.clock();
     let chain_description = ChainDescription::Root(1);
     let chain_id = ChainId::from(chain_description);
-    let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let mut signer = InMemSigner::new(None);
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let balance = Amount::ZERO;
