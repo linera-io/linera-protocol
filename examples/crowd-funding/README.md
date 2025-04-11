@@ -66,8 +66,10 @@ Create the user wallets and add chains to them:
 
 ```bash
 export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
+export LINERA_KEYSTORE_1="$LINERA_TMP_DIR/keystore_1.json"
 export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
 export LINERA_WALLET_2="$LINERA_TMP_DIR/wallet_2.json"
+export LINERA_KEYSTORE_2="$LINERA_TMP_DIR/keystore_2.json"
 export LINERA_STORAGE_2="rocksdb:$LINERA_TMP_DIR/client_2.db"
 
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
@@ -81,7 +83,7 @@ OWNER_1="${INFO_1[3]}"
 OWNER_2="${INFO_2[3]}"
 ```
 
-Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1"
+Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1" --keystore "$LINERA_KEYSTORE_1"
 --storage "$LINERA_STORAGE_1"`.
 
 The command below can be used to list the chains created for the test as known by each
