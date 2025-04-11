@@ -64,6 +64,10 @@ pub struct ProxyOptions {
     #[arg(long, env = "LINERA_PROXY_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 
+    /// The number of Tokio blocking threads to use.
+    #[arg(long, env = "LINERA_PROXY_TOKIO_BLOCKING_THREADS")]
+    tokio_blocking_threads: Option<usize>,
+
     /// Storage configuration for the blockchain history, chain states and binary blobs.
     #[arg(long = "storage")]
     storage_config: StorageConfigNamespace,
@@ -385,6 +389,10 @@ fn main() -> Result<()> {
 
         builder
     };
+
+    if let Some(blocking_threads) = options.tokio_blocking_threads {
+        runtime.max_blocking_threads(blocking_threads);
+    }
 
     runtime.enable_all().build()?.block_on(options.run())
 }

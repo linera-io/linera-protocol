@@ -161,6 +161,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
   Default value: `1000`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
+* `--tokio-blocking-threads <TOKIO_BLOCKING_THREADS>` — The number of Tokio blocking threads to use
 
 
 
