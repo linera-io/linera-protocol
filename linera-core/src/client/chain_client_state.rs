@@ -2,16 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeSet, sync::Arc};
 
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash},
+    crypto::{CryptoHash, Signer},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::AccountOwner,
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::ProposedBlock;
@@ -34,8 +30,6 @@ pub struct ChainClientState {
     ///
     /// This is always at the same height as `next_block_height`.
     pending_proposal: Option<PendingProposal>,
-    /// Known key pairs from present and past identities.
-    known_key_pairs: BTreeMap<AccountOwner, AccountSecretKey>,
 
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.
@@ -44,18 +38,12 @@ pub struct ChainClientState {
 
 impl ChainClientState {
     pub fn new(
-        known_key_pairs: Vec<AccountSecretKey>,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
     ) -> ChainClientState {
-        let known_key_pairs = known_key_pairs
-            .into_iter()
-            .map(|kp| (AccountOwner::from(kp.public()), kp))
-            .collect();
         ChainClientState {
-            known_key_pairs,
             block_hash,
             timestamp,
             next_block_height,
@@ -97,21 +85,11 @@ impl ChainClientState {
         }
     }
 
-    pub fn known_key_pairs(&self) -> &BTreeMap<AccountOwner, AccountSecretKey> {
-        &self.known_key_pairs
-    }
-
     /// Returns whether the given ownership includes anyone whose secret key we don't have.
-    pub fn has_other_owners(&self, ownership: &ChainOwnership) -> bool {
+    pub fn has_other_owners(&self, ownership: &ChainOwnership, signer: &impl Signer) -> bool {
         ownership
             .all_owners()
-            .any(|owner| !self.known_key_pairs.contains_key(owner))
-    }
-
-    pub(super) fn insert_known_key_pair(&mut self, key_pair: AccountSecretKey) -> AccountPublicKey {
-        let new_public_key = key_pair.public();
-        self.known_key_pairs.insert(new_public_key.into(), key_pair);
-        new_public_key
+            .any(|owner| !signer.contains_key(owner))
     }
 
     pub(super) fn update_from_info(&mut self, info: &ChainInfo) {

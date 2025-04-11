@@ -26,7 +26,7 @@ use futures::{
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Round,
         Timestamp,
@@ -169,6 +169,8 @@ where
     /// A copy of the storage client so that we don't have to lock the local node client
     /// to retrieve it.
     storage: Storage,
+    /// A reference to the Signer used to sign messages.
+    signer: Box<dyn Signer>,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
     /// The maximum active chain workers.
@@ -184,6 +186,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
     pub fn new(
         validator_node_provider: P,
         storage: S,
+        signer: Box<dyn Signer>,
         max_pending_message_bundles: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
         long_lived_services: bool,
@@ -216,6 +219,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
+            signer,
             max_loaded_chains,
             blob_download_timeout,
         }
@@ -244,11 +248,9 @@ impl<P, S: Storage + Clone> Client<P, S> {
 
     /// Creates a new `ChainClient`.
     #[instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
-    #[expect(clippy::too_many_arguments)]
     pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
-        known_key_pairs: Vec<AccountSecretKey>,
         admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
@@ -259,7 +261,6 @@ impl<P, S: Storage + Clone> Client<P, S> {
         // the arguments: If they were read from the wallet file, they might be stale.
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
             e.insert(ChainClientState::new(
-                known_key_pairs,
                 block_hash,
                 timestamp,
                 next_block_height,
@@ -402,6 +403,18 @@ where
         self.local_node
             .handle_certificate(certificate.clone(), &self.notifier)
             .await
+    }
+}
+
+#[cfg(with_testing)]
+impl<P, S> Client<P, S>
+where
+    S: Storage,
+{
+    /// Returns a mutable reference to the Signer used by this client.
+    #[instrument(level = "trace", skip(self))]
+    pub fn signer_mut(&mut self) -> &mut impl Signer {
+        &mut self.signer
     }
 }
 
@@ -650,6 +663,12 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         )
     }
 
+    /// Gets a reference to the client's signer instance.
+    #[instrument(level = "trace", skip(self))]
+    pub fn signer(&self) -> &impl Signer {
+        &self.client.signer
+    }
+
     /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
     pub fn options_mut(&mut self) -> &mut ChainClientOptions {
@@ -818,7 +837,7 @@ where
         {
             let state = self.state();
             ensure!(
-                state.has_other_owners(&info.manager.ownership)
+                state.has_other_owners(&info.manager.ownership, self.signer())
                     || info.next_block_height == state.next_block_height(),
                 ChainClientError::WalletSynchronizationError
             );
@@ -962,12 +981,11 @@ where
             manager.ownership.is_active(),
             LocalNodeError::InactiveChain(self.chain_id)
         );
-        let state = self.state();
         let mut our_identities = manager
             .ownership
             .all_owners()
             .chain(&manager.leader)
-            .filter(|owner| state.known_key_pairs().contains_key(owner));
+            .filter(|owner| self.signer().contains_key(owner));
         let Some(identity) = our_identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
@@ -978,22 +996,21 @@ where
         Ok(*identity)
     }
 
-    /// Obtains the key pair associated to the current identity.
-    #[instrument(level = "trace")]
-    pub async fn key_pair(&self) -> Result<AccountSecretKey, ChainClientError> {
-        let id = self.identity().await?;
-        Ok(self
-            .state()
-            .known_key_pairs()
-            .get(&id)
-            .expect("key should be known at this point")
-            .copy())
+    #[cfg(with_testing)]
+    /// Returns whether the client has a signer for the current identity.
+    pub async fn has_signer(&self) -> Result<bool, ChainClientError> {
+        let chain_owner = self.identity().await?;
+        Ok(self.signer().contains_key(&chain_owner))
     }
 
     /// Obtains the public key associated to the current identity.
     #[instrument(level = "trace")]
     pub async fn public_key(&self) -> Result<AccountPublicKey, ChainClientError> {
-        Ok(self.key_pair().await?.public())
+        let id = self.identity().await?;
+        Ok(self
+            .signer()
+            .get_public(&id)
+            .expect("key should be known at this point"))
     }
 
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
@@ -1005,7 +1022,10 @@ where
 
         let mut info = self.synchronize_until(self.next_block_height()).await?;
 
-        if self.state().has_other_owners(&info.manager.ownership) {
+        if self
+            .state()
+            .has_other_owners(&info.manager.ownership, self.signer())
+        {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -2469,7 +2489,7 @@ where
         {
             return self.finalize_locking_block(info).await;
         }
-        let identity = self.identity().await?;
+        let owner = self.identity().await?;
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
@@ -2508,8 +2528,7 @@ where
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match Self::round_for_new_proposal(&info, &identity, &proposed_block, true)?
-            {
+            let round = match Self::round_for_new_proposal(&info, &owner, &proposed_block, true)? {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
@@ -2525,7 +2544,7 @@ where
         let (proposed_block, outcome) = block.into_proposal();
         let round = match Self::round_for_new_proposal(
             &info,
-            &identity,
+            &owner,
             &proposed_block,
             has_oracle_responses,
         )? {
@@ -2536,20 +2555,22 @@ where
         let already_handled_locally = info
             .manager
             .already_handled_proposal(round, &proposed_block);
-        let key_pair = self.key_pair().await?;
         // Create the final block proposal.
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
-                LockingBlock::Regular(cert) => BlockProposal::new_retry(round, cert, &key_pair),
+                LockingBlock::Regular(cert) => {
+                    BlockProposal::new_retry(owner, round, cert, self.signer())
+                }
                 LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_initial(round, proposal.content.block, &key_pair)
+                    BlockProposal::new_initial(owner, round, proposal.content.block, self.signer())
                 }
             })
         } else {
             Box::new(BlockProposal::new_initial(
+                owner,
                 round,
                 proposed_block.clone(),
-                &key_pair,
+                self.signer(),
             ))
         };
         if !already_handled_locally {
@@ -2710,13 +2731,14 @@ where
     }
 
     /// Rotates the key of the chain.
-    #[instrument(level = "trace", skip(key_pair))]
+    ///
+    /// Replaces current owners of the chain with the new key pair.
+    #[instrument(level = "trace")]
     pub async fn rotate_key_pair(
         &self,
-        key_pair: AccountSecretKey,
+        public_key: AccountPublicKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let new_public_key = self.state_mut().insert_known_key_pair(key_pair);
-        self.transfer_ownership(new_public_key.into()).await
+        self.transfer_ownership(public_key.into()).await
     }
 
     /// Transfers ownership of the chain to a single super owner.

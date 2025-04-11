@@ -8,6 +8,7 @@ mod ed25519;
 mod hash;
 #[allow(dead_code)]
 mod secp256k1;
+mod signer;
 use std::{fmt::Display, io, num::ParseIntError, str::FromStr};
 
 use alloy_primitives::FixedBytes;
@@ -20,6 +21,7 @@ pub use secp256k1::{
     Secp256k1PublicKey, Secp256k1SecretKey, Secp256k1Signature,
 };
 use serde::{Deserialize, Serialize};
+pub use signer::*;
 use thiserror::Error;
 
 /// The public key of a validator.
@@ -133,10 +135,34 @@ impl AccountSecretKey {
         }
     }
 
+    /// Creates a signature for the `value` using provided `secret`.
+    pub fn sign_prehash(&self, value: CryptoHash) -> AccountSignature {
+        match self {
+            AccountSecretKey::Ed25519(secret) => {
+                let signature = Ed25519Signature::sign_prehash(secret, value);
+                AccountSignature::Ed25519(signature)
+            }
+            AccountSecretKey::Secp256k1(secret) => {
+                let signature = secp256k1::Secp256k1Signature::sign_prehash(secret, value);
+                AccountSignature::Secp256k1(signature)
+            }
+            AccountSecretKey::EvmSecp256k1(secret) => {
+                let signature = secp256k1::evm::EvmSignature::sign_prehash(secret, value);
+                AccountSignature::EvmSecp256k1(signature)
+            }
+        }
+    }
+
     #[cfg(all(with_testing, with_getrandom))]
     /// Generates a new key pair using the operating system's RNG.
     pub fn generate() -> Self {
         AccountSecretKey::Ed25519(Ed25519SecretKey::generate())
+    }
+
+    #[cfg(with_getrandom)]
+    /// Generates a new key pair from the given RNG. Use with care.
+    pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
+        AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(rng))
     }
 }
 

@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
+    crypto::{CryptoHash, Signer, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainId, MessageId},
     ownership::ChainOwnership,
@@ -31,7 +31,7 @@ use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
     crate::benchmark::Benchmark,
-    linera_base::{data_types::Amount, identifiers::ApplicationId},
+    linera_base::{crypto::AccountPublicKey, data_types::Amount, identifiers::ApplicationId},
     linera_execution::{
         committee::{Committee, Epoch},
         system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
@@ -100,10 +100,10 @@ where
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp)
+        self.update_wallet_for_new_chain(chain_id, owner, timestamp)
             .await?;
         self.save_wallet().await
     }
@@ -128,6 +128,12 @@ where
         &mut self.wallet
     }
 
+    /// Returns the [`Signer`] as a mutable reference.
+    #[cfg(with_testing)]
+    pub fn signer_mut(&mut self) -> &mut impl Signer {
+        Arc::get_mut(&mut self.client).unwrap().signer_mut()
+    }
+
     pub async fn mutate_wallet<R: Send>(
         &mut self,
         mutation: impl FnOnce(&mut Wallet) -> R + Send,
@@ -138,7 +144,12 @@ where
             .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    pub fn new(storage: S, options: ClientContextOptions, wallet: W) -> Self {
+    pub fn new(
+        storage: S,
+        options: ClientContextOptions,
+        wallet: W,
+        signer: Box<dyn Signer>,
+    ) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -156,6 +167,7 @@ where
         let client = Client::new(
             node_provider,
             storage,
+            signer,
             options.max_pending_message_bundles,
             delivery,
             options.long_lived_services,
@@ -180,7 +192,7 @@ where
     }
 
     #[cfg(with_testing)]
-    pub fn new_test_client_context(storage: S, wallet: W) -> Self {
+    pub fn new_test_client_context(storage: S, wallet: W, signer: Box<dyn Signer>) -> Self {
         use linera_core::DEFAULT_GRACE_PERIOD;
 
         let send_recv_timeout = Duration::from_millis(4000);
@@ -204,6 +216,7 @@ where
         let client = Client::new(
             node_provider,
             storage,
+            signer,
             10,
             delivery,
             false,
@@ -240,19 +253,21 @@ where
             .expect("No chain specified in wallet with no default chain")
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
+    pub fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainClient<NodeProvider, S>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain = match self.wallet.get(chain_id) {
+        let chain: UserChain = match self.wallet.get(chain_id) {
             Some(chain) => chain.clone(),
             None if chain_id == self.wallet.genesis_admin_chain() => {
                 UserChain::make_other(self.wallet.genesis_admin_chain(), Timestamp::from(0))
             }
             None => return Err(error::Inner::NonexistentChain(chain_id).into()),
         };
-        let known_key_pairs = chain.key_pair.into_iter().collect();
+
         Ok(self.make_chain_client_internal(
             chain_id,
-            known_key_pairs,
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
@@ -263,7 +278,6 @@ where
     fn make_chain_client_internal(
         &self,
         chain_id: ChainId,
-        known_key_pairs: Vec<AccountSecretKey>,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
@@ -271,7 +285,6 @@ where
     ) -> ChainClient<NodeProvider, S> {
         let mut chain_client = self.client.create_chain_client(
             chain_id,
-            known_key_pairs,
             self.wallet.genesis_admin_chain(),
             block_hash,
             timestamp,
@@ -317,24 +330,24 @@ where
     pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp)
+        self.update_wallet_for_new_chain_internal(chain_id, owner, timestamp)
             .await
     }
 
     async fn update_wallet_for_new_chain_internal(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.mutate_wallet(|w| {
                 w.insert(UserChain {
                     chain_id,
-                    key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                    owner,
                     block_hash: None,
                     timestamp,
                     next_block_height: BlockHeight::ZERO,
@@ -645,11 +658,12 @@ where
         transactions_per_block: usize,
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
+        pub_keys: Vec<AccountPublicKey>,
     ) -> Result<
         (
             HashMap<ChainId, ChainClient<NodeProvider, S>>,
             Epoch,
-            Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
+            Vec<(ChainId, Vec<Operation>, AccountOwner)>,
             Committee,
         ),
         Error,
@@ -666,7 +680,7 @@ where
 
         let start = Instant::now();
         let (key_pairs, chain_clients) = self
-            .make_benchmark_chains(num_chains, tokens_per_chain)
+            .make_benchmark_chains(num_chains, tokens_per_chain, pub_keys)
             .await?;
         info!(
             "Got {} chains in {} ms",
@@ -751,9 +765,10 @@ where
         &mut self,
         num_chains: usize,
         balance: Amount,
+        pub_keys: Vec<AccountPublicKey>,
     ) -> Result<
         (
-            HashMap<ChainId, AccountSecretKey>,
+            HashMap<ChainId, AccountOwner>,
             HashMap<ChainId, ChainClient<NodeProvider, S>>,
         ),
         Error,
@@ -767,17 +782,17 @@ where
             }
             // This should never panic, because `owned_chain_ids` only returns the owned chains that
             // we have a key pair for.
-            let key_pair = self
+            let owner = self
                 .wallet
                 .get(chain_id)
-                .and_then(|chain| chain.key_pair.as_ref().map(|kp| kp.copy()))
+                .and_then(|chain| chain.owner)
                 .unwrap();
             let chain_client = self.make_chain_client(chain_id)?;
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
             }
-            benchmark_chains.insert(chain_client.chain_id(), key_pair);
+            benchmark_chains.insert(chain_client.chain_id(), owner);
             chain_client.process_inbox().await?;
             chain_clients.insert(chain_id, chain_client);
         }
@@ -796,23 +811,19 @@ where
             .expect("should have default chain");
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
-        let mut key_pairs = Vec::new();
-        for _ in (0..num_chains_to_create).step_by(operations_per_block) {
-            key_pairs.push(self.wallet.generate_key_pair());
-        }
-        let mut key_pairs_iter = key_pairs.into_iter();
+        let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
         let admin_id = self.wallet.genesis_admin_chain();
         let default_chain_client = self.make_chain_client(default_chain_id)?;
 
         for i in (0..num_chains_to_create).step_by(operations_per_block) {
             let num_new_chains = operations_per_block.min(num_chains_to_create - i);
-            let key_pair = key_pairs_iter.next().unwrap();
+            let pub_key = pub_keys_iter.next().unwrap();
 
             let certificate = Self::execute_open_chains_operations(
                 num_new_chains,
                 &default_chain_client,
                 balance,
-                &key_pair,
+                pub_key.into(),
                 admin_id,
             )
             .await?;
@@ -824,12 +835,11 @@ where
                     .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
                     .expect("failed to create new chain");
                 let chain_id = ChainId::child(message_id);
-                benchmark_chains.insert(chain_id, key_pair.copy());
+                benchmark_chains.insert(chain_id, pub_key.into());
                 self.client.track_chain(chain_id);
 
                 let chain_client = self.make_chain_client_internal(
                     chain_id,
-                    vec![key_pair.copy()],
                     None,
                     certificate.block().header.timestamp,
                     BlockHeight::ZERO,
@@ -866,14 +876,14 @@ where
         num_new_chains: usize,
         chain_client: &ChainClient<NodeProvider, S>,
         balance: Amount,
-        key_pair: &AccountSecretKey,
+        owner: AccountOwner,
         admin_id: ChainId,
     ) -> Result<ConfirmedBlockCertificate, Error> {
         let chain_id = chain_client.chain_id();
         let (epoch, committees) = chain_client.epoch_and_committees(chain_id).await?;
         let epoch = epoch.expect("default chain should be active");
         let config = OpenChainConfig {
-            ownership: ChainOwnership::single_super(key_pair.public().into()),
+            ownership: ChainOwnership::single_super(owner),
             committees,
             admin_id,
             epoch,
@@ -895,30 +905,23 @@ where
     /// Supplies fungible tokens to the chains.
     async fn supply_fungible_tokens(
         &mut self,
-        key_pairs: &HashMap<ChainId, AccountSecretKey>,
+        key_pairs: &HashMap<ChainId, AccountOwner>,
         application_id: ApplicationId,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let default_key = self
-            .wallet
-            .get(default_chain_id)
-            .unwrap()
-            .key_pair
-            .as_ref()
-            .unwrap()
-            .public();
+        let default_key = self.wallet.get(default_chain_id).unwrap().owner.unwrap();
         let amount = Amount::from(1_000_000);
         let operations: Vec<_> = key_pairs
             .iter()
-            .map(|(chain_id, key_pair)| {
+            .map(|(chain_id, owner)| {
                 Benchmark::<S>::fungible_transfer(
                     application_id,
                     *chain_id,
                     default_key,
-                    key_pair.public(),
+                    *owner,
                     amount,
                 )
             })

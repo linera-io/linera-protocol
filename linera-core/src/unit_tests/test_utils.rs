@@ -16,9 +16,7 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::{
-        AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey,
-    },
+    crypto::{AccountPublicKey, CryptoHash, InMemSigner, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId},
 };
@@ -655,7 +653,8 @@ where
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stop.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
-pub struct TestBuilder<B: StorageBuilder> {
+#[allow(dead_code)]
+pub struct TestBuilder<'a, B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
     admin_id: ChainId,
@@ -663,6 +662,7 @@ pub struct TestBuilder<B: StorageBuilder> {
     validator_clients: Vec<LocalValidatorClient<B::Storage>>,
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
+    pub signer: &'a mut InMemSigner,
 }
 
 #[async_trait]
@@ -720,7 +720,7 @@ impl GenesisStorageBuilder {
     }
 }
 
-impl<B> TestBuilder<B>
+impl<'signer, B> TestBuilder<'signer, B>
 where
     B: StorageBuilder,
 {
@@ -728,25 +728,28 @@ where
         mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
+        signer: &'signer mut InMemSigner,
     ) -> Result<Self, anyhow::Error> {
-        let mut key_pairs = Vec::new();
         let mut validators = Vec::new();
         for _ in 0..count {
             let validator_keypair = ValidatorKeypair::generate();
-            let account_secret = AccountSecretKey::generate();
-            validators.push((validator_keypair.public_key, account_secret.public()));
-            key_pairs.push(validator_keypair.secret_key);
+            let account_public_key = signer.generate_new();
+            validators.push((validator_keypair, account_public_key));
         }
-        let initial_committee = Committee::make_simple(validators);
+        let for_committee = validators
+            .iter()
+            .map(|(validating, account)| (validating.public_key, *account))
+            .collect::<Vec<_>>();
+        let initial_committee = Committee::make_simple(for_committee);
         let mut validator_clients = Vec::new();
         let mut validator_storages = HashMap::new();
         let mut faulty_validators = HashSet::new();
-        for (i, validator_secret) in key_pairs.into_iter().enumerate() {
-            let validator_public_key = validator_secret.public();
+        for (i, (validator_keypair, _account_public_key)) in validators.into_iter().enumerate() {
+            let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
             let state = WorkerState::new(
                 format!("Node {}", i),
-                Some(validator_secret),
+                Some(validator_keypair.secret_key),
                 storage.clone(),
                 NonZeroUsize::new(100).expect("Chain worker limit should not be zero"),
             )
@@ -772,6 +775,7 @@ where
             validator_clients,
             validator_storages,
             chain_client_storages: Vec::new(),
+            signer,
         })
     }
 
@@ -809,8 +813,7 @@ where
             Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
         }
         let description = ChainDescription::Root(index);
-        let key_pair = AccountSecretKey::generate();
-        let public_key = key_pair.public();
+        let public_key = self.signer.generate_new();
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
             .add(description, public_key, balance);
@@ -858,7 +861,7 @@ where
                 .await
                 .unwrap();
         }
-        self.make_client(description.into(), key_pair, None, BlockHeight::ZERO)
+        self.make_client(description.into(), None, BlockHeight::ZERO)
             .await
     }
 
@@ -900,7 +903,6 @@ where
     pub async fn make_client(
         &mut self,
         chain_id: ChainId,
-        key_pair: AccountSecretKey,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
@@ -912,6 +914,7 @@ where
         let builder = Arc::new(Client::new(
             provider,
             storage,
+            Box::new(self.signer.clone()),
             10,
             CrossChainMessageDelivery::NonBlocking,
             false,
@@ -921,9 +924,9 @@ where
             DEFAULT_GRACE_PERIOD,
             Duration::from_secs(1),
         ));
+
         Ok(builder.create_chain_client(
             chain_id,
-            vec![key_pair],
             self.admin_id,
             block_hash,
             Timestamp::from(0),

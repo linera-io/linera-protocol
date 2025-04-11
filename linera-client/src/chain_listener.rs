@@ -10,9 +10,9 @@ use std::{
 use async_trait::async_trait;
 use futures::{channel::mpsc, lock::Mutex, FutureExt as _, SinkExt as _, Stream, StreamExt};
 use linera_base::{
-    crypto::AccountSecretKey,
+    crypto::Signer,
     data_types::Timestamp,
-    identifiers::{ChainId, Destination},
+    identifiers::{AccountOwner, ChainId, Destination},
 };
 use linera_core::{
     client::{ChainClient, ChainClientError},
@@ -68,7 +68,7 @@ pub trait ClientContext: 'static {
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error>;
 
@@ -277,12 +277,13 @@ impl<C: ClientContext> ChainClientListener<C> {
         let mut context_guard = self.listener.context.lock().await;
         let timestamp = block.header.timestamp;
         for (new_id, owners) in new_chains {
-            let key_pair = owners
+            let chain_owner = owners
                 .iter()
-                .find_map(|owner| context_guard.wallet().key_pair_for_owner(owner));
-            if key_pair.is_some() {
+                .find(|owner| self.client.signer().contains_key(owner))
+                .cloned();
+            if chain_owner.is_some() {
                 context_guard
-                    .update_wallet_for_new_chain(*new_id, key_pair, timestamp)
+                    .update_wallet_for_new_chain(*new_id, chain_owner, timestamp)
                     .await?;
                 self.listener.run_with_chain_id(*new_id);
             }

@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use linera_base::{
-    crypto::{AccountSecretKey, Ed25519SecretKey},
+    crypto::InMemSigner,
     data_types::{Amount, Blob, BlockHeight},
     identifiers::{ChainDescription, ChainId},
 };
@@ -13,7 +13,6 @@ use linera_core::{
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
 use linera_execution::committee::Epoch;
-use rand::{rngs::StdRng, SeedableRng as _};
 
 use super::util::make_genesis_config;
 use crate::{
@@ -25,10 +24,11 @@ use crate::{
 /// Tests whether we can correctly save a wallet that contains pending blobs.
 #[test_log::test(tokio::test)]
 async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
-    let mut rng = StdRng::seed_from_u64(42);
     let storage_builder = MemoryStorageBuilder::default();
+    //TODO: make persistable
+    let mut signer = InMemSigner::new(Some(42));
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let chain_id = ChainId::root(0);
     builder.add_root_chain(0, Amount::ONE).await?;
     let storage = builder.make_storage().await?;
@@ -47,12 +47,11 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     if wallet_path.exists() {
         return Err(anyhow!("Wallet already exists!"));
     }
-    let mut wallet =
-        WalletState::create_from_file(&wallet_path, Wallet::new(genesis_config, Some(37)))?;
-    let key_pair = AccountSecretKey::Ed25519(Ed25519SecretKey::generate_from(&mut rng));
+    let mut wallet = WalletState::read_or_create(&wallet_path, Wallet::new(genesis_config))?;
+    let new_pubkey = signer.generate_new();
     wallet
         .add_chains(Some(UserChain::make_initial(
-            key_pair,
+            new_pubkey.into(),
             ChainDescription::Root(0),
             clock.current_time(),
         )))
@@ -70,7 +69,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         },
         blobs: vec![Blob::new_data(b"blob".to_vec())],
     });
-    let mut context = ClientContext::new_test_client_context(storage, wallet);
+    let mut context = ClientContext::new_test_client_context(storage, wallet, Box::new(signer));
     context.save_wallet().await?;
     Ok(())
 }

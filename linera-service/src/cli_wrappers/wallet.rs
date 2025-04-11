@@ -62,6 +62,7 @@ pub struct ClientWrapper {
     testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
+    keystore: String,
     max_pending_message_bundles: usize,
     network: Network,
     pub path_provider: PathProvider,
@@ -91,11 +92,13 @@ impl ClientWrapper {
             id
         );
         let wallet = format!("wallet_{}.json", id);
+        let keystore = format!("keystore_{}.json", id);
         Self {
             binary_path: sync::Mutex::new(None),
             testing_prng_seed,
             storage,
             wallet,
+            keystore,
             max_pending_message_bundles: 10_000,
             network,
             path_provider,
@@ -175,6 +178,8 @@ impl ClientWrapper {
         [
             "--wallet".into(),
             self.wallet.as_str().into(),
+            "--keystore".into(),
+            self.keystore.as_str().into(),
             "--storage".into(),
             self.storage.as_str().into(),
             "--max-pending-message-bundles".into(),
@@ -849,6 +854,10 @@ impl ClientWrapper {
         self.path_provider.path().join(&self.wallet)
     }
 
+    pub fn keystore_path(&self) -> PathBuf {
+        self.path_provider.path().join(&self.keystore)
+    }
+
     pub fn storage_path(&self) -> &str {
         &self.storage
     }
@@ -856,8 +865,7 @@ impl ClientWrapper {
     pub fn get_owner(&self) -> Option<AccountOwner> {
         let wallet = self.load_wallet().ok()?;
         let chain_id = wallet.default_chain()?;
-        let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
-        Some(public_key.into())
+        wallet.get(chain_id)?.owner
     }
 
     pub async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
