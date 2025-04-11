@@ -39,6 +39,7 @@ use linera_views::{
     context::Context,
     views::{RootView, ViewError},
 };
+use serde::{Deserialize, Serialize};
 
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
@@ -171,6 +172,15 @@ pub trait Storage: Sized {
     async fn write_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
+    ) -> Result<(), ViewError>;
+
+    /// Reads the network description.
+    async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+
+    /// Writes the network description.
+    async fn write_network_description(
+        &self,
+        information: &NetworkDescription,
     ) -> Result<(), ViewError>;
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
@@ -318,6 +328,15 @@ pub trait Storage: Sized {
     ) -> Result<Self::BlockExporterContext, ViewError>;
 }
 
+/// A description of the current Linera network to be stored in every node's database.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkDescription {
+    pub name: String,
+    pub genesis_config_hash: CryptoHash,
+    pub timestamp: Timestamp,
+}
+
+/// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
     storage: S,
