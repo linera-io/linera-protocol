@@ -21,10 +21,11 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
+
 use linera_rpc::config::{
     ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
-use linera_storage::Storage;
+use linera_storage::{NetworkDescription, Storage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -308,6 +309,15 @@ impl GenesisConfig {
             let description = ChainDescription::new(origin, config, self.timestamp);
             storage.create_chain(description).await?;
         }
+        let network_description = NetworkDescription {
+            name: self.network_name.clone(),
+            genesis_config_hash: CryptoHash::new(self),
+            timestamp: self.timestamp,
+        };
+        storage
+            .write_network_description(&network_description)
+            .await
+            .map_err(linera_chain::ChainError::from)?;
         Ok(())
     }
 
