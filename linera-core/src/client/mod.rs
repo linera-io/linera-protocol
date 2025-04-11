@@ -2562,6 +2562,13 @@ where
                             .await?;
                         local_node.handle_block_proposal(*proposal.clone()).await?;
                     }
+                    LocalNodeError::WorkerError(WorkerError::ChainError(ref chain_error))
+                        if matches!(**chain_error, ChainError::IncorrectMessageOrder { .. }) =>
+                    {
+                        debug!("Clearing pending proposal after it failed due to: {chain_error}");
+                        self.clear_pending_proposal();
+                        return Err(err.into());
+                    }
                     err => return Err(err.into()),
                 }
             }
