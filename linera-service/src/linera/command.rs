@@ -19,6 +19,8 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
+#[cfg(feature = "kubernetes")]
+use linera_service::cli_wrappers::local_kubernetes_net::BuildMode;
 use linera_service::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
@@ -921,7 +923,7 @@ pub enum NetCommand {
         /// The build mode to use.
         #[cfg(feature = "kubernetes")]
         #[arg(long, default_value = "release")]
-        build_mode: String,
+        build_mode: BuildMode,
 
         /// Run with a specific path where the wallet and validator input files are.
         /// If none, then a temporary directory is created.

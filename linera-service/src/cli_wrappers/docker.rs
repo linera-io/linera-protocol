@@ -8,6 +8,8 @@ use linera_base::command::{current_binary_parent, CommandExt};
 use pathdiff::diff_paths;
 use tokio::process::Command;
 
+use crate::cli_wrappers::local_kubernetes_net::BuildMode;
+
 pub struct DockerImage {
     name: String,
 }
@@ -21,7 +23,7 @@ impl DockerImage {
         name: &str,
         binaries: &BuildArg,
         github_root: &PathBuf,
-        build_mode: &str,
+        build_mode: &BuildMode,
     ) -> Result<Self> {
         let build_arg = match binaries {
             BuildArg::Directory(bin_path) => {
@@ -63,15 +65,12 @@ impl DockerImage {
             .args(["--build-arg", &build_arg]);
 
         match build_mode {
-            "release" => {
+            BuildMode::Release => {
                 command.args(["--build-arg", "build_flag=--release"]);
                 command.args(["--build-arg", "build_folder=release"]);
             }
-            "debug" => {
+            BuildMode::Debug => {
                 command.args(["--build-arg", "build_folder=debug"]);
-            }
-            _ => {
-                return Err(anyhow::anyhow!("Invalid build mode: {}", build_mode));
             }
         }
 
