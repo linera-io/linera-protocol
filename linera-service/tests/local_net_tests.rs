@@ -700,6 +700,10 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     assert!(exports
         .next()
         .unwrap()?
+        .starts_with("export LINERA_KEYSTORE="));
+    assert!(exports
+        .next()
+        .unwrap()?
         .starts_with("export LINERA_STORAGE="));
     assert_eq!(exports.next().unwrap()?, "");
 
