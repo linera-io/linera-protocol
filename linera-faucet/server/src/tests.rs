@@ -39,10 +39,6 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
-    fn signer(&self) -> &Box<dyn Signer> {
-        unimplemented!()
-    }
-
     fn make_chain_client(
         &self,
         chain_id: ChainId,

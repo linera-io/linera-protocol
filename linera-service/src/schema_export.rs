@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    crypto::{CryptoHash, Signer},
+    crypto::CryptoHash,
     data_types::{BlobContent, Timestamp},
     identifiers::{AccountOwner, BlobId, ChainId},
 };
@@ -176,10 +176,6 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
     type Storage = S;
 
     fn wallet(&self) -> &Wallet {
-        unimplemented!()
-    }
-
-    fn signer(&self) -> &Box<dyn Signer> {
         unimplemented!()
     }
 

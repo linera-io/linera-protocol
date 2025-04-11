@@ -4,7 +4,6 @@
 use std::{collections::HashMap, iter};
 
 use linera_base::{
-    crypto::Signer,
     data_types::{Amount, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
@@ -96,7 +95,6 @@ where
 {
     #[expect(clippy::too_many_arguments)]
     pub async fn run_benchmark(
-        signer: Box<dyn Signer>,
         num_chains: usize,
         transactions_per_block: usize,
         bps: Option<usize>,
@@ -193,7 +191,6 @@ where
             } else {
                 bps_share
             };
-            let signer = signer.clone();
 
             let shutdown_notifier = shutdown_notifier.clone();
             let sender = sender.clone();
@@ -207,7 +204,6 @@ where
                 handle.block_on(
                     async move {
                         Box::pin(Self::run_benchmark_internal(
-                            signer,
                             chain_owner,
                             bps_share,
                             operations,
@@ -496,7 +492,6 @@ where
 
     #[expect(clippy::too_many_arguments)]
     async fn run_benchmark_internal(
-        keys: Box<dyn Signer>,
         signer: AccountOwner,
         bps: Option<usize>,
         operations: Vec<Operation>,
@@ -543,7 +538,7 @@ where
                 signer,
                 linera_base::data_types::Round::Fast,
                 proposed_block,
-                &keys,
+                chain_client.signer(),
             );
 
             chain_client

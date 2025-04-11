@@ -267,12 +267,12 @@ where
     B: StorageBuilder,
 {
     let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(None));
+    let new_public_key = signer.generate_new();
+    let new_owner = AccountOwner::from(new_public_key);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let new_public_key = sender.signer.generate_new();
-    let new_owner = AccountOwner::from(new_public_key);
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let certificate = sender
         .rotate_key_pair(new_public_key)
         .await

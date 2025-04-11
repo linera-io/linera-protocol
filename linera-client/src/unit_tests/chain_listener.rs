@@ -35,7 +35,6 @@ type TestProvider = NodeProvider<TestStorage>;
 
 struct ClientContext {
     wallet: Wallet,
-    signer: Box<dyn Signer>,
     client: Arc<Client<TestProvider, TestStorage>>,
 }
 
@@ -49,10 +48,6 @@ impl chain_listener::ClientContext for ClientContext {
         &self.wallet
     }
 
-    fn signer(&self) -> &Box<dyn Signer> {
-        &self.signer
-    }
-
     fn make_chain_client(
         &self,
         chain_id: ChainId,
@@ -61,10 +56,8 @@ impl chain_listener::ClientContext for ClientContext {
             .wallet
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        let signer = self.signer.clone();
         Ok(self.client.create_chain_client(
             chain_id,
-            signer,
             self.wallet.genesis_admin_chain(),
             chain.block_hash,
             chain.timestamp,
@@ -108,6 +101,8 @@ impl chain_listener::ClientContext for ClientContext {
 async fn test_chain_listener() -> anyhow::Result<()> {
     // Create two chains.
     let mut signer: Box<dyn Signer> = Box::new(InMemSigner::new(Some(42)));
+    let key_pair = signer.generate_new();
+    let owner: AccountOwner = key_pair.into();
     let config = ChainListenerConfig::default();
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
@@ -120,11 +115,13 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let genesis_config = make_genesis_config(&builder);
     let storage = builder.make_storage().await?;
     let delivery = CrossChainMessageDelivery::NonBlocking;
+
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config),
         client: Arc::new(Client::new(
             builder.make_node_provider(),
             storage.clone(),
+            signer,
             10,
             delivery,
             false,
@@ -134,10 +131,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             DEFAULT_GRACE_PERIOD,
             Duration::from_secs(1),
         )),
-        signer,
     };
-    let key_pair = context.signer.generate_new();
-    let owner: AccountOwner = key_pair.into();
     context
         .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time())
         .await?;

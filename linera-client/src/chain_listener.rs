@@ -63,9 +63,6 @@ pub trait ClientContext: 'static {
 
     fn wallet(&self) -> &Wallet;
 
-    #[allow(clippy::borrowed_box)]
-    fn signer(&self) -> &Box<dyn Signer>;
-
     fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
 
     async fn update_wallet_for_new_chain(
@@ -282,7 +279,7 @@ impl<C: ClientContext> ChainClientListener<C> {
         for (new_id, owners) in new_chains {
             let chain_owner = owners
                 .iter()
-                .find(|owner| context_guard.signer().contains_key(owner))
+                .find(|owner| self.client.signer().contains_key(owner))
                 .cloned();
             if chain_owner.is_some() {
                 context_guard

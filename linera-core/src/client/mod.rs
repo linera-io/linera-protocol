@@ -169,6 +169,8 @@ where
     /// A copy of the storage client so that we don't have to lock the local node client
     /// to retrieve it.
     storage: Storage,
+    /// A reference to the Signer used to sign messages.
+    signer: Box<dyn Signer>,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
     /// The maximum active chain workers.
@@ -184,6 +186,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
     pub fn new(
         validator_node_provider: P,
         storage: S,
+        signer: Box<dyn Signer>,
         max_pending_message_bundles: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
         long_lived_services: bool,
@@ -216,6 +219,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
+            signer,
             max_loaded_chains,
             blob_download_timeout,
         }
@@ -244,11 +248,9 @@ impl<P, S: Storage + Clone> Client<P, S> {
 
     /// Creates a new `ChainClient`.
     #[instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
-    #[expect(clippy::too_many_arguments)]
     pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
-        signer: Box<dyn Signer>,
         admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
@@ -277,7 +279,6 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 grace_period: self.grace_period,
                 blob_download_timeout: self.blob_download_timeout,
             },
-            signer,
         }
     }
 }
@@ -405,6 +406,18 @@ where
     }
 }
 
+#[cfg(with_testing)]
+impl<P, S> Client<P, S>
+where
+    S: Storage,
+{
+    /// Returns a mutable reference to the Signer used by this client.
+    #[instrument(level = "trace", skip(self))]
+    pub fn signer_mut(&mut self) -> &mut impl Signer {
+        &mut self.signer
+    }
+}
+
 /// Policies for automatically handling incoming messages.
 #[derive(Clone, Debug)]
 pub struct MessagePolicy {
@@ -503,9 +516,6 @@ where
     /// The client options.
     #[debug(skip)]
     options: ChainClientOptions,
-    /// A reference to the Signer used to sign messages.
-    #[debug(skip)]
-    signer: Box<dyn Signer>,
 }
 
 impl<P, S> Clone for ChainClient<P, S>
@@ -518,7 +528,6 @@ where
             chain_id: self.chain_id,
             admin_id: self.admin_id,
             options: self.options.clone(),
-            signer: self.signer.clone(),
         }
     }
 }
@@ -652,6 +661,12 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
                 .get_mut(&self.chain_id)
                 .expect("Chain client constructed for invalid chain"),
         )
+    }
+
+    /// Gets a reference to the client's signer instance.
+    #[instrument(level = "trace", skip(self))]
+    pub fn signer(&self) -> &impl Signer {
+        &self.client.signer
     }
 
     /// Gets a mutable reference to the per-`ChainClient` options.
@@ -822,7 +837,7 @@ where
         {
             let state = self.state();
             ensure!(
-                state.has_other_owners(&info.manager.ownership, &self.signer)
+                state.has_other_owners(&info.manager.ownership, self.signer())
                     || info.next_block_height == state.next_block_height(),
                 ChainClientError::WalletSynchronizationError
             );
@@ -970,7 +985,7 @@ where
             .ownership
             .all_owners()
             .chain(&manager.leader)
-            .filter(|owner| self.signer.contains_key(owner));
+            .filter(|owner| self.signer().contains_key(owner));
         let Some(identity) = our_identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
@@ -985,7 +1000,7 @@ where
     /// Returns whether the client has a signer for the current identity.
     pub async fn has_signer(&self) -> Result<bool, ChainClientError> {
         let chain_owner = self.identity().await?;
-        Ok(self.signer.contains_key(&chain_owner))
+        Ok(self.signer().contains_key(&chain_owner))
     }
 
     /// Obtains the public key associated to the current identity.
@@ -993,7 +1008,7 @@ where
     pub async fn public_key(&self) -> Result<AccountPublicKey, ChainClientError> {
         let id = self.identity().await?;
         Ok(self
-            .signer
+            .signer()
             .get_public(&id)
             .expect("key should be known at this point"))
     }
@@ -1009,7 +1024,7 @@ where
 
         if self
             .state()
-            .has_other_owners(&info.manager.ownership, &self.signer)
+            .has_other_owners(&info.manager.ownership, self.signer())
         {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
@@ -2544,10 +2559,10 @@ where
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
                 LockingBlock::Regular(cert) => {
-                    BlockProposal::new_retry(owner, round, cert, &self.signer)
+                    BlockProposal::new_retry(owner, round, cert, self.signer())
                 }
                 LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_initial(owner, round, proposal.content.block, &self.signer)
+                    BlockProposal::new_initial(owner, round, proposal.content.block, self.signer())
                 }
             })
         } else {
@@ -2555,7 +2570,7 @@ where
                 owner,
                 round,
                 proposed_block.clone(),
-                &self.signer,
+                self.signer(),
             ))
         };
         if !already_handled_locally {

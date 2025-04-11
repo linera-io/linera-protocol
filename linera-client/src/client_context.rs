@@ -69,7 +69,6 @@ where
     Storage: linera_storage::Storage,
 {
     pub wallet: WalletState<W>,
-    pub signer: Box<dyn Signer>,
     pub client: Arc<Client<NodeProvider, Storage>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -92,10 +91,6 @@ where
 
     fn wallet(&self) -> &Wallet {
         &self.wallet
-    }
-
-    fn signer(&self) -> &Box<dyn Signer> {
-        &self.signer
     }
 
     fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
@@ -133,6 +128,12 @@ where
         &mut self.wallet
     }
 
+    /// Returns the [`Signer`] as a mutable reference.
+    #[cfg(with_testing)]
+    pub fn signer_mut(&mut self) -> &mut impl Signer {
+        Arc::get_mut(&mut self.client).unwrap().signer_mut()
+    }
+
     pub async fn mutate_wallet<R: Send>(
         &mut self,
         mutation: impl FnOnce(&mut Wallet) -> R + Send,
@@ -166,6 +167,7 @@ where
         let client = Client::new(
             node_provider,
             storage,
+            signer,
             options.max_pending_message_bundles,
             delivery,
             options.long_lived_services,
@@ -179,7 +181,6 @@ where
         ClientContext {
             client: Arc::new(client),
             wallet: WalletState::new(wallet),
-            signer,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
@@ -215,6 +216,7 @@ where
         let client = Client::new(
             node_provider,
             storage,
+            signer,
             10,
             delivery,
             false,
@@ -228,7 +230,6 @@ where
         ClientContext {
             client: Arc::new(client),
             wallet: WalletState::new(wallet),
-            signer,
             send_timeout: send_recv_timeout,
             recv_timeout: send_recv_timeout,
             retry_delay,
@@ -284,7 +285,6 @@ where
     ) -> ChainClient<NodeProvider, S> {
         let mut chain_client = self.client.create_chain_client(
             chain_id,
-            self.signer.clone(),
             self.wallet.genesis_admin_chain(),
             block_hash,
             timestamp,
@@ -811,7 +811,7 @@ where
 
         let mut pub_keys = Vec::new();
         for _ in (0..num_chains_to_create).step_by(operations_per_block) {
-            pub_keys.push(self.signer.generate_new());
+            pub_keys.push(self.signer_mut().generate_new());
         }
         let mut pub_keys_iter = pub_keys.into_iter();
         let admin_id = self.wallet.genesis_admin_chain();

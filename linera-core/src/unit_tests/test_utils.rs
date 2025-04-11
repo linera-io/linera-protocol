@@ -914,6 +914,7 @@ where
         let builder = Arc::new(Client::new(
             provider,
             storage,
+            self.signer.clone(),
             10,
             CrossChainMessageDelivery::NonBlocking,
             false,
@@ -926,7 +927,6 @@ where
 
         Ok(builder.create_chain_client(
             chain_id,
-            self.signer.clone(),
             self.admin_id,
             block_hash,
             Timestamp::from(0),

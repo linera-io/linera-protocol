@@ -94,9 +94,8 @@ impl Runnable for Job {
     {
         let Job(options) = self;
         let wallet = options.wallet().await?;
-        let signer: Box<dyn Signer> = Box::new(options.signer().await?.into_value());
-        let mut context =
-            ClientContext::new(storage.clone(), options.inner.clone(), wallet, signer);
+        let mut signer = options.signer().await?;
+
         let command = options.command;
 
         use ClientCommand::*;
@@ -106,6 +105,12 @@ impl Runnable for Job {
                 recipient,
                 amount,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let chain_client = context.make_chain_client(sender.chain_id)?;
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
@@ -133,9 +138,15 @@ impl Runnable for Job {
                 owner,
                 balance,
             } => {
+                let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
-                let new_owner = owner.unwrap_or_else(|| context.signer.generate_new().into());
                 info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
                 let (message_id, certificate) = context
@@ -173,6 +184,12 @@ impl Runnable for Job {
                 ownership_config,
                 application_permissions_config,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!(
@@ -217,12 +234,26 @@ impl Runnable for Job {
             ChangeOwnership {
                 chain_id,
                 ownership_config,
-            } => context.change_ownership(chain_id, ownership_config).await?,
+            } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+                context.change_ownership(chain_id, ownership_config).await?
+            }
 
             ChangeApplicationPermissions {
                 chain_id,
                 application_permissions_config,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Changing application permissions for chain {}", chain_id);
@@ -250,6 +281,12 @@ impl Runnable for Job {
             }
 
             CloseChain { chain_id } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Closing chain {}", chain_id);
                 let time_start = Instant::now();
@@ -276,6 +313,12 @@ impl Runnable for Job {
             }
 
             LocalBalance { account } => {
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id)?;
                 info!("Reading the balance of {} from the local state", account);
@@ -287,6 +330,12 @@ impl Runnable for Job {
             }
 
             QueryBalance { account } => {
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id)?;
                 info!(
@@ -301,6 +350,12 @@ impl Runnable for Job {
             }
 
             SyncBalance { account } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id)?;
                 info!("Synchronizing chain information and querying the local balance");
@@ -319,6 +374,12 @@ impl Runnable for Job {
             }
 
             Sync { chain_id } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Synchronizing chain information");
@@ -333,6 +394,12 @@ impl Runnable for Job {
             }
 
             ProcessInbox { chain_id } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Processing the inbox of chain {}", chain_id);
@@ -352,6 +419,12 @@ impl Runnable for Job {
                 public_key,
             } => {
                 use linera_core::node::ValidatorNode as _;
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
 
                 let node = context.make_node_provider().make_node(&address)?;
                 match node.get_version_info().await {
@@ -416,6 +489,12 @@ impl Runnable for Job {
 
             QueryValidators { chain_id } => {
                 use linera_core::node::ValidatorNode as _;
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
 
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
@@ -487,6 +566,13 @@ impl Runnable for Job {
                 address,
                 mut chains,
             } => {
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 if chains.is_empty() {
                     chains.push(context.default_chain());
                 }
@@ -507,6 +593,12 @@ impl Runnable for Job {
 
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
 
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
@@ -712,6 +804,12 @@ impl Runnable for Job {
             FinalizeCommittee => {
                 info!("Starting operations to remove old committees");
                 let time_start = Instant::now();
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
 
                 let chain_client =
                     context.make_chain_client(context.wallet.genesis_admin_chain())?;
@@ -745,6 +843,12 @@ impl Runnable for Job {
                 health_check_endpoints,
                 wrap_up_max_in_flight,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
                     transactions_per_block > 0,
@@ -768,7 +872,6 @@ impl Runnable for Job {
                     .await?;
 
                 linera_client::benchmark::Benchmark::<S>::run_benchmark(
-                    context.signer.clone(),
                     num_chains,
                     transactions_per_block,
                     bps,
@@ -818,6 +921,13 @@ impl Runnable for Job {
             }
 
             Watch { chain_id, raw } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let mut join_set = JoinSet::new();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
@@ -836,6 +946,13 @@ impl Runnable for Job {
             }
 
             Service { config, port } => {
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let default_chain = context.wallet().default_chain();
                 let service = NodeService::new(config, port, default_chain, storage, context).await;
                 service.run().await?;
@@ -848,6 +965,13 @@ impl Runnable for Job {
                 limit_rate_until,
                 config,
             } => {
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Starting faucet service using chain {}", chain_id);
                 let end_timestamp = limit_rate_until
@@ -878,6 +1002,13 @@ impl Runnable for Job {
                 vm_runtime,
                 publisher,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing module on chain {}", publisher);
@@ -896,6 +1027,13 @@ impl Runnable for Job {
                 blob_path,
                 publisher,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing data blob on chain {}", publisher);
@@ -910,6 +1048,13 @@ impl Runnable for Job {
 
             // TODO(#2490): Consider removing or renaming this.
             ReadDataBlob { hash, reader } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let start_time = Instant::now();
                 let reader = reader.unwrap_or_else(|| context.default_chain());
                 info!("Verifying data blob on chain {}", reader);
@@ -927,6 +1072,13 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let start_time = Instant::now();
                 let creator = creator.unwrap_or_else(|| context.default_chain());
                 info!("Creating application on chain {}", creator);
@@ -976,6 +1128,13 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing and creating application on chain {}", publisher);
@@ -1014,6 +1173,12 @@ impl Runnable for Job {
             }
 
             Assign { owner, message_id } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let start_time = Instant::now();
                 let chain_id = ChainId::child(message_id);
                 info!(
@@ -1043,6 +1208,12 @@ impl Runnable for Job {
                     json_argument_path,
                     required_application_ids,
                 } => {
+                    let mut context = ClientContext::new(
+                        storage.clone(),
+                        options.inner.clone(),
+                        wallet,
+                        Box::new(signer.into_value()),
+                    );
                     let start_time = Instant::now();
                     let publisher = publisher.unwrap_or_else(|| context.default_chain());
                     info!("Creating application on chain {}", publisher);
@@ -1089,6 +1260,12 @@ impl Runnable for Job {
             },
 
             RetryPendingBlock { chain_id } => {
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Committing pending block for chain {}", chain_id);
@@ -1117,7 +1294,13 @@ impl Runnable for Job {
                 ..
             }) => {
                 let start_time = Instant::now();
-                let public_key = context.signer.generate_new();
+                let public_key = signer.generate_new();
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let owner: AccountOwner = public_key.into();
                 info!(
                     "Requesting a new chain for owner {owner} using the faucet at address \
@@ -1162,7 +1345,13 @@ impl Runnable for Job {
                 set_default,
             }) => {
                 let start_time = Instant::now();
-                let public_key = context.signer.generate_new();
+                let public_key = signer.generate_new();
+                let mut context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
                 let owner = public_key.into();
                 info!(
                     "Requesting a new chain for owner {owner} using the faucet at address \
