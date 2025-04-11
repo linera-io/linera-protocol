@@ -178,6 +178,8 @@ impl ClientWrapper {
         [
             "--wallet".into(),
             self.wallet.as_str().into(),
+            "--keystore".into(),
+            self.keystore.as_str().into(),
             "--storage".into(),
             self.storage.as_str().into(),
             "--max-pending-message-bundles".into(),
