@@ -56,11 +56,14 @@ pub const DEFAULT_NAMESPACE: &str = "table_linera";
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait Storage: Sized {
-    /// The low-level storage implementation in use.
+    /// The low-level storage implementation in use by the core protocol (chain workers etc).
     type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + Send + Sync + 'static;
 
     /// The clock type being used.
     type Clock: Clock;
+
+    /// The low-level storage implementation in use by the block exporter.
+    type BlockExporterContext: Context<Extra = u32> + Clone + Send + Sync + 'static;
 
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
@@ -329,6 +332,11 @@ pub trait Storage: Sized {
             }
         }
     }
+
+    async fn block_exporter_context(
+        &self,
+        block_exporter_id: u32,
+    ) -> Result<Self::BlockExporterContext, ViewError>;
 }
 
 #[derive(Clone)]
