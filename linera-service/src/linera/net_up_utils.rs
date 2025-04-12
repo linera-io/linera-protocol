@@ -24,7 +24,10 @@ use linera_storage_service::{
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 #[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
+use {
+    linera_service::cli_wrappers::local_kubernetes_net::{BuildMode, LocalKubernetesNetConfig},
+    std::path::PathBuf,
+};
 
 struct StorageConfigProvider {
     /// The `StorageConfig` and the namespace
@@ -112,7 +115,7 @@ pub async fn handle_net_up_kubernetes(
     binaries: &Option<Option<PathBuf>>,
     no_build: bool,
     docker_image_name: String,
-    build_mode: String,
+    build_mode: BuildMode,
     policy_config: ResourceControlPolicyConfig,
     with_faucet: bool,
     faucet_chain: Option<u32>,

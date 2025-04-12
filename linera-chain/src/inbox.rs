@@ -39,7 +39,7 @@ static INBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
         "inbox_size",
         "Inbox size",
         &[],
-        exponential_bucket_interval(1.0, 500_000.0),
+        exponential_bucket_interval(1.0, 2_000_000.0),
     )
 });
 

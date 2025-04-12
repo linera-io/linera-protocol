@@ -37,6 +37,27 @@ static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
     ClientWrapper,
 )> = OnceCell::const_new();
 
+#[derive(Clone, clap::Parser, clap::ValueEnum, Debug, Default)]
+pub enum BuildMode {
+    Debug,
+    #[default]
+    Release,
+}
+
+impl std::str::FromStr for BuildMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        clap::ValueEnum::from_str(s, true)
+    }
+}
+
+impl std::fmt::Display for BuildMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /// The information needed to start a [`LocalKubernetesNet`].
 pub struct LocalKubernetesNetConfig {
     pub network: Network,
@@ -48,7 +69,7 @@ pub struct LocalKubernetesNetConfig {
     pub binaries: BuildArg,
     pub no_build: bool,
     pub docker_image_name: String,
-    pub build_mode: String,
+    pub build_mode: BuildMode,
     pub policy_config: ResourceControlPolicyConfig,
 }
 
@@ -67,7 +88,7 @@ pub struct LocalKubernetesNet {
     binaries: BuildArg,
     no_build: bool,
     docker_image_name: String,
-    build_mode: String,
+    build_mode: BuildMode,
     kubectl_instance: Arc<Mutex<KubectlInstance>>,
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
@@ -104,7 +125,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             binaries,
             no_build: false,
             docker_image_name: String::from("linera:latest"),
-            build_mode: String::from("release"),
+            build_mode: BuildMode::Release,
             policy_config: ResourceControlPolicyConfig::Testnet,
         })
     }
@@ -312,7 +333,7 @@ impl LocalKubernetesNet {
         binaries: BuildArg,
         no_build: bool,
         docker_image_name: String,
-        build_mode: String,
+        build_mode: BuildMode,
         kubectl_instance: KubectlInstance,
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
