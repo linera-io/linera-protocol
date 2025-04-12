@@ -142,6 +142,40 @@ impl From<api::VersionInfo> for linera_version::VersionInfo {
     }
 }
 
+impl From<linera_storage::NetworkDescription> for api::NetworkDescription {
+    fn from(
+        linera_storage::NetworkDescription {
+            name,
+            genesis_config_hash,
+            timestamp,
+        }: linera_storage::NetworkDescription,
+    ) -> Self {
+        Self {
+            name,
+            genesis_config_hash: Some(genesis_config_hash.into()),
+            timestamp: timestamp.micros(),
+        }
+    }
+}
+
+impl TryFrom<api::NetworkDescription> for linera_storage::NetworkDescription {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(
+        api::NetworkDescription {
+            name,
+            genesis_config_hash,
+            timestamp,
+        }: api::NetworkDescription,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            name,
+            genesis_config_hash: try_proto_convert(genesis_config_hash)?,
+            timestamp: timestamp.into(),
+        })
+    }
+}
+
 impl TryFrom<Notification> for api::Notification {
     type Error = GrpcProtoConversionError;
 

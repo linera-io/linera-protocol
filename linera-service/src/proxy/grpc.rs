@@ -32,8 +32,8 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
-            HandlePendingBlobRequest, LiteCertificate, Notification, PendingBlobRequest,
-            PendingBlobResult, SubscriptionRequest, VersionInfo,
+            HandlePendingBlobRequest, LiteCertificate, NetworkDescription, Notification,
+            PendingBlobRequest, PendingBlobResult, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -466,10 +466,10 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn get_genesis_config_hash(
+    async fn get_network_description(
         &self,
         _request: Request<()>,
-    ) -> Result<Response<CryptoHash>, Status> {
+    ) -> Result<Response<NetworkDescription>, Status> {
         let description = self
             .0
             .storage
@@ -479,7 +479,7 @@ where
             .ok_or(Status::not_found(
                 "Cannot find network description in the database",
             ))?;
-        Ok(Response::new(description.genesis_config_hash.into()))
+        Ok(Response::new(description.into()))
     }
 
     #[instrument(skip_all, err(Display))]
