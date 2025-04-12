@@ -330,6 +330,7 @@ pub trait Storage: Sized {
 
 /// A description of the current Linera network to be stored in every node's database.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct NetworkDescription {
     pub name: String,
     pub genesis_config_hash: CryptoHash,

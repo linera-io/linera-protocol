@@ -30,7 +30,7 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
-use linera_storage::{DbStorage, Storage};
+use linera_storage::{DbStorage, NetworkDescription, Storage};
 use linera_version::VersionInfo;
 use linera_views::memory::MemoryStore;
 
@@ -104,7 +104,7 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
+    async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 

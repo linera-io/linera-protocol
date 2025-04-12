@@ -310,14 +310,14 @@ where
                     linera_version::VersionInfo::default().into(),
                 )))
             }
-            GenesisConfigHashQuery => {
+            NetworkDescriptionQuery => {
                 let description = self
                     .storage
                     .read_network_description()
                     .await?
                     .ok_or(anyhow!("Cannot find network description in the database"))?;
-                Ok(Some(RpcMessage::GenesisConfigHashResponse(Box::new(
-                    description.genesis_config_hash,
+                Ok(Some(RpcMessage::NetworkDescriptionResponse(Box::new(
+                    description,
                 ))))
             }
             UploadBlob(content) => {
@@ -357,7 +357,7 @@ where
             | Error(_)
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
-            | GenesisConfigHashResponse(_)
+            | NetworkDescriptionResponse(_)
             | DownloadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)

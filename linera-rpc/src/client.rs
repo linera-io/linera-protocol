@@ -160,12 +160,14 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
+    async fn get_network_description(
+        &self,
+    ) -> Result<linera_storage::NetworkDescription, NodeError> {
         Ok(match self {
-            Client::Grpc(grpc_client) => grpc_client.get_genesis_config_hash().await?,
+            Client::Grpc(grpc_client) => grpc_client.get_network_description().await?,
 
             #[cfg(with_simple_network)]
-            Client::Simple(simple_client) => simple_client.get_genesis_config_hash().await?,
+            Client::Simple(simple_client) => simple_client.get_network_description().await?,
         })
     }
 
