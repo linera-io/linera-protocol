@@ -31,6 +31,8 @@ pub enum Error {
     Chain(#[from] linera_chain::ChainError),
     #[error("persistence error: {0}")]
     Persistence(Box<dyn std::error::Error + Send + Sync>),
+    #[error("storage is already initialized: {0:?}")]
+    StorageIsAlreadyInitialized(NetworkDescription),
 }
 
 use crate::{
@@ -219,6 +221,13 @@ impl GenesisConfig {
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
+        if let Some(description) = storage
+            .read_network_description()
+            .await
+            .map_err(linera_chain::ChainError::from)?
+        {
+            return Err(Error::StorageIsAlreadyInitialized(description));
+        }
         let committee = self.create_committee();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
             let description = ChainDescription::Root(chain_number);
