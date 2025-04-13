@@ -314,7 +314,9 @@ mod test {
         );
         let confirmed_block = ConfirmedBlock::new(block);
         let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
-        let _ = storage.write_blobs_and_certificate(&[], &certificate).await?;
+        storage
+            .write_blobs_and_certificate(&[], &certificate)
+            .await?;
 
         let context = ExporterContext::new(0, service_config, destination_config);
         let service = ExporterService::from_context(&context, storage).await?;

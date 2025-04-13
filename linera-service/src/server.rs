@@ -267,6 +267,7 @@ struct ValidatorOptions {
     port: u16,
 
     /// The server configurations for the linera-exporter.
+    #[serde(default)]
     block_exporters: Vec<ExporterConfig>,
 
     /// The port for the metrics endpoint
