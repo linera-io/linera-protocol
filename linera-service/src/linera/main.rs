@@ -6,7 +6,7 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     env,
     ops::Deref,
     path::PathBuf,
@@ -425,87 +425,55 @@ impl Runnable for Job {
                 chain_id,
                 public_key,
             } => {
-                use linera_core::node::ValidatorNode as _;
                 let context = ClientContext::new(
                     storage.clone(),
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
                 );
-
                 let node = context.make_node_provider().make_node(&address)?;
-                match node.get_version_info().await {
-                    Ok(version_info)
-                        if version_info.is_compatible_with(&linera_version::VERSION_INFO) =>
-                    {
-                        info!(
-                            "Version information for validator {address}: {}",
-                            version_info
-                        );
-                    }
-                    Ok(version_info) => error!(
-                        "Validator version {} is not compatible with local version {}.",
-                        version_info,
-                        linera_version::VERSION_INFO
-                    ),
-                    Err(error) => {
-                        error!(
-                            "Failed to get version information for validator {address}:\n{error}"
-                        )
-                    }
+                let mut has_errors = false;
+                if let Err(e) = context.check_compatible_version_info(&address, &node).await {
+                    error!("{}", e);
+                    has_errors = true;
                 }
-
-                let genesis_config_hash = context.wallet().genesis_config().hash();
-                match node.get_network_description().await {
-                    Ok(description) => {
-                        if description.genesis_config_hash != genesis_config_hash {
-                            error!(
-                                "Validator's genesis config hash {} does not match our own: {}.",
-                                description.genesis_config_hash, genesis_config_hash
-                            );
-                        }
-                    }
-                    Err(error) => {
-                        error!(
-                            "Failed to get genesis config hash for validator {address}:\n{error}"
-                        )
-                    }
-                }
-
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let query = linera_core::data_types::ChainInfoQuery::new(chain_id);
-                match node.handle_chain_info_query(query).await {
-                    Ok(response) => {
-                        info!(
-                            "Validator {address} sees chain {chain_id} at block height {} and epoch {:?}",
-                            response.info.next_block_height,
-                            response.info.epoch,
-                        );
-                        if let Some(public_key) = public_key {
-                            if response.check(&public_key).is_ok() {
-                                info!("Signature for public key {public_key} is OK.");
-                            } else {
-                                error!("Signature for public key {public_key} is NOT OK.");
-                            }
-                        }
+                match context
+                    .check_matching_network_description(&address, &node)
+                    .await
+                {
+                    Ok(genesis_config_hash) => {
+                        println!("{}", genesis_config_hash);
                     }
                     Err(e) => {
-                        error!("Failed to get chain info for validator {address} and chain {chain_id}:\n{e}");
+                        error!("{}", e);
+                        has_errors = true;
                     }
                 }
-
-                println!("{}", genesis_config_hash);
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                if let Err(e) = context
+                    .check_validator_chain_info_response(
+                        public_key.as_ref(),
+                        &address,
+                        &node,
+                        chain_id,
+                    )
+                    .await
+                {
+                    error!("{}", e);
+                    has_errors = true;
+                }
+                if has_errors {
+                    bail!("Found error(s) while querying validator {address}");
+                }
             }
 
             QueryValidators { chain_id } => {
-                use linera_core::node::ValidatorNode as _;
                 let mut context = ClientContext::new(
                     storage.clone(),
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
                 );
-
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id).await?;
                 info!("Querying validators about chain {}", chain_id);
@@ -517,55 +485,39 @@ impl Runnable for Job {
                     committee.validators()
                 );
                 let node_provider = context.make_node_provider();
-                let mut num_ok_validators = 0;
-                let mut faulty_validators = vec![];
+                let mut faulty_validators = BTreeMap::<_, Vec<_>>::new();
                 for (name, state) in committee.validators() {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
-                    match node.get_version_info().await {
-                        Ok(version_info) => {
-                            info!(
-                                "Version information for validator {name:?} at {address}:{}",
-                                version_info
-                            );
-                        }
-                        Err(e) => {
-                            error!("Failed to get version information for validator {name:?} at {address}:\n{e}");
-                            faulty_validators.push((
-                                name,
-                                address,
-                                "Failed to get version information.".to_string(),
-                            ));
-                            continue;
-                        }
+                    if let Err(e) = context.check_compatible_version_info(address, &node).await {
+                        error!("{}", e);
+                        faulty_validators
+                            .entry((name, address))
+                            .or_default()
+                            .push(e);
                     }
-                    let query = linera_core::data_types::ChainInfoQuery::new(chain_id);
-                    match node.handle_chain_info_query(query).await {
-                        Ok(response) => {
-                            info!(
-                                "Validator {name:?} at {address} sees chain {chain_id} at block height {} and epoch {:?}",
-                                response.info.next_block_height,
-                                response.info.epoch,
-                            );
-                            if response.check(name).is_ok() {
-                                info!("Signature for public key {name} is OK.");
-                                num_ok_validators += 1;
-                            } else {
-                                error!("Signature for public key {name} is NOT OK.");
-                                faulty_validators.push((name, address, format!("{:#?}", response)));
-                            }
-                        }
-                        Err(e) => {
-                            error!("Failed to get chain info for validator {name:?} at {address} and chain {chain_id}:\n{e}");
-                            faulty_validators.push((
-                                name,
-                                address,
-                                "Failed to get chain info.".to_string(),
-                            ));
-                            continue;
-                        }
+                    if let Err(e) = context
+                        .check_matching_network_description(address, &node)
+                        .await
+                    {
+                        error!("{}", e);
+                        faulty_validators
+                            .entry((name, address))
+                            .or_default()
+                            .push(e);
+                    }
+                    if let Err(e) = context
+                        .check_validator_chain_info_response(None, address, &node, chain_id)
+                        .await
+                    {
+                        error!("{}", e);
+                        faulty_validators
+                            .entry((name, address))
+                            .or_default()
+                            .push(e);
                     }
                 }
+                let num_ok_validators = committee.validators().len() - faulty_validators.len();
                 if !faulty_validators.is_empty() {
                     println!("{:#?}", faulty_validators);
                 }
@@ -599,8 +551,6 @@ impl Runnable for Job {
             command @ (SetValidator { .. }
             | RemoveValidator { .. }
             | ResourceControlPolicy { .. }) => {
-                use linera_core::node::ValidatorNode as _;
-
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
                 let context = ClientContext::new(
@@ -613,7 +563,7 @@ impl Runnable for Job {
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 if let SetValidator {
-                    public_key,
+                    public_key: _,
                     account_key: _,
                     address,
                     votes: _,
@@ -621,34 +571,12 @@ impl Runnable for Job {
                 } = &command
                 {
                     let node = context.make_node_provider().make_node(address)?;
-                    match node.get_version_info().await {
-                        Ok(version_info)
-                            if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {}
-                        Ok(version_info) => bail!(
-                            "Validator version {} is not compatible with local version {}.",
-                            version_info,
-                            linera_version::VERSION_INFO
-                        ),
-                        Err(error) => bail!(
-                            "Failed to get version information for validator {public_key:?} at {address}:\n{error}"
-                        ),
-                    }
-                    let genesis_config_hash = context.wallet().genesis_config().hash();
-                    match node.get_network_description().await {
-                        Ok(description) => {
-                            if description.genesis_config_hash != genesis_config_hash {
-                                error!(
-                                "Validator's genesis config hash {} does not match our own: {}.",
-                                description.genesis_config_hash, genesis_config_hash
-                            );
-                            }
-                        }
-                        Err(error) => {
-                            error!(
-                            "Failed to get genesis config hash for validator {address}:\n{error}"
-                        )
-                        }
-                    }
+                    context
+                        .check_compatible_version_info(address, &node)
+                        .await?;
+                    context
+                        .check_matching_network_description(address, &node)
+                        .await?;
                 }
                 let chain_client = context
                     .make_chain_client(context.wallet.genesis_admin_chain())

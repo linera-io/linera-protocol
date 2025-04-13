@@ -28,7 +28,7 @@ wasmer = [
     "linera-storage/wasmer",
 ]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
-fs = ["fs-err", "fs4", "linera-execution/fs"]
+fs = ["fs-err", "fs4", "linera-execution/fs", "dep:linera-version"]
 metrics = [
     "linera-base/metrics",
     "linera-chain/metrics",
@@ -68,6 +68,7 @@ linera-execution.workspace = true
 linera-rpc.workspace = true
 linera-sdk = { workspace = true, optional = true }
 linera-storage.workspace = true
+linera-version = { workspace = true, optional = true }
 linera-views.workspace = true
 num-format = { workspace = true, optional = true }
 prometheus-parse = { workspace = true, optional = true }

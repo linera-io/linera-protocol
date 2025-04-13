@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{CryptoHash, Signer},
+    crypto::{CryptoHash, Signer, ValidatorPublicKey},
     data_types::{BlockHeight, ChainDescription, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
@@ -19,8 +19,8 @@ use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
     data_types::ClientOutcome,
     join_set_ext::JoinSet,
-    node::CrossChainMessageDelivery,
-    Environment, JoinSetExt,
+    node::{CrossChainMessageDelivery, ValidatorNode},
+    Environment, JoinSetExt as _,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
@@ -53,6 +53,7 @@ use {
         vm::VmRuntime,
     },
     linera_core::client::create_bytecode_blobs,
+    linera_version::VersionInfo,
     std::{fs, path::PathBuf},
 };
 
@@ -541,6 +542,89 @@ impl<Env: Environment, W> ClientContext<Env, W>
 where
     W: Persist<Target = Wallet>,
 {
+    pub async fn check_compatible_version_info(
+        &self,
+        address: &str,
+        node: &impl ValidatorNode,
+    ) -> anyhow::Result<VersionInfo> {
+        match node.get_version_info().await {
+            Ok(version_info) if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {
+                info!(
+                    "Version information for validator {address}: {}",
+                    version_info
+                );
+                Ok(version_info)
+            }
+            Ok(version_info) => {
+                anyhow::bail!(
+                    "Validator version {} is not compatible with local version {}.",
+                    version_info,
+                    linera_version::VERSION_INFO
+                );
+            }
+            Err(error) => {
+                anyhow::bail!(
+                    "Failed to get version information for validator {address}:\n{error}"
+                );
+            }
+        }
+    }
+
+    pub async fn check_matching_network_description(
+        &self,
+        address: &str,
+        node: &impl ValidatorNode,
+    ) -> anyhow::Result<CryptoHash> {
+        let network_description = self.wallet().genesis_config().network_description();
+        match node.get_network_description().await {
+            Ok(description) => {
+                if description == network_description {
+                    Ok(description.genesis_config_hash)
+                } else {
+                    anyhow::bail!(
+                        "Validator's network description {description:?} does not match our own: {network_description:?}."
+                    );
+                }
+            }
+            Err(error) => {
+                anyhow::bail!(
+                    "Failed to get network description for validator {address}:\n{error}"
+                );
+            }
+        }
+    }
+
+    pub async fn check_validator_chain_info_response(
+        &self,
+        public_key: Option<&ValidatorPublicKey>,
+        address: &str,
+        node: &impl ValidatorNode,
+        chain_id: ChainId,
+    ) -> anyhow::Result<()> {
+        let query = linera_core::data_types::ChainInfoQuery::new(chain_id);
+        match node.handle_chain_info_query(query).await {
+            Ok(response) => {
+                info!(
+                    "Validator {address} sees chain {chain_id} at block height {} and epoch {:?}",
+                    response.info.next_block_height, response.info.epoch,
+                );
+                if let Some(public_key) = public_key {
+                    if response.check(public_key).is_ok() {
+                        info!("Signature for public key {public_key} is OK.");
+                    } else {
+                        anyhow::bail!("Signature for public key {public_key} is NOT OK.");
+                    }
+                }
+            }
+            Err(e) => {
+                anyhow::bail!(
+                    "Failed to get chain info for validator {address} and chain {chain_id}:\n{e}"
+                );
+            }
+        }
+        Ok(())
+    }
+
     pub async fn publish_module(
         &mut self,
         chain_client: &ChainClient<Env>,
