@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{num::NonZeroU16, path::PathBuf, str::FromStr};
+use std::{num::NonZeroU16, str::FromStr};
 
 use colored::Colorize as _;
 use linera_base::{
@@ -121,7 +121,6 @@ pub async fn handle_net_up_kubernetes(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
-    block_exporter_config_path: Option<Option<PathBuf>>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -151,7 +150,6 @@ pub async fn handle_net_up_kubernetes(
         docker_image_name,
         build_mode,
         policy_config,
-        block_exporter_config_path,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
@@ -182,7 +180,7 @@ pub async fn handle_net_up_service(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
-    block_exporter_config_path: Option<Option<PathBuf>>,
+    num_block_exporters: u32,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -220,7 +218,7 @@ pub async fn handle_net_up_service(
         cross_chain_config,
         storage_config_builder,
         path_provider,
-        block_exporter_config_path,
+        num_block_exporters,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(

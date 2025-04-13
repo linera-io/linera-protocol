@@ -953,12 +953,9 @@ pub enum NetCommand {
         #[arg(long, default_value = "1000")]
         faucet_amount: Amount,
 
-        /// Start an optional linera block exporter service with its toml configuration at the specified path, if present.
-        /// If this argument is not provided, no exporter service will be started.
-        /// If provided without any path, then config will be generated according to directory.
-        /// Else the provided path for the config will be used.
-        #[arg(long)]
-        block_exporter: Option<Option<PathBuf>>,
+        /// The number of block exporters per validator in the local test network. Default is 0.
+        #[arg(long, default_value = "0")]
+        block_exporters: u32,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

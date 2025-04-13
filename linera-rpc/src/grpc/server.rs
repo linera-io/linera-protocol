@@ -25,7 +25,7 @@ use linera_storage::Storage;
 use rand::Rng;
 use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
-use tonic::{Request, Response, Status};
+use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
 #[cfg(with_metrics)]
@@ -240,7 +240,7 @@ where
             Self::forward_notifications(
                 state.nickname().to_string(),
                 internal_network.proxy_address(),
-                internal_network.exporter_address(),
+                internal_network.exporter_addresses(),
                 notification_receiver,
             )
         });
@@ -294,7 +294,7 @@ where
     async fn forward_notifications(
         nickname: String,
         proxy_address: String,
-        exporter_address: Option<String>,
+        exporter_addresses: Vec<String>,
         mut receiver: Receiver<Notification>,
     ) {
         let channel = tonic::transport::Channel::from_shared(proxy_address.clone())
@@ -304,14 +304,17 @@ where
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
-        let mut exporter_client = exporter_address.map(|address| {
-            let channel = tonic::transport::Channel::from_shared(address.clone())
-                .expect("Exporter URI should be valid")
-                .connect_lazy();
-            NotifierServiceClient::new(channel)
-                .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-                .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-        });
+        let mut exporter_clients: Vec<NotifierServiceClient<Channel>> = exporter_addresses
+            .iter()
+            .map(|address| {
+                let channel = tonic::transport::Channel::from_shared(address.clone())
+                    .expect("Exporter URI should be valid")
+                    .connect_lazy();
+                NotifierServiceClient::new(channel)
+                    .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                    .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            })
+            .collect::<Vec<_>>();
 
         while let Some(notification) = receiver.next().await {
             let reason = &notification.reason;
@@ -333,7 +336,7 @@ where
             }
 
             if let Reason::NewBlock { height: _, hash: _ } = reason {
-                if let Some(exporter_client) = exporter_client.as_mut() {
+                for exporter_client in &mut exporter_clients {
                     let request = tonic::Request::new(notification.clone());
                     if let Err(error) = exporter_client.notify(request).await {
                         error!(

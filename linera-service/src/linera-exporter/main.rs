@@ -6,18 +6,15 @@ use std::path::PathBuf;
 use anyhow::Result;
 use exporter_service::ExporterContext;
 use futures::FutureExt;
-use linera_client::config::BlockExporterConfig;
+use linera_client::config::{BlockExporterConfig, GenesisConfig};
 use linera_sdk::views::ViewError;
-use linera_service::storage::StorageConfigNamespace;
+use linera_service::{storage::StorageConfigNamespace, util};
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
-use storage::run_exporter_with_storage;
 
 #[allow(dead_code)]
 mod exporter_service;
 #[allow(dead_code)]
 mod state;
-#[allow(dead_code)]
-mod storage;
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum ExporterError {
@@ -64,6 +61,34 @@ struct ExporterOptions {
     /// Storage configuration for the blockchain history, chain states and binary blobs.
     #[arg(long = "storage")]
     storage_config: StorageConfigNamespace,
+
+    /// The number of Tokio worker threads to use.
+    #[arg(long)]
+    tokio_threads: Option<usize>,
+
+    /// The maximal number of simultaneous queries to the database
+    #[arg(long)]
+    max_concurrent_queries: Option<usize>,
+
+    /// The maximal number of stream queries to the database
+    #[arg(long, default_value = "10")]
+    max_stream_queries: usize,
+
+    /// The maximal memory used in the storage cache.
+    #[arg(long, default_value = "10000000")]
+    max_cache_size: usize,
+
+    /// The maximal size of an entry in the storage cache.
+    #[arg(long, default_value = "1000000")]
+    max_entry_size: usize,
+
+    /// The maximal number of entries in the storage cache.
+    #[arg(long, default_value = "1000")]
+    max_cache_entries: usize,
+
+    /// Path to the file describing the initial user chains (aka genesis state)
+    #[arg(long = "genesis")]
+    genesis_config_path: PathBuf,
 }
 
 fn main() -> Result<()> {
@@ -80,17 +105,17 @@ impl ExporterOptions {
             toml::from_str(&config_string).expect("Invalid configuration file format");
 
         let storage_cache_config = StorageCacheConfig {
-            max_cache_size: config.limits.max_cache_size,
-            max_entry_size: config.limits.max_entry_size,
-            max_cache_entries: config.limits.max_cache_entries,
+            max_cache_size: self.max_cache_size,
+            max_entry_size: self.max_entry_size,
+            max_cache_entries: self.max_cache_entries,
         };
         let common_config = CommonStoreConfig {
-            max_concurrent_queries: config.limits.max_concurrent_queries,
-            max_stream_queries: config.limits.max_stream_queries,
+            max_concurrent_queries: self.max_concurrent_queries,
+            max_stream_queries: self.max_stream_queries,
             storage_cache_config,
         };
 
-        let mut runtime_builder = match config.limits.tokio_threads {
+        let mut runtime_builder = match self.tokio_threads {
             None | Some(1) => tokio::runtime::Builder::new_current_thread(),
             Some(worker_threads) => {
                 let mut builder = tokio::runtime::Builder::new_multi_thread();
@@ -99,22 +124,23 @@ impl ExporterOptions {
             }
         };
 
+        let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
+
         let future = async {
             let context =
-                ExporterContext::from_config(config.service_config, config.destination_config);
-            let full_storage_config = self
+                ExporterContext::new(config.id, config.service_config, config.destination_config);
+            let storage_config = self
                 .storage_config
                 .add_common_config(common_config)
                 .await
                 .unwrap();
-            run_exporter_with_storage(full_storage_config, context)
+            storage_config
+                .run_with_storage(&genesis_config, None, context)
                 .boxed()
                 .await
         };
 
         let runtime = runtime_builder.enable_all().build()?;
-        runtime.block_on(future)?;
-
-        Ok(())
+        runtime.block_on(future)?.map_err(|e| e.into())
     }
 }

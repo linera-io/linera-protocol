@@ -972,7 +972,6 @@ impl EthereumTrackerApp {
     }
 }
 
-// This test feels incomplete. Maybe have to assert the stdout.
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
@@ -985,13 +984,13 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,
+        num_block_exporters: 1,
         ..LocalNetConfig::new_test(database, network)
     };
 
-    let config = config.with_block_exporter(None);
     let (_net, client) = config.instantiate().await?;
     let chain = client.default_chain().expect("Client has no default chain");
     client
         .transfer_with_silent_logs(1.into(), chain, chain)
-        .await // should print the block hash in the stdout.
+        .await
 }

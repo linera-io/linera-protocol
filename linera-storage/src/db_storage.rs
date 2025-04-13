@@ -268,13 +268,14 @@ pub struct DbStorage<Store, Clock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum BaseKey {
+enum BaseKey {
     ChainState(ChainId),
     Certificate(CryptoHash),
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
     Event(EventId),
+    BlockExporterState(u32),
 }
 
 const INDEX_CHAIN_ID: u8 = 0;

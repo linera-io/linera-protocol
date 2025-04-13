@@ -251,87 +251,14 @@ impl GenesisConfig {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlockExporterConfig {
     /// The server configuration for the linera-exporter.
-    /// This is a required argument.
     pub service_config: ServiceConfig,
 
     /// The configuration file for the export destinations.
-    /// This is an optional argument, if not provided, minimal defaults are used.
-    #[serde(default)]
+    #[serde(default = "DestinationConfig::new")]
     pub destination_config: DestinationConfig,
 
-    /// The various limits defined in the configuration file.
-    /// This is an optional argument, if not provided, reasonable defaults are used.
-    #[serde(default)]
-    pub limits: LimitsConfig,
-}
-
-struct DefaultLimitsProvider;
-
-impl DefaultLimitsProvider {
-    fn tokio_threads() -> Option<usize> {
-        Some(1)
-    }
-
-    fn max_concurrent_queries() -> Option<usize> {
-        None
-    }
-
-    fn max_stream_queries() -> usize {
-        10
-    }
-
-    fn max_cache_size() -> usize {
-        10000000
-    }
-
-    fn max_entry_size() -> usize {
-        1000000
-    }
-
-    fn max_cache_entries() -> usize {
-        1000
-    }
-}
-
-/// The configuration file to define and impose various limits on resources used by the exporter.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct LimitsConfig {
-    /// The number of Tokio worker threads to use.
-    #[serde(default = "DefaultLimitsProvider::tokio_threads")]
-    pub tokio_threads: Option<usize>,
-
-    #[serde(default = "DefaultLimitsProvider::max_concurrent_queries")]
-    /// The maximal number of simultaneous queries to the database
-    pub max_concurrent_queries: Option<usize>,
-
-    #[serde(default = "DefaultLimitsProvider::max_stream_queries")]
-    /// The maximal number of stream queries to the database
-    pub max_stream_queries: usize,
-
-    #[serde(default = "DefaultLimitsProvider::max_cache_size")]
-    /// The maximal memory used in the storage cache.
-    pub max_cache_size: usize,
-
-    #[serde(default = "DefaultLimitsProvider::max_entry_size")]
-    /// The maximal size of an entry in the storage cache
-    pub max_entry_size: usize,
-
-    #[serde(default = "DefaultLimitsProvider::max_cache_entries")]
-    /// The maximal number of entries in the storage cache.
-    pub max_cache_entries: usize,
-}
-
-impl Default for LimitsConfig {
-    fn default() -> Self {
-        Self {
-            tokio_threads: Some(1),
-            max_concurrent_queries: None,
-            max_stream_queries: 10,
-            max_cache_size: 10000000,
-            max_entry_size: 1000000,
-            max_cache_entries: 1000,
-        }
-    }
+    /// Identity for the block exporter state.
+    pub id: u32,
 }
 
 /// Configuration file for the exports.
@@ -339,18 +266,21 @@ impl Default for LimitsConfig {
 pub struct DestinationConfig {
     /// The destination URIs to export to.
     pub destinations: Vec<Destination>,
-    /// Should the exporter log every export.
-    pub debug_mode: bool,
     //walrus: bool,
     //committee: bool,
 }
 
-impl Default for DestinationConfig {
-    fn default() -> Self {
+impl DestinationConfig {
+    pub fn new() -> Self {
         Self {
             destinations: vec![],
-            debug_mode: true,
         }
+    }
+}
+
+impl Default for DestinationConfig {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

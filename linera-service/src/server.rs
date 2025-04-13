@@ -266,8 +266,8 @@ struct ValidatorOptions {
     /// The port of the validator
     port: u16,
 
-    /// The server configuration for the linera-exporter.
-    exporter_config: Option<ExporterConfig>,
+    /// The server configurations for the linera-exporter.
+    block_exporters: Vec<ExporterConfig>,
 
     /// The port for the metrics endpoint
     metrics_port: u16,
@@ -307,7 +307,7 @@ fn make_server_config<R: CryptoRng>(
         shards: options.shards,
         host: options.internal_host,
         port: options.internal_port,
-        exporter_config: options.exporter_config,
+        block_exporters: options.block_exporters,
         metrics_port: options.metrics_port,
     };
     let validator = ValidatorConfig {
@@ -738,7 +738,7 @@ mod test {
             port = 9002
             metrics_port = 5002
 
-            [exporter_config]
+            [[block_exporters]]
             host = "exporter"
             port = 12000
         "#;
@@ -751,10 +751,10 @@ mod test {
                 internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
-                exporter_config: Some(ExporterConfig {
+                block_exporters: vec![ExporterConfig {
                     host: "exporter".into(),
                     port: 12000
-                }),
+                }],
                 internal_host: "internal_host".into(),
                 internal_port: 10000,
                 metrics_port: 5000,

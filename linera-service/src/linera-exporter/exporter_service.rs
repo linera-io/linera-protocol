@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, listen_for_shutdown_signals,
@@ -12,45 +11,50 @@ use linera_rpc::grpc::api::{
     notifier_service_server::{NotifierService, NotifierServiceServer},
     Notification,
 };
-use linera_sdk::views::RootView;
-use linera_views::{context::ViewContext, store::KeyValueStore};
+use linera_sdk::views::{RootView, View};
+use linera_service::storage::Runnable;
+use linera_storage::Storage;
+#[cfg(test)]
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::info;
 
-use crate::{state::BlockExporterStateView, storage::ExporterStorage, ExporterError, Generic};
+use crate::{state::BlockExporterStateView, ExporterError, Generic};
 
 #[derive(Debug)]
 pub(super) struct ExporterContext {
+    id: u32,
     service_config: ServiceConfig,
     destination_config: DestinationConfig,
 }
 
-pub(crate) struct ExporterService<Store> {
-    // For now a Mutex should suffice as a simple workaround.
-    // As everything is currently happening on the single master thread.
-    // No tasks on the worker threads have been spawned yet.
-    state: Mutex<BlockExporterStateView<ViewContext<(), Store>>>,
+pub(crate) struct ExporterService<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    state: Mutex<BlockExporterStateView<S::BlockExporterContext>>,
     destination_config: DestinationConfig,
-    storage: ExporterStorage<Store>,
+    storage: S,
+    #[cfg(test)]
+    debug_destination: Option<UnboundedSender<Summary>>,
 }
 
 #[async_trait]
 impl<S> NotifierService for ExporterService<S>
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: Send + Sync,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
         let notification = request.into_inner();
-        let (chain_id, height, hash) =
+        let (chain_id, block_height, block_hash) =
             parse_notification(notification).map_err(|e| Status::from_error(e.into()))?;
 
         {
             let mut guard = self.state.lock().await;
             guard
-                .initialize_chain(&chain_id, (height, hash))
+                .initialize_chain(&chain_id, (block_height, block_hash))
                 .await
                 .map_err(|e| Status::from_error(e.into()))?;
             guard
@@ -59,34 +63,31 @@ where
                 .map_err(|e| Status::from_error(e.into()))?;
         }
 
-        info!("Just recieved a notification");
-
-        // Since the rest of the module is in an unimplimented state, the only way to
-        // test, was to either hard code the test like this
-        // or create a new service endpoint in a new proto file or in the linera-rpc crate.
-        #[cfg(test)]
+        // after implementation of future destinations
+        // this will be offloaded to a seperate thread.
+        #[cfg(with_testing)]
         {
-            let guard = self.state.lock().await;
-            let tip = guard
-                .get_chain_tip(&chain_id)
-                .await
-                .map_err(|e| Status::from_error(e.into()))?;
-            assert!(tip.is_some_and(|updated_height| updated_height == height));
-            info!("height is: {height}");
-        }
-
-        // only required in integeration
-        // where a worker continuously writes to a shared storage
-        #[cfg(not(test))]
-        if self.destination_config.debug_mode {
             let block = self
                 .storage
-                .read_confirmed_block(hash)
+                .read_confirmed_block(block_hash)
                 .await
-                .map_err(ExporterError::StorageError)
                 .map_err(|e| Status::from_error(e.into()))?;
-            let hash = block.into_inner().hash();
-            println!("{hash}");
+            let byte_size = bincode::serialized_size(&block).unwrap();
+            let summary = Summary {
+                chain_id,
+                block_height,
+                block_hash,
+                byte_size,
+            };
+
+            if cfg!(feature = "test") {
+                tracing::debug!("Block exporter batch summary: {:?}", summary);
+            }
+
+            #[cfg(test)]
+            if let Some(tx) = &self.debug_destination {
+                let _ = tx.send(summary);
+            }
         }
 
         Ok(Response::new(()))
@@ -95,22 +96,24 @@ where
 
 impl<S> ExporterService<S>
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: Send + Sync,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     async fn from_context(
-        context: &ExporterContext,
-        storage: ExporterStorage<S>,
-    ) -> core::result::Result<Self, ExporterError> {
-        let state = storage
-            .load_exporter_state()
+        exporter_context: &ExporterContext,
+        storage: S,
+    ) -> Result<Self, ExporterError> {
+        let storage_context = storage
+            .block_exporter_context(exporter_context.id)
             .await
             .map_err(ExporterError::StateError)?;
-        let destination_config = context.destination_config.clone();
+        let state = BlockExporterStateView::load(storage_context).await?;
+        let destination_config = exporter_context.destination_config.clone();
         Ok(Self {
             state: Mutex::new(state),
             destination_config,
             storage,
+            #[cfg(test)]
+            debug_destination: None,
         })
     }
 
@@ -123,20 +126,24 @@ where
         self.start_notification_server(endpoint, canellation_token)
             .await
     }
+
+    #[cfg(test)]
+    fn with_redirection_buffer(mut self, buffer: UnboundedSender<Summary>) -> Self {
+        self.debug_destination = Some(buffer);
+        self
+    }
 }
 
-impl ExporterContext {
-    pub(super) async fn run<S>(
-        self,
-        storage: ExporterStorage<S>,
-    ) -> core::result::Result<(), ExporterError>
+#[async_trait]
+impl Runnable for ExporterContext {
+    type Output = Result<(), ExporterError>;
+
+    async fn run<S>(self, storage: S) -> Self::Output
     where
-        S: KeyValueStore + Clone + Send + Sync + 'static,
-        S::Error: Send + Sync,
+        S: Storage + Clone + Send + Sync + 'static,
     {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
-
         let endpoint = format!("{}:{}", self.service_config.host, self.service_config.port);
         let service = ExporterService::from_context(&self, storage).await?;
         service.run(shutdown_notifier, endpoint).await
@@ -144,11 +151,13 @@ impl ExporterContext {
 }
 
 impl ExporterContext {
-    pub(super) fn from_config(
+    pub(super) fn new(
+        id: u32,
         service_config: ServiceConfig,
         destination_config: DestinationConfig,
     ) -> ExporterContext {
         Self {
+            id,
             service_config,
             destination_config,
         }
@@ -178,8 +187,7 @@ fn parse_notification(
 
 impl<S> ExporterService<S>
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: Send + Sync,
+    S: Storage + Clone + Send + Sync + 'static,
 {
     pub async fn start_notification_server(
         self,
@@ -204,7 +212,7 @@ where
             .await
             .expect("a running notification server");
 
-        if cfg!(feature = "test") {
+        if cfg!(with_testing) {
             Ok(())
         } else {
             Err(ExporterError::GenericError(
@@ -214,34 +222,104 @@ where
     }
 }
 
+#[cfg(with_testing)]
+#[derive(Debug, PartialEq)]
+pub struct Summary {
+    chain_id: ChainId,
+    block_height: BlockHeight,
+    block_hash: CryptoHash,
+    byte_size: u64,
+}
+
+#[cfg(with_testing)]
+impl Summary {
+    pub fn new(
+        chain_id: ChainId,
+        block_height: BlockHeight,
+        block_hash: CryptoHash,
+        byte_size: u64,
+    ) -> Summary {
+        Summary {
+            chain_id,
+            block_height,
+            block_hash,
+            byte_size,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use linera_base::{crypto::CryptoHash, port::get_free_port};
+    use std::collections::BTreeMap;
+
+    use linera_base::{
+        crypto::CryptoHash,
+        data_types::{Amount, Round},
+        port::get_free_port,
+    };
+    use linera_chain::{
+        data_types::{BlockExecutionOutcome, OperationResult},
+        test::{make_first_block, BlockTestExt},
+        types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
+    };
     use linera_rpc::grpc::api::notifier_service_client::NotifierServiceClient;
+    use linera_sdk::views::ViewError;
     use linera_service::cli_wrappers::local_net::LocalNet;
-    use linera_views::memory::MemoryStore;
+    use linera_storage::DbStorage;
+    use linera_views::{batch::Batch, memory::MemoryStore};
 
     use super::*;
 
+    trait BatchExt {
+        fn add_block(&mut self, block: &ConfirmedBlock) -> Result<(), ViewError>;
+    }
+
+    impl BatchExt for Batch {
+        fn add_block(&mut self, block: &ConfirmedBlock) -> Result<(), ViewError> {
+            let hash = block.hash();
+            let block_key = hash.as_bytes();
+            self.put_key_value(block_key.to_vec(), block)?;
+            Ok(())
+        }
+    }
+
     #[tokio::test]
-    async fn test_notification_service() -> Result<()> {
+    async fn test_notification_service() -> anyhow::Result<()> {
         linera_base::tracing::init("linera-exporter");
         let port = get_free_port().await?;
         let endpoint = format!("127.0.0.1:{port}");
 
         let canellation_token = CancellationToken::new();
 
-        let storage = ExporterStorage::<MemoryStore>::make_test_storage().await;
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
         let service_config = ServiceConfig {
             host: "127.0.0.1".to_string(),
             port,
         };
         let destination_config = DestinationConfig {
             destinations: vec![],
-            debug_mode: true,
         };
-        let context = ExporterContext::from_config(service_config, destination_config);
+
+        let block = BlockExecutionOutcome {
+            messages: vec![Vec::new()],
+            previous_message_blocks: BTreeMap::new(),
+            state_hash: CryptoHash::test_hash("state"),
+            oracle_responses: vec![Vec::new()],
+            events: vec![Vec::new()],
+            blobs: vec![Vec::new()],
+            operation_results: vec![OperationResult::default()],
+        }
+        .with(
+            make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE),
+        );
+        let confirmed_block = ConfirmedBlock::new(block);
+        let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
+        let _ = storage.write_blobs_and_certificate(&[], &certificate).await?;
+
+        let context = ExporterContext::new(0, service_config, destination_config);
         let service = ExporterService::from_context(&context, storage).await?;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let service = service.with_redirection_buffer(tx);
         tokio::spawn(service.run(canellation_token.clone(), endpoint.clone()));
 
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
@@ -249,16 +327,26 @@ mod test {
         let mut client = NotifierServiceClient::connect(format!("http://{endpoint}")).await?;
 
         let reason = Reason::NewBlock {
-            height: 46.into(),
-            hash: CryptoHash::test_hash("0"),
+            height: certificate.inner().height(),
+            hash: certificate.hash(),
         };
         let request = tonic::Request::new(Notification {
-            chain_id: Some(ChainId(CryptoHash::test_hash("abc")).into()),
+            chain_id: Some(certificate.inner().chain_id().into()),
             reason: bincode::serialize(&reason)?,
         });
 
         let _response = client.notify(request).await?;
         canellation_token.cancel();
+
+        let expected_summary = Summary::new(
+            certificate.inner().chain_id(),
+            certificate.inner().height(),
+            certificate.hash(),
+            260,
+        );
+        while let Some(summary) = rx.recv().await {
+            assert_eq!(summary, expected_summary);
+        }
 
         Ok(())
     }

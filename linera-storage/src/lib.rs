@@ -43,7 +43,7 @@ use linera_views::{
 
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
-pub use crate::db_storage::{BaseKey, ChainStatesFirstAssignment, DbStorage, WallClock};
+pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
