@@ -12,6 +12,8 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+artificial_random_read_error = ["dep:rand"]
+artificial_random_write_error = ["dep:rand"]
 metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
 storage-service = []
@@ -31,6 +33,7 @@ linera-base.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 prost.workspace = true
+rand = { workspace = true, optional = true, features = ["small_rng"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
