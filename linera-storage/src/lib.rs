@@ -334,7 +334,7 @@ pub trait Storage: Sized {
 pub struct NetworkDescription {
     pub name: String,
     pub genesis_config_hash: CryptoHash,
-    pub timestamp: Timestamp,
+    pub genesis_timestamp: Timestamp,
 }
 
 /// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.

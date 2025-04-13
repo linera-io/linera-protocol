@@ -123,7 +123,7 @@ message VersionInfo {
 message NetworkDescription {
     string name = 1;
     CryptoHash genesis_config_hash = 2;
-    uint64 timestamp = 3;
+    uint64 genesis_timestamp = 3;
 }
 
 // A request for client to subscribe to notifications for a given `ChainId`

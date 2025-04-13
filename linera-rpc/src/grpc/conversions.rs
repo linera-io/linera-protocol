@@ -147,13 +147,13 @@ impl From<linera_storage::NetworkDescription> for api::NetworkDescription {
         linera_storage::NetworkDescription {
             name,
             genesis_config_hash,
-            timestamp,
+            genesis_timestamp,
         }: linera_storage::NetworkDescription,
     ) -> Self {
         Self {
             name,
             genesis_config_hash: Some(genesis_config_hash.into()),
-            timestamp: timestamp.micros(),
+            genesis_timestamp: genesis_timestamp.micros(),
         }
     }
 }
@@ -165,13 +165,13 @@ impl TryFrom<api::NetworkDescription> for linera_storage::NetworkDescription {
         api::NetworkDescription {
             name,
             genesis_config_hash,
-            timestamp,
+            genesis_timestamp,
         }: api::NetworkDescription,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             name,
             genesis_config_hash: try_proto_convert(genesis_config_hash)?,
-            timestamp: timestamp.into(),
+            genesis_timestamp: genesis_timestamp.into(),
         })
     }
 }

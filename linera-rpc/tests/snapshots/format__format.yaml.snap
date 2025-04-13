@@ -641,7 +641,7 @@ NetworkDescription:
     - name: STR
     - genesis_config_hash:
         TYPENAME: CryptoHash
-    - timestamp:
+    - genesis_timestamp:
         TYPENAME: Timestamp
 NodeError:
   ENUM:

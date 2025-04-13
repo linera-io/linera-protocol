@@ -177,7 +177,7 @@ where
         Ok(NetworkDescription {
             name: "test network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
-            timestamp: Timestamp::now(),
+            genesis_timestamp: Timestamp::default(),
         })
     }
 

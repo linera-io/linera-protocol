@@ -312,7 +312,7 @@ impl GenesisConfig {
         let network_description = NetworkDescription {
             name: self.network_name.clone(),
             genesis_config_hash: CryptoHash::new(self),
-            timestamp: self.timestamp,
+            genesis_timestamp: self.timestamp,
         };
         storage
             .write_network_description(&network_description)
