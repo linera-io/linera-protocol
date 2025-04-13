@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::SocketAddr;
+
 use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, listen_for_shutdown_signals,
@@ -21,7 +23,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::info;
 
-use crate::{state::BlockExporterStateView, ExporterError, Generic};
+use crate::{state::BlockExporterStateView, ExporterError};
 
 #[derive(Debug)]
 pub(super) struct ExporterContext {
@@ -120,10 +122,10 @@ where
     pub async fn run(
         self,
         canellation_token: CancellationToken,
-        endpoint: String,
+        port: u16,
     ) -> core::result::Result<(), ExporterError> {
         info!("Linera exporter is running.");
-        self.start_notification_server(endpoint, canellation_token)
+        self.start_notification_server(port, canellation_token)
             .await
     }
 
@@ -144,9 +146,9 @@ impl Runnable for ExporterContext {
     {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
-        let endpoint = format!("{}:{}", self.service_config.host, self.service_config.port);
+        let port = self.service_config.port;
         let service = ExporterService::from_context(&self, storage).await?;
-        service.run(shutdown_notifier, endpoint).await
+        service.run(shutdown_notifier, port).await
     }
 }
 
@@ -185,16 +187,20 @@ fn parse_notification(
     Err(ExporterError::BadNotification)
 }
 
+fn get_address(port: u16) -> SocketAddr {
+    SocketAddr::from(([0, 0, 0, 0], port))
+}
+
 impl<S> ExporterService<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
     pub async fn start_notification_server(
         self,
-        endpoint: String,
+        port: u16,
         canellation_token: CancellationToken,
     ) -> core::result::Result<(), ExporterError> {
-        let endpoint = endpoint.parse().into_unknown()?;
+        let endpoint = get_address(port);
         info!(
             "Starting linera_exporter_service on endpoint = {}",
             endpoint
@@ -260,28 +266,14 @@ mod test {
     use linera_chain::{
         data_types::{BlockExecutionOutcome, OperationResult},
         test::{make_first_block, BlockTestExt},
-        types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate},
+        types::{ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_rpc::grpc::api::notifier_service_client::NotifierServiceClient;
-    use linera_sdk::views::ViewError;
     use linera_service::cli_wrappers::local_net::LocalNet;
     use linera_storage::DbStorage;
-    use linera_views::{batch::Batch, memory::MemoryStore};
+    use linera_views::memory::MemoryStore;
 
     use super::*;
-
-    trait BatchExt {
-        fn add_block(&mut self, block: &ConfirmedBlock) -> Result<(), ViewError>;
-    }
-
-    impl BatchExt for Batch {
-        fn add_block(&mut self, block: &ConfirmedBlock) -> Result<(), ViewError> {
-            let hash = block.hash();
-            let block_key = hash.as_bytes();
-            self.put_key_value(block_key.to_vec(), block)?;
-            Ok(())
-        }
-    }
 
     #[tokio::test]
     async fn test_notification_service() -> anyhow::Result<()> {
@@ -322,7 +314,7 @@ mod test {
         let service = ExporterService::from_context(&context, storage).await?;
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let service = service.with_redirection_buffer(tx);
-        tokio::spawn(service.run(canellation_token.clone(), endpoint.clone()));
+        tokio::spawn(service.run(canellation_token.clone(), port));
 
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
 

@@ -31,23 +31,6 @@ pub(crate) enum ExporterError {
     GenericError(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-trait Generic {
-    type Output;
-    fn into_unknown(self) -> Self::Output;
-}
-
-impl<T, E> Generic for core::result::Result<T, E>
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    type Output = Result<T, ExporterError>;
-
-    fn into_unknown(self) -> Self::Output {
-        self.map_err(|e| (Box::new(e) as Box<dyn std::error::Error + Send + Sync>))
-            .map_err(ExporterError::GenericError)
-    }
-}
-
 /// Options for running the linera block exporter.
 #[derive(clap::Parser, Debug, Clone)]
 #[command(
