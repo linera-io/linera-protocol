@@ -89,10 +89,8 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     let source_code = std::fs::read_to_string(path)?;
     let contract_name: &str = source_code
         .lines()
-        .find(|line| line.trim_start().starts_with("contract "))
-        .ok_or(anyhow::anyhow!("Not matching"))?;
-    let contract_name: &str = contract_name
-        .strip_prefix("contract ")
+        .filter_map(|line| line.trim_start().strip_prefix("contract "))
+        .next()
         .ok_or(anyhow::anyhow!("Not matching"))?;
     let contract_name: &str = contract_name
         .strip_suffix(" {")
