@@ -3,7 +3,7 @@
 
 //! Support for user applications compiled for the EVM
 //!
-//! We are using the REVM for implementing it.
+//! We are using Revm for implementing it.
 
 #![cfg(with_revm)]
 

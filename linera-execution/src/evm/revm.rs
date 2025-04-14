@@ -82,7 +82,7 @@ mod tests {
 static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
         "evm_contract_instantiation_latency",
-        "Evm contract instantiation latency",
+        "EVM contract instantiation latency",
         &[],
         exponential_bucket_latencies(1.0),
     )
@@ -92,7 +92,7 @@ static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
 static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
         "evm_service_instantiation_latency",
-        "Evm service instantiation latency",
+        "EVM service instantiation latency",
         &[],
         exponential_bucket_latencies(1.0),
     )
@@ -116,7 +116,7 @@ impl EvmContractModule {
         }
     }
 
-    /// Creates a new [`EvmContractModule`] using the WebAssembly module in `contract_bytecode_file`.
+    /// Creates a new [`EvmContractModule`] using the EVM module in `contract_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,
@@ -358,8 +358,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-        if inputs.target_address == PRECOMPILE_ADDRESS
-            || inputs.target_address == contract_address
+        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
             return Ok(None);
         }
@@ -413,8 +412,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-        if inputs.target_address == PRECOMPILE_ADDRESS
-            || inputs.target_address == contract_address
+        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
             return Ok(None);
         }
