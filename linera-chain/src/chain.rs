@@ -144,7 +144,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        exponential_bucket_latencies(10.0),
+        exponential_bucket_latencies(500.0),
     )
 });
 

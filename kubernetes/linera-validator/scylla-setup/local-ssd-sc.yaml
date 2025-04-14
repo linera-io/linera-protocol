@@ -1,0 +1,8 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nvme-ssd-block
+provisioner: local.csi.scylladb.com
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: false

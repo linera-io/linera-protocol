@@ -45,6 +45,8 @@ spec:
             - name: config
               mountPath: "/config"
               readOnly: true
+            - name: linera-db
+              mountPath: "/rocksdb/linera.db"
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
@@ -57,6 +59,8 @@ spec:
             - name: config
               mountPath: "/config"
               readOnly: true
+            - name: linera-db
+              mountPath: "/rocksdb/linera.db"
       volumes:
         - name: config
           configMap:
@@ -66,3 +70,12 @@ spec:
                 path: server.json
               - key: genesisConfig
                 path: genesis.json
+  volumeClaimTemplates:
+    - metadata:
+        name: linera-db
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: nvme-ssd-block
+        resources:
+          requests:
+            storage: {{ .Values.rocksdbStorageSize }}
