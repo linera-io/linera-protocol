@@ -10,7 +10,7 @@ edition.workspace = true
 [dependencies]
 linera-base.workspace = true
 linera-client.workspace = true
-linera-faucet = { version = "0.14.0", path = ".." }
+linera-faucet = { version = "0.15.0", path = ".." }
 linera-version.workspace = true
 reqwest.workspace = true
 serde.workspace = true
