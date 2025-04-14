@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use alloy::primitives::U256;
+use alloy_primitives::U256;
 use alloy_sol_types::{sol, SolCall};
 use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use linera_sdk::{
