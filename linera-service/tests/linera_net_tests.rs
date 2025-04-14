@@ -632,7 +632,6 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     // Creating the WASM smart contract
-
     let original_counter_value = 35;
     let increment = 5;
     let (contract, service) = client.build_example("counter-no-graphql").await?;
@@ -663,7 +662,7 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let nest_instantiation_argument = nest_instantiation_argument.abi_encode();
 
     let (nest_contract, _dir) =
-        get_evm_contract_path("test/fixtures/evm_call_wasm_example_counter.sol")?;
+        get_evm_contract_path("tests/fixtures/evm_call_wasm_example_counter.sol")?;
 
     type NestInstantiationArgument = Vec<u8>;
     let nest_application_id = client
