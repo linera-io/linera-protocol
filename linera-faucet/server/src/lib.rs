@@ -3,12 +3,12 @@
 
 //! The server component of the Linera faucet.
 
-use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{future::IntoFuture, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, Router};
-use futures::lock::Mutex;
+use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
@@ -22,6 +22,7 @@ use linera_client::{
 use linera_core::data_types::ClientOutcome;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
+use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
@@ -271,7 +272,7 @@ where
 
     /// Runs the faucet.
     #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self, cancellation_token: CancellationToken) -> anyhow::Result<()> {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
@@ -284,15 +285,15 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let context = Arc::clone(&self.context);
-        let listener = ChainListener::new(self.config.clone(), context, self.storage.clone());
-        listener.run().await;
-
-        axum::serve(
-            tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?,
-            app,
-        )
-        .await?;
+        let chain_listener =
+            ChainListener::new(self.config, self.context, self.storage, cancellation_token).run();
+        let tcp_listener =
+            tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
+        let server = axum::serve(tcp_listener, app).into_future();
+        futures::select! {
+            result = Box::pin(chain_listener).fuse() => result?,
+            result = Box::pin(server).fuse() => result?,
+        };
 
         Ok(())
     }

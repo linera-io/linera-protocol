@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{borrow::Cow, future::IntoFuture, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{
     futures_util::Stream, resolver_utils::ContainerType, Error, MergedObject, OutputType,
@@ -9,7 +9,7 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
-use futures::{lock::Mutex, Future};
+use futures::{lock::Mutex, Future, FutureExt as _};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
@@ -39,6 +39,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error as ThisError;
 use tokio::sync::OwnedRwLockReadGuard;
+use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, trace};
 
@@ -824,7 +825,7 @@ where
 
     /// Runs the node service.
     #[instrument(name = "node_service", level = "info", skip(self), fields(port = ?self.port))]
-    pub async fn run(self) -> Result<(), anyhow::Error> {
+    pub async fn run(self, cancellation_token: CancellationToken) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
@@ -843,14 +844,17 @@ where
             .layer(CorsLayer::permissive());
 
         info!("GraphiQL IDE: http://localhost:{}", port);
-        ChainListener::new(self.config, Arc::clone(&self.context), self.storage.clone())
-            .run()
-            .await;
-        let serve_fut = axum::serve(
-            tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
-            app,
-        );
-        serve_fut.await?;
+
+        let chain_listener =
+            ChainListener::new(self.config, self.context, self.storage, cancellation_token).run();
+        let mut chain_listener = Box::pin(chain_listener).fuse();
+        let tcp_listener =
+            tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
+        let server = axum::serve(tcp_listener, app).into_future();
+        futures::select! {
+            result = chain_listener => result?,
+            result = Box::pin(server).fuse() => result?,
+        };
 
         Ok(())
     }

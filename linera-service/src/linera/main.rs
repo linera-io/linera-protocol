@@ -24,6 +24,7 @@ use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
+    listen_for_shutdown_signals,
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -56,6 +57,7 @@ use linera_views::{
 };
 use serde_json::Value;
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
 #[cfg(feature = "benchmark")]
 use {
@@ -841,7 +843,10 @@ impl Runnable for Job {
             Service { config, port } => {
                 let default_chain = context.wallet().default_chain();
                 let service = NodeService::new(config, port, default_chain, storage, context).await;
-                service.run().await?;
+                let cancellation_token = CancellationToken::new();
+                let child_token = cancellation_token.child_token();
+                tokio::spawn(listen_for_shutdown_signals(cancellation_token));
+                service.run(child_token).await?;
             }
 
             Faucet {
@@ -872,7 +877,10 @@ impl Runnable for Job {
                     storage,
                 )
                 .await?;
-                faucet.run().await?;
+                let cancellation_token = CancellationToken::new();
+                let child_token = cancellation_token.child_token();
+                tokio::spawn(listen_for_shutdown_signals(cancellation_token));
+                faucet.run(child_token).await?;
             }
 
             PublishModule {
