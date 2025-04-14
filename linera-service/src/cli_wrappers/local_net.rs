@@ -602,12 +602,12 @@ impl LocalNet {
         match self.network.internal {
             Network::Grpc => {
                 let port = Self::block_exporter_port(validator, exporter_id as usize);
-                let nickname = format!("block exporter {validator}");
+                let nickname = format!("block exporter {validator}:{exporter_id}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
             }
             Network::Grpcs => {
                 let port = Self::block_exporter_port(validator, exporter_id as usize);
-                let nickname = format!("block exporter  {validator}");
+                let nickname = format!("block exporter  {validator}:{exporter_id}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
             }
             Network::Tcp | Network::Udp => {
