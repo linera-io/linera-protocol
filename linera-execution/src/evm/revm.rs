@@ -221,9 +221,7 @@ impl UserServiceModule for EvmServiceModule {
 
 // This is the precompile address that contains the Linera specific
 // functionalities accessed from the EVM.
-fn precompile_address() -> Address {
-    address!("000000000000000000000000000000000000000b")
-}
+const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
 fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
     let mut output = [0u64; 4];
@@ -360,7 +358,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-        if inputs.target_address != precompile_address()
+        if inputs.target_address != PRECOMPILE_ADDRESS
             && inputs.target_address != contract_address
         {
             let vec = inputs.input.to_vec();
@@ -416,7 +414,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-        if inputs.target_address != precompile_address()
+        if inputs.target_address != PRECOMPILE_ADDRESS
             && inputs.target_address != contract_address
         {
             let vec = inputs.input.to_vec();
@@ -599,7 +597,7 @@ where
                 handler.pre_execution.load_precompiles = Arc::new(move || {
                     let mut precompiles = precompiles.clone();
                     precompiles.extend([(
-                        precompile_address(),
+                        PRECOMPILE_ADDRESS,
                         ContextPrecompile::ContextStateful(Arc::new(GeneralContractCall)),
                     )]);
                     precompiles
@@ -705,7 +703,7 @@ where
                 handler.pre_execution.load_precompiles = Arc::new(move || {
                     let mut precompiles = precompiles.clone();
                     precompiles.extend([(
-                        precompile_address(),
+                        PRECOMPILE_ADDRESS,
                         ContextPrecompile::ContextStateful(Arc::new(GeneralServiceCall)),
                     )]);
                     precompiles
