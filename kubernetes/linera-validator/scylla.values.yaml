@@ -1,4 +1,12 @@
 developerMode: true
+exposeOptions:
+  nodeService:
+    type: ClusterIP
+  broadcastOptions:
+    clients:
+      type: ServiceClusterIP
+    nodes:
+      type: ServiceClusterIP
 sysctls:
   - "fs.aio-max-nr=4082080"
 datacenter: validator
