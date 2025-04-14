@@ -1,7 +1,7 @@
 #!/bin/sh
 
 while true; do
-  ./linera storage check-existence --storage "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+  ./linera storage check-existence --storage "dualrocksdbscylladb:/mnt/stateful_partition/kube-ephemeral-ssd/linera.db:spawn_blocking:tcp:scylla-client.scylla.svc.cluster.local:9042"
   status=$?
 
   if [ $status -eq 0 ]; then
@@ -10,7 +10,7 @@ while true; do
   elif [ $status -eq 1 ]; then
     echo "Database does not exist, attempting to initialize..."
     if ./linera-server initialize \
-      --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
+      --storage dualrocksdbscylladb:/mnt/stateful_partition/kube-ephemeral-ssd/linera.db:spawn_blocking:tcp:scylla-client.scylla.svc.cluster.local:9042 \
       --genesis /config/genesis.json; then
       echo "Initialization successful."
       exit 0
