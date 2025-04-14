@@ -5,13 +5,10 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-alloy = { workspace = true, default-features = false, features = [
-    "rpc-types-eth",
-] }
+alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 linera-sdk.workspace = true
 serde.workspace = true
-
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
