@@ -391,8 +391,8 @@ where
             | RpcMessage::Error(_)
             | RpcMessage::ChainInfoResponse(_)
             | RpcMessage::VersionInfoResponse(_)
-            | RpcMessage::GenesisConfigHashQuery
-            | RpcMessage::GenesisConfigHashResponse(_)
+            | RpcMessage::NetworkDescriptionQuery
+            | RpcMessage::NetworkDescriptionResponse(_)
             | RpcMessage::DownloadBlob(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)

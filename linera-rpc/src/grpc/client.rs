@@ -23,6 +23,7 @@ use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
+use linera_storage::NetworkDescription;
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
 use tracing::{debug, error, info, instrument, warn};
@@ -346,9 +347,9 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
+    async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
         let req = ();
-        Ok(client_delegate!(self, get_genesis_config_hash, req)?.try_into()?)
+        Ok(client_delegate!(self, get_network_description, req)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]

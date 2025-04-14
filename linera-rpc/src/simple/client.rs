@@ -21,6 +21,7 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
+use linera_storage::NetworkDescription;
 use linera_version::VersionInfo;
 
 use super::{codec, transport::TransportProtocol};
@@ -156,8 +157,8 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::VersionInfoQuery).await
     }
 
-    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
-        self.query(RpcMessage::GenesisConfigHashQuery).await
+    async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
+        self.query(RpcMessage::NetworkDescriptionQuery).await
     }
 
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {

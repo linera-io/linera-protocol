@@ -15,6 +15,7 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
 };
+use linera_storage::NetworkDescription;
 use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 
@@ -42,14 +43,14 @@ pub enum RpcMessage {
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Vec<BlobId>),
     VersionInfoQuery,
-    GenesisConfigHashQuery,
+    NetworkDescriptionQuery,
 
     // Outbound
     Vote(Box<LiteVote>),
     ChainInfoResponse(Box<ChainInfoResponse>),
     Error(Box<NodeError>),
     VersionInfoResponse(Box<VersionInfo>),
-    GenesisConfigHashResponse(Box<CryptoHash>),
+    NetworkDescriptionResponse(Box<NetworkDescription>),
     UploadBlobResponse(Box<BlobId>),
     DownloadBlobResponse(Box<BlobContent>),
     DownloadPendingBlobResponse(Box<BlobContent>),
@@ -84,8 +85,8 @@ impl RpcMessage {
             | ChainInfoResponse(_)
             | VersionInfoQuery
             | VersionInfoResponse(_)
-            | GenesisConfigHashQuery
-            | GenesisConfigHashResponse(_)
+            | NetworkDescriptionQuery
+            | NetworkDescriptionResponse(_)
             | UploadBlob(_)
             | UploadBlobResponse(_)
             | DownloadBlob(_)
@@ -113,7 +114,7 @@ impl RpcMessage {
 
         match self {
             VersionInfoQuery
-            | GenesisConfigHashQuery
+            | NetworkDescriptionQuery
             | UploadBlob(_)
             | DownloadBlob(_)
             | DownloadConfirmedBlock(_)
@@ -131,7 +132,7 @@ impl RpcMessage {
             | Error(_)
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
-            | GenesisConfigHashResponse(_)
+            | NetworkDescriptionResponse(_)
             | UploadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
@@ -206,8 +207,17 @@ impl TryFrom<RpcMessage> for CryptoHash {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::BlobLastUsedByResponse(hash) => Ok(*hash),
-            RpcMessage::GenesisConfigHashResponse(hash) => Ok(*hash),
             RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for NetworkDescription {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::NetworkDescriptionResponse(description) => Ok(*description),
             _ => Err(NodeError::UnexpectedMessage),
         }
     }
