@@ -755,6 +755,23 @@ where
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 
+    /// Returns all chain IDs that publish an event stream this chain subscribes to.
+    #[instrument(level = "trace", skip(self))]
+    pub async fn event_stream_publishers(&self) -> Result<BTreeSet<ChainId>, LocalNodeError> {
+        Ok(self
+            .chain_state_view()
+            .await?
+            .execution_state
+            .system
+            .event_subscriptions
+            .indices()
+            .await?
+            .into_iter()
+            .map(|(chain_id, _)| chain_id)
+            .chain((self.chain_id != self.admin_id).then_some(self.admin_id))
+            .collect())
+    }
+
     /// Subscribes to notifications from this client's chain.
     #[instrument(level = "trace")]
     pub async fn subscribe(&self) -> Result<NotificationStream, LocalNodeError> {
