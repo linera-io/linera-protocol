@@ -358,27 +358,26 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-        if inputs.target_address != PRECOMPILE_ADDRESS
-            && inputs.target_address != contract_address
+        if inputs.target_address == PRECOMPILE_ADDRESS
+            || inputs.target_address == contract_address
         {
-            let vec = inputs.input.to_vec();
-            let target = address_to_user_application_id(inputs.target_address);
-            let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
-            argument.extend(&vec);
-            let authenticated = true;
-            let result = {
-                let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-                runtime.try_call_application(authenticated, target, argument)?
-            };
-            let result = bcs::from_bytes::<InterpreterResult>(&result)?;
-            let call_outcome = CallOutcome {
-                result,
-                memory_offset: inputs.return_memory_offset.clone(),
-            };
-            Ok(Some(call_outcome))
-        } else {
-            Ok(None)
+            return Ok(None);
         }
+        let vec = inputs.input.to_vec();
+        let target = address_to_user_application_id(inputs.target_address);
+        let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
+        argument.extend(&vec);
+        let authenticated = true;
+        let result = {
+            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            runtime.try_call_application(authenticated, target, argument)?
+        };
+        let result = bcs::from_bytes::<InterpreterResult>(&result)?;
+        let call_outcome = CallOutcome {
+            result,
+            memory_offset: inputs.return_memory_offset.clone(),
+        };
+        Ok(Some(call_outcome))
     }
 }
 
@@ -414,28 +413,27 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-        if inputs.target_address != PRECOMPILE_ADDRESS
-            && inputs.target_address != contract_address
+        if inputs.target_address == PRECOMPILE_ADDRESS
+            || inputs.target_address == contract_address
         {
-            let vec = inputs.input.to_vec();
-            let target = address_to_user_application_id(inputs.target_address);
-            let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
-            argument.extend(&vec);
-            let result = {
-                let evm_query = EvmQuery::Query(argument);
-                let evm_query = serde_json::to_vec(&evm_query)?;
-                let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-                runtime.try_query_application(target, evm_query)?
-            };
-            let result = bcs::from_bytes::<InterpreterResult>(&result)?;
-            let call_outcome = CallOutcome {
-                result,
-                memory_offset: inputs.return_memory_offset.clone(),
-            };
-            Ok(Some(call_outcome))
-        } else {
-            Ok(None)
+            return Ok(None);
         }
+        let vec = inputs.input.to_vec();
+        let target = address_to_user_application_id(inputs.target_address);
+        let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
+        argument.extend(&vec);
+        let result = {
+            let evm_query = EvmQuery::Query(argument);
+            let evm_query = serde_json::to_vec(&evm_query)?;
+            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            runtime.try_query_application(target, evm_query)?
+        };
+        let result = bcs::from_bytes::<InterpreterResult>(&result)?;
+        let call_outcome = CallOutcome {
+            result,
+            memory_offset: inputs.return_memory_offset.clone(),
+        };
+        Ok(Some(call_outcome))
     }
 }
 
