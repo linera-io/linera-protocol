@@ -69,15 +69,7 @@ spec:
               name: linera-port
             - containerPort: 20100
               name: linera-port-int
-          command:
-            [
-              "./linera-proxy",
-              "--storage",
-              "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042",
-              "--genesis",
-              "/config/genesis.json",
-            ]
-          args: ["/config/server.json"]
+          command: ["./proxy-entrypoint.sh", {{ .Values.storageReplicationFactor | quote }}]
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}

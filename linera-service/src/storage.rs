@@ -388,6 +388,7 @@ impl StorageConfigNamespace {
     pub async fn add_common_config(
         &self,
         common_config: CommonStoreConfig,
+        _replication_factor: u32,
     ) -> Result<StoreConfig, anyhow::Error> {
         let namespace = self.namespace.clone();
         match &self.storage_config {
@@ -424,7 +425,8 @@ impl StorageConfigNamespace {
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri } => {
-                let config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let config =
+                    ScyllaDbStoreConfig::new(uri.to_string(), common_config, _replication_factor);
                 Ok(StoreConfig::ScyllaDb(config, namespace))
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -438,7 +440,8 @@ impl StorageConfigNamespace {
                     path_with_guard.clone(),
                     common_config.clone(),
                 );
-                let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
+                let second_config =
+                    ScyllaDbStoreConfig::new(uri.to_string(), common_config, _replication_factor);
                 let config = DualStoreConfig {
                     first_config,
                     second_config,
