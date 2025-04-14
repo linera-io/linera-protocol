@@ -233,9 +233,8 @@ fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
 }
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
-    let address: Vec<u8> = address.to_vec();
     let mut vec = vec![0_u8; 32];
-    vec[..20].copy_from_slice(&address[..20]);
+    vec[..20].copy_from_slice(address.as_ref());
     u8_slice_to_application_id(&vec)
 }
 
