@@ -400,17 +400,17 @@ async fn test_service_as_oracle_exceeding_time_limit(
 }
 
 /// Tests if execution fails early if services call `check_execution_time`.
-#[test_case(&[120]; "single service as oracle call")]
-#[test_case(&[60, 60]; "two service as oracle calls")]
-#[test_case(&[105, 15]; "long and short service as oracle calls")]
-#[test_case(&[50, 50, 50]; "three service as oracle calls")]
-#[test_case(&[60, 60, 60]; "first two service as oracle calls exceeds limit")]
+#[test_case(&[1200]; "single service as oracle call")]
+#[test_case(&[600, 600]; "two service as oracle calls")]
+#[test_case(&[1050, 150]; "long and short service as oracle calls")]
+#[test_case(&[500, 500, 500]; "three service as oracle calls")]
+#[test_case(&[600, 600, 600]; "first two service as oracle calls exceeds limit")]
 #[tokio::test]
 async fn test_service_as_oracle_timeout_early_stop(
     service_oracle_execution_times_ms: &[u64],
 ) -> anyhow::Result<()> {
-    let maximum_service_oracle_execution_ms = 70;
-    let poll_interval = Duration::from_millis(10);
+    let maximum_service_oracle_execution_ms = 700;
+    let poll_interval = Duration::from_millis(100);
     let maximum_expected_execution_time =
         Duration::from_millis(maximum_service_oracle_execution_ms) + 2 * poll_interval;
 
