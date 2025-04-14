@@ -642,9 +642,6 @@ async fn run(options: ServerOptions) {
                 "server::ServerCommand::Initialize, storage_config={:?}",
                 storage_config
             );
-            tracing::info!(
-                "server::ServerCommand::Initialize, call full_initialize_storage, step 1"
-            );
             store_config.initialize(&genesis_config).await.unwrap();
         }
 

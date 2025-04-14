@@ -142,10 +142,10 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
-revm = "19.4.0"
-revm-interpreter = { version = "15.1.0", features = ["serde"] }
-revm-precompile = "16.0.0"
-revm-primitives = "15.1.0"
+revm = "19.7.0"
+revm-interpreter = { version = "15.2.0", features = ["serde"] }
+revm-precompile = "16.2.0"
+revm-primitives = "15.2.0"
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
 scylla = "0.15.1"
