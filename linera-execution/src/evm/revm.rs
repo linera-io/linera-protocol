@@ -524,6 +524,7 @@ where
         _context: MessageContext,
         _message: Vec<u8>,
     ) -> Result<(), ExecutionError> {
+        // TODO(#3760): Implement execute_message for EVM
         todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
     }
 
@@ -615,6 +616,7 @@ where
     }
 
     fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
+        // TODO(#3758): Extracting Ethereum events from the Linera events.
         if !logs.is_empty() {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             let stream_name = bcs::to_bytes("ethereum_event")?;
