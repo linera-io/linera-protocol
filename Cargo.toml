@@ -148,7 +148,7 @@ revm-precompile = "16.2.0"
 revm-primitives = "15.2.0"
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
-scylla = "0.15.1"
+scylla = "1.1.0"
 secp256k1 = { version = "0.30.0", default-features = false, features = [
     "alloc",
     "rand",
