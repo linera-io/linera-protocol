@@ -22,6 +22,7 @@ use linera_client::{
 use linera_core::data_types::ClientOutcome;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
+use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
@@ -271,7 +272,7 @@ where
 
     /// Runs the faucet.
     #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self, cancellation_token: CancellationToken) -> anyhow::Result<()> {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
@@ -284,7 +285,8 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let chain_listener = ChainListener::new(self.config, self.context, self.storage).run();
+        let chain_listener =
+            ChainListener::new(self.config, self.context, self.storage, cancellation_token).run();
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
         let server = axum::serve(tcp_listener, app).into_future();

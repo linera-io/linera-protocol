@@ -9,11 +9,16 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{future::select_all, lock::Mutex, FutureExt as _, StreamExt};
+use futures::{
+    future::{join_all, select_all},
+    lock::Mutex,
+    FutureExt as _, StreamExt,
+};
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::Timestamp,
     identifiers::{ChainId, Destination},
+    task::NonBlockingFuture,
 };
 use linera_core::{
     client::{AbortOnDrop, ChainClient, ChainClientError},
@@ -22,6 +27,7 @@ use linera_core::{
 };
 use linera_execution::{Message, OutgoingMessage, SystemMessage};
 use linera_storage::{Clock as _, Storage};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
 use crate::{wallet::Wallet, Error};
@@ -93,7 +99,9 @@ struct ListeningClient<C: ClientContext> {
     /// The chain client.
     client: ContextChainClient<C>,
     /// The abort handle for the task that listens to the validators.
-    _abort_handle: AbortOnDrop,
+    abort_handle: AbortOnDrop,
+    /// The listening task's join handle.
+    join_handle: NonBlockingFuture<()>,
     /// The stream of notifications from the local node.
     notification_stream: Arc<Mutex<NotificationStream>>,
     /// This is only `< u64::MAX` when the client is waiting for a timeout to process the inbox.
@@ -103,15 +111,24 @@ struct ListeningClient<C: ClientContext> {
 impl<C: ClientContext> ListeningClient<C> {
     fn new(
         client: ContextChainClient<C>,
-        _abort_handle: AbortOnDrop,
+        abort_handle: AbortOnDrop,
+        join_handle: NonBlockingFuture<()>,
         notification_stream: NotificationStream,
     ) -> Self {
         Self {
             client,
-            _abort_handle,
+            abort_handle,
+            join_handle,
             #[allow(clippy::arc_with_non_send_sync)] // Only `Send` with `futures-util/alloc`.
             notification_stream: Arc::new(Mutex::new(notification_stream)),
             timeout: Timestamp::from(u64::MAX),
+        }
+    }
+
+    async fn stop(self) {
+        drop(self.abort_handle);
+        if let Err(error) = self.join_handle.await {
+            warn!("Failed to join listening task: {error:?}");
         }
     }
 }
@@ -123,16 +140,23 @@ pub struct ChainListener<C: ClientContext> {
     storage: C::Storage,
     config: Arc<ChainListenerConfig>,
     listening: BTreeMap<ChainId, ListeningClient<C>>,
+    cancellation_token: CancellationToken,
 }
 
 impl<C: ClientContext> ChainListener<C> {
     /// Creates a new chain listener given client chains.
-    pub fn new(config: ChainListenerConfig, context: Arc<Mutex<C>>, storage: C::Storage) -> Self {
+    pub fn new(
+        config: ChainListenerConfig,
+        context: Arc<Mutex<C>>,
+        storage: C::Storage,
+        cancellation_token: CancellationToken,
+    ) -> Self {
         Self {
             storage,
             context,
             config: Arc::new(config),
             listening: Default::default(),
+            cancellation_token,
         }
     }
 
@@ -153,8 +177,11 @@ impl<C: ClientContext> ChainListener<C> {
                 Action::Notification(notification) => {
                     self.process_notification(notification).await?
                 }
+                Action::Stop => break,
             }
         }
+        join_all(self.listening.into_values().map(|client| client.stop())).await;
+        Ok(())
     }
 
     /// Processes a notification, updating local chains and validators as needed.
@@ -246,8 +273,9 @@ impl<C: ClientContext> ChainListener<C> {
         } else {
             client.synchronize_chain_state(chain_id).await?;
         }
-        let _handle = linera_base::task::spawn(listener.in_current_span());
-        let listening_client = ListeningClient::new(client, abort_handle, notification_stream);
+        let join_handle = linera_base::task::spawn(listener.in_current_span());
+        let listening_client =
+            ListeningClient::new(client, abort_handle, join_handle, notification_stream);
         self.listening.insert(chain_id, listening_client);
         self.maybe_process_inbox(chain_id).await?;
         Ok(())
@@ -266,6 +294,9 @@ impl<C: ClientContext> ChainListener<C> {
                 })
                 .collect::<Vec<_>>();
             futures::select! {
+                () = self.cancellation_token.cancelled().fuse() => {
+                    return Ok(Action::Stop);
+                }
                 () = self.storage.clock().sleep_until(timeout).fuse() => {
                     return Ok(Action::ProcessInbox(timeout_chain_id));
                 }
@@ -366,4 +397,5 @@ impl<C: ClientContext> ChainListener<C> {
 enum Action {
     ProcessInbox(ChainId),
     Notification(Notification),
+    Stop,
 }

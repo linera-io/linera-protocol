@@ -3560,7 +3560,7 @@ enum ExecuteBlockOutcome {
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
 #[must_use]
-pub struct AbortOnDrop(AbortHandle);
+pub struct AbortOnDrop(pub AbortHandle);
 
 impl Drop for AbortOnDrop {
     #[instrument(level = "trace", skip(self))]

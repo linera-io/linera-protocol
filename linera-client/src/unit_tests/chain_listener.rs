@@ -23,6 +23,7 @@ use linera_execution::system::Recipient;
 use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
 use rand::SeedableRng as _;
+use tokio_util::sync::CancellationToken;
 
 use super::util::make_genesis_config;
 use crate::{
@@ -142,8 +143,10 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
         .await?;
     let context = Arc::new(Mutex::new(context));
-    let _handle = linera_base::task::spawn(async move {
-        ChainListener::new(config, context, storage)
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let handle = linera_base::task::spawn(async move {
+        ChainListener::new(config, context, storage, child_token)
             .run()
             .await
             .unwrap()
@@ -178,6 +181,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             panic!("Unexpected local balance: {}", balance);
         }
     }
+
+    cancellation_token.cancel();
+    handle.await?;
 
     Ok(())
 }
