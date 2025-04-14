@@ -223,7 +223,7 @@ impl BatchExt for Batch {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
-        self.put_key_value(blob_key.to_vec(), &blob.bytes())?;
+        self.put_key_value_bytes(blob_key.to_vec(), blob.bytes().to_vec());
         Ok(())
     }
 
@@ -526,7 +526,7 @@ where
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
+        let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?;
@@ -541,7 +541,7 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
-        let maybe_blob_bytes = self.store.read_multi_values::<Vec<u8>>(blob_keys).await?;
+        let maybe_blob_bytes = self.store.read_multi_values_bytes(blob_keys).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER
             .with_label_values(&[])
