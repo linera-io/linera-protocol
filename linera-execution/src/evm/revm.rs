@@ -457,7 +457,7 @@ impl ExecutionResultSuccess {
         let Output::Call(output) = self.output else {
             unreachable!("The Output is not a call which is impossible");
         };
-        let gas = Gas::new(100000);
+        let gas = Gas::new(0);
         let result = InterpreterResult {
             result,
             output,
