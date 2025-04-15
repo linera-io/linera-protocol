@@ -21,8 +21,8 @@ use linera_base::identifiers::{ChainId, StreamId};
 
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceSyncRuntimeHandle, UserContract, UserContractModule, UserService,
-    UserServiceModule,
+    ProcessStreamsContext, QueryContext, ServiceSyncRuntimeHandle, UserContract,
+    UserContractModule, UserService, UserServiceModule,
 };
 
 /// A mocked implementation of a user application.
@@ -150,7 +150,7 @@ type ExecuteMessageHandler = Box<
 type ProcessStreamHandler = Box<
     dyn FnOnce(
             &mut ContractSyncRuntimeHandle,
-            OperationContext,
+            ProcessStreamsContext,
             Vec<(ChainId, StreamId, u32)>,
         ) -> Result<(), ExecutionError>
         + Send
@@ -257,7 +257,7 @@ impl ExpectedCall {
     pub fn process_streams(
         handler: impl FnOnce(
                 &mut ContractSyncRuntimeHandle,
-                OperationContext,
+                ProcessStreamsContext,
                 Vec<(ChainId, StreamId, u32)>,
             ) -> Result<(), ExecutionError>
             + Send
@@ -379,12 +379,12 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
 
     fn process_streams(
         &mut self,
-        _context: OperationContext,
-        _streams: Vec<(ChainId, StreamId, u32)>,
+        context: ProcessStreamsContext,
+        streams: Vec<(ChainId, StreamId, u32)>,
     ) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::ProcessStreams(handler)) => {
-                handler(&mut self.runtime, _context, _streams)
+                handler(&mut self.runtime, context, streams)
             }
             Some(unexpected_call) => panic!(
                 "Expected a call to `process_streams`, got a call to `{unexpected_call}` instead."
