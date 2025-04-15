@@ -1,5 +1,9 @@
 [package]
 name = "linera-faucet-server"
+description = "The server component of the Linera faucet."
+readme = "README.md"
+documentation = "https://docs.rs/linera-faucet-server/latest/linera_faucet_server/"
+
 version.workspace = true
 authors.workspace = true
 repository.workspace = true
