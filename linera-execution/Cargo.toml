@@ -47,6 +47,7 @@ dyn-clone.workspace = true
 futures.workspace = true
 hex = { workspace = true, optional = true }
 js-sys = { workspace = true, optional = true }
+num_enum.workspace = true
 linera-base = { workspace = true, features = ["reqwest"] }
 linera-views.workspace = true
 linera-views-derive.workspace = true

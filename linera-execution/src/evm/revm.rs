@@ -4,7 +4,7 @@
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
 
 use core::ops::Range;
-use std::sync::Arc;
+use std::{convert::TryFrom, sync::Arc};
 
 use alloy::primitives::Address;
 use linera_base::{
@@ -13,6 +13,7 @@ use linera_base::{
     identifiers::{ApplicationId, StreamName},
     vm::EvmQuery,
 };
+use num_enum::TryFromPrimitive;
 use revm::{
     db::WrapDatabaseRef, inspector_handle_register, primitives::Bytes, ContextPrecompile,
     ContextStatefulPrecompile, Evm, EvmContext, InnerEvmContext, Inspector,
@@ -238,6 +239,15 @@ fn address_to_user_application_id(address: Address) -> ApplicationId {
     u8_slice_to_application_id(&vec)
 }
 
+#[repr(u8)]
+#[derive(TryFromPrimitive)]
+enum PrecompileTag {
+    /// Key prefix for the try_call_application
+    TryCallApplication,
+    /// Key prefix for the try_query_application
+    TryQueryApplication,
+}
+
 struct GeneralContractCall;
 
 impl<Runtime: ContractRuntime>
@@ -251,26 +261,38 @@ impl<Runtime: ContractRuntime>
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
         let vec = input.to_vec();
-        let target = u8_slice_to_application_id(&vec[0..32]);
-        let argument: Vec<u8> = vec[32..].to_vec();
-        let result = {
-            let authenticated = true;
-            let mut runtime = context
-                .db
-                .0
-                .runtime
-                .lock()
-                .expect("The lock should be possible");
-            runtime.try_call_application(authenticated, target, argument)
-        }
-        .map_err(|error| PrecompileErrors::Fatal {
-            msg: format!("{}", error),
+        let tag = vec[0];
+        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileErrors::Fatal {
+            msg: format!("{error} when trying to convert tag={tag}"),
         })?;
-        // We do not know how much gas was used.
-        let gas_used = 0;
-        let bytes = Bytes::copy_from_slice(&result);
-        let result = PrecompileOutput { gas_used, bytes };
-        Ok(result)
+        match tag {
+            PrecompileTag::TryCallApplication => {
+                let target = u8_slice_to_application_id(&vec[1..33]);
+                let argument = vec[33..].to_vec();
+                let result = {
+                    let authenticated = true;
+                    let mut runtime = context
+                        .db
+                        .0
+                        .runtime
+                        .lock()
+                        .expect("The lock should be possible");
+                    runtime.try_call_application(authenticated, target, argument)
+                }
+                .map_err(|error| PrecompileErrors::Fatal {
+                    msg: format!("{}", error),
+                })?;
+                // We do not know how much gas was used.
+                let gas_used = 0;
+                let bytes = Bytes::copy_from_slice(&result);
+                let result = PrecompileOutput { gas_used, bytes };
+                Ok(result)
+            }
+            PrecompileTag::TryQueryApplication => Err(PrecompileErrors::Fatal {
+                msg: "try_query_application is not available in the GeneralContractCall"
+                    .to_string(),
+            }),
+        }
     }
 }
 
@@ -287,25 +309,36 @@ impl<Runtime: ServiceRuntime>
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
         let vec = input.to_vec();
-        let target = u8_slice_to_application_id(&vec[0..32]);
-        let argument: Vec<u8> = vec[32..].to_vec();
-        let result = {
-            let mut runtime = context
-                .db
-                .0
-                .runtime
-                .lock()
-                .expect("The lock should be possible");
-            runtime.try_query_application(target, argument)
-        }
-        .map_err(|error| PrecompileErrors::Fatal {
-            msg: format!("{}", error),
+        let tag = vec[0];
+        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileErrors::Fatal {
+            msg: format!("{error} when trying to convert tag={tag}"),
         })?;
-        // We do not know how much gas was used.
-        let gas_used = 0;
-        let bytes = Bytes::copy_from_slice(&result);
-        let result = PrecompileOutput { gas_used, bytes };
-        Ok(result)
+        match tag {
+            PrecompileTag::TryCallApplication => Err(PrecompileErrors::Fatal {
+                msg: "try_call_application is not available in the GeneralServiceCall".to_string(),
+            }),
+            PrecompileTag::TryQueryApplication => {
+                let target = u8_slice_to_application_id(&vec[1..33]);
+                let argument = vec[33..].to_vec();
+                let result = {
+                    let mut runtime = context
+                        .db
+                        .0
+                        .runtime
+                        .lock()
+                        .expect("The lock should be possible");
+                    runtime.try_query_application(target, argument)
+                }
+                .map_err(|error| PrecompileErrors::Fatal {
+                    msg: format!("{}", error),
+                })?;
+                // We do not know how much gas was used.
+                let gas_used = 0;
+                let bytes = Bytes::copy_from_slice(&result);
+                let result = PrecompileOutput { gas_used, bytes };
+                Ok(result)
+            }
+        }
     }
 }
 
