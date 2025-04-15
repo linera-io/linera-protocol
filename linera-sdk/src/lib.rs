@@ -46,7 +46,6 @@ pub mod views;
 use std::fmt::Debug;
 
 pub use bcs;
-use contract::wit::contract_runtime_api::ChainId;
 pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
@@ -56,7 +55,7 @@ use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     crypto::CryptoHash,
     doc_scalar,
-    identifiers::StreamId,
+    identifiers::{ChainId, StreamId},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use serde_json;
