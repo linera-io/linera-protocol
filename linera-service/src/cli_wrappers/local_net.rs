@@ -79,8 +79,8 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
         Database::DynamoDb => {
             #[cfg(feature = "dynamodb")]
             {
-                let use_localstack = true;
-                Ok(StorageConfig::DynamoDb { use_localstack })
+                let use_dynamodb_local = true;
+                Ok(StorageConfig::DynamoDb { use_dynamodb_local })
             }
             #[cfg(not(feature = "dynamodb"))]
             panic!("Database::DynamoDb is selected without the feature dynamodb");
