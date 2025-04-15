@@ -76,6 +76,10 @@ pub use crate::{
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
 
+/// The `linera.sol` library code to be included in solidity smart
+/// contracts using Linera features.
+pub const LINERA_SOL: &str = include_str!("../solidity/linera.sol");
+
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
 
