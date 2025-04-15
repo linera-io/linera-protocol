@@ -9,10 +9,10 @@ This module defines the client API for the Web extension.
 use std::{collections::HashMap, future::Future, sync::Arc};
 
 use futures::{lock::Mutex as AsyncMutex, stream::StreamExt};
-use linera_base::identifiers::ApplicationId;
+use linera_base::identifiers::{AccountOwner, ApplicationId};
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
-    client_options::ClientOptions,
+    client_options::ClientContextOptions,
     wallet::Wallet,
 };
 use linera_core::{
@@ -33,8 +33,8 @@ type JsResult<T> = Result<T, JsError>;
 
 async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore as WithError>::Error>
 {
-    linera_storage::DbStorage::initialize(
-        linera_views::memory::MemoryStoreConfig::new(1),
+    linera_storage::DbStorage::maybe_create_and_connect(
+        &linera_views::memory::MemoryStoreConfig::new(1),
         "linera",
         Some(linera_execution::WasmRuntime::Wasmer),
     )
@@ -47,15 +47,11 @@ type ChainClient =
     linera_core::client::ChainClient<linera_rpc::node_provider::NodeProvider, WebStorage>;
 
 // TODO(#13): get from user
-pub const OPTIONS: ClientOptions = ClientOptions {
+pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     send_timeout: std::time::Duration::from_millis(4000),
     recv_timeout: std::time::Duration::from_millis(4000),
     max_pending_message_bundles: 10,
-    wasm_runtime: Some(linera_execution::WasmRuntime::Wasmer),
-    max_concurrent_queries: None,
     max_loaded_chains: nonzero_lit::usize!(40),
-    max_stream_queries: 10,
-    cache_size: 1000,
     retry_delay: std::time::Duration::from_millis(1000),
     max_retries: 10,
     wait_for_outgoing_messages: false,
@@ -68,10 +64,7 @@ pub const OPTIONS: ClientOptions = ClientOptions {
     // TODO(linera-protocol#2944): separate these out from the
     // `ClientOptions` struct, since they apply only to the CLI/native
     // client
-    tokio_threads: Some(1),
-    command: linera_client::client_options::ClientCommand::Keygen,
     wallet_state_path: None,
-    storage_config: None,
     with_wallet: None,
 };
 
@@ -107,12 +100,15 @@ impl JsFaucet {
     /// - if we fail to get the list of current validators from the faucet
     /// - if we fail to claim the chain from the faucet
     /// - if we fail to persist the new chain or keypair to the wallet
+    ///
+    /// # Panics
+    /// If an error occurs in the chain listener task.
     #[wasm_bindgen(js_name = claimChain)]
     pub async fn claim_chain(&self, client: &mut Client) -> JsResult<String> {
         use linera_client::persistent::LocalPersistExt as _;
         let mut context = client.client_context.lock().await;
         let key_pair = context.wallet.generate_key_pair();
-        let owner: linera_base::identifiers::Owner = key_pair.public().into();
+        let owner: AccountOwner = key_pair.public().into();
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
             owner,
@@ -203,7 +199,7 @@ pub struct Frontend(Client);
 
 #[derive(serde::Deserialize)]
 struct TransferParams {
-    donor: Option<linera_base::identifiers::Owner>,
+    donor: Option<AccountOwner>,
     amount: u64,
     recipient: linera_base::identifiers::Account,
 }
@@ -228,14 +224,18 @@ impl Client {
             OPTIONS,
             wallet,
         )));
-        ChainListener::new(ChainListenerConfig::default())
-            .run(client_context.clone(), storage)
-            .await;
+        ChainListener::new(
+            ChainListenerConfig::default(),
+            client_context.clone(),
+            storage,
+        )
+        .run()
+        .await;
         log::info!("Linera Web client successfully initialized");
         Ok(Self { client_context })
     }
 
-    /// Set a callback to be called when a notification is received
+    /// Sets a callback to be called when a notification is received
     /// from the network.
     ///
     /// # Panics
@@ -301,6 +301,15 @@ impl Client {
         result
     }
 
+    /// Transfers funds from one account to another.
+    ///
+    /// `options` should be an options object of the form `{ donor,
+    /// recipient, amount }`; omitting `donor` will cause the funds to
+    /// come from the chain balance.
+    ///
+    /// # Errors
+    /// - if the options object is of the wrong form
+    /// - if the transfer fails
     #[wasm_bindgen]
     pub async fn transfer(&self, options: wasm_bindgen::JsValue) -> JsResult<()> {
         let params: TransferParams = serde_wasm_bindgen::from_value(options)?;
@@ -309,7 +318,7 @@ impl Client {
         let _hash = self
             .apply_client_command(&chain_client, || {
                 chain_client.transfer(
-                    params.donor,
+                    params.donor.unwrap_or(AccountOwner::CHAIN),
                     linera_base::data_types::Amount::from_tokens(params.amount.into()),
                     linera_execution::system::Recipient::Account(params.recipient),
                 )
@@ -319,6 +328,10 @@ impl Client {
         Ok(())
     }
 
+    /// Gets the identity of the default chain.
+    ///
+    /// # Errors
+    /// If the chain couldn't be established.
     pub async fn identity(&self) -> JsResult<JsValue> {
         Ok(serde_wasm_bindgen::to_value(
             &self.default_chain_client().await?.identity().await?,
