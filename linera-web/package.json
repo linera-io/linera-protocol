@@ -1,6 +1,6 @@
 {
     "name": "@linera/client",
-    "version": "0.0.3",
+    "version": "0.14.0",
     "description": "Web client for the Linera blockchain",
     "main": "dist/linera_web.js",
     "types": "dist/linera_web.d.ts",
