@@ -10,7 +10,7 @@ use alloy::primitives::Address;
 use linera_base::{
     data_types::Bytecode,
     ensure,
-    identifiers::{ApplicationId, StreamName},
+    identifiers::{ApplicationId, ChainId, StreamId, StreamName},
     vm::EvmQuery,
 };
 use num_enum::TryFromPrimitive;
@@ -552,6 +552,14 @@ where
     ) -> Result<(), ExecutionError> {
         // TODO(#3760): Implement execute_message for EVM
         todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
+    }
+
+    fn process_streams(
+        &mut self,
+        _context: OperationContext,
+        _streams: Vec<(ChainId, StreamId, u32)>,
+    ) -> Result<(), ExecutionError> {
+        todo!("Streams are not implemented for Ethereum smart contracts yet.")
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {

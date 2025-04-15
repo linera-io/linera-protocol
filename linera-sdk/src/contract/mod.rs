@@ -85,6 +85,16 @@ macro_rules! contract {
                 )
             }
 
+            fn process_streams(streams: Vec<(ChainId, StreamId, u32>)) {
+                use $crate::util::BlockingWait;
+                $crate::contract::run_async_entrypoint::<$contract, _, _>(
+                    unsafe { &mut CONTRACT },
+                    move |contract| {
+                        contract.process_streams(streams).blocking_wait()
+                    },
+                )
+            }
+
             fn finalize() {
                 use $crate::util::BlockingWait;
 
