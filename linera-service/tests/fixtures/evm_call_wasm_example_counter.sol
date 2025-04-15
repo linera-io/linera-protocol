@@ -13,6 +13,8 @@ pragma solidity ^0.8.0;
 // solidity code. See,
 // TODO(#3761): Implement the Linera functionalities in a linera.sol library.
 
+import "./linera.sol";
+
 contract ExampleCallWasmCounter {
   bytes32 universal_address;
   constructor(bytes32 _universal_address) {
@@ -121,9 +123,7 @@ contract ExampleCallWasmCounter {
     address precompile = address(0x0b);
     CounterOperation memory input2 = CounterOperation({choice: 0, increment: input1});
     bytes memory input3 = bcs_serialize_CounterOperation(input2);
-    bytes memory input4 = abi.encodePacked(universal_address, input3);
-    (bool success, bytes memory return1) = precompile.call(input4);
-    require(success);
+    bytes memory return1 = Linera.try_call_application(universal_address, input3);
     uint64 return2 = bcs_deserialize_uint64(return1);
     return return2;
   }
@@ -132,9 +132,7 @@ contract ExampleCallWasmCounter {
     address precompile = address(0x0b);
     CounterRequest memory input2 = CounterRequest({choice:0, increment: 0});
     bytes memory input3 = serde_json_serialize_CounterRequest(input2);
-    bytes memory input4 = abi.encodePacked(universal_address, input3);
-    (bool success, bytes memory return1) = precompile.call(input4);
-    require(success);
+    bytes memory return1 = Linera.try_query_application(universal_address, input3);
     uint64 return2 = serde_json_deserialize_u64(return1);
     return return2;
   }
