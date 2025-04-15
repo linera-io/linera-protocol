@@ -46,6 +46,7 @@ pub mod views;
 use std::fmt::Debug;
 
 pub use bcs;
+use contract::wit::contract_runtime_api::ChainId;
 pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
@@ -55,6 +56,7 @@ use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     crypto::CryptoHash,
     doc_scalar,
+    identifiers::StreamId,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use serde_json;
@@ -131,6 +133,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// For a message to be executed, a user must mark it to be received in a block of the receiver
     /// chain.
     async fn execute_message(&mut self, message: Self::Message);
+
+    /// Reacts to new events on streams.
+    ///
+    /// This is called whenever there is a new event on any stream that this application
+    /// subscribes to.
+    async fn process_streams(&mut self, _streams: Vec<(ChainId, StreamId, u32)>) {}
 
     /// Finishes the execution of the current transaction.
     ///

@@ -17,6 +17,7 @@ use std::{
 
 #[cfg(web)]
 use js_sys::wasm_bindgen;
+use linera_base::identifiers::{ChainId, StreamId};
 
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, FinalizeContext, MessageContext, OperationContext,
@@ -146,6 +147,15 @@ type ExecuteMessageHandler = Box<
         + Send
         + Sync,
 >;
+type ProcessStreamHandler = Box<
+    dyn FnOnce(
+            &mut ContractSyncRuntimeHandle,
+            OperationContext,
+            Vec<(ChainId, StreamId, u32)>,
+        ) -> Result<(), ExecutionError>
+        + Send
+        + Sync,
+>;
 type FinalizeHandler = Box<
     dyn FnOnce(&mut ContractSyncRuntimeHandle, FinalizeContext) -> Result<(), ExecutionError>
         + Send
@@ -170,6 +180,8 @@ pub enum ExpectedCall {
     ExecuteOperation(#[debug(skip)] ExecuteOperationHandler),
     /// An expected call to [`UserContract::execute_message`].
     ExecuteMessage(#[debug(skip)] ExecuteMessageHandler),
+    /// An expected call to [`UserContract::process_streams`].
+    ProcessStreams(#[debug(skip)] ProcessStreamHandler),
     /// An expected call to [`UserContract::finalize`].
     Finalize(#[debug(skip)] FinalizeHandler),
     /// An expected call to [`UserService::handle_query`].
@@ -182,6 +194,7 @@ impl Display for ExpectedCall {
             ExpectedCall::Instantiate(_) => "instantiate",
             ExpectedCall::ExecuteOperation(_) => "execute_operation",
             ExpectedCall::ExecuteMessage(_) => "execute_message",
+            ExpectedCall::ProcessStreams(_) => "process_streams",
             ExpectedCall::Finalize(_) => "finalize",
             ExpectedCall::HandleQuery(_) => "handle_query",
         };
@@ -236,6 +249,22 @@ impl ExpectedCall {
             + 'static,
     ) -> Self {
         ExpectedCall::ExecuteMessage(Box::new(handler))
+    }
+
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
+    /// [`UserContract::process_streams`] implementation, which is handled by the provided
+    /// `handler`.
+    pub fn process_streams(
+        handler: impl FnOnce(
+                &mut ContractSyncRuntimeHandle,
+                OperationContext,
+                Vec<(ChainId, StreamId, u32)>,
+            ) -> Result<(), ExecutionError>
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        ExpectedCall::ProcessStreams(Box::new(handler))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
@@ -345,6 +374,22 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
                 "Expected a call to `execute_message`, got a call to `{unexpected_call}` instead."
             ),
             None => panic!("Unexpected call to `execute_message`"),
+        }
+    }
+
+    fn process_streams(
+        &mut self,
+        _context: OperationContext,
+        _streams: Vec<(ChainId, StreamId, u32)>,
+    ) -> Result<(), ExecutionError> {
+        match self.next_expected_call() {
+            Some(ExpectedCall::ProcessStreams(handler)) => {
+                handler(&mut self.runtime, _context, _streams)
+            }
+            Some(unexpected_call) => panic!(
+                "Expected a call to `process_streams`, got a call to `{unexpected_call}` instead."
+            ),
+            None => panic!("Unexpected call to `process_streams`"),
         }
     }
 

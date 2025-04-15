@@ -40,7 +40,7 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, StreamName,
+        EventId, GenericApplicationId, MessageId, ModuleId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -361,6 +361,13 @@ pub trait UserContract {
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
+    ) -> Result<(), ExecutionError>;
+
+    /// Reacts to new events on streams this application subscribes to.
+    fn process_streams(
+        &mut self,
+        context: OperationContext,
+        streams: Vec<(ChainId, StreamId, u32)>,
     ) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.
