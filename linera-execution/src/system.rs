@@ -17,8 +17,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlobContent, BlockHeight, Epoch, OracleResponse,
-        Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
+        OracleResponse, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -514,13 +514,36 @@ where
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
             }
             UpdateStreams(streams) => {
+                let mut to_process = BTreeMap::new();
                 for (chain_id, stream_id, next_index) in streams {
                     let subscriptions = self
                         .event_subscriptions
-                        .get_mut_or_default(&(chain_id, stream_id))
+                        .get_mut_or_default(&(chain_id, stream_id.clone()))
                         .await?;
-                    subscriptions.next_index = subscriptions.next_index.max(next_index);
+                    if subscriptions.next_index >= next_index {
+                        continue;
+                    }
+                    subscriptions.next_index = next_index;
+                    for app_id in &subscriptions.applications {
+                        to_process.entry(*app_id).or_insert_with(Vec::new).push((
+                            chain_id,
+                            stream_id.clone(),
+                            next_index,
+                        ));
+                    }
+                    let index = next_index
+                        .checked_sub(1)
+                        .ok_or(ArithmeticError::Underflow)?;
+                    self.context()
+                        .extra()
+                        .get_event(EventId {
+                            chain_id,
+                            stream_id,
+                            index,
+                        })
+                        .await?;
                 }
+                // TODO(#365): Call process_streams.
             }
         }
 
