@@ -51,6 +51,7 @@ metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 storage-service = ["linera-storage-service"]
 
 [dependencies]
+alloy-primitives.workspace = true
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
 assert_matches.workspace = true
