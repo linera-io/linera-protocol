@@ -1054,6 +1054,9 @@ impl ContractSyncRuntimeHandle {
             UserAction::Message(context, message) => {
                 code.execute_message(context, message).map(|()| None)
             }
+            UserAction::ProcessStreams(context, streams) => {
+                code.process_streams(context, streams).map(|()| None)
+            }
         };
 
         let result = self.execute(application_id, signer, closure)?;

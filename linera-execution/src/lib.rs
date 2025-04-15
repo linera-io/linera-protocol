@@ -366,7 +366,7 @@ pub trait UserContract {
     /// Reacts to new events on streams this application subscribes to.
     fn process_streams(
         &mut self,
-        context: OperationContext,
+        context: ProcessStreamsContext,
         streams: Vec<(ChainId, StreamId, u32)>,
     ) -> Result<(), ExecutionError>;
 
@@ -471,6 +471,41 @@ pub struct MessageContext {
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProcessStreamsContext {
+    /// The current chain ID.
+    pub chain_id: ChainId,
+    /// The authenticated signer of the operation that created the message, if any.
+    #[debug(skip_if = Option::is_none)]
+    pub authenticated_signer: Option<AccountOwner>,
+    /// The current block height.
+    pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
+}
+
+impl From<MessageContext> for ProcessStreamsContext {
+    fn from(context: MessageContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            authenticated_signer: context.authenticated_signer,
+            height: context.height,
+            round: context.round,
+        }
+    }
+}
+
+impl From<OperationContext> for ProcessStreamsContext {
+    fn from(context: OperationContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            authenticated_signer: context.authenticated_signer,
+            height: context.height,
+            round: context.round,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

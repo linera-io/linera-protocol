@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, vec};
+use std::{collections::BTreeMap, mem, vec};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, AccountOwner, Destination, StreamId},
+    identifiers::{Account, AccountOwner, ChainId, Destination, StreamId},
 };
 use linera_views::{
     context::Context,
@@ -28,11 +28,12 @@ use {
 
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
-    ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    OutgoingMessage, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage,
-    TransactionTracker,
+    resources::ResourceController,
+    system::{EventSubscriptions, SystemExecutionStateView},
+    ApplicationDescription, ApplicationId, ContractSyncRuntime, ExecutionError,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageContext, MessageKind,
+    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, Query, QueryContext,
+    QueryOutcome, ServiceSyncRuntime, SystemMessage, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -138,6 +139,7 @@ pub enum UserAction {
     Instantiate(OperationContext, Vec<u8>),
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
+    ProcessStreams(ProcessStreamsContext, Vec<(ChainId, StreamId, u32)>),
 }
 
 impl UserAction {
@@ -146,6 +148,7 @@ impl UserAction {
         match self {
             Instantiate(context, _) => context.authenticated_signer,
             Operation(context, _) => context.authenticated_signer,
+            ProcessStreams(context, _) => context.authenticated_signer,
             Message(context, _) => context.authenticated_signer,
         }
     }
@@ -154,6 +157,7 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
+            UserAction::ProcessStreams(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
         }
     }
@@ -162,6 +166,7 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,
+            UserAction::ProcessStreams(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
         }
     }
@@ -263,6 +268,7 @@ where
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
+        let old_subscriptions = self.read_event_subscriptions().await?;
         match operation {
             Operation::System(op) => {
                 let new_application = self
@@ -297,6 +303,13 @@ where
                 .await?;
             }
         }
+        self.process_subscriptions(
+            txn_tracker,
+            resource_controller,
+            context.into(),
+            old_subscriptions,
+        )
+        .await?;
         Ok(())
     }
 
@@ -309,6 +322,7 @@ where
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
+        let old_subscriptions = self.read_event_subscriptions().await?;
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
@@ -329,6 +343,13 @@ where
                 .await?;
             }
         }
+        self.process_subscriptions(
+            txn_tracker,
+            resource_controller,
+            context.into(),
+            old_subscriptions,
+        )
+        .await?;
         Ok(())
     }
 
@@ -493,5 +514,61 @@ where
             applications.push((app_id, application_description));
         }
         Ok(applications)
+    }
+
+    async fn read_event_subscriptions(
+        &self,
+    ) -> Result<BTreeMap<(ChainId, StreamId), EventSubscriptions>, ExecutionError> {
+        let vec = self.system.event_subscriptions.index_values().await?;
+        Ok(vec.into_iter().collect())
+    }
+
+    async fn process_subscriptions(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+        context: ProcessStreamsContext,
+        mut old_subscriptions: BTreeMap<(ChainId, StreamId), EventSubscriptions>,
+    ) -> Result<(), ExecutionError> {
+        let mut new_subscriptions = self.read_event_subscriptions().await?;
+        let empty = EventSubscriptions::default();
+        loop {
+            let mut to_process = BTreeMap::<ApplicationId, Vec<_>>::new();
+            for ((chain_id, stream_id), new) in &new_subscriptions {
+                if new.next_index == 0 {
+                    continue;
+                }
+                let old = old_subscriptions
+                    .get(&(*chain_id, stream_id.clone()))
+                    .unwrap_or(&empty);
+                for app_id in &new.applications {
+                    if !old.applications.contains(app_id) {
+                        to_process.entry(*app_id).or_default().push((
+                            *chain_id,
+                            stream_id.clone(),
+                            new.next_index,
+                        ));
+                    }
+                }
+            }
+            if to_process.is_empty() {
+                return Ok(());
+            }
+            for (app_id, streams) in to_process {
+                self.run_user_action(
+                    app_id,
+                    UserAction::ProcessStreams(context, streams.clone()),
+                    None,
+                    None,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
+            }
+            old_subscriptions = mem::replace(
+                &mut new_subscriptions,
+                self.read_event_subscriptions().await?,
+            );
+        }
     }
 }

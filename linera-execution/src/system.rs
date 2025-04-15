@@ -514,7 +514,6 @@ where
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
             }
             UpdateStreams(streams) => {
-                let mut to_process = BTreeMap::new();
                 for (chain_id, stream_id, next_index) in streams {
                     let subscriptions = self
                         .event_subscriptions
@@ -524,13 +523,6 @@ where
                         continue;
                     }
                     subscriptions.next_index = next_index;
-                    for app_id in &subscriptions.applications {
-                        to_process.entry(*app_id).or_insert_with(Vec::new).push((
-                            chain_id,
-                            stream_id.clone(),
-                            next_index,
-                        ));
-                    }
                     let index = next_index
                         .checked_sub(1)
                         .ok_or(ArithmeticError::Underflow)?;
@@ -543,7 +535,6 @@ where
                         })
                         .await?;
                 }
-                // TODO(#365): Call process_streams.
             }
         }
 

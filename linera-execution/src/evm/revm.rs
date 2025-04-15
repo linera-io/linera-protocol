@@ -35,9 +35,9 @@ use {
 
 use crate::{
     evm::database::DatabaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError,
-    EvmRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext, QueryContext,
-    ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
-    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    EvmRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
+    ProcessStreamsContext, QueryContext, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
+    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -556,7 +556,7 @@ where
 
     fn process_streams(
         &mut self,
-        _context: OperationContext,
+        _context: ProcessStreamsContext,
         _streams: Vec<(ChainId, StreamId, u32)>,
     ) -> Result<(), ExecutionError> {
         todo!("Streams are not implemented for Ethereum smart contracts yet.")
