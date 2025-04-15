@@ -375,7 +375,7 @@ where
             chain.execution_state = execution_state;
             (outcome.clone(), Vec::new(), Vec::new())
         } else {
-            chain
+            let (outcome, _resources, subscribe, unsubscribe) = chain
                 .execute_block(
                     &proposed_block,
                     local_time,
@@ -383,7 +383,8 @@ where
                     &published_blobs,
                     oracle_responses,
                 )
-                .await?
+                .await?;
+            (outcome, subscribe, unsubscribe)
         };
         // We should always agree on the messages and state hash.
         ensure!(

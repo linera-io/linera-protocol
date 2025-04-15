@@ -318,7 +318,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<BlockExecutionOutcome, WorkerError> {
-        let (outcome, subscribe, unsubscribe) =
+        let (outcome, _resources, subscribe, unsubscribe) =
             Box::pin(
                 self.0
                     .chain
