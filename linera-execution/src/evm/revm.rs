@@ -11,7 +11,7 @@ use linera_base::{
     data_types::Bytecode,
     ensure,
     identifiers::{ApplicationId, StreamName},
-    vm::EvmQuery,
+    vm::{EvmQuery, VmRuntime},
 };
 use revm::{
     db::WrapDatabaseRef, inspector_handle_register, primitives::Bytes, ContextPrecompile,
@@ -33,10 +33,11 @@ use {
 };
 
 use crate::{
-    evm::database::DatabaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError,
-    EvmRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext, QueryContext,
-    ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
-    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    evm::database::{DatabaseRuntime, StorageStats},
+    ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime, ExecutionError,
+    FinalizeContext, MessageContext, OperationContext, QueryContext, ServiceRuntime,
+    ServiceSyncRuntimeHandle, UserContract, UserContractInstance, UserContractModule, UserService,
+    UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -467,7 +468,7 @@ impl ExecutionResultSuccess {
         Ok((self.gas_final, result, self.logs))
     }
 
-    fn output_and_logs(self) -> (Vec<u8>, Vec<Log>) {
+    fn output_and_logs(self) -> (u64, Vec<u8>, Vec<Log>) {
         let Output::Call(output) = self.output else {
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
@@ -550,7 +551,7 @@ fn process_execution_result(
                 logs,
                 output,
             })
-        },
+        }
         ExecutionResult::Revert { gas_used, output } => {
             let error = EvmExecutionError::Revert { gas_used, output };
             Err(ExecutionError::EvmError(error))

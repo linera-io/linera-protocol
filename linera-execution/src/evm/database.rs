@@ -41,7 +41,7 @@ const SSTORE_COST_RESET_NEQ: u64 = 2900;
 const SSTORE_REFUND_RELEASE: u64 = 4800;
 
 #[derive(Clone, Default)]
-struct StorageStats {
+pub(crate) struct StorageStats {
     number_key_reset_eq: u64,
     number_key_reset_neq: u64,
     number_key_set: u64,
@@ -51,7 +51,7 @@ struct StorageStats {
 }
 
 impl StorageStats {
-    fn storage_costs(&self) -> u64 {
+    pub fn storage_costs(&self) -> u64 {
         let mut storage_costs = 0;
         storage_costs += self.number_key_reset_eq * SSTORE_COST_RESET_EQ;
         storage_costs += self.number_key_reset_neq * SSTORE_COST_RESET_NEQ;
@@ -61,12 +61,10 @@ impl StorageStats {
         storage_costs
     }
 
-    fn storage_refund(&self) -> u64 {
-        seld.number_key_release * SSTORE_REFUND_RELEASE
+    pub fn storage_refund(&self) -> u64 {
+        self.number_key_release * SSTORE_REFUND_RELEASE
     }
 }
-
-
 
 pub(crate) struct DatabaseRuntime<Runtime> {
     commit_error: Option<Arc<ExecutionError>>,
@@ -78,6 +76,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
         Self {
             commit_error: self.commit_error.clone(),
+            storage_stats: self.storage_stats.clone(),
             runtime: self.runtime.clone(),
         }
     }
@@ -124,7 +123,7 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         }
     }
 
-    fn reset_storage_stats(&self) -> StorageStats {
+    pub fn reset_storage_stats(&self) -> StorageStats {
         let mut storage_stats_read = self
             .storage_stats
             .lock()
