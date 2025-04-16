@@ -201,10 +201,7 @@ impl BlockBuilder {
 
     /// Tries to sign the prepared block with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
-    pub(crate) async fn try_sign(
-        self,
-        blobs: &[Blob],
-    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
+    pub(crate) async fn try_sign(self, blobs: &[Blob]) -> Result<CertifiedBlock, WorkerError> {
         let published_blobs = self
             .block
             .published_blob_ids()
@@ -217,7 +214,7 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (block, _, _) = self
+        let (block, resources, _) = self
             .validator
             .worker()
             .stage_block_execution(self.block, None, published_blobs)
@@ -236,7 +233,10 @@ impl BlockBuilder {
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
 
-        Ok(certificate)
+        Ok(CertifiedBlock {
+            certificate,
+            resources,
+        })
     }
 }
 
