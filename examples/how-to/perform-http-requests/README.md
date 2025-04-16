@@ -65,6 +65,7 @@ For the test, a simple HTTP server will be executed in the background.
 ```bash
 HTTP_PORT=9090
 cd examples
+cargo build --bin test_http_server
 cargo run --bin test_http_server -- "$HTTP_PORT" &
 cd ..
 ```
