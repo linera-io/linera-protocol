@@ -559,6 +559,7 @@ where
         _context: ProcessStreamsContext,
         _streams: Vec<(ChainId, StreamId, u32)>,
     ) -> Result<(), ExecutionError> {
+        // TODO(#3785): Implement process_streams for EVM
         todo!("Streams are not implemented for Ethereum smart contracts yet.")
     }
 
