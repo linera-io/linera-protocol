@@ -19,7 +19,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
     vm::VmRuntime,
 };
-use linera_chain::{types::ConfirmedBlockCertificate, ChainExecutionContext};
+use linera_chain::ChainExecutionContext;
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     committee::Epoch,
@@ -37,7 +37,7 @@ use crate::{ContractAbi, ServiceAbi};
 pub struct ActiveChain {
     key_pair: AccountSecretKey,
     description: ChainDescription,
-    tip: Arc<Mutex<Option<ConfirmedBlockCertificate>>>,
+    tip: Arc<Mutex<Option<CertifiedBlock>>>,
     validator: TestValidator,
 }
 
@@ -279,7 +279,7 @@ impl ActiveChain {
             result.expect("Rejected certificate");
         }
 
-        *tip = Some(block.certificate.clone());
+        *tip = Some(block.clone());
 
         Ok(block)
     }

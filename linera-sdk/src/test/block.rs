@@ -50,13 +50,14 @@ impl BlockBuilder {
         chain_id: ChainId,
         owner: AccountOwner,
         epoch: Epoch,
-        previous_block: Option<&ConfirmedBlockCertificate>,
+        previous_block: Option<&CertifiedBlock>,
         validator: TestValidator,
     ) -> Self {
-        let previous_block_hash = previous_block.map(|certificate| certificate.hash());
+        let previous_block_hash = previous_block.map(|block| block.certificate.hash());
         let height = previous_block
-            .map(|certificate| {
-                certificate
+            .map(|block| {
+                block
+                    .certificate
                     .inner()
                     .height()
                     .try_add_one()
