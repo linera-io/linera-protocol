@@ -8,7 +8,7 @@
 use linera_base::{
     abi::ContractAbi,
     data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
@@ -263,5 +263,22 @@ impl CertifiedBlock {
     /// Returns the number of messages produced by this [`CertifiedBlock`].
     pub fn outgoing_message_count(&self) -> usize {
         self.certificate.outgoing_message_count()
+    }
+
+    /// Returns the [`MessageId`] for the `message_index`th outgoing message produced by the
+    /// `operation_index`th operation in this [`CertifiedBlock`].
+    pub fn message_id_for_operation(
+        &self,
+        operation_index: usize,
+        message_index: u32,
+    ) -> MessageId {
+        self.certificate
+            .inner()
+            .block()
+            .message_id_for_operation(operation_index, message_index)
+            .expect(
+                "Missing {message_index}th outgoing message \
+                produced by {operation_index}th operation",
+            )
     }
 }
