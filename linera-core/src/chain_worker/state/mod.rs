@@ -29,7 +29,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch, ExecutionStateView, Message, Query, QueryContext, QueryOutcome,
-    ServiceRuntimeEndpoint, SystemMessage,
+    ResourceTracker, ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -189,12 +189,12 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        let (block, _resources, response) = ChainWorkerStateWithTemporaryChanges::new(self)
+    ) -> Result<(Block, ResourceTracker, ChainInfoResponse), WorkerError> {
+        let (block, resources, response) = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .stage_block_execution(block, round, published_blobs)
             .await?;
-        Ok((block, response))
+        Ok((block, resources, response))
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.

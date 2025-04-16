@@ -22,7 +22,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    committee::Epoch, ExecutionStateView, Query, QueryContext, QueryOutcome, ResourceTracker,
     ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
@@ -88,7 +88,7 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(Block, ChainInfoResponse), WorkerError>>,
+        callback: oneshot::Sender<Result<(Block, ResourceTracker, ChainInfoResponse), WorkerError>>,
     },
 
     /// Process a leader timeout issued for this multi-owner chain.

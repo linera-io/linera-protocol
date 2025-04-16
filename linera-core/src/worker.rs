@@ -542,15 +542,17 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        self.query_chain_worker(block.chain_id, move |callback| {
-            ChainWorkerRequest::StageBlockExecution {
-                block,
-                round,
-                published_blobs,
-                callback,
-            }
-        })
-        .await
+        let (block, _resources, response) = self
+            .query_chain_worker(block.chain_id, move |callback| {
+                ChainWorkerRequest::StageBlockExecution {
+                    block,
+                    round,
+                    published_blobs,
+                    callback,
+                }
+            })
+            .await?;
+        Ok((block, response))
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
