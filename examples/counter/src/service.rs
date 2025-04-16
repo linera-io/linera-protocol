@@ -7,7 +7,7 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Request, Response, Schema, Object};
 use counter::CounterOperation;
 use linera_sdk::{
     graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service,
@@ -16,20 +16,25 @@ use linera_sdk::{
 
 use self::state::CounterState;
 
+// ANCHOR: service_struct
+linera_sdk::service!(CounterService);
+
 pub struct CounterService {
     state: Arc<CounterState>,
     runtime: Arc<ServiceRuntime<Self>>,
 }
+// ANCHOR_END: service_struct
 
-linera_sdk::service!(CounterService);
-
+// ANCHOR: declare_abi
 impl WithServiceAbi for CounterService {
     type Abi = counter::CounterAbi;
 }
+// ANCHOR_END: declare_abi
 
 impl Service for CounterService {
     type Parameters = ();
 
+    // ANCHOR: new
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = CounterState::load(runtime.root_view_storage_context())
             .await
@@ -39,7 +44,9 @@ impl Service for CounterService {
             runtime: Arc::new(runtime),
         }
     }
+    // ANCHOR_END: new
 
+    // ANCHOR: handle_query
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
@@ -49,7 +56,37 @@ impl Service for CounterService {
         .finish();
         schema.execute(request).await
     }
+    // ANCHOR_END: handle_query
 }
+
+/*
+// ANCHOR: mutation
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<CounterService>>,
+}
+
+#[Object]
+impl MutationRoot {
+    async fn increment(&self, value: u64) -> [u8; 0] {
+        self.runtime.schedule_operation(&value);
+        []
+    }
+}
+// ANCHOR_END: mutation
+*/
+
+// ANCHOR: query
+struct QueryRoot {
+    value: u64,
+}
+
+#[Object]
+impl QueryRoot {
+    async fn value(&self) -> &u64 {
+        &self.value
+    }
+}
+// ANCHOR_END: query
 
 #[cfg(test)]
 mod tests {
