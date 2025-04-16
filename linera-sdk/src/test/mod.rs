@@ -33,7 +33,7 @@ pub use {
 pub use self::mock_stubs::*;
 #[cfg(with_integration_testing)]
 pub use self::{
-    block::BlockBuilder,
+    block::{BlockBuilder, CertifiedBlock},
     chain::{ActiveChain, TryGraphQLMutationError, TryGraphQLQueryError, TryQueryError},
     validator::TestValidator,
 };

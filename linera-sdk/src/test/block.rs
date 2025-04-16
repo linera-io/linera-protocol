@@ -16,13 +16,13 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin, ProposedBlock,
         SignatureAggregator,
     },
-    types::{ConfirmedBlock, ConfirmedBlockCertificate},
+    types::{BlockHeader, ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
 use linera_execution::{
     committee::Epoch,
     system::{Recipient, SystemOperation},
-    Operation,
+    Operation, OutgoingMessage, ResourceTracker,
 };
 
 use super::TestValidator;
@@ -237,5 +237,24 @@ impl BlockBuilder {
             .expect("Committee has more than one test validator");
 
         Ok(certificate)
+    }
+}
+
+/// A block that has been confirmed and certified by the validators.
+#[derive(Clone, Debug)]
+pub struct CertifiedBlock {
+    pub(super) certificate: ConfirmedBlockCertificate,
+    pub(super) resources: ResourceTracker,
+}
+
+impl CertifiedBlock {
+    /// Returns the header of this [`CertifiedBlock`].
+    pub fn header(&self) -> &BlockHeader {
+        &self.certificate.inner().block().header
+    }
+
+    /// Returns the messages in this [`CertifiedBlock`].
+    pub fn messages(&self) -> &[Vec<OutgoingMessage>] {
+        self.certificate.inner().block().messages()
     }
 }
