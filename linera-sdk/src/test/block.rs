@@ -7,7 +7,7 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Resources, Round, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId, MessageId},
     ownership::TimeoutConfig,
 };
@@ -280,5 +280,63 @@ impl CertifiedBlock {
                 "Missing {message_index}th outgoing message \
                 produced by {operation_index}th operation",
             )
+    }
+
+    /// Returns [`true`] if this block used less than the [`Resources`] listed for comparison.
+    pub fn consumed_less_than_or_equal_resources(&self, resources: Resources) -> bool {
+        let Resources {
+            fuel: maximum_fuel,
+            read_operations: maximum_read_operations,
+            write_operations: maximum_write_operations,
+            bytes_to_read,
+            bytes_to_write,
+            blobs_to_read,
+            blobs_to_publish,
+            blob_bytes_to_read,
+            blob_bytes_to_publish,
+            messages: maximum_messages,
+            message_size,
+            storage_size_delta,
+            service_as_oracle_queries,
+            http_requests: maximum_http_requests,
+        } = resources;
+
+        let ResourceTracker {
+            blocks: _,
+            block_size: _,
+            fuel,
+            read_operations,
+            write_operations,
+            bytes_read,
+            bytes_written,
+            blobs_read,
+            blobs_published,
+            blob_bytes_read,
+            blob_bytes_published,
+            bytes_stored,
+            operations: _,
+            operation_bytes: _,
+            messages,
+            message_bytes,
+            http_requests,
+            service_oracle_queries,
+            service_oracle_execution: _,
+            grants: _,
+        } = self.resources;
+
+        fuel <= maximum_fuel
+            && read_operations <= maximum_read_operations
+            && write_operations <= maximum_write_operations
+            && bytes_read <= bytes_to_read.into()
+            && bytes_written <= bytes_to_write.into()
+            && blobs_read <= blobs_to_read
+            && blobs_published <= blobs_to_publish
+            && blob_bytes_read <= blob_bytes_to_read.into()
+            && blob_bytes_published <= blob_bytes_to_publish.into()
+            && messages <= maximum_messages
+            && message_bytes <= message_size.into()
+            && bytes_stored <= storage_size_delta.try_into().unwrap_or(i32::MAX)
+            && service_oracle_queries <= service_as_oracle_queries
+            && http_requests <= maximum_http_requests
     }
 }
