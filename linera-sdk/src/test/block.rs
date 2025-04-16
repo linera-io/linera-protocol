@@ -217,7 +217,7 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (block, _) = self
+        let (block, _, _) = self
             .validator
             .worker()
             .stage_block_execution(self.block, None, published_blobs)
