@@ -90,6 +90,7 @@ FAUCET_URL=http://localhost:8080
 
 # Set the path of the future wallet.
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 # Initialize a new user wallet.

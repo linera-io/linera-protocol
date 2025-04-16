@@ -19,8 +19,9 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
+    crypto::InMemSigner,
     data_types::{Amount, Bytecode, Event, OracleResponse},
-    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, StreamId, StreamName},
+    identifiers::{ApplicationId, BlobId, BlobType, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -97,6 +98,7 @@ async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
@@ -111,7 +113,7 @@ where
         .len()
         .max(service_bytecode.bytes.len()) as u64;
     policy.maximum_blob_size = contract_compressed_len.max(service_compressed_len) as u64;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
         .with_policy(policy.clone());
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
@@ -261,8 +263,9 @@ async fn run_test_run_application_with_dependency<B>(storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the module.
@@ -276,6 +279,7 @@ where
     // Handling the message causes an oracle request to the counter service, so no fast blocks
     // are allowed.
     let receiver_key = receiver.public_key().await.unwrap();
+
     receiver
         .change_ownership(ChainOwnership::multiple(
             [(receiver_key.into(), 100)],
@@ -284,6 +288,7 @@ where
         ))
         .await
         .unwrap();
+
     let creator_key = creator.public_key().await.unwrap();
     creator
         .change_ownership(ChainOwnership::multiple(
@@ -528,8 +533,9 @@ async fn run_test_cross_chain_message<B>(storage_builder: B) -> anyhow::Result<(
 where
     B: StorageBuilder,
 {
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let _admin = builder.add_root_chain(0, Amount::ONE).await?;
@@ -554,9 +560,9 @@ where
     let module_id = module_id
         .with_abi::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>();
 
-    let sender_owner = AccountOwner::from(sender.key_pair().await?.public());
-    let receiver_owner = AccountOwner::from(receiver.key_pair().await?.public());
-    let receiver2_owner = AccountOwner::from(receiver2.key_pair().await?.public());
+    let sender_owner = sender.preferred_owner.unwrap();
+    let receiver_owner = receiver.preferred_owner.unwrap();
+    let receiver2_owner = receiver2.preferred_owner.unwrap();
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = fungible::InitialState { accounts };
@@ -709,8 +715,9 @@ async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> anyhow::Result
 where
     B: StorageBuilder,
 {
+    let mut keys = InMemSigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let sender = builder.add_root_chain(0, Amount::ONE).await?;
@@ -874,7 +881,8 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         blob_byte_published: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
     };
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut keys = InMemSigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
         .await?
         .with_policy(policy.clone());
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;

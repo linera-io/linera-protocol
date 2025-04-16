@@ -351,12 +351,16 @@ impl Secp256k1Signature {
     where
         T: BcsSignable<'de>,
     {
+        Self::sign_prehash(secret, CryptoHash::new(value))
+    }
+
+    /// Computes a signature from a prehash.
+    pub fn sign_prehash(secret: &Secp256k1SecretKey, prehash: CryptoHash) -> Self {
         use k256::ecdsa::signature::hazmat::PrehashSigner;
 
-        let prehash = CryptoHash::new(value).as_bytes().0;
         let (signature, _rid) = secret
             .0
-            .sign_prehash(&prehash)
+            .sign_prehash(&prehash.as_bytes().0)
             .expect("Failed to sign prehashed data"); // NOTE: This is a critical error we don't control.
         Secp256k1Signature(signature)
     }

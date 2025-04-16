@@ -17,6 +17,7 @@ cleanup() {
     rm -r linera.db
     rm server.json
     rm wallet.json
+    rm keystore.json
     SCYLLA_VOLUME=docker_linera-scylla-data
     SHARED_VOLUME=docker_linera-shared
     docker rm -f $(docker ps -a -q --filter volume=$SCYLLA_VOLUME)
@@ -63,7 +64,7 @@ linera-server generate --validators "$CONF_DIR/validator.toml" --committee commi
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
 
-linera --wallet wallet.json --storage rocksdb:linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json --testing-prng-seed 2
+linera --wallet wallet.json --keystore keystore.json --storage rocksdb:linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json --testing-prng-seed 2
 
 if [ "${DOCKER_COMPOSE_WAIT:-false}" = "true" ]; then
     docker compose up --wait

@@ -15,17 +15,17 @@ use futures::{
     FutureExt as _, StreamExt,
 };
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash},
+    crypto::CryptoHash,
     data_types::Timestamp,
-    identifiers::{ChainId, Destination},
+    identifiers::{AccountOwner, ChainId, Destination},
     task::NonBlockingFuture,
 };
 use linera_core::{
-    client::{AbortOnDrop, ChainClient, ChainClientError},
+    client::{AbortOnDrop, ChainClient as ContextChainClient, ChainClientError},
     node::{NotificationStream, ValidatorNodeProvider},
     worker::{Notification, Reason},
 };
-use linera_execution::{Message, OutgoingMessage, SystemMessage};
+use linera_execution::OutgoingMessage;
 use linera_storage::{Clock as _, Storage};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
@@ -59,8 +59,8 @@ pub struct ChainListenerConfig {
     pub delay_after_ms: u64,
 }
 
-type ContextChainClient<C> =
-    ChainClient<<C as ClientContext>::ValidatorNodeProvider, <C as ClientContext>::Storage>;
+type ChainClient<C> =
+    ContextChainClient<<C as ClientContext>::ValidatorNodeProvider, <C as ClientContext>::Storage>;
 
 #[cfg_attr(not(web), async_trait, trait_variant::make(Send))]
 #[cfg_attr(web, async_trait(?Send))]
@@ -70,18 +70,18 @@ pub trait ClientContext: 'static {
 
     fn wallet(&self) -> &Wallet;
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Self>, Error>;
 
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error>;
 
-    async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
+    async fn update_wallet(&mut self, client: &ChainClient<Self>) -> Result<(), Error>;
 
-    fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+    fn clients(&self) -> Result<Vec<ChainClient<Self>>, Error> {
         let mut clients = vec![];
         for chain_id in &self.wallet().chain_ids() {
             clients.push(self.make_chain_client(*chain_id)?);
@@ -97,7 +97,7 @@ pub trait ClientContext: 'static {
 /// dropped.
 struct ListeningClient<C: ClientContext> {
     /// The chain client.
-    client: ContextChainClient<C>,
+    client: ChainClient<C>,
     /// The abort handle for the task that listens to the validators.
     abort_handle: AbortOnDrop,
     /// The listening task's join handle.
@@ -110,7 +110,7 @@ struct ListeningClient<C: ClientContext> {
 
 impl<C: ClientContext> ListeningClient<C> {
     fn new(
-        client: ContextChainClient<C>,
+        client: ChainClient<C>,
         abort_handle: AbortOnDrop,
         join_handle: NonBlockingFuture<()>,
         notification_stream: NotificationStream,
@@ -212,12 +212,10 @@ impl<C: ClientContext> ChainListener<C> {
             .filter_map(|outgoing_message| {
                 if let OutgoingMessage {
                     destination: Destination::Recipient(new_id),
-                    message: Message::System(SystemMessage::OpenChain(open_chain_config)),
                     ..
                 } = outgoing_message
                 {
-                    let owners = open_chain_config.ownership.all_owners().cloned();
-                    Some((new_id, owners.collect::<Vec<_>>()))
+                    Some(new_id)
                 } else {
                     None
                 }
@@ -228,20 +226,15 @@ impl<C: ClientContext> ChainListener<C> {
         }
         let mut new_ids = BTreeSet::new();
         let mut context_guard = self.context.lock().await;
-        for (new_id, owners) in new_chains {
-            let key_pair = owners
-                .iter()
-                .find_map(|owner| context_guard.wallet().key_pair_for_owner(owner));
-            if key_pair.is_some() {
-                context_guard
-                    .update_wallet_for_new_chain(*new_id, key_pair, block.header.timestamp)
-                    .await?;
-                new_ids.insert(*new_id);
-            }
+        for new_chain_id in new_chains {
+            context_guard
+                .update_wallet_for_new_chain(*new_chain_id, None, block.header.timestamp)
+                .await?;
+            new_ids.insert(new_chain_id);
         }
         drop(context_guard);
         for new_id in new_ids {
-            self.listen(new_id).await?;
+            self.listen(*new_id).await?;
         }
         Ok(())
     }

@@ -63,6 +63,7 @@ tokio = { workspace = true, features = ["time"] }
 tokio-stream.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
+trait-variant.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 wasm_thread = { workspace = true, optional = true }

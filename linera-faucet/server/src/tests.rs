@@ -8,9 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey},
+    crypto::{AccountPublicKey, InMemSigner},
     data_types::{Amount, Timestamp},
-    identifiers::ChainId,
+    identifiers::{AccountOwner, ChainId},
 };
 use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
@@ -50,7 +50,7 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
-        _: Option<AccountSecretKey>,
+        _: Option<AccountOwner>,
         _: Timestamp,
     ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
@@ -69,9 +69,12 @@ impl chain_listener::ClientContext for ClientContext {
 #[tokio::test]
 async fn test_faucet_rate_limiting() {
     let storage_builder = MemoryStorageBuilder::default();
+    let mut keys = InMemSigner::new(None);
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
+        .await
+        .unwrap();
     let client = builder
         .add_root_chain(1, Amount::from_tokens(6))
         .await

@@ -136,7 +136,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
         Self::read_or_create(path, || {
             Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("path does not exist: {}", path.display()),
+                format!("file is empty or does not exist: {}", path.display()),
             )
             .into())
         })

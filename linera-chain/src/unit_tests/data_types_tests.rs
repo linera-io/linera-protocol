@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{Ed25519SecretKey, Secp256k1SecretKey, ValidatorKeypair},
+    crypto::{AccountSecretKey, Ed25519SecretKey, Secp256k1SecretKey, ValidatorKeypair},
     data_types::Amount,
 };
 

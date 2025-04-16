@@ -95,7 +95,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required module
 * `keygen` — Create an unassigned key pair
-* `assign` — Link an owner with a key pair in the wallet to a chain that was created for that owner
+* `assign` — Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
 * `project` — Manage Linera projects
@@ -106,6 +106,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
+* `--keystore <KEYSTORE_ENV_VAR>` — Sets the file storing the keystore state
 * `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
 * `--send-timeout-ms <SEND_TIMEOUT>` — Timeout for sending queries (milliseconds)
 
@@ -715,7 +716,7 @@ Create an unassigned key pair
 
 ## `linera assign`
 
-Link an owner with a key pair in the wallet to a chain that was created for that owner
+Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 
 **Usage:** `linera assign --owner <OWNER> --message-id <MESSAGE_ID>`
 

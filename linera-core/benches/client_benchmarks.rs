@@ -3,6 +3,7 @@
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
 use linera_base::{
+    crypto::InMemSigner,
     data_types::Amount,
     identifiers::{Account, AccountOwner},
     time::Duration,
@@ -33,12 +34,15 @@ where
     B: StorageBuilder + Default,
 {
     let storage_builder = B::default();
+    let mut signer = InMemSigner::new(None);
     // Criterion doesn't allow setup functions to be async, but it runs them inside an async
     // context. But our setup uses async functions:
     let handle = runtime::Handle::current();
     let _guard = handle.enter();
     futures::executor::block_on(async move {
-        let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
+        let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
+            .await
+            .unwrap();
         let chain1 = builder
             .add_root_chain(1, Amount::from_tokens(10))
             .await
@@ -54,7 +58,7 @@ pub async fn run_claim_bench<B>((chain1, chain2): (ChainClient<B>, ChainClient<B
 where
     B: StorageBuilder,
 {
-    let owner1 = chain1.identity().await.unwrap();
+    let owner1 = chain1.identity().await.unwrap().unwrap();
     let amt = Amount::ONE;
 
     let account = Account::new(chain2.chain_id(), owner1);

@@ -72,4 +72,4 @@ jobs:
           max_attempts: 10
           timeout_minutes: 2
           retry_wait_seconds: 10
-          command: linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
+          command: linera --wallet docker/wallet.json --keystore docker/keystore.json --storage rocksdb:docker/linera.db sync-balance

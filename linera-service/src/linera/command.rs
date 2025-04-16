@@ -731,7 +731,9 @@ pub enum ClientCommand {
     /// Create an unassigned key pair.
     Keygen,
 
-    /// Link an owner with a key pair in the wallet to a chain that was created for that owner.
+    /// Link the owner to the chain.
+    /// Expects that the caller has a private key corresponding to the `public_key`,
+    /// otherwise block proposals will fail when signing with it.
     Assign {
         /// The owner to assign.
         #[arg(long)]
