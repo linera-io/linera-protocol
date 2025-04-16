@@ -174,23 +174,24 @@ impl BlockBuilder {
         self
     }
 
-    /// Receives all direct messages  that were sent to this chain by the given certificate.
-    pub fn with_messages_from(&mut self, certificate: &ConfirmedBlockCertificate) -> &mut Self {
-        self.with_messages_from_by_medium(certificate, &Medium::Direct, MessageAction::Accept)
+    /// Receives all direct messages that were sent to this chain by the given certificate.
+    pub fn with_messages_from(&mut self, block: &CertifiedBlock) -> &mut Self {
+        self.with_messages_from_by_medium(block, &Medium::Direct, MessageAction::Accept)
     }
 
     /// Receives all messages that were sent to this chain by the given certificate.
     pub fn with_messages_from_by_medium(
         &mut self,
-        certificate: &ConfirmedBlockCertificate,
+        block: &CertifiedBlock,
         medium: &Medium,
         action: MessageAction,
     ) -> &mut Self {
         let origin = Origin {
-            sender: certificate.inner().chain_id(),
+            sender: block.certificate.inner().chain_id(),
             medium: medium.clone(),
         };
-        let bundles = certificate
+        let bundles = block
+            .certificate
             .message_bundles_for(medium, self.block.chain_id)
             .map(|(_epoch, bundle)| IncomingBundle {
                 origin: origin.clone(),
