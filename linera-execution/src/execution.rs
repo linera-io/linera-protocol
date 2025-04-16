@@ -32,7 +32,7 @@ use crate::{
     ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
     OutgoingMessage, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage,
-    TransactionTracker,
+    Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -78,11 +78,13 @@ where
             height: application_description.block_height,
             round: None,
             index: Some(0),
+            timestamp: local_time,
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
         let next_message_index = 0;
         let next_application_index = application_description.application_index + 1;
+        let next_chain_index = 0;
 
         let application_id = From::from(&application_description);
 
@@ -115,6 +117,7 @@ where
             0,
             next_message_index,
             next_application_index,
+            next_chain_index,
             None,
         );
         txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
@@ -161,6 +164,14 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
+        }
+    }
+
+    pub(crate) fn timestamp(&self) -> Timestamp {
+        match self {
+            UserAction::Instantiate(context, _) => context.timestamp,
+            UserAction::Operation(context, _) => context.timestamp,
+            UserAction::Message(context, _) => context.timestamp,
         }
     }
 }

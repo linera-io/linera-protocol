@@ -124,6 +124,8 @@ BlobType:
       ApplicationDescription: UNIT
     5:
       Committee: UNIT
+    6:
+      ChainDescription: UNIT
 Block:
   STRUCT:
     - header:
@@ -258,14 +260,13 @@ ChainAndHeight:
     - height:
         TYPENAME: BlockHeight
 ChainDescription:
-  ENUM:
-    0:
-      Root:
-        NEWTYPE: U32
-    1:
-      Child:
-        NEWTYPE:
-          TYPENAME: MessageId
+  STRUCT:
+    - origin:
+        TYPENAME: ChainOrigin
+    - timestamp:
+        TYPENAME: Timestamp
+    - config:
+        TYPENAME: OpenChainConfig
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -375,6 +376,19 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
+ChainOrigin:
+  ENUM:
+    0:
+      Root:
+        NEWTYPE: U32
+    1:
+      Child:
+        STRUCT:
+          - parent:
+              TYPENAME: ChainId
+          - block_height:
+              TYPENAME: BlockHeight
+          - chain_index: U32
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -617,13 +631,6 @@ MessageBundle:
     - messages:
         SEQ:
           TYPENAME: PostedMessage
-MessageId:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - height:
-        TYPENAME: BlockHeight
-    - index: U32
 MessageKind:
   ENUM:
     0:
@@ -742,7 +749,8 @@ OpenChainConfig:
     - ownership:
         TYPENAME: ChainOwnership
     - admin_id:
-        TYPENAME: ChainId
+        OPTION:
+          TYPENAME: ChainId
     - epoch:
         TYPENAME: Epoch
     - committees:
@@ -750,7 +758,7 @@ OpenChainConfig:
           KEY:
             TYPENAME: Epoch
           VALUE:
-            TYPENAME: Committee
+            SEQ: U8
     - balance:
         TYPENAME: Amount
     - application_permissions:
@@ -1100,10 +1108,6 @@ SystemMessage:
           - recipient:
               TYPENAME: Recipient
     2:
-      OpenChain:
-        NEWTYPE:
-          TYPENAME: OpenChainConfig
-    3:
       ApplicationCreated: UNIT
 SystemOperation:
   ENUM:

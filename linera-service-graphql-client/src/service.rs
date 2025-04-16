@@ -4,10 +4,9 @@
 use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, ChainDescription, OracleResponse, Round, Timestamp},
     identifiers::{
-        Account, AccountOwner, BlobId, ChainDescription, ChainId, Destination,
-        GenericApplicationId, StreamName,
+        Account, AccountOwner, BlobId, ChainId, Destination, GenericApplicationId, StreamName,
     },
 };
 use thiserror::Error;

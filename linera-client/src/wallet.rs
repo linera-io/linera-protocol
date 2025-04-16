@@ -8,9 +8,9 @@ use std::{
 
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng},
-    data_types::{BlockHeight, Timestamp},
+    data_types::{BlockHeight, ChainDescription, Timestamp},
     ensure,
-    identifiers::{AccountOwner, ChainDescription, ChainId},
+    identifiers::{AccountOwner, ChainId},
 };
 use linera_core::{
     client::{ChainClient, PendingProposal},

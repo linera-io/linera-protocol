@@ -296,6 +296,35 @@ where
 
     /// Obtains the certificate containing the specified message.
     #[instrument(level = "trace", skip(self))]
+    pub async fn certificate_for_block(
+        &self,
+        chain_id: ChainId,
+        block_height: BlockHeight,
+    ) -> Result<ConfirmedBlockCertificate, LocalNodeError> {
+        let query = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_in_range(BlockHeightRange::single(block_height));
+        let info = self.handle_chain_info_query(query).await?.info;
+        let certificates = self
+            .storage_client()
+            .read_certificates(info.requested_sent_certificate_hashes)
+            .await?;
+        let certificate = certificates
+            .into_iter()
+            .find(|certificate| {
+                certificate.block().header.chain_id == chain_id
+                    && certificate.block().header.height == block_height
+            })
+            .ok_or_else(|| {
+                ViewError::not_found(
+                    "could not find certificate with block chain ID and height {}",
+                    (chain_id, block_height),
+                )
+            })?;
+        Ok(certificate)
+    }
+
+    /// Obtains the certificate containing the specified message.
+    #[instrument(level = "trace", skip(self))]
     pub async fn certificate_for(
         &self,
         message_id: &MessageId,

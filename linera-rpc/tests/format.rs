@@ -4,8 +4,8 @@
 
 use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, TestString},
-    data_types::{BlobContent, OracleResponse, Round},
-    identifiers::{AccountOwner, BlobType, ChainDescription, Destination, GenericApplicationId},
+    data_types::{BlobContent, ChainDescription, ChainOrigin, OracleResponse, Round},
+    identifiers::{AccountOwner, BlobType, Destination, GenericApplicationId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -74,6 +74,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Medium>(&samples)?;
     tracer.trace_type::<Destination>(&samples)?;
     tracer.trace_type::<ChainDescription>(&samples)?;
+    tracer.trace_type::<ChainOrigin>(&samples)?;
     tracer.trace_type::<ChainOwnership>(&samples)?;
     tracer.trace_type::<GenericApplicationId>(&samples)?;
     tracer.trace_type::<LockingBlock>(&samples)?;

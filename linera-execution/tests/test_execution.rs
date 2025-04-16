@@ -9,18 +9,18 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, Epoch, Resources, SendMessageRequest,
-        Timestamp,
+        Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin, Epoch,
+        OpenChainConfig, Resources, SendMessageRequest, Timestamp,
     },
-    identifiers::{Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId},
+    identifiers::{Account, AccountOwner, BlobType, Destination},
     ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::Committee,
-    system::SystemMessage,
     test_utils::{
         blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,
-        create_dummy_user_application_registrations, ExpectedCall, RegisterMockApplication,
+        create_dummy_user_application_registrations, dummy_chain_description,
+        dummy_chain_description_with_ownership_and_balance, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeContext, Message, Operation,
@@ -33,7 +33,9 @@ use test_case::test_case;
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (app_id, app_desc, contract_blob, service_blob) =
@@ -47,7 +49,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         .add_blobs([contract_blob.clone(), service_blob.clone(), app_desc_blob])
         .await?;
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -76,7 +78,9 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 // TODO(#1484): Split this test into multiple more specialized tests.
 async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -140,7 +144,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 
     let context = OperationContext {
         authenticated_signer: Some(owner),
-        ..create_dummy_operation_context()
+        ..create_dummy_operation_context(chain_id)
     };
     let mut controller = ResourceController::default();
     let mut txn_tracker =
@@ -173,7 +177,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     }));
 
     let context = QueryContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
@@ -228,7 +232,9 @@ enum SessionCall {
 #[tokio::test]
 async fn test_simulated_session() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -285,7 +291,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     }));
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let mut txn_tracker =
         TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
@@ -308,7 +314,9 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_simulated_session_leak() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -354,7 +362,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -376,7 +384,9 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (id, application, blobs) = view.register_mock_application(0).await?;
@@ -391,7 +401,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -413,7 +423,9 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (first_id, first_application, first_app_blobs) = view.register_mock_application(0).await?;
@@ -454,7 +466,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     second_application.expect_call(ExpectedCall::default_finalize());
     first_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -482,7 +494,9 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
 #[tokio::test]
 async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (first_id, first_application, first_app_blobs) = view.register_mock_application(0).await?;
@@ -492,7 +506,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     let (fourth_id, fourth_application, fourth_app_blobs) =
         view.register_mock_application(3).await?;
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination_chain = dummy_chain_description(1).id();
     let first_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
@@ -587,7 +601,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         Ok(())
     }));
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(
         first_app_blobs
@@ -626,7 +640,9 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -643,7 +659,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
         }
     }));
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -673,7 +689,9 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_cross_application_call_from_finalize_of_called_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -697,7 +715,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     }));
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -726,7 +744,9 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
 #[tokio::test]
 async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -750,7 +770,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
         }
     }));
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -782,7 +802,9 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_cross_application_error() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -801,7 +823,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         |_runtime, _context, _argument| Err(ExecutionError::UserError(error_message.to_owned())),
     ));
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     assert_matches!(
         view.execute_operation(
@@ -827,12 +849,14 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_simple_message() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination_chain = dummy_chain_description(1).id();
     let dummy_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
@@ -857,7 +881,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
     view.execute_operation(
@@ -887,7 +911,9 @@ async fn test_simple_message() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -900,7 +926,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         },
     ));
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination_chain = dummy_chain_description(1).id();
     let dummy_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
@@ -927,7 +953,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     target_application.expect_call(ExpectedCall::default_finalize());
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let mut txn_tracker =
         TransactionTracker::new_replaying_blobs(caller_blobs.iter().chain(&target_blobs));
@@ -957,7 +983,9 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -978,7 +1006,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         },
     ));
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination_chain = dummy_chain_description(1).id();
     let dummy_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
         authenticated: false,
@@ -1006,7 +1034,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     middle_application.expect_call(ExpectedCall::default_finalize());
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(
         caller_blobs
@@ -1044,7 +1072,9 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_multiple_messages_from_different_applications() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
 
     // The entrypoint application, which sends a message and calls other applications
@@ -1057,9 +1087,9 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         view.register_mock_application(2).await?;
 
     // The first destination chain receives messages from the caller and the sending applications
-    let first_destination_chain = ChainId::from(ChainDescription::Root(1));
+    let first_destination_chain = dummy_chain_description(1).id();
     // The second destination chain only receives a message from the sending application
-    let second_destination_chain = ChainId::from(ChainDescription::Root(2));
+    let second_destination_chain = dummy_chain_description(2).id();
 
     // The message sent to the first destination chain by the caller and the sending applications
     let first_message = SendMessageRequest {
@@ -1118,7 +1148,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     caller_application.expect_call(ExpectedCall::default_finalize());
 
     // Execute the operation, starting the test scenario
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(
         caller_blobs
@@ -1178,45 +1208,57 @@ async fn test_open_chain() -> anyhow::Result<()> {
         ValidatorPublicKey::test_key(0),
         AccountPublicKey::test_key(0),
     )]);
-    let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
+    let committees = BTreeMap::from([(
+        Epoch::ZERO,
+        bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
+    )]);
     let chain_key = AccountPublicKey::test_key(1);
     let ownership = ChainOwnership::single(chain_key.into());
     let child_ownership = ChainOwnership::single(AccountPublicKey::test_key(2).into());
-    let state = SystemExecutionState {
-        committees: committees.clone(),
-        ownership: ownership.clone(),
-        balance: Amount::from_tokens(5),
-        ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
-    };
+    let balance = Amount::from_tokens(5);
+    let root_description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let state = SystemExecutionState::new(root_description.clone());
     let mut view = state.into_view().await;
+    view.context()
+        .extra()
+        .add_blobs([Blob::new_chain_description(&root_description)])
+        .await?;
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     let context = OperationContext {
         height: BlockHeight(1),
         authenticated_signer: Some(chain_key.into()),
-        ..create_dummy_operation_context()
+        ..create_dummy_operation_context(root_description.id())
     };
     let first_message_index = 5;
-    // We will send one additional message before calling open_chain.
-    let index = first_message_index + 1;
-    let message_id = MessageId {
-        chain_id: context.chain_id,
-        height: context.height,
-        index,
+
+    let child_origin = ChainOrigin::Child {
+        parent: root_description.id(),
+        block_height: BlockHeight(1),
+        chain_index: 0,
     };
+    let child_application_permissions = ApplicationPermissions::new_single(application_id);
+    let child_config = OpenChainConfig {
+        balance: Amount::ONE,
+        ownership: child_ownership.clone(),
+        application_permissions: child_application_permissions.clone(),
+        admin_id: Some(root_description.id()),
+        ..root_description.config().clone()
+    };
+    let child_description = ChainDescription::new(child_origin, child_config, Timestamp::default());
+    let child_id = child_description.id();
 
     application.expect_call(ExpectedCall::execute_operation({
         let child_ownership = child_ownership.clone();
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership()?, ownership);
-            let destination = Account::chain(ChainId::root(2));
+            let destination = Account::chain(dummy_chain_description(2).id());
             runtime.transfer(AccountOwner::CHAIN, destination, Amount::ONE)?;
-            let id = runtime.application_id()?;
-            let application_permissions = ApplicationPermissions::new_single(id);
-            let (actual_message_id, chain_id) =
+            let application_permissions = child_application_permissions.clone();
+            let chain_id =
                 runtime.open_chain(child_ownership, application_permissions, Amount::ONE)?;
-            assert_eq!(message_id, actual_message_id);
-            assert_eq!(chain_id, ChainId::child(message_id));
+            assert_eq!(chain_id, child_id);
             Ok(vec![])
         }
     }));
@@ -1232,6 +1274,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         1,
         first_message_index,
         0,
+        0,
         Some(blob_oracle_responses(blobs.iter())),
     );
     view.execute_operation(context, operation, &mut txn_tracker, &mut controller)
@@ -1239,30 +1282,42 @@ async fn test_open_chain() -> anyhow::Result<()> {
 
     assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
     let txn_outcome = txn_tracker.into_outcome().unwrap();
-    let message = &txn_outcome.outgoing_messages[(index - first_message_index) as usize];
-    let OutgoingMessage {
-        message: Message::System(SystemMessage::OpenChain(config)),
-        destination: Destination::Recipient(recipient_id),
-        ..
-    } = message
-    else {
-        panic!("Unexpected message at index {}: {:?}", index, message);
-    };
-    assert_eq!(*recipient_id, ChainId::child(message_id));
-    assert_eq!(config.balance, Amount::ONE);
-    assert_eq!(config.ownership, child_ownership);
-    assert_eq!(config.committees, committees);
+    let new_blob = &txn_outcome.blobs[0];
+    assert_eq!(new_blob.id().hash, child_id.0);
+    assert_eq!(new_blob.id().blob_type, BlobType::ChainDescription);
+    let created_description: ChainDescription = bcs::from_bytes(&new_blob.clone().into_bytes())
+        .expect("should deserialize a chain description");
+    assert_eq!(created_description.config().balance, Amount::ONE);
+    assert_eq!(created_description.config().ownership, child_ownership);
+    assert_eq!(created_description.config().committees, committees);
 
     // Initialize the child chain using the config from the message.
     let mut child_view = SystemExecutionState::default()
-        .into_view_with(ChainId::child(message_id), Default::default())
+        .into_view_with(child_id, Default::default())
         .await;
     child_view
+        .context()
+        .extra()
+        .add_blobs([Blob::new_chain_description(&child_description)])
+        .await?;
+    child_view
         .system
-        .initialize_chain(message_id, Timestamp::from(0), (**config).clone());
+        .initialize_chain(child_description.id())
+        .await
+        .expect("should initialize chain correctly");
     assert_eq!(*child_view.system.balance.get(), Amount::ONE);
     assert_eq!(*child_view.system.ownership.get(), child_ownership);
-    assert_eq!(*child_view.system.committees.get(), committees);
+    assert_eq!(
+        *child_view.system.committees.get(),
+        committees
+            .into_iter()
+            .map(|(epoch, serialized_committee)| (
+                epoch,
+                bcs::from_bytes::<Committee>(&serialized_committee)
+                    .expect("deserializing a committee should not fail")
+            ))
+            .collect::<BTreeMap<_, _>>()
+    );
     assert_eq!(
         *child_view.system.application_permissions.get(),
         ApplicationPermissions::new_single(application_id)
@@ -1274,23 +1329,19 @@ async fn test_open_chain() -> anyhow::Result<()> {
 /// Tests the system API call `close_chain`.
 #[tokio::test]
 async fn test_close_chain() -> anyhow::Result<()> {
-    let committee = Committee::make_simple(vec![(
-        ValidatorPublicKey::test_key(0),
-        AccountPublicKey::test_key(0),
-    )]);
-    let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
     let ownership = ChainOwnership::single(AccountPublicKey::test_key(1).into());
-    let state = SystemExecutionState {
-        committees: committees.clone(),
-        ownership: ownership.clone(),
-        balance: Amount::from_tokens(5),
-        ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
-    };
+    let description = dummy_chain_description_with_ownership_and_balance(
+        0,
+        ownership.clone(),
+        Amount::from_tokens(5),
+    );
+    let chain_id = description.id();
+    let state = SystemExecutionState::new(description);
     let mut view = state.into_view().await;
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     // The application is not authorized to close the chain.
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             assert_matches!(
@@ -1386,22 +1437,22 @@ async fn test_message_receipt_spending_chain_balance(
     let amount = Amount::ONE;
     let super_owners = receiving_chain_owner.into_iter().collect();
 
-    let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
-        balance: amount,
-        ownership: ChainOwnership {
+    let description = dummy_chain_description_with_ownership_and_balance(
+        0,
+        ChainOwnership {
             super_owners,
             ..ChainOwnership::default()
         },
-        ..SystemExecutionState::default()
-    }
-    .into_view()
-    .await;
+        amount,
+    );
+    let chain_id = description.id();
+
+    let mut view = SystemExecutionState::new(description).into_view().await;
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     let receiver_chain_account = AccountOwner::CHAIN;
-    let sender_chain_id = ChainId::root(2);
+    let sender_chain_id = dummy_chain_description(2).id();
     let recipient = Account {
         chain_id: sender_chain_id,
         owner: AccountOwner::CHAIN,
@@ -1415,7 +1466,7 @@ async fn test_message_receipt_spending_chain_balance(
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_message_context(authenticated_signer);
+    let context = create_dummy_message_context(chain_id, authenticated_signer);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
 
