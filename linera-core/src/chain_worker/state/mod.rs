@@ -190,7 +190,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
-        let (block, response) = ChainWorkerStateWithTemporaryChanges::new(self)
+        let (block, _resources, response) = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .stage_block_execution(block, round, published_blobs)
             .await?;

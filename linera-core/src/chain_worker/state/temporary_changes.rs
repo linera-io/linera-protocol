@@ -125,13 +125,13 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ResourceTracker, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.0.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
-        let (outcome, _resources) = self
+        let (outcome, resources) = self
             .execute_block(&block, local_time, round, published_blobs)
             .await?;
 
@@ -147,7 +147,7 @@ where
                 .await?;
         }
 
-        Ok((outcome.with(block), response))
+        Ok((outcome.with(block), resources, response))
     }
 
     /// Validates a proposal's signatures; returns `manager::Outcome::Skip` if we already voted
