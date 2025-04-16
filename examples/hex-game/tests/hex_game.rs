@@ -21,7 +21,7 @@ async fn hex_game() {
     let (validator, app_id, creation_chain) =
         TestValidator::with_current_application::<HexAbi, _, _>((), Timeouts::default()).await;
 
-    let certificate = creation_chain
+    let start_block = creation_chain
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
@@ -33,14 +33,13 @@ async fn hex_game() {
         })
         .await;
 
-    let block = certificate.inner().block();
-    let message_id = block.message_id_for_operation(0, 0).unwrap();
+    let message_id = start_block.message_id_for_operation(0, 0);
     let description = ChainDescription::Child(message_id);
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator);
 
     chain
         .add_block(|block| {
-            block.with_messages_from(&certificate);
+            block.with_messages_from(&start_block);
             block.with_operation(app_id, Operation::MakeMove { x: 0, y: 0 });
         })
         .await;
@@ -95,7 +94,7 @@ async fn hex_game_clock() {
             .saturating_sub(TimeDelta::from_millis(1)),
     );
 
-    let certificate = creation_chain
+    let start_block = creation_chain
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
@@ -107,15 +106,14 @@ async fn hex_game_clock() {
         })
         .await;
 
-    let block = certificate.inner().block();
-    let message_id = block.message_id_for_operation(0, 0).unwrap();
+    let message_id = start_block.message_id_for_operation(0, 0);
     let description = ChainDescription::Child(message_id);
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator.clone());
 
     chain
         .add_block(|block| {
             block
-                .with_messages_from(&certificate)
+                .with_messages_from(&start_block)
                 .with_operation(app_id, Operation::MakeMove { x: 0, y: 0 })
                 .with_timestamp(time);
         })

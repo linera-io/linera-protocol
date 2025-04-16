@@ -3198,7 +3198,7 @@ where
             timeout_config: TimeoutConfig::default(),
         })
         .with_authenticated_signer(Some(owner0));
-    let (block0, _) = worker
+    let (block0, _, _) = worker
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
@@ -3249,7 +3249,7 @@ where
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 = make_child_block(&value0.clone());
-    let (block1, _) = worker
+    let (block1, _, _) = worker
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let proposal1_wrong_owner = proposed_block1
@@ -3291,7 +3291,7 @@ where
     let amount = Amount::from_tokens(1);
     let proposed_block2 =
         make_child_block(&value0.clone()).with_simple_transfer(ChainId::root(1), amount);
-    let (block2, _) = worker
+    let (block2, _, _) = worker
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
 
@@ -3407,7 +3407,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (block0, _) = worker
+    let (block0, _, _) = worker
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
@@ -3498,7 +3498,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (change_ownership_block, _) = worker
+    let (change_ownership_block, _, _) = worker
         .stage_block_execution(change_ownership_block, None, vec![])
         .await?;
     let change_ownership_value = ConfirmedBlock::new(change_ownership_block);
@@ -3522,7 +3522,7 @@ where
     // Without the transfer, a random key pair can propose a block.
     let proposal = make_child_block(&change_ownership_value)
         .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
-    let (block, _) = worker
+    let (block, _, _) = worker
         .stage_block_execution(proposal.content.block.clone(), None, vec![])
         .await?;
     let value = ConfirmedBlock::new(block);
@@ -3563,7 +3563,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (block0, _) = worker
+    let (block0, _, _) = worker
         .stage_block_execution(proposed_block0, None, vec![])
         .await?;
     let value0 = ConfirmedBlock::new(block0);
@@ -3581,7 +3581,7 @@ where
     let proposal1 = proposed_block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
-    let (block1, _) = worker
+    let (block1, _, _) = worker
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let value1 = ConfirmedBlock::new(block1);
@@ -3629,7 +3629,7 @@ where
     worker.handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (block2, _) = worker
+    let (block2, _, _) = worker
         .stage_block_execution(proposed_block2.clone(), None, vec![])
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
@@ -3688,7 +3688,7 @@ where
     let proposed_block = make_first_block(chain_id)
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_authenticated_signer(Some(key_pair.public().into()));
-    let (block, _) = worker
+    let (block, _, _) = worker
         .stage_block_execution(proposed_block, None, vec![])
         .await?;
     let value = ConfirmedBlock::new(block);

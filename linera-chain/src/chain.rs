@@ -728,6 +728,7 @@ where
     ) -> Result<
         (
             BlockExecutionOutcome,
+            ResourceTracker,
             Vec<(ChannelFullName, ChainId)>,
             Vec<(ChannelFullName, ChainId)>,
         ),
@@ -974,7 +975,7 @@ where
             operation_results,
         };
 
-        Ok((outcome, subscribe, unsubscribe))
+        Ok((outcome, resource_controller.tracker, subscribe, unsubscribe))
     }
 
     /// Executes a block: first the incoming messages, then the main operation.
@@ -989,6 +990,7 @@ where
     ) -> Result<
         (
             BlockExecutionOutcome,
+            ResourceTracker,
             Vec<(ChannelFullName, ChainId)>,
             Vec<(ChannelFullName, ChainId)>,
         ),
