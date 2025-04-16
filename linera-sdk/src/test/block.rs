@@ -259,4 +259,9 @@ impl CertifiedBlock {
     pub fn messages(&self) -> &[Vec<OutgoingMessage>] {
         self.certificate.inner().block().messages()
     }
+
+    /// Returns the number of messages produced by this [`CertifiedBlock`].
+    pub fn outgoing_message_count(&self) -> usize {
+        self.certificate.outgoing_message_count()
+    }
 }
