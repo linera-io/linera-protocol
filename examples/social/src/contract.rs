@@ -6,11 +6,12 @@
 mod state;
 
 use linera_sdk::{
-    linera_base_types::{ChainId, ChannelName, Destination, MessageId, WithContractAbi},
+    linera_base_types::{ChainId, StreamId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use social::{Comment, Key, Message, Operation, OwnPost, Post, SocialAbi};
+use serde::{Deserialize, Serialize};
+use social::{Comment, Key, Operation, OwnPost, Post, SocialAbi};
 use state::SocialState;
 
 /// The channel name the application uses for cross-chain messages about new posts.
@@ -28,10 +29,10 @@ impl WithContractAbi for SocialContract {
 }
 
 impl Contract for SocialContract {
-    type Message = Message;
+    type Message = ();
     type InstantiationArgument = ();
     type Parameters = ();
-    type EventValue = OwnPost;
+    type EventValue = Event;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = SocialState::load(runtime.root_view_storage_context())
@@ -46,9 +47,17 @@ impl Contract for SocialContract {
     }
 
     async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
-        let (destination, message) = match operation {
-            Operation::Subscribe { chain_id } => (chain_id.into(), Message::Subscribe),
-            Operation::Unsubscribe { chain_id } => (chain_id.into(), Message::Unsubscribe),
+        match operation {
+            Operation::Subscribe { chain_id } => {
+                let app_id = self.runtime.application_id().forget_abi();
+                self.runtime
+                    .subscribe_to_events(chain_id, app_id, POSTS_CHANNEL_NAME.into());
+            }
+            Operation::Unsubscribe { chain_id } => {
+                let app_id = self.runtime.application_id().forget_abi();
+                self.runtime
+                    .unsubscribe_from_events(chain_id, app_id, POSTS_CHANNEL_NAME.into());
+            }
             Operation::Post { text, image_url } => {
                 self.execute_post_operation(text, image_url).await
             }
@@ -56,32 +65,42 @@ impl Contract for SocialContract {
             Operation::Comment { key, comment } => {
                 self.execute_comment_operation(key, comment).await
             }
-        };
-
-        self.runtime.send_message(destination, message);
+        }
     }
 
-    async fn execute_message(&mut self, message: Message) {
-        let message_id = self
-            .runtime
-            .message_id()
-            .expect("Message ID has to be available when executing a message");
-        match message {
-            Message::Subscribe => self.runtime.subscribe(
-                message_id.chain_id,
-                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
-            ),
-            Message::Unsubscribe => self.runtime.unsubscribe(
-                message_id.chain_id,
-                ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
-            ),
-            Message::Post { index, post } => self.execute_post_message(message_id, index, post),
-            Message::Like { key } => self.execute_like_message(key).await,
-            Message::Comment {
-                key,
-                chain_id,
-                comment,
-            } => self.execute_comment_message(key, chain_id, comment).await,
+    async fn execute_message(&mut self, (): ()) {
+        panic!("Unexpected message");
+    }
+
+    async fn process_streams(&mut self, streams: Vec<(ChainId, StreamId, u32)>) {
+        for (chain_id, stream_id, next_index) in streams {
+            assert_eq!(stream_id.stream_name, POSTS_CHANNEL_NAME.into());
+            assert_eq!(
+                stream_id.application_id,
+                self.runtime.application_id().forget_abi().into()
+            );
+            let stored_count = self
+                .state
+                .processed_events
+                .get_mut_or_default(&chain_id)
+                .await
+                .expect("Failed to read from state");
+            let count = *stored_count;
+            *stored_count = next_index;
+            for index in count..next_index {
+                let event = self
+                    .runtime
+                    .read_event(chain_id, POSTS_CHANNEL_NAME.into(), index);
+                match event {
+                    Event::Post { post } => {
+                        self.execute_post_event(chain_id, next_index, post);
+                    }
+                    Event::Like { key } => self.execute_like_event(key).await,
+                    Event::Comment { key, comment } => {
+                        self.execute_comment_event(key, chain_id, comment).await;
+                    }
+                }
+            }
         }
     }
 
@@ -91,56 +110,32 @@ impl Contract for SocialContract {
 }
 
 impl SocialContract {
-    async fn execute_post_operation(
-        &mut self,
-        text: String,
-        image_url: Option<String>,
-    ) -> (Destination, Message) {
+    async fn execute_post_operation(&mut self, text: String, image_url: Option<String>) {
         let timestamp = self.runtime.system_time();
         let post = OwnPost {
             timestamp,
             text,
             image_url,
         };
-        let index = self.runtime.emit(POSTS_CHANNEL_NAME.into(), &post);
         self.state.own_posts.push(post.clone());
-        (
-            ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
-            Message::Post { index, post },
-        )
+        self.runtime
+            .emit(POSTS_CHANNEL_NAME.into(), &Event::Post { post });
     }
 
-    async fn execute_like_operation(&mut self, key: Key) -> (Destination, Message) {
-        (
-            ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
-            Message::Like { key },
-        )
+    async fn execute_like_operation(&mut self, key: Key) {
+        self.runtime
+            .emit(POSTS_CHANNEL_NAME.into(), &Event::Like { key });
     }
 
-    async fn execute_comment_operation(
-        &mut self,
-        key: Key,
-        comment: String,
-    ) -> (Destination, Message) {
-        let chain_id = self.runtime.chain_id();
-        (
-            ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
-            Message::Comment {
-                key,
-                chain_id,
-                comment,
-            },
-        )
+    async fn execute_comment_operation(&mut self, key: Key, comment: String) {
+        self.runtime
+            .emit(POSTS_CHANNEL_NAME.into(), &Event::Comment { key, comment });
     }
 
-    fn execute_post_message(&mut self, message_id: MessageId, index: u32, post: OwnPost) {
-        let post_event =
-            self.runtime
-                .read_event(message_id.chain_id, POSTS_CHANNEL_NAME.into(), index);
-        assert_eq!(post_event, post);
+    fn execute_post_event(&mut self, chain_id: ChainId, index: u32, post: OwnPost) {
         let key = Key {
             timestamp: post.timestamp,
-            author: message_id.chain_id,
+            author: chain_id,
             index,
         };
         let new_post = Post {
@@ -157,7 +152,7 @@ impl SocialContract {
             .expect("Failed to insert received post");
     }
 
-    async fn execute_like_message(&mut self, key: Key) {
+    async fn execute_like_event(&mut self, key: Key) {
         let mut post = self
             .state
             .received_posts
@@ -174,7 +169,7 @@ impl SocialContract {
             .expect("Failed to insert received post");
     }
 
-    async fn execute_comment_message(&mut self, key: Key, chain_id: ChainId, comment: String) {
+    async fn execute_comment_event(&mut self, key: Key, chain_id: ChainId, comment: String) {
         let mut post = self
             .state
             .received_posts
@@ -195,4 +190,14 @@ impl SocialContract {
             .insert(&key, post)
             .expect("Failed to insert received post");
     }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum Event {
+    /// A new post was created
+    Post { post: OwnPost },
+    /// A user liked a post
+    Like { key: Key },
+    /// A user commented on a post
+    Comment { key: Key, comment: String },
 }
