@@ -327,6 +327,8 @@ pub enum ExecutionError {
     InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+    #[error("process_streams was not called for all stream updates")]
+    UnprocessedStreams,
     #[error("Internal error: {0}")]
     InternalError(&'static str),
 }

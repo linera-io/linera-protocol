@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, vec};
+use std::{collections::BTreeMap, mem, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{ArithmeticError, Blob, Event, OracleResponse, Timestamp},
     ensure,
-    identifiers::{BlobId, ChainId, ChannelFullName, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
 };
 
 use crate::{ExecutionError, OutgoingMessage};
@@ -38,6 +38,8 @@ pub struct TransactionTracker {
     unsubscribe: Vec<(ChannelFullName, ChainId)>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
+    /// Streams that have been updated but not yet processed during this transaction.
+    streams_to_process: BTreeMap<ApplicationId, BTreeMap<(ChainId, StreamId), u32>>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -160,6 +162,46 @@ impl TransactionTracker {
         self.operation_result = result
     }
 
+    pub fn add_stream_to_process(
+        &mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        stream_id: StreamId,
+        next_index: u32,
+    ) {
+        if next_index == 0 {
+            return; // No events in the stream.
+        }
+        *self
+            .streams_to_process
+            .entry(application_id)
+            .or_default()
+            .entry((chain_id, stream_id))
+            .or_default() = next_index;
+    }
+
+    pub fn remove_stream_to_process(
+        &mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) {
+        let Some(streams) = self.streams_to_process.get_mut(&application_id) else {
+            return;
+        };
+        if streams.remove(&(chain_id, stream_id)).is_some() {
+            if streams.is_empty() {
+                self.streams_to_process.remove(&application_id);
+            }
+        }
+    }
+
+    pub fn flush_streams_to_process(
+        &mut self,
+    ) -> BTreeMap<ApplicationId, BTreeMap<(ChainId, StreamId), u32>> {
+        mem::take(&mut self.streams_to_process)
+    }
+
     /// Adds the oracle response to the record.
     /// If replaying, it also checks that it matches the next replayed one and returns `true`.
     pub fn replay_oracle_response(
@@ -212,7 +254,12 @@ impl TransactionTracker {
             subscribe,
             unsubscribe,
             operation_result,
+            streams_to_process,
         } = self;
+        ensure!(
+            streams_to_process.is_empty(),
+            ExecutionError::UnprocessedStreams
+        );
         if let Some(mut responses) = replaying_oracle_responses {
             ensure!(
                 responses.next().is_none(),
