@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, mem, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem, vec,
+};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
@@ -268,7 +271,6 @@ where
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        let old_subscriptions = self.read_event_subscriptions().await?;
         match operation {
             Operation::System(op) => {
                 let new_application = self
@@ -303,13 +305,8 @@ where
                 .await?;
             }
         }
-        self.process_subscriptions(
-            txn_tracker,
-            resource_controller,
-            context.into(),
-            old_subscriptions,
-        )
-        .await?;
+        self.process_subscriptions(txn_tracker, resource_controller, context.into())
+            .await?;
         Ok(())
     }
 
@@ -322,7 +319,6 @@ where
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        let old_subscriptions = self.read_event_subscriptions().await?;
         match message {
             Message::System(message) => {
                 let outcome = self.system.execute_message(context, message).await?;
@@ -343,13 +339,8 @@ where
                 .await?;
             }
         }
-        self.process_subscriptions(
-            txn_tracker,
-            resource_controller,
-            context.into(),
-            old_subscriptions,
-        )
-        .await?;
+        self.process_subscriptions(txn_tracker, resource_controller, context.into())
+            .await?;
         Ok(())
     }
 
@@ -516,41 +507,35 @@ where
         Ok(applications)
     }
 
-    async fn read_event_subscriptions(
-        &self,
-    ) -> Result<BTreeMap<(ChainId, StreamId), EventSubscriptions>, ExecutionError> {
-        let vec = self.system.event_subscriptions.index_values().await?;
-        Ok(vec.into_iter().collect())
-    }
-
     async fn process_subscriptions(
         &mut self,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
         context: ProcessStreamsContext,
-        mut old_subscriptions: BTreeMap<(ChainId, StreamId), EventSubscriptions>,
     ) -> Result<(), ExecutionError> {
-        let mut new_subscriptions = self.read_event_subscriptions().await?;
-        let empty = EventSubscriptions::default();
+        // Keep track of which streams we have already processed. This is to guard against
+        // applications unsubscribing and subscribing in the process_streams call itself.
+        let mut processed = BTreeSet::new();
         loop {
-            let mut to_process = BTreeMap::<ApplicationId, Vec<_>>::new();
-            for ((chain_id, stream_id), new) in &new_subscriptions {
-                if new.next_index == 0 {
-                    continue;
-                }
-                let old = old_subscriptions
-                    .get(&(*chain_id, stream_id.clone()))
-                    .unwrap_or(&empty);
-                for app_id in &new.applications {
-                    if !old.applications.contains(app_id) || old.next_index < new.next_index {
-                        to_process.entry(*app_id).or_default().push((
-                            *chain_id,
-                            stream_id.clone(),
-                            new.next_index,
-                        ));
+            let to_process = txn_tracker
+                .flush_streams_to_process()
+                .into_iter()
+                .filter_map(|(app_id, streams)| {
+                    let streams = streams
+                        .into_iter()
+                        .filter_map(|((chain_id, stream_id), next_index)| {
+                            if !processed.insert((app_id, chain_id, stream_id.clone())) {
+                                return None;
+                            }
+                            Some((chain_id, stream_id, next_index))
+                        })
+                        .collect::<Vec<_>>();
+                    if streams.is_empty() {
+                        return None;
                     }
-                }
-            }
+                    Some((app_id, streams))
+                })
+                .collect::<BTreeMap<_, _>>();
             if to_process.is_empty() {
                 return Ok(());
             }
@@ -565,10 +550,6 @@ where
                 )
                 .await?;
             }
-            old_subscriptions = mem::replace(
-                &mut new_subscriptions,
-                self.read_event_subscriptions().await?,
-            );
         }
     }
 }
