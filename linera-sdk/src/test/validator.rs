@@ -278,16 +278,16 @@ impl TestValidator {
             application_permissions: ApplicationPermissions::default(),
         };
 
-        let certificate = admin_chain
+        let block = admin_chain
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
             })
             .await;
-        let block = certificate.inner().block();
+        let block_header = block.header();
 
         ChainDescription::Child(MessageId {
-            chain_id: block.header.chain_id,
-            height: block.header.height,
+            chain_id: block_header.chain_id,
+            height: block_header.height,
             index: OPEN_CHAIN_MESSAGE_INDEX,
         })
     }

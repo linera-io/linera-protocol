@@ -30,7 +30,7 @@ use linera_storage::Storage as _;
 use serde::Serialize;
 use tokio::{fs, sync::Mutex};
 
-use super::{BlockBuilder, TestValidator};
+use super::{BlockBuilder, CertifiedBlock, TestValidator};
 use crate::{ContractAbi, ServiceAbi};
 
 /// A reference to a single microchain inside a [`TestValidator`].
@@ -206,10 +206,7 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
-    pub async fn add_block(
-        &self,
-        block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> ConfirmedBlockCertificate {
+    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> CertifiedBlock {
         self.try_add_block(block_builder)
             .await
             .expect("Failed to execute block.")
@@ -223,7 +220,7 @@ impl ActiveChain {
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
         blobs: Vec<Blob>,
-    ) -> ConfirmedBlockCertificate {
+    ) -> CertifiedBlock {
         self.try_add_block_with_blobs(block_builder, blobs)
             .await
             .expect("Failed to execute block.")
@@ -236,7 +233,7 @@ impl ActiveChain {
     pub async fn try_add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
+    ) -> Result<CertifiedBlock, WorkerError> {
         self.try_add_block_with_blobs(block_builder, vec![]).await
     }
 
@@ -251,7 +248,7 @@ impl ActiveChain {
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
         blobs: Vec<Blob>,
-    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
+    ) -> Result<CertifiedBlock, WorkerError> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -264,27 +261,27 @@ impl ActiveChain {
         block_builder(&mut block);
 
         // TODO(#2066): Remove boxing once call-stack is shallower
-        let certificate = Box::pin(block.try_sign(&blobs)).await?.certificate;
+        let block = Box::pin(block.try_sign(&blobs)).await?;
 
         let result = self
             .validator
             .worker()
-            .fully_handle_certificate_with_notifications(certificate.clone(), &())
+            .fully_handle_certificate_with_notifications(block.certificate.clone(), &())
             .await;
         if let Err(WorkerError::BlobsNotFound(_)) = &result {
             self.validator.storage().maybe_write_blobs(&blobs).await?;
             self.validator
                 .worker()
-                .fully_handle_certificate_with_notifications(certificate.clone(), &())
+                .fully_handle_certificate_with_notifications(block.certificate.clone(), &())
                 .await
                 .expect("Rejected certificate");
         } else {
             result.expect("Rejected certificate");
         }
 
-        *tip = Some(certificate.clone());
+        *tip = Some(block.certificate.clone());
 
-        Ok(certificate)
+        Ok(block)
     }
 
     /// Receives all queued messages in all inboxes of this microchain.
@@ -340,7 +337,7 @@ impl ActiveChain {
 
         let module_id = ModuleId::new(contract_blob_hash, service_blob_hash, vm_runtime);
 
-        let certificate = self
+        let block = self
             .add_block_with_blobs(
                 |block| {
                     block.with_system_operation(SystemOperation::PublishModule { module_id });
@@ -349,9 +346,9 @@ impl ActiveChain {
             )
             .await;
 
-        let block = certificate.inner().block();
-        assert_eq!(block.messages().len(), 1);
-        assert_eq!(block.messages()[0].len(), 0);
+        let messages = block.messages();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].len(), 0);
 
         module_id.with_abi()
     }
@@ -457,9 +454,7 @@ impl ActiveChain {
             .await
             .as_ref()
             .expect("Block was not successfully added")
-            .inner()
-            .block()
-            .header
+            .header()
             .height
     }
 
@@ -488,7 +483,7 @@ impl ActiveChain {
         let parameters = serde_json::to_vec(&parameters).unwrap();
         let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
 
-        let creation_certificate = self
+        let creation_block = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::CreateApplication {
                     module_id: module_id.forget_abi(),
@@ -499,14 +494,14 @@ impl ActiveChain {
             })
             .await;
 
-        let block = creation_certificate.inner().block();
-        assert_eq!(block.messages().len(), 1);
-        assert!(block.messages()[0].is_empty());
+        let messages = creation_block.messages();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].is_empty());
 
         let description = ApplicationDescription {
             module_id: module_id.forget_abi(),
-            creator_chain_id: block.header.chain_id,
-            block_height: block.header.height,
+            creator_chain_id: creation_block.header().chain_id,
+            block_height: creation_block.header().height,
             application_index: 0,
             parameters,
             required_application_ids,
@@ -640,7 +635,7 @@ impl ActiveChain {
         &self,
         application_id: ApplicationId<Abi>,
         query: impl Into<async_graphql::Request>,
-    ) -> ConfirmedBlockCertificate
+    ) -> CertifiedBlock
     where
         Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
     {
@@ -657,13 +652,13 @@ impl ActiveChain {
         &self,
         application_id: ApplicationId<Abi>,
         query: impl Into<async_graphql::Request>,
-    ) -> Result<ConfirmedBlockCertificate, TryGraphQLMutationError>
+    ) -> Result<CertifiedBlock, TryGraphQLMutationError>
     where
         Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
     {
         let QueryOutcome { operations, .. } = self.try_graphql_query(application_id, query).await?;
 
-        let certificate = self
+        let block = self
             .try_add_block(|block| {
                 for operation in operations {
                     match operation {
@@ -681,7 +676,7 @@ impl ActiveChain {
             })
             .await?;
 
-        Ok(certificate)
+        Ok(block)
     }
 }
 
