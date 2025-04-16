@@ -189,10 +189,8 @@ impl TransactionTracker {
         let Some(streams) = self.streams_to_process.get_mut(&application_id) else {
             return;
         };
-        if streams.remove(&(chain_id, stream_id)).is_some() {
-            if streams.is_empty() {
-                self.streams_to_process.remove(&application_id);
-            }
+        if streams.remove(&(chain_id, stream_id)).is_some() && streams.is_empty() {
+            self.streams_to_process.remove(&application_id);
         }
     }
 

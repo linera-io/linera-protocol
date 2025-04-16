@@ -885,7 +885,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
+async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::time::Instant;
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
