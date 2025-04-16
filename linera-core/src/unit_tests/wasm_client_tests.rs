@@ -27,7 +27,7 @@ use linera_base::{
 use linera_chain::{data_types::MessageAction, ChainError, ChainExecutionContext};
 use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, WasmRuntime,
+    SystemMessage, SystemOperation, WasmRuntime,
 };
 use linera_storage::Storage as _;
 use serde_json::json;
@@ -663,8 +663,8 @@ where
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_user_pub_sub_channels(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+async fn test_memory_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_event_streams(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -672,9 +672,8 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow:
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_service_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_user_pub_sub_channels(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await)
-        .await
+async fn test_service_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_event_streams(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -682,9 +681,8 @@ async fn test_service_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_user_pub_sub_channels(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
-        .await
+async fn test_rocks_db_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_event_streams(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -692,8 +690,8 @@ async fn test_rocks_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyho
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_dynamo_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_user_pub_sub_channels(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+async fn test_dynamo_db_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_event_streams(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -701,11 +699,11 @@ async fn test_dynamo_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyh
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_scylla_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_user_pub_sub_channels(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+async fn test_scylla_db_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_event_streams(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> anyhow::Result<()>
+async fn run_test_event_streams<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -774,11 +772,21 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be a message receiving the new post.
-    let messages = &certs[0].block().body.incoming_bundles;
-    assert!(messages
-        .iter()
-        .any(|msg| matches!(&msg.bundle.messages[0].message, Message::User { .. })));
+    // There should be an UpdateStreams operation due to the new post.
+    let [Operation::System(operation)] = &*certs[0].block().body.operations else {
+        panic!(
+            "Expected one operation, got {:?}",
+            certs[0].block().body.operations
+        );
+    };
+    let stream_id = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)])
+    );
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let outcome = receiver
