@@ -30,8 +30,10 @@ use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
-    crate::benchmark::Benchmark,
+    crate::benchmark::{Benchmark, BenchmarkError},
+    futures::{stream, StreamExt, TryStreamExt},
     linera_base::{data_types::Amount, identifiers::ApplicationId},
+    linera_core::client::ChainClientError,
     linera_execution::{
         committee::{Committee, Epoch},
         system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
@@ -702,6 +704,43 @@ where
         );
 
         Ok((chain_clients, epoch, blocks_infos, committee))
+    }
+
+    pub async fn wrap_up_benchmark(
+        &mut self,
+        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
+        close_chains: bool,
+        wrap_up_max_in_flight: usize,
+    ) -> Result<(), Error> {
+        if close_chains {
+            info!("Closing chains...");
+            let stream = stream::iter(chain_clients.values().cloned())
+                .map(|chain_client| async move {
+                    Benchmark::<S>::close_benchmark_chain(&chain_client).await?;
+                    info!("Closed chain {:?}", chain_client.chain_id());
+                    Ok::<(), BenchmarkError>(())
+                })
+                .buffer_unordered(wrap_up_max_in_flight);
+            stream.try_collect::<Vec<_>>().await?;
+        } else {
+            info!("Processing inbox for all chains...");
+            let stream = stream::iter(chain_clients.values().cloned())
+                .map(|chain_client| async move {
+                    chain_client.process_inbox().await?;
+                    info!("Processed inbox for chain {:?}", chain_client.chain_id());
+                    Ok::<(), ChainClientError>(())
+                })
+                .buffer_unordered(wrap_up_max_in_flight);
+            stream.try_collect::<Vec<_>>().await?;
+
+            info!("Updating wallet from chain clients...");
+            for chain_client in chain_clients.values() {
+                self.wallet.as_mut().update_from_state(chain_client).await;
+            }
+            self.save_wallet().await?;
+        }
+
+        Ok(())
     }
 
     async fn process_inboxes_and_force_validator_updates(&mut self) {
