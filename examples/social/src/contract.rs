@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use social::{Comment, Key, Operation, OwnPost, Post, SocialAbi};
 use state::SocialState;
 
-/// The channel name the application uses for cross-chain messages about new posts.
-const POSTS_CHANNEL_NAME: &[u8] = b"posts";
+/// The stream name the application uses for events about posts, likes and comments.
+const STREAM_NAME: &[u8] = b"posts";
 
 pub struct SocialContract {
     state: SocialState,
@@ -51,12 +51,12 @@ impl Contract for SocialContract {
             Operation::Subscribe { chain_id } => {
                 let app_id = self.runtime.application_id().forget_abi();
                 self.runtime
-                    .subscribe_to_events(chain_id, app_id, POSTS_CHANNEL_NAME.into());
+                    .subscribe_to_events(chain_id, app_id, STREAM_NAME.into());
             }
             Operation::Unsubscribe { chain_id } => {
                 let app_id = self.runtime.application_id().forget_abi();
                 self.runtime
-                    .unsubscribe_from_events(chain_id, app_id, POSTS_CHANNEL_NAME.into());
+                    .unsubscribe_from_events(chain_id, app_id, STREAM_NAME.into());
             }
             Operation::Post { text, image_url } => {
                 self.execute_post_operation(text, image_url).await
@@ -74,7 +74,7 @@ impl Contract for SocialContract {
 
     async fn process_streams(&mut self, streams: Vec<(ChainId, StreamId, u32)>) {
         for (chain_id, stream_id, next_index) in streams {
-            assert_eq!(stream_id.stream_name, POSTS_CHANNEL_NAME.into());
+            assert_eq!(stream_id.stream_name, STREAM_NAME.into());
             assert_eq!(
                 stream_id.application_id,
                 self.runtime.application_id().forget_abi().into()
@@ -88,12 +88,10 @@ impl Contract for SocialContract {
             let count = *stored_count;
             *stored_count = next_index;
             for index in count..next_index {
-                let event = self
-                    .runtime
-                    .read_event(chain_id, POSTS_CHANNEL_NAME.into(), index);
+                let event = self.runtime.read_event(chain_id, STREAM_NAME.into(), index);
                 match event {
-                    Event::Post { post } => {
-                        self.execute_post_event(chain_id, next_index, post);
+                    Event::Post { post, index } => {
+                        self.execute_post_event(chain_id, index, post);
                     }
                     Event::Like { key } => self.execute_like_event(key).await,
                     Event::Comment { key, comment } => {
@@ -117,19 +115,19 @@ impl SocialContract {
             text,
             image_url,
         };
+        let index = self.state.own_posts.count().try_into().unwrap();
         self.state.own_posts.push(post.clone());
         self.runtime
-            .emit(POSTS_CHANNEL_NAME.into(), &Event::Post { post });
+            .emit(STREAM_NAME.into(), &Event::Post { post, index });
     }
 
     async fn execute_like_operation(&mut self, key: Key) {
-        self.runtime
-            .emit(POSTS_CHANNEL_NAME.into(), &Event::Like { key });
+        self.runtime.emit(STREAM_NAME.into(), &Event::Like { key });
     }
 
     async fn execute_comment_operation(&mut self, key: Key, comment: String) {
         self.runtime
-            .emit(POSTS_CHANNEL_NAME.into(), &Event::Comment { key, comment });
+            .emit(STREAM_NAME.into(), &Event::Comment { key, comment });
     }
 
     fn execute_post_event(&mut self, chain_id: ChainId, index: u32, post: OwnPost) {
@@ -195,7 +193,7 @@ impl SocialContract {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Event {
     /// A new post was created
-    Post { post: OwnPost },
+    Post { post: OwnPost, index: u32 },
     /// A user liked a post
     Like { key: Key },
     /// A user commented on a post

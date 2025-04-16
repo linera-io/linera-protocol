@@ -542,7 +542,7 @@ where
                     .get(&(*chain_id, stream_id.clone()))
                     .unwrap_or(&empty);
                 for app_id in &new.applications {
-                    if !old.applications.contains(app_id) {
+                    if !old.applications.contains(app_id) || old.next_index < new.next_index {
                         to_process.entry(*app_id).or_default().push((
                             *chain_id,
                             stream_id.clone(),

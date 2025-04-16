@@ -195,8 +195,13 @@ impl<C: ClientContext> ChainListener<C> {
                 self.update_validators(&notification).await?;
                 self.update_wallet(notification.chain_id).await?;
                 self.add_new_chains(*hash).await?;
-                self.update_event_subscriptions(notification.chain_id)
+                let publishers = self
+                    .update_event_subscriptions(notification.chain_id)
                     .await?;
+                if !publishers.is_empty() {
+                    self.listen_recursively(publishers).await?;
+                    self.maybe_process_inbox(notification.chain_id).await?;
+                }
                 self.process_new_events(notification.chain_id).await?;
             }
         }
@@ -382,15 +387,15 @@ impl<C: ClientContext> ChainListener<C> {
     /// is returned if persisting the wallet fails.
     async fn maybe_process_inbox(&mut self, chain_id: ChainId) -> Result<(), Error> {
         if self.config.skip_process_inbox {
-            debug!("Not processing inbox due to listener configuration");
+            debug!("Not processing inbox for {chain_id:.8} due to listener configuration");
             return Ok(());
         }
         let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
         if !listening_client.client.is_tracked() {
-            debug!("Not processing inbox for non-tracked chain");
+            debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
             return Ok(());
         }
-        debug!("Processing inbox");
+        debug!("Processing inbox for {chain_id:.8}");
         listening_client.timeout = Timestamp::from(u64::MAX);
         match listening_client
             .client
