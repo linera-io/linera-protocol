@@ -21,9 +21,9 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::Committee, system::OpenChainConfig, ExecutionRuntimeContext, ExecutionStateView,
-    Message, MessageContext, Operation, OperationContext, OutgoingMessage, Query, QueryContext,
-    QueryOutcome, ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
+    Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
+    ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,
@@ -38,7 +38,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::{Block, ConfirmedBlock},
+    block::ConfirmedBlock,
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
         OperationResult, PostedMessage, ProposedBlock, Transaction,
@@ -47,7 +47,7 @@ use crate::{
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
-    ChainError, ChainExecutionContext, ExecutionResultExt,
+    ChainError, ChainExecutionContext, ExecutionError, ExecutionResultExt,
 };
 
 #[cfg(test)]
@@ -426,11 +426,30 @@ where
     }
 
     /// Invariant for the states of active chains.
-    pub fn ensure_is_active(&self) -> Result<(), ChainError> {
+    pub async fn ensure_is_active(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
         if self.is_active() {
             Ok(())
         } else {
-            Err(ChainError::InactiveChain(self.chain_id()))
+            // Initialize ourselves.
+            self.execution_state
+                .system
+                .initialize_chain(self.chain_id())
+                .await
+                .with_execution_context(ChainExecutionContext::Block)?;
+            // Recompute the state hash.
+            let hash = self.execution_state.crypto_hash().await?;
+            self.execution_state_hash.set(Some(hash));
+            let maybe_committee = self.execution_state.system.current_committee().into_iter();
+            // Last, reset the consensus state based on the current ownership.
+            //
+            self.manager.reset(
+                self.execution_state.system.ownership.get().clone(),
+                BlockHeight(0),
+                local_time,
+                maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
+            )?;
+            self.save().await?;
+            Ok(())
         }
     }
 
@@ -505,16 +524,20 @@ where
             height: bundle.height,
         };
 
-        // Handle immediate messages.
-        for posted_message in &bundle.messages {
-            if let Some(config) = posted_message.message.matches_open_chain() {
-                if self.execution_state.system.description.get().is_none() {
-                    let message_id = chain_and_height.to_message_id(posted_message.index);
-                    self.execute_init_message(message_id, config, bundle.timestamp, local_time)
-                        .await?;
-                }
+        match self.ensure_is_active(local_time).await {
+            Ok(_) => (),
+            // if the only issue was that we couldn't initialize the chain because of a
+            // missing chain description blob, we might still want to process the inbox
+            Err(ChainError::ExecutionError(exec_err, _))
+                if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
+                if blobs.iter().all(|blob_id| {
+                    blob_id.blob_type == BlobType::ChainDescription && blob_id.hash == chain_id.0
+                })) => {}
+            err => {
+                return err;
             }
         }
+
         // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
         #[cfg(with_metrics)]
@@ -563,52 +586,6 @@ where
                 })
                 .or_insert(tracker);
         }
-    }
-
-    /// Verifies that the block's first message is `OpenChain`. Initializes the chain if necessary.
-    pub async fn execute_init_message_from(
-        &mut self,
-        block: &Block,
-        local_time: Timestamp,
-    ) -> Result<(), ChainError> {
-        let (in_bundle, posted_message, config) = block
-            .starts_with_open_chain_message()
-            .ok_or_else(|| ChainError::InactiveChain(block.header.chain_id))?;
-        if self.is_active() {
-            return Ok(()); // Already initialized.
-        }
-        let message_id = MessageId {
-            chain_id: in_bundle.origin,
-            height: in_bundle.bundle.height,
-            index: posted_message.index,
-        };
-        self.execute_init_message(message_id, config, block.header.timestamp, local_time)
-            .await
-    }
-
-    /// Initializes the chain using the given configuration.
-    async fn execute_init_message(
-        &mut self,
-        message_id: MessageId,
-        config: &OpenChainConfig,
-        timestamp: Timestamp,
-        local_time: Timestamp,
-    ) -> Result<(), ChainError> {
-        // Initialize ourself.
-        self.execution_state
-            .system
-            .initialize_chain(message_id, timestamp, config.clone());
-        // Recompute the state hash.
-        let hash = self.execution_state.crypto_hash().await?;
-        self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        // Last, reset the consensus state based on the current ownership.
-        self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
-            BlockHeight(0),
-            local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
-        )
     }
 
     pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
@@ -697,7 +674,7 @@ where
     /// Executes a block: first the incoming messages, then the main operation.
     /// Does not update chain state other than the execution state.
     #[expect(clippy::too_many_arguments)]
-    pub async fn execute_block_inner(
+    async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
         confirmed_log: &LogView<C, CryptoHash>,
         previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
@@ -710,13 +687,6 @@ where
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
-        assert_eq!(block.chain_id, chain.context().extra().chain_id());
-
-        ensure!(
-            *chain.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
-        );
-        chain.system.timestamp.set(block.timestamp);
         let (_, committee) = chain
             .system
             .current_committee()
@@ -766,6 +736,7 @@ where
         let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
         let mut next_message_index = 0;
         let mut next_application_index = 0;
+        let mut next_chain_index = 0;
         let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
         let mut blobs = Vec::new();
@@ -786,6 +757,7 @@ where
                 txn_index,
                 next_message_index,
                 next_application_index,
+                next_chain_index,
                 maybe_responses,
             );
             match transaction {
@@ -819,6 +791,7 @@ where
                         round,
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
+                        timestamp: block.timestamp,
                     };
                     Box::pin(chain.execute_operation(
                         context,
@@ -841,6 +814,7 @@ where
                 .with_execution_context(chain_execution_context)?;
             next_message_index = txn_outcome.next_message_index;
             next_application_index = txn_outcome.next_application_index;
+            next_chain_index = txn_outcome.next_chain_index;
 
             if matches!(
                 transaction,
@@ -953,6 +927,20 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
+        assert_eq!(
+            block.chain_id,
+            self.execution_state.context().extra().chain_id()
+        );
+
+        ensure!(
+            *self.execution_state.system.timestamp.get() <= block.timestamp,
+            ChainError::InvalidBlockTimestamp
+        );
+
+        self.ensure_is_active(local_time).await?;
+
+        self.execution_state.system.timestamp.set(block.timestamp);
+
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
@@ -1030,6 +1018,7 @@ where
             message_id,
             authenticated_signer: posted_message.authenticated_signer,
             refund_grant_to: posted_message.refund_grant_to,
+            timestamp: block.timestamp,
         };
         let mut grant = posted_message.grant;
         match incoming_bundle.action {
@@ -1196,7 +1185,9 @@ where
 #[test]
 fn empty_block_size() {
     let size = bcs::serialized_size(&crate::block::Block::new(
-        crate::test::make_first_block(ChainId::root(0)),
+        crate::test::make_first_block(
+            linera_execution::test_utils::dummy_chain_description(0).id(),
+        ),
         crate::data_types::BlockExecutionOutcome::default(),
     ))
     .unwrap();

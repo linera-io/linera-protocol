@@ -49,7 +49,7 @@ impl chain_listener::ClientContext for ClientContext {
         self.client.storage_client()
     }
 
-    fn make_chain_client(
+    async fn make_chain_client(
         &self,
         chain_id: ChainId,
     ) -> Result<ChainClient<environment::Test>, Error> {
@@ -63,15 +63,18 @@ impl chain_listener::ClientContext for ClientContext {
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        Ok(self.client.create_chain_client(
-            chain_id,
-            known_key_pairs,
-            self.wallet.genesis_admin_chain(),
-            chain.block_hash,
-            chain.timestamp,
-            chain.next_block_height,
-            chain.pending_proposal.clone(),
-        ))
+        Ok(self
+            .client
+            .create_chain_client(
+                chain_id,
+                known_key_pairs,
+                self.wallet.genesis_admin_chain(),
+                chain.block_hash,
+                chain.timestamp,
+                chain.next_block_height,
+                chain.pending_proposal.clone(),
+            )
+            .await?)
     }
 
     async fn update_wallet_for_new_chain(

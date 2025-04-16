@@ -17,14 +17,11 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
-        OracleResponse, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
+        ChainDescription, ChainOrigin, Epoch, OpenChainConfig, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
-    identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, EventId, MessageId,
-        ModuleId, StreamId,
-    },
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
@@ -46,8 +43,6 @@ use crate::{
     QueryContext, QueryOutcome, ResourceController, TransactionTracker,
 };
 
-/// The relative index of the `OpenChain` message created by the `OpenChain` operation.
-pub static OPEN_CHAIN_MESSAGE_INDEX: u32 = 0;
 /// The event stream name for new epochs and committees.
 pub static EPOCH_STREAM_NAME: &[u8] = &[0];
 /// The event stream name for removed epochs.
@@ -103,17 +98,6 @@ pub struct EventSubscriptions {
     pub next_index: u32,
     /// The applications that are subscribed to this stream.
     pub applications: BTreeSet<ApplicationId>,
-}
-
-/// The configuration for a new chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct OpenChainConfig {
-    pub ownership: ChainOwnership,
-    pub admin_id: ChainId,
-    pub epoch: Epoch,
-    pub committees: BTreeMap<Epoch, Committee>,
-    pub balance: Amount,
-    pub application_permissions: ApplicationPermissions,
 }
 
 /// A system operation.
@@ -221,8 +205,6 @@ pub enum SystemMessage {
         amount: Amount,
         recipient: Recipient,
     },
-    /// Creates (or activates) a new chain.
-    OpenChain(Box<OpenChainConfig>),
     /// Notifies that a new application was created.
     ApplicationCreated,
 }
@@ -251,12 +233,6 @@ impl Recipient {
     /// Returns the default recipient for the given chain (no owner).
     pub fn chain(chain_id: ChainId) -> Recipient {
         Recipient::Account(Account::chain(chain_id))
-    }
-
-    /// Returns the default recipient for the root chain with the given index.
-    #[cfg(with_testing)]
-    pub fn root(index: u32) -> Recipient {
-        Recipient::chain(ChainId::root(index))
     }
 }
 
@@ -318,6 +294,19 @@ where
         Some((*epoch, committee))
     }
 
+    /// Returns a map of epochs to blob IDs of corresponding committee blobs.
+    pub fn get_committees(&self) -> BTreeMap<Epoch, Vec<u8>> {
+        self.committees
+            .get()
+            .iter()
+            .map(|(epoch, committee)| {
+                let serialized_committee =
+                    bcs::to_bytes(committee).expect("Serializing a committee should not fail!");
+                (*epoch, serialized_committee)
+            })
+            .collect()
+    }
+
     /// Executes the sender's side of an operation and returns a list of actions to be
     /// taken.
     pub async fn execute_operation(
@@ -331,9 +320,15 @@ where
         let mut new_application = None;
         match operation {
             OpenChain(config) => {
-                let next_message_id = context.next_message_id(txn_tracker.next_message_index());
-                let message = self.open_chain(config, next_message_id).await?;
-                txn_tracker.add_outgoing_message(message)?;
+                let _chain_id = self
+                    .open_chain(
+                        config,
+                        context.chain_id,
+                        context.height,
+                        context.timestamp,
+                        txn_tracker,
+                    )
+                    .await?;
                 #[cfg(with_metrics)]
                 OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
@@ -712,8 +707,6 @@ where
                     Recipient::Burn => (),
                 }
             }
-            // These messages are executed immediately when cross-chain requests are received.
-            OpenChain(_) => {}
             // This message is only a placeholder: Its ID is part of the application ID.
             ApplicationCreated => {}
         }
@@ -721,16 +714,15 @@ where
     }
 
     /// Initializes the system application state on a newly opened chain.
-    pub fn initialize_chain(
-        &mut self,
-        message_id: MessageId,
-        timestamp: Timestamp,
-        config: OpenChainConfig,
-    ) {
+    pub async fn initialize_chain(&mut self, chain_id: ChainId) -> Result<(), ExecutionError> {
         // Guaranteed under BFT assumptions.
         assert!(self.description.get().is_none());
         assert!(!self.ownership.get().is_active());
         assert!(self.committees.get().is_empty());
+        let description_blob = self
+            .read_blob_content(BlobId::new(chain_id.0, BlobType::ChainDescription))
+            .await?;
+        let description: ChainDescription = bcs::from_bytes(description_blob.bytes())?;
         let OpenChainConfig {
             ownership,
             admin_id,
@@ -738,16 +730,25 @@ where
             committees,
             balance,
             application_permissions,
-        } = config;
-        let description = ChainDescription::Child(message_id);
+        } = description.config().clone();
+        self.timestamp.set(description.timestamp());
         self.description.set(Some(description));
         self.epoch.set(Some(epoch));
+        let committees = committees
+            .into_iter()
+            .map(|(epoch, serialized_committee)| {
+                let committee = bcs::from_bytes(&serialized_committee)
+                    .expect("Deserializing a committee shouldn't fail");
+                (epoch, committee)
+            })
+            .collect();
         self.committees.set(committees);
-        self.admin_id.set(Some(admin_id));
+        // If `admin_id` is `None`, this chain is its own admin chain.
+        self.admin_id.set(admin_id.or(Some(chain_id)));
         self.ownership.set(ownership);
-        self.timestamp.set(timestamp);
         self.balance.set(balance);
         self.application_permissions.set(application_permissions);
+        Ok(())
     }
 
     pub async fn handle_query(
@@ -770,15 +771,26 @@ where
     pub async fn open_chain(
         &mut self,
         config: OpenChainConfig,
-        next_message_id: MessageId,
-    ) -> Result<OutgoingMessage, ExecutionError> {
-        let child_id = ChainId::child(next_message_id);
+        parent: ChainId,
+        block_height: BlockHeight,
+        timestamp: Timestamp,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<ChainId, ExecutionError> {
+        let chain_index = txn_tracker.next_chain_index();
+        let chain_origin = ChainOrigin::Child {
+            parent,
+            block_height,
+            chain_index,
+        };
+        let chain_description = ChainDescription::new(chain_origin, config.clone(), timestamp);
+        let child_id = chain_description.id();
         ensure!(
-            self.admin_id.get().as_ref() == Some(&config.admin_id),
+            *self.admin_id.get() == config.admin_id,
             ExecutionError::InvalidNewChainAdminId(child_id)
         );
+        let self_committees = self.get_committees();
         ensure!(
-            self.committees.get() == &config.committees,
+            self_committees == config.committees,
             ExecutionError::InvalidCommittees
         );
         ensure!(
@@ -789,8 +801,9 @@ where
             }
         );
         self.debit(&AccountOwner::CHAIN, config.balance).await?;
-        let message = SystemMessage::OpenChain(Box::new(config));
-        Ok(OutgoingMessage::new(child_id, message).with_kind(MessageKind::Protected))
+        let blob = Blob::new_chain_description(&chain_description);
+        txn_tracker.add_created_blob(blob);
+        Ok(child_id)
     }
 
     pub async fn close_chain(&mut self) -> Result<(), ExecutionError> {

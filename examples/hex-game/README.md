@@ -60,8 +60,8 @@ INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
 INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
-OWNER_1="${INFO_1[3]}"
-OWNER_2="${INFO_2[3]}"
+OWNER_1="${INFO_1[2]}"
+OWNER_2="${INFO_2[2]}"
 ```
 
 Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wallet
@@ -123,25 +123,24 @@ query {
   gameChains {
     entry(key: "$OWNER_1") {
       value {
-        messageId chainId
+        chainId
       }
     }
   }
 }
 ```
 
-Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `HEX_CHAIN` and `MESSAGE_ID` will be properly set for you.
-Alternatively you can set the variables to the `chainId` and `messageId` values, respectively, returned by the previous query yourself.
-Using the message ID, we can assign the new chain to the key in each wallet:
+Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `HEX_CHAIN` will be properly set for you.
+Alternatively you can set the variable to the `chainId`, returned by the previous query yourself.
+Using the chain ID, we can assign the new chain to the key in each wallet:
 
 ```bash
 kill %% && sleep 1    # Kill the service so we can use CLI commands for wallet 0.
 
 HEX_CHAIN=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].chainId')
-MESSAGE_ID=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].messageId')
 
-linera -w1 assign --owner $OWNER_1 --message-id $MESSAGE_ID
-linera -w2 assign --owner $OWNER_2 --message-id $MESSAGE_ID
+linera -w1 assign --owner $OWNER_1 --chain-id $HEX_CHAIN
+linera -w2 assign --owner $OWNER_2 --chain-id $HEX_CHAIN
 
 linera -w1 service --port 8080 &
 linera -w2 service --port 8081 &

@@ -695,6 +695,7 @@ impl<T> GrpcMessageLimiter<T> {
 
 #[cfg(test)]
 mod proto_message_cap {
+    use linera_base::crypto::CryptoHash;
     use linera_chain::{
         data_types::BlockExecutionOutcome,
         types::{Block, Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
@@ -710,7 +711,7 @@ mod proto_message_cap {
         let validator = keypair.public_key;
         let signature = ValidatorSignature::new(&TestString::new("Test"), &keypair.secret_key);
         let block = Block::new(
-            linera_chain::test::make_first_block(ChainId::root(0)),
+            linera_chain::test::make_first_block(ChainId(CryptoHash::test_hash("root_chain"))),
             BlockExecutionOutcome::default(),
         );
         let signatures = vec![(validator, signature)];

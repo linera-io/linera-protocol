@@ -2,15 +2,15 @@
 resolver = "2"
 members = [
     "amm",
-    "counter",
     "call-evm-counter",
+    "counter",
     "counter-no-graphql",
     "crowd-funding",
     "ethereum-tracker",
     "fungible",
     "gen-nft",
-    "how-to/perform-http-requests",
     "hex-game",
+    "how-to/perform-http-requests",
     "llm",
     "matching-engine",
     "meta-counter",

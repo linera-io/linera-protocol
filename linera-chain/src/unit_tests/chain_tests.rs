@@ -12,23 +12,22 @@ use std::{
 use assert_matches::assert_matches;
 use axum::{routing::get, Router};
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode, Epoch,
-        Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
+        ChainDescription, ChainOrigin, Epoch, OpenChainConfig, Timestamp,
     },
     http,
-    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    system::{OpenChainConfig, Recipient},
+    system::Recipient,
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    Message, MessageKind, Operation, ResourceControlPolicy, ServiceRuntime, SystemMessage,
-    SystemOperation, TestExecutionRuntimeContext,
+    Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
 };
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
@@ -39,10 +38,8 @@ use test_case::test_case;
 
 use crate::{
     block::{Block, ConfirmedBlock},
-    data_types::{
-        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, ProposedBlock,
-    },
-    test::{make_child_block, make_first_block, BlockTestExt, HttpServer, MessageTestExt},
+    data_types::{BlockExecutionOutcome, ProposedBlock},
+    test::{make_child_block, make_first_block, BlockTestExt, HttpServer},
     ChainError, ChainExecutionContext, ChainStateView,
 };
 
@@ -63,70 +60,108 @@ where
     }
 }
 
-fn make_app_description() -> (ApplicationDescription, Blob, Blob) {
-    let contract = Bytecode::new(b"contract".into());
-    let service = Bytecode::new(b"service".into());
-    let contract_blob = Blob::new_contract_bytecode(contract.compress());
-    let service_blob = Blob::new_service_bytecode(service.compress());
-    let vm_runtime = VmRuntime::Wasm;
-
-    let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
-    (
-        ApplicationDescription {
-            module_id,
-            creator_chain_id: admin_id(),
-            block_height: BlockHeight(2),
-            application_index: 0,
-            required_application_ids: vec![],
-            parameters: vec![],
-        },
-        contract_blob,
-        service_blob,
-    )
+struct TestEnvironment {
+    admin_chain_description: ChainDescription,
+    created_descriptions: BTreeMap<ChainId, ChainDescription>,
 }
 
-fn admin_id() -> ChainId {
-    ChainId::root(0)
-}
-
-fn make_admin_message_id(height: BlockHeight) -> MessageId {
-    MessageId {
-        chain_id: admin_id(),
-        height,
-        index: 0,
+impl TestEnvironment {
+    fn new() -> Self {
+        let committee = Committee::make_simple(vec![(
+            ValidatorPublicKey::test_key(1),
+            AccountPublicKey::test_key(1),
+        )]);
+        let config = OpenChainConfig {
+            ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
+            admin_id: None,
+            epoch: Epoch::ZERO,
+            committees: iter::once((
+                Epoch::ZERO,
+                bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
+            ))
+            .collect(),
+            balance: Amount::from_tokens(10),
+            application_permissions: Default::default(),
+        };
+        let origin = ChainOrigin::Root(0);
+        let admin_chain_description = ChainDescription::new(origin, config, Default::default());
+        let admin_id = admin_chain_description.id();
+        Self {
+            admin_chain_description: admin_chain_description.clone(),
+            created_descriptions: [(admin_id, admin_chain_description)].into_iter().collect(),
+        }
     }
-}
 
-fn make_open_chain_config() -> OpenChainConfig {
-    let committee = Committee::make_simple(vec![(
-        ValidatorPublicKey::test_key(1),
-        AccountPublicKey::test_key(1),
-    )]);
-    OpenChainConfig {
-        ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
-        admin_id: admin_id(),
-        epoch: Epoch::ZERO,
-        committees: iter::once((Epoch::ZERO, committee)).collect(),
-        balance: Amount::from_tokens(10),
-        application_permissions: Default::default(),
+    fn admin_id(&self) -> ChainId {
+        self.admin_chain_description.id()
+    }
+
+    fn description_blobs(&self) -> impl Iterator<Item = Blob> + '_ {
+        self.created_descriptions
+            .values()
+            .map(Blob::new_chain_description)
+    }
+
+    fn make_open_chain_config(&self) -> OpenChainConfig {
+        self.admin_chain_description.config().clone()
+    }
+
+    fn make_app_description(&self) -> (ApplicationDescription, Blob, Blob) {
+        let contract = Bytecode::new(b"contract".into());
+        let service = Bytecode::new(b"service".into());
+        let contract_blob = Blob::new_contract_bytecode(contract.compress());
+        let service_blob = Blob::new_service_bytecode(service.compress());
+        let vm_runtime = VmRuntime::Wasm;
+
+        let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+        (
+            ApplicationDescription {
+                module_id,
+                creator_chain_id: self.admin_id(),
+                block_height: BlockHeight(2),
+                application_index: 0,
+                required_application_ids: vec![],
+                parameters: vec![],
+            },
+            contract_blob,
+            service_blob,
+        )
+    }
+
+    fn make_child_chain_description_with_config(
+        &mut self,
+        height: u64,
+        config: OpenChainConfig,
+    ) -> ChainDescription {
+        let origin = ChainOrigin::Child {
+            parent: self.admin_id(),
+            block_height: BlockHeight(height),
+            chain_index: 0,
+        };
+        let config = OpenChainConfig {
+            admin_id: Some(self.admin_id()),
+            ..config
+        };
+        let description = ChainDescription::new(origin, config, Timestamp::from(0));
+        self.created_descriptions
+            .insert(description.id(), description.clone());
+        description
     }
 }
 
 #[tokio::test]
-async fn test_block_size_limit() {
+async fn test_block_size_limit() -> anyhow::Result<()> {
+    let mut env = TestEnvironment::new();
+
     let time = Timestamp::from(0);
-    let message_id = make_admin_message_id(BlockHeight(3));
-    let chain_id = ChainId::child(message_id);
-    let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_block_size = 856;
+    let maximum_block_size = 260;
 
-    // Initialize the chain.
-    let mut config = make_open_chain_config();
+    let mut config = env.make_open_chain_config();
     config.committees.insert(
         Epoch(0),
-        Committee::new(
+        bcs::to_bytes(&Committee::new(
             BTreeMap::from([(
                 ValidatorPublicKey::test_key(1),
                 ValidatorState {
@@ -139,34 +174,45 @@ async fn test_block_size_limit() {
                 maximum_block_size,
                 ..ResourceControlPolicy::default()
             },
-        ),
+        ))
+        .expect("serializing a committee should not fail"),
     );
 
-    chain
-        .execute_init_message(message_id, &config, time, time)
-        .await
+    let chain_desc = env.make_child_chain_description_with_config(3, config);
+    let chain_id = chain_desc.id();
+    let owner = chain_desc
+        .config()
+        .ownership
+        .all_owners()
+        .next()
+        .copied()
         .unwrap();
-    let open_chain_bundle = IncomingBundle {
-        origin: admin_id(),
-        bundle: MessageBundle {
-            certificate_hash: CryptoHash::test_hash("certificate"),
-            height: BlockHeight(1),
-            transaction_index: 0,
-            timestamp: time,
-            messages: vec![Message::System(SystemMessage::OpenChain(Box::new(config)))
-                .to_posted(0, MessageKind::Protected)],
-        },
-        action: MessageAction::Accept,
-    };
 
-    let valid_block = make_first_block(chain_id).with_incoming_bundle(open_chain_bundle.clone());
+    let mut chain = ChainStateView::new(chain_id).await;
+    chain
+        .context()
+        .extra()
+        .add_blobs(env.description_blobs())
+        .await?;
+
+    // Initialize the chain.
+
+    chain.ensure_is_active(time).await.unwrap();
+
+    let valid_block = make_first_block(chain_id)
+        .with_authenticated_signer(Some(owner))
+        .with_operation(SystemOperation::Transfer {
+            owner: AccountOwner::CHAIN,
+            recipient: Recipient::chain(env.admin_id()),
+            amount: Amount::ONE,
+        });
 
     // Any block larger than the valid block is rejected.
     let invalid_block = valid_block
         .clone()
         .with_operation(SystemOperation::Transfer {
             owner: AccountOwner::CHAIN,
-            recipient: Recipient::root(0),
+            recipient: Recipient::chain(env.admin_id()),
             amount: Amount::ONE,
         });
 
@@ -193,23 +239,35 @@ async fn test_block_size_limit() {
         bcs::serialized_size(&block).unwrap(),
         maximum_block_size as usize
     );
+
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_application_permissions() -> anyhow::Result<()> {
+    let mut env = TestEnvironment::new();
+
     let time = Timestamp::from(0);
-    let message_id = make_admin_message_id(BlockHeight(3));
-    let chain_id = ChainId::child(message_id);
-    let mut chain = ChainStateView::new(chain_id).await;
 
     // Create a mock application.
-    let (app_description, contract_blob, service_blob) = make_app_description();
+    let (app_description, contract_blob, service_blob) = env.make_app_description();
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
+
+    let config = OpenChainConfig {
+        application_permissions: ApplicationPermissions::new_single(application_id),
+        ..env.make_open_chain_config()
+    };
+    let chain_desc = env.make_child_chain_description_with_config(3, config);
+    let chain_id = chain_desc.id();
+
+    let mut chain = ChainStateView::new(chain_id).await;
+
     let extra = &chain.context().extra();
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
+    extra.add_blobs(env.description_blobs()).await?;
     extra
         .add_blobs([
             contract_blob,
@@ -219,32 +277,10 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .await?;
 
     // Initialize the chain, with a chain application.
-    let config = OpenChainConfig {
-        application_permissions: ApplicationPermissions::new_single(application_id),
-        ..make_open_chain_config()
-    };
-    chain
-        .execute_init_message(message_id, &config, time, time)
-        .await?;
-    let open_chain_message = Message::System(SystemMessage::OpenChain(Box::new(config)));
-
-    // The OpenChain message must be included in the first block. Also register the app.
-    let bundle = IncomingBundle {
-        origin: admin_id(),
-        bundle: MessageBundle {
-            certificate_hash: CryptoHash::test_hash("certificate"),
-            height: BlockHeight(1),
-            transaction_index: 0,
-            timestamp: Timestamp::from(0),
-            messages: vec![open_chain_message.to_posted(0, MessageKind::Protected)],
-        },
-        action: MessageAction::Accept,
-    };
+    chain.ensure_is_active(time).await?;
 
     // An operation that doesn't belong to the app isn't allowed.
-    let invalid_block = make_first_block(chain_id)
-        .with_incoming_bundle(bundle.clone())
-        .with_simple_transfer(chain_id, Amount::ONE);
+    let invalid_block = make_first_block(chain_id).with_simple_transfer(chain_id, Amount::ONE);
     let result = chain
         .execute_block(&invalid_block, time, None, &[], None)
         .await;
@@ -259,9 +295,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         application_id,
         bytes: b"foo".to_vec(),
     };
-    let valid_block = make_first_block(chain_id)
-        .with_incoming_bundle(bundle)
-        .with_operation(app_operation.clone());
+    let valid_block = make_first_block(chain_id).with_operation(app_operation.clone());
     let outcome = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
@@ -628,15 +662,13 @@ async fn prepare_test_with_dummy_mock_application(
     ProposedBlock,
     Timestamp,
 )> {
+    let mut env = TestEnvironment::new();
     let time = Timestamp::from(0);
-    let message_id = make_admin_message_id(BlockHeight(3));
-    let chain_id = ChainId::child(message_id);
-    let mut chain = ChainStateView::new(chain_id).await;
 
-    let mut config = make_open_chain_config();
+    let mut config = env.make_open_chain_config();
     config.committees.insert(
         Epoch(0),
-        Committee::new(
+        bcs::to_bytes(&Committee::new(
             BTreeMap::from([(
                 ValidatorPublicKey::test_key(1),
                 ValidatorState {
@@ -646,15 +678,24 @@ async fn prepare_test_with_dummy_mock_application(
                 },
             )]),
             policy,
-        ),
+        ))
+        .expect("serializing a committee should not fail"),
     );
 
+    let chain_desc = env.make_child_chain_description_with_config(3, config);
+    let chain_id = chain_desc.id();
+    let mut chain = ChainStateView::new(chain_id).await;
+
     chain
-        .execute_init_message(message_id, &config, time, time)
+        .context()
+        .extra()
+        .add_blobs(env.description_blobs())
         .await?;
 
+    chain.ensure_is_active(time).await?;
+
     // Create a mock application.
-    let (app_description, contract_blob, service_blob) = make_app_description();
+    let (app_description, contract_blob, service_blob) = env.make_app_description();
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();

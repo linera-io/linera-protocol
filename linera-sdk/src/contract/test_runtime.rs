@@ -62,8 +62,7 @@ where
     expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
-    expected_open_chain_calls:
-        VecDeque<(ChainOwnership, ApplicationPermissions, Amount, MessageId)>,
+    expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
     key_value_store: KeyValueStore,
 }
@@ -651,13 +650,13 @@ where
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-        message_id: MessageId,
+        chain_id: ChainId,
     ) {
         self.expected_open_chain_calls.push_back((
             ownership,
             application_permissions,
             balance,
-            message_id,
+            chain_id,
         ));
     }
 
@@ -668,16 +667,15 @@ where
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> (MessageId, ChainId) {
-        let (expected_ownership, expected_permissions, expected_balance, message_id) = self
+    ) -> ChainId {
+        let (expected_ownership, expected_permissions, expected_balance, chain_id) = self
             .expected_open_chain_calls
             .pop_front()
             .expect("Unexpected open_chain call");
         assert_eq!(ownership, expected_ownership);
         assert_eq!(application_permissions, expected_permissions);
         assert_eq!(balance, expected_balance);
-        let chain_id = ChainId::child(message_id);
-        (message_id, chain_id)
+        chain_id
     }
 
     /// Adds a new expected call to `create_application`.

@@ -10,8 +10,8 @@ use linera_base::{
         BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey,
         ValidatorSignature,
     },
-    data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
-    identifiers::{AccountOwner, ChainDescription, ChainId},
+    data_types::{Amount, BlockHeight, ChainDescription, Epoch, Round, Timestamp},
+    identifiers::{AccountOwner, ChainId},
 };
 use linera_chain::{
     data_types::{ChainAndHeight, IncomingBundle, MessageBundle},
@@ -271,7 +271,7 @@ where
         ChainInfo {
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
-            description: *system_state.description.get(),
+            description: system_state.description.get().clone(),
             manager: Box::new(ChainManagerInfo::from(&view.manager)),
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,

@@ -4,9 +4,7 @@
 use std::{num::NonZeroU16, str::FromStr};
 
 use colored::Colorize as _;
-use linera_base::{
-    data_types::Amount, identifiers::ChainId, listen_for_shutdown_signals, time::Duration,
-};
+use linera_base::{data_types::Amount, listen_for_shutdown_signals, time::Duration};
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_rpc::config::CrossChainConfig;
 use linera_service::{
@@ -282,17 +280,17 @@ async fn print_messages_and_create_faucet(
         format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
     );
 
+    let chains = client.load_wallet()?.chain_ids();
+
     // Run the faucet,
     let faucet_service = if with_faucet {
-        let faucet_chain = if let Some(faucet_chain) = faucet_chain {
-            ChainId::root(faucet_chain)
-        } else {
-            assert!(
-                num_other_initial_chains > 1,
-                "num_other_initial_chains must be greater than 1 if with_faucet is true"
-            );
-            ChainId::root(1)
-        };
+        let faucet_chain_idx = faucet_chain.unwrap_or(1);
+        assert!(
+            num_other_initial_chains >= faucet_chain_idx,
+            "num_other_initial_chains must be greater than the faucet chain index if with_faucet \
+            is true"
+        );
+        let faucet_chain = chains[faucet_chain_idx as usize];
         let service = client
             .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount, None)
             .await?;

@@ -323,13 +323,13 @@ where
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> (MessageId, ChainId) {
-        let (message_id, chain_id) = contract_wit::open_chain(
+    ) -> ChainId {
+        let chain_id = contract_wit::open_chain(
             &chain_ownership.into(),
             &application_permissions.into(),
             balance.into(),
         );
-        (message_id.into(), chain_id.into())
+        chain_id.into()
     }
 
     /// Closes the current chain. Returns an error if the application doesn't have

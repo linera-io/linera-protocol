@@ -475,7 +475,7 @@ where
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<(MessageId, ChainId), RuntimeError> {
+    ) -> Result<ChainId, RuntimeError> {
         caller
             .user_data_mut()
             .runtime

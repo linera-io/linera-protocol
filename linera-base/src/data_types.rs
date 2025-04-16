@@ -9,6 +9,7 @@ use std::ops;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
+    collections::BTreeMap,
     fmt::{self, Display},
     fs,
     hash::Hash,
@@ -37,6 +38,7 @@ use crate::{
         ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, ModuleId, StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
+    ownership::ChainOwnership,
     time::{Duration, SystemTime},
     vm::VmRuntime,
 };
@@ -706,6 +708,30 @@ impl Amount {
     }
 }
 
+/// What created a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub enum ChainOrigin {
+    /// The chain was created by the genesis configuration.
+    Root(u32),
+    /// The chain was created by a call from another chain.
+    Child {
+        /// The parent of this chain.
+        parent: ChainId,
+        /// The block height in the parent at which this chain was created.
+        block_height: BlockHeight,
+        /// The index of this chain among chains created at the same block height in the parent
+        /// chain.
+        chain_index: u32,
+    },
+}
+
+impl ChainOrigin {
+    /// Whether the chain was created by another chain.
+    pub fn is_child(&self) -> bool {
+        matches!(self, ChainOrigin::Child { .. })
+    }
+}
+
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 pub struct Epoch(pub u32);
@@ -784,12 +810,77 @@ impl Epoch {
     }
 }
 
+/// The configuration for a new chain.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
+pub struct OpenChainConfig {
+    /// The ownership configuration of the new chain.
+    pub ownership: ChainOwnership,
+    /// The ID of the admin chain.
+    pub admin_id: Option<ChainId>,
+    /// The epoch in which the chain is created.
+    pub epoch: Epoch,
+    /// Blob IDs of the committees corresponding to epochs.
+    pub committees: BTreeMap<Epoch, Vec<u8>>,
+    /// The initial chain balance.
+    pub balance: Amount,
+    /// The initial application permissions.
+    pub application_permissions: ApplicationPermissions,
+}
+
+/// How to create a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct ChainDescription {
+    origin: ChainOrigin,
+    timestamp: Timestamp,
+    config: OpenChainConfig,
+}
+
+impl ChainDescription {
+    /// Creates a new [`ChainDescription`].
+    pub fn new(origin: ChainOrigin, config: OpenChainConfig, timestamp: Timestamp) -> Self {
+        Self {
+            origin,
+            config,
+            timestamp,
+        }
+    }
+
+    /// Returns the [`ChainId`] based on this [`ChainDescription`].
+    pub fn id(&self) -> ChainId {
+        ChainId::from(self)
+    }
+
+    /// Returns the [`ChainOrigin`] describing who created this chain.
+    pub fn origin(&self) -> ChainOrigin {
+        self.origin
+    }
+
+    /// Returns a reference to the [`OpenChainConfig`] of the chain.
+    pub fn config(&self) -> &OpenChainConfig {
+        &self.config
+    }
+
+    /// Returns the timestamp of when the chain was created.
+    pub fn timestamp(&self) -> Timestamp {
+        self.timestamp
+    }
+
+    /// Whether the chain was created by another chain.
+    pub fn is_child(&self) -> bool {
+        self.origin.is_child()
+    }
+}
+
+impl BcsHashable<'_> for ChainDescription {}
+
 /// Permissions for applications on a chain.
 #[derive(
     Default,
     Debug,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Clone,
     Serialize,
@@ -1137,6 +1228,13 @@ impl BlobContent {
         BlobContent::new(BlobType::Committee, committee)
     }
 
+    /// Creates a new chain description [`BlobContent`] from a [`ChainDescription`].
+    pub fn new_chain_description(chain_description: &ChainDescription) -> Self {
+        let bytes = bcs::to_bytes(&chain_description)
+            .expect("Serializing a ChainDescription should not fail!");
+        BlobContent::new(BlobType::ChainDescription, bytes)
+    }
+
     /// Gets a reference to the blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
@@ -1198,7 +1296,7 @@ impl Blob {
         Blob::new(BlobContent::new_data(bytes))
     }
 
-    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    /// Creates a new contract bytecode [`Blob`] from the provided bytes.
     pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         Blob::new(BlobContent::new_contract_bytecode(compressed_bytecode))
     }
@@ -1208,17 +1306,26 @@ impl Blob {
         Blob::new(BlobContent::new_evm_bytecode(compressed_bytecode))
     }
 
-    /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
+    /// Creates a new service bytecode [`Blob`] from the provided bytes.
     pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         Blob::new(BlobContent::new_service_bytecode(compressed_bytecode))
     }
 
-    /// Creates a new application description [`BlobContent`] from the provided
-    /// description.
+    /// Creates a new application description [`Blob`] from the provided description.
     pub fn new_application_description(application_description: &ApplicationDescription) -> Self {
         Blob::new(BlobContent::new_application_description(
             application_description,
         ))
+    }
+
+    /// Creates a new committee [`Blob`] from the provided bytes.
+    pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
+        Blob::new(BlobContent::new_committee(committee))
+    }
+
+    /// Creates a new chain description [`Blob`] from a [`ChainDescription`].
+    pub fn new_chain_description(chain_description: &ChainDescription) -> Self {
+        Blob::new(BlobContent::new_chain_description(chain_description))
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
@@ -1352,6 +1459,7 @@ doc_scalar!(
     Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
+doc_scalar!(ChainDescription, "How to create a chain");
 doc_scalar!(OracleResponse, "A record of a single oracle response.");
 doc_scalar!(BlobContent, "A blob of binary data.");
 doc_scalar!(

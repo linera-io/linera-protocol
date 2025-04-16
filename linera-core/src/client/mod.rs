@@ -29,12 +29,12 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
-        Round, Timestamp,
+        OpenChainConfig, Round, Timestamp,
     },
     ensure,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, MessageId,
-        ModuleId, StreamId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, ModuleId,
+        StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -54,8 +54,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
-        OPEN_CHAIN_MESSAGE_INDEX, REMOVED_EPOCH_STREAM_NAME,
+        AdminOperation, Recipient, SystemOperation, EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
@@ -240,7 +239,7 @@ impl<Env: Environment> Client<Env> {
     /// Creates a new `ChainClient`.
     #[instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     #[expect(clippy::too_many_arguments)]
-    pub fn create_chain_client(
+    pub async fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
         known_key_pairs: Vec<AccountSecretKey>,
@@ -249,7 +248,7 @@ impl<Env: Environment> Client<Env> {
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
-    ) -> ChainClient<Env> {
+    ) -> Result<ChainClient<Env>, ChainClientError> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
@@ -262,7 +261,11 @@ impl<Env: Environment> Client<Env> {
             ));
         }
 
-        ChainClient {
+        let _ = self
+            .ensure_has_chain_description(chain_id, admin_id)
+            .await?;
+
+        Ok(ChainClient {
             client: self.clone(),
             chain_id,
             admin_id,
@@ -273,6 +276,25 @@ impl<Env: Environment> Client<Env> {
                 grace_period: self.grace_period,
                 blob_download_timeout: self.blob_download_timeout,
             },
+        })
+    }
+
+    pub async fn chain_info(
+        &self,
+        chain_id: ChainId,
+        validators: &[RemoteNode<impl ValidatorNode>],
+    ) -> Result<Box<ChainInfo>, LocalNodeError> {
+        match self.local_node.chain_info(chain_id).await {
+            Ok(info) => Ok(info),
+            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                let blobs =
+                    RemoteNode::download_blobs(&blob_ids, validators, self.blob_download_timeout)
+                        .await
+                        .ok_or(LocalNodeError::BlobsNotFound(blob_ids))?;
+                self.local_node.storage_client().write_blobs(&blobs).await?;
+                self.local_node.chain_info(chain_id).await
+            }
+            err => err,
         }
     }
 
@@ -285,10 +307,10 @@ impl<Env: Environment> Client<Env> {
         target_next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         // Sequentially try each validator in random order.
-        let mut validators = validators.iter().collect::<Vec<_>>();
-        validators.shuffle(&mut rand::thread_rng());
-        for remote_node in validators {
-            let info = self.local_node.chain_info(chain_id).await?;
+        let mut validators_vec = validators.iter().collect::<Vec<_>>();
+        validators_vec.shuffle(&mut rand::thread_rng());
+        for remote_node in validators_vec {
+            let info = self.chain_info(chain_id, validators).await?;
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
@@ -300,7 +322,7 @@ impl<Env: Environment> Client<Env> {
             )
             .await?;
         }
-        let info = self.local_node.chain_info(chain_id).await?;
+        let info = self.chain_info(chain_id, validators).await?;
         if target_next_block_height <= info.next_block_height {
             Ok(info)
         } else {
@@ -391,6 +413,61 @@ impl<Env: Environment> Client<Env> {
         self.local_node
             .handle_certificate(certificate.clone(), &self.notifier)
             .await
+    }
+
+    /// Obtains the current epoch of the given chain as well as its set of trusted committees.
+    pub async fn epoch_and_committees(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
+        let query = ChainInfoQuery::new(chain_id).with_committees();
+        let info = self.local_node.handle_chain_info_query(query).await?.info;
+        let epoch = info.epoch;
+        let committees = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+        Ok((epoch, committees))
+    }
+
+    fn make_nodes(&self, committee: &Committee) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, NodeError> {
+        Ok(self
+            .validator_node_provider
+            .make_nodes(committee)?
+            .map(|(public_key, node)| RemoteNode { public_key, node })
+            .collect())
+    }
+
+    /// Ensures that the client has the `ChainDescription` blob corresponding to this
+    /// client's `ChainId`.
+    pub async fn ensure_has_chain_description(
+        &self,
+        chain_id: ChainId,
+        admin_id: ChainId,
+    ) -> Result<Blob, ChainClientError> {
+        let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+        if let Ok(blob) = self
+            .local_node
+            .storage_client()
+            .read_blob(chain_desc_id)
+            .await
+        {
+            // We have the blob - return it.
+            return Ok(blob);
+        }
+        // We can't get the committee from the chain we're assigned to because we don't
+        // have the description - use the admin chain.
+        let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
+        let admin_epoch = admin_epoch.ok_or(ChainClientError::CommitteeSynchronizationError)?;
+        let remote_committee = admin_committees
+            .get(&admin_epoch)
+            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
+        // Recover history from the network.
+        let nodes = self.make_nodes(remote_committee)?;
+        let blob = RemoteNode::download_blob(&nodes, chain_desc_id, self.blob_download_timeout)
+            .await
+            .ok_or(LocalNodeError::BlobsNotFound(vec![chain_desc_id]))?;
+        self.local_node.storage_client().write_blob(&blob).await?;
+        Ok(blob)
     }
 }
 
@@ -814,6 +891,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// local chain.
     #[instrument(level = "trace")]
     async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
+        if self.options.message_policy.is_ignore() {
+            // Ignore all messages.
+            return Ok(Vec::new());
+        }
+
         let query = ChainInfoQuery::new(self.chain_id).with_pending_message_bundles();
         let info = self
             .client
@@ -829,35 +911,8 @@ impl<Env: Environment> ChainClient<Env> {
                 ChainClientError::WalletSynchronizationError
             );
         }
-        if info.next_block_height != BlockHeight::ZERO && self.options.message_policy.is_ignore() {
-            return Ok(Vec::new()); // OpenChain is already received, others are ignored.
-        }
 
-        let mut rearranged = false;
-        let mut pending_message_bundles = info.requested_pending_message_bundles;
-
-        // The first incoming message of any child chain must be `OpenChain`. We must have it in
-        // our inbox, and include it before all other messages.
-        if info.next_block_height == BlockHeight::ZERO
-            && info
-                .description
-                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
-                .is_child()
-        {
-            // The first incoming message of any child chain must be `OpenChain`. We must have it in
-            // our inbox, and include it before all other messages.
-            rearranged = IncomingBundle::put_openchain_at_front(&mut pending_message_bundles);
-            ensure!(rearranged, LocalNodeError::InactiveChain(self.chain_id));
-        }
-
-        if self.options.message_policy.is_ignore() {
-            // Ignore messages other than OpenChain.
-            if rearranged {
-                return Ok(pending_message_bundles[0..1].to_vec());
-            } else {
-                return Ok(Vec::new());
-            }
-        }
+        let pending_message_bundles = info.requested_pending_message_bundles;
 
         Ok(pending_message_bundles
             .into_iter()
@@ -922,31 +977,20 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         chain_id: ChainId,
     ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self
-            .client
-            .local_node
-            .handle_chain_info_query(query)
-            .await?
-            .info;
-        let epoch = info.epoch;
-        let committees = info
-            .requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
-        Ok((epoch, committees))
+        self.client.epoch_and_committees(chain_id).await
     }
 
     /// Obtains the epochs of the committees trusted by the local chain.
     #[instrument(level = "trace")]
     pub async fn epochs(&self) -> Result<Vec<Epoch>, LocalNodeError> {
-        let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
+        let (_epoch, committees) = self.client.epoch_and_committees(self.chain_id).await?;
         Ok(committees.into_keys().collect())
     }
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Committee, LocalNodeError> {
-        let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
+        let (epoch, mut committees) = self.client.epoch_and_committees(self.chain_id).await?;
         committees
             .remove(
                 epoch
@@ -971,24 +1015,18 @@ impl<Env: Environment> ChainClient<Env> {
     async fn known_committees(
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
-        let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
-        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id).await?;
+        let (epoch, mut committees) = match self.client.epoch_and_committees(self.chain_id).await {
+            Ok(result) => result,
+            // We might not be initialized due to a missing blob - just treat this case as
+            // no committees.
+            Err(LocalNodeError::BlobsNotFound(_)) => (None, BTreeMap::new()),
+            err => err?,
+        };
+        let (admin_epoch, admin_committees) =
+            self.client.epoch_and_committees(self.admin_id).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
         Ok((committees, epoch))
-    }
-
-    #[instrument(level = "trace")]
-    fn make_nodes(
-        &self,
-        committee: &Committee,
-    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, NodeError> {
-        Ok(self
-            .client
-            .validator_node_provider()
-            .make_nodes(committee)?
-            .map(|(public_key, node)| RemoteNode { public_key, node })
-            .collect())
     }
 
     /// Obtains the validators for the latest epoch.
@@ -997,7 +1035,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
     ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, ChainClientError> {
         let committee = self.latest_committee().await?;
-        Ok(self.make_nodes(&committee)?)
+        Ok(self.client.make_nodes(&committee)?)
     }
 
     /// Obtains the current epoch of the local chain.
@@ -1193,7 +1231,7 @@ impl<Env: Environment> ChainClient<Env> {
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
         let local_node = self.client.local_node.clone();
-        let nodes = self.make_nodes(committee)?;
+        let nodes = self.client.make_nodes(committee)?;
         let n_validators = nodes.len();
         let chain_worker_count =
             std::cmp::max(1, self.client.max_loaded_chains.get() / n_validators);
@@ -1232,7 +1270,7 @@ impl<Env: Environment> ChainClient<Env> {
         value: T,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
         let local_node = self.client.local_node.clone();
-        let nodes = self.make_nodes(committee)?;
+        let nodes = self.client.make_nodes(committee)?;
         let n_validators = nodes.len();
         let chain_worker_count =
             std::cmp::max(1, self.client.max_loaded_chains.get() / n_validators);
@@ -1331,7 +1369,7 @@ impl<Env: Environment> ChainClient<Env> {
             nodes
         } else {
             // We assume that the committee that signed the certificate is still active.
-            self.make_nodes(remote_committee)?
+            self.client.make_nodes(remote_committee)?
         };
         self.client
             .download_certificates(&nodes, block.header.chain_id, block.header.height)
@@ -1633,7 +1671,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
-        let nodes = self.make_nodes(&local_committee)?;
+        let nodes = self.client.make_nodes(&local_committee)?;
         let client = self.clone();
         // Proceed to downloading received certificates. Split the available chain workers so that
         // the tasks don't use more than the limit in total.
@@ -1793,11 +1831,11 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let (epoch, mut committees) = self.epoch_and_committees(chain_id).await?;
+        let (epoch, mut committees) = self.client.epoch_and_committees(chain_id).await?;
         let committee = committees
             .remove(&epoch.ok_or(LocalNodeError::InvalidChainInfoResponse)?)
             .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
-        let validators = self.make_nodes(&committee)?;
+        let validators = self.client.make_nodes(&committee)?;
         communicate_with_quorum(
             &validators,
             &committee,
@@ -2910,14 +2948,23 @@ impl<Env: Environment> ChainClient<Env> {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ClientOutcome<(MessageId, ConfirmedBlockCertificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(ChainId, ConfirmedBlockCertificate)>, ChainClientError> {
         loop {
-            let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
+            let (epoch, committees) = self.client.epoch_and_committees(self.chain_id).await?;
+            let committees = committees
+                .into_iter()
+                .map(|(epoch, committee)| {
+                    (
+                        epoch,
+                        bcs::to_bytes(&committee).expect("Serializing a committee shouldn't fail!"),
+                    )
+                })
+                .collect();
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
                 committees,
-                admin_id: self.admin_id,
+                admin_id: Some(self.admin_id),
                 epoch,
                 balance,
                 application_permissions: application_permissions.clone(),
@@ -2931,17 +2978,20 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             };
             // The first message of the only operation created the new chain.
-            let message_id = certificate
+            let chain_blob_id = certificate
                 .block()
-                .message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
-                .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
+                .created_blob_ids()
+                .into_iter()
+                .next()
+                .ok_or_else(|| ChainClientError::InternalError("Failed to create a new chain"))?;
+            let chain_id = ChainId(chain_blob_id.hash);
             // Add the new chain to the list of tracked chains
-            self.client.track_chain(ChainId::child(message_id));
+            self.client.track_chain(chain_id);
             self.client
                 .local_node
                 .retry_pending_cross_chain_requests(self.chain_id)
                 .await?;
-            return Ok(ClientOutcome::Committed((message_id, certificate)));
+            return Ok(ClientOutcome::Committed((chain_id, certificate)));
         }
     }
 
@@ -3242,7 +3292,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.prepare_chain().await?;
-        let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
+        let (current_epoch, committees) = self.client.epoch_and_committees(self.chain_id).await?;
         let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         let operations = committees
             .keys()

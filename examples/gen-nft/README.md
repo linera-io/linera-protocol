@@ -61,8 +61,8 @@ INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
 INFO_2=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
-OWNER_1="${INFO_1[3]}"
-OWNER_2="${INFO_2[3]}"
+OWNER_1="${INFO_1[2]}"
+OWNER_2="${INFO_2[2]}"
 ```
 
 Next, compile the `non-fungible` application WebAssembly binaries, and publish them as an application module:

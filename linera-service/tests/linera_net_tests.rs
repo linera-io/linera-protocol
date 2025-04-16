@@ -2933,12 +2933,12 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     let owner2 = client2.keygen().await?;
 
     // Open chain on behalf of Client 2.
-    let (message_id, chain2, _) = client1
+    let (chain2, _) = client1
         .open_chain(chain1, Some(owner2), Amount::ZERO)
         .await?;
 
     // Assign chain2 to client2_key.
-    assert_eq!(chain2, client2.assign(owner2, message_id).await?);
+    client2.assign(owner2, chain2).await?;
 
     // Transfer a token to chain 2. Check that this increases the local balance, proving
     // that client 2 can create blocks on that chain.
@@ -2979,7 +2979,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
     let owner2 = client2.keygen().await?;
 
     // Open a chain owned by both clients.
-    let (message_id, chain2) = client1
+    let chain2 = client1
         .open_multi_owner_chain(
             chain1,
             vec![owner1, owner2],
@@ -2991,10 +2991,10 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
         .await?;
 
     // Assign chain2 to client1_key.
-    assert_eq!(chain2, client1.assign(owner1, message_id).await?);
+    client1.assign(owner1, chain2).await?;
 
     // Assign chain2 to client2_key.
-    assert_eq!(chain2, client2.assign(owner2, message_id).await?);
+    client2.assign(owner2, chain2).await?;
 
     client2.sync(chain2).await?;
 
@@ -3087,14 +3087,14 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let owner2 = client2.keygen().await?;
 
     // Open a great-grandchild chain on behalf of client 2.
-    let (_, grandparent, _) = client1
+    let (grandparent, _) = client1
         .open_chain(chain1, None, Amount::from_tokens(2))
         .await?;
-    let (_, parent, _) = client1.open_chain(grandparent, None, Amount::ONE).await?;
-    let (message_id, chain2, _) = client1
+    let (parent, _) = client1.open_chain(grandparent, None, Amount::ONE).await?;
+    let (chain2, _) = client1
         .open_chain(parent, Some(owner2), Amount::ZERO)
         .await?;
-    client2.assign(owner2, message_id).await?;
+    client2.assign(owner2, chain2).await?;
 
     // Transfer a token to chain 2. Check that this increases the local balance, proving
     // that client 2 can create blocks on that chain.
@@ -3171,7 +3171,6 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     let faucet = faucet_service.instance();
     let outcome = faucet.claim(&owner2).await?;
     let chain2 = outcome.chain_id;
-    let message_id = outcome.message_id;
 
     // Test version info.
     let info = faucet.version_info().await?;
@@ -3208,7 +3207,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     assert!(faucet_balance > balance1 - Amount::from_tokens(9));
 
     // Assign chain2 to client2_key.
-    assert_eq!(chain2, client2.assign(owner2, message_id).await?);
+    client2.assign(owner2, chain2).await?;
 
     // Clients 2 and 3 should have the tokens, and own the chain.
     client2.sync(chain2).await?;
@@ -3252,7 +3251,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Use the faucet directly to initialize many chains
     for _ in 0..chain_count {
-        let (_, new_chain_id, _) = faucet_client
+        let (new_chain_id, _) = faucet_client
             .open_chain(faucet_chain, None, Amount::ONE)
             .await?;
         faucet_client.forget_chain(new_chain_id).await?;
@@ -3378,7 +3377,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     // Open a chain owned by both clients, with only single-leader rounds.
     let owner1 = client1.keygen().await?;
     let owner2 = client2.keygen().await?;
-    let (message_id, chain2) = client1
+    let chain2 = client1
         .open_multi_owner_chain(
             chain1,
             vec![owner1, owner2],
@@ -3388,8 +3387,8 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
             u64::MAX,
         )
         .await?;
-    client1.assign(owner1, message_id).await?;
-    client2.assign(owner2, message_id).await?;
+    client1.assign(owner1, chain2).await?;
+    client2.assign(owner2, chain2).await?;
     client2.sync(chain2).await?;
 
     let (tx, mut rx) = mpsc::channel(8);

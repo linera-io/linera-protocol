@@ -32,8 +32,6 @@ pub(crate) enum Inner {
     ChainInfoResponseMissingCommittee,
     #[error("arithmetic error: {0}")]
     Arithmetic(#[from] linera_base::data_types::ArithmeticError),
-    #[error("invalid open message")]
-    InvalidOpenMessage(Option<Box<linera_execution::Message>>),
     #[error("incorrect chain ownership")]
     ChainOwnership,
     #[cfg(feature = "benchmark")]
