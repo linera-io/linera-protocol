@@ -31,7 +31,6 @@ mod types {
     pub type MessageAction = Value;
     pub type Operation = Value;
     pub type Origin = Value;
-    pub type Target = Value;
     pub type ApplicationDescription = Value;
     pub type OperationResult = Value;
 
@@ -66,7 +65,7 @@ mod types {
         ownership::ChainOwnership,
     };
     pub use linera_chain::{
-        data_types::{MessageAction, MessageBundle, OperationResult, Origin, Target},
+        data_types::{MessageAction, MessageBundle, OperationResult},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};

@@ -30,8 +30,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, IncomingBundle, LiteValue, LiteVote,
-        Medium, MessageAction, MessageBundle, OperationResult, Origin, PostedMessage,
-        ProposedBlock, SignatureAggregator,
+        MessageAction, MessageBundle, OperationResult, PostedMessage, ProposedBlock,
+        SignatureAggregator,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -301,7 +301,7 @@ where
                     {
                         vec![OutgoingMessage {
                             authenticated_signer: posted_message.authenticated_signer,
-                            destination: Destination::Recipient(incoming_bundle.origin.sender),
+                            destination: Destination::Recipient(incoming_bundle.origin),
                             grant: Amount::ZERO,
                             refund_grant_to: None,
                             kind: MessageKind::Bouncing,
@@ -422,11 +422,11 @@ fn update_recipient_direct(
     certificate: &ConfirmedBlockCertificate,
 ) -> CrossChainRequest {
     let sender = certificate.inner().block().header.chain_id;
-    let bundles = certificate.message_bundles_for(&Medium::Direct, recipient);
+    let bundles = certificate.message_bundles_for(recipient).collect();
     CrossChainRequest::UpdateRecipient {
         sender,
         recipient,
-        bundle_vecs: vec![(Medium::Direct, bundles.collect())],
+        bundles,
     }
 }
 
@@ -870,7 +870,7 @@ where
             Notification {
                 chain_id: ChainId::root(2),
                 reason: NewIncomingBundle {
-                    origin: Origin::chain(ChainId::root(1)),
+                    origin: ChainId::root(1),
                     height: BlockHeight(0)
                 }
             },
@@ -884,7 +884,7 @@ where
             Notification {
                 chain_id: ChainId::root(2),
                 reason: NewIncomingBundle {
-                    origin: Origin::chain(ChainId::root(1)),
+                    origin: ChainId::root(1),
                     height: BlockHeight(1)
                 }
             }
@@ -909,7 +909,7 @@ where
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(5))
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
@@ -922,7 +922,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
@@ -934,7 +934,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(1),
@@ -960,7 +960,7 @@ where
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
@@ -984,7 +984,7 @@ where
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(1),
@@ -996,7 +996,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
@@ -1009,7 +1009,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
@@ -1033,7 +1033,7 @@ where
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::ONE)
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
@@ -1082,7 +1082,7 @@ where
         let block_proposal = make_child_block(&certificate.into_value())
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(3))
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
                     height: BlockHeight::from(0),
@@ -1094,7 +1094,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_incoming_bundle(IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(1),
@@ -1327,7 +1327,7 @@ where
         ..SystemExecutionState::new(epoch, description, admin_id)
     };
     let open_chain_message = IncomingBundle {
-        origin: Origin::chain(ChainId::root(3)),
+        origin: ChainId::root(3),
         bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight::ZERO,
@@ -1498,7 +1498,7 @@ where
         ChainId::root(2),
         Amount::from_tokens(1000),
         vec![IncomingBundle {
-            origin: Origin::chain(ChainId::root(3)),
+            origin: ChainId::root(3),
             bundle: MessageBundle {
                 certificate_hash: CryptoHash::test_hash("certificate"),
                 height: BlockHeight::ZERO,
@@ -1527,7 +1527,7 @@ where
     );
     let inbox = chain
         .inboxes
-        .try_load_entry(&Origin::chain(ChainId::root(3)))
+        .try_load_entry(&ChainId::root(3))
         .await?
         .expect("Missing inbox for `ChainId::root(3)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::ZERO, inbox.next_block_height_to_receive()?);
@@ -1669,7 +1669,7 @@ where
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     let inbox = chain
         .inboxes
-        .try_load_entry(&Origin::chain(ChainId::root(1)))
+        .try_load_entry(&ChainId::root(1))
         .await?
         .expect("Missing inbox for `ChainId::root(1)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
@@ -1744,7 +1744,7 @@ where
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
     let inbox = chain
         .inboxes
-        .try_load_entry(&Origin::chain(ChainId::root(1)))
+        .try_load_entry(&ChainId::root(1))
         .await?
         .expect("Missing inbox for `ChainId::root(1)` in `ChainId::root(2)`");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
@@ -1859,7 +1859,7 @@ where
         vec![Notification {
             chain_id: ChainId::root(2),
             reason: Reason::NewIncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 height: BlockHeight::ZERO,
             }
         }]
@@ -1965,7 +1965,7 @@ where
         ChainId::root(3),
         Amount::ONE,
         vec![IncomingBundle {
-            origin: Origin::chain(ChainId::root(1)),
+            origin: ChainId::root(1),
             bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
                 height: BlockHeight::ZERO,
@@ -2150,7 +2150,7 @@ where
         Recipient::Burn,
         Amount::ONE,
         vec![IncomingBundle {
-            origin: Origin::chain(ChainId::root(1)),
+            origin: ChainId::root(1),
             bundle: MessageBundle {
                 certificate_hash: certificate00.hash(),
                 height: BlockHeight::from(0),
@@ -2234,7 +2234,7 @@ where
         Amount::ONE,
         vec![
             IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(2),
@@ -2250,7 +2250,7 @@ where
                 action: MessageAction::Reject,
             },
             IncomingBundle {
-                origin: Origin::chain(ChainId::root(1)),
+                origin: ChainId::root(1),
                 bundle: MessageBundle {
                     certificate_hash: certificate2.hash(),
                     height: BlockHeight::from(3),
@@ -2293,7 +2293,7 @@ where
         Recipient::Burn,
         Amount::from_tokens(3),
         vec![IncomingBundle {
-            origin: Origin::chain(ChainId::root(2)),
+            origin: ChainId::root(2),
             bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
                 height: BlockHeight::from(0),
@@ -2496,7 +2496,7 @@ where
         matches!(
             &user_chain
                 .inboxes
-                .try_load_entry(&Origin::chain(admin_id))
+                .try_load_entry(&admin_id)
                 .await?
                 .expect("Missing inbox for admin chain in user chain")
                 .added_bundles
@@ -2551,7 +2551,7 @@ where
             .with(
                 make_first_block(user_id)
                     .with_incoming_bundle(IncomingBundle {
-                        origin: Origin::chain(admin_id),
+                        origin: admin_id,
                         bundle: MessageBundle {
                             certificate_hash: certificate0.hash(),
                             height: BlockHeight::from(0),
@@ -2572,7 +2572,7 @@ where
                         action: MessageAction::Accept,
                     })
                     .with_incoming_bundle(IncomingBundle {
-                        origin: Origin::chain(admin_id),
+                        origin: admin_id,
                         bundle: MessageBundle {
                             certificate_hash: certificate1.hash(),
                             height: BlockHeight::from(1),
@@ -2734,7 +2734,7 @@ where
     matches!(
         &admin_chain
             .inboxes
-            .try_load_entry(&Origin::chain(user_id))
+            .try_load_entry(&user_id)
             .await?
             .expect("Missing inbox for user chain in admin chain")
             .added_bundles
@@ -2907,7 +2907,7 @@ where
                 make_child_block(&certificate1.into_value())
                     .with_epoch(1)
                     .with_incoming_bundle(IncomingBundle {
-                        origin: Origin::chain(user_id),
+                        origin: user_id,
                         bundle: MessageBundle {
                             certificate_hash: certificate0.hash(),
                             height: BlockHeight::ZERO,
@@ -3034,18 +3034,10 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         Some(&certificate2),
     )
     .await;
-    let bundles0 = certificate0
-        .message_bundles_for(&Medium::Direct, id1)
-        .collect::<Vec<_>>();
-    let bundles1 = certificate1
-        .message_bundles_for(&Medium::Direct, id1)
-        .collect::<Vec<_>>();
-    let bundles2 = certificate2
-        .message_bundles_for(&Medium::Direct, id1)
-        .collect::<Vec<_>>();
-    let bundles3 = certificate3
-        .message_bundles_for(&Medium::Direct, id1)
-        .collect::<Vec<_>>();
+    let bundles0 = certificate0.message_bundles_for(id1).collect::<Vec<_>>();
+    let bundles1 = certificate1.message_bundles_for(id1).collect::<Vec<_>>();
+    let bundles2 = certificate2.message_bundles_for(id1).collect::<Vec<_>>();
+    let bundles3 = certificate3.message_bundles_for(id1).collect::<Vec<_>>();
     let bundles01 = Vec::from_iter(bundles0.iter().cloned().chain(bundles1.iter().cloned()));
     let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
     let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
@@ -3066,40 +3058,22 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     };
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
-        helper.select_message_bundles(
-            &Origin::chain(id0),
-            id1,
-            BlockHeight::ZERO,
-            None,
-            bundles01.clone()
-        )?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
         without_epochs(&bundles01)
     );
     // Received heights is removing prefixes.
     assert_eq!(
-        helper.select_message_bundles(
-            &Origin::chain(id0),
-            id1,
-            BlockHeight::from(1),
-            None,
-            bundles01.clone()
-        )?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles01.clone())?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        helper.select_message_bundles(
-            &Origin::chain(id0),
-            id1,
-            BlockHeight::from(2),
-            None,
-            bundles01.clone()
-        )?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::from(2), None, bundles01.clone())?,
         vec![]
     );
     // Order of certificates is checked.
     assert_matches!(
         helper.select_message_bundles(
-            &Origin::chain(id0),
+            &id0,
             id1,
             BlockHeight::ZERO,
             None,
@@ -3115,41 +3089,23 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     };
     // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
     assert_eq!(
-        helper.select_message_bundles(
-            &Origin::chain(id0),
-            id1,
-            BlockHeight::ZERO,
-            None,
-            bundles01.clone()
-        )?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
         vec![]
     );
     // A certificate with a recent epoch certifies all the previous blocks.
     assert_eq!(
-        helper.select_message_bundles(
-            &Origin::chain(id0),
-            id1,
-            BlockHeight::ZERO,
-            None,
-            bundles0123.clone()
-        )?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles0123.clone())?,
         without_epochs(&bundles012)
     );
     // Received heights is still removing prefixes.
     assert_eq!(
-        helper.select_message_bundles(
-            &Origin::chain(id0),
-            id1,
-            BlockHeight::from(1),
-            None,
-            bundles012.clone()
-        )?,
+        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles012.clone())?,
         without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
         helper.select_message_bundles(
-            &Origin::chain(id0),
+            &id0,
             id1,
             BlockHeight::from(1),
             Some(BlockHeight::from(1)),
@@ -3159,7 +3115,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     );
     assert_eq!(
         helper.select_message_bundles(
-            &Origin::chain(id0),
+            &id0,
             id1,
             BlockHeight::ZERO,
             Some(BlockHeight::from(1)),

@@ -41,7 +41,7 @@ use crate::{
     block::{Block, ConfirmedBlock},
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        OperationResult, Origin, PostedMessage, ProposedBlock, Target, Transaction,
+        OperationResult, PostedMessage, ProposedBlock, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -186,13 +186,13 @@ pub struct TimestampedBundleInInbox {
 )]
 pub struct BundleInInbox {
     /// The origin from which we received the bundle.
-    pub origin: Origin,
+    pub origin: ChainId,
     /// The cursor of the bundle in the inbox.
     pub cursor: Cursor,
 }
 
 impl BundleInInbox {
-    fn new(origin: Origin, bundle: &MessageBundle) -> Self {
+    fn new(origin: ChainId, bundle: &MessageBundle) -> Self {
         BundleInInbox {
             cursor: Cursor::from(bundle),
             origin,
@@ -236,7 +236,7 @@ where
     pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorPublicKey, u64>>,
 
     /// Mailboxes used to receive messages indexed by their origin.
-    pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
+    pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
     pub unskippable_bundles:
         BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
@@ -245,7 +245,7 @@ where
     /// The heights of previous blocks that sent messages to the same recipients.
     pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
-    pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
+    pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
@@ -373,7 +373,7 @@ where
 
     pub async fn mark_messages_as_received(
         &mut self,
-        target: &Target,
+        target: &ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
         let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
@@ -458,7 +458,7 @@ where
 
     pub async fn next_block_height_to_receive(
         &self,
-        origin: &Origin,
+        origin: &ChainId,
     ) -> Result<BlockHeight, ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
@@ -469,7 +469,7 @@ where
 
     pub async fn last_anticipated_block_height(
         &self,
-        origin: &Origin,
+        origin: &ChainId,
     ) -> Result<Option<BlockHeight>, ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
@@ -489,7 +489,7 @@ where
     /// Returns `true` if incoming `Subscribe` messages created new outbox entries.
     pub async fn receive_message_bundle(
         &mut self,
-        origin: &Origin,
+        origin: &ChainId,
         bundle: MessageBundle,
         local_time: Timestamp,
         add_to_received_log: bool,
@@ -501,7 +501,7 @@ where
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
-            chain_id: origin.sender,
+            chain_id: *origin,
             height: bundle.height,
         };
 
@@ -521,7 +521,7 @@ where
         NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
-        let entry = BundleInInbox::new(origin.clone(), &bundle);
+        let entry = BundleInInbox::new(*origin, &bundle);
         let skippable = bundle.is_skippable();
         let newly_added = inbox
             .add_bundle(bundle)
@@ -578,7 +578,7 @@ where
             return Ok(()); // Already initialized.
         }
         let message_id = MessageId {
-            chain_id: in_bundle.origin.sender,
+            chain_id: in_bundle.origin,
             height: in_bundle.bundle.height,
             index: posted_message.index,
         };
@@ -658,9 +658,9 @@ where
                 let was_present = inbox
                     .remove_bundle(bundle)
                     .await
-                    .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
+                    .map_err(|error| ChainError::from((chain_id, *origin, error)))?;
                 if was_present && !bundle.is_skippable() {
-                    removed_unskippable.insert(BundleInInbox::new(origin.clone(), bundle));
+                    removed_unskippable.insert(BundleInInbox::new(*origin, bundle));
                 }
             }
         }
@@ -1060,7 +1060,7 @@ where
                     !posted_message.is_protected() || *chain.system.closed.get(),
                     ChainError::CannotRejectMessage {
                         chain_id: block.chain_id,
-                        origin: Box::new(incoming_bundle.origin.clone()),
+                        origin: Box::new(incoming_bundle.origin),
                         posted_message: Box::new(posted_message.clone()),
                     }
                 );
@@ -1177,10 +1177,7 @@ where
 
         // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
-        let targets = recipients
-            .into_iter()
-            .map(Target::chain)
-            .collect::<Vec<_>>();
+        let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for mut outbox in outboxes {
             if outbox.schedule_message(height)? {

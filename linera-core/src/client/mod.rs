@@ -448,7 +448,7 @@ impl MessagePolicy {
                 bundle.action = MessageAction::Reject;
             }
         }
-        let sender = bundle.origin.sender;
+        let sender = bundle.origin;
         match &self.restrict_chain_ids_to {
             None => true,
             Some(chains) => chains.contains(&sender),
@@ -3332,11 +3332,7 @@ where
     ) {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
-                if self
-                    .local_next_block_height(origin.sender, &mut local_node)
-                    .await
-                    > Some(height)
-                {
+                if self.local_next_block_height(origin, &mut local_node).await > Some(height) {
                     debug!("Accepting redundant notification for new message");
                     return;
                 }
@@ -3347,11 +3343,7 @@ where
                     error!("Fail to process notification: {error}");
                     return;
                 }
-                if self
-                    .local_next_block_height(origin.sender, &mut local_node)
-                    .await
-                    <= Some(height)
-                {
+                if self.local_next_block_height(origin, &mut local_node).await <= Some(height) {
                     error!("Fail to synchronize new message after notification");
                 }
             }

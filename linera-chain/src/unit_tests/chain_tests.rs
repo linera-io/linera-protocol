@@ -40,7 +40,7 @@ use test_case::test_case;
 use crate::{
     block::{Block, ConfirmedBlock},
     data_types::{
-        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, Origin, ProposedBlock,
+        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, ProposedBlock,
     },
     test::{make_child_block, make_first_block, BlockTestExt, HttpServer, MessageTestExt},
     ChainError, ChainExecutionContext, ChainStateView,
@@ -147,7 +147,7 @@ async fn test_block_size_limit() {
         .await
         .unwrap();
     let open_chain_bundle = IncomingBundle {
-        origin: Origin::chain(admin_id()),
+        origin: admin_id(),
         bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight(1),
@@ -230,7 +230,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
 
     // The OpenChain message must be included in the first block. Also register the app.
     let bundle = IncomingBundle {
-        origin: Origin::chain(admin_id()),
+        origin: admin_id(),
         bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight(1),

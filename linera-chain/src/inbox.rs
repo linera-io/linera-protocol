@@ -21,7 +21,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{data_types::MessageBundle, ChainError, Origin};
+use crate::{data_types::MessageBundle, ChainError};
 
 #[cfg(test)]
 #[path = "unit_tests/inbox_tests.rs"]
@@ -143,8 +143,8 @@ impl Cursor {
     }
 }
 
-impl From<(ChainId, Origin, InboxError)> for ChainError {
-    fn from(value: (ChainId, Origin, InboxError)) -> Self {
+impl From<(ChainId, ChainId, InboxError)> for ChainError {
+    fn from(value: (ChainId, ChainId, InboxError)) -> Self {
         let (chain_id, origin, error) = value;
         match error {
             InboxError::ViewError(e) => ChainError::ViewError(e),

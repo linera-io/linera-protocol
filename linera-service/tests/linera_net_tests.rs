@@ -31,7 +31,6 @@ use linera_base::{
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     vm::VmRuntime,
 };
-use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
     linera_base_types::{BlobContent, BlockHeight},
@@ -3425,8 +3424,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             match reason {
                 Reason::NewIncomingBundle { height, origin } => {
                     assert_eq!(height, next_height1);
-                    assert_eq!(origin.sender, chain_id1);
-                    assert_eq!(origin.medium, Medium::Direct);
+                    assert_eq!(origin, chain_id1);
                     assert!(
                         !got_message,
                         "Duplicate message notification about transfer #{i}"
@@ -3466,9 +3464,8 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             ))
             .await?;
         let mut bundle = block2["block"]["block"]["body"]["incomingBundles"][0].take();
-        let origin = serde_json::from_value::<Origin>(bundle["origin"].take())?;
-        assert_eq!(origin.sender, chain_id1);
-        assert_eq!(origin.medium, Medium::Direct);
+        let origin = serde_json::from_value::<ChainId>(bundle["origin"].take())?;
+        assert_eq!(origin, chain_id1);
         let sender_height =
             serde_json::from_value::<BlockHeight>(bundle["bundle"]["height"].take())?;
         assert_eq!(sender_height + BlockHeight(1), next_height1);
