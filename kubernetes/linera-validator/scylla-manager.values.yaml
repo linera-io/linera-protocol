@@ -11,9 +11,9 @@ controllerResources:
 scylla:
   developerMode: true
   scyllaImage:
-    tag: 5.4.3
+    tag: 6.2.1
   agentImage:
-    tag: 3.2.8
+    tag: 3.4.1
   datacenter: validator
   racks:
   - name: manager-rack
