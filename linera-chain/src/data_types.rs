@@ -17,10 +17,7 @@ use linera_base::{
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
-    identifiers::{
-        Account, AccountOwner, BlobId, ChainId, ChannelFullName, Destination, GenericApplicationId,
-        MessageId,
-    },
+    identifiers::{Account, AccountOwner, BlobId, ChainId, Destination, MessageId},
 };
 use linera_execution::{
     committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
@@ -260,8 +257,6 @@ pub struct MessageBundle {
 pub enum Medium {
     /// The message is a direct message.
     Direct,
-    /// The message is a channel broadcast.
-    Channel(ChannelFullName),
 }
 
 /// An authenticated proposal for a new block.
@@ -313,19 +308,7 @@ impl OutgoingMessageExt for OutgoingMessage {
     /// actually subscribed to that channel.
     fn has_destination(&self, medium: &Medium, recipient: ChainId) -> bool {
         match (&self.destination, medium) {
-            (Destination::Recipient(_), Medium::Channel(_))
-            | (Destination::Subscribers(_), Medium::Direct) => false,
             (Destination::Recipient(id), Medium::Direct) => *id == recipient,
-            (
-                Destination::Subscribers(dest_name),
-                Medium::Channel(ChannelFullName {
-                    application_id,
-                    name,
-                }),
-            ) => {
-                GenericApplicationId::User(*application_id) == self.message.application_id()
-                    && name == dest_name
-            }
         }
     }
 
@@ -485,7 +468,6 @@ impl fmt::Display for Origin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.medium {
             Medium::Direct => write!(f, "{:.8} (direct)", self.sender),
-            Medium::Channel(full_name) => write!(f, "{:.8} via {full_name:.8}", self.sender),
         }
     }
 }
@@ -497,13 +479,6 @@ impl Origin {
             medium: Medium::Direct,
         }
     }
-
-    pub fn channel(sender: ChainId, name: ChannelFullName) -> Self {
-        Self {
-            sender,
-            medium: Medium::Channel(name),
-        }
-    }
 }
 
 impl Target {
@@ -511,13 +486,6 @@ impl Target {
         Self {
             recipient,
             medium: Medium::Direct,
-        }
-    }
-
-    pub fn channel(recipient: ChainId, name: ChannelFullName) -> Self {
-        Self {
-            recipient,
-            medium: Medium::Channel(name),
         }
     }
 }

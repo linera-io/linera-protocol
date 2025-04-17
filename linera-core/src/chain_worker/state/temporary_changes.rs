@@ -318,19 +318,17 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<BlockExecutionOutcome, WorkerError> {
-        let (outcome, subscribe, unsubscribe) =
+        let outcome =
             Box::pin(
                 self.0
                     .chain
                     .execute_block(block, local_time, round, published_blobs, None),
             )
             .await?;
-        if subscribe.is_empty() && unsubscribe.is_empty() {
-            self.0.execution_state_cache.insert_owned(
-                &outcome.state_hash,
-                self.0.chain.execution_state.clone_unchecked()?,
-            );
-        }
+        self.0.execution_state_cache.insert_owned(
+            &outcome.state_hash,
+            self.0.chain.execution_state.clone_unchecked()?,
+        );
         Ok(outcome)
     }
 }

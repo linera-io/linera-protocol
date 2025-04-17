@@ -39,8 +39,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, Destination, EventId,
+        GenericApplicationId, MessageId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -716,12 +716,6 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;
-
-    /// Schedules to subscribe to some `channel` on a `chain`.
-    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
-
-    /// Schedules to unsubscribe to some `channel` on a `chain`.
-    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
 
     /// Transfers amount from source to destination.
     fn transfer(

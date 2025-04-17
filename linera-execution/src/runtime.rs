@@ -18,8 +18,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, EventId,
-        GenericApplicationId, MessageId, StreamId, StreamName,
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId, MessageId,
+        StreamId, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -1188,24 +1188,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                     bytes: message.message,
                 },
             })?;
-
-        Ok(())
-    }
-
-    fn subscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
-        let mut this = self.inner();
-        let application_id = this.current_application().id;
-        let full_name = ChannelFullName::new(name, application_id);
-        this.transaction_tracker.subscribe(full_name, chain);
-
-        Ok(())
-    }
-
-    fn unsubscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
-        let mut this = self.inner();
-        let application_id = this.current_application().id;
-        let full_name = ChannelFullName::new(name, application_id);
-        this.transaction_tracker.unsubscribe(full_name, chain);
 
         Ok(())
     }

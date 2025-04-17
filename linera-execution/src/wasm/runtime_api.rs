@@ -7,9 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     http,
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, StreamName,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, StreamName},
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -438,32 +436,6 @@ where
             .user_data_mut()
             .runtime
             .send_message(message)
-            .map_err(|error| RuntimeError::Custom(error.into()))
-    }
-
-    /// Subscribes to a message channel from another chain.
-    fn subscribe(
-        caller: &mut Caller,
-        chain: ChainId,
-        channel: ChannelName,
-    ) -> Result<(), RuntimeError> {
-        caller
-            .user_data_mut()
-            .runtime
-            .subscribe(chain, channel)
-            .map_err(|error| RuntimeError::Custom(error.into()))
-    }
-
-    /// Unsubscribes to a message channel from another chain.
-    fn unsubscribe(
-        caller: &mut Caller,
-        chain: ChainId,
-        channel: ChannelName,
-    ) -> Result<(), RuntimeError> {
-        caller
-            .user_data_mut()
-            .runtime
-            .unsubscribe(chain, channel)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

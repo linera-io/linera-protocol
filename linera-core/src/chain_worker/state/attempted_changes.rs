@@ -369,11 +369,11 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let (verified_outcome, subscribe, unsubscribe) = if let Some(execution_state) =
+        let verified_outcome = if let Some(execution_state) =
             self.state.execution_state_cache.remove(&outcome.state_hash)
         {
             chain.execution_state = execution_state;
-            (outcome.clone(), Vec::new(), Vec::new())
+            outcome.clone()
         } else {
             chain
                 .execute_block(
@@ -394,11 +394,9 @@ where
             }
         );
         // Update the rest of the chain state.
-        chain.process_unsubscribes(unsubscribe).await?;
         chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
-        chain.process_subscribes(subscribe).await?;
         self.state
             .track_newly_created_chains(&proposed_block, &outcome);
         let mut actions = self.state.create_network_actions().await?;

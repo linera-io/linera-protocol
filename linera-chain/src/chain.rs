@@ -17,10 +17,7 @@ use linera_base::{
         Epoch, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{
-        AccountOwner, ApplicationId, BlobType, ChainId, ChannelFullName, Destination,
-        GenericApplicationId, MessageId,
-    },
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, Destination, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -252,8 +249,6 @@ where
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
-    /// Channels able to multicast messages to subscribers.
-    pub channels: ReentrantCollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
 
 /// Block-chaining state.
@@ -336,18 +331,6 @@ impl ChainTipState {
 
         Ok(())
     }
-}
-
-/// The state of a channel followed by subscribers.
-#[derive(Debug, ClonableView, View, SimpleObject)]
-pub struct ChannelStateView<C>
-where
-    C: Context + Send + Sync,
-{
-    /// The current subscribers.
-    pub subscribers: SetView<C, ChainId>,
-    /// The block heights so far, to be sent to future subscribers.
-    pub block_heights: LogView<C, BlockHeight>,
 }
 
 impl<C> ChainStateView<C>
@@ -723,14 +706,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<
-        (
-            BlockExecutionOutcome,
-            Vec<(ChannelFullName, ChainId)>,
-            Vec<(ChannelFullName, ChainId)>,
-        ),
-        ChainError,
-    > {
+    ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
@@ -795,8 +771,6 @@ where
         let mut blobs = Vec::new();
         let mut messages = Vec::new();
         let mut operation_results = Vec::new();
-        let mut subscribe = Vec::new();
-        let mut unsubscribe = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
@@ -867,9 +841,6 @@ where
                 .with_execution_context(chain_execution_context)?;
             next_message_index = txn_outcome.next_message_index;
             next_application_index = txn_outcome.next_application_index;
-
-            subscribe.extend(txn_outcome.subscribe);
-            unsubscribe.extend(txn_outcome.unsubscribe);
 
             if matches!(
                 transaction,
@@ -961,7 +932,7 @@ where
             chain.crypto_hash().await?
         };
 
-        let outcome = BlockExecutionOutcome {
+        Ok(BlockExecutionOutcome {
             messages,
             previous_message_blocks,
             state_hash,
@@ -969,9 +940,7 @@ where
             events,
             blobs,
             operation_results,
-        };
-
-        Ok((outcome, subscribe, unsubscribe))
+        })
     }
 
     /// Executes a block: first the incoming messages, then the main operation.
@@ -983,14 +952,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<
-        (
-            BlockExecutionOutcome,
-            Vec<(ChannelFullName, ChainId)>,
-            Vec<(ChannelFullName, ChainId)>,
-        ),
-        ChainError,
-    > {
+    ) -> Result<BlockExecutionOutcome, ChainError> {
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
@@ -1202,37 +1164,18 @@ where
         height: BlockHeight,
         messages: &[OutgoingMessage],
     ) -> Result<(), ChainError> {
-        let max_stream_queries = self.context().max_stream_queries();
         // Record the messages of the execution. Messages are understood within an
         // application.
         let mut recipients = HashSet::new();
-        let mut channel_broadcasts = HashSet::new();
         for message in messages {
             match &message.destination {
                 Destination::Recipient(id) => {
                     recipients.insert(*id);
                 }
-                Destination::Subscribers(name) => {
-                    ensure!(
-                        message.grant == Amount::ZERO,
-                        ChainError::GrantUseOnBroadcast
-                    );
-                    let GenericApplicationId::User(application_id) =
-                        message.message.application_id()
-                    else {
-                        return Err(ChainError::InternalError(
-                            "System messages cannot be sent to channels".to_string(),
-                        ));
-                    };
-                    channel_broadcasts.insert(ChannelFullName {
-                        application_id,
-                        name: name.clone(),
-                    });
-                }
             }
         }
 
-        // Update the (regular) outboxes.
+        // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
         let targets = recipients
             .into_iter()
@@ -1245,104 +1188,10 @@ where
             }
         }
 
-        let full_names = channel_broadcasts.into_iter().collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        let stream = full_names.into_iter().zip(channels);
-        let stream = stream::iter(stream)
-            .map(|(full_name, mut channel)| async move {
-                let recipients = channel.subscribers.indices().await?;
-                channel.block_heights.push(height);
-                let targets = recipients
-                    .into_iter()
-                    .map(|recipient| Target::channel(recipient, full_name.clone()))
-                    .collect::<Vec<_>>();
-                Ok::<_, ChainError>(targets)
-            })
-            .buffer_unordered(max_stream_queries);
-        let infos = stream.try_collect::<Vec<_>>().await?;
-        let targets = infos.into_iter().flatten().collect::<Vec<_>>();
-        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        let outbox_counters = self.outbox_counters.get_mut();
-        for mut outbox in outboxes {
-            if outbox.schedule_message(height)? {
-                *outbox_counters.entry(height).or_default() += 1;
-            }
-        }
         #[cfg(with_metrics)]
         NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
-        Ok(())
-    }
-
-    /// Processes new subscriptions. Returns `true` if at least one new subscriber was added for
-    /// which we have outgoing messages.
-    pub async fn process_subscribes(
-        &mut self,
-        names_and_ids: Vec<(ChannelFullName, ChainId)>,
-    ) -> Result<bool, ChainError> {
-        if names_and_ids.is_empty() {
-            return Ok(false);
-        }
-        let full_names = names_and_ids
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        let subscribe_channels = names_and_ids.into_iter().zip(channels);
-        let max_stream_queries = self.context().max_stream_queries();
-        let stream = stream::iter(subscribe_channels)
-            .map(|((name, id), mut channel)| async move {
-                if channel.subscribers.contains(&id).await? {
-                    return Ok(None); // Was already a subscriber.
-                }
-                tracing::trace!("Adding subscriber {id:.8} for {name:}");
-                channel.subscribers.insert(&id)?;
-                // Send all messages.
-                let heights = channel.block_heights.read(..).await?;
-                if heights.is_empty() {
-                    return Ok(None); // No messages on this channel yet.
-                }
-                let target = Target::channel(id, name.clone());
-                Ok::<_, ChainError>(Some((target, heights)))
-            })
-            .buffer_unordered(max_stream_queries);
-        let infos = stream.try_collect::<Vec<_>>().await?;
-        let (targets, heights): (Vec<_>, Vec<_>) = infos.into_iter().flatten().unzip();
-        let mut new_outbox_entries = false;
-        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        let outbox_counters = self.outbox_counters.get_mut();
-        for (heights, mut outbox) in heights.into_iter().zip(outboxes) {
-            for height in heights {
-                if outbox.schedule_message(height)? {
-                    *outbox_counters.entry(height).or_default() += 1;
-                    new_outbox_entries = true;
-                }
-            }
-        }
-        #[cfg(with_metrics)]
-        NUM_OUTBOXES
-            .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
-        Ok(new_outbox_entries)
-    }
-
-    pub async fn process_unsubscribes(
-        &mut self,
-        names_and_ids: Vec<(ChannelFullName, ChainId)>,
-    ) -> Result<(), ChainError> {
-        if names_and_ids.is_empty() {
-            return Ok(());
-        }
-        let full_names = names_and_ids
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for ((_name, id), mut channel) in names_and_ids.into_iter().zip(channels) {
-            // Remove subscriber. Do not remove the channel outbox yet.
-            channel.subscribers.remove(&id)?;
-        }
         Ok(())
     }
 }

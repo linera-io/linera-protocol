@@ -6,8 +6,6 @@ interface contract-runtime-api {
     message-is-bouncing: func() -> option<bool>;
     authenticated-caller-id: func() -> option<application-id>;
     send-message: func(message: send-message-request);
-    subscribe: func(chain: chain-id, channel: channel-name);
-    unsubscribe: func(chain: chain-id, channel: channel-name);
     transfer: func(source: account-owner, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
@@ -78,10 +76,6 @@ interface contract-runtime-api {
         not-permitted,
     }
 
-    record channel-name {
-        inner0: list<u8>,
-    }
-
     enum close-chain-error {
         not-permitted,
     }
@@ -95,7 +89,6 @@ interface contract-runtime-api {
 
     variant destination {
         recipient(chain-id),
-        subscribers(channel-name),
     }
 
     record message-id {

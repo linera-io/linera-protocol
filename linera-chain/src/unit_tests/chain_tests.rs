@@ -182,7 +182,7 @@ async fn test_block_size_limit() {
     );
 
     // The valid block is accepted...
-    let (outcome, _, _) = chain
+    let outcome = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await
         .unwrap();
@@ -262,7 +262,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let (outcome, _, _) = chain
+    let outcome = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
     let value = ConfirmedBlock::new(outcome.with(valid_block));
@@ -292,7 +292,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
-    let (outcome, _, _) = chain
+    let outcome = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
     let value = ConfirmedBlock::new(outcome.with(valid_block));
@@ -499,10 +499,7 @@ async fn test_service_as_oracle_response_size_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain
-        .execute_block(&block, time, None, &[], None)
-        .await
-        .map(|(outcome, _, _)| outcome)
+    chain.execute_block(&block, time, None, &[], None).await
 }
 
 /// Tests contract HTTP response size limit.
@@ -558,10 +555,7 @@ async fn test_contract_http_response_size_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain
-        .execute_block(&block, time, None, &[], None)
-        .await
-        .map(|(outcome, _, _)| outcome)
+    chain.execute_block(&block, time, None, &[], None).await
 }
 
 /// Tests service HTTP response size limit.
@@ -617,10 +611,7 @@ async fn test_service_http_response_size_limit(
 
     application.expect_call(ExpectedCall::default_finalize());
 
-    chain
-        .execute_block(&block, time, None, &[], None)
-        .await
-        .map(|(outcome, _, _)| outcome)
+    chain.execute_block(&block, time, None, &[], None).await
 }
 
 /// Sets up a test with a dummy [`MockApplication`].
