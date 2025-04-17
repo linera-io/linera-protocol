@@ -361,10 +361,6 @@ type ChainStateExtendedView {
 	We use a `RegisterView` to prioritize speed for small maps.
 	"""
 	outboxCounters: JSONObject!
-	"""
-	Channels able to multicast messages to subscribers.
-	"""
-	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053!
 }
 
 """
@@ -396,25 +392,6 @@ type ChainTipState {
 type Chains {
 	list: [ChainId!]!
 	default: ChainId
-}
-
-"""
-A channel name together with its application ID.
-"""
-scalar ChannelFullName
-
-"""
-The state of a channel followed by subscribers.
-"""
-type ChannelStateView {
-	"""
-	The current subscribers.
-	"""
-	subscribers: [ChainId!]!
-	"""
-	The block heights so far, to be sent to future subscribers.
-	"""
-	blockHeights: LogView_BlockHeight_e824a938!
 }
 
 """
@@ -502,14 +479,6 @@ A GraphQL-visible map item, complete with key.
 type Entry_ChainId_BlockHeight_2fe78645 {
 	key: ChainId!
 	value: BlockHeight
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
-type Entry_ChannelFullName_ChannelStateView_bd1de7ae {
-	key: ChannelFullName!
-	value: ChannelStateView!
 }
 
 """
@@ -620,10 +589,6 @@ A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
 
-type LogView_BlockHeight_e824a938 {
-	entries(start: Int, end: Int): [BlockHeight!]!
-}
-
 type LogView_ChainAndHeight_7af83576 {
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
@@ -644,10 +609,6 @@ input MapFilters_ChainId_37f83aa9 {
 	keys: [ChainId!]
 }
 
-input MapFilters_ChannelFullName_7b67e184 {
-	keys: [ChannelFullName!]
-}
-
 input MapFilters_Origin_742d451b {
 	keys: [Origin!]
 }
@@ -666,10 +627,6 @@ input MapInput_BlobId_4d2a0555 {
 
 input MapInput_ChainId_37f83aa9 {
 	filters: MapFilters_ChainId_37f83aa9
-}
-
-input MapInput_ChannelFullName_7b67e184 {
-	filters: MapFilters_ChannelFullName_7b67e184
 }
 
 input MapInput_Origin_742d451b {
@@ -1013,12 +970,6 @@ type ReentrantCollectionView_AccountOwner_PendingBlobsView_673534848 {
 	keys: [AccountOwner!]!
 	entry(key: AccountOwner!): Entry_AccountOwner_PendingBlobsView_f0b6a64b!
 	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_f0b6a64b!]!
-}
-
-type ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053 {
-	keys: [ChannelFullName!]!
-	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_bd1de7ae!
-	entries(input: MapInput_ChannelFullName_7b67e184): [Entry_ChannelFullName_ChannelStateView_bd1de7ae!]!
 }
 
 type ReentrantCollectionView_Origin_InboxStateView_3699835794 {

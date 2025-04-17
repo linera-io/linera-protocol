@@ -24,7 +24,6 @@ mod types {
 
     pub type ChainManager = Value;
     pub type ChainOwnership = Value;
-    pub type ChannelFullName = Value;
     pub type Epoch = Value;
     pub type MessageBundle = Value;
     pub type MessageKind = Value;
@@ -64,7 +63,6 @@ mod types {
 mod types {
     pub use linera_base::{
         data_types::{ApplicationDescription, Epoch},
-        identifiers::ChannelFullName,
         ownership::ChainOwnership,
     };
     pub use linera_chain::{

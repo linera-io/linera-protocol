@@ -21,22 +21,6 @@ query ChainOutbox($chainId: ChainId!, $target: Target!) {
   }
 }
 
-query ChainChannel($chainId: ChainId!, $channelFullName: ChannelFullName!) {
-  chain(chainId: $chainId) {
-    channels {
-      entry(key: $channelFullName) {
-        key
-        value {
-          subscribers
-          blockHeights {
-            entries
-          }
-        }
-      }
-    }
-  }
-}
-
 query ChainInbox($chainId: ChainId!, $origin: Origin!) {
   chain(chainId: $chainId) {
     inboxes {
@@ -93,7 +77,6 @@ query Chain(
   $chainId: ChainId!,
   $inboxesInput: MapInput_Origin_742d451b,
   $outboxesInput: MapInput_Target_7aac1e1c,
-  $channelsInput: MapInput_ChannelFullName_7b67e184,
   $previousMessageBlocksInput: MapInput_ChainId_37f83aa9,
 ) {
   chain(chainId: $chainId) {
@@ -198,18 +181,6 @@ query Chain(
       entries(input: $previousMessageBlocksInput) {
         key
         value
-      }
-    }
-    channels {
-      keys
-      entries(input: $channelsInput) {
-        key
-        value {
-          subscribers
-          blockHeights {
-            entries
-          }
-        }
       }
     }
 

@@ -389,14 +389,6 @@ ChainOwnership:
     - open_multi_leader_rounds: BOOL
     - timeout_config:
         TYPENAME: TimeoutConfig
-ChannelFullName:
-  STRUCT:
-    - application_id:
-        TYPENAME: ApplicationId
-    - name:
-        TYPENAME: ChannelName
-ChannelName:
-  NEWTYPESTRUCT: BYTES
 Committee:
   STRUCT:
     - validators:
@@ -463,10 +455,6 @@ Destination:
       Recipient:
         NEWTYPE:
           TYPENAME: ChainId
-    1:
-      Subscribers:
-        NEWTYPE:
-          TYPENAME: ChannelName
 Ed25519PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -583,10 +571,6 @@ Medium:
   ENUM:
     0:
       Direct: UNIT
-    1:
-      Channel:
-        NEWTYPE:
-          TYPENAME: ChannelFullName
 Message:
   ENUM:
     0:

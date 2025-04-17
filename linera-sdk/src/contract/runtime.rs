@@ -10,8 +10,7 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, StreamName,
+        Account, AccountOwner, ApplicationId, ChainId, Destination, MessageId, ModuleId, StreamName,
     },
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
@@ -232,16 +231,6 @@ where
         message: Application::Message,
     ) -> MessageBuilder<Application::Message> {
         MessageBuilder::new(message)
-    }
-
-    /// Subscribes to a message channel from another chain.
-    pub fn subscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        contract_wit::subscribe(chain.into(), &channel.into());
-    }
-
-    /// Unsubscribes from a message channel from another chain.
-    pub fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        contract_wit::unsubscribe(chain.into(), &channel.into());
     }
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
