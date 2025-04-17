@@ -950,10 +950,10 @@ Start a Local Linera Network
 * `--initial-amount <INITIAL_AMOUNT>` — The initial amount of native tokens credited in the initial "root" chains, including the default "admin" chain
 
   Default value: `1000000`
-* `--validators <VALIDATORS>` — The number of validators in the local test network. Default is 1
+* `--validators <VALIDATORS>` — The number of validators in the local test network
 
   Default value: `1`
-* `--shards <SHARDS>` — The number of shards per validator in the local test network. Default is 1
+* `--shards <SHARDS>` — The number of shards per validator in the local test network
 
   Default value: `1`
 * `--policy-config <POLICY_CONFIG>` — Configure the resource control policy (notably fees) according to pre-defined settings

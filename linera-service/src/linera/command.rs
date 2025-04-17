@@ -880,11 +880,11 @@ pub enum NetCommand {
         #[arg(long, default_value = "1000000")]
         initial_amount: u128,
 
-        /// The number of validators in the local test network. Default is 1.
+        /// The number of validators in the local test network.
         #[arg(long, default_value = "1")]
         validators: usize,
 
-        /// The number of shards per validator in the local test network. Default is 1.
+        /// The number of shards per validator in the local test network.
         #[arg(long, default_value = "1")]
         shards: usize,
 
