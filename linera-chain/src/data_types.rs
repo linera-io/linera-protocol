@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    fmt,
-};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
@@ -166,8 +163,8 @@ impl ChainAndHeight {
 /// A bundle of cross-chain messages.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct IncomingBundle {
-    /// The origin of the messages (chain and channel if any).
-    pub origin: Origin,
+    /// The origin of the messages.
+    pub origin: ChainId,
     /// The messages to be delivered to the inbox identified by `origin`.
     pub bundle: MessageBundle,
     /// What to do with the message.
@@ -178,7 +175,7 @@ impl IncomingBundle {
     /// Returns an iterator over all posted messages in this bundle, together with their ID.
     pub fn messages_and_ids(&self) -> impl Iterator<Item = (MessageId, &PostedMessage)> {
         let chain_and_height = ChainAndHeight {
-            chain_id: self.origin.sender,
+            chain_id: self.origin,
             height: self.bundle.height,
         };
         let messages = self.bundle.messages.iter();
@@ -219,24 +216,6 @@ pub enum MessageAction {
     Reject,
 }
 
-/// The origin of a message, relative to a particular application. Used to identify each inbox.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
-pub struct Origin {
-    /// The chain ID of the sender.
-    pub sender: ChainId,
-    /// The medium.
-    pub medium: Medium,
-}
-
-/// The target of a message, relative to a particular application. Used to identify each outbox.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
-pub struct Target {
-    /// The chain ID of the recipient.
-    pub recipient: ChainId,
-    /// The medium.
-    pub medium: Medium,
-}
-
 /// A set of messages from a single block, for a single destination.
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct MessageBundle {
@@ -250,13 +229,6 @@ pub struct MessageBundle {
     pub transaction_index: u32,
     /// The relevant messages.
     pub messages: Vec<PostedMessage>,
-}
-
-/// The origin of a message coming from a particular chain. Used to identify each inbox.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
-pub enum Medium {
-    /// The message is a direct message.
-    Direct,
 }
 
 /// An authenticated proposal for a new block.
@@ -296,19 +268,17 @@ pub trait OutgoingMessageExt {
     /// Returns whether this message is sent via the given medium to the specified
     /// recipient. If the medium is a channel, does not verify that the recipient is
     /// actually subscribed to that channel.
-    fn has_destination(&self, medium: &Medium, recipient: ChainId) -> bool;
+    fn has_destination(&self, recipient: ChainId) -> bool;
 
     /// Returns the posted message, i.e. the outgoing message without the destination.
     fn into_posted(self, index: u32) -> PostedMessage;
 }
 
 impl OutgoingMessageExt for OutgoingMessage {
-    /// Returns whether this message is sent via the given medium to the specified
-    /// recipient. If the medium is a channel, does not verify that the recipient is
-    /// actually subscribed to that channel.
-    fn has_destination(&self, medium: &Medium, recipient: ChainId) -> bool {
-        match (&self.destination, medium) {
-            (Destination::Recipient(id), Medium::Direct) => *id == recipient,
+    /// Returns whether this message is sent to the specified recipient.
+    fn has_destination(&self, recipient: ChainId) -> bool {
+        match &self.destination {
+            Destination::Recipient(id) => *id == recipient,
         }
     }
 
@@ -461,32 +431,6 @@ impl LiteVote {
 
     pub fn kind(&self) -> CertificateKind {
         self.value.kind
-    }
-}
-
-impl fmt::Display for Origin {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.medium {
-            Medium::Direct => write!(f, "{:.8} (direct)", self.sender),
-        }
-    }
-}
-
-impl Origin {
-    pub fn chain(sender: ChainId) -> Self {
-        Self {
-            sender,
-            medium: Medium::Direct,
-        }
-    }
-}
-
-impl Target {
-    pub fn chain(recipient: ChainId) -> Self {
-        Self {
-            recipient,
-            medium: Medium::Direct,
-        }
     }
 }
 
@@ -781,18 +725,6 @@ impl BcsSignable<'_> for VoteValue {}
 doc_scalar!(
     MessageAction,
     "Whether an incoming message is accepted or rejected."
-);
-doc_scalar!(
-    Medium,
-    "The origin of a message coming from a particular chain. Used to identify each inbox."
-);
-doc_scalar!(
-    Origin,
-    "The origin of a message, relative to a particular application. Used to identify each inbox."
-);
-doc_scalar!(
-    Target,
-    "The target of a message, relative to a particular application. Used to identify each outbox."
 );
 
 #[cfg(test)]

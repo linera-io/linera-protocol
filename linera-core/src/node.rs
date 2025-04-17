@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, Origin},
+    data_types::BlockProposal,
     types::{
         ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
         ValidatedBlock,
@@ -205,7 +205,7 @@ pub enum NodeError {
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        origin: Box<Origin>,
+        origin: Box<ChainId>,
         height: BlockHeight,
     },
 

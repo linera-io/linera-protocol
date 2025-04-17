@@ -21,9 +21,7 @@ mod validator;
 #[cfg(with_integration_testing)]
 pub use {
     linera_chain::{
-        data_types::{Medium, MessageAction},
-        test::HttpServer,
-        ChainError, ChainExecutionContext,
+        data_types::MessageAction, test::HttpServer, ChainError, ChainExecutionContext,
     },
     linera_core::worker::WorkerError,
     linera_execution::{system::Recipient, ExecutionError, QueryOutcome, WasmExecutionError},

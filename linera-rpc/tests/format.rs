@@ -10,7 +10,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_chain::{
-    data_types::{Medium, MessageAction},
+    data_types::MessageAction,
     manager::{ChainManagerInfo, LockingBlock},
     types::{Certificate, CertificateKind, ConfirmedBlock, Timeout, ValidatedBlock},
 };
@@ -71,7 +71,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ConfirmedBlock>(&samples)?;
     tracer.trace_type::<ValidatedBlock>(&samples)?;
     tracer.trace_type::<Timeout>(&samples)?;
-    tracer.trace_type::<Medium>(&samples)?;
     tracer.trace_type::<Destination>(&samples)?;
     tracer.trace_type::<ChainDescription>(&samples)?;
     tracer.trace_type::<ChainOwnership>(&samples)?;

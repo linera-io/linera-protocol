@@ -14,7 +14,7 @@ use linera_base::{
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };
 use linera_chain::{
-    data_types::{ChainAndHeight, IncomingBundle, Medium, MessageBundle},
+    data_types::{ChainAndHeight, IncomingBundle, MessageBundle},
     manager::ChainManagerInfo,
     ChainStateView,
 };
@@ -228,13 +228,13 @@ pub enum CrossChainRequest {
     UpdateRecipient {
         sender: ChainId,
         recipient: ChainId,
-        bundle_vecs: Vec<(Medium, Vec<(Epoch, MessageBundle)>)>,
+        bundles: Vec<(Epoch, MessageBundle)>,
     },
     /// Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
         sender: ChainId,
         recipient: ChainId,
-        latest_heights: Vec<(Medium, BlockHeight)>,
+        latest_height: BlockHeight,
     },
 }
 
@@ -251,11 +251,9 @@ impl CrossChainRequest {
     /// Returns true if the cross-chain request has messages lower or equal than `height`.
     pub fn has_messages_lower_or_equal_than(&self, height: BlockHeight) -> bool {
         match self {
-            CrossChainRequest::UpdateRecipient { bundle_vecs, .. } => {
-                bundle_vecs.iter().any(|(_, bundles)| {
-                    debug_assert!(bundles.windows(2).all(|w| w[0].1.height <= w[1].1.height));
-                    matches!(bundles.first(), Some((_, h)) if h.height <= height)
-                })
+            CrossChainRequest::UpdateRecipient { bundles, .. } => {
+                debug_assert!(bundles.windows(2).all(|w| w[0].1.height <= w[1].1.height));
+                matches!(bundles.first(), Some((_, h)) if h.height <= height)
             }
             _ => false,
         }

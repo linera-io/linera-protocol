@@ -5,7 +5,7 @@ query Chains {
   }
 }
 
-query ChainOutbox($chainId: ChainId!, $target: Target!) {
+query ChainOutbox($chainId: ChainId!, $target: ChainId!) {
   chain(chainId: $chainId) {
     outboxes {
       entry(key: $target) {
@@ -21,7 +21,7 @@ query ChainOutbox($chainId: ChainId!, $target: Target!) {
   }
 }
 
-query ChainInbox($chainId: ChainId!, $origin: Origin!) {
+query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
   chain(chainId: $chainId) {
     inboxes {
       entry(key: $origin) {
@@ -75,8 +75,8 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
 
 query Chain(
   $chainId: ChainId!,
-  $inboxesInput: MapInput_Origin_742d451b,
-  $outboxesInput: MapInput_Target_7aac1e1c,
+  $inboxesInput: MapInput_ChainId_37f83aa9,
+  $outboxesInput: MapInput_ChainId_37f83aa9,
   $previousMessageBlocksInput: MapInput_ChainId_37f83aa9,
 ) {
   chain(chainId: $chainId) {

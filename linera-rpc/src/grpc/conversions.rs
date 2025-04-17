@@ -242,20 +242,22 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
             Inner::UpdateRecipient(api::UpdateRecipient {
                 sender,
                 recipient,
-                bundle_vecs,
+                bundles,
             }) => CrossChainRequest::UpdateRecipient {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
-                bundle_vecs: bincode::deserialize(&bundle_vecs)?,
+                bundles: bincode::deserialize(&bundles)?,
             },
             Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
-                latest_heights,
+                latest_height,
             }) => CrossChainRequest::ConfirmUpdatedRecipient {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
-                latest_heights: bincode::deserialize(&latest_heights)?,
+                latest_height: latest_height
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .into(),
             },
         };
         Ok(ccr)
@@ -272,20 +274,20 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
             CrossChainRequest::UpdateRecipient {
                 sender,
                 recipient,
-                bundle_vecs,
+                bundles,
             } => Inner::UpdateRecipient(api::UpdateRecipient {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                bundle_vecs: bincode::serialize(&bundle_vecs)?,
+                bundles: bincode::serialize(&bundles)?,
             }),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
-                latest_heights,
+                latest_height,
             } => Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                latest_heights: bincode::serialize(&latest_heights)?,
+                latest_height: Some(latest_height.into()),
             }),
         };
         Ok(Self { inner: Some(inner) })
@@ -1174,7 +1176,7 @@ pub mod tests {
         let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
             sender: ChainId::root(0),
             recipient: ChainId::root(0),
-            bundle_vecs: vec![(linera_chain::data_types::Medium::Direct, vec![])],
+            bundles: vec![],
         };
         round_trip_check::<_, api::CrossChainRequest>(cross_chain_request_update_recipient);
 
@@ -1182,10 +1184,7 @@ pub mod tests {
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender: ChainId::root(0),
                 recipient: ChainId::root(0),
-                latest_heights: vec![(
-                    linera_chain::data_types::Medium::Direct,
-                    Default::default(),
-                )],
+                latest_height: BlockHeight(1),
             };
         round_trip_check::<_, api::CrossChainRequest>(
             cross_chain_request_confirm_updated_recipient,

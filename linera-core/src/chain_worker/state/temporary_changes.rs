@@ -22,10 +22,7 @@ use linera_views::views::{ClonableView, View};
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::{
-        data_types::{MessageBundle, Origin},
-        types::ConfirmedBlockCertificate,
-    },
+    linera_chain::{data_types::MessageBundle, types::ConfirmedBlockCertificate},
 };
 
 use super::ChainWorkerState;
@@ -75,7 +72,7 @@ where
     #[cfg(with_testing)]
     pub(super) async fn find_bundle_in_inbox(
         &mut self,
-        inbox_id: Origin,
+        inbox_id: linera_base::identifiers::ChainId,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
@@ -279,7 +276,7 @@ where
             for (origin, inbox) in pairs {
                 for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
-                        origin: origin.clone(),
+                        origin,
                         bundle,
                         action,
                     });

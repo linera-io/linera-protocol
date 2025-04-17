@@ -424,14 +424,11 @@ CrossChainRequest:
               TYPENAME: ChainId
           - recipient:
               TYPENAME: ChainId
-          - bundle_vecs:
+          - bundles:
               SEQ:
                 TUPLE:
-                  - TYPENAME: Medium
-                  - SEQ:
-                      TUPLE:
-                        - TYPENAME: Epoch
-                        - TYPENAME: MessageBundle
+                  - TYPENAME: Epoch
+                  - TYPENAME: MessageBundle
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
@@ -439,11 +436,8 @@ CrossChainRequest:
               TYPENAME: ChainId
           - recipient:
               TYPENAME: ChainId
-          - latest_heights:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: Medium
-                  - TYPENAME: BlockHeight
+          - latest_height:
+              TYPENAME: BlockHeight
 CryptoHash:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -523,7 +517,7 @@ Header:
 IncomingBundle:
   STRUCT:
     - origin:
-        TYPENAME: Origin
+        TYPENAME: ChainId
     - bundle:
         TYPENAME: MessageBundle
     - action:
@@ -567,10 +561,6 @@ LockingBlock:
       Regular:
         NEWTYPE:
           TYPENAME: ValidatedBlockCertificate
-Medium:
-  ENUM:
-    0:
-      Direct: UNIT
 Message:
   ENUM:
     0:
@@ -658,7 +648,7 @@ NodeError:
           - chain_id:
               TYPENAME: ChainId
           - origin:
-              TYPENAME: Origin
+              TYPENAME: ChainId
           - height:
               TYPENAME: BlockHeight
     7:
@@ -777,12 +767,6 @@ OracleResponse:
         TUPLE:
           - TYPENAME: EventId
           - SEQ: U8
-Origin:
-  STRUCT:
-    - sender:
-        TYPENAME: ChainId
-    - medium:
-        TYPENAME: Medium
 OutgoingMessage:
   STRUCT:
     - destination:

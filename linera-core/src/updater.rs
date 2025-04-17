@@ -409,7 +409,7 @@ where
             for (origin, inbox) in pairs {
                 let inbox_next_height = inbox.next_block_height_to_receive()?;
                 sender_heights
-                    .entry(origin.sender)
+                    .entry(origin)
                     .and_modify(|h| *h = inbox_next_height.max(*h))
                     .or_insert(inbox_next_height);
             }

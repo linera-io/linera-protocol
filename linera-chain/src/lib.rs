@@ -22,7 +22,7 @@ mod pending_blobs;
 pub mod test;
 
 pub use chain::ChainStateView;
-use data_types::{MessageBundle, Origin, PostedMessage};
+use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
     crypto::{CryptoError, CryptoHash},
@@ -53,7 +53,7 @@ pub enum ChainError {
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        origin: Box<Origin>,
+        origin: Box<ChainId>,
         height: BlockHeight,
     },
     #[error(
@@ -62,7 +62,7 @@ pub enum ChainError {
     )]
     UnexpectedMessage {
         chain_id: ChainId,
-        origin: Box<Origin>,
+        origin: Box<ChainId>,
         bundle: Box<MessageBundle>,
         previous_bundle: Box<MessageBundle>,
     },
@@ -73,7 +73,7 @@ pub enum ChainError {
     )]
     IncorrectMessageOrder {
         chain_id: ChainId,
-        origin: Box<Origin>,
+        origin: Box<ChainId>,
         bundle: Box<MessageBundle>,
         next_height: BlockHeight,
         next_index: u32,
@@ -84,7 +84,7 @@ pub enum ChainError {
     )]
     CannotRejectMessage {
         chain_id: ChainId,
-        origin: Box<Origin>,
+        origin: Box<ChainId>,
         posted_message: Box<PostedMessage>,
     },
     #[error(
@@ -93,7 +93,7 @@ pub enum ChainError {
     )]
     CannotSkipMessage {
         chain_id: ChainId,
-        origin: Box<Origin>,
+        origin: Box<ChainId>,
         bundle: Box<MessageBundle>,
     },
     #[error(
