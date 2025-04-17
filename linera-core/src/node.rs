@@ -205,7 +205,7 @@ pub enum NodeError {
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        origin: Box<ChainId>,
+        origin: ChainId,
         height: BlockHeight,
     },
 

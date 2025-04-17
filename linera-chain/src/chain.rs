@@ -445,7 +445,7 @@ where
                 if let Some(bundle) = inbox.removed_bundles.front().await? {
                     return Err(ChainError::MissingCrossChainUpdate {
                         chain_id,
-                        origin: origin.into(),
+                        origin,
                         height: bundle.height,
                     });
                 }
@@ -658,7 +658,7 @@ where
                 let was_present = inbox
                     .remove_bundle(bundle)
                     .await
-                    .map_err(|error| ChainError::from((chain_id, *origin, error)))?;
+                    .map_err(|error| (chain_id, *origin, error))?;
                 if was_present && !bundle.is_skippable() {
                     removed_unskippable.insert(BundleInInbox::new(*origin, bundle));
                 }
@@ -1060,7 +1060,7 @@ where
                     !posted_message.is_protected() || *chain.system.closed.get(),
                     ChainError::CannotRejectMessage {
                         chain_id: block.chain_id,
-                        origin: Box::new(incoming_bundle.origin),
+                        origin: incoming_bundle.origin,
                         posted_message: Box::new(posted_message.clone()),
                     }
                 );

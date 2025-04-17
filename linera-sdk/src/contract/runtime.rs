@@ -436,7 +436,7 @@ where
             bcs::to_bytes(&self.message).expect("Failed to serialize message to be sent");
 
         let raw_message = SendMessageRequest {
-            destination: destination.into(),
+            destination,
             authenticated: self.authenticated,
             is_tracked: self.is_tracked,
             grant: self.grant,

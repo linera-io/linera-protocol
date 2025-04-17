@@ -448,10 +448,9 @@ impl MessagePolicy {
                 bundle.action = MessageAction::Reject;
             }
         }
-        let sender = bundle.origin;
         match &self.restrict_chain_ids_to {
             None => true,
-            Some(chains) => chains.contains(&sender),
+            Some(chains) => chains.contains(&bundle.origin),
         }
     }
 

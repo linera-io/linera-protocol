@@ -265,21 +265,11 @@ pub struct PostedMessage {
 }
 
 pub trait OutgoingMessageExt {
-    /// Returns whether this message is sent via the given medium to the specified
-    /// recipient. If the medium is a channel, does not verify that the recipient is
-    /// actually subscribed to that channel.
-    fn has_destination(&self, recipient: ChainId) -> bool;
-
     /// Returns the posted message, i.e. the outgoing message without the destination.
     fn into_posted(self, index: u32) -> PostedMessage;
 }
 
 impl OutgoingMessageExt for OutgoingMessage {
-    /// Returns whether this message is sent to the specified recipient.
-    fn has_destination(&self, recipient: ChainId) -> bool {
-        self.destination == recipient
-    }
-
     /// Returns the posted message, i.e. the outgoing message without the destination.
     fn into_posted(self, index: u32) -> PostedMessage {
         let OutgoingMessage {
