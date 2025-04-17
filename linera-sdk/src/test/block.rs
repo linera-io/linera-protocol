@@ -7,7 +7,7 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, ApplicationPermissions, Blob, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
@@ -20,7 +20,6 @@ use linera_chain::{
 };
 use linera_core::worker::WorkerError;
 use linera_execution::{
-    committee::Epoch,
     system::{Recipient, SystemOperation},
     Operation,
 };

@@ -19,11 +19,10 @@ use guard::INTEGRATION_TEST_GUARD;
 use linera_base::vm::VmRuntime;
 use linera_base::{
     crypto::Secp256k1SecretKey,
-    data_types::{Amount, BlockHeight},
+    data_types::{Amount, BlockHeight, Epoch},
     identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
-use linera_execution::committee::Epoch;
 use linera_faucet::ClaimOutcome;
 use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{

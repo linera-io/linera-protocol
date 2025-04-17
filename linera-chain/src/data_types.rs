@@ -15,7 +15,7 @@ use linera_base::{
         AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
         CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
-    data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Round, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
     identifiers::{
         Account, AccountOwner, BlobId, ChainId, ChannelFullName, Destination, GenericApplicationId,
@@ -23,8 +23,7 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
-    Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
+    committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -832,10 +831,9 @@ doc_scalar!(
 mod signing {
     use linera_base::{
         crypto::{AccountSecretKey, AccountSignature, CryptoHash, EvmSignature, TestString},
-        data_types::{BlockHeight, Round},
+        data_types::{BlockHeight, Epoch, Round},
         identifiers::ChainId,
     };
-    use linera_execution::committee::Epoch;
 
     use crate::data_types::{ProposalContent, ProposedBlock};
 

@@ -25,7 +25,6 @@ use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
-use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
@@ -36,7 +35,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Resources, SendMessageRequest, Timestamp,
+        DecompressionError, Epoch, Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{

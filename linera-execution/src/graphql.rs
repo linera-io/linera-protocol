@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, Epoch, Timestamp},
     doc_scalar,
     identifiers::{AccountOwner, ChainDescription, ChainId},
     ownership::ChainOwnership,
@@ -13,15 +13,11 @@ use linera_base::{
 use linera_views::{context::Context, map_view::MapView};
 
 use crate::{
-    committee::{Committee, Epoch, ValidatorState},
+    committee::{Committee, ValidatorState},
     system::{Recipient, UserData},
     ExecutionStateView, SystemExecutionStateView,
 };
 
-doc_scalar!(
-    Epoch,
-    "A number identifying the configuration of the chain (aka the committee)"
-);
 doc_scalar!(Recipient, "The recipient of a transfer");
 doc_scalar!(UserData, "Optional user message attached to a transfer");
 

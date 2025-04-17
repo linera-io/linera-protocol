@@ -15,13 +15,13 @@ use futures::{
 };
 use linera_base::{
     crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
-    data_types::{Amount, ApplicationPermissions, Blob, BlobContent, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, BlobContent, Epoch, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::{AdminOperation, OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
     ResourceControlPolicy, WasmRuntime,
 };

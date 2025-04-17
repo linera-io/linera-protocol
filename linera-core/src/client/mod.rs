@@ -28,8 +28,8 @@ use linera_base::{
     abi::Abi,
     crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Round,
-        Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
+        Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -52,7 +52,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
         OPEN_CHAIN_MESSAGE_INDEX, REMOVED_EPOCH_STREAM_NAME,

@@ -32,10 +32,13 @@ use tracing::{debug, info};
 use {
     crate::benchmark::{Benchmark, BenchmarkError},
     futures::{stream, StreamExt, TryStreamExt},
-    linera_base::{data_types::Amount, identifiers::ApplicationId},
+    linera_base::{
+        data_types::{Amount, Epoch},
+        identifiers::ApplicationId,
+    },
     linera_core::client::ChainClientError,
     linera_execution::{
-        committee::{Committee, Epoch},
+        committee::Committee,
         system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
         Operation,
     },

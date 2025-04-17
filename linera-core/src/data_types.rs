@@ -10,7 +10,7 @@ use linera_base::{
         BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey,
         ValidatorSignature,
     },
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };
 use linera_chain::{
@@ -18,10 +18,7 @@ use linera_chain::{
     manager::ChainManagerInfo,
     ChainStateView,
 };
-use linera_execution::{
-    committee::{Committee, Epoch},
-    ExecutionRuntimeContext,
-};
+use linera_execution::{committee::Committee, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
 use linera_views::context::Context;
 use serde::{Deserialize, Serialize};

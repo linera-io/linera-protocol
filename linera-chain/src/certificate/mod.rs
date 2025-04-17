@@ -13,10 +13,9 @@ use std::collections::BTreeSet;
 pub use generic::GenericCertificate;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
-    data_types::{BlockHeight, Round},
+    data_types::{BlockHeight, Epoch, Round},
     identifiers::{BlobId, ChainId},
 };
-use linera_execution::committee::Epoch;
 pub use lite::LiteCertificate;
 use serde::{Deserialize, Serialize};
 

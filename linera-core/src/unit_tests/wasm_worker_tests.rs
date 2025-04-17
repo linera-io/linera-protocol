@@ -16,7 +16,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::{
-        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp,
+        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, Epoch, OracleResponse,
+        Timestamp,
     },
     identifiers::{ChainDescription, ChainId, ModuleId},
     ownership::ChainOwnership,
@@ -28,9 +29,8 @@ use linera_chain::{
     types::ConfirmedBlock,
 };
 use linera_execution::{
-    committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState,
-    ExecutionRuntimeContext, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    system::SystemOperation, test_utils::SystemExecutionState, ExecutionRuntimeContext, Operation,
+    OperationContext, ResourceController, TransactionTracker, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]

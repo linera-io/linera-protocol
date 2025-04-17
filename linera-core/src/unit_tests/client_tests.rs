@@ -21,7 +21,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::{Recipient, SystemOperation},
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
     SystemMessage, SystemQuery, SystemResponse,

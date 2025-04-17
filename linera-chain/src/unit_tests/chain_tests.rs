@@ -14,7 +14,7 @@ use axum::{routing::get, Router};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
+        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode, Epoch,
         Timestamp,
     },
     http,
@@ -23,7 +23,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorState},
+    committee::{Committee, ValidatorState},
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,

@@ -5,53 +5,10 @@
 use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use async_graphql::InputObject;
-use linera_base::{
-    crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey},
-    data_types::ArithmeticError,
-};
+use linera_base::crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey};
 use serde::{Deserialize, Serialize};
 
 use crate::policy::ResourceControlPolicy;
-
-/// A number identifying the configuration of the chain (aka the committee).
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
-pub struct Epoch(pub u32);
-
-impl Epoch {
-    pub const ZERO: Epoch = Epoch(0);
-}
-
-impl Serialize for Epoch {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&self.0.to_string())
-        } else {
-            serializer.serialize_newtype_struct("Epoch", &self.0)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for Epoch {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            Ok(Epoch(u32::from_str(&s).map_err(serde::de::Error::custom)?))
-        } else {
-            #[derive(Deserialize)]
-            #[serde(rename = "Epoch")]
-            struct EpochDerived(u32);
-
-            let value = EpochDerived::deserialize(deserializer)?;
-            Ok(Self(value.0))
-        }
-    }
-}
 
 /// The identity of a validator.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
@@ -247,46 +204,6 @@ impl std::str::FromStr for ValidatorName {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(ValidatorName(ValidatorPublicKey::from_str(s)?))
-    }
-}
-
-impl std::fmt::Display for Epoch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for Epoch {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Epoch(s.parse()?))
-    }
-}
-
-impl From<u32> for Epoch {
-    fn from(value: u32) -> Self {
-        Epoch(value)
-    }
-}
-
-impl From<ValidatorPublicKey> for ValidatorName {
-    fn from(value: ValidatorPublicKey) -> Self {
-        Self(value)
-    }
-}
-
-impl Epoch {
-    #[inline]
-    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
-        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(())
     }
 }
 

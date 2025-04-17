@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, TimeDelta, Timestamp},
+    data_types::{Blob, Epoch, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -17,8 +17,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode,
-    WasmRuntime,
+    BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
