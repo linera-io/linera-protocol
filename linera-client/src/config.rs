@@ -20,7 +20,7 @@ use linera_execution::{
     ResourceControlPolicy,
 };
 use linera_rpc::config::{
-    ExporterConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+    ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -251,10 +251,10 @@ impl GenesisConfig {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlockExporterConfig {
     /// The server configuration for the linera-exporter.
-    pub service_config: ServiceConfig,
+    pub service_config: ExporterServiceConfig,
 
     /// The configuration file for the export destinations.
-    #[serde(default = "DestinationConfig::new")]
+    #[serde(default)]
     pub destination_config: DestinationConfig,
 
     /// Identity for the block exporter state.
@@ -262,26 +262,10 @@ pub struct BlockExporterConfig {
 }
 
 /// Configuration file for the exports.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DestinationConfig {
     /// The destination URIs to export to.
     pub destinations: Vec<Destination>,
-    //walrus: bool,
-    //committee: bool,
-}
-
-impl DestinationConfig {
-    pub fn new() -> Self {
-        Self {
-            destinations: vec![],
-        }
-    }
-}
-
-impl Default for DestinationConfig {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 // Each destination has an ID and a configuration.
@@ -296,5 +280,3 @@ pub struct Destination {
     /// The port number of the target destination.
     pub port: u16,
 }
-
-pub type ServiceConfig = ExporterConfig;

@@ -26,7 +26,7 @@ use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
-        CrossChainConfig, ExporterConfig, NetworkProtocol, NotificationConfig, ShardConfig,
+        CrossChainConfig, ExporterServiceConfig, NetworkProtocol, NotificationConfig, ShardConfig,
         ShardId, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     grpc, simple,
@@ -268,7 +268,7 @@ struct ValidatorOptions {
 
     /// The server configurations for the linera-exporter.
     #[serde(default)]
-    block_exporters: Vec<ExporterConfig>,
+    block_exporters: Vec<ExporterServiceConfig>,
 
     /// The port for the metrics endpoint
     metrics_port: u16,
@@ -752,7 +752,7 @@ mod test {
                 internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
-                block_exporters: vec![ExporterConfig {
+                block_exporters: vec![ExporterServiceConfig {
                     host: "exporter".into(),
                     port: 12000
                 }],

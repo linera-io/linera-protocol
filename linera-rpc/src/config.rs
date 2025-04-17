@@ -141,8 +141,9 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The port the proxy listens on the internal network.
     pub port: u16,
     /// The server configurations for the linera-exporter.
-    /// They can be used as optional locations to forward notifications to other than the proxy, by the workers.
-    pub block_exporters: Vec<ExporterConfig>,
+    /// They can be used as optional locations to forward notifications to destinations other than
+    /// the proxy, by the workers.
+    pub block_exporters: Vec<ExporterServiceConfig>,
     /// The port of the proxy's metrics endpoint.
     pub metrics_port: u16,
 }
@@ -169,7 +170,7 @@ impl ValidatorInternalNetworkConfig {
     pub fn exporter_addresses(&self) -> Vec<String> {
         self.block_exporters
             .iter()
-            .map(|ExporterConfig { host, port }| {
+            .map(|ExporterServiceConfig { host, port }| {
                 format!("{}://{}:{}", self.protocol.scheme(), host, port)
             })
             .collect::<Vec<_>>()
@@ -288,7 +289,7 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 /// The server configuration for the linera-exporter.
-pub struct ExporterConfig {
+pub struct ExporterServiceConfig {
     /// The host name of the server (IP or hostname).
     pub host: String,
     /// The port for the server to listen on.

@@ -7,11 +7,14 @@ use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, listen_for_shutdown_signals,
 };
-use linera_client::config::{DestinationConfig, ServiceConfig};
+use linera_client::config::DestinationConfig;
 use linera_core::worker::Reason;
-use linera_rpc::grpc::api::{
-    notifier_service_server::{NotifierService, NotifierServiceServer},
-    Notification,
+use linera_rpc::{
+    config::ExporterServiceConfig,
+    grpc::api::{
+        notifier_service_server::{NotifierService, NotifierServiceServer},
+        Notification,
+    },
 };
 use linera_sdk::views::{RootView, View};
 use linera_service::storage::Runnable;
@@ -28,7 +31,7 @@ use crate::{state::BlockExporterStateView, ExporterError};
 #[derive(Debug)]
 pub(super) struct ExporterContext {
     id: u32,
-    service_config: ServiceConfig,
+    service_config: ExporterServiceConfig,
     destination_config: DestinationConfig,
 }
 
@@ -74,7 +77,7 @@ where
                 .read_confirmed_block(block_hash)
                 .await
                 .map_err(|e| Status::from_error(e.into()))?;
-            let byte_size = bincode::serialized_size(&block).unwrap();
+            let byte_size = bcs::serialized_size(&block).unwrap();
             let summary = Summary {
                 chain_id,
                 block_height,
@@ -121,11 +124,11 @@ where
 
     pub async fn run(
         self,
-        canellation_token: CancellationToken,
+        cancellation_token: CancellationToken,
         port: u16,
     ) -> core::result::Result<(), ExporterError> {
         info!("Linera exporter is running.");
-        self.start_notification_server(port, canellation_token)
+        self.start_notification_server(port, cancellation_token)
             .await
     }
 
@@ -155,7 +158,7 @@ impl Runnable for ExporterContext {
 impl ExporterContext {
     pub(super) fn new(
         id: u32,
-        service_config: ServiceConfig,
+        service_config: ExporterServiceConfig,
         destination_config: DestinationConfig,
     ) -> ExporterContext {
         Self {
@@ -198,7 +201,7 @@ where
     pub async fn start_notification_server(
         self,
         port: u16,
-        canellation_token: CancellationToken,
+        cancellation_token: CancellationToken,
     ) -> core::result::Result<(), ExporterError> {
         let endpoint = get_address(port);
         info!(
@@ -214,7 +217,7 @@ where
         Server::builder()
             .add_service(health_service)
             .add_service(NotifierServiceServer::new(self))
-            .serve_with_shutdown(endpoint, canellation_token.cancelled_owned())
+            .serve_with_shutdown(endpoint, cancellation_token.cancelled_owned())
             .await
             .expect("a running notification server");
 
@@ -234,7 +237,7 @@ pub struct Summary {
     chain_id: ChainId,
     block_height: BlockHeight,
     block_hash: CryptoHash,
-    byte_size: u64,
+    byte_size: usize,
 }
 
 #[cfg(with_testing)]
@@ -243,7 +246,7 @@ impl Summary {
         chain_id: ChainId,
         block_height: BlockHeight,
         block_hash: CryptoHash,
-        byte_size: u64,
+        byte_size: usize,
     ) -> Summary {
         Summary {
             chain_id,
@@ -281,10 +284,10 @@ mod test {
         let port = get_free_port().await?;
         let endpoint = format!("127.0.0.1:{port}");
 
-        let canellation_token = CancellationToken::new();
+        let cancellation_token = CancellationToken::new();
 
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
-        let service_config = ServiceConfig {
+        let service_config = ExporterServiceConfig {
             host: "127.0.0.1".to_string(),
             port,
         };
@@ -305,6 +308,7 @@ mod test {
             make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE),
         );
         let confirmed_block = ConfirmedBlock::new(block);
+        let expected_byte_size = bcs::serialized_size(&confirmed_block).unwrap(); // here just to avoid cloning after the move below.
         let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
         storage
             .write_blobs_and_certificate(&[], &certificate)
@@ -314,7 +318,7 @@ mod test {
         let service = ExporterService::from_context(&context, storage).await?;
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let service = service.with_redirection_buffer(tx);
-        tokio::spawn(service.run(canellation_token.clone(), port));
+        tokio::spawn(service.run(cancellation_token.clone(), port));
 
         LocalNet::ensure_grpc_server_has_started("test server", port as usize, "http").await?;
 
@@ -330,14 +334,18 @@ mod test {
         });
 
         let _response = client.notify(request).await?;
-        canellation_token.cancel();
+        cancellation_token.cancel();
 
+        let expected_chain_id = certificate.inner().chain_id();
+        let expected_block_height = certificate.inner().height();
+        let expected_block_hash = certificate.hash();
         let expected_summary = Summary::new(
-            certificate.inner().chain_id(),
-            certificate.inner().height(),
-            certificate.hash(),
-            260,
+            expected_chain_id,
+            expected_block_height,
+            expected_block_hash,
+            expected_byte_size,
         );
+
         while let Some(summary) = rx.recv().await {
             assert_eq!(summary, expected_summary);
         }

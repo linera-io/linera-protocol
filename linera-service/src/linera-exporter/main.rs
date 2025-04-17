@@ -18,7 +18,7 @@ mod state;
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum ExporterError {
-    #[error("Recieved an invalid notification.")]
+    #[error("received an invalid notification.")]
     BadNotification,
 
     #[error("unable to load the exporter state")]
@@ -38,7 +38,7 @@ pub(crate) enum ExporterError {
     version = linera_version::VersionInfo::default_clap_str(),
 )]
 struct ExporterOptions {
-    /// Path to the TOML file dedcribing the configuration for the block exporter.
+    /// Path to the TOML file describing the configuration for the block exporter.
     config_path: PathBuf,
 
     /// Storage configuration for the blockchain history, chain states and binary blobs.

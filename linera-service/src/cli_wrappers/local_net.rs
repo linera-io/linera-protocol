@@ -421,10 +421,6 @@ impl LocalNet {
         9000 + validator * 100
     }
 
-    fn block_exporter_port(validator: usize, exporter_id: usize) -> usize {
-        19000 + validator * 100 + exporter_id + 1
-    }
-
     fn shard_port(validator: usize, shard: usize) -> usize {
         9000 + validator * 100 + shard + 1
     }
@@ -439,6 +435,10 @@ impl LocalNet {
 
     fn shard_metrics_port(validator: usize, shard: usize) -> usize {
         11000 + validator * 100 + shard + 1
+    }
+
+    fn block_exporter_port(validator: usize, exporter_id: usize) -> usize {
+        12000 + validator * 100 + exporter_id + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {

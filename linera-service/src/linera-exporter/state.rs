@@ -14,7 +14,7 @@ use crate::ExporterError;
 /// State of the linera exporter as a view.
 #[derive(Debug, RootView, ClonableView)]
 pub struct BlockExporterStateView<C> {
-    /// The inner state.
+    /// The chain status, by chain ID.
     state: ReentrantCollectionView<C, ChainId, ChainStatusView<C>>,
 }
 
@@ -44,13 +44,12 @@ where
         &mut self,
         destination: DestinationId,
     ) -> Result<(), ExporterError> {
-        match self.next_heights_to_process.get_mut(&destination).await? {
-            Some(mutable) => {
-                mutable.try_add_one().map_err(ViewError::ArithmeticError)?;
-                Ok(())
-            }
-            None => self.insert_destination(destination),
-        }
+        let height = self
+            .next_heights_to_process
+            .get_mut_or_default(&destination)
+            .await?;
+        *height = height.try_add_one().map_err(ViewError::ArithmeticError)?;
+        Ok(())
     }
 
     pub fn insert_destination(&mut self, destination: DestinationId) -> Result<(), ExporterError> {
@@ -67,10 +66,10 @@ where
     pub async fn initialize_chain(
         &mut self,
         chain_id: &ChainId,
-        height: (BlockHeight, CryptoHash),
+        (height, hash): (BlockHeight, CryptoHash),
     ) -> Result<(), ExporterError> {
         let mut guard = self.state.try_load_entry_mut(chain_id).await?;
-        guard.update_block_height(height.0, height.1);
+        guard.update_block_height(height, hash);
         Ok(())
     }
 
