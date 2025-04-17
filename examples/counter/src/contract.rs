@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn operation() {
         let runtime = ContractRuntime::new().with_application_parameters(());
-        let state = Counter::load(runtime.root_view_storage_context())
+        let state = CounterState::load(runtime.root_view_storage_context())
             .blocking_wait()
             .expect("Failed to read from mock key value store");
         let mut counter = CounterContract { state, runtime };

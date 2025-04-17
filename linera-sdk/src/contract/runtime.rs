@@ -263,7 +263,7 @@ where
         application: ApplicationId<A>,
         call: &A::Operation,
     ) -> A::Response
-    // ANCHOR_END: call_application
+// ANCHOR_END: call_application
     {
         let call_bytes = A::serialize_operation(call)
             .expect("Failed to serialize `Operation` in cross-application call");
