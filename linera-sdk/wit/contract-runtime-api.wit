@@ -87,10 +87,6 @@ interface contract-runtime-api {
         part4: u64,
     }
 
-    variant destination {
-        recipient(chain-id),
-    }
-
     record message-id {
         chain-id: chain-id,
         height: block-height,
@@ -121,7 +117,7 @@ interface contract-runtime-api {
     }
 
     record send-message-request {
-        destination: destination,
+        destination: chain-id,
         authenticated: bool,
         is-tracked: bool,
         grant: resources,

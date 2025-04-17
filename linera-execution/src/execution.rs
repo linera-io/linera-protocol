@@ -9,7 +9,7 @@ use std::{
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, StreamUpdate},
-    identifiers::{Account, AccountOwner, Destination, StreamId},
+    identifiers::{Account, AccountOwner, StreamId},
 };
 use linera_views::{
     context::Context,
@@ -350,7 +350,7 @@ where
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         txn_tracker.add_outgoing_message(OutgoingMessage {
-            destination: Destination::Recipient(context.message_id.chain_id),
+            destination: context.message_id.chain_id,
             authenticated_signer: context.authenticated_signer,
             refund_grant_to: context.refund_grant_to.filter(|_| !grant.is_zero()),
             grant,

@@ -490,41 +490,6 @@ pub struct EventId {
     pub index: u32,
 }
 
-/// The destination of a message, relative to a particular application.
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-pub enum Destination {
-    /// Direct message to a chain.
-    Recipient(ChainId),
-}
-
-impl Destination {
-    /// Returns the recipient chain, or `None` if it is `Subscribers`.
-    pub fn recipient(&self) -> Option<ChainId> {
-        match self {
-            Destination::Recipient(chain_id) => Some(*chain_id),
-        }
-    }
-}
-
-impl From<ChainId> for Destination {
-    fn from(chain_id: ChainId) -> Self {
-        Destination::Recipient(chain_id)
-    }
-}
-
 impl StreamName {
     /// Turns the stream name into bytes.
     pub fn into_bytes(self) -> Vec<u8> {
@@ -1033,10 +998,6 @@ doc_scalar!(
 );
 doc_scalar!(StreamName, "The name of an event stream");
 bcs_scalar!(MessageId, "The index of a message in a chain");
-doc_scalar!(
-    Destination,
-    "The destination of a message, relative to a particular application."
-);
 doc_scalar!(
     AccountOwner,
     "A unique identifier for a user or an application."

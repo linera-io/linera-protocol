@@ -34,8 +34,7 @@ use crate::{
     crypto::{BcsHashable, CryptoError, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
-        ModuleId, StreamId,
+        ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, ModuleId, StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -307,7 +306,7 @@ pub struct Resources {
 #[witty_specialize_with(Message = Vec<u8>)]
 pub struct SendMessageRequest<Message> {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// Whether the message is authenticated.
     pub authenticated: bool,
     /// Whether the message is tracked.

@@ -14,7 +14,7 @@ use linera_base::{
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, ChainId, Destination, MessageId},
+    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId},
 };
 use linera_execution::{
     committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
@@ -277,9 +277,7 @@ pub trait OutgoingMessageExt {
 impl OutgoingMessageExt for OutgoingMessage {
     /// Returns whether this message is sent to the specified recipient.
     fn has_destination(&self, recipient: ChainId) -> bool {
-        match &self.destination {
-            Destination::Recipient(id) => *id == recipient,
-        }
+        self.destination == recipient
     }
 
     /// Returns the posted message, i.e. the outgoing message without the destination.

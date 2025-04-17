@@ -17,7 +17,7 @@ use linera_base::{
         Epoch, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, Destination, MessageId},
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -902,7 +902,7 @@ where
         let recipients = messages
             .iter()
             .flatten()
-            .flat_map(|message| message.destination.recipient())
+            .map(|message| message.destination)
             .collect::<BTreeSet<_>>();
         let mut previous_message_blocks = BTreeMap::new();
         for recipient in recipients {
@@ -986,7 +986,7 @@ where
             .messages
             .iter()
             .flatten()
-            .flat_map(|message| message.destination.recipient())
+            .map(|message| message.destination)
             .collect::<BTreeSet<_>>();
         for recipient in recipients {
             self.previous_message_blocks
@@ -1166,14 +1166,10 @@ where
     ) -> Result<(), ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
-        let mut recipients = HashSet::new();
-        for message in messages {
-            match &message.destination {
-                Destination::Recipient(id) => {
-                    recipients.insert(*id);
-                }
-            }
-        }
+        let recipients = messages
+            .iter()
+            .map(|msg| msg.destination)
+            .collect::<HashSet<_>>();
 
         // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();

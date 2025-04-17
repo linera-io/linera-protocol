@@ -22,9 +22,7 @@ use linera_base::{
         Secp256k1SecretKey, ValidatorKeypair,
     },
     data_types::*,
-    identifiers::{
-        Account, AccountOwner, ChainDescription, ChainId, Destination, EventId, MessageId, StreamId,
-    },
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId, EventId, MessageId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -301,7 +299,7 @@ where
                     {
                         vec![OutgoingMessage {
                             authenticated_signer: posted_message.authenticated_signer,
-                            destination: Destination::Recipient(incoming_bundle.origin),
+                            destination: incoming_bundle.origin,
                             grant: Amount::ZERO,
                             refund_grant_to: None,
                             kind: MessageKind::Bouncing,
@@ -347,12 +345,12 @@ where
     let previous_message_blocks = messages
         .iter()
         .flatten()
-        .flat_map(|message| message.destination.recipient())
+        .map(|message| message.destination)
         .filter(|recipient| {
             previous_confirmed_block
                 .iter()
                 .flat_map(|block| block.inner().block().body.messages.iter().flatten())
-                .any(|message| message.destination.recipient() == Some(*recipient))
+                .any(|message| message.destination == *recipient)
         })
         .map(|recipient| (recipient, previous_confirmed_block.unwrap().hash()))
         .collect();
@@ -377,7 +375,7 @@ fn direct_outgoing_message(
     message: SystemMessage,
 ) -> OutgoingMessage {
     OutgoingMessage {
-        destination: Destination::Recipient(recipient),
+        destination: recipient,
         authenticated_signer: None,
         grant: Amount::ZERO,
         refund_grant_to: None,
