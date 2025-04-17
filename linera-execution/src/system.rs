@@ -17,7 +17,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlobContent, BlockHeight, OracleResponse, Timestamp,
+        Amount, ApplicationPermissions, Blob, BlobContent, BlockHeight, Epoch, OracleResponse,
+        Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -40,10 +41,9 @@ use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCoun
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
 use crate::{
-    committee::{Committee, Epoch},
-    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext, MessageContext,
-    MessageKind, OperationContext, OutgoingMessage, QueryContext, QueryOutcome, ResourceController,
-    TransactionTracker,
+    committee::Committee, ApplicationDescription, ApplicationId, ExecutionError,
+    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, OutgoingMessage,
+    QueryContext, QueryOutcome, ResourceController, TransactionTracker,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.

@@ -12,7 +12,9 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future, FutureExt as _};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{Amount, ApplicationDescription, ApplicationPermissions, Bytecode, TimeDelta},
+    data_types::{
+        Amount, ApplicationDescription, ApplicationPermissions, Bytecode, Epoch, TimeDelta,
+    },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -29,7 +31,7 @@ use linera_core::{
     worker::Notification,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::{AdminOperation, Recipient},
     Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
 };

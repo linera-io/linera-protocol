@@ -22,13 +22,13 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::CryptoHash,
-    data_types::{Amount, Bytecode},
+    data_types::{Amount, Bytecode, Epoch},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
 use linera_core::worker::Notification;
-use linera_execution::committee::{Committee, Epoch};
+use linera_execution::committee::Committee;
 use linera_faucet::ClaimOutcome;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};

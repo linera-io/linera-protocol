@@ -15,14 +15,15 @@ use std::{
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, CompressedBytecode},
+    data_types::{
+        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, CompressedBytecode, Epoch,
+    },
     identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
-    committee::Epoch,
     system::{SystemOperation, SystemQuery, SystemResponse},
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse,
 };

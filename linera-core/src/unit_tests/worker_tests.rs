@@ -42,7 +42,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemMessage, SystemOperation,
         EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,

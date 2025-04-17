@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        OracleResponse, Timestamp,
+        Epoch, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{
@@ -24,11 +24,9 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
-    system::OpenChainConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, Operation,
-    OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    committee::Committee, system::OpenChainConfig, ExecutionRuntimeContext, ExecutionStateView,
+    Message, MessageContext, Operation, OperationContext, OutgoingMessage, Query, QueryContext,
+    QueryOutcome, ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,

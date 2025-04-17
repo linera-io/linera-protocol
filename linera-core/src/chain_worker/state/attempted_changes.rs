@@ -8,7 +8,7 @@ use std::{borrow::Cow, collections::BTreeMap};
 use futures::future::Either;
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Blob, BlockHeight, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Timestamp},
     ensure,
     identifiers::{AccountOwner, ChainId},
 };
@@ -20,7 +20,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
-use linera_execution::committee::{Committee, Epoch};
+use linera_execution::committee::Committee;
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
