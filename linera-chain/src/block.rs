@@ -420,7 +420,7 @@ impl Block {
             .filter_map(move |(transaction_index, txn_messages)| {
                 let messages = (index..)
                     .zip(txn_messages)
-                    .filter(|(_, message)| message.has_destination(recipient))
+                    .filter(|(_, message)| message.destination == recipient)
                     .map(|(idx, message)| message.clone().into_posted(idx))
                     .collect::<Vec<_>>();
                 index += txn_messages.len() as u32;
