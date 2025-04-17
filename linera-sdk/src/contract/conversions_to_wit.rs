@@ -8,9 +8,7 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
     },
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, Destination, MessageId, ModuleId, StreamName,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -148,16 +146,6 @@ impl From<Resources> for wit_contract_api::Resources {
             storage_size_delta: resources.storage_size_delta,
             service_as_oracle_queries: resources.service_as_oracle_queries,
             http_requests: resources.http_requests,
-        }
-    }
-}
-
-impl From<Destination> for wit_contract_api::Destination {
-    fn from(destination: Destination) -> Self {
-        match destination {
-            Destination::Recipient(chain_id) => {
-                wit_contract_api::Destination::Recipient(chain_id.into())
-            }
         }
     }
 }

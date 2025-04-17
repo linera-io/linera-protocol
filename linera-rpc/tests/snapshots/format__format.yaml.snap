@@ -443,12 +443,6 @@ CryptoHash:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Destination:
-  ENUM:
-    0:
-      Recipient:
-        NEWTYPE:
-          TYPENAME: ChainId
 Ed25519PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -770,7 +764,7 @@ OracleResponse:
 OutgoingMessage:
   STRUCT:
     - destination:
-        TYPENAME: Destination
+        TYPENAME: ChainId
     - authenticated_signer:
         OPTION:
           TYPENAME: AccountOwner

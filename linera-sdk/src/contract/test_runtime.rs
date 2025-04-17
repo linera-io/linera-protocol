@@ -14,9 +14,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     ensure, http,
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, Destination, MessageId, ModuleId, StreamName,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
@@ -464,11 +462,7 @@ where
     }
 
     /// Schedules a message to be sent to this application on another chain.
-    pub fn send_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Application::Message,
-    ) {
+    pub fn send_message(&mut self, destination: ChainId, message: Application::Message) {
         self.prepare_message(message).send_to(destination)
     }
 
@@ -991,9 +985,9 @@ where
     }
 
     /// Schedules this `Message` to be sent to the `destination`.
-    pub fn send_to(self, destination: impl Into<Destination>) {
+    pub fn send_to(self, destination: ChainId) {
         let request = SendMessageRequest {
-            destination: destination.into(),
+            destination,
             authenticated: self.authenticated,
             is_tracked: self.is_tracked,
             grant: self.grant,
