@@ -9,16 +9,16 @@ controllerResources:
     memory: 200Mi
 
 scylla:
-  developerMode: true
   scyllaImage:
     tag: 5.4.3
   agentImage:
     tag: 3.2.8
-  datacenter: manager-dc
+  datacenter: validator
   racks:
   - name: manager-rack
     members: 1
     storage:
+      storageClassName: nvme-ssd-block
       capacity: 5Gi
     resources:
       limits:

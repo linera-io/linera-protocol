@@ -69,4 +69,3 @@ releases:
     set:
       - name: crds.enabled
         value: "true"
-

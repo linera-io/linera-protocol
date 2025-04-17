@@ -69,7 +69,7 @@ RUN cargo build ${build_flag:+"$build_flag"} \
     --bin linera \
     --bin linera-proxy \
     --bin linera-server \
-    --features scylladb,metrics
+    --features scylladb,rocksdb,metrics
 
 RUN mv \
     target/"$target"/"$build_folder"/linera \
