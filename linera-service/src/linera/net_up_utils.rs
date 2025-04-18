@@ -178,6 +178,7 @@ pub async fn handle_net_up_service(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    num_block_exporters: u32,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -215,6 +216,7 @@ pub async fn handle_net_up_service(
         cross_chain_config,
         storage_config_builder,
         path_provider,
+        num_block_exporters,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
