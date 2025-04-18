@@ -5,104 +5,31 @@
 
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
-use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey, Secp256k1SecretKey},
-    data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    data_types::{Amount, TimeDelta},
+    identifiers::AccountOwner,
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{BlanketMessagePolicy, Client},
+    join_set_ext::JoinSet,
     node::CrossChainMessageDelivery,
-    test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
+    test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
     DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::system::Recipient;
-use linera_storage::{DbStorage, TestClock};
-use linera_views::memory::MemoryStore;
 use rand::SeedableRng as _;
 use tokio_util::sync::CancellationToken;
 
 use super::util::make_genesis_config;
 use crate::{
-    chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
-    wallet::{UserChain, Wallet},
-    Error,
+    chain_listener::{ChainListener, ChainListenerConfig},
+    client_context::ClientContext,
+    config::WalletState,
+    wallet::Wallet,
 };
-
-type TestStorage = DbStorage<MemoryStore, TestClock>;
-type TestProvider = NodeProvider<TestStorage>;
-
-struct ClientContext {
-    wallet: Wallet,
-    client: Arc<Client<TestProvider, TestStorage>>,
-}
-
-#[cfg_attr(not(web), async_trait)]
-#[cfg_attr(web, async_trait(?Send))]
-impl chain_listener::ClientContext for ClientContext {
-    type ValidatorNodeProvider = TestProvider;
-    type Storage = TestStorage;
-
-    fn wallet(&self) -> &Wallet {
-        &self.wallet
-    }
-
-    fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainClient<TestProvider, TestStorage>, Error> {
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        let known_key_pairs = chain
-            .key_pair
-            .as_ref()
-            .map(|kp| kp.copy())
-            .into_iter()
-            .collect();
-        Ok(self.client.create_chain_client(
-            chain_id,
-            known_key_pairs,
-            self.wallet.genesis_admin_chain(),
-            chain.block_hash,
-            chain.timestamp,
-            chain.next_block_height,
-            chain.pending_proposal.clone(),
-        ))
-    }
-
-    async fn update_wallet_for_new_chain(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
-        timestamp: Timestamp,
-    ) -> Result<(), Error> {
-        if self.wallet.get(chain_id).is_none() {
-            self.wallet.insert(UserChain {
-                chain_id,
-                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
-                block_hash: None,
-                timestamp,
-                next_block_height: BlockHeight::ZERO,
-                pending_proposal: None,
-            });
-        }
-
-        Ok(())
-    }
-
-    async fn update_wallet(
-        &mut self,
-        client: &ChainClient<TestProvider, TestStorage>,
-    ) -> Result<(), Error> {
-        self.wallet.update_from_state(client).await;
-        Ok(())
-    }
-}
 
 /// Tests that the chain listener, if there is a message in the inbox, will continue requesting
 /// timeout certificates until it becomes the leader and can process the inbox.
@@ -122,8 +49,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let genesis_config = make_genesis_config(&builder);
     let storage = builder.make_storage().await?;
     let delivery = CrossChainMessageDelivery::NonBlocking;
+    let wallet = crate::persistent::memory::Memory::new(Wallet::new(genesis_config, Some(37)));
     let mut context = ClientContext {
-        wallet: Wallet::new(genesis_config, Some(37)),
+        wallet: WalletState::new(wallet),
         client: Arc::new(Client::new(
             builder.make_node_provider(),
             storage.clone(),
@@ -136,6 +64,13 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             DEFAULT_GRACE_PERIOD,
             Duration::from_secs(1),
         )),
+        send_timeout: Duration::from_millis(4000),
+        recv_timeout: Duration::from_millis(4000),
+        retry_delay: Duration::from_millis(1000),
+        max_retries: 10,
+        chain_listeners: JoinSet::new(),
+        blanket_message_policy: BlanketMessagePolicy::Accept,
+        restrict_chain_ids_to: None,
     };
     let key_pair = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate_from(&mut rng));
     let owner = key_pair.public().into();

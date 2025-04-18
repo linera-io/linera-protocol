@@ -28,7 +28,6 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_client::{
-    chain_listener::ClientContext as _,
     client_context::ClientContext,
     client_options::ClientContextOptions,
     config::{CommitteeConfig, GenesisConfig, WalletState},
@@ -43,6 +42,7 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault as _,
 };
 use linera_faucet_server::FaucetService;
+use linera_rpc::{NodeOptions, NodeProvider};
 use linera_service::{
     cli_wrappers,
     node_service::NodeService,
@@ -90,7 +90,19 @@ impl Runnable for Job {
     {
         let Job(options) = self;
         let wallet = options.wallet().await?;
-        let mut context = ClientContext::new(storage.clone(), options.inner.clone(), wallet);
+        let node_options = NodeOptions {
+            send_timeout: options.inner.send_timeout,
+            recv_timeout: options.inner.recv_timeout,
+            retry_delay: options.inner.retry_delay,
+            max_retries: options.inner.max_retries,
+        };
+        let node_provider = NodeProvider::new(node_options);
+        let mut context = ClientContext::new(
+            node_provider,
+            storage.clone(),
+            options.inner.clone(),
+            wallet,
+        );
         let command = options.command;
 
         use ClientCommand::*;
@@ -308,7 +320,7 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = chain_client.query_owner_balance(account.owner).await;
-                context.update_wallet_from_client(&chain_client).await?;
+                context.update_wallet(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -324,7 +336,7 @@ impl Runnable for Job {
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                context.update_wallet_from_client(&chain_client).await?;
+                context.update_wallet(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(
                     "Synchronized chain information in {} ms",
@@ -421,7 +433,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Querying validators about chain {}", chain_id);
                 let result = chain_client.local_committee().await;
-                context.update_wallet_from_client(&chain_client).await?;
+                context.update_wallet(&chain_client).await?;
                 let committee = result.context("Failed to get local committee")?;
                 info!(
                     "Using the local set of validators: {:?}",
@@ -811,7 +823,7 @@ impl Runnable for Job {
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
-                        context.update_wallet_from_client(&chain_client).await?;
+                        context.update_wallet(&chain_client).await?;
                     }
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
@@ -1094,7 +1106,7 @@ impl Runnable for Job {
                         info!("Please try again at {}", timeout.timestamp)
                     }
                 }
-                context.update_wallet_from_client(&chain_client).await?;
+                context.update_wallet(&chain_client).await?;
                 info!(
                     "Pending block retried in {} ms",
                     start_time.elapsed().as_millis()
@@ -1208,10 +1220,10 @@ impl Job {
     /// Prints a warning message to explain that the wallet has been initialized using data from
     /// untrusted nodes, and gives instructions to verify that we are connected to the right
     /// network.
-    async fn print_peg_certificate_hash<S>(
+    async fn print_peg_certificate_hash<P, S>(
         storage: S,
         chain_ids: impl IntoIterator<Item = ChainId>,
-        context: &ClientContext<S, impl Persist<Target = Wallet>>,
+        context: &ClientContext<P, S, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,

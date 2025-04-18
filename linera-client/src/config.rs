@@ -197,6 +197,19 @@ pub struct GenesisConfig {
 
 impl BcsSignable<'_> for GenesisConfig {}
 
+impl Default for GenesisConfig {
+    fn default() -> Self {
+        Self {
+            committee: CommitteeConfig::default(),
+            admin_id: ChainId::root(0),
+            timestamp: Timestamp::now(),
+            chains: Vec::new(),
+            policy: ResourceControlPolicy::default(),
+            network_name: "linera".to_string(),
+        }
+    }
+}
+
 impl GenesisConfig {
     pub fn new(
         committee: CommitteeConfig,

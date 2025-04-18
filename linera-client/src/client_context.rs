@@ -5,7 +5,6 @@
 use std::num::NonZeroUsize;
 use std::{collections::HashSet, sync::Arc};
 
-use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
@@ -61,7 +60,6 @@ use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
 #[cfg(not(web))]
 use crate::persistent::{Persist, PersistExt as _};
 use crate::{
-    chain_listener,
     client_options::{ChainOwnershipConfig, ClientContextOptions},
     config::WalletState,
     error, util,
@@ -69,12 +67,12 @@ use crate::{
     Error,
 };
 
-pub struct ClientContext<Storage, W>
+pub struct ClientContext<Provider, Storage, W>
 where
     Storage: linera_storage::Storage,
 {
     pub wallet: WalletState<W>,
-    pub client: Arc<Client<NodeProvider, Storage>>,
+    pub client: Arc<Client<Provider, Storage>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub retry_delay: Duration,
@@ -84,44 +82,10 @@ where
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
-#[cfg_attr(not(web), async_trait)]
-#[cfg_attr(web, async_trait(?Send))]
-impl<S, W> chain_listener::ClientContext for ClientContext<S, W>
+impl<P, S, W> ClientContext<P, S, W>
 where
-    S: Storage + Clone + Send + Sync + 'static,
-    W: Persist<Target = Wallet> + 'static,
-{
-    type ValidatorNodeProvider = NodeProvider;
-    type Storage = S;
-
-    fn wallet(&self) -> &Wallet {
-        &self.wallet
-    }
-
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
-        self.make_chain_client(chain_id)
-    }
-
-    async fn update_wallet_for_new_chain(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
-        timestamp: Timestamp,
-    ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp)
-            .await?;
-        self.save_wallet().await
-    }
-
-    async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
-        self.update_wallet_from_client(client).await
-    }
-}
-
-impl<S, W> ClientContext<S, W>
-where
-    S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
+    S: linera_storage::Storage,
 {
     /// Returns a reference to the wallet.
     pub fn wallet(&self) -> &Wallet {
@@ -142,15 +106,15 @@ where
             .await
             .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
+}
 
-    pub fn new(storage: S, options: ClientContextOptions, wallet: W) -> Self {
-        let node_options = NodeOptions {
-            send_timeout: options.send_timeout,
-            recv_timeout: options.recv_timeout,
-            retry_delay: options.retry_delay,
-            max_retries: options.max_retries,
-        };
-        let node_provider = NodeProvider::new(node_options);
+impl<P, S, W> ClientContext<P, S, W>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    W: Persist<Target = Wallet>,
+    P: ValidatorNodeProvider,
+{
+    pub fn new(node_provider: P, storage: S, options: ClientContextOptions, wallet: W) -> Self {
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
@@ -185,20 +149,13 @@ where
     }
 
     #[cfg(with_testing)]
-    pub fn new_test_client_context(storage: S, wallet: W) -> Self {
+    pub fn new_test_client_context(node_provider: P, storage: S, wallet: W) -> Self {
         use linera_core::DEFAULT_GRACE_PERIOD;
 
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
         let max_retries = 10;
 
-        let node_options = NodeOptions {
-            send_timeout: send_recv_timeout,
-            recv_timeout: send_recv_timeout,
-            retry_delay,
-            max_retries,
-        };
-        let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(true);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
@@ -245,7 +202,7 @@ where
             .expect("No chain specified in wallet with no default chain")
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
+    pub fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<P, S>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
         let chain = match self.wallet.get(chain_id) {
             Some(chain) => chain.clone(),
@@ -273,7 +230,7 @@ where
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
-    ) -> ChainClient<NodeProvider, S> {
+    ) -> ChainClient<P, S> {
         let mut chain_client = self.client.create_chain_client(
             chain_id,
             known_key_pairs,
@@ -310,26 +267,7 @@ where
             .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    pub async fn update_wallet_from_client(
-        &mut self,
-        client: &ChainClient<NodeProvider, S>,
-    ) -> Result<(), Error> {
-        self.wallet.as_mut().update_from_state(client).await;
-        self.save_wallet().await
-    }
-
-    /// Remembers the new chain and private key (if any) in the wallet.
     pub async fn update_wallet_for_new_chain(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
-        timestamp: Timestamp,
-    ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp)
-            .await
-    }
-
-    async fn update_wallet_for_new_chain_internal(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<AccountSecretKey>,
@@ -349,19 +287,24 @@ where
             .await?;
         }
 
-        Ok(())
+        self.save_wallet().await
+    }
+
+    pub async fn update_wallet(&mut self, client: &ChainClient<P, S>) -> Result<(), Error> {
+        self.wallet.as_mut().update_from_state(client).await;
+        self.save_wallet().await
     }
 
     pub async fn process_inbox(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<P, S>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
             chain_client.synchronize_from_validators().await?;
             let result = chain_client.process_inbox_without_prepare().await;
-            self.update_wallet_from_client(chain_client).await?;
+            self.update_wallet(chain_client).await?;
             if result.is_err() {
                 self.save_wallet().await?;
             }
@@ -380,7 +323,7 @@ where
         loop {
             let (new_certificates, maybe_timeout) = {
                 let result = chain_client.process_inbox().await;
-                self.update_wallet_from_client(chain_client).await?;
+                self.update_wallet(chain_client).await?;
                 if result.is_err() {
                     self.save_wallet().await?;
                 }
@@ -402,10 +345,7 @@ where
         message_id: MessageId,
         owner: AccountOwner,
         validators: Option<Vec<(ValidatorPublicKey, String)>>,
-    ) -> Result<(), Error>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-    {
+    ) -> Result<(), Error> {
         let node_provider = self.make_node_provider();
         self.client.track_chain(chain_id);
 
@@ -478,18 +418,18 @@ where
     /// timeout, it will wait and retry.
     pub async fn apply_client_command<E, F, Fut, T>(
         &mut self,
-        client: &ChainClient<NodeProvider, S>,
+        client: &ChainClient<P, S>,
         mut f: F,
     ) -> Result<T, Error>
     where
-        F: FnMut(&ChainClient<NodeProvider, S>) -> Fut,
+        F: FnMut(&ChainClient<P, S>) -> Fut,
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
         client.prepare_chain().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
-        self.update_wallet_from_client(client).await?;
+        self.update_wallet(client).await?;
         if let ClientOutcome::Committed(t) = result? {
             return Ok(t);
         }
@@ -502,7 +442,7 @@ where
             // Try applying f. Return if committed.
             client.prepare_chain().await?;
             let result = f(client).await;
-            self.update_wallet_from_client(client).await?;
+            self.update_wallet(client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -544,14 +484,15 @@ where
 }
 
 #[cfg(feature = "fs")]
-impl<S, W> ClientContext<S, W>
+impl<P, S, W> ClientContext<P, S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
+    P: ValidatorNodeProvider,
 {
     pub async fn publish_module(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<P, S>,
         contract: PathBuf,
         service: PathBuf,
         vm_runtime: VmRuntime,
@@ -589,7 +530,7 @@ where
 
     pub async fn publish_data_blob(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<P, S>,
         blob_path: PathBuf,
     ) -> Result<CryptoHash, Error> {
         info!("Loading data blob file");
@@ -618,7 +559,7 @@ where
     // TODO(#2490): Consider removing or renaming this.
     pub async fn read_data_blob(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<P, S>,
         hash: CryptoHash,
     ) -> Result<(), Error> {
         info!("Verifying data blob");
@@ -639,10 +580,11 @@ where
 }
 
 #[cfg(feature = "benchmark")]
-impl<S, W> ClientContext<S, W>
+impl<P, S, W> ClientContext<P, S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
+    P: ValidatorNodeProvider,
 {
     pub async fn prepare_for_benchmark(
         &mut self,
@@ -652,7 +594,7 @@ where
         fungible_application_id: Option<ApplicationId>,
     ) -> Result<
         (
-            HashMap<ChainId, ChainClient<NodeProvider, S>>,
+            HashMap<ChainId, ChainClient<P, S>>,
             Epoch,
             Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
             Committee,
@@ -711,7 +653,7 @@ where
 
     pub async fn wrap_up_benchmark(
         &mut self,
-        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
+        chain_clients: HashMap<ChainId, ChainClient<P, S>>,
         close_chains: bool,
         wrap_up_max_in_flight: usize,
     ) -> Result<(), Error> {
@@ -769,12 +711,12 @@ where
 
         let chain_clients = join_set.join_all().await;
         for chain_client in &chain_clients {
-            self.update_wallet_from_client(chain_client).await.unwrap();
+            self.update_wallet(chain_client).await.unwrap();
         }
     }
 
     async fn process_inbox_without_updating_wallet(
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<P, S>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
         // Try processing the inbox optimistically without waiting for validator notifications.
         chain_client.synchronize_from_validators().await?;
@@ -796,7 +738,7 @@ where
     ) -> Result<
         (
             HashMap<ChainId, AccountSecretKey>,
-            HashMap<ChainId, ChainClient<NodeProvider, S>>,
+            HashMap<ChainId, ChainClient<P, S>>,
         ),
         Error,
     > {
@@ -891,8 +833,7 @@ where
         }
 
         info!("Updating wallet from client");
-        self.update_wallet_from_client(&default_chain_client)
-            .await?;
+        self.update_wallet(&default_chain_client).await?;
         info!("Retrying pending outgoing messages");
         default_chain_client
             .retry_pending_outgoing_messages()
@@ -906,7 +847,7 @@ where
 
     async fn execute_open_chains_operations(
         num_new_chains: usize,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<P, S>,
         balance: Amount,
         key_pair: &AccountSecretKey,
         admin_id: ChainId,
@@ -973,7 +914,7 @@ where
                 .await?
                 .expect("should execute block with Transfer operations");
         }
-        self.update_wallet_from_client(&chain_client).await?;
+        self.update_wallet(&chain_client).await?;
 
         Ok(())
     }

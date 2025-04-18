@@ -4619,7 +4619,6 @@ dependencies = [
  "alloy",
  "amm",
  "anyhow",
- "async-trait",
  "base64 0.22.1",
  "bcs",
  "cfg-if",

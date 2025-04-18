@@ -14,7 +14,7 @@ use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
     types::ConfirmedBlock,
 };
-use linera_core::{client::ChainClient, local_node::LocalNodeClient};
+use linera_core::{client::ChainClient, local_node::LocalNodeClient, node::ValidatorNodeProvider};
 use linera_execution::{
     committee::Committee,
     system::{Recipient, SystemOperation},
@@ -583,8 +583,8 @@ where
     }
 
     /// Closes the chain that was created for the benchmark.
-    pub async fn close_benchmark_chain(
-        chain_client: &ChainClient<NodeProvider, S>,
+    pub async fn close_benchmark_chain<P: ValidatorNodeProvider>(
+        chain_client: &ChainClient<P, S>,
     ) -> Result<(), BenchmarkError> {
         let start = Instant::now();
         chain_client
