@@ -995,6 +995,9 @@ Start a Local Linera Network
 * `--faucet-amount <FAUCET_AMOUNT>` — The number of tokens to send to each new chain created by the faucet
 
   Default value: `1000`
+* `--block-exporters <BLOCK_EXPORTERS>` — The number of block exporters per validator in the local test network. Default is 0
+
+  Default value: `0`
 
 
 

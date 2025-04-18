@@ -19,7 +19,9 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
-use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
+use linera_rpc::config::{
+    ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+};
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 
@@ -243,4 +245,38 @@ impl GenesisConfig {
     pub fn hash(&self) -> CryptoHash {
         CryptoHash::new(self)
     }
+}
+
+/// The configuration file for the linera-exporter.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlockExporterConfig {
+    /// The server configuration for the linera-exporter.
+    pub service_config: ExporterServiceConfig,
+
+    /// The configuration file for the export destinations.
+    #[serde(default)]
+    pub destination_config: DestinationConfig,
+
+    /// Identity for the block exporter state.
+    pub id: u32,
+}
+
+/// Configuration file for the exports.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct DestinationConfig {
+    /// The destination URIs to export to.
+    pub destinations: Vec<Destination>,
+}
+
+// Each destination has an ID and a configuration.
+pub type DestinationId = u16;
+
+/// The uri to provide export services to.
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Destination {
+    /// The host name of the target destination (IP or hostname).
+    pub endpoint: String,
+    /// The port number of the target destination.
+    pub port: u16,
 }
