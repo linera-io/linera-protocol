@@ -5,7 +5,10 @@
 
 use std::sync::LazyLock;
 
-use linera_base::data_types::Bytecode;
+use linera_base::{
+    data_types::Bytecode,
+    identifiers::{ChainId, StreamId},
+};
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo};
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store};
@@ -18,7 +21,7 @@ use super::{
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
     ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceRuntime,
+    ProcessStreamsContext, QueryContext, ServiceRuntime,
 };
 
 /// An [`Engine`] instance configured to run application contracts.
@@ -161,6 +164,17 @@ where
     ) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(message)
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
+    }
+
+    fn process_streams(
+        &mut self,
+        _context: ProcessStreamsContext,
+        streams: Vec<(ChainId, StreamId, u32)>,
+    ) -> Result<(), ExecutionError> {
+        ContractEntrypoints::new(&mut self.instance)
+            .process_streams(streams)
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }

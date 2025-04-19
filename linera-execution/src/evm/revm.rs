@@ -10,7 +10,7 @@ use alloy::primitives::Address;
 use linera_base::{
     data_types::Bytecode,
     ensure,
-    identifiers::{ApplicationId, StreamName},
+    identifiers::{ApplicationId, ChainId, StreamId, StreamName},
     vm::EvmQuery,
 };
 use num_enum::TryFromPrimitive;
@@ -35,9 +35,9 @@ use {
 
 use crate::{
     evm::database::DatabaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError,
-    EvmRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext, QueryContext,
-    ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
-    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    EvmRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
+    ProcessStreamsContext, QueryContext, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
+    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -552,6 +552,15 @@ where
     ) -> Result<(), ExecutionError> {
         // TODO(#3760): Implement execute_message for EVM
         todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
+    }
+
+    fn process_streams(
+        &mut self,
+        _context: ProcessStreamsContext,
+        _streams: Vec<(ChainId, StreamId, u32)>,
+    ) -> Result<(), ExecutionError> {
+        // TODO(#3785): Implement process_streams for EVM
+        todo!("Streams are not implemented for Ethereum smart contracts yet.")
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {

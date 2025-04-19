@@ -35,9 +35,6 @@ async fn test_cross_chain_posting() {
         })
         .await;
 
-    // Make chain2 handle that fact.
-    chain2.handle_received_messages().await;
-
     // Post on chain2
     chain2
         .add_block(|block| {
@@ -51,8 +48,8 @@ async fn test_cross_chain_posting() {
         })
         .await;
 
-    // Now make chain1 handle that fact.
-    chain1.handle_received_messages().await;
+    // Now make chain1 handle the post.
+    chain1.handle_new_events().await;
 
     // Querying the own posts
     let query = "query { ownPosts { entries(start: 0, end: 1) { timestamp, text } } }";

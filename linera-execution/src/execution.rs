@@ -1,12 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem, vec,
+};
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, AccountOwner, BlobType, Destination, StreamId},
+    identifiers::{Account, AccountOwner, BlobType, ChainId, Destination, StreamId},
 };
 use linera_views::{
     context::Context,
@@ -31,8 +34,8 @@ use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
     ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    OutgoingMessage, Query, QueryContext, QueryOutcome, ServiceSyncRuntime, SystemMessage,
-    TransactionTracker,
+    OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
+    SystemMessage, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -136,6 +139,7 @@ pub enum UserAction {
     Instantiate(OperationContext, Vec<u8>),
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
+    ProcessStreams(ProcessStreamsContext, Vec<(ChainId, StreamId, u32)>),
 }
 
 impl UserAction {
@@ -144,6 +148,7 @@ impl UserAction {
         match self {
             Instantiate(context, _) => context.authenticated_signer,
             Operation(context, _) => context.authenticated_signer,
+            ProcessStreams(context, _) => context.authenticated_signer,
             Message(context, _) => context.authenticated_signer,
         }
     }
@@ -152,6 +157,7 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
+            UserAction::ProcessStreams(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
         }
     }
@@ -160,6 +166,7 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,
+            UserAction::ProcessStreams(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
         }
     }
@@ -295,6 +302,8 @@ where
                 .await?;
             }
         }
+        self.process_subscriptions(txn_tracker, resource_controller, context.into())
+            .await?;
         Ok(())
     }
 
@@ -327,6 +336,8 @@ where
                 .await?;
             }
         }
+        self.process_subscriptions(txn_tracker, resource_controller, context.into())
+            .await?;
         Ok(())
     }
 
@@ -494,5 +505,51 @@ where
             }
         }
         Ok(applications)
+    }
+
+    async fn process_subscriptions(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+        context: ProcessStreamsContext,
+    ) -> Result<(), ExecutionError> {
+        // Keep track of which streams we have already processed. This is to guard against
+        // applications unsubscribing and subscribing in the process_streams call itself.
+        let mut processed = BTreeSet::new();
+        loop {
+            let to_process = txn_tracker
+                .flush_streams_to_process()
+                .into_iter()
+                .filter_map(|(app_id, streams)| {
+                    let streams = streams
+                        .into_iter()
+                        .filter_map(|((chain_id, stream_id), next_index)| {
+                            if !processed.insert((app_id, chain_id, stream_id.clone())) {
+                                return None;
+                            }
+                            Some((chain_id, stream_id, next_index))
+                        })
+                        .collect::<Vec<_>>();
+                    if streams.is_empty() {
+                        return None;
+                    }
+                    Some((app_id, streams))
+                })
+                .collect::<BTreeMap<_, _>>();
+            if to_process.is_empty() {
+                return Ok(());
+            }
+            for (app_id, streams) in to_process {
+                self.run_user_action(
+                    app_id,
+                    UserAction::ProcessStreams(context, streams.clone()),
+                    None,
+                    None,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
+            }
+        }
     }
 }

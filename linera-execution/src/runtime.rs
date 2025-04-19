@@ -1054,6 +1054,9 @@ impl ContractSyncRuntimeHandle {
             UserAction::Message(context, message) => {
                 code.execute_message(context, message).map(|()| None)
             }
+            UserAction::ProcessStreams(context, streams) => {
+                code.process_streams(context, streams).map(|()| None)
+            }
         };
 
         let result = self.execute(application_id, signer, closure)?;
@@ -1351,7 +1354,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError> {
-        let this = self.inner();
+        let mut this = self.inner();
         ensure!(
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
@@ -1361,14 +1364,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             application_id: application_id.into(),
         };
         let subscriber_app_id = this.current_application().id;
-        this.execution_state_sender
+        let next_index = this
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::SubscribeToEvents {
                 chain_id,
-                stream_id,
+                stream_id: stream_id.clone(),
                 subscriber_app_id,
                 callback,
             })?
             .recv_response()?;
+        this.transaction_tracker.add_stream_to_process(
+            subscriber_app_id,
+            chain_id,
+            stream_id,
+            next_index,
+        );
         Ok(())
     }
 
@@ -1378,7 +1388,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError> {
-        let this = self.inner();
+        let mut this = self.inner();
         ensure!(
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
@@ -1391,11 +1401,13 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::UnsubscribeFromEvents {
                 chain_id,
-                stream_id,
+                stream_id: stream_id.clone(),
                 subscriber_app_id,
                 callback,
             })?
             .recv_response()?;
+        this.transaction_tracker
+            .remove_stream_to_process(application_id, chain_id, stream_id);
         Ok(())
     }
 
