@@ -10,6 +10,7 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlobContent},
     ensure,
     identifiers::AccountOwner,
+    vm::VmRuntime,
 };
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
@@ -33,8 +34,10 @@ pub struct ResourceTracker {
     pub blocks: u32,
     /// The total size of the block so far.
     pub block_size: u64,
-    /// The fuel used so far.
-    pub fuel: u64,
+    /// The EVM fuel used so far.
+    pub evm_fuel: u64,
+    /// The Wasm fuel used so far.
+    pub wasm_fuel: u64,
     /// The number of read operations.
     pub read_operations: u32,
     /// The number of write operations.
@@ -69,6 +72,15 @@ pub struct ResourceTracker {
     pub service_oracle_execution: Duration,
     /// The amount allocated to message grants.
     pub grants: Amount,
+}
+
+impl ResourceTracker {
+    fn fuel(&self, vm_runtime: VmRuntime) -> u64 {
+        match vm_runtime {
+            VmRuntime::Wasm => self.wasm_fuel,
+            VmRuntime::Evm => self.evm_fuel,
+        }
+    }
 }
 
 /// How to access the balance of an account.
@@ -119,14 +131,13 @@ where
     }
 
     /// Obtains the amount of fuel that could be spent by consuming the entire balance.
-    pub(crate) fn remaining_fuel(&self) -> u64 {
+    pub(crate) fn remaining_fuel(&self, vm_runtime: VmRuntime) -> u64 {
+        let balance = self.balance().unwrap_or(Amount::MAX);
+        let fuel = self.tracker.as_ref().fuel(vm_runtime);
+        let maximum_fuel_per_block = self.policy.maximum_fuel_per_block(vm_runtime);
         self.policy
-            .remaining_fuel(self.balance().unwrap_or(Amount::MAX))
-            .min(
-                self.policy
-                    .maximum_fuel_per_block
-                    .saturating_sub(self.tracker.as_ref().fuel),
-            )
+            .remaining_fuel(balance, vm_runtime)
+            .min(maximum_fuel_per_block.saturating_sub(fuel))
     }
 
     /// Tracks the allocation of a grant.
@@ -208,18 +219,38 @@ where
     }
 
     /// Tracks a number of fuel units used.
-    pub(crate) fn track_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().fuel = self
-            .tracker
-            .as_ref()
-            .fuel
-            .checked_add(fuel)
-            .ok_or(ArithmeticError::Overflow)?;
-        ensure!(
-            self.tracker.as_ref().fuel <= self.policy.maximum_fuel_per_block,
-            ExecutionError::MaximumFuelExceeded
-        );
-        self.update_balance(self.policy.fuel_price(fuel)?)
+    pub(crate) fn track_fuel(
+        &mut self,
+        fuel: u64,
+        vm_runtime: VmRuntime,
+    ) -> Result<(), ExecutionError> {
+        match vm_runtime {
+            VmRuntime::Wasm => {
+                self.tracker.as_mut().wasm_fuel = self
+                    .tracker
+                    .as_ref()
+                    .wasm_fuel
+                    .checked_add(fuel)
+                    .ok_or(ArithmeticError::Overflow)?;
+                ensure!(
+                    self.tracker.as_ref().wasm_fuel <= self.policy.maximum_wasm_fuel_per_block,
+                    ExecutionError::MaximumFuelExceeded(vm_runtime)
+                );
+            }
+            VmRuntime::Evm => {
+                self.tracker.as_mut().evm_fuel = self
+                    .tracker
+                    .as_ref()
+                    .evm_fuel
+                    .checked_add(fuel)
+                    .ok_or(ArithmeticError::Overflow)?;
+                ensure!(
+                    self.tracker.as_ref().evm_fuel <= self.policy.maximum_evm_fuel_per_block,
+                    ExecutionError::MaximumFuelExceeded(vm_runtime)
+                );
+            }
+        }
+        self.update_balance(self.policy.fuel_price(fuel, vm_runtime)?)
     }
 
     /// Tracks a read operation.

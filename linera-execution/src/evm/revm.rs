@@ -11,7 +11,7 @@ use linera_base::{
     data_types::Bytecode,
     ensure,
     identifiers::{ApplicationId, StreamName},
-    vm::EvmQuery,
+    vm::{EvmQuery, VmRuntime},
 };
 use num_enum::TryFromPrimitive;
 use revm::{
@@ -34,10 +34,11 @@ use {
 };
 
 use crate::{
-    evm::database::DatabaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError,
-    EvmRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext, QueryContext,
-    ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
-    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    evm::database::{DatabaseRuntime, StorageStats},
+    ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime, ExecutionError,
+    FinalizeContext, MessageContext, OperationContext, QueryContext, ServiceRuntime,
+    ServiceSyncRuntimeHandle, UserContract, UserContractInstance, UserContractModule, UserService,
+    UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -479,12 +480,13 @@ enum Choice {
 
 struct ExecutionResultSuccess {
     reason: SuccessReason,
+    gas_final: u64,
     logs: Vec<Log>,
     output: Output,
 }
 
 impl ExecutionResultSuccess {
-    fn interpreter_result_and_logs(self) -> Result<(Vec<u8>, Vec<Log>), ExecutionError> {
+    fn interpreter_result_and_logs(self) -> Result<(u64, Vec<u8>, Vec<Log>), ExecutionError> {
         let result: InstructionResult = self.reason.into();
         let Output::Call(output) = self.output else {
             unreachable!("The Output is not a call which is impossible");
@@ -496,15 +498,15 @@ impl ExecutionResultSuccess {
             gas,
         };
         let result = bcs::to_bytes(&result)?;
-        Ok((result, self.logs))
+        Ok((self.gas_final, result, self.logs))
     }
 
-    fn output_and_logs(self) -> (Vec<u8>, Vec<Log>) {
+    fn output_and_logs(self) -> (u64, Vec<u8>, Vec<Log>) {
         let Output::Call(output) = self.output else {
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
         let output = output.as_ref().to_vec();
-        (output, self.logs)
+        (self.gas_final, output, self.logs)
     }
 }
 
@@ -521,6 +523,7 @@ where
         let mut vec = self.module.clone();
         vec.extend_from_slice(&argument);
         let result = self.transact_commit_tx_data(Choice::Create, &vec)?;
+        self.consume_fuel(result.gas_final)?;
         self.write_logs(result.logs, "deploy")?;
         let Output::Create(_, _) = result.output else {
             unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
@@ -534,13 +537,14 @@ where
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         ensure_message_length(operation.len(), 4)?;
-        let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
+        let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             let result = self.transact_commit_tx_data(Choice::Call, &operation[4..])?;
             result.interpreter_result_and_logs()?
         } else {
             let result = self.transact_commit_tx_data(Choice::Call, &operation)?;
             result.output_and_logs()
         };
+        self.consume_fuel(gas_final)?;
         self.write_logs(logs, "operation")?;
         Ok(output)
     }
@@ -560,20 +564,27 @@ where
 }
 
 fn process_execution_result(
+    storage_stats: StorageStats,
     result: ExecutionResult,
 ) -> Result<ExecutionResultSuccess, ExecutionError> {
     match result {
         ExecutionResult::Success {
             reason,
-            gas_used: _,
-            gas_refunded: _,
+            gas_used,
+            gas_refunded,
             logs,
             output,
-        } => Ok(ExecutionResultSuccess {
-            reason,
-            logs,
-            output,
-        }),
+        } => {
+            let mut gas_final = gas_used;
+            gas_final -= storage_stats.storage_costs();
+            assert_eq!(gas_refunded, storage_stats.storage_refund());
+            Ok(ExecutionResultSuccess {
+                reason,
+                gas_final,
+                logs,
+                output,
+            })
+        }
         ExecutionResult::Revert { gas_used, output } => {
             let error = EvmExecutionError::Revert { gas_used, output };
             Err(ExecutionError::EvmError(error))
@@ -611,34 +622,42 @@ where
         let mut inspector = CallInterceptorContract {
             db: self.db.clone(),
         };
-        let mut evm: Evm<'_, _, _> = Evm::builder()
-            .with_ref_db(&mut self.db)
-            .with_external_context(&mut inspector)
-            .modify_tx_env(|tx| {
-                tx.clear();
-                tx.transact_to = kind;
-                tx.data = tx_data;
-            })
-            .append_handler_register(|handler| {
-                inspector_handle_register(handler);
-                let precompiles = handler.pre_execution.load_precompiles();
-                handler.pre_execution.load_precompiles = Arc::new(move || {
-                    let mut precompiles = precompiles.clone();
-                    precompiles.extend([(
-                        PRECOMPILE_ADDRESS,
-                        ContextPrecompile::ContextStateful(Arc::new(GeneralContractCall)),
-                    )]);
-                    precompiles
-                });
-            })
-            .build();
+        let result = {
+            let mut evm: Evm<'_, _, _> = Evm::builder()
+                .with_ref_db(&mut self.db)
+                .with_external_context(&mut inspector)
+                .modify_tx_env(|tx| {
+                    tx.clear();
+                    tx.transact_to = kind;
+                    tx.data = tx_data;
+                })
+                .append_handler_register(|handler| {
+                    inspector_handle_register(handler);
+                    let precompiles = handler.pre_execution.load_precompiles();
+                    handler.pre_execution.load_precompiles = Arc::new(move || {
+                        let mut precompiles = precompiles.clone();
+                        precompiles.extend([(
+                            PRECOMPILE_ADDRESS,
+                            ContextPrecompile::ContextStateful(Arc::new(GeneralContractCall)),
+                        )]);
+                        precompiles
+                    });
+                })
+                .build();
 
-        let result = evm.transact_commit().map_err(|error| {
-            let error = format!("{:?}", error);
-            let error = EvmExecutionError::TransactCommitError(error);
-            ExecutionError::EvmError(error)
-        })?;
-        process_execution_result(result)
+            evm.transact_commit().map_err(|error| {
+                let error = format!("{:?}", error);
+                let error = EvmExecutionError::TransactCommitError(error);
+                ExecutionError::EvmError(error)
+            })
+        }?;
+        let storage_stats = self.db.reset_storage_stats();
+        process_execution_result(storage_stats, result)
+    }
+
+    fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
+        let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+        runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
     fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
@@ -690,16 +709,17 @@ where
         };
 
         ensure_message_length(query.len(), 4)?;
+        // We drop the logs since the "eth_call" execution does not return any log.
+        // Also, for handle_query, we do not have associated costs.
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
             let result = self.transact_tx_data(&query[4..])?;
-            let (answer, _logs) = result.interpreter_result_and_logs()?;
+            let (_gas_final, answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
             let result = self.transact_tx_data(&query)?;
-            let (output, _logs) = result.output_and_logs();
+            let (_gas_final, output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
-        // We drop the logs since the "eth_call" execution does not return any log.
         Ok(answer)
     }
 }
@@ -717,33 +737,36 @@ where
             db: self.db.clone(),
         };
 
-        let mut evm: Evm<'_, _, _> = Evm::builder()
-            .with_ref_db(&mut self.db)
-            .with_external_context(&mut inspector)
-            .modify_tx_env(|tx| {
-                tx.clear();
-                tx.transact_to = TxKind::Call(contract_address);
-                tx.data = tx_data;
-            })
-            .append_handler_register(|handler| {
-                inspector_handle_register(handler);
-                let precompiles = handler.pre_execution.load_precompiles();
-                handler.pre_execution.load_precompiles = Arc::new(move || {
-                    let mut precompiles = precompiles.clone();
-                    precompiles.extend([(
-                        PRECOMPILE_ADDRESS,
-                        ContextPrecompile::ContextStateful(Arc::new(GeneralServiceCall)),
-                    )]);
-                    precompiles
-                });
-            })
-            .build();
+        let result_state = {
+            let mut evm: Evm<'_, _, _> = Evm::builder()
+                .with_ref_db(&mut self.db)
+                .with_external_context(&mut inspector)
+                .modify_tx_env(|tx| {
+                    tx.clear();
+                    tx.transact_to = TxKind::Call(contract_address);
+                    tx.data = tx_data;
+                })
+                .append_handler_register(|handler| {
+                    inspector_handle_register(handler);
+                    let precompiles = handler.pre_execution.load_precompiles();
+                    handler.pre_execution.load_precompiles = Arc::new(move || {
+                        let mut precompiles = precompiles.clone();
+                        precompiles.extend([(
+                            PRECOMPILE_ADDRESS,
+                            ContextPrecompile::ContextStateful(Arc::new(GeneralServiceCall)),
+                        )]);
+                        precompiles
+                    });
+                })
+                .build();
 
-        let result_state = evm.transact().map_err(|error| {
-            let error = format!("{:?}", error);
-            let error = EvmExecutionError::TransactCommitError(error);
-            ExecutionError::EvmError(error)
-        })?;
-        process_execution_result(result_state.result)
+            evm.transact().map_err(|error| {
+                let error = format!("{:?}", error);
+                let error = EvmExecutionError::TransactCommitError(error);
+                ExecutionError::EvmError(error)
+            })
+        }?;
+        let storage_stats = self.db.reset_storage_stats();
+        process_execution_result(storage_stats, result_state.result)
     }
 }
