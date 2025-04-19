@@ -387,6 +387,10 @@ enum ServerCommand {
         /// The maximal number of entries in the storage cache.
         #[arg(long, default_value = "1000")]
         max_cache_entries: usize,
+
+        /// The replication factor for the storage.
+        #[arg(long, default_value = "1")]
+        storage_replication_factor: u32,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -436,6 +440,10 @@ enum ServerCommand {
         /// The maximal number of entries in the storage cache.
         #[arg(long, default_value = "1000")]
         max_cache_entries: usize,
+
+        /// The replication factor for the storage.
+        #[arg(long, default_value = "1")]
+        storage_replication_factor: u32,
     },
 
     /// Replaces the configurations of the shards by following the given template.
@@ -538,6 +546,7 @@ async fn run(options: ServerOptions) {
             max_cache_size,
             max_entry_size,
             max_cache_entries,
+            storage_replication_factor,
         } => {
             linera_version::VERSION_INFO.log();
 
@@ -566,7 +575,7 @@ async fn run(options: ServerOptions) {
                 storage_cache_config,
             };
             let store_config = storage_config
-                .add_common_config(common_config)
+                .add_common_config(common_config, storage_replication_factor)
                 .await
                 .unwrap();
             store_config
@@ -626,6 +635,7 @@ async fn run(options: ServerOptions) {
             max_cache_size,
             max_entry_size,
             max_cache_entries,
+            storage_replication_factor,
         } => {
             let genesis_config: GenesisConfig =
                 util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
@@ -640,7 +650,7 @@ async fn run(options: ServerOptions) {
                 storage_cache_config,
             };
             let store_config = storage_config
-                .add_common_config(common_config)
+                .add_common_config(common_config, storage_replication_factor)
                 .await
                 .unwrap();
             tracing::info!(

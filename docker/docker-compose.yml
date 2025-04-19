@@ -42,7 +42,7 @@ services:
   shard-init:
     image: "${LINERA_IMAGE:-linera}"
     container_name: shard-init
-    command: [ "./compose-server-init.sh" ]
+    command: [ "./compose-server-init.sh", "1"]
     volumes:
       - .:/config
     depends_on:

@@ -1315,6 +1315,10 @@ struct ClientOptions {
     /// Subcommand.
     #[command(subcommand)]
     command: ClientCommand,
+
+    /// The replication factor for the keyspace
+    #[arg(long, default_value = "1")]
+    storage_replication_factor: u32,
 }
 
 impl ClientOptions {
@@ -1339,7 +1343,7 @@ impl ClientOptions {
         let storage_config = self.storage_config()?;
         debug!("Running command using storage configuration: {storage_config}");
         let store_config = storage_config
-            .add_common_config(self.common_config())
+            .add_common_config(self.common_config(), self.storage_replication_factor)
             .await?;
         let genesis_config = self.wallet().await?.genesis_config().clone();
         let output = Box::pin(store_config.run_with_storage(
@@ -1355,7 +1359,7 @@ impl ClientOptions {
         let storage_config = self.storage_config()?;
         debug!("Running command using storage configuration: {storage_config}");
         let store_config = storage_config
-            .add_common_config(self.common_config())
+            .add_common_config(self.common_config(), self.storage_replication_factor)
             .await?;
         let output = Box::pin(store_config.run_with_store(job)).await?;
         Ok(output)
@@ -1365,7 +1369,7 @@ impl ClientOptions {
         let storage_config = self.storage_config()?;
         debug!("Initializing storage using configuration: {storage_config}");
         let store_config = storage_config
-            .add_common_config(self.common_config())
+            .add_common_config(self.common_config(), self.storage_replication_factor)
             .await?;
         let wallet = self.wallet().await?;
         store_config.initialize(wallet.genesis_config()).await?;

@@ -115,6 +115,7 @@ COPY --from=binaries \
 COPY --chmod=755 \
     docker/server-entrypoint.sh \
     docker/server-init.sh \
+    docker/proxy-entrypoint.sh \
     docker/proxy-init.sh \
     docker/compose-server-entrypoint.sh \
     docker/compose-proxy-entrypoint.sh \

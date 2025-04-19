@@ -4,7 +4,7 @@ sysctls:
 datacenter: validator
 racks:
   - name: rack-1
-    members: 1
+    members: {{ env "LINERA_HELMFILE_SET_SCYLLA_REPLICATION_FACTOR" | default 1 }}
     scyllaConfig: "scylla-config"
     storage:
       capacity: 2Gi

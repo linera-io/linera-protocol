@@ -7,6 +7,7 @@ logLevel: "debug"
 proxyPort: 19100
 metricsPort: 21100
 numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
+storageReplicationFactor: {{ env "LINERA_HELMFILE_SET_STORAGE_REPLICATION_FACTOR" | default 1 }}
 
 # Loki
 loki-stack:

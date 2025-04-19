@@ -632,6 +632,8 @@ pub struct ScyllaDbStoreInternalConfig {
     pub uri: String,
     /// The common configuration of the key value store
     common_config: CommonStoreInternalConfig,
+    /// The replication factor for the keyspace
+    pub replication_factor: u32,
 }
 
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
@@ -811,10 +813,13 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .boxed()
             .await?;
         // Create a keyspace if it doesn't exist
-        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
-            'class' : 'SimpleStrategy', \
-            'replication_factor' : 1 \
-        }";
+        let query = format!(
+            "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = {{ \
+                'class' : 'SimpleStrategy', \
+                'replication_factor' : {} \
+            }}",
+            config.replication_factor
+        );
 
         // Execute the query
         let prepared = session.prepare(query).await?;
@@ -890,7 +895,11 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
         };
-        Ok(ScyllaDbStoreInternalConfig { uri, common_config })
+        Ok(ScyllaDbStoreInternalConfig {
+            uri,
+            common_config,
+            replication_factor: 1,
+        })
     }
 }
 
@@ -914,10 +923,15 @@ pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
 impl ScyllaDbStoreConfig {
     /// Creates a `ScyllaDbStoreConfig` from the inputs.
-    pub fn new(uri: String, common_config: crate::store::CommonStoreConfig) -> ScyllaDbStoreConfig {
+    pub fn new(
+        uri: String,
+        common_config: crate::store::CommonStoreConfig,
+        replication_factor: u32,
+    ) -> ScyllaDbStoreConfig {
         let inner_config = ScyllaDbStoreInternalConfig {
             uri,
             common_config: common_config.reduced(),
+            replication_factor,
         };
         ScyllaDbStoreConfig {
             inner_config,

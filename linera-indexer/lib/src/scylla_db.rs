@@ -41,6 +41,10 @@ pub struct ScyllaDbConfig {
     /// The maximal number of entries in the storage cache.
     #[arg(long, default_value = "1000")]
     pub max_cache_entries: usize,
+
+    /// The replication factor for the keyspace
+    #[arg(long, default_value = "1")]
+    pub replication_factor: u32,
 }
 
 pub type ScyllaDbRunner = Runner<ScyllaDbStore, ScyllaDbConfig>;
@@ -59,7 +63,11 @@ impl ScyllaDbRunner {
             storage_cache_config,
         };
         let namespace = config.client.table.clone();
-        let store_config = ScyllaDbStoreConfig::new(config.client.uri.clone(), common_config);
+        let store_config = ScyllaDbStoreConfig::new(
+            config.client.uri.clone(),
+            common_config,
+            config.client.replication_factor,
+        );
         let store = ScyllaDbStore::connect(&store_config, &namespace).await?;
         Self::new(config, store).await
     }
