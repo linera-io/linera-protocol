@@ -4,7 +4,6 @@
 //! Test utilities
 
 mod http_server;
-
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
@@ -170,3 +169,39 @@ impl<T: Into<Message>> MessageTestExt for T {
         }
     }
 }
+faucet_chain,
+faucet_port,
+faucet_amount,
+                block_exporters,
+..
+} => {
+net_up_utils::handle_net_up_service(
+@@ -1867,27 +1868,28 @@
+*faucet_chain,
+*faucet_port,
+*faucet_amount,
+                    *block_exporters,
+)
+.boxed()
+.await?;
+Ok(0)
+}
+
+NetCommand::Helper => {
+info!("You may append the following script to your `~/.bash_profile` or `source` it when needed.");
+info!(
+"This will install several functions to facilitate \
+                      testing with a local Linera network"
+);
+println!("{}", include_str!("../../template/linera_net_helper.sh"));
+Ok(0)
+}
+},
+
+ClientCommand::Storage(command) => {
+Ok(options.run_with_store(DatabaseToolJob(command)).await?)
+}
+
+ClientCommand::Wallet(wallet_command) => match wallet_command {
+WalletCommand::Show {
+chain_id,
