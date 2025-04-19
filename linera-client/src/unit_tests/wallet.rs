@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use anyhow::anyhow;
 use linera_base::{
     crypto::{AccountSecretKey, Ed25519SecretKey},
@@ -12,6 +14,7 @@ use linera_core::{
     client::PendingProposal,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
+use linera_rpc::{NodeOptions, NodeProvider};
 use rand::{rngs::StdRng, SeedableRng as _};
 
 use super::util::make_genesis_config;
@@ -69,7 +72,20 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         },
         blobs: vec![Blob::new_data(b"blob".to_vec())],
     });
-    let mut context = ClientContext::new_test_client_context(storage, wallet);
+
+    let send_recv_timeout = Duration::from_millis(4000);
+    let retry_delay = Duration::from_millis(1000);
+    let max_retries = 10;
+
+    let node_options = NodeOptions {
+        send_timeout: send_recv_timeout,
+        recv_timeout: send_recv_timeout,
+        retry_delay,
+        max_retries,
+    };
+    let node_provider = NodeProvider::new(node_options);
+
+    let mut context = ClientContext::new_test_client_context(node_provider, storage, wallet);
     context.save_wallet().await?;
     Ok(())
 }

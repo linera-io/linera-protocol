@@ -284,7 +284,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
 
 impl<P, S> Client<P, S>
 where
-    P: ValidatorNodeProvider + Sync + 'static,
+    P: ValidatorNodeProvider + 'static,
     S: Storage + Sync + Send + Clone + 'static,
 {
     /// Downloads and processes all certificates up to (excluding) the specified height.
@@ -744,7 +744,7 @@ pub async fn create_bytecode_blobs(
 
 impl<P, S> ChainClient<P, S>
 where
-    P: ValidatorNodeProvider + Sync + 'static,
+    P: ValidatorNodeProvider + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
     /// Obtains a `ChainStateView` for this client's chain.

@@ -166,7 +166,7 @@ impl Wallet {
 
     pub async fn update_from_state<P, S>(&mut self, chain_client: &ChainClient<P, S>)
     where
-        P: ValidatorNodeProvider + Sync + 'static,
+        P: ValidatorNodeProvider + 'static,
         S: Storage + Clone + Send + Sync + 'static,
     {
         let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();

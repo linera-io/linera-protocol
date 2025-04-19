@@ -24,10 +24,16 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate},
     ChainStateView,
 };
-use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
+use linera_client::{
+    chain_listener::{ChainListener, ChainListenerConfig},
+    client_context::ClientContext,
+    persistent::Persist,
+    wallet::Wallet,
+};
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::ClientOutcome,
+    node::ValidatorNodeProvider,
     worker::Notification,
 };
 use linera_execution::{
@@ -109,9 +115,11 @@ impl IntoResponse for NodeServiceError {
 }
 
 #[Subscription]
-impl<C> SubscriptionRoot<C>
+impl<P, S, W> SubscriptionRoot<ClientContext<P, S, W>>
 where
-    C: ClientContext,
+    P: ValidatorNodeProvider,
+    S: Storage + Send + Sync + Clone + 'static,
+    W: Persist<Target = Wallet> + 'static,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
@@ -123,9 +131,11 @@ where
     }
 }
 
-impl<C> MutationRoot<C>
+impl<P, S, W> MutationRoot<ClientContext<P, S, W>>
 where
-    C: ClientContext,
+    P: ValidatorNodeProvider,
+    S: Storage + Clone + Send + Sync + 'static,
+    W: Persist<Target = Wallet> + 'static,
 {
     async fn execute_system_operation(
         &self,
@@ -156,13 +166,8 @@ where
         mut f: F,
     ) -> Result<T, Error>
     where
-        F: FnMut(ChainClient<C::ValidatorNodeProvider, C::Storage>) -> Fut,
-        Fut: Future<
-            Output = (
-                Result<ClientOutcome<T>, Error>,
-                ChainClient<C::ValidatorNodeProvider, C::Storage>,
-            ),
-        >,
+        F: FnMut(ChainClient<P, S>) -> Fut,
+        Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<P, S>)>,
     {
         loop {
             let client = self.context.lock().await.make_chain_client(*chain_id)?;
@@ -180,9 +185,11 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C> MutationRoot<C>
+impl<P, S, W> MutationRoot<ClientContext<P, S, W>>
 where
-    C: ClientContext,
+    P: ValidatorNodeProvider,
+    S: Storage + Send + Sync + Clone + 'static,
+    W: Persist<Target = Wallet> + 'static,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
@@ -575,14 +582,16 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C> QueryRoot<C>
+impl<P, S, W> QueryRoot<ClientContext<P, S, W>>
 where
-    C: ClientContext,
+    P: ValidatorNodeProvider,
+    S: Storage + Clone + Send + Sync + 'static,
+    W: Persist<Target = Wallet> + 'static,
 {
     async fn chain(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainStateExtendedView<<C::Storage as Storage>::Context>, Error> {
+    ) -> Result<ChainStateExtendedView<<S as Storage>::Context>, Error> {
         let client = self.context.lock().await.make_chain_client(chain_id)?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
@@ -761,20 +770,20 @@ impl ApplicationOverview {
 
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
-pub struct NodeService<C>
+pub struct NodeService<P, S, W>
 where
-    C: ClientContext,
+    S: Storage,
 {
     config: ChainListenerConfig,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
-    storage: C::Storage,
-    context: Arc<Mutex<C>>,
+    storage: S,
+    context: Arc<Mutex<ClientContext<P, S, W>>>,
 }
 
-impl<C> Clone for NodeService<C>
+impl<P, S, W> Clone for NodeService<P, S, W>
 where
-    C: ClientContext,
+    S: Storage + Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -787,17 +796,25 @@ where
     }
 }
 
-impl<C> NodeService<C>
+type ClientContextSchema<P, S, W> = Schema<
+    QueryRoot<ClientContext<P, S, W>>,
+    MutationRoot<ClientContext<P, S, W>>,
+    SubscriptionRoot<ClientContext<P, S, W>>,
+>;
+
+impl<P, S, W> NodeService<P, S, W>
 where
-    C: ClientContext,
+    P: ValidatorNodeProvider,
+    S: Storage + Send + Sync + Clone + 'static,
+    W: Persist<Target = Wallet> + 'static,
 {
     /// Creates a new instance of the node service given a client chain and a port.
     pub async fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
         default_chain: Option<ChainId>,
-        storage: C::Storage,
-        context: C,
+        storage: S,
+        context: ClientContext<P, S, W>,
     ) -> Self {
         Self {
             config,
@@ -808,7 +825,7 @@ where
         }
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
+    pub fn schema(&self) -> ClientContextSchema<P, S, W> {
         Schema::build(
             QueryRoot {
                 context: Arc::clone(&self.context),

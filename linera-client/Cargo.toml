@@ -54,7 +54,6 @@ web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
 clap.workspace = true

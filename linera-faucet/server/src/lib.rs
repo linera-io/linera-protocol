@@ -16,10 +16,13 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_client::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+    chain_listener::{ChainListener, ChainListenerConfig},
+    client_context::ClientContext,
     config::GenesisConfig,
+    persistent::Persist,
+    wallet::Wallet,
 };
-use linera_core::data_types::ClientOutcome;
+use linera_core::{data_types::ClientOutcome, node::ValidatorNodeProvider};
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
@@ -47,9 +50,9 @@ pub struct QueryRoot<C> {
 }
 
 /// The root GraphQL mutation type.
-pub struct MutationRoot<C> {
+pub struct MutationRoot<P, S: linera_storage::Storage, W> {
     chain_id: ChainId,
-    context: Arc<Mutex<C>>,
+    context: Arc<Mutex<ClientContext<P, S, W>>>,
     amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -74,9 +77,11 @@ pub struct Validator {
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C> QueryRoot<C>
+impl<P, S, W> QueryRoot<ClientContext<P, S, W>>
 where
-    C: ClientContext,
+    S: Storage + Clone + Send + Sync + 'static,
+    W: Persist<Target = Wallet>,
+    P: ValidatorNodeProvider,
 {
     /// Returns the version information on this faucet service.
     async fn version(&self) -> linera_version::VersionInfo {
@@ -104,9 +109,11 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C> MutationRoot<C>
+impl<P, S, W> MutationRoot<P, S, W>
 where
-    C: ClientContext,
+    S: Storage + Clone + Send + Sync + 'static,
+    W: Persist<Target = Wallet>,
+    P: ValidatorNodeProvider,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
@@ -114,9 +121,11 @@ where
     }
 }
 
-impl<C> MutationRoot<C>
+impl<P, S, W> MutationRoot<P, S, W>
 where
-    C: ClientContext,
+    S: Storage + Clone + Send + Sync + 'static,
+    W: Persist<Target = Wallet>,
+    P: ValidatorNodeProvider,
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
         let client = self.context.lock().await.make_chain_client(self.chain_id)?;
@@ -169,7 +178,7 @@ where
     }
 }
 
-impl<C> MutationRoot<C> {
+impl<P, S: linera_storage::Storage, W> MutationRoot<P, S, W> {
     /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
     fn multiply(a: u128, b: u64) -> [u64; 3] {
         let lower = u128::from(u64::MAX);
@@ -182,15 +191,16 @@ impl<C> MutationRoot<C> {
 }
 
 /// A GraphQL interface to request a new chain with tokens.
-pub struct FaucetService<C>
+pub struct FaucetService<P, S, W>
 where
-    C: ClientContext,
+    S: linera_storage::Storage + 'static,
+    W: Persist<Target = Wallet>,
 {
     chain_id: ChainId,
-    context: Arc<Mutex<C>>,
+    context: Arc<Mutex<ClientContext<P, S, W>>>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
-    storage: C::Storage,
+    storage: S,
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
@@ -198,9 +208,10 @@ where
     start_balance: Amount,
 }
 
-impl<C> Clone for FaucetService<C>
+impl<P, S, W> Clone for FaucetService<P, S, W>
 where
-    C: ClientContext,
+    S: linera_storage::Storage + Clone + 'static,
+    W: Persist<Target = Wallet>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -218,21 +229,26 @@ where
     }
 }
 
-impl<C> FaucetService<C>
+type ClientContextSchema<P, S, W> =
+    Schema<QueryRoot<ClientContext<P, S, W>>, MutationRoot<P, S, W>, EmptySubscription>;
+
+impl<P, S, W> FaucetService<P, S, W>
 where
-    C: ClientContext,
+    S: linera_storage::Storage + Send + Sync + Clone + 'static,
+    P: ValidatorNodeProvider,
+    W: Persist<Target = Wallet> + 'static,
 {
     /// Creates a new instance of the faucet service.
     #[expect(clippy::too_many_arguments)]
     pub async fn new(
         port: NonZeroU16,
         chain_id: ChainId,
-        context: C,
+        context: ClientContext<P, S, W>,
         amount: Amount,
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
         config: ChainListenerConfig,
-        storage: C::Storage,
+        storage: S,
     ) -> anyhow::Result<Self> {
         let client = context.make_chain_client(chain_id)?;
         let context = Arc::new(Mutex::new(context));
@@ -253,7 +269,7 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
+    pub fn schema(&self) -> ClientContextSchema<P, S, W> {
         let mutation_root = MutationRoot {
             chain_id: self.chain_id,
             context: Arc::clone(&self.context),
