@@ -27,73 +27,82 @@ type ChainClient<B> = client::ChainClient<
 
 mod recorder;
 
-/// Creates root chains 1 and 2, the first one with a positive balance.
 pub fn setup_claim_bench<B>() -> (ChainClient<B>, ChainClient<B>)
 where
     B: StorageBuilder + Default,
 {
     let storage_builder = B::default();
-    // Criterion doesn't allow setup functions to be async, but it runs them inside an async
-    // context. But our setup uses async functions:
     let handle = runtime::Handle::current();
     let _guard = handle.enter();
     futures::executor::block_on(async move {
-        let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
+        let mut builder = TestBuilder::new(storage_builder, 4, 1)
+            .await
+            .expect("Failed to create TestBuilder");
         let chain1 = builder
             .add_root_chain(1, Amount::from_tokens(10))
             .await
-            .unwrap();
-        let chain2 = builder.add_root_chain(2, Amount::ZERO).await.unwrap();
+            .expect("Failed to add chain 1");
+        let chain2 = builder
+            .add_root_chain(2, Amount::ZERO)
+            .await
+            .expect("Failed to add chain 2");
         (chain1, chain2)
     })
 }
 
-/// Sends a token from the first chain to the first chain's owner on chain 2, then
-/// reclaims that amount.
 pub async fn run_claim_bench<B>((chain1, chain2): (ChainClient<B>, ChainClient<B>))
 where
     B: StorageBuilder,
 {
-    let owner1 = chain1.identity().await.unwrap();
+    let owner1 = chain1.identity().await.expect("Failed to get identity");
     let amt = Amount::ONE;
 
     let account = Account::new(chain2.chain_id(), owner1);
     let cert = chain1
         .transfer_to_account(AccountOwner::CHAIN, amt, account)
         .await
-        .unwrap()
-        .unwrap();
+        .expect("Transfer failed")
+        .expect("No certificate produced");
 
     chain2
         .receive_certificate_and_update_validators(cert)
         .await
-        .unwrap();
-    chain2.process_inbox().await.unwrap();
+        .expect("Chain2 failed to receive cert");
+    chain2.process_inbox().await.expect("Chain2 failed to process inbox");
+
     assert_eq!(
-        chain1.local_balance().await.unwrap(),
+        chain1.local_balance().await.expect("Failed to get balance"),
         Amount::from_tokens(9)
     );
 
-    let account = Recipient::chain(chain1.chain_id());
+    let recipient = Recipient::chain(chain1.chain_id());
     let cert = chain1
-        .claim(owner1, chain2.chain_id(), account, amt)
+        .claim(owner1, chain2.chain_id(), recipient, amt)
         .await
-        .unwrap()
-        .unwrap();
+        .expect("Claim failed")
+        .expect("No certificate produced");
 
     chain2
         .receive_certificate_and_update_validators(cert)
         .await
-        .unwrap();
-    let cert = chain2.process_inbox().await.unwrap().0.pop().unwrap();
+        .expect("Chain2 failed to receive claim cert");
+
+    let cert = chain2
+        .process_inbox()
+        .await
+        .expect("Chain2 inbox processing failed")
+        .0
+        .pop()
+        .expect("No cert in processed inbox");
 
     chain1
         .receive_certificate_and_update_validators(cert)
         .await
-        .unwrap();
-    chain1.process_inbox().await.unwrap();
+        .expect("Chain1 failed to receive cert");
+    chain1.process_inbox().await.expect("Chain1 failed to process inbox");
+
     assert_eq!(
-        chain1.local_balance().await.unwrap(),
+        chain1.local_balance().await.expect("Failed to get balance"),
         Amount::from_tokens(10)
     );
 }
@@ -115,8 +124,10 @@ criterion_group!(
         .measurement_time(Duration::from_secs(40))
         .with_measurement(BenchRecorderMeasurement::new(vec![
             READ_CONFIRMED_BLOCK_COUNTER.desc()[0].fq_name.as_str(),
-            READ_CERTIFICATE_COUNTER.desc()[0].fq_name.as_str(), WRITE_CERTIFICATE_COUNTER.desc()[0].fq_name.as_str(),
-            LOAD_VIEW_COUNTER.desc()[0].fq_name.as_str(), SAVE_VIEW_COUNTER.desc()[0].fq_name.as_str(),
+            READ_CERTIFICATE_COUNTER.desc()[0].fq_name.as_str(),
+            WRITE_CERTIFICATE_COUNTER.desc()[0].fq_name.as_str(),
+            LOAD_VIEW_COUNTER.desc()[0].fq_name.as_str(),
+            SAVE_VIEW_COUNTER.desc()[0].fq_name.as_str(),
         ]));
     targets = criterion_benchmark
 );
