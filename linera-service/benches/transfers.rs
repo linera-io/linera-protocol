@@ -9,7 +9,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountSecretKey, Ed25519SecretKey, EvmSecretKey, Secp256k1SecretKey},
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner},
     time::{Duration, Instant},
 };
 use linera_execution::system::Recipient;
@@ -75,7 +75,7 @@ async fn setup_native_token_balances(
         .collect::<Vec<_>>()
         .await;
 
-    let admin_chain = validator.get_chain(&ChainId::root(0));
+    let admin_chain = validator.get_chain(&validator.admin_chain_id());
 
     for chain in &chains {
         let recipient = Recipient::Account(Account {

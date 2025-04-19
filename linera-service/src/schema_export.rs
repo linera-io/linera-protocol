@@ -179,7 +179,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<P, S>, Error> {
+    async fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<P, S>, Error> {
         unimplemented!()
     }
 
@@ -196,7 +196,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
         Ok(())
     }
 
-    fn clients(
+    async fn clients(
         &self,
     ) -> Result<Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>>, Error> {
         Ok(vec![])

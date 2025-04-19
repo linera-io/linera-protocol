@@ -47,7 +47,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use system::{AdminOperation, OpenChainConfig};
+use system::AdminOperation;
 use thiserror::Error;
 
 #[cfg(with_revm)]
@@ -441,6 +441,8 @@ pub struct OperationContext {
     /// The current index of the operation.
     #[debug(skip_if = Option::is_none)]
     pub index: Option<u32>,
+    /// The timestamp of the block containing the operation.
+    pub timestamp: Timestamp,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -459,6 +461,8 @@ pub struct MessageContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
+    /// The timestamp of the block executing the message.
+    pub timestamp: Timestamp,
     /// The hash of the remote certificate that created the message.
     pub certificate_hash: CryptoHash,
     /// The ID of the message (based on the operation height and index in the remote
@@ -772,7 +776,7 @@ pub trait ContractRuntime: BaseRuntime {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<(MessageId, ChainId), ExecutionError>;
+    ) -> Result<ChainId, ExecutionError>;
 
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
@@ -1005,14 +1009,6 @@ impl OperationContext {
             owner,
         })
     }
-
-    fn next_message_id(&self, next_message_index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index: next_message_index,
-        }
-    }
 }
 
 #[cfg(with_testing)]
@@ -1226,13 +1222,6 @@ impl Message {
         match self {
             Self::System(_) => GenericApplicationId::System,
             Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
-        }
-    }
-
-    pub fn matches_open_chain(&self) -> Option<&OpenChainConfig> {
-        match self {
-            Message::System(SystemMessage::OpenChain(config)) => Some(config),
-            _ => None,
         }
     }
 }

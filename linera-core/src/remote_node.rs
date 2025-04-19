@@ -314,7 +314,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     #[instrument(level = "trace", skip(validators))]
-    async fn download_blob(
+    pub async fn download_blob(
         validators: &[Self],
         blob_id: BlobId,
         timeout: Duration,

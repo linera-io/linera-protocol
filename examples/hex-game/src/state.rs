@@ -14,8 +14,6 @@ use serde::{Deserialize, Serialize};
 /// The IDs of a temporary chain for a single game of Hex.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, SimpleObject)]
 pub struct GameChain {
-    /// The ID of the `OpenChain` message that created the chain.
-    pub message_id: MessageId,
     /// The ID of the temporary game chain itself.
     pub chain_id: ChainId,
 }

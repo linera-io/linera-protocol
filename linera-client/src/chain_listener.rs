@@ -16,8 +16,8 @@ use futures::{
 };
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
-    data_types::Timestamp,
-    identifiers::{ChainId, Destination},
+    data_types::{ChainDescription, Timestamp},
+    identifiers::{BlobType, ChainId},
     task::NonBlockingFuture,
 };
 use linera_core::{
@@ -25,7 +25,6 @@ use linera_core::{
     node::{NotificationStream, ValidatorNodeProvider},
     worker::{Notification, Reason},
 };
-use linera_execution::{Message, OutgoingMessage, SystemMessage};
 use linera_storage::{Clock as _, Storage};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
@@ -70,7 +69,8 @@ pub trait ClientContext: 'static {
 
     fn wallet(&self) -> &Wallet;
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
+    async fn make_chain_client(&self, chain_id: ChainId)
+        -> Result<ContextChainClient<Self>, Error>;
 
     async fn update_wallet_for_new_chain(
         &mut self,
@@ -81,10 +81,10 @@ pub trait ClientContext: 'static {
 
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
 
-    fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+    async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
         let mut clients = vec![];
         for chain_id in &self.wallet().chain_ids() {
-            clients.push(self.make_chain_client(*chain_id)?);
+            clients.push(self.make_chain_client(*chain_id).await?);
         }
         Ok(clients)
     }
@@ -207,17 +207,14 @@ impl<C: ClientContext> ChainListener<C> {
     /// add them to the wallet and start listening for notifications.
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
         let block = self.storage.read_confirmed_block(hash).await?.into_block();
-        let messages = block.messages().iter().flatten();
-        let new_chains = messages
-            .filter_map(|outgoing_message| {
-                if let OutgoingMessage {
-                    destination: Destination::Recipient(new_id),
-                    message: Message::System(SystemMessage::OpenChain(open_chain_config)),
-                    ..
-                } = outgoing_message
-                {
-                    let owners = open_chain_config.ownership.all_owners().cloned();
-                    Some((new_id, owners.collect::<Vec<_>>()))
+        let blobs = block.created_blobs().into_iter();
+        let new_chains = blobs
+            .filter_map(|(blob_id, blob)| {
+                if blob_id.blob_type == BlobType::ChainDescription {
+                    let chain_desc: ChainDescription = bcs::from_bytes(blob.content().bytes())
+                        .expect("ChainDescription should deserialize correctly");
+                    let owners = chain_desc.config().ownership.all_owners().cloned();
+                    Some((ChainId(blob_id.hash), owners.collect::<Vec<_>>()))
                 } else {
                     None
                 }
@@ -234,9 +231,9 @@ impl<C: ClientContext> ChainListener<C> {
                 .find_map(|owner| context_guard.wallet().key_pair_for_owner(owner));
             if key_pair.is_some() {
                 context_guard
-                    .update_wallet_for_new_chain(*new_id, key_pair, block.header.timestamp)
+                    .update_wallet_for_new_chain(new_id, key_pair, block.header.timestamp)
                     .await?;
-                new_ids.insert(*new_id);
+                new_ids.insert(new_id);
             }
         }
         drop(context_guard);
@@ -266,7 +263,12 @@ impl<C: ClientContext> ChainListener<C> {
         if self.listening.contains_key(&chain_id) {
             return Ok(());
         }
-        let client = self.context.lock().await.make_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         if client.is_tracked() {
             client.synchronize_from_validators().await?;

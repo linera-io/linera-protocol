@@ -28,6 +28,7 @@ pub struct TransactionTracker {
     transaction_index: u32,
     next_message_index: u32,
     next_application_index: u32,
+    next_chain_index: u32,
     /// Events recorded by contracts' `emit` calls.
     events: Vec<Event>,
     /// Blobs created by contracts.
@@ -49,6 +50,7 @@ pub struct TransactionOutcome {
     pub outgoing_messages: Vec<OutgoingMessage>,
     pub next_message_index: u32,
     pub next_application_index: u32,
+    pub next_chain_index: u32,
     /// Events recorded by contracts' `emit` calls.
     pub events: Vec<Event>,
     /// Blobs created by contracts.
@@ -67,6 +69,7 @@ impl TransactionTracker {
         transaction_index: u32,
         next_message_index: u32,
         next_application_index: u32,
+        next_chain_index: u32,
         oracle_responses: Option<Vec<OracleResponse>>,
     ) -> Self {
         TransactionTracker {
@@ -74,6 +77,7 @@ impl TransactionTracker {
             transaction_index,
             next_message_index,
             next_application_index,
+            next_chain_index,
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
             ..Self::default()
         }
@@ -103,6 +107,12 @@ impl TransactionTracker {
     pub fn next_application_index(&mut self) -> u32 {
         let index = self.next_application_index;
         self.next_application_index += 1;
+        index
+    }
+
+    pub fn next_chain_index(&mut self) -> u32 {
+        let index = self.next_chain_index;
+        self.next_chain_index += 1;
         index
     }
 
@@ -207,6 +217,7 @@ impl TransactionTracker {
             transaction_index: _,
             next_message_index,
             next_application_index,
+            next_chain_index,
             events,
             blobs,
             subscribe,
@@ -224,6 +235,7 @@ impl TransactionTracker {
             oracle_responses,
             next_message_index,
             next_application_index,
+            next_chain_index,
             events,
             blobs: blobs.into_values().collect(),
             subscribe,
@@ -238,7 +250,7 @@ impl TransactionTracker {
     /// Creates a new [`TransactionTracker`] for testing, with default values and the given
     /// oracle responses.
     pub fn new_replaying(oracle_responses: Vec<OracleResponse>) -> Self {
-        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses))
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, 0, Some(oracle_responses))
     }
 
     /// Creates a new [`TransactionTracker`] for testing, with default values and oracle responses

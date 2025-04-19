@@ -155,17 +155,14 @@ impl HexContract {
         );
         let app_id = self.runtime.application_id();
         let permissions = ApplicationPermissions::new_single(app_id.forget_abi());
-        let (message_id, chain_id) = self.runtime.open_chain(ownership, permissions, fee_budget);
+        let chain_id = self.runtime.open_chain(ownership, permissions, fee_budget);
         for owner in &players {
             self.state
                 .game_chains
                 .get_mut_or_default(owner)
                 .await
                 .unwrap()
-                .insert(GameChain {
-                    message_id,
-                    chain_id,
-                });
+                .insert(GameChain { chain_id });
         }
         self.runtime.send_message(
             chain_id,

@@ -105,7 +105,7 @@ impl Faucet {
     ) -> Result<ClaimOutcome, Error> {
         let query = format!(
             "mutation {{ claim(owner: \"{owner}\") {{ \
-                messageId chainId certificateHash \
+                chainId certificateHash \
             }} }}"
         );
 

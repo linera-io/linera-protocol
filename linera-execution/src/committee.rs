@@ -207,6 +207,12 @@ impl std::str::FromStr for ValidatorName {
     }
 }
 
+impl From<ValidatorPublicKey> for ValidatorName {
+    fn from(value: ValidatorPublicKey) -> Self {
+        Self(value)
+    }
+}
+
 impl Committee {
     pub fn new(
         validators: BTreeMap<ValidatorPublicKey, ValidatorState>,

@@ -334,7 +334,7 @@ impl RfqContract {
         );
         let app_id = self.runtime.application_id();
         let permissions = ApplicationPermissions::new_single(app_id.forget_abi());
-        let (_, temp_chain_id) = self.runtime.open_chain(ownership, permissions, fee_budget);
+        let temp_chain_id = self.runtime.open_chain(ownership, permissions, fee_budget);
 
         // transfer tokens to the new chain
         let transfer = fungible::Operation::Transfer {

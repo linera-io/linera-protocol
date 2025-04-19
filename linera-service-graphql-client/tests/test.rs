@@ -61,7 +61,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         let wallet = client.load_wallet().unwrap();
         (wallet.default_chain(), wallet.chain_ids())
     };
-    let chain_id = node_chains.0.unwrap();
+    let chain0 = node_chains.0.unwrap();
 
     // publishing an application
     let (contract, service) = client.build_example("fungible").await.unwrap();
@@ -91,8 +91,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     let url = &format!("http://localhost:{}/", node_service.port());
 
     // sending a few transfers
-    let chain0 = ChainId::root(0);
-    let chain1 = Account::chain(ChainId::root(1));
+    let chain1 = Account::chain(node_chains.1[1]);
     for _ in 0..10 {
         transfer(req_client, url, chain0, chain1, "0.1").await;
     }
@@ -109,7 +108,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         req_client,
         url,
         blocks::Variables {
-            chain_id,
+            chain_id: chain0,
             from: None,
             limit: None,
         },
@@ -124,7 +123,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         &reqwest_client(),
         &format!("http://localhost:{}/", node_service.port()),
         block::Variables {
-            chain_id,
+            chain_id: chain0,
             hash: None,
         },
     )

@@ -62,7 +62,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
         let certificate_hash = match self.0.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -80,7 +80,7 @@ where
         height: BlockHeight,
         index: u32,
     ) -> Result<Option<MessageBundle>, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
 
         let mut inbox = self.0.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
         let mut bundles = inbox.added_bundles.iter_mut().await?;
@@ -99,7 +99,7 @@ where
         &mut self,
         query: Query,
     ) -> Result<QueryOutcome, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let outcome = self
             .0
@@ -114,7 +114,7 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
         let response = self.0.chain.describe_application(application_id).await?;
         Ok(response)
     }
@@ -126,6 +126,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+        self.0.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.0.chain.current_committee()?;
@@ -244,6 +245,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
+        self.0.ensure_is_active().await?;
         let chain = &self.0.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
