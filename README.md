@@ -126,6 +126,8 @@ linera transfer 2 --from "$CHAIN1:$ACCOUNT1" --to "$CHAIN2:$ACCOUNT2"
 linera query-balance "$CHAIN1:$ACCOUNT1"
 linera query-balance "$CHAIN2:$ACCOUNT2"
 ```
+## My Contribution
+Added a helpful note to the README.
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well
 as the [example applications](./examples) in this repository.
