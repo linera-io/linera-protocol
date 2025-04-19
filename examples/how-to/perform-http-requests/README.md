@@ -30,7 +30,7 @@ service perform the HTTP request and return only the deterministic parts of the 
 
 ## HTTP requests using the service as an oracle
 
-The contract may call the service as an oracle. That means that contracts sends a query to the
+The contract may call the service as an oracle. That means that contract sends a query to the
 service and waits for its response. The execution of the contract is metered by executed
 instruction, while the service executing as an oracle is metered by a coarse-grained timer. That
 allows the service to execute non-deterministically, and as long as it always returns a
