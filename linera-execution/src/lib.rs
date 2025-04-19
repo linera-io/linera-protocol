@@ -39,8 +39,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
+        GenericApplicationId, MessageId, ModuleId, StreamId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -327,6 +327,8 @@ pub enum ExecutionError {
     InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+    #[error("process_streams was not called for all stream updates")]
+    UnprocessedStreams,
     #[error("Internal error: {0}")]
     InternalError(&'static str),
 }
@@ -361,6 +363,13 @@ pub trait UserContract {
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
+    ) -> Result<(), ExecutionError>;
+
+    /// Reacts to new events on streams this application subscribes to.
+    fn process_streams(
+        &mut self,
+        context: ProcessStreamsContext,
+        streams: Vec<(ChainId, StreamId, u32)>,
     ) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.
@@ -464,6 +473,41 @@ pub struct MessageContext {
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProcessStreamsContext {
+    /// The current chain ID.
+    pub chain_id: ChainId,
+    /// The authenticated signer of the operation that created the message, if any.
+    #[debug(skip_if = Option::is_none)]
+    pub authenticated_signer: Option<AccountOwner>,
+    /// The current block height.
+    pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
+}
+
+impl From<MessageContext> for ProcessStreamsContext {
+    fn from(context: MessageContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            authenticated_signer: context.authenticated_signer,
+            height: context.height,
+            round: context.round,
+        }
+    }
+}
+
+impl From<OperationContext> for ProcessStreamsContext {
+    fn from(context: OperationContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            authenticated_signer: context.authenticated_signer,
+            height: context.height,
+            round: context.round,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -699,12 +743,6 @@ pub trait ContractRuntime: BaseRuntime {
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;
 
-    /// Schedules to subscribe to some `channel` on a `chain`.
-    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
-
-    /// Schedules to unsubscribe to some `channel` on a `chain`.
-    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
-
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
@@ -896,7 +934,7 @@ pub enum QueryResponse {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct RawOutgoingMessage<Message, Grant> {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// Whether the message is authenticated.
     pub authenticated: bool,
     /// The grant needed for message execution, typically specified as an `Amount` or as `Resources`.
@@ -952,7 +990,7 @@ pub enum MessageKind {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OutgoingMessage {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<AccountOwner>,
@@ -974,7 +1012,7 @@ impl OutgoingMessage {
     /// Creates a new simple outgoing message with no grant and no authenticated signer.
     pub fn new(recipient: ChainId, message: impl Into<Message>) -> Self {
         OutgoingMessage {
-            destination: Destination::Recipient(recipient),
+            destination: recipient,
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,

@@ -404,54 +404,6 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
-/// The name of a subscription channel.
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-pub struct ChannelName(
-    #[serde(with = "serde_bytes")]
-    #[debug(with = "hex_debug")]
-    Vec<u8>,
-);
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-/// A channel name together with its application ID.
-pub struct ChannelFullName {
-    /// The application owning the channel.
-    pub application_id: ApplicationId,
-    /// The name of the channel.
-    pub name: ChannelName,
-}
-
-impl fmt::Display for ChannelFullName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = hex::encode(&self.name);
-        let app_id = self.application_id;
-        write!(f, "user channel {name} for app {app_id}")
-    }
-}
-
-impl ChannelFullName {
-    /// Creates a full user channel name.
-    pub fn new(name: ChannelName, application_id: ApplicationId) -> Self {
-        Self {
-            application_id,
-            name,
-        }
-    }
-}
-
 /// The name of an event stream.
 #[derive(
     Clone,
@@ -536,74 +488,6 @@ pub struct EventId {
     pub stream_id: StreamId,
     /// The event index, i.e. the number of events in the stream before this one.
     pub index: u32,
-}
-
-/// The destination of a message, relative to a particular application.
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-pub enum Destination {
-    /// Direct message to a chain.
-    Recipient(ChainId),
-    /// Broadcast to the current subscribers of our channel.
-    Subscribers(ChannelName),
-}
-
-impl Destination {
-    /// Whether the destination is a broadcast channel.
-    pub fn is_channel(&self) -> bool {
-        matches!(self, Destination::Subscribers(_))
-    }
-
-    /// Returns the recipient chain, or `None` if it is `Subscribers`.
-    pub fn recipient(&self) -> Option<ChainId> {
-        match self {
-            Destination::Recipient(chain_id) => Some(*chain_id),
-            Destination::Subscribers(_) => None,
-        }
-    }
-}
-
-impl From<ChainId> for Destination {
-    fn from(chain_id: ChainId) -> Self {
-        Destination::Recipient(chain_id)
-    }
-}
-
-impl From<ChannelName> for Destination {
-    fn from(channel_name: ChannelName) -> Self {
-        Destination::Subscribers(channel_name)
-    }
-}
-
-impl AsRef<[u8]> for ChannelName {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl From<Vec<u8>> for ChannelName {
-    fn from(name: Vec<u8>) -> Self {
-        ChannelName(name)
-    }
-}
-
-impl ChannelName {
-    /// Turns the channel name into bytes.
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.0
-    }
 }
 
 impl StreamName {
@@ -1112,13 +996,8 @@ doc_scalar!(
     "The unique identifier (UID) of a chain. This is currently computed as the hash value of a \
     ChainDescription."
 );
-doc_scalar!(ChannelName, "The name of a subscription channel");
 doc_scalar!(StreamName, "The name of an event stream");
 bcs_scalar!(MessageId, "The index of a message in a chain");
-doc_scalar!(
-    Destination,
-    "The destination of a message, relative to a particular application."
-);
 doc_scalar!(
     AccountOwner,
     "A unique identifier for a user or an application."
@@ -1127,10 +1006,6 @@ doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"
-);
-doc_scalar!(
-    ChannelFullName,
-    "A channel name together with its application ID."
 );
 
 #[cfg(test)]

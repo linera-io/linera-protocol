@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, vec};
+use std::{collections::BTreeMap, mem, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{ArithmeticError, Blob, Event, OracleResponse, Timestamp},
     ensure,
-    identifiers::{BlobId, ChainId, ChannelFullName, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, StreamId},
 };
 
 use crate::{ExecutionError, OutgoingMessage};
@@ -32,12 +32,10 @@ pub struct TransactionTracker {
     events: Vec<Event>,
     /// Blobs created by contracts.
     blobs: BTreeMap<BlobId, Blob>,
-    /// Subscribe chains to channels.
-    subscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Unsubscribe chains from channels.
-    unsubscribe: Vec<(ChannelFullName, ChainId)>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
+    /// Streams that have been updated but not yet processed during this transaction.
+    streams_to_process: BTreeMap<ApplicationId, BTreeMap<(ChainId, StreamId), u32>>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -53,10 +51,6 @@ pub struct TransactionOutcome {
     pub events: Vec<Event>,
     /// Blobs created by contracts.
     pub blobs: Vec<Blob>,
-    /// Subscribe chains to channels.
-    pub subscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Unsubscribe chains from channels.
-    pub unsubscribe: Vec<(ChannelFullName, ChainId)>,
     /// Operation result.
     pub operation_result: Vec<u8>,
 }
@@ -144,20 +138,50 @@ impl TransactionTracker {
         &self.blobs
     }
 
-    pub fn subscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
-        self.subscribe.push((name, subscriber));
-    }
-
-    pub fn unsubscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
-        self.unsubscribe.push((name, subscriber));
-    }
-
     pub fn add_oracle_response(&mut self, oracle_response: OracleResponse) {
         self.oracle_responses.push(oracle_response);
     }
 
     pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
         self.operation_result = result
+    }
+
+    pub fn add_stream_to_process(
+        &mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        stream_id: StreamId,
+        next_index: u32,
+    ) {
+        if next_index == 0 {
+            return; // No events in the stream.
+        }
+        *self
+            .streams_to_process
+            .entry(application_id)
+            .or_default()
+            .entry((chain_id, stream_id))
+            .or_default() = next_index;
+    }
+
+    pub fn remove_stream_to_process(
+        &mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) {
+        let Some(streams) = self.streams_to_process.get_mut(&application_id) else {
+            return;
+        };
+        if streams.remove(&(chain_id, stream_id)).is_some() && streams.is_empty() {
+            self.streams_to_process.remove(&application_id);
+        }
+    }
+
+    pub fn flush_streams_to_process(
+        &mut self,
+    ) -> BTreeMap<ApplicationId, BTreeMap<(ChainId, StreamId), u32>> {
+        mem::take(&mut self.streams_to_process)
     }
 
     /// Adds the oracle response to the record.
@@ -209,10 +233,13 @@ impl TransactionTracker {
             next_application_index,
             events,
             blobs,
-            subscribe,
-            unsubscribe,
             operation_result,
+            streams_to_process,
         } = self;
+        ensure!(
+            streams_to_process.is_empty(),
+            ExecutionError::UnprocessedStreams
+        );
         if let Some(mut responses) = replaying_oracle_responses {
             ensure!(
                 responses.next().is_none(),
@@ -226,8 +253,6 @@ impl TransactionTracker {
             next_application_index,
             events,
             blobs: blobs.into_values().collect(),
-            subscribe,
-            unsubscribe,
             operation_result: operation_result.unwrap_or_default(),
         })
     }

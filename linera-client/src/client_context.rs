@@ -249,10 +249,7 @@ where
         // We only create clients for chains we have in the wallet, or for the admin chain.
         let chain = match self.wallet.get(chain_id) {
             Some(chain) => chain.clone(),
-            None if chain_id == self.wallet.genesis_admin_chain() => {
-                UserChain::make_other(self.wallet.genesis_admin_chain(), Timestamp::from(0))
-            }
-            None => return Err(error::Inner::NonexistentChain(chain_id).into()),
+            None => UserChain::make_other(chain_id, Timestamp::from(0)),
         };
         let known_key_pairs = chain.key_pair.into_iter().collect();
         Ok(self.make_chain_client_internal(

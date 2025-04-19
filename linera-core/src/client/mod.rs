@@ -448,10 +448,9 @@ impl MessagePolicy {
                 bundle.action = MessageAction::Reject;
             }
         }
-        let sender = bundle.origin.sender;
         match &self.restrict_chain_ids_to {
             None => true,
-            Some(chains) => chains.contains(&sender),
+            Some(chains) => chains.contains(&bundle.origin),
         }
     }
 
@@ -755,6 +754,23 @@ where
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 
+    /// Returns all chain IDs that publish an event stream this chain subscribes to.
+    #[instrument(level = "trace", skip(self))]
+    pub async fn event_stream_publishers(&self) -> Result<BTreeSet<ChainId>, LocalNodeError> {
+        Ok(self
+            .chain_state_view()
+            .await?
+            .execution_state
+            .system
+            .event_subscriptions
+            .indices()
+            .await?
+            .into_iter()
+            .map(|(chain_id, _)| chain_id)
+            .chain((self.chain_id != self.admin_id).then_some(self.admin_id))
+            .collect())
+    }
+
     /// Subscribes to notifications from this client's chain.
     #[instrument(level = "trace")]
     pub async fn subscribe(&self) -> Result<NotificationStream, LocalNodeError> {
@@ -863,6 +879,51 @@ where
             })
             .take(self.options.max_pending_message_bundles)
             .collect())
+    }
+
+    /// Returns an `UpdateStreams` operation that updates this client's chain about new events
+    /// in any of the streams its applications are subscribing to. Returns `None` if there are no
+    /// new events.
+    #[instrument(level = "trace")]
+    async fn update_streams_operation(&self) -> Result<Option<Operation>, ChainClientError> {
+        // Load all our subscriptions.
+        let subscription_map = self
+            .chain_state_view()
+            .await?
+            .execution_state
+            .system
+            .event_subscriptions
+            .index_values()
+            .await?;
+        // Collect the indices of all new events.
+        let futures = subscription_map
+            .into_iter()
+            .map(|((chain_id, stream_id), subscriptions)| {
+                let client = self.client.clone();
+                async move {
+                    let chain = client.local_node.chain_state_view(chain_id).await?;
+                    if let Some(next_index) = chain
+                        .execution_state
+                        .stream_event_counts
+                        .get(&stream_id)
+                        .await?
+                        .filter(|next_index| *next_index > subscriptions.next_index)
+                    {
+                        Ok(Some((chain_id, stream_id, next_index)))
+                    } else {
+                        Ok::<_, ChainClientError>(None)
+                    }
+                }
+            });
+        let updates = future::try_join_all(futures)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        if updates.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(SystemOperation::UpdateStreams(updates).into()))
     }
 
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
@@ -1524,6 +1585,29 @@ where
                 self.chain_id
             );
         }
+    }
+
+    /// Synchronizes all chains that any application on this chain subscribes to.
+    async fn synchronize_publisher_chains(&self) -> Result<(), ChainClientError> {
+        let chain_ids = self
+            .chain_state_view()
+            .await?
+            .execution_state
+            .system
+            .event_subscriptions
+            .indices()
+            .await?
+            .iter()
+            .map(|(chain_id, _)| *chain_id)
+            .filter(|chain_id| *chain_id != self.chain_id && *chain_id != self.admin_id)
+            .collect::<BTreeSet<_>>();
+        try_join_all(
+            chain_ids
+                .into_iter()
+                .map(|chain_id| self.synchronize_chain_state(chain_id)),
+        )
+        .await?;
+        Ok(())
     }
 
     /// Attempts to download new received certificates.
@@ -2443,6 +2527,7 @@ where
             self.synchronize_chain_state(self.admin_id).await?;
         }
         let info = self.prepare_chain().await?;
+        self.synchronize_publisher_chains().await?;
         self.find_received_certificates().await?;
         Ok(info)
     }
@@ -3056,7 +3141,11 @@ where
         let mut certificates = Vec::new();
         loop {
             let incoming_bundles = self.pending_message_bundles().await?;
-            let block_operations = epoch_change_ops.next().into_iter().collect::<Vec<_>>();
+            let update_streams = self.update_streams_operation().await?;
+            let block_operations = update_streams
+                .into_iter()
+                .chain(epoch_change_ops.next())
+                .collect::<Vec<_>>();
             if incoming_bundles.is_empty() && block_operations.is_empty() {
                 return Ok((certificates, None));
             }
@@ -3241,11 +3330,7 @@ where
     ) {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
-                if self
-                    .local_next_block_height(origin.sender, &mut local_node)
-                    .await
-                    > Some(height)
-                {
+                if self.local_next_block_height(origin, &mut local_node).await > Some(height) {
                     debug!("Accepting redundant notification for new message");
                     return;
                 }
@@ -3256,11 +3341,7 @@ where
                     error!("Fail to process notification: {error}");
                     return;
                 }
-                if self
-                    .local_next_block_height(origin.sender, &mut local_node)
-                    .await
-                    <= Some(height)
-                {
+                if self.local_next_block_height(origin, &mut local_node).await <= Some(height) {
                     error!("Fail to synchronize new message after notification");
                 }
             }

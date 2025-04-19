@@ -21,7 +21,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{data_types::MessageBundle, ChainError, Origin};
+use crate::{data_types::MessageBundle, ChainError};
 
 #[cfg(test)]
 #[path = "unit_tests/inbox_tests.rs"]
@@ -143,8 +143,8 @@ impl Cursor {
     }
 }
 
-impl From<(ChainId, Origin, InboxError)> for ChainError {
-    fn from(value: (ChainId, Origin, InboxError)) -> Self {
+impl From<(ChainId, ChainId, InboxError)> for ChainError {
+    fn from(value: (ChainId, ChainId, InboxError)) -> Self {
         let (chain_id, origin, error) = value;
         match error {
             InboxError::ViewError(e) => ChainError::ViewError(e),
@@ -154,7 +154,7 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
                 previous_bundle,
             } => ChainError::UnexpectedMessage {
                 chain_id,
-                origin: origin.into(),
+                origin,
                 bundle: Box::new(bundle),
                 previous_bundle: Box::new(previous_bundle),
             },
@@ -163,14 +163,14 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
                 next_cursor,
             } => ChainError::IncorrectMessageOrder {
                 chain_id,
-                origin: origin.into(),
+                origin,
                 bundle: Box::new(bundle),
                 next_height: next_cursor.height,
                 next_index: next_cursor.index,
             },
             InboxError::UnskippableBundle { bundle } => ChainError::CannotSkipMessage {
                 chain_id,
-                origin: origin.into(),
+                origin,
                 bundle: Box::new(bundle),
             },
         }

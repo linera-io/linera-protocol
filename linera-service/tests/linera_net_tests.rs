@@ -31,7 +31,6 @@ use linera_base::{
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     vm::VmRuntime,
 };
-use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
     linera_base_types::{BlobContent, BlockHeight},
@@ -879,7 +878,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
+async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::time::Instant;
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -913,18 +912,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let app2 = node_service2
         .make_application(&chain2, &application_id)
         .await?;
-    let hash = app2
-        .mutate(format!("subscribe(chainId: \"{chain1}\")"))
+    app2.mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await?;
-
-    node_service1.process_inbox(&chain1).await?;
-
-    // The returned hash should now be the latest one.
-    let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
-    for node_service in [&node_service2, &node_service1] {
-        let response = node_service.query_node(&query).await?;
-        assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
-    }
 
     let mut notifications = Box::pin(node_service2.notifications(chain2).await?);
 
@@ -3429,8 +3418,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             match reason {
                 Reason::NewIncomingBundle { height, origin } => {
                     assert_eq!(height, next_height1);
-                    assert_eq!(origin.sender, chain_id1);
-                    assert_eq!(origin.medium, Medium::Direct);
+                    assert_eq!(origin, chain_id1);
                     assert!(
                         !got_message,
                         "Duplicate message notification about transfer #{i}"
@@ -3470,9 +3458,8 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             ))
             .await?;
         let mut bundle = block2["block"]["block"]["body"]["incomingBundles"][0].take();
-        let origin = serde_json::from_value::<Origin>(bundle["origin"].take())?;
-        assert_eq!(origin.sender, chain_id1);
-        assert_eq!(origin.medium, Medium::Direct);
+        let origin = serde_json::from_value::<ChainId>(bundle["origin"].take())?;
+        assert_eq!(origin, chain_id1);
         let sender_height =
             serde_json::from_value::<BlockHeight>(bundle["bundle"]["height"].take())?;
         assert_eq!(sender_height + BlockHeight(1), next_height1);

@@ -13,8 +13,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin, ProposedBlock,
-        SignatureAggregator,
+        IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock, SignatureAggregator,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
@@ -174,27 +173,24 @@ impl BlockBuilder {
 
     /// Receives all direct messages  that were sent to this chain by the given certificate.
     pub fn with_messages_from(&mut self, certificate: &ConfirmedBlockCertificate) -> &mut Self {
-        self.with_messages_from_by_medium(certificate, &Medium::Direct, MessageAction::Accept)
+        self.with_messages_from_by_action(certificate, MessageAction::Accept)
     }
 
     /// Receives all messages that were sent to this chain by the given certificate.
-    pub fn with_messages_from_by_medium(
+    pub fn with_messages_from_by_action(
         &mut self,
         certificate: &ConfirmedBlockCertificate,
-        medium: &Medium,
         action: MessageAction,
     ) -> &mut Self {
-        let origin = Origin {
-            sender: certificate.inner().chain_id(),
-            medium: medium.clone(),
-        };
-        let bundles = certificate
-            .message_bundles_for(medium, self.block.chain_id)
-            .map(|(_epoch, bundle)| IncomingBundle {
-                origin: origin.clone(),
-                bundle,
-                action,
-            });
+        let origin = certificate.inner().chain_id();
+        let bundles =
+            certificate
+                .message_bundles_for(self.block.chain_id)
+                .map(|(_epoch, bundle)| IncomingBundle {
+                    origin,
+                    bundle,
+                    action,
+                });
         self.with_incoming_bundles(bundles)
     }
 
