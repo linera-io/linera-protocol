@@ -483,7 +483,7 @@ mod test {
             let blob = self.blobs.get(&blob_id).ok_or(ExporterError::GenericError(
                 "blob not found in the protocol state".into(),
             ))?;
-            storage.write_blob(&blob).await?;
+            storage.write_blob(blob).await?;
             Ok(())
         }
 
@@ -491,8 +491,7 @@ mod test {
         where
             S: Storage + Clone + Send + Sync + 'static,
         {
-            let mut chains = self.chains.iter();
-            while let Some((chain_id, chain)) = chains.next() {
+            for (chain_id, chain) in &self.chains {
                 for block_height in 0..chain.len() {
                     self.synchronize_storage_with_block(*chain_id, block_height, storage.clone())
                         .await?;
@@ -555,7 +554,7 @@ mod test {
             }
 
             let mut chains = (0..chain_id + 1)
-                .map(|id| ChainId::root(id))
+                .map(ChainId::root)
                 .collect::<Vec<_>>();
 
             if chain_id % 2 == 0 {
