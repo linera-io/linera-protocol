@@ -1,0 +1,8 @@
+Clean-up example application READMEs and Cargo config (#1996)
+* Remove custom test runner configuration
+
+The custom Wasm test runner no longer exists.
+
+* Update build commands in example README files
+
+Ensure that the Wasm target is specified.
