@@ -11,6 +11,7 @@ use linera_sdk::views::ViewError;
 use linera_service::{storage::StorageConfigNamespace, util};
 use linera_views::{lru_caching::StorageCacheConfig, store::CommonStoreConfig};
 
+mod block_processor;
 #[allow(dead_code)]
 mod exporter_service;
 #[allow(dead_code)]
