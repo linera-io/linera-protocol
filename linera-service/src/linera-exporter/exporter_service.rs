@@ -553,9 +553,7 @@ mod test {
                 return Ok(batch);
             }
 
-            let mut chains = (0..chain_id + 1)
-                .map(ChainId::root)
-                .collect::<Vec<_>>();
+            let mut chains = (0..chain_id + 1).map(ChainId::root).collect::<Vec<_>>();
 
             if chain_id % 2 == 0 {
                 let last_chain = chains.pop().unwrap();
