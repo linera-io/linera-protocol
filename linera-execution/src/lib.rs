@@ -7,13 +7,12 @@
 #![deny(clippy::large_futures)]
 
 pub mod committee;
+pub mod evm;
 mod execution;
 mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
-#[cfg(with_revm)]
-pub mod revm;
 mod runtime;
 pub mod system;
 #[cfg(with_testing)]
@@ -26,7 +25,6 @@ use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
-use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
@@ -37,7 +35,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Resources, SendMessageRequest, Timestamp,
+        DecompressionError, Epoch, Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -53,7 +51,7 @@ use system::{AdminOperation, OpenChainConfig};
 use thiserror::Error;
 
 #[cfg(with_revm)]
-use crate::revm::EvmExecutionError;
+use crate::evm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
@@ -76,6 +74,10 @@ pub use crate::{
     },
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
+
+/// The `linera.sol` library code to be included in solidity smart
+/// contracts using Linera features.
+pub const LINERA_SOL: &str = include_str!("../solidity/linera.sol");
 
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;

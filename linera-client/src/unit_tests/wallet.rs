@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use linera_base::{
     crypto::{AccountSecretKey, Ed25519SecretKey},
-    data_types::{Amount, Blob, BlockHeight},
+    data_types::{Amount, Blob, BlockHeight, Epoch},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::data_types::ProposedBlock;
@@ -12,7 +12,6 @@ use linera_core::{
     client::PendingProposal,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
-use linera_execution::committee::Epoch;
 use rand::{rngs::StdRng, SeedableRng as _};
 
 use super::util::make_genesis_config;

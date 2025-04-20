@@ -7,11 +7,11 @@ mod http_server;
 
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorState},
+    committee::{Committee, ValidatorState},
     system::Recipient,
     Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
 };

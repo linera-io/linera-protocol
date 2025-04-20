@@ -138,10 +138,10 @@ mod implementation {
     }
 
     /// The type of a future awaiting another task.
-    pub type NonblockingFuture<R> = oneshot::Receiver<R>;
+    pub type NonBlockingFuture<R> = oneshot::Receiver<R>;
 
     /// Spawns a new task on the current thread.
-    pub fn spawn<F: Future + 'static>(future: F) -> NonblockingFuture<F::Output> {
+    pub fn spawn<F: Future + 'static>(future: F) -> NonBlockingFuture<F::Output> {
         let (send, recv) = oneshot::channel();
         wasm_bindgen_futures::spawn_local(async {
             let _ = send.send(future.await);

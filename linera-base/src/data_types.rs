@@ -31,7 +31,7 @@ use crate::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
 };
 use crate::{
-    crypto::{BcsHashable, CryptoHash},
+    crypto::{BcsHashable, CryptoError, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
         ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
@@ -707,6 +707,84 @@ impl Amount {
     }
 }
 
+/// A number identifying the configuration of the chain (aka the committee).
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
+pub struct Epoch(pub u32);
+
+impl Epoch {
+    /// The zero epoch.
+    pub const ZERO: Epoch = Epoch(0);
+}
+
+impl Serialize for Epoch {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.0.to_string())
+        } else {
+            serializer.serialize_newtype_struct("Epoch", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Epoch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Ok(Epoch(u32::from_str(&s).map_err(serde::de::Error::custom)?))
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "Epoch")]
+            struct EpochDerived(u32);
+
+            let value = EpochDerived::deserialize(deserializer)?;
+            Ok(Self(value.0))
+        }
+    }
+}
+
+impl std::fmt::Display for Epoch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for Epoch {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Epoch(s.parse()?))
+    }
+}
+
+impl From<u32> for Epoch {
+    fn from(value: u32) -> Self {
+        Epoch(value)
+    }
+}
+
+impl Epoch {
+    /// Tries to return an epoch with a number increased by one. Returns an error if an overflow
+    /// happens.
+    #[inline]
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(Self(val))
+    }
+
+    /// Tries to add one to this epoch's number. Returns an error if an overflow happens.
+    #[inline]
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+}
+
 /// Permissions for applications on a chain.
 #[derive(
     Default,
@@ -1241,6 +1319,10 @@ impl BcsHashable<'_> for Event {}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
+doc_scalar!(
+    Epoch,
+    "A number identifying the configuration of the chain (aka the committee)"
+);
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
     Timestamp,

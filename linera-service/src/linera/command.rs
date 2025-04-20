@@ -388,6 +388,10 @@ pub enum ClientCommand {
         /// closing chains.
         #[arg(long, default_value = "5")]
         wrap_up_max_in_flight: usize,
+
+        /// Confirm before starting the benchmark.
+        #[arg(long)]
+        confirm_before_start: bool,
     },
 
     /// Create genesis configuration for a Linera deployment.
@@ -876,11 +880,11 @@ pub enum NetCommand {
         #[arg(long, default_value = "1000000")]
         initial_amount: u128,
 
-        /// The number of validators in the local test network. Default is 1.
+        /// The number of validators in the local test network.
         #[arg(long, default_value = "1")]
         validators: usize,
 
-        /// The number of shards per validator in the local test network. Default is 1.
+        /// The number of shards per validator in the local test network.
         #[arg(long, default_value = "1")]
         shards: usize,
 

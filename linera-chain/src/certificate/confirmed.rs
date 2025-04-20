@@ -4,10 +4,9 @@
 
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
-    data_types::Round,
+    data_types::{Epoch, Round},
     identifiers::{BlobId, ChainId, MessageId},
 };
-use linera_execution::committee::Epoch;
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 
 use super::{generic::GenericCertificate, Certificate};

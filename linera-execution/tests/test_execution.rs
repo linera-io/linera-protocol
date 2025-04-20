@@ -9,13 +9,14 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, Blob, BlockHeight, Epoch, Resources, SendMessageRequest,
+        Timestamp,
     },
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::SystemMessage,
     test_utils::{
         blob_oracle_responses, create_dummy_message_context, create_dummy_operation_context,

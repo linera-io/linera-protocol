@@ -5,9 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-alloy = { workspace = true, default-features = false, features = [
-    "rpc-types-eth",
-] }
+alloy-primitives.workspace = true
 async-graphql.workspace = true
 linera-sdk = { workspace = true, features = ["ethereum"] }
 serde.workspace = true

@@ -7,7 +7,7 @@ mod state;
 
 use std::sync::Arc;
 
-use alloy::primitives::U256;
+use alloy_primitives::U256;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use ethereum_tracker::Operation;
 use linera_sdk::{

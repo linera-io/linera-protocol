@@ -1,5 +1,9 @@
 [package]
 name = "linera-faucet-server"
+description = "The server component of the Linera faucet."
+readme = "README.md"
+documentation = "https://docs.rs/linera-faucet-server/latest/linera_faucet_server/"
+
 version.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -21,6 +25,7 @@ linera-version.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
 

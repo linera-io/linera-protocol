@@ -5,7 +5,7 @@ use std::{collections::HashMap, iter, sync::Arc};
 
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, Epoch, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
     time::Instant,
@@ -16,7 +16,7 @@ use linera_chain::{
 };
 use linera_core::{client::ChainClient, local_node::LocalNodeClient};
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::{Recipient, SystemOperation},
     Operation,
 };

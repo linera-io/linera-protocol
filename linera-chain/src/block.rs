@@ -11,13 +11,11 @@ use std::{
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{Blob, BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Event, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{AccountOwner, BlobId, ChainId, MessageId},
 };
-use linera_execution::{
-    committee::Epoch, system::OpenChainConfig, BlobState, Operation, OutgoingMessage,
-};
+use linera_execution::{system::OpenChainConfig, BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 

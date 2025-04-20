@@ -75,12 +75,12 @@ use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorSecretKey},
-    data_types::{Blob, BlockHeight, Round, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
 };
-use linera_execution::{committee::Epoch, ExecutionRuntimeContext};
+use linera_execution::ExecutionRuntimeContext;
 use linera_views::{
     context::Context,
     map_view::MapView,

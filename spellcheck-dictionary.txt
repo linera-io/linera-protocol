@@ -61,7 +61,6 @@ KiB
 Kubernetes
 Linera
 liveness
-LocalStack
 LRU
 memoize
 memoizing

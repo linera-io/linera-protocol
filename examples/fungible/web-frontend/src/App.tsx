@@ -13,7 +13,6 @@ import {
 import Header from "./components/Header";
 import ErrorMessage from "./components/ErrorMessage";
 import DialogSuccess from "./components/DialogSuccess";
-import Radio from './components/Radio';
 import { IconLoader } from "./assets/icons/Loader";
 
 const GET_BALANCE = gql`
@@ -43,7 +42,7 @@ const MAKE_PAYMENT = gql`
 `;
 
 const NOTIFICATION_SUBSCRIPTION = gql`
-  subscription Notifications($chainId: ID!) {
+  subscription Notifications($chainId: ChainId!) {
     notifications(chainId: $chainId)
   }
 `;
@@ -57,7 +56,6 @@ function App({ chainId, owner }: AppProps) {
   const [recipient, setRecipient] = useState("");
   const [targetChain, setTargetChain] = useState("");
   const [amount, setAmount] = useState("");
-  const [typeAccount, setTypeAccount] = useState("User");
   const [error, setError] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
 
@@ -65,13 +63,22 @@ function App({ chainId, owner }: AppProps) {
     balanceQuery,
     { data: balanceData, called: balanceCalled, error: balanceError },
   ] = useLazyQuery<AccountsQuery>(GET_BALANCE, {
+    onError: (error) => {
+      console.error('failed to query balance', error);
+    },
     fetchPolicy: "network-only",
-    variables: { owner: `${owner}` },
+    variables: { owner },
   });
 
   useSubscription(NOTIFICATION_SUBSCRIPTION, {
     variables: { chainId: chainId },
-    onData: () => balanceQuery(),
+    onError: () => {
+      console.log('failed to subscribe to notifications');
+    },
+    onData: () => {
+      console.log('querying balance');
+      balanceQuery();
+    },
   });
 
   if (!balanceCalled) {
@@ -101,7 +108,6 @@ function App({ chainId, owner }: AppProps) {
         setRecipient("");
         setAmount("");
         setError("");
-        setTypeAccount("User")
         setOpenDialog(true);
       },
     });
@@ -132,10 +138,10 @@ function App({ chainId, owner }: AppProps) {
         amount,
         targetAccount: {
           chainId: targetChain,
-          owner: `${typeAccount}:${recipient}`,
+          owner: `${recipient}`,
         },
       },
-    }).then((r) => console.log("payment made: " + r));
+    }).then((r) => console.log("payment made", r));
   };
 
   const isMaxBalance = useMemo(() => {
@@ -210,12 +216,6 @@ function App({ chainId, owner }: AppProps) {
                     onChange={handleTargetChainChange}
                     required
                   />
-                </div>
-                <div className="flex w-full flex-col gap-y-4">
-                  <label className="font-bold" htmlFor="typeAccount">
-                    Type Account:
-                  </label>
-                  <Radio checked={typeAccount} setChecked={setTypeAccount}/>
                 </div>
                 <div className="flex w-full flex-col gap-y-4">
                   <label className="font-bold" htmlFor="recipient">

@@ -5,7 +5,7 @@
 
 mod state;
 
-use alloy::primitives::U256;
+use alloy_primitives::U256;
 use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
 use linera_sdk::{
     linera_base_types::WithContractAbi,

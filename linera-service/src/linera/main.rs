@@ -24,6 +24,7 @@ use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
+    listen_for_shutdown_signals,
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -56,13 +57,8 @@ use linera_views::{
 };
 use serde_json::Value;
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
-#[cfg(feature = "benchmark")]
-use {
-    futures::{stream, TryStreamExt},
-    linera_client::benchmark::BenchmarkError,
-    linera_core::client::ChainClientError,
-};
 
 mod command;
 mod net_up_utils;
@@ -748,6 +744,7 @@ impl Runnable for Job {
                 close_chains,
                 health_check_endpoints,
                 wrap_up_max_in_flight,
+                confirm_before_start,
             } => {
                 assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
@@ -771,6 +768,22 @@ impl Runnable for Job {
                     )
                     .await?;
 
+                if confirm_before_start {
+                    info!("Ready to start benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
+                    if !std::io::stdin()
+                        .lines()
+                        .next()
+                        .unwrap()?
+                        .eq_ignore_ascii_case("yes")
+                    {
+                        info!("Benchmark cancelled by user");
+                        context
+                            .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
+                            .await?;
+                        return Ok(());
+                    }
+                }
+
                 linera_client::benchmark::Benchmark::<S>::run_benchmark(
                     num_chains,
                     transactions_per_block,
@@ -784,40 +797,9 @@ impl Runnable for Job {
                 )
                 .await?;
 
-                if close_chains {
-                    info!("Closing chains...");
-                    let stream = stream::iter(chain_clients.values().cloned())
-                        .map(|chain_client| async move {
-                            linera_client::benchmark::Benchmark::<S>::close_benchmark_chain(
-                                &chain_client,
-                            )
-                            .await?;
-                            info!("Closed chain {:?}", chain_client.chain_id());
-                            Ok::<(), BenchmarkError>(())
-                        })
-                        .buffer_unordered(wrap_up_max_in_flight);
-                    stream.try_collect::<Vec<_>>().await?;
-                } else {
-                    info!("Processing inbox for all chains...");
-                    let stream = stream::iter(chain_clients.values().cloned())
-                        .map(|chain_client| async move {
-                            chain_client.process_inbox().await?;
-                            info!("Processed inbox for chain {:?}", chain_client.chain_id());
-                            Ok::<(), ChainClientError>(())
-                        })
-                        .buffer_unordered(wrap_up_max_in_flight);
-                    stream.try_collect::<Vec<_>>().await?;
-
-                    info!("Updating wallet from chain clients...");
-                    for chain_client in chain_clients.values() {
-                        context
-                            .wallet
-                            .as_mut()
-                            .update_from_state(chain_client)
-                            .await;
-                    }
-                    context.save_wallet().await?;
-                }
+                context
+                    .wrap_up_benchmark(chain_clients, close_chains, wrap_up_max_in_flight)
+                    .await?;
             }
 
             Watch { chain_id, raw } => {
@@ -841,7 +823,10 @@ impl Runnable for Job {
             Service { config, port } => {
                 let default_chain = context.wallet().default_chain();
                 let service = NodeService::new(config, port, default_chain, storage, context).await;
-                service.run().await?;
+                let cancellation_token = CancellationToken::new();
+                let child_token = cancellation_token.child_token();
+                tokio::spawn(listen_for_shutdown_signals(cancellation_token));
+                service.run(child_token).await?;
             }
 
             Faucet {
@@ -872,7 +857,10 @@ impl Runnable for Job {
                     storage,
                 )
                 .await?;
-                faucet.run().await?;
+                let cancellation_token = CancellationToken::new();
+                let child_token = cancellation_token.child_token();
+                tokio::spawn(listen_for_shutdown_signals(cancellation_token));
+                faucet.run(child_token).await?;
             }
 
             PublishModule {

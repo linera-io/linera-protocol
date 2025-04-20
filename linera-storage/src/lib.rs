@@ -14,7 +14,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
+        Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, Epoch, TimeDelta,
+        Timestamp,
     },
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, EventId},
     ownership::ChainOwnership,
@@ -25,13 +26,12 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    committee::Committee, BlobState, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_revm)]
 use linera_execution::{
-    revm::{EvmContractModule, EvmServiceModule},
+    evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
 };
 #[cfg(with_wasm_runtime)]

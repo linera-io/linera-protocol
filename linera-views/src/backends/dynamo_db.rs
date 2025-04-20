@@ -55,8 +55,8 @@ use crate::{
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 
-/// Name of the environment variable with the address to a LocalStack instance.
-const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
+/// Name of the environment variable with the address to a DynamoDB local instance.
+const DYNAMODB_LOCAL_ENDPOINT: &str = "DYNAMODB_LOCAL_ENDPOINT";
 
 /// Gets the AWS configuration from the environment
 async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
@@ -67,11 +67,12 @@ async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInte
 }
 
 fn get_endpoint_address() -> Option<String> {
-    env::var(LOCALSTACK_ENDPOINT).ok()
+    env::var(DYNAMODB_LOCAL_ENDPOINT).ok()
 }
 
-/// Gets the LocalStack config
-async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
+/// Gets the DynamoDB local config
+async fn get_dynamodb_local_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError>
+{
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -320,16 +321,16 @@ pub struct DynamoDbStoreInternal {
 /// The initial configuration of the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamoDbStoreInternalConfig {
-    /// Whether to use local stack or not.
-    use_localstack: bool,
+    /// Whether to use DynamoDB local or not.
+    use_dynamodb_local: bool,
     /// The common configuration of the key value store
     common_config: CommonStoreInternalConfig,
 }
 
 impl DynamoDbStoreInternalConfig {
     async fn client(&self) -> Result<Client, DynamoDbStoreInternalError> {
-        let config = if self.use_localstack {
-            get_localstack_config().await?
+        let config = if self.use_dynamodb_local {
+            get_dynamodb_local_config().await?
         } else {
             get_base_config().await?
         };
@@ -1160,7 +1161,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
             max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
         };
         Ok(DynamoDbStoreInternalConfig {
-            use_localstack: true,
+            use_dynamodb_local: true,
             common_config,
         })
     }
@@ -1190,11 +1191,11 @@ pub type DynamoDbStoreConfig = LruCachingConfig<DynamoDbStoreInternalConfig>;
 impl DynamoDbStoreConfig {
     /// Creates a `DynamoDbStoreConfig` from the input.
     pub fn new(
-        use_localstack: bool,
+        use_dynamodb_local: bool,
         common_config: crate::store::CommonStoreConfig,
     ) -> DynamoDbStoreConfig {
         let inner_config = DynamoDbStoreInternalConfig {
-            use_localstack,
+            use_dynamodb_local,
             common_config: common_config.reduced(),
         };
         DynamoDbStoreConfig {

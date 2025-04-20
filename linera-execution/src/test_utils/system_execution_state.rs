@@ -10,7 +10,7 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Timestamp},
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
@@ -22,11 +22,10 @@ use linera_views::{
 
 use super::{MockApplication, RegisterMockApplication};
 use crate::{
-    committee::{Committee, Epoch},
-    execution::UserAction,
-    ApplicationDescription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
-    ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
+    committee::Committee, execution::UserAction, ApplicationDescription, ExecutionError,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, OperationContext,
+    ResourceControlPolicy, ResourceController, ResourceTracker, TestExecutionRuntimeContext,
+    UserContractCode,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.

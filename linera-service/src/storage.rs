@@ -88,8 +88,8 @@ pub enum StorageConfig {
     /// The DynamoDB description
     #[cfg(feature = "dynamodb")]
     DynamoDb {
-        /// Whether to use the LocalStack system
-        use_localstack: bool,
+        /// Whether to use the DynamoDB Local system
+        use_dynamodb_local: bool,
     },
     /// The ScyllaDB description
     #[cfg(feature = "scylladb")]
@@ -264,17 +264,17 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 .next()
                 .ok_or_else(|| anyhow!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"))?
                 .to_string();
-            let use_localstack = match parts.next() {
+            let use_dynamodb_local = match parts.next() {
                 None | Some("env") => false,
-                Some("localstack") => true,
+                Some("dynamodb_local") => true,
                 Some(unknown) => {
                     bail!(
                         "Invalid DynamoDB endpoint {unknown:?}. \
-                        Expected {DYNAMO_DB}TABLE:[env|localstack]"
+                        Expected {DYNAMO_DB}TABLE:[env|dynamodb_local]"
                     );
                 }
             };
-            let storage_config = StorageConfig::DynamoDb { use_localstack };
+            let storage_config = StorageConfig::DynamoDb { use_dynamodb_local };
             return Ok(StorageConfigNamespace {
                 storage_config,
                 namespace,
@@ -418,8 +418,8 @@ impl StorageConfigNamespace {
                 Ok(StoreConfig::RocksDb(config, namespace))
             }
             #[cfg(feature = "dynamodb")]
-            StorageConfig::DynamoDb { use_localstack } => {
-                let config = DynamoDbStoreConfig::new(*use_localstack, common_config);
+            StorageConfig::DynamoDb { use_dynamodb_local } => {
+                let config = DynamoDbStoreConfig::new(*use_dynamodb_local, common_config);
                 Ok(StoreConfig::DynamoDb(config, namespace))
             }
             #[cfg(feature = "scylladb")]
@@ -466,8 +466,8 @@ impl fmt::Display for StorageConfigNamespace {
                 write!(f, "rocksdb:{}:{}:{}", path.display(), spawn_mode, namespace)
             }
             #[cfg(feature = "dynamodb")]
-            StorageConfig::DynamoDb { use_localstack } => match use_localstack {
-                true => write!(f, "dynamodb:{}:localstack", namespace),
+            StorageConfig::DynamoDb { use_dynamodb_local } => match use_dynamodb_local {
+                true => write!(f, "dynamodb:{}:dynamodb_local", namespace),
                 false => write!(f, "dynamodb:{}:env", namespace),
             },
             #[cfg(feature = "scylladb")]
@@ -725,7 +725,7 @@ fn test_aws_storage_config_from_str() {
         StorageConfigNamespace::from_str("dynamodb:table").unwrap(),
         StorageConfigNamespace {
             storage_config: StorageConfig::DynamoDb {
-                use_localstack: false
+                use_dynamodb_local: false
             },
             namespace: "table".to_string()
         }
@@ -734,16 +734,16 @@ fn test_aws_storage_config_from_str() {
         StorageConfigNamespace::from_str("dynamodb:table:env").unwrap(),
         StorageConfigNamespace {
             storage_config: StorageConfig::DynamoDb {
-                use_localstack: false
+                use_dynamodb_local: false
             },
             namespace: "table".to_string()
         }
     );
     assert_eq!(
-        StorageConfigNamespace::from_str("dynamodb:table:localstack").unwrap(),
+        StorageConfigNamespace::from_str("dynamodb:table:dynamodb_local").unwrap(),
         StorageConfigNamespace {
             storage_config: StorageConfig::DynamoDb {
-                use_localstack: true
+                use_dynamodb_local: true
             },
             namespace: "table".to_string()
         }

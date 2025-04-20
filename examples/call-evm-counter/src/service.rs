@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use alloy::primitives::U256;
+use alloy_primitives::U256;
 use alloy_sol_types::{sol, SolCall};
 use call_evm_counter::{CallCounterOperation, CallCounterRequest};
 use linera_sdk::{

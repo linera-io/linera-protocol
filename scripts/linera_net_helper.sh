@@ -38,7 +38,7 @@ function linera_spawn_and_read_wallet_variables() {
 function linera_spawn() {
     LINERA_TMP_DIR=$(mktemp -d) || exit 1
 
-    trap 'jobs -p | xargs -r kill; rm -rf "$LINERA_TMP_DIR"' EXIT
+    trap 'jobs -p | xargs -r kill || true; rm -rf "$LINERA_TMP_DIR"' EXIT
 
     LINERA_TMP_OUT="$LINERA_TMP_DIR/out"
     LINERA_TMP_ERR="$LINERA_TMP_DIR/err"

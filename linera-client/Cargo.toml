@@ -16,7 +16,6 @@ test = ["linera-views/test", "linera-execution/test"]
 benchmark = [
     "linera-base/test",
     "dep:linera-sdk",
-    "dep:tokio-util",
     "dep:crossbeam-channel",
     "dep:num-format",
     "dep:reqwest",
@@ -80,7 +79,7 @@ thiserror.workspace = true
 thiserror-context.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
-tokio-util = { workspace = true, optional = true }
+tokio-util.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
 
