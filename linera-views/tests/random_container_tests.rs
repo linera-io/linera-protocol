@@ -426,7 +426,7 @@ async fn bucket_log_view_mutability_check() -> Result<()> {
         let count_oper = rng.gen_range(0..25);
         let mut new_vector = vector.clone();
         for _ in 0..count_oper {
-            let choice = rng.gen_range(0..6);
+            let choice = rng.gen_range(0..3);
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..100);

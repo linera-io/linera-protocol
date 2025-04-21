@@ -135,6 +135,7 @@ where
         let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
+            self.stored_data.clear();
             self.stored_count = 0;
             delete_view = true;
         }
