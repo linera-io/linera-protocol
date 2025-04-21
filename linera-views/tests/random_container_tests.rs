@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use linera_views::{
+    bucket_log_view::HashedBucketLogView,
     bucket_queue_view::HashedBucketQueueView,
     collection_view::HashedCollectionView,
     context::{Context, MemoryContext},
@@ -402,6 +403,93 @@ async fn map_view_mutability() -> Result<()> {
     }
     Ok(())
 }
+
+
+
+#[derive(CryptoHashRootView)]
+pub struct BucketLogStateView<C> {
+    pub log: HashedBucketLogView<C, u8, 5>,
+}
+
+#[tokio::test]
+async fn bucket_log_view_mutability_check() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    let mut rng = make_deterministic_rng();
+    let mut vector = Vec::new();
+    let n = 200;
+    for _ in 0..n {
+        let mut view = BucketLogStateView::load(context.clone()).await?;
+        let hash = view.crypto_hash().await?;
+        let save = rng.gen::<bool>();
+        let elements = view.log.elements().await?;
+        assert_eq!(elements, vector);
+        let count_oper = rng.gen_range(0..25);
+        let mut new_vector = vector.clone();
+        for _ in 0..count_oper {
+            let choice = rng.gen_range(0..6);
+            if choice == 0 {
+                // inserting random stuff
+                let n_ins = rng.gen_range(0..100);
+                for _ in 0..n_ins {
+                    let val = rng.gen::<u8>();
+                    view.log.push(val);
+                    new_vector.push(val);
+                }
+            }
+            if choice == 1 {
+                // Doing the clearing
+                view.clear();
+                new_vector.clear();
+            }
+            if choice == 2 {
+                // Doing the rollback
+                view.rollback();
+                assert!(!view.has_pending_changes().await);
+                new_vector.clone_from(&vector);
+            }
+            let new_elements = view.log.elements().await?;
+            let new_hash = view.crypto_hash().await?;
+            if elements == new_elements {
+                assert_eq!(new_hash, hash);
+            } else {
+                // If equal it is a bug or a hash collision (unlikely)
+                assert_ne!(new_hash, hash);
+            }
+            assert_eq!(new_elements, new_vector);
+            let count = view.log.count();
+            if count > 0 {
+                for _ in 0..3 {
+                    let mut vec2 = Vec::new();
+                    let mut indices = Vec::new();
+                    for _ in 0..10 {
+                        let pos = rng.gen_range(0..count);
+                        indices.push(pos);
+                        vec2.push(Some(new_vector[pos]));
+                    }
+                    let vec1 = view.log.multi_get(indices).await?;
+                    assert_eq!(vec1, vec2);
+                }
+            }
+        }
+        if save {
+            if vector != new_vector {
+                assert!(view.has_pending_changes().await);
+            }
+            vector.clone_from(&new_vector);
+            view.save().await?;
+            let new_elements = view.log.elements().await?;
+            assert_eq!(new_elements, new_vector);
+            assert!(!view.has_pending_changes().await);
+        }
+    }
+    Ok(())
+}
+
+
+
+
+
+
 
 #[derive(CryptoHashRootView)]
 pub struct BucketQueueStateView<C> {

@@ -69,7 +69,6 @@ impl<T> Bucket<T> {
     }
 }
 
-
 /// A view that supports logging values of type `T`.
 #[derive(Debug)]
 pub struct BucketLogView<C, T, const N: usize> {
@@ -402,6 +401,26 @@ where
             )
         }
     }
+
+    /// Read all the elements of the bucket log view
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut log = LogView::load(context).await.unwrap();
+    /// log.push(34);
+    /// log.push(42);
+    /// log.push(56);
+    /// assert_eq!(log.elements().await.unwrap(), vec![34, 42, 56]);
+    /// # })
+    /// ```
+    pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
+        self.read(..).await
+    }
+
+
 }
 
 #[async_trait]
