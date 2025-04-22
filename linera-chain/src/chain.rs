@@ -29,8 +29,8 @@ use linera_execution::{
     QueryOutcome, ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
-    bucket_queue_view::BucketQueueView,
     bucket_log_view::BucketLogView,
+    bucket_queue_view::BucketQueueView,
     context::Context,
     map_view::MapView,
     reentrant_collection_view::ReentrantCollectionView,

@@ -207,6 +207,18 @@ A block height to identify blocks in a chain
 scalar BlockHeight
 
 
+type BucketLogView_BlockHeight_e824a938 {
+	entries(start: Int, end: Int): [BlockHeight!]!
+}
+
+type BucketLogView_ChainAndHeight_7af83576 {
+	entries(start: Int, end: Int): [ChainAndHeight!]!
+}
+
+type BucketLogView_CryptoHash_87fbb60c {
+	entries(start: Int, end: Int): [CryptoHash!]!
+}
+
 type BucketQueueView_BlockHeight_e824a938 {
 	entries(count: Int): [BlockHeight!]!
 }
@@ -327,11 +339,11 @@ type ChainStateExtendedView {
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
 	"""
-	confirmedLog: LogView_CryptoHash_87fbb60c!
+	confirmedLog: BucketLogView_CryptoHash_87fbb60c!
 	"""
 	Sender chain and height of all certified blocks known as a receiver (local ordering).
 	"""
-	receivedLog: LogView_ChainAndHeight_7af83576!
+	receivedLog: BucketLogView_ChainAndHeight_7af83576!
 	"""
 	The number of `received_log` entries we have synchronized, for each validator.
 	"""
@@ -414,7 +426,7 @@ type ChannelStateView {
 	"""
 	The block heights so far, to be sent to future subscribers.
 	"""
-	blockHeights: LogView_BlockHeight_e824a938!
+	blockHeights: BucketLogView_BlockHeight_e824a938!
 }
 
 """
@@ -619,18 +631,6 @@ type IncomingBundle {
 A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
-
-type LogView_BlockHeight_e824a938 {
-	entries(start: Int, end: Int): [BlockHeight!]!
-}
-
-type LogView_ChainAndHeight_7af83576 {
-	entries(start: Int, end: Int): [ChainAndHeight!]!
-}
-
-type LogView_CryptoHash_87fbb60c {
-	entries(start: Int, end: Int): [CryptoHash!]!
-}
 
 input MapFilters_AccountOwner_d6668c53 {
 	keys: [AccountOwner!]
