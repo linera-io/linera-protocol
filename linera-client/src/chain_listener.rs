@@ -139,7 +139,8 @@ pub struct ChainListener<C: ClientContext> {
     storage: C::Storage,
     config: Arc<ChainListenerConfig>,
     listening: BTreeMap<ChainId, ListeningClient<C>>,
-    /// The set of chains that subscribe to at least one event stream on the given chain.
+    /// Map from publishing chain to subscriber chains.
+    /// Events emitted on the _publishing chain_ are of interest to the _subscriber chains_.
     event_subscribers: BTreeMap<ChainId, BTreeSet<ChainId>>,
     cancellation_token: CancellationToken,
 }
@@ -250,7 +251,7 @@ impl<C: ClientContext> ChainListener<C> {
         Ok(())
     }
 
-    /// Processes the inboxes of all chains that are subscribed to streams with new events.
+    /// Processes the inboxes of all chains that are subscribed to `chain_id`.
     async fn process_new_events(&mut self, chain_id: ChainId) -> Result<(), Error> {
         let Some(subscribers) = self.event_subscribers.get(&chain_id).cloned() else {
             return Ok(());
@@ -261,8 +262,8 @@ impl<C: ClientContext> ChainListener<C> {
         Ok(())
     }
 
-    /// Starts listening for notifications about the given chains, and any event stream publisher
-    /// chains.
+    /// Starts listening for notifications about the given chains, and any chains that publish
+    /// event streams those chains are subscribed to.
     async fn listen_recursively(&mut self, mut chain_ids: BTreeSet<ChainId>) -> Result<(), Error> {
         while let Some(chain_id) = chain_ids.pop_first() {
             chain_ids.extend(self.listen(chain_id).await?);
@@ -272,7 +273,7 @@ impl<C: ClientContext> ChainListener<C> {
 
     /// Starts listening for notifications about the given chain.
     ///
-    /// Returns all publisher chains, that we also need to listen to.
+    /// Returns all publishing chains, that we also need to listen to.
     async fn listen(&mut self, chain_id: ChainId) -> Result<BTreeSet<ChainId>, Error> {
         if self.listening.contains_key(&chain_id) {
             return Ok(BTreeSet::new());
@@ -288,12 +289,12 @@ impl<C: ClientContext> ChainListener<C> {
         let listening_client =
             ListeningClient::new(client, abort_handle, join_handle, notification_stream);
         self.listening.insert(chain_id, listening_client);
-        let publishers = self.update_event_subscriptions(chain_id).await?;
+        let publishing_chains = self.update_event_subscriptions(chain_id).await?;
         self.maybe_process_inbox(chain_id).await?;
-        Ok(publishers)
+        Ok(publishing_chains)
     }
 
-    /// Updates the event subscribers map, and returns all publisher chains we need to listen to.
+    /// Updates the event subscribers map, and returns all publishing chains we need to listen to.
     async fn update_event_subscriptions(
         &mut self,
         chain_id: ChainId,
@@ -302,14 +303,14 @@ impl<C: ClientContext> ChainListener<C> {
         if !listening_client.client.is_tracked() {
             return Ok(BTreeSet::new());
         }
-        let publishers = listening_client.client.event_stream_publishers().await?;
-        for publisher_id in &publishers {
+        let publishing_chains = listening_client.client.event_stream_publishers().await?;
+        for publisher_id in &publishing_chains {
             self.event_subscribers
                 .entry(*publisher_id)
                 .or_default()
                 .insert(chain_id);
         }
-        Ok(publishers)
+        Ok(publishing_chains)
     }
 
     /// Returns the next notification or timeout to process.

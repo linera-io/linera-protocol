@@ -331,6 +331,8 @@ pub enum ExecutionError {
     UnprocessedStreams,
     #[error("Internal error: {0}")]
     InternalError(&'static str),
+    #[error("UpdateStreams contains an unknown event")]
+    EventNotFound(EventId),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -419,6 +421,8 @@ pub trait ExecutionRuntimeContext {
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError>;
+
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
@@ -479,9 +483,6 @@ pub struct MessageContext {
 pub struct ProcessStreamsContext {
     /// The current chain ID.
     pub chain_id: ChainId,
-    /// The authenticated signer of the operation that created the message, if any.
-    #[debug(skip_if = Option::is_none)]
-    pub authenticated_signer: Option<AccountOwner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
@@ -492,7 +493,6 @@ impl From<MessageContext> for ProcessStreamsContext {
     fn from(context: MessageContext) -> Self {
         Self {
             chain_id: context.chain_id,
-            authenticated_signer: context.authenticated_signer,
             height: context.height,
             round: context.round,
         }
@@ -503,7 +503,6 @@ impl From<OperationContext> for ProcessStreamsContext {
     fn from(context: OperationContext) -> Self {
         Self {
             chain_id: context.chain_id,
-            authenticated_signer: context.authenticated_signer,
             height: context.height,
             round: context.round,
         }
@@ -1150,6 +1149,10 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
+    }
+
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        Ok(self.events.contains_key(&event_id))
     }
 
     #[cfg(with_testing)]

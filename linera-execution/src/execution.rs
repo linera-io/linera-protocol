@@ -150,7 +150,7 @@ impl UserAction {
         match self {
             Instantiate(context, _) => context.authenticated_signer,
             Operation(context, _) => context.authenticated_signer,
-            ProcessStreams(context, _) => context.authenticated_signer,
+            ProcessStreams(_, _) => None,
             Message(context, _) => context.authenticated_signer,
         }
     }
@@ -506,6 +506,8 @@ where
         Ok(applications)
     }
 
+    /// Calls `process_streams` for all applications that are subscribed to streams with new
+    /// events or that have new subscriptions.
     async fn process_subscriptions(
         &mut self,
         txn_tracker: &mut TransactionTracker,

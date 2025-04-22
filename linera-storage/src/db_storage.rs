@@ -783,6 +783,14 @@ where
         maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
     }
 
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+        let exists = self.store.contains_key(&event_key).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
+        Ok(exists)
+    }
+
     async fn write_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,

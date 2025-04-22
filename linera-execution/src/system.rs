@@ -522,7 +522,6 @@ where
                     if subscriptions.next_index >= next_index {
                         continue;
                     }
-                    subscriptions.next_index = next_index;
                     for application_id in &subscriptions.applications {
                         txn_tracker.add_stream_to_process(
                             *application_id,
@@ -531,17 +530,22 @@ where
                             next_index,
                         );
                     }
+                    subscriptions.next_index = next_index;
                     let index = next_index
                         .checked_sub(1)
                         .ok_or(ArithmeticError::Underflow)?;
-                    self.context()
-                        .extra()
-                        .get_event(EventId {
-                            chain_id,
-                            stream_id: stream_id.clone(),
-                            index,
-                        })
-                        .await?;
+                    let event_id = EventId {
+                        chain_id,
+                        stream_id,
+                        index,
+                    };
+                    ensure!(
+                        self.context()
+                            .extra()
+                            .contains_event(event_id.clone())
+                            .await?,
+                        ExecutionError::EventNotFound(event_id)
+                    );
                 }
             }
         }
