@@ -649,6 +649,12 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         .await?;
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let query = format!("query {{ applications(chainId:\"{chain}\") {{ id }} }}");
+    let response = node_service.query_node(query).await?;
+    assert_eq!(
+        response["applications"][0]["id"].as_str().unwrap(),
+        &application_id.forget_abi().to_string()
+    );
 
     let application = node_service
         .make_application(&chain, &application_id)
