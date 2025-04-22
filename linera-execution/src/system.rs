@@ -799,7 +799,9 @@ where
         self.check_required_applications(&application_description, Some(&mut txn_tracker))
             .await?;
 
-        txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
+        let blob = Blob::new_application_description(&application_description);
+        self.used_blobs.insert(&blob.id())?;
+        txn_tracker.add_created_blob(blob);
 
         Ok(CreateApplicationResult {
             app_id: ApplicationId::from(&application_description),
