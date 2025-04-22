@@ -17,7 +17,10 @@ use std::{
 
 #[cfg(web)]
 use js_sys::wasm_bindgen;
-use linera_base::identifiers::{ChainId, StreamId};
+use linera_base::{
+    data_types::StreamUpdate,
+    identifiers::{ChainId, StreamId},
+};
 
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, FinalizeContext, MessageContext, OperationContext,
@@ -151,7 +154,7 @@ type ProcessStreamHandler = Box<
     dyn FnOnce(
             &mut ContractSyncRuntimeHandle,
             ProcessStreamsContext,
-            Vec<(ChainId, StreamId, u32)>,
+            Vec<StreamUpdate>,
         ) -> Result<(), ExecutionError>
         + Send
         + Sync,
@@ -258,7 +261,7 @@ impl ExpectedCall {
         handler: impl FnOnce(
                 &mut ContractSyncRuntimeHandle,
                 ProcessStreamsContext,
-                Vec<(ChainId, StreamId, u32)>,
+                Vec<StreamUpdate>,
             ) -> Result<(), ExecutionError>
             + Send
             + Sync
@@ -380,11 +383,11 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
     fn process_streams(
         &mut self,
         context: ProcessStreamsContext,
-        streams: Vec<(ChainId, StreamId, u32)>,
+        updates: Vec<StreamUpdate>,
     ) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::ProcessStreams(handler)) => {
-                handler(&mut self.runtime, context, streams)
+                handler(&mut self.runtime, context, updates)
             }
             Some(unexpected_call) => panic!(
                 "Expected a call to `process_streams`, got a call to `{unexpected_call}` instead."

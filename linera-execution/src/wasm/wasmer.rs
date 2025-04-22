@@ -5,10 +5,7 @@
 
 use std::{marker::Unpin, sync::LazyLock};
 
-use linera_base::{
-    data_types::Bytecode,
-    identifiers::{ChainId, StreamId},
-};
+use linera_base::data_types::{Bytecode, StreamUpdate};
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
     ExportTo,
@@ -166,10 +163,10 @@ where
     fn process_streams(
         &mut self,
         _context: ProcessStreamsContext,
-        streams: Vec<(ChainId, StreamId, u32)>,
+        updates: Vec<StreamUpdate>,
     ) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
-            .process_streams(streams)
+            .process_streams(updates)
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }

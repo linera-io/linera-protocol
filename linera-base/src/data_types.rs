@@ -1315,6 +1315,26 @@ impl Event {
     }
 }
 
+/// An update for a stream with new events.
+#[derive(Clone, Debug, Serialize, Deserialize, WitType, WitLoad, WitStore)]
+pub struct StreamUpdate {
+    /// The publishing chain.
+    pub chain_id: ChainId,
+    /// The stream ID.
+    pub stream_id: StreamId,
+    /// The lowest index of a new event.
+    pub previous_index: u32,
+    /// The index of the next event, i.e. the lowest for which no event is known yet.
+    pub next_index: u32,
+}
+
+impl StreamUpdate {
+    /// Returns the indices of all new events in the stream.
+    pub fn new_indices(&self) -> impl Iterator<Item = u32> {
+        self.previous_index..self.next_index
+    }
+}
+
 impl BcsHashable<'_> for Event {}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");

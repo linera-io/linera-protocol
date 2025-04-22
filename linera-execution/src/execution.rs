@@ -8,8 +8,8 @@ use std::{
 
 use futures::{FutureExt, StreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight},
-    identifiers::{Account, AccountOwner, ChainId, Destination, StreamId},
+    data_types::{Amount, BlockHeight, StreamUpdate},
+    identifiers::{Account, AccountOwner, Destination, StreamId},
 };
 use linera_views::{
     context::Context,
@@ -141,7 +141,7 @@ pub enum UserAction {
     Instantiate(OperationContext, Vec<u8>),
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
-    ProcessStreams(ProcessStreamsContext, Vec<(ChainId, StreamId, u32)>),
+    ProcessStreams(ProcessStreamsContext, Vec<StreamUpdate>),
 }
 
 impl UserAction {
@@ -521,29 +521,33 @@ where
             let to_process = txn_tracker
                 .flush_streams_to_process()
                 .into_iter()
-                .filter_map(|(app_id, streams)| {
-                    let streams = streams
+                .filter_map(|(app_id, updates)| {
+                    let updates = updates
                         .into_iter()
-                        .filter_map(|((chain_id, stream_id), next_index)| {
-                            if !processed.insert((app_id, chain_id, stream_id.clone())) {
+                        .filter_map(|update| {
+                            if !processed.insert((
+                                app_id,
+                                update.chain_id,
+                                update.stream_id.clone(),
+                            )) {
                                 return None;
                             }
-                            Some((chain_id, stream_id, next_index))
+                            Some(update)
                         })
                         .collect::<Vec<_>>();
-                    if streams.is_empty() {
+                    if updates.is_empty() {
                         return None;
                     }
-                    Some((app_id, streams))
+                    Some((app_id, updates))
                 })
                 .collect::<BTreeMap<_, _>>();
             if to_process.is_empty() {
                 return Ok(());
             }
-            for (app_id, streams) in to_process {
+            for (app_id, updates) in to_process {
                 self.run_user_action(
                     app_id,
-                    UserAction::ProcessStreams(context, streams.clone()),
+                    UserAction::ProcessStreams(context, updates),
                     None,
                     None,
                     txn_tracker,

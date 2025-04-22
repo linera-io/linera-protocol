@@ -527,6 +527,7 @@ where
                             *application_id,
                             chain_id,
                             stream_id.clone(),
+                            subscriptions.next_index,
                             next_index,
                         );
                     }

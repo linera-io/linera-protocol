@@ -54,8 +54,8 @@ pub use linera_base::{
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     crypto::CryptoHash,
+    data_types::StreamUpdate,
     doc_scalar,
-    identifiers::{ChainId, StreamId},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use serde_json;
@@ -137,7 +137,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     ///
     /// This is called whenever there is a new event on any stream that this application
     /// subscribes to.
-    async fn process_streams(&mut self, _streams: Vec<(ChainId, StreamId, u32)>) {}
+    async fn process_streams(&mut self, _updates: Vec<StreamUpdate>) {}
 
     /// Finishes the execution of the current transaction.
     ///

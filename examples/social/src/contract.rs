@@ -6,7 +6,7 @@
 mod state;
 
 use linera_sdk::{
-    linera_base_types::{ChainId, StreamId, WithContractAbi},
+    linera_base_types::{ChainId, StreamUpdate, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -72,30 +72,25 @@ impl Contract for SocialContract {
         panic!("Unexpected message");
     }
 
-    async fn process_streams(&mut self, streams: Vec<(ChainId, StreamId, u32)>) {
-        for (chain_id, stream_id, next_index) in streams {
-            assert_eq!(stream_id.stream_name, STREAM_NAME.into());
+    async fn process_streams(&mut self, updates: Vec<StreamUpdate>) {
+        for update in updates {
+            assert_eq!(update.stream_id.stream_name, STREAM_NAME.into());
             assert_eq!(
-                stream_id.application_id,
+                update.stream_id.application_id,
                 self.runtime.application_id().forget_abi().into()
             );
-            let stored_count = self
-                .state
-                .processed_events
-                .get_mut_or_default(&chain_id)
-                .await
-                .expect("Failed to read from state");
-            let count = *stored_count;
-            *stored_count = next_index;
-            for index in count..next_index {
-                let event = self.runtime.read_event(chain_id, STREAM_NAME.into(), index);
+            for index in update.new_indices() {
+                let event = self
+                    .runtime
+                    .read_event(update.chain_id, STREAM_NAME.into(), index);
                 match event {
                     Event::Post { post, index } => {
-                        self.execute_post_event(chain_id, index, post);
+                        self.execute_post_event(update.chain_id, index, post);
                     }
                     Event::Like { key } => self.execute_like_event(key).await,
                     Event::Comment { key, comment } => {
-                        self.execute_comment_event(key, chain_id, comment).await;
+                        self.execute_comment_event(key, update.chain_id, comment)
+                            .await;
                     }
                 }
             }

@@ -4,7 +4,7 @@ interface contract-entrypoints {
     instantiate: func(argument: list<u8>);
     execute-operation: func(operation: list<u8>) -> list<u8>;
     execute-message: func(message: list<u8>);
-    process-streams: func(streams: list<tuple<chain-id, stream-id, u32>>);
+    process-streams: func(streams: list<stream-update>);
     finalize: func();
 
     record application-id {
@@ -34,5 +34,12 @@ interface contract-entrypoints {
 
     record stream-name {
         inner0: list<u8>,
+    }
+
+    record stream-update {
+        chain-id: chain-id,
+        stream-id: stream-id,
+        previous-index: u32,
+        next-index: u32,
     }
 }

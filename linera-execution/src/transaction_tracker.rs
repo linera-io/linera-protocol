@@ -5,12 +5,14 @@ use std::{collections::BTreeMap, mem, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ArithmeticError, Blob, Event, OracleResponse, Timestamp},
+    data_types::{ArithmeticError, Blob, Event, OracleResponse, StreamUpdate, Timestamp},
     ensure,
     identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
 };
 
 use crate::{ExecutionError, OutgoingMessage};
+
+type AppStreamUpdates = BTreeMap<(ChainId, StreamId), (u32, u32)>;
 
 /// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
 /// as replayed oracle responses.
@@ -39,7 +41,7 @@ pub struct TransactionTracker {
     /// Operation result.
     operation_result: Option<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
-    streams_to_process: BTreeMap<ApplicationId, BTreeMap<(ChainId, StreamId), u32>>,
+    streams_to_process: BTreeMap<ApplicationId, AppStreamUpdates>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -167,17 +169,21 @@ impl TransactionTracker {
         application_id: ApplicationId,
         chain_id: ChainId,
         stream_id: StreamId,
+        previous_index: u32,
         next_index: u32,
     ) {
-        if next_index == 0 {
-            return; // No events in the stream.
+        if next_index == previous_index {
+            return; // No new events in the stream.
         }
-        *self
-            .streams_to_process
+        self.streams_to_process
             .entry(application_id)
             .or_default()
             .entry((chain_id, stream_id))
-            .or_default() = next_index;
+            .and_modify(|(pi, ni)| {
+                *pi = (*pi).min(previous_index);
+                *ni = (*ni).max(next_index);
+            })
+            .or_insert_with(|| (previous_index, next_index));
     }
 
     pub fn remove_stream_to_process(
@@ -194,10 +200,24 @@ impl TransactionTracker {
         }
     }
 
-    pub fn flush_streams_to_process(
-        &mut self,
-    ) -> BTreeMap<ApplicationId, BTreeMap<(ChainId, StreamId), u32>> {
+    pub fn flush_streams_to_process(&mut self) -> BTreeMap<ApplicationId, Vec<StreamUpdate>> {
         mem::take(&mut self.streams_to_process)
+            .into_iter()
+            .map(|(app_id, streams)| {
+                let updates = streams
+                    .into_iter()
+                    .map(
+                        |((chain_id, stream_id), (previous_index, next_index))| StreamUpdate {
+                            chain_id,
+                            stream_id,
+                            previous_index,
+                            next_index,
+                        },
+                    )
+                    .collect();
+                (app_id, updates)
+            })
+            .collect()
     }
 
     /// Adds the oracle response to the record.

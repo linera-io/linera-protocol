@@ -3,7 +3,7 @@
 
 //! Wasm entrypoints for contracts and services.
 
-use linera_base::identifiers::{ChainId, StreamId};
+use linera_base::data_types::StreamUpdate;
 use linera_witty::wit_import;
 
 /// WIT entrypoints for application contracts.
@@ -12,7 +12,7 @@ pub trait ContractEntrypoints {
     fn instantiate(argument: Vec<u8>);
     fn execute_operation(operation: Vec<u8>) -> Vec<u8>;
     fn execute_message(message: Vec<u8>);
-    fn process_streams(streams: Vec<(ChainId, StreamId, u32)>);
+    fn process_streams(streams: Vec<StreamUpdate>);
     fn finalize();
 }
 

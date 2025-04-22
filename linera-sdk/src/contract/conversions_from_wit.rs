@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight},
+    data_types::{Amount, BlockHeight, StreamUpdate},
     identifiers::{
         AccountOwner, ApplicationId, ChainId, GenericApplicationId, MessageId, ModuleId, StreamId,
         StreamName,
@@ -168,6 +168,17 @@ impl From<wit_entrypoints::StreamId> for StreamId {
         StreamId {
             application_id: stream_id.application_id.into(),
             stream_name: stream_id.stream_name.into(),
+        }
+    }
+}
+
+impl From<wit_entrypoints::StreamUpdate> for StreamUpdate {
+    fn from(stream_update: wit_entrypoints::StreamUpdate) -> Self {
+        StreamUpdate {
+            chain_id: stream_update.chain_id.into(),
+            stream_id: stream_update.stream_id.into(),
+            previous_index: stream_update.previous_index,
+            next_index: stream_update.next_index,
         }
     }
 }

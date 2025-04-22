@@ -35,12 +35,12 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, Resources, SendMessageRequest, Timestamp,
+        DecompressionError, Epoch, Resources, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, StreamId, StreamName,
+        EventId, GenericApplicationId, MessageId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -371,7 +371,7 @@ pub trait UserContract {
     fn process_streams(
         &mut self,
         context: ProcessStreamsContext,
-        streams: Vec<(ChainId, StreamId, u32)>,
+        updates: Vec<StreamUpdate>,
     ) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.

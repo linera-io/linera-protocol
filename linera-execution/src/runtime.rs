@@ -1054,8 +1054,8 @@ impl ContractSyncRuntimeHandle {
             UserAction::Message(context, message) => {
                 code.execute_message(context, message).map(|()| None)
             }
-            UserAction::ProcessStreams(context, streams) => {
-                code.process_streams(context, streams).map(|()| None)
+            UserAction::ProcessStreams(context, updates) => {
+                code.process_streams(context, updates).map(|()| None)
             }
         };
 
@@ -1377,6 +1377,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             subscriber_app_id,
             chain_id,
             stream_id,
+            0,
             next_index,
         );
         Ok(())

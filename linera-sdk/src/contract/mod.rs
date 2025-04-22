@@ -85,18 +85,15 @@ macro_rules! contract {
                 )
             }
 
-            fn process_streams(streams: Vec<(
-                $crate::contract::wit::exports::linera::app::contract_entrypoints::ChainId,
-                $crate::contract::wit::exports::linera::app::contract_entrypoints::StreamId,
-                u32,
-            )>) {
+            fn process_streams(updates: Vec<
+                $crate::contract::wit::exports::linera::app::contract_entrypoints::StreamUpdate,
+            >) {
                 use $crate::util::BlockingWait;
                 $crate::contract::run_async_entrypoint::<$contract, _, _>(
                     unsafe { &mut CONTRACT },
                     move |contract| {
-                        contract.process_streams(streams.into_iter().map(|(chain_id, stream_id, next_index)| {
-                            (chain_id.into(), stream_id.into(), next_index)
-                        }).collect()).blocking_wait()
+                        let updates = updates.into_iter().map(Into::into).collect();
+                        contract.process_streams(updates).blocking_wait()
                     },
                 )
             }

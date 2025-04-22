@@ -8,9 +8,9 @@ use std::{convert::TryFrom, sync::Arc};
 
 use alloy::primitives::Address;
 use linera_base::{
-    data_types::Bytecode,
+    data_types::{Bytecode, StreamUpdate},
     ensure,
-    identifiers::{ApplicationId, ChainId, StreamId, StreamName},
+    identifiers::{ApplicationId, StreamName},
     vm::EvmQuery,
 };
 use num_enum::TryFromPrimitive;
@@ -557,7 +557,7 @@ where
     fn process_streams(
         &mut self,
         _context: ProcessStreamsContext,
-        _streams: Vec<(ChainId, StreamId, u32)>,
+        _streams: Vec<StreamUpdate>,
     ) -> Result<(), ExecutionError> {
         // TODO(#3785): Implement process_streams for EVM
         todo!("Streams are not implemented for Ethereum smart contracts yet.")
