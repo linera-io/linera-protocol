@@ -5,7 +5,7 @@
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::{Epoch, Round},
-    identifiers::{BlobId, ChainId, MessageId},
+    identifiers::{ChainId, MessageId},
 };
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 
@@ -38,10 +38,6 @@ impl GenericCertificate<ConfirmedBlock> {
         let certificate_hash = self.hash();
         self.block()
             .message_bundles_for(medium, recipient, certificate_hash)
-    }
-
-    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.block().requires_blob(blob_id)
     }
 
     #[cfg(with_testing)]
