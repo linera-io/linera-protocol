@@ -296,6 +296,10 @@ where
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(3));
+    creator_state
+        .system
+        .used_blobs
+        .insert(&application_description_blob_id)?;
     let run_block_proposal = ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
@@ -303,7 +307,7 @@ where
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![vec![OracleResponse::Blob(application_description_blob_id)]],
+            oracle_responses: vec![vec![]],
             operation_results: vec![OperationResult(bcs::to_bytes(&15u64)?)],
         }
         .with(run_block),
