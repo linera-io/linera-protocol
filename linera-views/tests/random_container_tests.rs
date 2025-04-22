@@ -404,8 +404,6 @@ async fn map_view_mutability() -> Result<()> {
     Ok(())
 }
 
-
-
 #[derive(CryptoHashRootView)]
 pub struct BucketLogStateView<C> {
     pub log: HashedBucketLogView<C, u8, 5>,
@@ -484,12 +482,6 @@ async fn bucket_log_view_mutability_check() -> Result<()> {
     }
     Ok(())
 }
-
-
-
-
-
-
 
 #[derive(CryptoHashRootView)]
 pub struct BucketQueueStateView<C> {

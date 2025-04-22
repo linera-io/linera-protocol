@@ -30,8 +30,8 @@ use linera_execution::{
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,
+    bucket_log_view::BucketLogView,
     context::Context,
-    log_view::LogView,
     map_view::MapView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
@@ -174,6 +174,9 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 /// The BCS-serialized size of an empty [`Block`].
 const EMPTY_BLOCK_SIZE: usize = 94;
 
+/// The size of a bucket in the ['BucketLogView']
+const LOG_VIEW_SIZE: usize = 100;
+
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
 pub struct TimestampedBundleInInbox {
@@ -232,9 +235,9 @@ where
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    pub confirmed_log: LogView<C, CryptoHash>,
+    pub confirmed_log: BucketLogView<C, CryptoHash, LOG_VIEW_SIZE>,
     /// Sender chain and height of all certified blocks known as a receiver (local ordering).
-    pub received_log: LogView<C, ChainAndHeight>,
+    pub received_log: BucketLogView<C, ChainAndHeight, LOG_VIEW_SIZE>,
     /// The number of `received_log` entries we have synchronized, for each validator.
     pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorPublicKey, u64>>,
 
@@ -347,7 +350,7 @@ where
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,
     /// The block heights so far, to be sent to future subscribers.
-    pub block_heights: LogView<C, BlockHeight>,
+    pub block_heights: BucketLogView<C, BlockHeight, LOG_VIEW_SIZE>,
 }
 
 impl<C> ChainStateView<C>
@@ -716,7 +719,7 @@ where
     #[expect(clippy::too_many_arguments)]
     pub async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
-        confirmed_log: &LogView<C, CryptoHash>,
+        confirmed_log: &BucketLogView<C, CryptoHash, LOG_VIEW_SIZE>,
         previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
         block: &ProposedBlock,
         local_time: Timestamp,

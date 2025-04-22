@@ -1,9 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::{BTreeSet, HashMap}, ops::{Bound, Range, RangeBounds}};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
+use std::{
+    collections::{BTreeSet, HashMap},
+    ops::{Bound, Range, RangeBounds},
+};
 
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -42,7 +45,6 @@ enum KeyTag {
     /// Prefix for the indices of the log.
     Index,
 }
-
 
 /// The `StoredIndices` contains the description of the stored buckets.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -100,7 +102,8 @@ where
         let value = values.first().ok_or(ViewError::PostLoadValuesError)?;
         let stored_sizes = from_bytes_option_or_default::<StoredSizes, _>(value)?;
         let stored_count = stored_sizes.sizes.iter().sum();
-        let stored_data = stored_sizes.sizes
+        let stored_data = stored_sizes
+            .sizes
             .into_iter()
             .map(|length| Bucket::NotLoaded { length })
             .collect::<Vec<_>>();
@@ -144,22 +147,19 @@ where
             self.stored_count += self.new_values.len();
             let new_values = std::mem::take(&mut self.new_values);
             for value_chunk in new_values.chunks(N) {
-                let key = self
-                    .context
-                    .derive_tag_key(KeyTag::Index as u8, &i_block)?;
+                let key = self.context.derive_tag_key(KeyTag::Index as u8, &i_block)?;
                 batch.put_key_value(key, &value_chunk.to_vec())?;
-                self.stored_data.push(
-                    Bucket::Loaded {
-                        data: value_chunk.to_vec(),
-                    },
-                );
+                self.stored_data.push(Bucket::Loaded {
+                    data: value_chunk.to_vec(),
+                });
                 i_block += 1;
             }
             delete_view = false;
             self.new_values.clear();
         }
         if !self.delete_storage_first || !self.stored_data.is_empty() {
-            let stored_sizes = self.stored_data
+            let stored_sizes = self
+                .stored_data
                 .iter()
                 .map(|bucket| bucket.len())
                 .collect::<Vec<_>>();
@@ -187,7 +187,7 @@ where
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             stored_data: self.stored_data.clone(),
-            stored_count: self.stored_count.clone(),
+            stored_count: self.stored_count,
             new_values: self.new_values.clone(),
         })
     }
@@ -201,10 +201,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::bucket_log_view::BucketLogView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut log = LogView::load(context).await.unwrap();
+    /// let mut log = BucketLogView::<_, u8, 5>::load(context).await.unwrap();
     /// log.push(34);
     /// # })
     /// ```
@@ -216,10 +216,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::bucket_log_view::BucketLogView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut log = LogView::load(context).await.unwrap();
+    /// let mut log = BucketLogView::<_, u8, 5>::load(context).await.unwrap();
     /// log.push(34);
     /// log.push(42);
     /// assert_eq!(log.count(), 2);
@@ -261,10 +261,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::bucket_log_view::BucketLogView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut log = LogView::load(context).await.unwrap();
+    /// let mut log = BucketLogView::<_, u8, 5>::load(context).await.unwrap();
     /// log.push(34);
     /// assert_eq!(log.get(0).await.unwrap(), Some(34));
     /// # })
@@ -274,7 +274,9 @@ where
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
             let (i_bucket, position) = self.get_position(index).unwrap();
-            let key = self.context.derive_tag_key(KeyTag::Index as u8, &i_bucket)?;
+            let key = self
+                .context
+                .derive_tag_key(KeyTag::Index as u8, &i_bucket)?;
             let bucket = self.context.read_value::<Vec<T>>(&key).await?.unwrap();
             Some(bucket[position].clone())
         } else {
@@ -287,10 +289,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::bucket_log_view::BucketLogView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut log = LogView::load(context).await.unwrap();
+    /// let mut log = BucketLogView::<_, u8, 5>::load(context).await.unwrap();
     /// log.push(34);
     /// log.push(42);
     /// assert_eq!(
@@ -321,7 +323,10 @@ where
             let mut keys = Vec::new();
             let mut map_bucket = HashMap::new();
             for (pos_bucket, i_bucket) in set_bucket.into_iter().enumerate() {
-                keys.push(self.context.derive_tag_key(KeyTag::Index as u8, &i_bucket)?);
+                keys.push(
+                    self.context
+                        .derive_tag_key(KeyTag::Index as u8, &i_bucket)?,
+                );
                 map_bucket.insert(i_bucket, pos_bucket);
             }
             let values = self.context.read_multi_values::<Vec<T>>(keys).await?;
@@ -340,20 +345,17 @@ where
             indices.push(index);
         }
         let values = self.multi_get(indices).await?;
-        Ok(values
-            .into_iter()
-            .map(|x| x.unwrap())
-            .collect::<Vec<_>>())
+        Ok(values.into_iter().map(|x| x.unwrap()).collect::<Vec<_>>())
     }
 
     /// Reads the logged values in the given range (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::bucket_log_view::BucketLogView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut log = LogView::load(context).await.unwrap();
+    /// let mut log = BucketLogView::<_, u8, 5>::load(context).await.unwrap();
     /// log.push(34);
     /// log.push(42);
     /// log.push(56);
@@ -407,10 +409,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::log_view::LogView;
+    /// # use linera_views::bucket_log_view::BucketLogView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut log = LogView::load(context).await.unwrap();
+    /// let mut log = BucketLogView::<_, u8, 5>::load(context).await.unwrap();
     /// log.push(34);
     /// log.push(42);
     /// log.push(56);
@@ -420,8 +422,6 @@ where
     pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
         self.read(..).await
     }
-
-
 }
 
 #[async_trait]
@@ -448,7 +448,8 @@ where
 }
 
 /// Type wrapping `LogView` while memoizing the hash.
-pub type HashedBucketLogView<C, T, const N: usize> = WrappedHashableContainerView<C, BucketLogView<C, T, N>, HasherOutput>;
+pub type HashedBucketLogView<C, T, const N: usize> =
+    WrappedHashableContainerView<C, BucketLogView<C, T, N>, HasherOutput>;
 
 mod graphql {
     use std::borrow::Cow;
@@ -459,7 +460,9 @@ mod graphql {
         graphql::{hash_name, mangle},
     };
 
-    impl<C: Send + Sync, T: async_graphql::OutputType, const N: usize> async_graphql::TypeName for BucketLogView<C, T, N> {
+    impl<C: Send + Sync, T: async_graphql::OutputType, const N: usize> async_graphql::TypeName
+        for BucketLogView<C, T, N>
+    {
         fn type_name() -> Cow<'static, str> {
             format!(
                 "BucketLogView_{}_{:08x}",
