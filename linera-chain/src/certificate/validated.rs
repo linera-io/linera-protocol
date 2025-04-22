@@ -5,7 +5,6 @@
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
-    identifiers::BlobId,
 };
 use serde::{
     ser::{Serialize, SerializeStruct, Serializer},
@@ -16,10 +15,6 @@ use super::{generic::GenericCertificate, Certificate};
 use crate::block::{Block, ConversionError, ValidatedBlock};
 
 impl GenericCertificate<ValidatedBlock> {
-    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.block().requires_blob(blob_id)
-    }
-
     #[cfg(with_testing)]
     pub fn outgoing_message_count(&self) -> usize {
         self.block().messages().iter().map(Vec::len).sum()

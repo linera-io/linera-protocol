@@ -502,7 +502,7 @@ impl Block {
     }
 
     /// Returns whether this block requires the blob with the specified ID.
-    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
+    pub fn requires_or_creates_blob(&self, blob_id: &BlobId) -> bool {
         self.oracle_blob_ids().contains(blob_id)
             || self.published_blob_ids().contains(blob_id)
             || self.created_blob_ids().contains(blob_id)

@@ -1336,7 +1336,9 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate.block().requires_blob(&blob0_id));
+    assert!(publish_certificate
+        .block()
+        .requires_or_creates_blob(&blob0_id));
 
     // Validators goes back up
     builder.set_fault_type([2], FaultType::Honest).await;
@@ -1353,7 +1355,7 @@ where
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
     // The blob is not new on this chain, so it is not required.
-    assert!(!certificate.block().requires_blob(&blob0_id));
+    assert!(!certificate.block().requires_or_creates_blob(&blob0_id));
 
     // Validators 0, 1, 2 now don't process validated block certificates. Client 2A tries to
     // commit a block that reads blob 0 and publishes blob 1. Client 2A will have that block
@@ -1503,7 +1505,9 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate.block().requires_blob(&blob0_id));
+    assert!(publish_certificate
+        .block()
+        .requires_or_creates_blob(&blob0_id));
 
     builder
         .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
@@ -1641,7 +1645,9 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate0.block().requires_blob(&blob0_id));
+    assert!(publish_certificate0
+        .block()
+        .requires_or_creates_blob(&blob0_id));
 
     let blob2_bytes = b"blob2".to_vec();
     let blob2_id = Blob::new(BlobContent::new_data(blob2_bytes.clone())).id();
@@ -1653,7 +1659,9 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate2.block().requires_blob(&blob2_id));
+    assert!(publish_certificate2
+        .block()
+        .requires_or_creates_blob(&blob2_id));
 
     builder
         .set_fault_type([0, 1], FaultType::DontProcessValidated)
