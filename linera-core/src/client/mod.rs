@@ -1591,8 +1591,8 @@ where
         }
     }
 
-    /// Synchronizes all chains that any application on this chain subscribes to, except the admin
-    /// chain.
+    /// Synchronizes all chains that any application on this chain subscribes to.
+    /// We always consider the admin chain a relevant publishing chain, for new epochs.
     async fn synchronize_publisher_chains(&self) -> Result<(), ChainClientError> {
         let chain_ids = self
             .chain_state_view()
@@ -1604,7 +1604,8 @@ where
             .await?
             .iter()
             .map(|(chain_id, _)| *chain_id)
-            .filter(|chain_id| *chain_id != self.chain_id && *chain_id != self.admin_id)
+            .chain(iter::once(self.admin_id))
+            .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
         try_join_all(
             chain_ids
@@ -2527,10 +2528,6 @@ where
     /// `process_inbox` must be called separately.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
-        if self.chain_id != self.admin_id {
-            // Synchronize the state of the admin chain from the network.
-            self.synchronize_chain_state(self.admin_id).await?;
-        }
         let info = self.prepare_chain().await?;
         self.synchronize_publisher_chains().await?;
         self.find_received_certificates().await?;
