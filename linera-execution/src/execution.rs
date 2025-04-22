@@ -6,7 +6,7 @@ use std::{mem, vec};
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, AccountOwner, BlobType, Destination, StreamId},
+    identifiers::{Account, AccountOwner, Destination, StreamId},
 };
 use linera_views::{
     context::Context,
@@ -484,14 +484,11 @@ where
         &self,
     ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {
         let mut applications = vec![];
-        for blob_id in self.system.used_blobs.indices().await? {
-            if blob_id.blob_type == BlobType::ApplicationDescription {
-                let blob_content = self.system.read_blob_content(blob_id).await?;
-                let application_description: ApplicationDescription =
-                    bcs::from_bytes(blob_content.bytes())?;
-                let app_id = ApplicationId::from(&application_description);
-                applications.push((app_id, application_description));
-            }
+        for app_id in self.users.indices().await? {
+            let blob_id = app_id.description_blob_id();
+            let blob_content = self.system.read_blob_content(blob_id).await?;
+            let application_description = bcs::from_bytes(blob_content.bytes())?;
+            applications.push((app_id, application_description));
         }
         Ok(applications)
     }
