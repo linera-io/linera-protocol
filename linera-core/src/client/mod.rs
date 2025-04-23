@@ -889,7 +889,7 @@ where
     /// in any of the streams its applications are subscribing to. Returns `None` if there are no
     /// new events.
     #[instrument(level = "trace")]
-    async fn update_streams_operation(&self) -> Result<Option<Operation>, ChainClientError> {
+    async fn collect_stream_updates(&self) -> Result<Option<Operation>, ChainClientError> {
         // Load all our subscriptions.
         let subscription_map = self
             .chain_state_view()
@@ -3143,8 +3143,8 @@ where
         let mut certificates = Vec::new();
         loop {
             let incoming_bundles = self.pending_message_bundles().await?;
-            let update_streams = self.update_streams_operation().await?;
-            let block_operations = update_streams
+            let stream_updates = self.collect_stream_updates().await?;
+            let block_operations = stream_updates
                 .into_iter()
                 .chain(epoch_change_ops.next())
                 .collect::<Vec<_>>();

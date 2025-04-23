@@ -517,7 +517,7 @@ where
         let mut processed = BTreeSet::new();
         loop {
             let to_process = txn_tracker
-                .flush_streams_to_process()
+                .take_streams_to_process()
                 .into_iter()
                 .filter_map(|(app_id, updates)| {
                     let updates = updates

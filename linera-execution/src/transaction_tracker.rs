@@ -200,7 +200,7 @@ impl TransactionTracker {
         }
     }
 
-    pub fn flush_streams_to_process(&mut self) -> BTreeMap<ApplicationId, Vec<StreamUpdate>> {
+    pub fn take_streams_to_process(&mut self) -> BTreeMap<ApplicationId, Vec<StreamUpdate>> {
         mem::take(&mut self.streams_to_process)
             .into_iter()
             .map(|(app_id, streams)| {
