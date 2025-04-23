@@ -253,7 +253,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     );
 
     // After registering, an app operation can already be used in the first block.
-    application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
+    application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let app_operation = Operation::User {
         application_id,
@@ -289,7 +289,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     );
 
     // But app operations continue to work.
-    application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
+    application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
     let (outcome, _, _) = chain
@@ -322,7 +322,7 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
         })
         .await?;
 
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _| {
         for _ in 0..service_oracle_call_count {
             runtime.query_service(application_id, vec![])?;
         }
@@ -330,7 +330,7 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
     }));
 
     for service_oracle_execution_time in service_oracle_execution_times {
-        application.expect_call(ExpectedCall::handle_query(move |_, _, _| {
+        application.expect_call(ExpectedCall::handle_query(move |_, _| {
             thread::sleep(service_oracle_execution_time);
             Ok(vec![])
         }));
@@ -367,7 +367,7 @@ async fn test_service_as_oracle_exceeding_time_limit(
         })
         .await?;
 
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _| {
         for _ in 0..service_oracle_call_count {
             runtime.query_service(application_id, vec![])?;
         }
@@ -375,7 +375,7 @@ async fn test_service_as_oracle_exceeding_time_limit(
     }));
 
     for service_oracle_execution_time in service_oracle_execution_times {
-        application.expect_call(ExpectedCall::handle_query(move |_, _, _| {
+        application.expect_call(ExpectedCall::handle_query(move |_, _| {
             thread::sleep(service_oracle_execution_time);
             Ok(vec![])
         }));
@@ -427,7 +427,7 @@ async fn test_service_as_oracle_timeout_early_stop(
         })
         .await?;
 
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _| {
         for _ in 0..service_oracle_call_count {
             runtime.query_service(application_id, vec![])?;
         }
@@ -435,7 +435,7 @@ async fn test_service_as_oracle_timeout_early_stop(
     }));
 
     for service_oracle_execution_time in service_oracle_execution_times {
-        application.expect_call(ExpectedCall::handle_query(move |runtime, _, _| {
+        application.expect_call(ExpectedCall::handle_query(move |runtime, _| {
             let execution_time = Instant::now();
             while execution_time.elapsed() < service_oracle_execution_time {
                 runtime.check_execution_time()?;
@@ -488,12 +488,12 @@ async fn test_service_as_oracle_response_size_limit(
         .await
         .expect("Failed to set up test with mock application");
 
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _| {
         runtime.query_service(application_id, vec![])?;
         Ok(vec![])
     }));
 
-    application.expect_call(ExpectedCall::handle_query(move |_runtime, _, _| {
+    application.expect_call(ExpectedCall::handle_query(move |_runtime, _| {
         Ok(vec![0; response_size])
     }));
 
@@ -551,7 +551,7 @@ async fn test_contract_http_response_size_limit(
         .await
         .expect("Failed to set up test with mock application");
 
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _| {
         runtime.perform_http_request(http::Request::get(http_server.url()))?;
         Ok(vec![])
     }));
@@ -605,12 +605,12 @@ async fn test_service_http_response_size_limit(
         .await
         .expect("Failed to set up test with mock application");
 
-    application.expect_call(ExpectedCall::execute_operation(move |runtime, _, _| {
+    application.expect_call(ExpectedCall::execute_operation(move |runtime, _| {
         runtime.query_service(application_id, vec![])?;
         Ok(vec![])
     }));
 
-    application.expect_call(ExpectedCall::handle_query(move |runtime, _, _| {
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _| {
         runtime.perform_http_request(http::Request::get(http_server.url()))?;
         Ok(vec![])
     }));

@@ -8,7 +8,7 @@
 use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash},
+    crypto::AccountPublicKey,
     data_types::{Amount, BlockHeight, OracleResponse},
     http,
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId},
@@ -256,14 +256,12 @@ async fn test_fee_consumption(
         oracle_responses.extend(spend.expected_oracle_responses());
     }
 
-    application.expect_call(ExpectedCall::execute_message(
-        move |runtime, _context, _operation| {
-            for spend in spends {
-                spend.execute(runtime)?;
-            }
-            Ok(())
-        },
-    ));
+    application.expect_call(ExpectedCall::execute_message(move |runtime, _operation| {
+        for spend in spends {
+            spend.execute(runtime)?;
+        }
+        Ok(())
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let refund_grant_to = authenticated_signer
@@ -279,7 +277,6 @@ async fn test_fee_consumption(
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),
-        certificate_hash: CryptoHash::default(),
         message_id: MessageId::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();

@@ -1066,7 +1066,6 @@ where
             is_bouncing: posted_message.is_bouncing(),
             height: block.height,
             round,
-            certificate_hash: incoming_bundle.bundle.certificate_hash,
             message_id,
             authenticated_signer: posted_message.authenticated_signer,
             refund_grant_to: posted_message.refund_grant_to,

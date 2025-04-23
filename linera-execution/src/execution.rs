@@ -142,11 +142,10 @@ pub enum UserAction {
 
 impl UserAction {
     pub(crate) fn signer(&self) -> Option<AccountOwner> {
-        use UserAction::*;
         match self {
-            Instantiate(context, _) => context.authenticated_signer,
-            Operation(context, _) => context.authenticated_signer,
-            Message(context, _) => context.authenticated_signer,
+            UserAction::Instantiate(context, _) => context.authenticated_signer,
+            UserAction::Operation(context, _) => context.authenticated_signer,
+            UserAction::Message(context, _) => context.authenticated_signer,
         }
     }
 

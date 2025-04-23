@@ -61,12 +61,12 @@ async fn test_transfer_system_api(
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, context, _operation| {
+        move |runtime, _operation| {
             runtime.transfer(
                 sender.sender_account_owner(),
                 Account {
                     owner: recipient.recipient_account_owner(),
-                    chain_id: context.chain_id,
+                    chain_id: ChainId::root(0),
                 },
                 amount,
             )?;
@@ -145,12 +145,12 @@ async fn test_unauthorized_transfer_system_api(
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, context, _operation| {
+        move |runtime, _operation| {
             runtime.transfer(
                 sender.unauthorized_sender_account_owner(),
                 Account {
                     owner: recipient.recipient_account_owner(),
-                    chain_id: context.chain_id,
+                    chain_id: ChainId::root(0),
                 },
                 amount,
             )?;
@@ -230,7 +230,7 @@ async fn test_claim_system_api(
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, context, _operation| {
+        move |runtime, _operation| {
             runtime.claim(
                 Account {
                     owner: sender.sender_account_owner(),
@@ -238,7 +238,7 @@ async fn test_claim_system_api(
                 },
                 Account {
                     owner: recipient.recipient_account_owner(),
-                    chain_id: context.chain_id,
+                    chain_id: claimer_chain_id,
                 },
                 amount,
             )?;
@@ -371,7 +371,7 @@ async fn test_unauthorized_claims(
         .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, context, _operation| {
+        move |runtime, _operation| {
             runtime.claim(
                 Account {
                     owner: sender.unauthorized_sender_account_owner(),
@@ -379,7 +379,7 @@ async fn test_unauthorized_claims(
                 },
                 Account {
                     owner: recipient.recipient_account_owner(),
-                    chain_id: context.chain_id,
+                    chain_id: claimer_chain_id,
                 },
                 amount,
             )?;
@@ -438,7 +438,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
         .unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             assert_eq!(runtime.read_chain_balance().unwrap(), chain_balance);
             Ok(vec![])
         },
@@ -482,7 +482,7 @@ async fn test_read_owner_balance_system_api(
     let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             for (owner, balance) in accounts {
                 assert_eq!(runtime.read_owner_balance(owner).unwrap(), balance);
             }
@@ -521,7 +521,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
     let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             assert_eq!(
                 runtime.read_owner_balance(missing_account).unwrap(),
                 Amount::ZERO
@@ -564,7 +564,7 @@ async fn test_read_owner_balances_system_api(
     let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             assert_eq!(
                 runtime.read_owner_balances().unwrap(),
                 accounts.into_iter().collect::<Vec<_>>()
@@ -607,7 +607,7 @@ async fn test_read_balance_owners_system_api(
     let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             assert_eq!(
                 runtime.read_balance_owners().unwrap(),
                 accounts.keys().copied().collect::<Vec<_>>()
@@ -839,15 +839,13 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
         });
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.query_service(application_id, vec![])?;
             Ok(vec![])
         },
     ));
     application.expect_call(ExpectedCall::default_finalize());
-    application.expect_call(ExpectedCall::handle_query(|_service, _context, _query| {
-        Ok(vec![])
-    }));
+    application.expect_call(ExpectedCall::handle_query(|_service, _query| Ok(vec![])));
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
@@ -913,7 +911,7 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
         });
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.perform_http_request(http::Request::get("http://localhost"))?;
             Ok(vec![])
         },

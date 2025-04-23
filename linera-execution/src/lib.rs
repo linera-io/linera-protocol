@@ -343,38 +343,22 @@ impl From<ViewError> for ExecutionError {
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.
-    fn instantiate(
-        &mut self,
-        context: OperationContext,
-        argument: Vec<u8>,
-    ) -> Result<(), ExecutionError>;
+    fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError>;
 
     /// Applies an operation from the current block.
-    fn execute_operation(
-        &mut self,
-        context: OperationContext,
-        operation: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
+    fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
-    fn execute_message(
-        &mut self,
-        context: MessageContext,
-        message: Vec<u8>,
-    ) -> Result<(), ExecutionError>;
+    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError>;
+    fn finalize(&mut self) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
 pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
-    fn handle_query(
-        &mut self,
-        context: QueryContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
+    fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 }
 
 /// Configuration options for the execution runtime available to applications.
@@ -459,8 +443,6 @@ pub struct MessageContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
-    /// The hash of the remote certificate that created the message.
-    pub certificate_hash: CryptoHash,
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,

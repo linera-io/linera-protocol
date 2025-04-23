@@ -1045,15 +1045,13 @@ impl ContractSyncRuntimeHandle {
 
         let signer = action.signer();
         let closure = move |code: &mut UserContractInstance| match action {
-            UserAction::Instantiate(context, argument) => {
-                code.instantiate(context, argument).map(|()| None)
+            UserAction::Instantiate(_context, argument) => {
+                code.instantiate(argument).map(|()| None)
             }
-            UserAction::Operation(context, operation) => {
-                code.execute_operation(context, operation).map(Option::Some)
+            UserAction::Operation(_context, operation) => {
+                code.execute_operation(operation).map(Option::Some)
             }
-            UserAction::Message(context, message) => {
-                code.execute_message(context, message).map(|()| None)
-            }
+            UserAction::Message(_context, message) => code.execute_message(message).map(|()| None),
         };
 
         let result = self.execute(application_id, signer, closure)?;
@@ -1071,7 +1069,7 @@ impl ContractSyncRuntimeHandle {
 
         for application in applications {
             self.execute(application, context.authenticated_signer, |contract| {
-                contract.finalize(context).map(|_| None)
+                contract.finalize().map(|_| None)
             })?;
             self.inner().loaded_applications.remove(&application);
         }
@@ -1270,14 +1268,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         callee_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (contract, context) =
+        let (contract, _context) =
             self.inner()
                 .prepare_for_call(self.clone(), authenticated, callee_id)?;
 
         let value = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .execute_operation(context, argument)?;
+            .execute_operation(argument)?;
 
         self.inner().finish_call()?;
 
@@ -1519,12 +1517,12 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         self.inner().transaction_tracker = txn_tracker_moved;
 
-        let (contract, context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
+        let (contract, _context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
         contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .instantiate(context, argument)?;
+            .instantiate(argument)?;
 
         self.inner().finish_call()?;
 
@@ -1699,29 +1697,24 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
         queried_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (query_context, service) = {
+        let service = {
             let mut this = self.inner();
 
             // Load the application.
             let application = this.load_service_instance(self.clone(), queried_id)?;
             // Make the call to user code.
-            let query_context = QueryContext {
-                chain_id: this.chain_id,
-                next_block_height: this.height,
-                local_time: this.transaction_tracker.local_time(),
-            };
             this.push_application(ApplicationStatus {
                 caller_id: None,
                 id: queried_id,
                 description: application.description,
                 signer: None,
             });
-            (query_context, application.instance)
+            application.instance
         };
         let response = service
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .handle_query(query_context, argument)?;
+            .handle_query(argument)?;
         self.inner().pop_application();
         Ok(response)
     }

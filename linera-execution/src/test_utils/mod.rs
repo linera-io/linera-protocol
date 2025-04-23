@@ -87,7 +87,6 @@ pub fn create_dummy_message_context(authenticated_signer: Option<AccountOwner>) 
         refund_grant_to: None,
         height: BlockHeight(0),
         round: Some(0),
-        certificate_hash: CryptoHash::test_hash("block receiving a message"),
         message_id: MessageId {
             chain_id: ChainId::root(0),
             height: BlockHeight(0),

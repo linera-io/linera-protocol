@@ -35,9 +35,8 @@ use {
 
 use crate::{
     evm::database::DatabaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError,
-    EvmRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext, QueryContext,
-    ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
-    UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
+    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -512,11 +511,7 @@ impl<Runtime> UserContract for RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
-    fn instantiate(
-        &mut self,
-        _context: OperationContext,
-        argument: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         let mut vec = self.module.clone();
         vec.extend_from_slice(&argument);
@@ -528,11 +523,7 @@ where
         Ok(())
     }
 
-    fn execute_operation(
-        &mut self,
-        _context: OperationContext,
-        operation: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         ensure_message_length(operation.len(), 4)?;
         let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             let result = self.transact_commit_tx_data(Choice::Call, &operation[4..])?;
@@ -545,16 +536,12 @@ where
         Ok(output)
     }
 
-    fn execute_message(
-        &mut self,
-        _context: MessageContext,
-        _message: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn execute_message(&mut self, _message: Vec<u8>) -> Result<(), ExecutionError> {
         // TODO(#3760): Implement execute_message for EVM
         todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
     }
 
-    fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
+    fn finalize(&mut self) -> Result<(), ExecutionError> {
         Ok(())
     }
 }
@@ -674,11 +661,7 @@ impl<Runtime> UserService for RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    fn handle_query(
-        &mut self,
-        _context: QueryContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
