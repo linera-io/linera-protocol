@@ -89,7 +89,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     caller_application.expect_call({
         let state_key = state_key.clone();
         let dummy_operation = dummy_operation.clone();
-        ExpectedCall::execute_operation(move |runtime, _context, operation| {
+        ExpectedCall::execute_operation(move |runtime, operation| {
             assert_eq!(operation, dummy_operation);
             // Modify our state.
             let mut state = runtime
@@ -121,15 +121,13 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     });
 
     target_application.expect_call(ExpectedCall::execute_operation(
-        move |_runtime, context, argument| {
-            assert_eq!(context.authenticated_signer, Some(owner));
+        move |_runtime, argument| {
             assert_eq!(&argument, &[SessionCall::StartSession as u8]);
             Ok(vec![])
         },
     ));
     target_application.expect_call(ExpectedCall::execute_operation(
-        move |_runtime, context, argument| {
-            assert_eq!(context.authenticated_signer, None);
+        move |_runtime, argument| {
             assert_eq!(&argument, &[SessionCall::EndSession as u8]);
             Ok(vec![])
         },
@@ -161,13 +159,13 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 
     {
         let state_key = state_key.clone();
-        caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
+        caller_application.expect_call(ExpectedCall::handle_query(|runtime, _query| {
             let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
             Ok(state)
         }));
     }
 
-    caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
+    caller_application.expect_call(ExpectedCall::handle_query(|runtime, _query| {
         let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
         Ok(state)
     }));
@@ -235,7 +233,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(
                 false,
                 target_id,
@@ -250,7 +248,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::execute_operation({
         let state_key = state_key.clone();
-        move |runtime, _context, argument| {
+        move |runtime, argument| {
             assert_eq!(&argument, &[SessionCall::StartSession as u8]);
 
             let mut batch = Batch::new();
@@ -263,7 +261,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::execute_operation({
         let state_key = state_key.clone();
-        move |runtime, _context, argument| {
+        move |runtime, argument| {
             assert_eq!(&argument, &[SessionCall::EndSession as u8]);
 
             let mut batch = Batch::new();
@@ -274,7 +272,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
         }
     }));
 
-    target_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    target_application.expect_call(ExpectedCall::finalize(|runtime| {
         match runtime.read_value_bytes(state_key)? {
             Some(session_is_open) if session_is_open == vec![u8::from(false)] => Ok(()),
             Some(_) => Err(ExecutionError::UserError("Leaked session".to_owned())),
@@ -315,7 +313,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(
                 false,
                 target_id,
@@ -329,7 +327,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::execute_operation({
         let state_key = state_key.clone();
-        |runtime, _context, argument| {
+        |runtime, argument| {
             assert_eq!(argument, &[SessionCall::StartSession as u8]);
 
             let mut batch = Batch::new();
@@ -342,7 +340,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     let error_message = "Session leaked";
 
-    target_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    target_application.expect_call(ExpectedCall::finalize(|runtime| {
         match runtime.read_value_bytes(state_key)? {
             Some(session_is_open) if session_is_open == vec![u8::from(false)] => Ok(()),
             Some(_) => Err(ExecutionError::UserError(error_message.to_owned())),
@@ -382,12 +380,12 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     let (id, application, blobs) = view.register_mock_application(0).await?;
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |_runtime, _context, _operation| Ok(vec![]),
+        move |_runtime, _operation| Ok(vec![]),
     ));
 
     let error_message = "Finalize aborted execution";
 
-    application.expect_call(ExpectedCall::finalize(|_runtime, _context| {
+    application.expect_call(ExpectedCall::finalize(|_runtime| {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
 
@@ -424,31 +422,31 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
         view.register_mock_application(3).await?;
 
     first_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(false, second_id, vec![])?;
             Ok(vec![])
         },
     ));
     second_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _argument| {
+        move |runtime, _argument| {
             runtime.try_call_application(false, third_id, vec![])?;
             Ok(vec![])
         },
     ));
     third_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _argument| {
+        move |runtime, _argument| {
             runtime.try_call_application(false, fourth_id, vec![])?;
             Ok(vec![])
         },
     ));
-    fourth_application.expect_call(ExpectedCall::execute_operation(
-        |_runtime, _context, _argument| Ok(vec![]),
-    ));
+    fourth_application.expect_call(ExpectedCall::execute_operation(|_runtime, _argument| {
+        Ok(vec![])
+    }));
 
     let error_message = "Third application aborted execution";
 
     fourth_application.expect_call(ExpectedCall::default_finalize());
-    third_application.expect_call(ExpectedCall::finalize(|_runtime, _context| {
+    third_application.expect_call(ExpectedCall::finalize(|_runtime| {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
     second_application.expect_call(ExpectedCall::default_finalize());
@@ -509,27 +507,27 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     );
 
     first_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(false, second_id, vec![])?;
             Ok(vec![])
         },
     ));
     second_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _argument| {
+        move |runtime, _argument| {
             runtime.try_call_application(false, third_id, vec![])?;
             Ok(vec![])
         },
     ));
     third_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _argument| {
+        move |runtime, _argument| {
             runtime.send_message(first_message)?;
             runtime.try_call_application(false, fourth_id, vec![])?;
             Ok(vec![])
         },
     ));
-    fourth_application.expect_call(ExpectedCall::execute_operation(
-        |_runtime, _context, _argument| Ok(vec![]),
-    ));
+    fourth_application.expect_call(ExpectedCall::execute_operation(|_runtime, _argument| {
+        Ok(vec![])
+    }));
 
     let second_message = SendMessageRequest {
         destination: Destination::from(destination_chain),
@@ -576,13 +574,13 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     );
 
     fourth_application.expect_call(ExpectedCall::default_finalize());
-    third_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    third_application.expect_call(ExpectedCall::finalize(|runtime| {
         runtime.send_message(second_message)?;
         runtime.send_message(third_message)?;
         Ok(())
     }));
     second_application.expect_call(ExpectedCall::default_finalize());
-    first_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+    first_application.expect_call(ExpectedCall::finalize(|runtime| {
         runtime.send_message(fourth_message)?;
         Ok(())
     }));
@@ -633,11 +631,11 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     let (target_id, _target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |_runtime, _context, _operation| Ok(vec![]),
+        move |_runtime, _operation| Ok(vec![]),
     ));
 
     caller_application.expect_call(ExpectedCall::finalize({
-        move |runtime, _context| {
+        move |runtime| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(())
         }
@@ -680,17 +678,17 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(vec![])
         },
     ));
-    target_application.expect_call(ExpectedCall::execute_operation(
-        |_runtime, _context, _argument| Ok(vec![]),
-    ));
+    target_application.expect_call(ExpectedCall::execute_operation(|_runtime, _argument| {
+        Ok(vec![])
+    }));
 
     target_application.expect_call(ExpectedCall::finalize({
-        move |runtime, _context| {
+        move |runtime| {
             runtime.try_call_application(false, caller_id, vec![])?;
             Ok(())
         }
@@ -733,18 +731,18 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(vec![])
         },
     ));
-    target_application.expect_call(ExpectedCall::execute_operation(
-        |_runtime, _context, _argument| Ok(vec![]),
-    ));
+    target_application.expect_call(ExpectedCall::execute_operation(|_runtime, _argument| {
+        Ok(vec![])
+    }));
 
     target_application.expect_call(ExpectedCall::default_finalize());
     caller_application.expect_call(ExpectedCall::finalize({
-        move |runtime, _context| {
+        move |runtime| {
             runtime.try_call_application(false, target_id, vec![])?;
             Ok(())
         }
@@ -789,7 +787,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
             Ok(vec![])
         },
@@ -797,9 +795,9 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
 
     let error_message = "Cross-application call failed";
 
-    target_application.expect_call(ExpectedCall::execute_operation(
-        |_runtime, _context, _argument| Err(ExecutionError::UserError(error_message.to_owned())),
-    ));
+    target_application.expect_call(ExpectedCall::execute_operation(|_runtime, _argument| {
+        Err(ExecutionError::UserError(error_message.to_owned()))
+    }));
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
@@ -850,7 +848,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     );
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.send_message(dummy_message)?;
             Ok(vec![])
         },
@@ -894,7 +892,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
             Ok(vec![])
         },
@@ -917,12 +915,10 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         },
     );
 
-    target_application.expect_call(ExpectedCall::execute_operation(
-        |runtime, _context, _argument| {
-            runtime.send_message(dummy_message)?;
-            Ok(vec![])
-        },
-    ));
+    target_application.expect_call(ExpectedCall::execute_operation(|runtime, _argument| {
+        runtime.send_message(dummy_message)?;
+        Ok(vec![])
+    }));
 
     target_application.expect_call(ExpectedCall::default_finalize());
     caller_application.expect_call(ExpectedCall::default_finalize());
@@ -965,14 +961,14 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     let (target_id, target_application, target_blobs) = view.register_mock_application(2).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(/* authenticated */ false, middle_id, vec![])?;
             Ok(vec![])
         },
     ));
 
     middle_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _argument| {
+        move |runtime, _argument| {
             runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
             Ok(vec![])
         },
@@ -996,7 +992,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     );
 
     target_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _argument| {
+        move |runtime, _argument| {
             runtime.send_message(dummy_message)?;
             Ok(vec![])
         },
@@ -1074,7 +1070,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     // applications
     caller_application.expect_call(ExpectedCall::execute_operation({
         let first_message = first_message.clone();
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.try_call_application(
                 /* authenticated */ false,
                 silent_target_id,
@@ -1092,7 +1088,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     // The silent application does nothing
     silent_target_application.expect_call(ExpectedCall::execute_operation(
-        |_runtime, _context, _argument| Ok(vec![]),
+        |_runtime, _argument| Ok(vec![]),
     ));
 
     // The message sent to the second destination chain by the sending application
@@ -1106,7 +1102,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     // The sending application sends two messages, one to each of the destination chains
     sending_target_application.expect_call(ExpectedCall::execute_operation(
-        |runtime, _context, _argument| {
+        |runtime, _argument| {
             runtime.send_message(first_message)?;
             runtime.send_message(second_message)?;
             Ok(vec![])
@@ -1207,7 +1203,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
 
     application.expect_call(ExpectedCall::execute_operation({
         let child_ownership = child_ownership.clone();
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             assert_eq!(runtime.chain_ownership()?, ownership);
             let destination = Account::chain(ChainId::root(2));
             runtime.transfer(AccountOwner::CHAIN, destination, Amount::ONE)?;
@@ -1292,7 +1288,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     // The application is not authorized to close the chain.
     let context = create_dummy_operation_context();
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             assert_matches!(
                 runtime.close_chain(),
                 Err(ExecutionError::UnauthorizedApplication(_))
@@ -1328,7 +1324,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
+        move |runtime, _operation| {
             runtime.close_chain()?;
             Ok(vec![])
         },
@@ -1407,12 +1403,10 @@ async fn test_message_receipt_spending_chain_balance(
         owner: AccountOwner::CHAIN,
     };
 
-    application.expect_call(ExpectedCall::execute_message(
-        move |runtime, _context, _operation| {
-            runtime.transfer(receiver_chain_account, recipient, amount)?;
-            Ok(())
-        },
-    ));
+    application.expect_call(ExpectedCall::execute_message(move |runtime, _operation| {
+        runtime.transfer(receiver_chain_account, recipient, amount)?;
+        Ok(())
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_message_context(authenticated_signer);

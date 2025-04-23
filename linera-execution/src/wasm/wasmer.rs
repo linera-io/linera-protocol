@@ -19,8 +19,7 @@ use super::{
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceRuntime,
+    ContractRuntime, ExecutionError, ServiceRuntime,
 };
 
 /// An [`Engine`] instance configured to run application services.
@@ -128,39 +127,27 @@ impl<Runtime> crate::UserContract for WasmerContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Unpin + 'static,
 {
-    fn instantiate(
-        &mut self,
-        _context: OperationContext,
-        argument: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .instantiate(argument)
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }
 
-    fn execute_operation(
-        &mut self,
-        _context: OperationContext,
-        operation: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         Ok(ContractEntrypoints::new(&mut self.instance)
             .execute_operation(operation)
             .map_err(WasmExecutionError::from)?)
     }
 
-    fn execute_message(
-        &mut self,
-        _context: MessageContext,
-        message: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(message)
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }
 
-    fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
+    fn finalize(&mut self) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .finalize()
             .map_err(WasmExecutionError::from)?;
@@ -169,11 +156,7 @@ where
 }
 
 impl<Runtime: 'static> crate::UserService for WasmerServiceInstance<Runtime> {
-    fn handle_query(
-        &mut self,
-        _context: QueryContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         Ok(ServiceEntrypoints::new(&mut self.instance)
             .handle_query(argument)
             .map_err(WasmExecutionError::from)?)
