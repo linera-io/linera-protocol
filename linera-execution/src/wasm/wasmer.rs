@@ -20,7 +20,7 @@ use super::{
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
     ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    ProcessStreamsContext, QueryContext, ServiceRuntime,
+    QueryContext, ServiceRuntime,
 };
 
 /// An [`Engine`] instance configured to run application services.
@@ -160,11 +160,7 @@ where
         Ok(())
     }
 
-    fn process_streams(
-        &mut self,
-        _context: ProcessStreamsContext,
-        updates: Vec<StreamUpdate>,
-    ) -> Result<(), ExecutionError> {
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .process_streams(updates)
             .map_err(WasmExecutionError::from)?;

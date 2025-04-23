@@ -368,11 +368,7 @@ pub trait UserContract {
     ) -> Result<(), ExecutionError>;
 
     /// Reacts to new events on streams this application subscribes to.
-    fn process_streams(
-        &mut self,
-        context: ProcessStreamsContext,
-        updates: Vec<StreamUpdate>,
-    ) -> Result<(), ExecutionError>;
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.
     fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError>;

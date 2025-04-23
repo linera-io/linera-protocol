@@ -24,8 +24,8 @@ use linera_base::{
 
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    ProcessStreamsContext, QueryContext, ServiceSyncRuntimeHandle, UserContract,
-    UserContractModule, UserService, UserServiceModule,
+    QueryContext, ServiceSyncRuntimeHandle, UserContract, UserContractModule, UserService,
+    UserServiceModule,
 };
 
 /// A mocked implementation of a user application.
@@ -151,11 +151,7 @@ type ExecuteMessageHandler = Box<
         + Sync,
 >;
 type ProcessStreamHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntimeHandle,
-            ProcessStreamsContext,
-            Vec<StreamUpdate>,
-        ) -> Result<(), ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntimeHandle, Vec<StreamUpdate>) -> Result<(), ExecutionError>
         + Send
         + Sync,
 >;
@@ -258,11 +254,7 @@ impl ExpectedCall {
     /// [`UserContract::process_streams`] implementation, which is handled by the provided
     /// `handler`.
     pub fn process_streams(
-        handler: impl FnOnce(
-                &mut ContractSyncRuntimeHandle,
-                ProcessStreamsContext,
-                Vec<StreamUpdate>,
-            ) -> Result<(), ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, Vec<StreamUpdate>) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -380,15 +372,9 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn process_streams(
-        &mut self,
-        context: ProcessStreamsContext,
-        updates: Vec<StreamUpdate>,
-    ) -> Result<(), ExecutionError> {
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::ProcessStreams(handler)) => {
-                handler(&mut self.runtime, context, updates)
-            }
+            Some(ExpectedCall::ProcessStreams(handler)) => handler(&mut self.runtime, updates),
             Some(unexpected_call) => panic!(
                 "Expected a call to `process_streams`, got a call to `{unexpected_call}` instead."
             ),
