@@ -31,12 +31,10 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
 
     let (application_id, application, _) = view.register_mock_application(0).await.unwrap();
 
-    application.expect_call(ExpectedCall::handle_query(
-        move |runtime, _context, _query| {
-            assert_eq!(runtime.read_chain_balance().unwrap(), chain_balance);
-            Ok(vec![])
-        },
-    ));
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _query| {
+        assert_eq!(runtime.read_chain_balance().unwrap(), chain_balance);
+        Ok(vec![])
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
@@ -63,14 +61,12 @@ async fn test_read_owner_balance_system_api(
 
     let (application_id, application, _) = view.register_mock_application(0).await.unwrap();
 
-    application.expect_call(ExpectedCall::handle_query(
-        move |runtime, _context, _query| {
-            for (owner, balance) in accounts {
-                assert_eq!(runtime.read_owner_balance(owner).unwrap(), balance);
-            }
-            Ok(vec![])
-        },
-    ));
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _query| {
+        for (owner, balance) in accounts {
+            assert_eq!(runtime.read_owner_balance(owner).unwrap(), balance);
+        }
+        Ok(vec![])
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
@@ -94,15 +90,13 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
 
     let (application_id, application, _) = view.register_mock_application(0).await.unwrap();
 
-    application.expect_call(ExpectedCall::handle_query(
-        move |runtime, _context, _query| {
-            assert_eq!(
-                runtime.read_owner_balance(missing_account).unwrap(),
-                Amount::ZERO
-            );
-            Ok(vec![])
-        },
-    ));
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _query| {
+        assert_eq!(
+            runtime.read_owner_balance(missing_account).unwrap(),
+            Amount::ZERO
+        );
+        Ok(vec![])
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
@@ -129,15 +123,13 @@ async fn test_read_owner_balances_system_api(
 
     let (application_id, application, _) = view.register_mock_application(0).await.unwrap();
 
-    application.expect_call(ExpectedCall::handle_query(
-        move |runtime, _context, _query| {
-            assert_eq!(
-                runtime.read_owner_balances().unwrap(),
-                accounts.into_iter().collect::<Vec<_>>(),
-            );
-            Ok(vec![])
-        },
-    ));
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _query| {
+        assert_eq!(
+            runtime.read_owner_balances().unwrap(),
+            accounts.into_iter().collect::<Vec<_>>(),
+        );
+        Ok(vec![])
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
@@ -164,15 +156,13 @@ async fn test_read_balance_owners_system_api(
 
     let (application_id, application, _) = view.register_mock_application(0).await.unwrap();
 
-    application.expect_call(ExpectedCall::handle_query(
-        move |runtime, _context, _query| {
-            assert_eq!(
-                runtime.read_balance_owners().unwrap(),
-                accounts.keys().copied().collect::<Vec<_>>()
-            );
-            Ok(vec![])
-        },
-    ));
+    application.expect_call(ExpectedCall::handle_query(move |runtime, _query| {
+        assert_eq!(
+            runtime.read_balance_owners().unwrap(),
+            accounts.keys().copied().collect::<Vec<_>>()
+        );
+        Ok(vec![])
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();

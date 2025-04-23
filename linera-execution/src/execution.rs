@@ -80,7 +80,6 @@ where
             authenticated_caller_id: None,
             height: application_description.block_height,
             round: None,
-            index: Some(0),
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
@@ -146,12 +145,11 @@ pub enum UserAction {
 
 impl UserAction {
     pub(crate) fn signer(&self) -> Option<AccountOwner> {
-        use UserAction::*;
         match self {
-            Instantiate(context, _) => context.authenticated_signer,
-            Operation(context, _) => context.authenticated_signer,
-            ProcessStreams(_, _) => None,
-            Message(context, _) => context.authenticated_signer,
+            UserAction::Instantiate(context, _) => context.authenticated_signer,
+            UserAction::Operation(context, _) => context.authenticated_signer,
+            UserAction::ProcessStreams(_, _) => None,
+            UserAction::Message(context, _) => context.authenticated_signer,
         }
     }
 

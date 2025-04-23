@@ -3786,14 +3786,11 @@ where
         local_time,
     });
 
-    for query_context in query_contexts {
-        application.expect_call(ExpectedCall::handle_query(
-            move |_runtime, context, query| {
-                assert_eq!(context, query_context);
-                assert!(query.is_empty());
-                Ok(vec![])
-            },
-        ));
+    for _ in query_contexts {
+        application.expect_call(ExpectedCall::handle_query(move |_runtime, query| {
+            assert!(query.is_empty());
+            Ok(vec![])
+        }));
     }
 
     let query = Query::User {
@@ -3901,14 +3898,11 @@ where
                 local_time,
             });
 
-    for query_context in query_contexts_before_new_block {
-        application.expect_call(ExpectedCall::handle_query(
-            move |_runtime, context, query| {
-                assert_eq!(context, query_context);
-                assert!(query.is_empty());
-                Ok(vec![])
-            },
-        ));
+    for _ in query_contexts_before_new_block.clone() {
+        application.expect_call(ExpectedCall::handle_query(move |_runtime, query| {
+            assert!(query.is_empty());
+            Ok(vec![])
+        }));
     }
 
     for local_time in queries_before_proposal {
@@ -3971,14 +3965,11 @@ where
         .handle_confirmed_certificate(certificate, None)
         .await?;
 
-    for query_context in query_contexts_after_new_block.clone() {
-        application.expect_call(ExpectedCall::handle_query(
-            move |_runtime, context, query| {
-                assert_eq!(context, query_context);
-                assert!(query.is_empty());
-                Ok(vec![])
-            },
-        ));
+    for _ in query_contexts_after_new_block.clone() {
+        application.expect_call(ExpectedCall::handle_query(move |_runtime, query| {
+            assert!(query.is_empty());
+            Ok(vec![])
+        }));
     }
 
     for local_time in queries_after_new_block {

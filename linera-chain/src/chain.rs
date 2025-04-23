@@ -842,7 +842,6 @@ where
                     let context = OperationContext {
                         chain_id: block.chain_id,
                         height: block.height,
-                        index: Some(txn_index),
                         round,
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
@@ -1066,7 +1065,6 @@ where
             is_bouncing: posted_message.is_bouncing(),
             height: block.height,
             round,
-            certificate_hash: incoming_bundle.bundle.certificate_hash,
             message_id,
             authenticated_signer: posted_message.authenticated_signer,
             refund_grant_to: posted_message.refund_grant_to,

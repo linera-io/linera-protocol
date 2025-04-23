@@ -84,7 +84,6 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
     };
