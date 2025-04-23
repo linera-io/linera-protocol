@@ -1322,7 +1322,7 @@ pub struct StreamUpdate {
     pub chain_id: ChainId,
     /// The stream ID.
     pub stream_id: StreamId,
-    /// The lowest index of a new event.
+    /// The lowest index of a new event. See [`StreamUpdate::new_indices`].
     pub previous_index: u32,
     /// The index of the next event, i.e. the lowest for which no event is known yet.
     pub next_index: u32,
