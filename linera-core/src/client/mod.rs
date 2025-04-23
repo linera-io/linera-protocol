@@ -2109,6 +2109,8 @@ where
         let _guard = match guard {
             Some(guard) => guard,
             None => {
+                // Acquire a lock if we don't already have it, so that we don't accidentally
+                // create a conflicting block in another task.
                 let mutex = self.state().client_mutex();
                 mutex.lock_owned().await
             }
