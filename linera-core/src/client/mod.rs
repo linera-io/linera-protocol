@@ -3394,6 +3394,17 @@ impl<Env: Environment> ChainClient<Env> {
     ) {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
+                if let Err(error) = self
+                    .client
+                    .ensure_has_chain_description(origin, self.admin_id)
+                    .await
+                {
+                    error!(
+                        chain_id = %self.chain_id,
+                        "NewIncomingBundle: could not find blob for sender's chain: {error}"
+                    );
+                    return;
+                }
                 if self.local_next_block_height(origin, &mut local_node).await > Some(height) {
                     debug!(
                         chain_id = %self.chain_id,
