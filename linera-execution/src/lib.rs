@@ -35,7 +35,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, Resources, SendMessageRequest, Timestamp,
+        DecompressionError, Epoch, Resources, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -327,8 +327,12 @@ pub enum ExecutionError {
     InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+    #[error("process_streams was not called for all stream updates")]
+    UnprocessedStreams,
     #[error("Internal error: {0}")]
     InternalError(&'static str),
+    #[error("UpdateStreams contains an unknown event")]
+    EventNotFound(EventId),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -350,6 +354,9 @@ pub trait UserContract {
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError>;
+
+    /// Reacts to new events on streams this application subscribes to.
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.
     fn finalize(&mut self) -> Result<(), ExecutionError>;
@@ -393,6 +400,8 @@ pub trait ExecutionRuntimeContext {
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
+
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError>;
 
     #[cfg(with_testing)]
     async fn add_blobs(
@@ -443,6 +452,36 @@ pub struct MessageContext {
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProcessStreamsContext {
+    /// The current chain ID.
+    pub chain_id: ChainId,
+    /// The current block height.
+    pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
+}
+
+impl From<MessageContext> for ProcessStreamsContext {
+    fn from(context: MessageContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            height: context.height,
+            round: context.round,
+        }
+    }
+}
+
+impl From<OperationContext> for ProcessStreamsContext {
+    fn from(context: OperationContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            height: context.height,
+            round: context.round,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1085,6 +1124,10 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
+    }
+
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        Ok(self.events.contains_key(&event_id))
     }
 
     #[cfg(with_testing)]

@@ -195,6 +195,16 @@ pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     )
 });
 
+/// The metric counting how often an event is tested for existence from storage
+#[cfg(with_metrics)]
+static CONTAINS_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "contains_event",
+        "The metric counting how often an event is tested for existence from storage",
+        &[],
+    )
+});
+
 /// The metric counting how often an event is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
@@ -781,6 +791,14 @@ where
         #[cfg(with_metrics)]
         READ_EVENT_COUNTER.with_label_values(&[]).inc();
         maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
+    }
+
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+        let exists = self.store.contains_key(&event_key).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
+        Ok(exists)
     }
 
     async fn write_events(

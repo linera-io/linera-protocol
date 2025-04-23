@@ -41,25 +41,6 @@ pub enum Operation {
     Comment { key: Key, comment: String },
 }
 
-/// A message of the application on one chain, to be handled on another chain.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub enum Message {
-    /// The origin chain wants to subscribe to the target chain.
-    Subscribe,
-    /// The origin chain wants to unsubscribe from the target chain.
-    Unsubscribe,
-    /// The origin chain made a post, and the target chain is subscribed.
-    Post { index: u32, post: OwnPost },
-    /// A Chain liked a post
-    Like { key: Key },
-    /// A Chain commented on a post
-    Comment {
-        key: Key,
-        chain_id: ChainId,
-        comment: String,
-    },
-}
-
 /// A post's text and timestamp, to use in contexts where author and index are known.
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OwnPost {

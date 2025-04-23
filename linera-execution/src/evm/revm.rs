@@ -8,7 +8,7 @@ use std::{convert::TryFrom, sync::Arc};
 
 use alloy::primitives::Address;
 use linera_base::{
-    data_types::Bytecode,
+    data_types::{Bytecode, StreamUpdate},
     ensure,
     identifiers::{ApplicationId, StreamName},
     vm::EvmQuery,
@@ -539,6 +539,11 @@ where
     fn execute_message(&mut self, _message: Vec<u8>) -> Result<(), ExecutionError> {
         // TODO(#3760): Implement execute_message for EVM
         todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
+    }
+
+    fn process_streams(&mut self, _streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
+        // TODO(#3785): Implement process_streams for EVM
+        todo!("Streams are not implemented for Ethereum smart contracts yet.")
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {

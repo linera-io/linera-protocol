@@ -165,6 +165,9 @@ pub trait Storage: Sized {
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
 
+    /// Tests existence of the event with the given ID.
+    async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
+
     /// Writes a vector of events.
     async fn write_events(
         &self,
@@ -408,6 +411,10 @@ where
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
+    }
+
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        self.storage.contains_event(event_id).await
     }
 
     #[cfg(with_testing)]

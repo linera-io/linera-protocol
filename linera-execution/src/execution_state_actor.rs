@@ -464,8 +464,12 @@ where
                     .event_subscriptions
                     .get_mut_or_default(&(chain_id, stream_id))
                     .await?;
-                subscriptions.applications.insert(subscriber_app_id);
-                callback.respond(());
+                let next_index = if subscriptions.applications.insert(subscriber_app_id) {
+                    subscriptions.next_index
+                } else {
+                    0
+                };
+                callback.respond(next_index);
             }
 
             UnsubscribeFromEvents {
@@ -759,7 +763,7 @@ pub enum ExecutionRequest {
         stream_id: StreamId,
         subscriber_app_id: ApplicationId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<u32>,
     },
 
     UnsubscribeFromEvents {

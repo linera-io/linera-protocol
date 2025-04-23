@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use linera_base::data_types::Bytecode;
+use linera_base::data_types::{Bytecode, StreamUpdate};
 use linera_witty::{wasmtime::EntrypointInstance, ExportTo};
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store};
@@ -148,6 +148,13 @@ where
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(message)
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
+    }
+
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
+        ContractEntrypoints::new(&mut self.instance)
+            .process_streams(updates)
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }

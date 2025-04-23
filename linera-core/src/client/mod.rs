@@ -755,6 +755,26 @@ where
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 
+    /// Returns chain IDs that this chain subcribes to.
+    #[instrument(level = "trace", skip(self))]
+    pub async fn event_stream_publishers(&self) -> Result<BTreeSet<ChainId>, LocalNodeError> {
+        let mut publishers = self
+            .chain_state_view()
+            .await?
+            .execution_state
+            .system
+            .event_subscriptions
+            .indices()
+            .await?
+            .into_iter()
+            .map(|(chain_id, _)| chain_id)
+            .collect::<BTreeSet<_>>();
+        if self.chain_id != self.admin_id {
+            publishers.insert(self.admin_id);
+        }
+        Ok(publishers)
+    }
+
     /// Subscribes to notifications from this client's chain.
     #[instrument(level = "trace")]
     pub async fn subscribe(&self) -> Result<NotificationStream, LocalNodeError> {
@@ -863,6 +883,51 @@ where
             })
             .take(self.options.max_pending_message_bundles)
             .collect())
+    }
+
+    /// Returns an `UpdateStreams` operation that updates this client's chain about new events
+    /// in any of the streams its applications are subscribing to. Returns `None` if there are no
+    /// new events.
+    #[instrument(level = "trace")]
+    async fn collect_stream_updates(&self) -> Result<Option<Operation>, ChainClientError> {
+        // Load all our subscriptions.
+        let subscription_map = self
+            .chain_state_view()
+            .await?
+            .execution_state
+            .system
+            .event_subscriptions
+            .index_values()
+            .await?;
+        // Collect the indices of all new events.
+        let futures = subscription_map
+            .into_iter()
+            .map(|((chain_id, stream_id), subscriptions)| {
+                let client = self.client.clone();
+                async move {
+                    let chain = client.local_node.chain_state_view(chain_id).await?;
+                    if let Some(next_index) = chain
+                        .execution_state
+                        .stream_event_counts
+                        .get(&stream_id)
+                        .await?
+                        .filter(|next_index| *next_index > subscriptions.next_index)
+                    {
+                        Ok(Some((chain_id, stream_id, next_index)))
+                    } else {
+                        Ok::<_, ChainClientError>(None)
+                    }
+                }
+            });
+        let updates = future::try_join_all(futures)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        if updates.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(SystemOperation::UpdateStreams(updates).into()))
     }
 
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
@@ -1524,6 +1589,31 @@ where
                 self.chain_id
             );
         }
+    }
+
+    /// Synchronizes all chains that any application on this chain subscribes to.
+    /// We always consider the admin chain a relevant publishing chain, for new epochs.
+    async fn synchronize_publisher_chains(&self) -> Result<(), ChainClientError> {
+        let chain_ids = self
+            .chain_state_view()
+            .await?
+            .execution_state
+            .system
+            .event_subscriptions
+            .indices()
+            .await?
+            .iter()
+            .map(|(chain_id, _)| *chain_id)
+            .chain(iter::once(self.admin_id))
+            .filter(|chain_id| *chain_id != self.chain_id)
+            .collect::<BTreeSet<_>>();
+        try_join_all(
+            chain_ids
+                .into_iter()
+                .map(|chain_id| self.synchronize_chain_state(chain_id)),
+        )
+        .await?;
+        Ok(())
     }
 
     /// Attempts to download new received certificates.
@@ -2438,11 +2528,8 @@ where
     /// `process_inbox` must be called separately.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
-        if self.chain_id != self.admin_id {
-            // Synchronize the state of the admin chain from the network.
-            self.synchronize_chain_state(self.admin_id).await?;
-        }
         let info = self.prepare_chain().await?;
+        self.synchronize_publisher_chains().await?;
         self.find_received_certificates().await?;
         Ok(info)
     }
@@ -3056,7 +3143,11 @@ where
         let mut certificates = Vec::new();
         loop {
             let incoming_bundles = self.pending_message_bundles().await?;
-            let block_operations = epoch_change_ops.next().into_iter().collect::<Vec<_>>();
+            let stream_updates = self.collect_stream_updates().await?;
+            let block_operations = stream_updates
+                .into_iter()
+                .chain(epoch_change_ops.next())
+                .collect::<Vec<_>>();
             if incoming_bundles.is_empty() && block_operations.is_empty() {
                 return Ok((certificates, None));
             }
