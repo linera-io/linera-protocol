@@ -77,7 +77,6 @@ where
             authenticated_caller_id: None,
             height: application_description.block_height,
             round: None,
-            index: Some(0),
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);

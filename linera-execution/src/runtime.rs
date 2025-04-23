@@ -447,7 +447,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_caller_id,
             height: self.height,
             round: self.round,
-            index: None,
         };
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,

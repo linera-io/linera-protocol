@@ -422,9 +422,6 @@ pub struct OperationContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
-    /// The current index of the operation.
-    #[debug(skip_if = Option::is_none)]
-    pub index: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]

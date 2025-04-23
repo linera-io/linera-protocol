@@ -38,7 +38,6 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         round: Some(0),
-        index: Some(0),
         authenticated_signer: Some(owner),
         authenticated_caller_id: None,
     };

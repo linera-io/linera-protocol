@@ -842,7 +842,6 @@ where
                     let context = OperationContext {
                         chain_id: block.chain_id,
                         height: block.height,
-                        index: Some(txn_index),
                         round,
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
