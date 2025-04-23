@@ -24,6 +24,9 @@ mod tests;
 /// The `RegisterView` implements a register for a single value.
 pub mod register_view;
 
+/// The `BucketLogView` implements a log list that can be pushed and group data in buckets.
+pub mod bucket_log_view;
+
 /// The `LogView` implements a log list that can be pushed.
 pub mod log_view;
 
