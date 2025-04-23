@@ -3395,18 +3395,27 @@ impl<Env: Environment> ChainClient<Env> {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
                 if self.local_next_block_height(origin, &mut local_node).await > Some(height) {
-                    debug!("Accepting redundant notification for new message");
+                    debug!(
+                        chain_id = %self.chain_id,
+                        "Accepting redundant notification for new message"
+                    );
                     return;
                 }
                 if let Err(error) = self
                     .find_received_certificates_from_validator(remote_node)
                     .await
                 {
-                    error!("Fail to process notification: {error}");
+                    error!(
+                        chain_id = %self.chain_id,
+                        "NewIncomingBundle: Fail to process notification: {error}"
+                    );
                     return;
                 }
                 if self.local_next_block_height(origin, &mut local_node).await <= Some(height) {
-                    error!("Fail to synchronize new message after notification");
+                    error!(
+                        chain_id = %self.chain_id,
+                        "NewIncomingBundle: Fail to synchronize new message after notification"
+                    );
                 }
             }
             Reason::NewBlock { height, .. } => {
@@ -3416,28 +3425,37 @@ impl<Env: Environment> ChainClient<Env> {
                     .await
                     > Some(height)
                 {
-                    debug!("Accepting redundant notification for new block");
+                    debug!(
+                        chain_id = %self.chain_id,
+                        "Accepting redundant notification for new block"
+                    );
                     return;
                 }
                 if let Err(error) = self
                     .try_synchronize_chain_state_from(&remote_node, chain_id)
                     .await
                 {
-                    error!("Fail to process notification: {error}");
+                    error!(
+                        chain_id = %self.chain_id,
+                        "NewBlock: Fail to process notification: {error}"
+                    );
                     return;
                 }
                 let local_height = self
                     .local_next_block_height(chain_id, &mut local_node)
                     .await;
                 if local_height <= Some(height) {
-                    error!("Fail to synchronize new block after notification");
+                    error!("NewBlock: Fail to synchronize new block after notification");
                 }
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
                 if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
-                        debug!("Accepting redundant notification for new round");
+                        debug!(
+                            chain_id = %self.chain_id,
+                            "Accepting redundant notification for new round"
+                        );
                         return;
                     }
                 }
@@ -3445,15 +3463,24 @@ impl<Env: Environment> ChainClient<Env> {
                     .try_synchronize_chain_state_from(&remote_node, chain_id)
                     .await
                 {
-                    error!("Fail to process notification: {error}");
+                    error!(
+                        chain_id = %self.chain_id,
+                        "NewRound: Fail to process notification: {error}"
+                    );
                     return;
                 }
                 let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
-                    error!("Fail to read local chain info for {chain_id}");
+                    error!(
+                        chain_id = %self.chain_id,
+                        "NewRound: Fail to read local chain info for {chain_id}"
+                    );
                     return;
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
-                    error!("Fail to synchronize new block after notification");
+                    error!(
+                        chain_id = %self.chain_id,
+                        "NewRound: Fail to synchronize new block after notification"
+                    );
                 }
             }
         }
