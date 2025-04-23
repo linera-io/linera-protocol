@@ -13,9 +13,7 @@ use linera_base::{
     identifiers::{AccountOwner, ChainId},
 };
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, ProposalContent, Target,
-    },
+    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposalContent},
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
@@ -369,11 +367,11 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let (verified_outcome, subscribe, unsubscribe) = if let Some(execution_state) =
+        let verified_outcome = if let Some(execution_state) =
             self.state.execution_state_cache.remove(&outcome.state_hash)
         {
             chain.execution_state = execution_state;
-            (outcome.clone(), Vec::new(), Vec::new())
+            outcome.clone()
         } else {
             chain
                 .execute_block(
@@ -394,11 +392,9 @@ where
             }
         );
         // Update the rest of the chain state.
-        chain.process_unsubscribes(unsubscribe).await?;
         chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
-        chain.process_subscribes(subscribe).await?;
         self.state
             .track_newly_created_chains(&proposed_block, &outcome);
         let mut actions = self.state.create_network_actions().await?;
@@ -451,7 +447,7 @@ where
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     pub(super) async fn process_cross_chain_update(
         &mut self,
-        origin: Origin,
+        origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
@@ -507,30 +503,23 @@ where
     /// Handles the cross-chain request confirming that the recipient was updated.
     pub(super) async fn confirm_updated_recipient(
         &mut self,
-        latest_heights: Vec<(Target, BlockHeight)>,
+        recipient: ChainId,
+        latest_height: BlockHeight,
     ) -> Result<(), WorkerError> {
-        let mut height_with_fully_delivered_messages = None;
-
-        for (target, height) in latest_heights {
-            let fully_delivered = self
+        let fully_delivered = self
+            .state
+            .chain
+            .mark_messages_as_received(&recipient, latest_height)
+            .await?
+            && self
                 .state
-                .chain
-                .mark_messages_as_received(&target, height)
-                .await?
-                && self
-                    .state
-                    .all_messages_to_tracked_chains_delivered_up_to(height)
-                    .await?;
-
-            if fully_delivered && Some(height) > height_with_fully_delivered_messages {
-                height_with_fully_delivered_messages = Some(height);
-            }
-        }
+                .all_messages_to_tracked_chains_delivered_up_to(latest_height)
+                .await?;
 
         self.save().await?;
 
-        if let Some(height) = height_with_fully_delivered_messages {
-            self.state.delivery_notifier.notify(height);
+        if fully_delivered {
+            self.state.delivery_notifier.notify(latest_height);
         }
 
         Ok(())
@@ -695,7 +684,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
     ///   correctly.
     pub fn select_message_bundles(
         &self,
-        origin: &'a Origin,
+        origin: &'a ChainId,
         recipient: ChainId,
         next_height_to_receive: BlockHeight,
         last_anticipated_block_height: Option<BlockHeight>,

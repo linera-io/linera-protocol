@@ -175,7 +175,6 @@ async fn get_chain(node: &str, chain_id: ChainId) -> Result<Box<Chain>> {
     let client = reqwest::Client::new();
     let variables = chain::Variables {
         chain_id,
-        channels_input: None,
         inboxes_input: None,
         outboxes_input: None,
         previous_message_blocks_input: None,

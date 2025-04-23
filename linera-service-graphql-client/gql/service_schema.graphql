@@ -222,7 +222,7 @@ type BundleInInbox {
 	"""
 	The origin from which we received the bundle.
 	"""
-	origin: Origin!
+	origin: ChainId!
 	"""
 	The cursor of the bundle in the inbox.
 	"""
@@ -339,7 +339,7 @@ type ChainStateExtendedView {
 	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
-	inboxes: ReentrantCollectionView_Origin_InboxStateView_3699835794!
+	inboxes: ReentrantCollectionView_ChainId_InboxStateView_1897134286!
 	"""
 	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
@@ -355,16 +355,12 @@ type ChainStateExtendedView {
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
-	outboxes: ReentrantCollectionView_Target_OutboxStateView_2789119133!
+	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_1682262239!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
 	"""
 	outboxCounters: JSONObject!
-	"""
-	Channels able to multicast messages to subscribers.
-	"""
-	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053!
 }
 
 """
@@ -396,25 +392,6 @@ type ChainTipState {
 type Chains {
 	list: [ChainId!]!
 	default: ChainId
-}
-
-"""
-A channel name together with its application ID.
-"""
-scalar ChannelFullName
-
-"""
-The state of a channel followed by subscribers.
-"""
-type ChannelStateView {
-	"""
-	The current subscribers.
-	"""
-	subscribers: [ChainId!]!
-	"""
-	The block heights so far, to be sent to future subscribers.
-	"""
-	blockHeights: LogView_BlockHeight_e824a938!
 }
 
 """
@@ -460,11 +437,6 @@ type Cursor {
 }
 
 """
-The destination of a message, relative to a particular application.
-"""
-scalar Destination
-
-"""
 A GraphQL-visible map item, complete with key.
 """
 type Entry_AccountOwner_Amount_aaf96548 {
@@ -507,24 +479,16 @@ type Entry_ChainId_BlockHeight_2fe78645 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChannelFullName_ChannelStateView_bd1de7ae {
-	key: ChannelFullName!
-	value: ChannelStateView!
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
-type Entry_Origin_InboxStateView_c4db01d6 {
-	key: Origin!
+type Entry_ChainId_InboxStateView_a719a606 {
+	key: ChainId!
 	value: InboxStateView!
 }
 
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_Target_OutboxStateView_50a86149 {
-	key: Target!
+type Entry_ChainId_OutboxStateView_b73c476d {
+	key: ChainId!
 	value: OutboxStateView!
 }
 
@@ -601,9 +565,9 @@ A bundle of cross-chain messages.
 """
 type IncomingBundle {
 	"""
-	The origin of the messages (chain and channel if any).
+	The origin of the messages.
 	"""
-	origin: Origin!
+	origin: ChainId!
 	"""
 	The messages to be delivered to the inbox identified by `origin`.
 	"""
@@ -619,10 +583,6 @@ type IncomingBundle {
 A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
-
-type LogView_BlockHeight_e824a938 {
-	entries(start: Int, end: Int): [BlockHeight!]!
-}
 
 type LogView_ChainAndHeight_7af83576 {
 	entries(start: Int, end: Int): [ChainAndHeight!]!
@@ -644,18 +604,6 @@ input MapFilters_ChainId_37f83aa9 {
 	keys: [ChainId!]
 }
 
-input MapFilters_ChannelFullName_7b67e184 {
-	keys: [ChannelFullName!]
-}
-
-input MapFilters_Origin_742d451b {
-	keys: [Origin!]
-}
-
-input MapFilters_Target_7aac1e1c {
-	keys: [Target!]
-}
-
 input MapInput_AccountOwner_d6668c53 {
 	filters: MapFilters_AccountOwner_d6668c53
 }
@@ -666,18 +614,6 @@ input MapInput_BlobId_4d2a0555 {
 
 input MapInput_ChainId_37f83aa9 {
 	filters: MapFilters_ChainId_37f83aa9
-}
-
-input MapInput_ChannelFullName_7b67e184 {
-	filters: MapFilters_ChannelFullName_7b67e184
-}
-
-input MapInput_Origin_742d451b {
-	filters: MapFilters_Origin_742d451b
-}
-
-input MapInput_Target_7aac1e1c {
-	filters: MapFilters_Target_7aac1e1c
 }
 
 type MapView_AccountOwner_Amount_11ef1379 {
@@ -881,11 +817,6 @@ A record of a single oracle response.
 scalar OracleResponse
 
 """
-The origin of a message, relative to a particular application. Used to identify each inbox.
-"""
-scalar Origin
-
-"""
 The state of an outbox
 * An outbox is used to send messages to another chain.
 * Internally, this is implemented as a FIFO queue of (increasing) block heights.
@@ -913,7 +844,7 @@ type OutgoingMessage {
 	"""
 	The destination of the message.
 	"""
-	destination: Destination!
+	destination: ChainId!
 	"""
 	The user authentication carried by the message, if any.
 	"""
@@ -1015,22 +946,16 @@ type ReentrantCollectionView_AccountOwner_PendingBlobsView_673534848 {
 	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_f0b6a64b!]!
 }
 
-type ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053 {
-	keys: [ChannelFullName!]!
-	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_bd1de7ae!
-	entries(input: MapInput_ChannelFullName_7b67e184): [Entry_ChannelFullName_ChannelStateView_bd1de7ae!]!
+type ReentrantCollectionView_ChainId_InboxStateView_1897134286 {
+	keys: [ChainId!]!
+	entry(key: ChainId!): Entry_ChainId_InboxStateView_a719a606!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_InboxStateView_a719a606!]!
 }
 
-type ReentrantCollectionView_Origin_InboxStateView_3699835794 {
-	keys: [Origin!]!
-	entry(key: Origin!): Entry_Origin_InboxStateView_c4db01d6!
-	entries(input: MapInput_Origin_742d451b): [Entry_Origin_InboxStateView_c4db01d6!]!
-}
-
-type ReentrantCollectionView_Target_OutboxStateView_2789119133 {
-	keys: [Target!]!
-	entry(key: Target!): Entry_Target_OutboxStateView_50a86149!
-	entries(input: MapInput_Target_7aac1e1c): [Entry_Target_OutboxStateView_50a86149!]!
+type ReentrantCollectionView_ChainId_OutboxStateView_1682262239 {
+	keys: [ChainId!]!
+	entry(key: ChainId!): Entry_ChainId_OutboxStateView_b73c476d!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_OutboxStateView_b73c476d!]!
 }
 
 """
@@ -1202,11 +1127,6 @@ type SystemExecutionStateView {
 	balances: MapView_AccountOwner_Amount_11ef1379!
 	timestamp: Timestamp!
 }
-
-"""
-The target of a message, relative to a particular application. Used to identify each outbox.
-"""
-scalar Target
 
 """
 A timestamp, in microseconds since the Unix epoch

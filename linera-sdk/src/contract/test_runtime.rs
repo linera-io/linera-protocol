@@ -14,10 +14,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     ensure, http,
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, StreamName,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
@@ -57,8 +54,6 @@ where
     can_change_application_permissions: Option<bool>,
     call_application_handler: Option<CallApplicationHandler>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
-    subscribe_requests: Vec<(ChainId, ChannelName)>,
-    unsubscribe_requests: Vec<(ChainId, ChannelName)>,
     outgoing_transfers: HashMap<Account, Amount>,
     created_events: BTreeMap<StreamName, Vec<Vec<u8>>>,
     events: BTreeMap<(ChainId, StreamName, u32), Vec<u8>>,
@@ -107,8 +102,6 @@ where
             can_change_application_permissions: None,
             call_application_handler: None,
             send_message_requests: Arc::default(),
-            subscribe_requests: Vec::new(),
-            unsubscribe_requests: Vec::new(),
             outgoing_transfers: HashMap::new(),
             created_events: BTreeMap::new(),
             events: BTreeMap::new(),
@@ -469,11 +462,7 @@ where
     }
 
     /// Schedules a message to be sent to this application on another chain.
-    pub fn send_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Application::Message,
-    ) {
+    pub fn send_message(&mut self, destination: ChainId, message: Application::Message) {
         self.prepare_message(message).send_to(destination)
     }
 
@@ -492,26 +481,6 @@ where
         self.send_message_requests
             .try_lock()
             .expect("Unit test should be single-threaded")
-    }
-
-    /// Subscribes to a message channel from another chain.
-    pub fn subscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        self.subscribe_requests.push((chain, channel));
-    }
-
-    /// Returns the list of requests to subscribe to channels made in the test so far.
-    pub fn subscribe_requests(&self) -> &[(ChainId, ChannelName)] {
-        &self.subscribe_requests
-    }
-
-    /// Unsubscribes to a message channel from another chain.
-    pub fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        self.unsubscribe_requests.push((chain, channel));
-    }
-
-    /// Returns the list of requests to unsubscribe to channels made in the test so far.
-    pub fn unsubscribe_requests(&self) -> &[(ChainId, ChannelName)] {
-        &self.unsubscribe_requests
     }
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
@@ -1016,9 +985,9 @@ where
     }
 
     /// Schedules this `Message` to be sent to the `destination`.
-    pub fn send_to(self, destination: impl Into<Destination>) {
+    pub fn send_to(self, destination: ChainId) {
         let request = SendMessageRequest {
-            destination: destination.into(),
+            destination,
             authenticated: self.authenticated,
             is_tracked: self.is_tracked,
             grant: self.grant,

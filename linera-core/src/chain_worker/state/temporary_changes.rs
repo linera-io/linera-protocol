@@ -22,10 +22,7 @@ use linera_views::views::{ClonableView, View};
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::{
-        data_types::{MessageBundle, Origin},
-        types::ConfirmedBlockCertificate,
-    },
+    linera_chain::{data_types::MessageBundle, types::ConfirmedBlockCertificate},
 };
 
 use super::ChainWorkerState;
@@ -75,7 +72,7 @@ where
     #[cfg(with_testing)]
     pub(super) async fn find_bundle_in_inbox(
         &mut self,
-        inbox_id: Origin,
+        inbox_id: linera_base::identifiers::ChainId,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
@@ -279,7 +276,7 @@ where
             for (origin, inbox) in pairs {
                 for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
-                        origin: origin.clone(),
+                        origin,
                         bundle,
                         action,
                     });
@@ -318,19 +315,17 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<BlockExecutionOutcome, WorkerError> {
-        let (outcome, subscribe, unsubscribe) =
+        let outcome =
             Box::pin(
                 self.0
                     .chain
                     .execute_block(block, local_time, round, published_blobs, None),
             )
             .await?;
-        if subscribe.is_empty() && unsubscribe.is_empty() {
-            self.0.execution_state_cache.insert_owned(
-                &outcome.state_hash,
-                self.0.chain.execution_state.clone_unchecked()?,
-            );
-        }
+        self.0.execution_state_cache.insert_owned(
+            &outcome.state_hash,
+            self.0.chain.execution_state.clone_unchecked()?,
+        );
         Ok(outcome)
     }
 }

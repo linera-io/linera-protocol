@@ -15,7 +15,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
+    data_types::{IncomingBundle, MessageBundle, PostedMessage},
     manager::LockingBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
@@ -814,7 +814,7 @@ where
     assert_matches!(
         &block.body.incoming_bundles[0],
         IncomingBundle {
-            origin: Origin { sender, medium: Medium::Direct },
+            origin: sender,
             action: MessageAction::Reject,
             bundle: MessageBundle {
                 messages,

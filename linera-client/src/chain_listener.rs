@@ -16,7 +16,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
     data_types::Timestamp,
-    identifiers::{ChainId, Destination},
+    identifiers::ChainId,
     task::NonBlockingFuture,
 };
 use linera_core::{
@@ -218,7 +218,7 @@ impl<C: ClientContext> ChainListener<C> {
         let new_chains = messages
             .filter_map(|outgoing_message| {
                 if let OutgoingMessage {
-                    destination: Destination::Recipient(new_id),
+                    destination: new_id,
                     message: Message::System(SystemMessage::OpenChain(open_chain_config)),
                     ..
                 } = outgoing_message

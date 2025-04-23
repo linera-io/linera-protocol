@@ -39,8 +39,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
+        GenericApplicationId, MessageId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
     task,
@@ -717,12 +717,6 @@ pub trait ContractRuntime: BaseRuntime {
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;
 
-    /// Schedules to subscribe to some `channel` on a `chain`.
-    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
-
-    /// Schedules to unsubscribe to some `channel` on a `chain`.
-    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
-
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
@@ -914,7 +908,7 @@ pub enum QueryResponse {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct RawOutgoingMessage<Message, Grant> {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// Whether the message is authenticated.
     pub authenticated: bool,
     /// The grant needed for message execution, typically specified as an `Amount` or as `Resources`.
@@ -970,7 +964,7 @@ pub enum MessageKind {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OutgoingMessage {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<AccountOwner>,
@@ -992,7 +986,7 @@ impl OutgoingMessage {
     /// Creates a new simple outgoing message with no grant and no authenticated signer.
     pub fn new(recipient: ChainId, message: impl Into<Message>) -> Self {
         OutgoingMessage {
-            destination: Destination::Recipient(recipient),
+            destination: recipient,
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,

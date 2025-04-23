@@ -21,8 +21,8 @@ use thiserror::Error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, IncomingBundle, Medium, MessageAction, MessageBundle,
-        OperationResult, OutgoingMessageExt, PostedMessage, ProposedBlock,
+        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, OperationResult,
+        OutgoingMessageExt, PostedMessage, ProposedBlock,
     },
     types::CertificateValue,
 };
@@ -405,12 +405,11 @@ impl Block {
     /// recipient. Messages originating from different transactions of the original block
     /// are kept in separate bundles. If the medium is a channel, does not verify that the
     /// recipient is actually subscribed to that channel.
-    pub fn message_bundles_for<'a>(
-        &'a self,
-        medium: &'a Medium,
+    pub fn message_bundles_for(
+        &self,
         recipient: ChainId,
         certificate_hash: CryptoHash,
-    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
+    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + '_ {
         let mut index = 0u32;
         let block_height = self.header.height;
         let block_timestamp = self.header.timestamp;
@@ -421,7 +420,7 @@ impl Block {
             .filter_map(move |(transaction_index, txn_messages)| {
                 let messages = (index..)
                     .zip(txn_messages)
-                    .filter(|(_, message)| message.has_destination(medium, recipient))
+                    .filter(|(_, message)| message.destination == recipient)
                     .map(|(idx, message)| message.clone().into_posted(idx))
                     .collect::<Vec<_>>();
                 index += txn_messages.len() as u32;

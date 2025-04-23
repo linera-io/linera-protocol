@@ -12,7 +12,7 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlockHeight, Epoch, Resources, SendMessageRequest,
         Timestamp,
     },
-    identifiers::{Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId},
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -490,16 +490,16 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     let (fourth_id, fourth_application, fourth_app_blobs) =
         view.register_mock_application(3).await?;
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination = ChainId::from(ChainDescription::Root(1));
     let first_message = SendMessageRequest {
-        destination: Destination::from(destination_chain),
+        destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
         message: b"first".to_vec(),
     };
     let expected_first_message = OutgoingMessage::new(
-        destination_chain,
+        destination,
         Message::User {
             application_id: third_id,
             bytes: b"first".to_vec(),
@@ -530,21 +530,21 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     }));
 
     let second_message = SendMessageRequest {
-        destination: Destination::from(destination_chain),
+        destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
         message: b"second".to_vec(),
     };
     let third_message = SendMessageRequest {
-        destination: Destination::from(destination_chain),
+        destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
         message: b"third".to_vec(),
     };
     let fourth_message = SendMessageRequest {
-        destination: Destination::from(destination_chain),
+        destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
@@ -552,21 +552,21 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     };
 
     let expected_second_message = OutgoingMessage::new(
-        destination_chain,
+        destination,
         Message::User {
             application_id: third_id,
             bytes: b"second".to_vec(),
         },
     );
     let expected_third_message = OutgoingMessage::new(
-        destination_chain,
+        destination,
         Message::User {
             application_id: third_id,
             bytes: b"third".to_vec(),
         },
     );
     let expected_fourth_message = OutgoingMessage::new(
-        destination_chain,
+        destination,
         Message::User {
             application_id: first_id,
             bytes: b"fourth".to_vec(),
@@ -830,9 +830,9 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination = ChainId::from(ChainDescription::Root(1));
     let dummy_message = SendMessageRequest {
-        destination: Destination::from(destination_chain),
+        destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
@@ -840,7 +840,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     };
 
     let expected_dummy_message = OutgoingMessage::new(
-        destination_chain,
+        destination,
         Message::User {
             application_id,
             bytes: b"msg".to_vec(),
@@ -898,9 +898,9 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         },
     ));
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination = ChainId::from(ChainDescription::Root(1));
     let dummy_message = SendMessageRequest {
-        destination: Destination::from(destination_chain),
+        destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
@@ -908,7 +908,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     };
 
     let expected_dummy_message = OutgoingMessage::new(
-        destination_chain,
+        destination,
         Message::User {
             application_id: target_id,
             bytes: b"msg".to_vec(),
@@ -974,9 +974,9 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         },
     ));
 
-    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let destination = ChainId::from(ChainDescription::Root(1));
     let dummy_message = SendMessageRequest {
-        destination: Destination::from(destination_chain),
+        destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
@@ -984,7 +984,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     };
 
     let expected_dummy_message = OutgoingMessage::new(
-        destination_chain,
+        destination,
         Message::User {
             application_id: target_id,
             bytes: b"msg".to_vec(),
@@ -1053,13 +1053,13 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         view.register_mock_application(2).await?;
 
     // The first destination chain receives messages from the caller and the sending applications
-    let first_destination_chain = ChainId::from(ChainDescription::Root(1));
+    let first_destination = ChainId::from(ChainDescription::Root(1));
     // The second destination chain only receives a message from the sending application
-    let second_destination_chain = ChainId::from(ChainDescription::Root(2));
+    let second_destination = ChainId::from(ChainDescription::Root(2));
 
     // The message sent to the first destination chain by the caller and the sending applications
     let first_message = SendMessageRequest {
-        destination: Destination::from(first_destination_chain),
+        destination: first_destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
@@ -1093,7 +1093,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     // The message sent to the second destination chain by the sending application
     let second_message = SendMessageRequest {
-        destination: Destination::from(second_destination_chain),
+        destination: second_destination,
         authenticated: false,
         is_tracked: false,
         grant: Resources::default(),
@@ -1138,21 +1138,21 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let mut expected = TransactionTracker::default();
     expected.add_outgoing_messages(vec![
         OutgoingMessage::new(
-            first_destination_chain,
+            first_destination,
             Message::User {
                 application_id: caller_id,
                 bytes: b"first".to_vec(),
             },
         ),
         OutgoingMessage::new(
-            first_destination_chain,
+            first_destination,
             Message::User {
                 application_id: sending_target_id,
                 bytes: b"first".to_vec(),
             },
         ),
         OutgoingMessage::new(
-            second_destination_chain,
+            second_destination,
             Message::User {
                 application_id: sending_target_id,
                 bytes: b"second".to_vec(),
@@ -1238,7 +1238,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     let message = &txn_outcome.outgoing_messages[(index - first_message_index) as usize];
     let OutgoingMessage {
         message: Message::System(SystemMessage::OpenChain(config)),
-        destination: Destination::Recipient(recipient_id),
+        destination: recipient_id,
         ..
     } = message
     else {

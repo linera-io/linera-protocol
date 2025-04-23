@@ -17,10 +17,7 @@ use linera_base::{
         Epoch, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{
-        AccountOwner, ApplicationId, BlobType, ChainId, ChannelFullName, Destination,
-        GenericApplicationId, MessageId,
-    },
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -44,7 +41,7 @@ use crate::{
     block::{Block, ConfirmedBlock},
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        OperationResult, Origin, PostedMessage, ProposedBlock, Target, Transaction,
+        OperationResult, PostedMessage, ProposedBlock, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -189,13 +186,13 @@ pub struct TimestampedBundleInInbox {
 )]
 pub struct BundleInInbox {
     /// The origin from which we received the bundle.
-    pub origin: Origin,
+    pub origin: ChainId,
     /// The cursor of the bundle in the inbox.
     pub cursor: Cursor,
 }
 
 impl BundleInInbox {
-    fn new(origin: Origin, bundle: &MessageBundle) -> Self {
+    fn new(origin: ChainId, bundle: &MessageBundle) -> Self {
         BundleInInbox {
             cursor: Cursor::from(bundle),
             origin,
@@ -239,7 +236,7 @@ where
     pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorPublicKey, u64>>,
 
     /// Mailboxes used to receive messages indexed by their origin.
-    pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
+    pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
     pub unskippable_bundles:
         BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
@@ -248,12 +245,10 @@ where
     /// The heights of previous blocks that sent messages to the same recipients.
     pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
     /// Mailboxes used to send messages, indexed by their target.
-    pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
+    pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
-    /// Channels able to multicast messages to subscribers.
-    pub channels: ReentrantCollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
 
 /// Block-chaining state.
@@ -338,18 +333,6 @@ impl ChainTipState {
     }
 }
 
-/// The state of a channel followed by subscribers.
-#[derive(Debug, ClonableView, View, SimpleObject)]
-pub struct ChannelStateView<C>
-where
-    C: Context + Send + Sync,
-{
-    /// The current subscribers.
-    pub subscribers: SetView<C, ChainId>,
-    /// The block heights so far, to be sent to future subscribers.
-    pub block_heights: LogView<C, BlockHeight>,
-}
-
 impl<C> ChainStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
@@ -390,7 +373,7 @@ where
 
     pub async fn mark_messages_as_received(
         &mut self,
-        target: &Target,
+        target: &ChainId,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
         let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
@@ -462,7 +445,7 @@ where
                 if let Some(bundle) = inbox.removed_bundles.front().await? {
                     return Err(ChainError::MissingCrossChainUpdate {
                         chain_id,
-                        origin: origin.into(),
+                        origin,
                         height: bundle.height,
                     });
                 }
@@ -475,7 +458,7 @@ where
 
     pub async fn next_block_height_to_receive(
         &self,
-        origin: &Origin,
+        origin: &ChainId,
     ) -> Result<BlockHeight, ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
@@ -486,7 +469,7 @@ where
 
     pub async fn last_anticipated_block_height(
         &self,
-        origin: &Origin,
+        origin: &ChainId,
     ) -> Result<Option<BlockHeight>, ChainError> {
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
@@ -506,7 +489,7 @@ where
     /// Returns `true` if incoming `Subscribe` messages created new outbox entries.
     pub async fn receive_message_bundle(
         &mut self,
-        origin: &Origin,
+        origin: &ChainId,
         bundle: MessageBundle,
         local_time: Timestamp,
         add_to_received_log: bool,
@@ -518,7 +501,7 @@ where
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
-            chain_id: origin.sender,
+            chain_id: *origin,
             height: bundle.height,
         };
 
@@ -538,7 +521,7 @@ where
         NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
-        let entry = BundleInInbox::new(origin.clone(), &bundle);
+        let entry = BundleInInbox::new(*origin, &bundle);
         let skippable = bundle.is_skippable();
         let newly_added = inbox
             .add_bundle(bundle)
@@ -595,7 +578,7 @@ where
             return Ok(()); // Already initialized.
         }
         let message_id = MessageId {
-            chain_id: in_bundle.origin.sender,
+            chain_id: in_bundle.origin,
             height: in_bundle.bundle.height,
             index: posted_message.index,
         };
@@ -675,9 +658,9 @@ where
                 let was_present = inbox
                     .remove_bundle(bundle)
                     .await
-                    .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
+                    .map_err(|error| (chain_id, *origin, error))?;
                 if was_present && !bundle.is_skippable() {
-                    removed_unskippable.insert(BundleInInbox::new(origin.clone(), bundle));
+                    removed_unskippable.insert(BundleInInbox::new(*origin, bundle));
                 }
             }
         }
@@ -723,14 +706,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<
-        (
-            BlockExecutionOutcome,
-            Vec<(ChannelFullName, ChainId)>,
-            Vec<(ChannelFullName, ChainId)>,
-        ),
-        ChainError,
-    > {
+    ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
@@ -795,8 +771,6 @@ where
         let mut blobs = Vec::new();
         let mut messages = Vec::new();
         let mut operation_results = Vec::new();
-        let mut subscribe = Vec::new();
-        let mut unsubscribe = Vec::new();
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
@@ -868,9 +842,6 @@ where
             next_message_index = txn_outcome.next_message_index;
             next_application_index = txn_outcome.next_application_index;
 
-            subscribe.extend(txn_outcome.subscribe);
-            unsubscribe.extend(txn_outcome.unsubscribe);
-
             if matches!(
                 transaction,
                 Transaction::ExecuteOperation(_)
@@ -931,7 +902,7 @@ where
         let recipients = messages
             .iter()
             .flatten()
-            .flat_map(|message| message.destination.recipient())
+            .map(|message| message.destination)
             .collect::<BTreeSet<_>>();
         let mut previous_message_blocks = BTreeMap::new();
         for recipient in recipients {
@@ -961,7 +932,7 @@ where
             chain.crypto_hash().await?
         };
 
-        let outcome = BlockExecutionOutcome {
+        Ok(BlockExecutionOutcome {
             messages,
             previous_message_blocks,
             state_hash,
@@ -969,9 +940,7 @@ where
             events,
             blobs,
             operation_results,
-        };
-
-        Ok((outcome, subscribe, unsubscribe))
+        })
     }
 
     /// Executes a block: first the incoming messages, then the main operation.
@@ -983,14 +952,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<
-        (
-            BlockExecutionOutcome,
-            Vec<(ChannelFullName, ChainId)>,
-            Vec<(ChannelFullName, ChainId)>,
-        ),
-        ChainError,
-    > {
+    ) -> Result<BlockExecutionOutcome, ChainError> {
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
@@ -1024,7 +986,7 @@ where
             .messages
             .iter()
             .flatten()
-            .flat_map(|message| message.destination.recipient())
+            .map(|message| message.destination)
             .collect::<BTreeSet<_>>();
         for recipient in recipients {
             self.previous_message_blocks
@@ -1098,7 +1060,7 @@ where
                     !posted_message.is_protected() || *chain.system.closed.get(),
                     ChainError::CannotRejectMessage {
                         chain_id: block.chain_id,
-                        origin: Box::new(incoming_bundle.origin.clone()),
+                        origin: incoming_bundle.origin,
                         posted_message: Box::new(posted_message.clone()),
                     }
                 );
@@ -1202,42 +1164,16 @@ where
         height: BlockHeight,
         messages: &[OutgoingMessage],
     ) -> Result<(), ChainError> {
-        let max_stream_queries = self.context().max_stream_queries();
         // Record the messages of the execution. Messages are understood within an
         // application.
-        let mut recipients = HashSet::new();
-        let mut channel_broadcasts = HashSet::new();
-        for message in messages {
-            match &message.destination {
-                Destination::Recipient(id) => {
-                    recipients.insert(*id);
-                }
-                Destination::Subscribers(name) => {
-                    ensure!(
-                        message.grant == Amount::ZERO,
-                        ChainError::GrantUseOnBroadcast
-                    );
-                    let GenericApplicationId::User(application_id) =
-                        message.message.application_id()
-                    else {
-                        return Err(ChainError::InternalError(
-                            "System messages cannot be sent to channels".to_string(),
-                        ));
-                    };
-                    channel_broadcasts.insert(ChannelFullName {
-                        application_id,
-                        name: name.clone(),
-                    });
-                }
-            }
-        }
+        let recipients = messages
+            .iter()
+            .map(|msg| msg.destination)
+            .collect::<HashSet<_>>();
 
-        // Update the (regular) outboxes.
+        // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
-        let targets = recipients
-            .into_iter()
-            .map(Target::chain)
-            .collect::<Vec<_>>();
+        let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for mut outbox in outboxes {
             if outbox.schedule_message(height)? {
@@ -1245,104 +1181,10 @@ where
             }
         }
 
-        let full_names = channel_broadcasts.into_iter().collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        let stream = full_names.into_iter().zip(channels);
-        let stream = stream::iter(stream)
-            .map(|(full_name, mut channel)| async move {
-                let recipients = channel.subscribers.indices().await?;
-                channel.block_heights.push(height);
-                let targets = recipients
-                    .into_iter()
-                    .map(|recipient| Target::channel(recipient, full_name.clone()))
-                    .collect::<Vec<_>>();
-                Ok::<_, ChainError>(targets)
-            })
-            .buffer_unordered(max_stream_queries);
-        let infos = stream.try_collect::<Vec<_>>().await?;
-        let targets = infos.into_iter().flatten().collect::<Vec<_>>();
-        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        let outbox_counters = self.outbox_counters.get_mut();
-        for mut outbox in outboxes {
-            if outbox.schedule_message(height)? {
-                *outbox_counters.entry(height).or_default() += 1;
-            }
-        }
         #[cfg(with_metrics)]
         NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
-        Ok(())
-    }
-
-    /// Processes new subscriptions. Returns `true` if at least one new subscriber was added for
-    /// which we have outgoing messages.
-    pub async fn process_subscribes(
-        &mut self,
-        names_and_ids: Vec<(ChannelFullName, ChainId)>,
-    ) -> Result<bool, ChainError> {
-        if names_and_ids.is_empty() {
-            return Ok(false);
-        }
-        let full_names = names_and_ids
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        let subscribe_channels = names_and_ids.into_iter().zip(channels);
-        let max_stream_queries = self.context().max_stream_queries();
-        let stream = stream::iter(subscribe_channels)
-            .map(|((name, id), mut channel)| async move {
-                if channel.subscribers.contains(&id).await? {
-                    return Ok(None); // Was already a subscriber.
-                }
-                tracing::trace!("Adding subscriber {id:.8} for {name:}");
-                channel.subscribers.insert(&id)?;
-                // Send all messages.
-                let heights = channel.block_heights.read(..).await?;
-                if heights.is_empty() {
-                    return Ok(None); // No messages on this channel yet.
-                }
-                let target = Target::channel(id, name.clone());
-                Ok::<_, ChainError>(Some((target, heights)))
-            })
-            .buffer_unordered(max_stream_queries);
-        let infos = stream.try_collect::<Vec<_>>().await?;
-        let (targets, heights): (Vec<_>, Vec<_>) = infos.into_iter().flatten().unzip();
-        let mut new_outbox_entries = false;
-        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        let outbox_counters = self.outbox_counters.get_mut();
-        for (heights, mut outbox) in heights.into_iter().zip(outboxes) {
-            for height in heights {
-                if outbox.schedule_message(height)? {
-                    *outbox_counters.entry(height).or_default() += 1;
-                    new_outbox_entries = true;
-                }
-            }
-        }
-        #[cfg(with_metrics)]
-        NUM_OUTBOXES
-            .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
-        Ok(new_outbox_entries)
-    }
-
-    pub async fn process_unsubscribes(
-        &mut self,
-        names_and_ids: Vec<(ChannelFullName, ChainId)>,
-    ) -> Result<(), ChainError> {
-        if names_and_ids.is_empty() {
-            return Ok(());
-        }
-        let full_names = names_and_ids
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for ((_name, id), mut channel) in names_and_ids.into_iter().zip(channels) {
-            // Remove subscriber. Do not remove the channel outbox yet.
-            channel.subscribers.remove(&id)?;
-        }
         Ok(())
     }
 }

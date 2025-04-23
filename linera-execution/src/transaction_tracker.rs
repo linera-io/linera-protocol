@@ -7,7 +7,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{ArithmeticError, Blob, Event, OracleResponse, StreamUpdate, Timestamp},
     ensure,
-    identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, StreamId},
 };
 
 use crate::{ExecutionError, OutgoingMessage};
@@ -34,10 +34,6 @@ pub struct TransactionTracker {
     events: Vec<Event>,
     /// Blobs created by contracts.
     blobs: BTreeMap<BlobId, Blob>,
-    /// Subscribe chains to channels.
-    subscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Unsubscribe chains from channels.
-    unsubscribe: Vec<(ChannelFullName, ChainId)>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
@@ -57,10 +53,6 @@ pub struct TransactionOutcome {
     pub events: Vec<Event>,
     /// Blobs created by contracts.
     pub blobs: Vec<Blob>,
-    /// Subscribe chains to channels.
-    pub subscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Unsubscribe chains from channels.
-    pub unsubscribe: Vec<(ChannelFullName, ChainId)>,
     /// Operation result.
     pub operation_result: Vec<u8>,
 }
@@ -146,14 +138,6 @@ impl TransactionTracker {
 
     pub fn created_blobs(&self) -> &BTreeMap<BlobId, Blob> {
         &self.blobs
-    }
-
-    pub fn subscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
-        self.subscribe.push((name, subscriber));
-    }
-
-    pub fn unsubscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
-        self.unsubscribe.push((name, subscriber));
     }
 
     pub fn add_oracle_response(&mut self, oracle_response: OracleResponse) {
@@ -269,8 +253,6 @@ impl TransactionTracker {
             next_application_index,
             events,
             blobs,
-            subscribe,
-            unsubscribe,
             operation_result,
             streams_to_process,
         } = self;
@@ -291,8 +273,6 @@ impl TransactionTracker {
             next_application_index,
             events,
             blobs: blobs.into_values().collect(),
-            subscribe,
-            unsubscribe,
             operation_result: operation_result.unwrap_or_default(),
         })
     }
