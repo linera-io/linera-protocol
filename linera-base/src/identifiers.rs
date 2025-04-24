@@ -994,33 +994,33 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::{AccountOwner, BlobType};
+    use crate::{
+        data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
+        ownership::ChainOwnership,
+    };
 
-    /* TODO: figure out if this can be fixed.
-    /// Verifies that chain IDs that are explicitly used in some example and test scripts don't
-    /// change.
+    /// Verifies that the way of computing chain IDs doesn't change.
     #[test]
-    fn chain_ids() {
-        assert_eq!(
-            &ChainId::root(0).to_string(),
-            "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
+    fn chain_id_computing() {
+        let example_chain_origin = ChainOrigin::Root(0);
+        let example_chain_config = InitialChainConfig {
+            admin_id: None,
+            epoch: Epoch::ZERO,
+            ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
+            balance: Amount::ZERO,
+            committees: [(Epoch::ZERO, vec![])].into_iter().collect(),
+            application_permissions: Default::default(),
+        };
+        let description = ChainDescription::new(
+            example_chain_origin,
+            example_chain_config,
+            Timestamp::from(0),
         );
         assert_eq!(
-            &ChainId::root(1).to_string(),
-            "a3edc33d8e951a1139333be8a4b56646b5598a8f51216e86592d881808972b07"
+            description.id().to_string(),
+            "f8c2f02adc0ac763ffd74a32d02aa37490d869605c356a2da55e1d09e7d253bf"
         );
-        assert_eq!(
-            &ChainId::root(2).to_string(),
-            "678e9f66507069d38955b593e93ddf192a23a4087225fd307eadad44e5544ae3"
-        );
-        assert_eq!(
-            &ChainId::root(9).to_string(),
-            "63620ea465af9e9e0e8e4dd8d21593cc3a719feac5f096df8440f90738f4dbd8"
-        );
-        assert_eq!(
-            &ChainId::root(999).to_string(),
-            "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
-        );
-    }*/
+    }
 
     #[test]
     fn blob_types() {

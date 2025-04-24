@@ -16,8 +16,8 @@ use linera_base::prometheus_util::{
 };
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OpenChainConfig,
-        Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight,
+        InitialChainConfig, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -298,7 +298,7 @@ where
                 mut txn_tracker,
             } => {
                 let inactive_err = || ExecutionError::InactiveChain;
-                let config = OpenChainConfig {
+                let config = InitialChainConfig {
                     ownership,
                     admin_id: Some(self.system.admin_id.get().ok_or_else(inactive_err)?),
                     epoch: self.system.epoch.get().ok_or_else(inactive_err)?,

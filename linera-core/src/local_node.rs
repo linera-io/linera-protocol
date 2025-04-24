@@ -11,7 +11,7 @@ use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight},
-    identifiers::{ApplicationId, BlobId, ChainId, MessageId},
+    identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
@@ -319,28 +319,6 @@ where
                     "could not find certificate with block chain ID and height {}",
                     (chain_id, block_height),
                 )
-            })?;
-        Ok(certificate)
-    }
-
-    /// Obtains the certificate containing the specified message.
-    #[instrument(level = "trace", skip(self))]
-    pub async fn certificate_for(
-        &self,
-        message_id: &MessageId,
-    ) -> Result<ConfirmedBlockCertificate, LocalNodeError> {
-        let query = ChainInfoQuery::new(message_id.chain_id)
-            .with_sent_certificate_hashes_in_range(BlockHeightRange::single(message_id.height));
-        let info = self.handle_chain_info_query(query).await?.info;
-        let certificates = self
-            .storage_client()
-            .read_certificates(info.requested_sent_certificate_hashes)
-            .await?;
-        let certificate = certificates
-            .into_iter()
-            .find(|certificate| certificate.has_message(message_id))
-            .ok_or_else(|| {
-                ViewError::not_found("could not find certificate with message {}", message_id)
             })?;
         Ok(certificate)
     }

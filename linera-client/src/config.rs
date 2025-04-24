@@ -13,7 +13,7 @@ use linera_base::{
         AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, Ed25519SecretKey,
         ValidatorPublicKey, ValidatorSecretKey,
     },
-    data_types::{Amount, ChainDescription, ChainOrigin, Epoch, OpenChainConfig, Timestamp},
+    data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
     identifiers::ChainId,
     ownership::ChainOwnership,
 };
@@ -232,7 +232,7 @@ impl GenesisConfig {
         .collect();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
             let origin = ChainOrigin::Root(chain_number);
-            let config = OpenChainConfig {
+            let config = InitialChainConfig {
                 admin_id: if chain_number == 0 {
                     None
                 } else {

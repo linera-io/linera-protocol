@@ -29,7 +29,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
-        OpenChainConfig, Round, Timestamp,
+        InitialChainConfig, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -2961,7 +2961,7 @@ impl<Env: Environment> ChainClient<Env> {
                 })
                 .collect();
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-            let config = OpenChainConfig {
+            let config = InitialChainConfig {
                 ownership: ownership.clone(),
                 committees,
                 admin_id: Some(self.admin_id),

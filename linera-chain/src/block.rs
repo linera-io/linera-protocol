@@ -512,8 +512,9 @@ impl Block {
         self.oracle_blob_ids().contains(blob_id)
             || self.published_blob_ids().contains(blob_id)
             || self.created_blob_ids().contains(blob_id)
-            || (blob_id.blob_type == BlobType::ChainDescription
-                && blob_id.hash == self.header.chain_id.0)
+            || (self.header.height == BlockHeight(0)
+                && (blob_id.blob_type == BlobType::ChainDescription
+                    && blob_id.hash == self.header.chain_id.0))
     }
 
     /// Returns all the published blob IDs in this block's operations.

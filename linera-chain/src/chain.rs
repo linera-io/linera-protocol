@@ -428,29 +428,27 @@ where
     /// Invariant for the states of active chains.
     pub async fn ensure_is_active(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
         if self.is_active() {
-            Ok(())
-        } else {
-            // Initialize ourselves.
-            self.execution_state
-                .system
-                .initialize_chain(self.chain_id())
-                .await
-                .with_execution_context(ChainExecutionContext::Block)?;
-            // Recompute the state hash.
-            let hash = self.execution_state.crypto_hash().await?;
-            self.execution_state_hash.set(Some(hash));
-            let maybe_committee = self.execution_state.system.current_committee().into_iter();
-            // Last, reset the consensus state based on the current ownership.
-            //
-            self.manager.reset(
-                self.execution_state.system.ownership.get().clone(),
-                BlockHeight(0),
-                local_time,
-                maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
-            )?;
-            self.save().await?;
-            Ok(())
+            return Ok(());
         }
+        // Initialize ourselves.
+        self.execution_state
+            .system
+            .initialize_chain(self.chain_id())
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
+        // Recompute the state hash.
+        let hash = self.execution_state.crypto_hash().await?;
+        self.execution_state_hash.set(Some(hash));
+        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        // Last, reset the consensus state based on the current ownership.
+        self.manager.reset(
+            self.execution_state.system.ownership.get().clone(),
+            BlockHeight(0),
+            local_time,
+            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
+        )?;
+        self.save().await?;
+        Ok(())
     }
 
     /// Verifies that this chain is up-to-date and all the messages executed ahead of time
@@ -686,6 +684,13 @@ where
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
+
+        ensure!(
+            *chain.system.timestamp.get() <= block.timestamp,
+            ChainError::InvalidBlockTimestamp
+        );
+
+        chain.system.timestamp.set(block.timestamp);
 
         let (_, committee) = chain
             .system
@@ -932,14 +937,7 @@ where
             self.execution_state.context().extra().chain_id()
         );
 
-        ensure!(
-            *self.execution_state.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
-        );
-
         self.ensure_is_active(local_time).await?;
-
-        self.execution_state.system.timestamp.set(block.timestamp);
 
         Self::execute_block_inner(
             &mut self.execution_state,

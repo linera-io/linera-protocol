@@ -15,7 +15,7 @@ use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
-        ChainDescription, ChainOrigin, Epoch, OpenChainConfig, Timestamp,
+        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
@@ -71,7 +71,7 @@ impl TestEnvironment {
             ValidatorPublicKey::test_key(1),
             AccountPublicKey::test_key(1),
         )]);
-        let config = OpenChainConfig {
+        let config = InitialChainConfig {
             ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
             admin_id: None,
             epoch: Epoch::ZERO,
@@ -102,7 +102,7 @@ impl TestEnvironment {
             .map(Blob::new_chain_description)
     }
 
-    fn make_open_chain_config(&self) -> OpenChainConfig {
+    fn make_open_chain_config(&self) -> InitialChainConfig {
         self.admin_chain_description.config().clone()
     }
 
@@ -131,14 +131,14 @@ impl TestEnvironment {
     fn make_child_chain_description_with_config(
         &mut self,
         height: u64,
-        config: OpenChainConfig,
+        config: InitialChainConfig,
     ) -> ChainDescription {
         let origin = ChainOrigin::Child {
             parent: self.admin_id(),
             block_height: BlockHeight(height),
             chain_index: 0,
         };
-        let config = OpenChainConfig {
+        let config = InitialChainConfig {
             admin_id: Some(self.admin_id()),
             ..config
         };
@@ -254,7 +254,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
 
-    let config = OpenChainConfig {
+    let config = InitialChainConfig {
         application_permissions: ApplicationPermissions::new_single(application_id),
         ..env.make_open_chain_config()
     };

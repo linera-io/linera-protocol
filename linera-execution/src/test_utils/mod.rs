@@ -16,7 +16,7 @@ use linera_base::{
     crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, Blob, BlockHeight, ChainDescription, ChainOrigin, CompressedBytecode, Epoch,
-        OpenChainConfig, OracleResponse, Timestamp,
+        InitialChainConfig, OracleResponse, Timestamp,
     },
     identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
@@ -54,7 +54,7 @@ pub fn dummy_chain_description_with_ownership_and_balance(
         bcs::to_bytes(&committee).expect("serializing a committee shouldn't fail"),
     )]);
     let origin = ChainOrigin::Root(index);
-    let config = OpenChainConfig {
+    let config = InitialChainConfig {
         admin_id: if index == 0 {
             None
         } else {

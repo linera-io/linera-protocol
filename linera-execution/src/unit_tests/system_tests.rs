@@ -109,7 +109,7 @@ async fn open_chain_message_index() {
         .collect();
     let owner = linera_base::crypto::AccountPublicKey::test_key(0).into();
     let ownership = ChainOwnership::single(owner);
-    let config = OpenChainConfig {
+    let config = InitialChainConfig {
         ownership,
         committees,
         epoch,

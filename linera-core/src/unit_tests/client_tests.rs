@@ -513,7 +513,7 @@ where
     let parent = builder.add_root_chain(2, Amount::ZERO).await?;
     let new_key_pair = AccountSecretKey::generate();
 
-    let new_chain_config = OpenChainConfig {
+    let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_key_pair.public().into()),
         admin_id: Some(builder.admin_id()),
         epoch: Epoch::ZERO,

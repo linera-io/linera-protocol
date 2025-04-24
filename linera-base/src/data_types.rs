@@ -810,16 +810,16 @@ impl Epoch {
     }
 }
 
-/// The configuration for a new chain.
+/// The initial configuration for a new chain.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
-pub struct OpenChainConfig {
+pub struct InitialChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
     /// The ID of the admin chain.
     pub admin_id: Option<ChainId>,
     /// The epoch in which the chain is created.
     pub epoch: Epoch,
-    /// Blob IDs of the committees corresponding to epochs.
+    /// Serialized committees corresponding to epochs.
     pub committees: BTreeMap<Epoch, Vec<u8>>,
     /// The initial chain balance.
     pub balance: Amount,
@@ -832,12 +832,12 @@ pub struct OpenChainConfig {
 pub struct ChainDescription {
     origin: ChainOrigin,
     timestamp: Timestamp,
-    config: OpenChainConfig,
+    config: InitialChainConfig,
 }
 
 impl ChainDescription {
     /// Creates a new [`ChainDescription`].
-    pub fn new(origin: ChainOrigin, config: OpenChainConfig, timestamp: Timestamp) -> Self {
+    pub fn new(origin: ChainOrigin, config: InitialChainConfig, timestamp: Timestamp) -> Self {
         Self {
             origin,
             config,
@@ -855,8 +855,8 @@ impl ChainDescription {
         self.origin
     }
 
-    /// Returns a reference to the [`OpenChainConfig`] of the chain.
-    pub fn config(&self) -> &OpenChainConfig {
+    /// Returns a reference to the [`InitialChainConfig`] of the chain.
+    pub fn config(&self) -> &InitialChainConfig {
         &self.config
     }
 

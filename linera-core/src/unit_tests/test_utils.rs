@@ -813,7 +813,7 @@ where
         );
         let key_pair = AccountSecretKey::generate();
         let public_key = key_pair.public();
-        let open_chain_config = OpenChainConfig {
+        let open_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(public_key.into()),
             admin_id: if index == 0 {
                 None
@@ -839,7 +839,7 @@ where
                 .unwrap();
             if validator.fault_type().await == FaultType::Malicious {
                 let origin = description.origin();
-                let config = OpenChainConfig {
+                let config = InitialChainConfig {
                     balance: Amount::ZERO,
                     ..description.config().clone()
                 };

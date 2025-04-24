@@ -18,7 +18,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, ChainOrigin, Epoch, OpenChainConfig, OracleResponse, Timestamp,
+        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, StreamId},
@@ -121,7 +121,7 @@ pub enum SystemOperation {
     },
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    OpenChain(OpenChainConfig),
+    OpenChain(InitialChainConfig),
     /// Closes the chain.
     CloseChain,
     /// Changes the ownership of the chain.
@@ -723,7 +723,7 @@ where
             .read_blob_content(BlobId::new(chain_id.0, BlobType::ChainDescription))
             .await?;
         let description: ChainDescription = bcs::from_bytes(description_blob.bytes())?;
-        let OpenChainConfig {
+        let InitialChainConfig {
             ownership,
             admin_id,
             epoch,
@@ -770,7 +770,7 @@ where
     /// from this chain's.
     pub async fn open_chain(
         &mut self,
-        config: OpenChainConfig,
+        config: InitialChainConfig,
         parent: ChainId,
         block_height: BlockHeight,
         timestamp: Timestamp,

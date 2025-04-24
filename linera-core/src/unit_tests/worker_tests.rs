@@ -125,7 +125,7 @@ where
         )]);
 
         let origin = ChainOrigin::Root(0);
-        let config = OpenChainConfig {
+        let config = InitialChainConfig {
             admin_id: None,
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
@@ -181,7 +181,7 @@ where
         balance: Amount,
     ) -> ChainDescription {
         let origin = ChainOrigin::Root(index);
-        let config = OpenChainConfig {
+        let config = InitialChainConfig {
             admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
@@ -211,7 +211,7 @@ where
             block_height: BlockHeight(0),
             chain_index: 0,
         };
-        let config = OpenChainConfig {
+        let config = InitialChainConfig {
             admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
@@ -2286,7 +2286,7 @@ where
         }
         .with(
             make_first_block(admin_id)
-                .with_operation(SystemOperation::OpenChain(OpenChainConfig {
+                .with_operation(SystemOperation::OpenChain(InitialChainConfig {
                     ownership: ChainOwnership::single(env.admin_public_key().into()),
                     epoch: Epoch::ZERO,
                     committees: serialize_committees(committees.clone()),

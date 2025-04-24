@@ -17,7 +17,7 @@ use linera_base::{
     crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
     data_types::{
         Amount, ApplicationPermissions, Blob, BlobContent, ChainDescription, ChainOrigin, Epoch,
-        OpenChainConfig, Timestamp,
+        InitialChainConfig, Timestamp,
     },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
@@ -286,7 +286,7 @@ impl TestValidator {
 
         let (epoch, committee) = self.committee.lock().await.clone();
 
-        let new_chain_config = OpenChainConfig {
+        let new_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(owner),
             committees: [(
                 epoch,
@@ -326,7 +326,7 @@ impl TestValidator {
         let key_pair = AccountSecretKey::generate();
         let (epoch, committee) = self.committee.lock().await.clone();
 
-        let new_chain_config = OpenChainConfig {
+        let new_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(key_pair.public().into()),
             committees: [(
                 epoch,

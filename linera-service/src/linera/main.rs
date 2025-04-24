@@ -24,7 +24,7 @@ use linera_base::{
     bcs,
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{
-        ApplicationPermissions, BlockHeight, ChainDescription, ChainOrigin, Epoch, OpenChainConfig, Timestamp,
+        ApplicationPermissions, BlockHeight, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
@@ -1724,7 +1724,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             )]
             .into_iter()
             .collect();
-            let admin_config = OpenChainConfig {
+            let admin_config = InitialChainConfig {
                 admin_id: None,
                 balance: *initial_funding,
                 committees,
@@ -1756,7 +1756,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 let config = if i == 0 {
                     admin_config.clone()
                 } else {
-                    OpenChainConfig {
+                    InitialChainConfig {
                         admin_id: Some(admin_id),
                         ownership: ChainOwnership::single(key_pair.public().into()),
                         ..admin_config.clone()

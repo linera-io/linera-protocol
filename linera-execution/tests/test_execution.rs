@@ -10,7 +10,7 @@ use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin, Epoch,
-        OpenChainConfig, Resources, SendMessageRequest, Timestamp,
+        InitialChainConfig, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{Account, AccountOwner, BlobType},
     ownership::ChainOwnership,
@@ -1235,7 +1235,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         chain_index: 0,
     };
     let child_application_permissions = ApplicationPermissions::new_single(application_id);
-    let child_config = OpenChainConfig {
+    let child_config = InitialChainConfig {
         balance: Amount::ONE,
         ownership: child_ownership.clone(),
         application_permissions: child_application_permissions.clone(),

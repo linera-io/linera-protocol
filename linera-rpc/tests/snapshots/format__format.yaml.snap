@@ -266,7 +266,7 @@ ChainDescription:
     - timestamp:
         TYPENAME: Timestamp
     - config:
-        TYPENAME: OpenChainConfig
+        TYPENAME: InitialChainConfig
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -530,6 +530,25 @@ IncomingBundle:
         TYPENAME: MessageBundle
     - action:
         TYPENAME: MessageAction
+InitialChainConfig:
+  STRUCT:
+    - ownership:
+        TYPENAME: ChainOwnership
+    - admin_id:
+        OPTION:
+          TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
+    - committees:
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            SEQ: U8
+    - balance:
+        TYPENAME: Amount
+    - application_permissions:
+        TYPENAME: ApplicationPermissions
 LiteCertificate:
   STRUCT:
     - value:
@@ -712,25 +731,6 @@ NodeError:
       ResponseHandlingError:
         STRUCT:
           - error: STR
-OpenChainConfig:
-  STRUCT:
-    - ownership:
-        TYPENAME: ChainOwnership
-    - admin_id:
-        OPTION:
-          TYPENAME: ChainId
-    - epoch:
-        TYPENAME: Epoch
-    - committees:
-        MAP:
-          KEY:
-            TYPENAME: Epoch
-          VALUE:
-            SEQ: U8
-    - balance:
-        TYPENAME: Amount
-    - application_permissions:
-        TYPENAME: ApplicationPermissions
 Operation:
   ENUM:
     0:
@@ -1096,7 +1096,7 @@ SystemOperation:
     2:
       OpenChain:
         NEWTYPE:
-          TYPENAME: OpenChainConfig
+          TYPENAME: InitialChainConfig
     3:
       CloseChain: UNIT
     4:

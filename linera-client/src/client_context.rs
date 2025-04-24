@@ -32,7 +32,7 @@ use {
     crate::benchmark::{Benchmark, BenchmarkError},
     futures::{stream, StreamExt, TryStreamExt},
     linera_base::{
-        data_types::{Amount, Epoch, OpenChainConfig},
+        data_types::{Amount, Epoch, InitialChainConfig},
         identifiers::ApplicationId,
     },
     linera_core::client::ChainClientError,
@@ -953,7 +953,7 @@ where
             })
             .collect();
         let epoch = epoch.expect("default chain should be active");
-        let config = OpenChainConfig {
+        let config = InitialChainConfig {
             ownership: ChainOwnership::single_super(key_pair.public().into()),
             committees,
             admin_id: Some(admin_id),
