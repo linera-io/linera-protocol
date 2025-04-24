@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Account, AccountOwner, Amount, ChainId, CryptoHash},
+    linera_base_types::{Account, AccountOwner, Amount, CryptoHash},
     test::{ActiveChain, Recipient, TestValidator},
 };
 
@@ -28,7 +28,7 @@ async fn chain_balance_transfers() {
     .await;
 
     let transfer_amount = Amount::ONE;
-    let funding_chain = validator.get_chain(&ChainId::root(0));
+    let funding_chain = validator.get_chain(&validator.admin_chain_id());
     let recipient = Recipient::chain(recipient_chain.id());
 
     let transfer_certificate = funding_chain
@@ -62,7 +62,7 @@ async fn transfer_to_owner() {
     .await;
 
     let transfer_amount = Amount::from_tokens(2);
-    let funding_chain = validator.get_chain(&ChainId::root(0));
+    let funding_chain = validator.get_chain(&validator.admin_chain_id());
     let owner = AccountOwner::from(CryptoHash::test_hash("owner"));
     let account = Account::new(recipient_chain.id(), owner);
     let recipient = Recipient::Account(account);
@@ -98,7 +98,7 @@ async fn transfer_to_multiple_owners() {
 
     let number_of_owners = 10;
     let transfer_amounts = (1..=number_of_owners).map(Amount::from_tokens);
-    let funding_chain = validator.get_chain(&ChainId::root(0));
+    let funding_chain = validator.get_chain(&validator.admin_chain_id());
 
     let account_owners = (1..=number_of_owners)
         .map(|index| AccountOwner::from(CryptoHash::test_hash(format!("owner{index}"))))
@@ -146,7 +146,7 @@ async fn emptied_account_disappears_from_queries() {
     .await;
 
     let transfer_amount = Amount::from_tokens(100);
-    let funding_chain = validator.get_chain(&ChainId::root(0));
+    let funding_chain = validator.get_chain(&validator.admin_chain_id());
 
     let owner = AccountOwner::from(recipient_chain.public_key());
     let recipient = Recipient::Account(Account::new(recipient_chain.id(), owner));
