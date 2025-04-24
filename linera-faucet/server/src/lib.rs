@@ -190,7 +190,7 @@ where
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
-    storage: C::Storage,
+    storage: <C::Environment as linera_core::Environment>::Storage,
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
@@ -232,7 +232,7 @@ where
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
         config: ChainListenerConfig,
-        storage: C::Storage,
+        storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
         let client = context.make_chain_client(chain_id)?;
         let context = Arc::new(Mutex::new(context));

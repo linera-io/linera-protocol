@@ -21,11 +21,12 @@ use linera_base::{
 };
 use linera_core::{
     client::{AbortOnDrop, ChainClient, ChainClientError},
-    node::{NotificationStream, ValidatorNodeProvider},
+    node::NotificationStream,
     worker::{Notification, Reason},
+    Environment,
 };
 use linera_execution::{Message, OutgoingMessage, SystemMessage};
-use linera_storage::{Clock as _, Storage};
+use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
@@ -58,16 +59,16 @@ pub struct ChainListenerConfig {
     pub delay_after_ms: u64,
 }
 
-type ContextChainClient<C> =
-    ChainClient<<C as ClientContext>::ValidatorNodeProvider, <C as ClientContext>::Storage>;
+type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
 #[cfg_attr(not(web), async_trait, trait_variant::make(Send))]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait ClientContext: 'static {
-    type ValidatorNodeProvider: ValidatorNodeProvider + Sync;
-    type Storage: Storage + Clone + Send + Sync + 'static;
+    type Environment: linera_core::Environment;
 
     fn wallet(&self) -> &Wallet;
+
+    fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
     fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
 
@@ -136,7 +137,7 @@ impl<C: ClientContext> ListeningClient<C> {
 /// appropriately.
 pub struct ChainListener<C: ClientContext> {
     context: Arc<Mutex<C>>,
-    storage: C::Storage,
+    storage: <C::Environment as Environment>::Storage,
     config: Arc<ChainListenerConfig>,
     listening: BTreeMap<ChainId, ListeningClient<C>>,
     /// Map from publishing chain to subscriber chains.
@@ -150,7 +151,7 @@ impl<C: ClientContext> ChainListener<C> {
     pub fn new(
         config: ChainListenerConfig,
         context: Arc<Mutex<C>>,
-        storage: C::Storage,
+        storage: <C::Environment as Environment>::Storage,
         cancellation_token: CancellationToken,
     ) -> Self {
         Self {

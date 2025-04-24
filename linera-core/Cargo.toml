@@ -76,6 +76,7 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
 tracing.workspace = true
+trait-set = "0.3.0"
 trait-variant.workspace = true
 wasm-bindgen-futures = { workspace = true, optional = true }
 

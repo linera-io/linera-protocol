@@ -267,7 +267,7 @@ impl BatchExt for Batch {
 
 /// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
-pub struct DbStorage<Store, Clock> {
+pub struct DbStorage<Store, Clock = WallClock> {
     store: Arc<Store>,
     clock: Clock,
     wasm_runtime: Option<WasmRuntime>,

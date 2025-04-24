@@ -90,7 +90,7 @@ impl Runnable for Job {
     {
         let Job(options) = self;
         let wallet = options.wallet().await?;
-        let mut context = ClientContext::new(storage.clone(), options.inner.clone(), wallet);
+        let mut context = ClientContext::new(storage.clone(), wallet, options.inner.clone());
         let command = options.command;
 
         use ClientCommand::*;
@@ -784,7 +784,7 @@ impl Runnable for Job {
                     }
                 }
 
-                linera_client::benchmark::Benchmark::<S>::run_benchmark(
+                linera_client::benchmark::Benchmark::run_benchmark(
                     num_chains,
                     transactions_per_block,
                     bps,
@@ -822,7 +822,7 @@ impl Runnable for Job {
 
             Service { config, port } => {
                 let default_chain = context.wallet().default_chain();
-                let service = NodeService::new(config, port, default_chain, storage, context).await;
+                let service = NodeService::new(config, port, default_chain, context).await;
                 let cancellation_token = CancellationToken::new();
                 let child_token = cancellation_token.child_token();
                 tokio::spawn(listen_for_shutdown_signals(cancellation_token));
@@ -1211,7 +1211,7 @@ impl Job {
     async fn print_peg_certificate_hash<S>(
         storage: S,
         chain_ids: impl IntoIterator<Item = ChainId>,
-        context: &ClientContext<S, impl Persist<Target = Wallet>>,
+        context: &ClientContext<impl linera_core::Environment, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,

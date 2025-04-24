@@ -14,9 +14,8 @@ use linera_base::{
 };
 use linera_core::{
     client::{ChainClient, PendingProposal},
-    node::ValidatorNodeProvider,
+    Environment,
 };
-use linera_storage::Storage;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 
@@ -164,11 +163,7 @@ impl Wallet {
         Ok(())
     }
 
-    pub async fn update_from_state<P, S>(&mut self, chain_client: &ChainClient<P, S>)
-    where
-        P: ValidatorNodeProvider + Sync + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-    {
+    pub async fn update_from_state<Env: Environment>(&mut self, chain_client: &ChainClient<Env>) {
         let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();
         let state = chain_client.state();
         self.chains.insert(
