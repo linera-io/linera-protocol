@@ -3108,6 +3108,10 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     net.ensure_is_running().await?;
     net.terminate().await?;
 
+    // Explicitly drop clients so that they aren't dropped earlier.
+    drop(client1);
+    drop(client2);
+
     Ok(())
 }
 
