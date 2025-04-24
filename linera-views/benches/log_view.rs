@@ -13,8 +13,8 @@ use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     bucket_log_view::BucketLogView,
     context::ViewContext,
-    memory::MemoryStore,
     log_view::LogView,
+    memory::MemoryStore,
     random::{make_deterministic_rng, DeterministicRng},
     store::TestKeyValueStore,
     views::{CryptoHashRootView, RootView, View},

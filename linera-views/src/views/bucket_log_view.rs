@@ -49,10 +49,7 @@ enum KeyTag {
 /// The `StoredIndices` contains the description of the stored buckets.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StoredSizes {
-    /// The stored buckets with the first index being the size (at most N) and the
-    /// second one is the index in the storage. If the index is 0 then it corresponds
-    /// with the first value (entry `KeyTag::Front`), otherwise to the keys with
-    /// prefix `KeyTag::Index`.
+    /// The stored buckets sizes.
     sizes: Vec<usize>,
 }
 
@@ -148,7 +145,7 @@ where
             let new_values = std::mem::take(&mut self.new_values);
             for value_chunk in new_values.chunks(N) {
                 let key = self.context.derive_tag_key(KeyTag::Index as u8, &i_block)?;
-                batch.put_key_value(key, &value_chunk.to_vec())?;
+                batch.put_key_value(key, &value_chunk)?;
                 self.stored_data.push(Bucket::Loaded {
                     data: value_chunk.to_vec(),
                 });
@@ -274,6 +271,9 @@ where
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
             let (i_bucket, position) = self.get_position(index).unwrap();
+            if let Bucket::Loaded { data } = self.stored_data.get(i_bucket).unwrap() {
+                return Ok(Some(data[position].clone()));
+            }
             let key = self
                 .context
                 .derive_tag_key(KeyTag::Index as u8, &i_bucket)?;
@@ -313,9 +313,16 @@ where
             for (pos, index) in indices.into_iter().enumerate() {
                 if index < self.stored_count {
                     let (i_bucket, position) = self.get_position(index).unwrap();
-                    set_bucket.insert(i_bucket);
-                    infos.push((pos, i_bucket, position));
-                    result.push(None);
+                    match self.stored_data.get(i_bucket).unwrap() {
+                        Bucket::Loaded { data } => {
+                            result.push(Some(data[position].clone()));
+                        }
+                        Bucket::NotLoaded { length: _ } => {
+                            set_bucket.insert(i_bucket);
+                            infos.push((pos, i_bucket, position));
+                            result.push(None);
+                        }
+                    }
                 } else {
                     result.push(self.new_values.get(index - self.stored_count).cloned());
                 }
@@ -340,10 +347,7 @@ where
     }
 
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let mut indices = Vec::new();
-        for index in range {
-            indices.push(index);
-        }
+        let indices = range.collect::<Vec<_>>();
         let values = self.multi_get(indices).await?;
         Ok(values.into_iter().map(|x| x.unwrap()).collect::<Vec<_>>())
     }
@@ -405,7 +409,7 @@ where
         }
     }
 
-    /// Read all the elements of the bucket log view
+    /// Reads all the elements of the bucket log view
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
