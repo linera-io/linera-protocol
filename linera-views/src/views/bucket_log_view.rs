@@ -347,9 +347,53 @@ where
     }
 
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let indices = range.collect::<Vec<_>>();
-        let values = self.multi_get(indices).await?;
-        Ok(values.into_iter().map(|x| x.unwrap()).collect::<Vec<_>>())
+        let (i_bucket_start, position_start) = self.get_position(range.start).unwrap();
+        let (i_bucket_end, position_end) = self.get_position(range.end).unwrap();
+
+        let mut keys = Vec::new();
+        let mut symbols = Vec::new();
+        let mut i_key = 0;
+        for i_bucket in i_bucket_start..=i_bucket_end {
+            let start = if i_bucket == i_bucket_start {
+                position_start
+            } else {
+                0
+            };
+            let end = if i_bucket == i_bucket_end {
+                position_end
+            } else {
+                self.stored_data[i_bucket].len()
+            };
+            let range = Range { start, end };
+            let access = match self.stored_data[i_bucket] {
+                Bucket::Loaded { data: _ } => None,
+                Bucket::NotLoaded { length: _ } => {
+                    let key = self.context
+                        .derive_tag_key(KeyTag::Index as u8, &i_bucket)?;
+                    keys.push(key);
+                    i_key += 1;
+                    Some(i_key - 1)
+                },
+            };
+            symbols.push((i_bucket, range, access));
+        }
+        let values = self.context.read_multi_values::<Vec<T>>(keys).await?;
+        let mut returned_values: Vec<T> = Vec::new();
+        for (i_bucket, range, access) in symbols {
+            let vec: Vec<T> = match access {
+                None => {
+                    let Bucket::Loaded { data } = self.stored_data.get(i_bucket).unwrap() else {
+                        unreachable!("The data should be loaded");
+                    };
+                    data[range].to_vec()
+                },
+                Some(i_key) => {
+                    values.get(i_key).unwrap().clone().unwrap()[range].to_vec()
+                },
+            };
+            returned_values.extend(vec);
+        }
+        Ok(returned_values)
     }
 
     /// Reads the logged values in the given range (including staged ones).
