@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions/setup-node@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Check toolchain symlinks
