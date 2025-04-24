@@ -387,6 +387,7 @@ impl ClientWrapper {
         &self,
         contract: PathBuf,
         service: PathBuf,
+        vm_runtime: VmRuntime,
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
         let stdout = self
@@ -394,6 +395,7 @@ impl ClientWrapper {
             .await?
             .arg("publish-module")
             .args([contract, service])
+            .args(["--vm-runtime", &format!("{}", vm_runtime).to_lowercase()])
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
