@@ -176,7 +176,7 @@ where
                 if !account.storage.is_empty() {
                     panic!("For user account, storage must be empty");
                 }
-                // TODO(#3756): Implement EVM transferts within Linera.
+                // TODO(#3756): Implement EVM transfers within Linera.
                 // The only allowed operations are the ones for the
                 // account balances.
                 if account.info.balance != U256::ZERO {
