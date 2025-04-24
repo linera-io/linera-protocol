@@ -1,0 +1,231 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::time::{Duration, Instant};
+
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+#[cfg(with_dynamodb)]
+use linera_views::dynamo_db::DynamoDbStore;
+#[cfg(with_rocksdb)]
+use linera_views::rocks_db::RocksDbStore;
+#[cfg(with_scylladb)]
+use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::{
+    bucket_log_view::BucketLogView,
+    context::ViewContext,
+    memory::MemoryStore,
+    log_view::LogView,
+    random::{make_deterministic_rng, DeterministicRng},
+    store::TestKeyValueStore,
+    views::{CryptoHashRootView, RootView, View},
+};
+use rand::Rng;
+use tokio::runtime::Runtime;
+
+/// The number of operations
+const N_OPERATIONS: usize = 1000;
+
+enum Operations {
+    Save,
+    Push(u8),
+}
+
+fn generate_test_case(n_operation: usize, rng: &mut DeterministicRng) -> Vec<Operations> {
+    let mut operations = Vec::new();
+    for _ in 0..n_operation {
+        let choice = rng.gen_range(0..10);
+        if choice == 0 {
+            operations.push(Operations::Save);
+        } else {
+            let val = rng.gen::<u8>();
+            operations.push(Operations::Push(val));
+        }
+    }
+    operations
+}
+
+#[derive(CryptoHashRootView)]
+pub struct LogStateView<C> {
+    pub log: LogView<C, u8>,
+}
+
+pub async fn performance_log_view<S: TestKeyValueStore + Clone + Sync + 'static>(
+    iterations: u64,
+) -> Duration
+where
+    S::Error: Send + Sync,
+{
+    let store = S::new_test_store().await.unwrap();
+    let context = ViewContext::<(), S>::create_root_context(store, ())
+        .await
+        .unwrap();
+    let mut total_time = Duration::ZERO;
+    let mut rng = make_deterministic_rng();
+    let n_read = 10;
+    for _ in 0..iterations {
+        let operations = generate_test_case(N_OPERATIONS, &mut rng);
+        let mut view = LogStateView::load(context.clone()).await.unwrap();
+        let measurement = Instant::now();
+        for operation in operations {
+            match operation {
+                Operations::Save => {
+                    view.save().await.unwrap();
+                }
+                Operations::Push(val) => {
+                    view.log.push(val);
+                }
+            }
+            let count = view.log.count();
+            if count > 0 {
+                for _ in 0..n_read {
+                    let index = rng.gen_range(0..count);
+                    black_box(view.log.get(index).await.unwrap());
+                }
+                let mut indices = Vec::new();
+                for _ in 0..n_read {
+                    let index = rng.gen_range(0..count);
+                    indices.push(index);
+                }
+                black_box(view.log.multi_get(indices).await.unwrap());
+            }
+            black_box(view.log.read(..).await.unwrap());
+        }
+        view.clear();
+        view.save().await.unwrap();
+        total_time += measurement.elapsed();
+    }
+
+    total_time
+}
+
+fn bench_log_view(criterion: &mut Criterion) {
+    criterion.bench_function("memory_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_log_view::<MemoryStore>(iterations).await
+            })
+    });
+
+    #[cfg(with_rocksdb)]
+    criterion.bench_function("rocksdb_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_log_view::<RocksDbStore>(iterations).await
+            })
+    });
+
+    #[cfg(with_dynamodb)]
+    criterion.bench_function("dynamodb_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_log_view::<DynamoDbStore>(iterations).await
+            })
+    });
+
+    #[cfg(with_scylladb)]
+    criterion.bench_function("scylladb_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_log_view::<ScyllaDbStore>(iterations).await
+            })
+    });
+}
+
+#[derive(CryptoHashRootView)]
+pub struct BucketLogStateView<C> {
+    pub log: BucketLogView<C, u8, 100>,
+}
+
+pub async fn performance_bucket_log_view<S: TestKeyValueStore + Clone + Sync + 'static>(
+    iterations: u64,
+) -> Duration
+where
+    S::Error: Send + Sync,
+{
+    let store = S::new_test_store().await.unwrap();
+    let context = ViewContext::<(), S>::create_root_context(store, ())
+        .await
+        .unwrap();
+    let mut total_time = Duration::ZERO;
+    let mut rng = make_deterministic_rng();
+    let n_read = 10;
+    for _ in 0..iterations {
+        let operations = generate_test_case(N_OPERATIONS, &mut rng);
+        let mut view = BucketLogStateView::load(context.clone()).await.unwrap();
+        //
+        let measurement = Instant::now();
+        for operation in operations {
+            match operation {
+                Operations::Save => {
+                    view.save().await.unwrap();
+                }
+                Operations::Push(val) => {
+                    view.log.push(val);
+                }
+            }
+            let count = view.log.count();
+            if count > 0 {
+                for _ in 0..n_read {
+                    let index = rng.gen_range(0..count);
+                    black_box(view.log.get(index).await.unwrap());
+                }
+                let mut indices = Vec::new();
+                for _ in 0..n_read {
+                    let index = rng.gen_range(0..count);
+                    indices.push(index);
+                }
+                black_box(view.log.multi_get(indices).await.unwrap());
+            }
+            black_box(view.log.read(..).await.unwrap());
+        }
+        view.clear();
+        view.save().await.unwrap();
+        total_time += measurement.elapsed();
+    }
+
+    total_time
+}
+
+fn bench_bucket_log_view(criterion: &mut Criterion) {
+    criterion.bench_function("memory_bucket_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_bucket_log_view::<MemoryStore>(iterations).await
+            })
+    });
+
+    #[cfg(with_rocksdb)]
+    criterion.bench_function("rocksdb_bucket_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_bucket_log_view::<RocksDbStore>(iterations).await
+            })
+    });
+
+    #[cfg(with_dynamodb)]
+    criterion.bench_function("dynamodb_bucket_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_bucket_log_view::<DynamoDbStore>(iterations).await
+            })
+    });
+
+    #[cfg(with_scylladb)]
+    criterion.bench_function("scylladb_bucket_log_view", |bencher| {
+        bencher
+            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .iter_custom(|iterations| async move {
+                performance_bucket_log_view::<ScyllaDbStore>(iterations).await
+            })
+    });
+}
+
+criterion_group!(benches, bench_log_view, bench_bucket_log_view);
+criterion_main!(benches);

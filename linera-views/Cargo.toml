@@ -88,3 +88,7 @@ harness = false
 [[bench]]
 name = "queue_view"
 harness = false
+
+[[bench]]
+name = "log_view"
+harness = false
