@@ -843,7 +843,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let (contract, service) = client.build_example("counter").await?;
 
     let module_id = client
-        .publish_module::<CounterAbi, (), u64>(contract, service, None)
+        .publish_module::<CounterAbi, (), u64>(contract, service, VmRuntime::Wasm, None)
         .await?;
     let application_id = client
         .create_application(&module_id, &(), &original_counter_value, &[], None)
@@ -900,7 +900,7 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     client2.sync(chain2).await?;
     let (contract, service) = client1.build_example("social").await?;
     let module_id = client1
-        .publish_module::<SocialAbi, (), ()>(contract, service, None)
+        .publish_module::<SocialAbi, (), ()>(contract, service, VmRuntime::Wasm, None)
         .await?;
     let application_id = client1
         .create_application(&module_id, &(), &(), &[], None)
