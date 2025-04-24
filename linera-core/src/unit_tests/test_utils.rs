@@ -50,7 +50,7 @@ use {
 };
 
 use crate::{
-    client::{ChainClient, Client},
+    client::Client,
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -720,6 +720,8 @@ impl GenesisStorageBuilder {
     }
 }
 
+pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
+
 impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
@@ -803,7 +805,7 @@ where
         &mut self,
         index: u32,
         balance: Amount,
-    ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Make sure the admin chain is initialized.
         if self.genesis_storage_builder.accounts.is_empty() && index != 0 {
             Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
@@ -903,15 +905,16 @@ where
         key_pair: AccountSecretKey,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
-    ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
-        let provider = self.make_node_provider();
         let builder = Arc::new(Client::new(
-            provider,
-            storage,
+            crate::environment::Impl {
+                network: self.make_node_provider(),
+                storage,
+            },
             10,
             CrossChainMessageDelivery::NonBlocking,
             false,

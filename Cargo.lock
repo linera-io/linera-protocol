@@ -4684,6 +4684,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "cfg-if",
  "cfg_aliases",
  "clap",
  "counter",

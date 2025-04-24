@@ -7,10 +7,7 @@ use linera_base::{
     identifiers::{Account, AccountOwner},
     time::Duration,
 };
-use linera_core::{
-    client,
-    test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
-};
+use linera_core::test_utils::{ChainClient, MemoryStorageBuilder, StorageBuilder, TestBuilder};
 use linera_execution::system::Recipient;
 use linera_storage::{
     READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
@@ -20,15 +17,10 @@ use prometheus::core::Collector;
 use recorder::BenchRecorderMeasurement;
 use tokio::runtime;
 
-type ChainClient<B> = client::ChainClient<
-    NodeProvider<<B as StorageBuilder>::Storage>,
-    <B as StorageBuilder>::Storage,
->;
-
 mod recorder;
 
 /// Creates root chains 1 and 2, the first one with a positive balance.
-pub fn setup_claim_bench<B>() -> (ChainClient<B>, ChainClient<B>)
+pub fn setup_claim_bench<B>() -> (ChainClient<B::Storage>, ChainClient<B::Storage>)
 where
     B: StorageBuilder + Default,
 {
@@ -50,8 +42,9 @@ where
 
 /// Sends a token from the first chain to the first chain's owner on chain 2, then
 /// reclaims that amount.
-pub async fn run_claim_bench<B>((chain1, chain2): (ChainClient<B>, ChainClient<B>))
-where
+pub async fn run_claim_bench<B>(
+    (chain1, chain2): (ChainClient<B::Storage>, ChainClient<B::Storage>),
+) where
     B: StorageBuilder,
 {
     let owner1 = chain1.identity().await.unwrap();

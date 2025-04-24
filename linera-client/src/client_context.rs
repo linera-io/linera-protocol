@@ -177,7 +177,6 @@ where
             retry_delay,
             max_retries,
         };
-        let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(true);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
@@ -186,8 +185,10 @@ where
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
         let client = Client::new(
-            node_provider,
-            storage,
+            linera_core::environment::Impl {
+                storage,
+                network: NodeProvider::new(node_options),
+            },
             10,
             delivery,
             false,

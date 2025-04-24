@@ -47,3 +47,11 @@ impl<S: Storage, N: Network> Environment for Impl<S, N> {
         &self.network
     }
 }
+
+cfg_if::cfg_if! {
+    if #[cfg(with_testing)] {
+        pub type TestStorage = linera_storage::DbStorage<linera_views::memory::MemoryStore, linera_storage::TestClock>;
+        pub type TestNetwork = crate::test_utils::NodeProvider<TestStorage>;
+        pub type Test = Impl<TestStorage, TestNetwork>;
+    }
+}

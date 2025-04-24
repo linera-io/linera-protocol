@@ -772,8 +772,8 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Returns the storage client used by this client's local node.
     #[instrument(level = "trace")]
-    pub fn storage_client(&self) -> Env::Storage {
-        self.client.storage_client().clone()
+    pub fn storage_client(&self) -> &Env::Storage {
+        self.client.storage_client()
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
