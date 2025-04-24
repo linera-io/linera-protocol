@@ -35,7 +35,7 @@ where
     C: Context + Clone + Send + Sync + 'static,
 {
     // Update with the latest [`BlockHeight`] rather than incrementing by one.
-    // As in cases notfications are lost, exporter is lagging behind, crashes etc.
+    // As in cases notifications are lost, exporter is lagging behind, crashes etc.
     pub fn update_block_height(&mut self, height: BlockHeight, hash: CryptoHash) {
         self.known_height.set(Some((height, hash)));
     }
