@@ -28,7 +28,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, Update},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    store::KeyIterable,
+    store::{KeyIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -307,7 +307,7 @@ where
                 Some(view.clone())
             } else {
                 let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                if self.context.contains_key(&key_index).await? {
+                if self.context.store().contains_key(&key_index).await? {
                     let view = Self::wrapped_view(&self.context, false, short_key).await?;
                     let mut cached_entries = self.cached_entries.lock().unwrap();
                     cached_entries.insert(short_key.to_owned(), view.clone());
@@ -407,7 +407,7 @@ where
             true
         } else {
             let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-            self.context.contains_key(&key_index).await?
+            self.context.store().contains_key(&key_index).await?
         })
     }
 
@@ -544,7 +544,7 @@ where
                 }
             }
         }
-        let values = self.context.read_multi_values_bytes(keys).await?;
+        let values = self.context.store().read_multi_values_bytes(keys).await?;
         for (loaded_values, short_key) in values
             .chunks_exact(W::NUM_INIT_KEYS)
             .zip(short_keys_to_load)
@@ -620,7 +620,7 @@ where
             }
         }
 
-        let found_keys = self.context.contains_keys(keys_to_check).await?;
+        let found_keys = self.context.store().contains_keys(keys_to_check).await?;
         let entries_to_load = keys_to_check_metadata
             .into_iter()
             .zip(found_keys)
@@ -638,7 +638,11 @@ where
             for (_, _, context) in &entries_to_load {
                 keys_to_load.extend(W::pre_load(context)?);
             }
-            let values = self.context.read_multi_values_bytes(keys_to_load).await?;
+            let values = self
+                .context
+                .store()
+                .read_multi_values_bytes(keys_to_load)
+                .await?;
             let mut cached_entries = self.cached_entries.lock().unwrap();
             for (loaded_values, (position, short_key, context)) in
                 values.chunks_exact(W::NUM_INIT_KEYS).zip(entries_to_load)
@@ -701,7 +705,7 @@ where
                     }
                 }
             }
-            let values = self.context.read_multi_values_bytes(keys).await?;
+            let values = self.context.store().read_multi_values_bytes(keys).await?;
             {
                 let mut cached_entries = self.cached_entries.lock().unwrap();
                 for (loaded_values, short_key) in values
@@ -779,7 +783,7 @@ where
                     }
                 }
             }
-            let values = self.context.read_multi_values_bytes(keys).await?;
+            let values = self.context.store().read_multi_values_bytes(keys).await?;
             for (loaded_values, short_key) in values
                 .chunks_exact(W::NUM_INIT_KEYS)
                 .zip(short_keys_to_load)
@@ -900,7 +904,13 @@ where
         let mut update = updates.next();
         if !self.delete_storage_first {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
+            for index in self
+                .context
+                .store()
+                .find_keys_by_prefix(&base)
+                .await?
+                .iterator()
+            {
                 let index = index?;
                 loop {
                     match update {

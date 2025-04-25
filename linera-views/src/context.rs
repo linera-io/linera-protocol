@@ -5,10 +5,11 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    batch::{Batch, DeletePrefixExpander},
-    common::from_bytes_option,
+    batch::DeletePrefixExpander,
     memory::MemoryStore,
-    store::{KeyIterable, KeyValueIterable, KeyValueStoreError, RestrictedKeyValueStore},
+    store::{
+        KeyIterable, KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
     views::MIN_VIEW_TAG,
 };
 
@@ -16,54 +17,22 @@ use crate::{
 /// connect to the database and the address of the current entry.
 #[async_trait]
 pub trait Context: Clone {
-    /// The maximal size of values that can be stored.
-    const MAX_VALUE_SIZE: usize;
-
-    /// The maximal size of keys that can be stored.
-    const MAX_KEY_SIZE: usize;
+    /// The type of the key-value store used by this context.
+    type Store: ReadableKeyValueStore
+        + WritableKeyValueStore
+        + WithError<Error = Self::Error>
+        + Send
+        + Sync;
 
     /// User-provided data to be carried along.
     type Extra: Clone + Send + Sync;
 
-    /// The error type in use by internal operations.
-    type Error: KeyValueStoreError + Send + Sync + 'static;
+    /// The type of errors that may be returned by operations on the `Store`, a
+    /// convenience alias for `<Self::Store as WithError>::Error`.
+    type Error: KeyValueStoreError;
 
-    /// Returns type for key search operations.
-    type Keys: KeyIterable<Self::Error>;
-
-    /// Returns type for key-value search operations.
-    type KeyValues: KeyValueIterable<Self::Error>;
-
-    /// Retrieves the number of stream queries.
-    fn max_stream_queries(&self) -> usize;
-
-    /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
-    /// context.
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
-
-    /// Tests whether a key exists in the database
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
-
-    /// Tests whether a set of keys exist in the database
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
-
-    /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
-
-    /// Finds the keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
-
-    /// Finds the `(key,value)` pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error>;
-
-    /// Applies the operations from the `batch`, persisting the changes.
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
+    /// Getter for the store.
+    fn store(&self) -> &Self::Store;
 
     /// Getter for the user-provided data.
     fn extra(&self) -> &Self::Extra;
@@ -128,31 +97,6 @@ pub trait Context: Clone {
         let value = bcs::from_bytes(bytes)?;
         Ok(value)
     }
-
-    /// Retrieves a generic `Item` from the database using the provided `key` prefixed by the current
-    /// context.
-    /// The `Item` is deserialized using [`bcs`].
-    async fn read_value<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
-    where
-        Item: DeserializeOwned,
-    {
-        from_bytes_option(&self.read_value_bytes(key).await?)
-    }
-
-    /// Reads multiple `keys` and deserializes the results if present.
-    async fn read_multi_values<V: DeserializeOwned + Send>(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<V>>, Self::Error>
-    where
-        Self::Error: From<bcs::Error>,
-    {
-        let mut values = Vec::with_capacity(keys.len());
-        for entry in self.read_multi_values_bytes(keys).await? {
-            values.push(from_bytes_option(&entry)?);
-        }
-        Ok(values)
-    }
 }
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
@@ -169,7 +113,7 @@ pub struct ViewContext<E, S> {
 
 impl<E, S> ViewContext<E, S>
 where
-    S: RestrictedKeyValueStore,
+    S: ReadableKeyValueStore + WritableKeyValueStore,
 {
     /// Creates a context suitable for a root view, using the given store. If the
     /// journal's store is non-empty, it will be cleared first, before the context is
@@ -197,18 +141,16 @@ impl<E, S> ViewContext<E, S> {
 impl<E, S> Context for ViewContext<E, S>
 where
     E: Clone + Send + Sync,
-    S: RestrictedKeyValueStore + Clone + Send + Sync,
+    S: ReadableKeyValueStore + WritableKeyValueStore + Clone + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
-    const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
-    const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
     type Extra = E;
-    type Error = S::Error;
-    type Keys = S::Keys;
-    type KeyValues = S::KeyValues;
+    type Store = S;
 
-    fn max_stream_queries(&self) -> usize {
-        self.store.max_stream_queries()
+    type Error = S::Error;
+
+    fn store(&self) -> &Self::Store {
+        &self.store
     }
 
     fn extra(&self) -> &E {
@@ -217,48 +159,6 @@ where
 
     fn base_key(&self) -> Vec<u8> {
         self.base_key.clone()
-    }
-
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.store.read_value_bytes(key).await
-    }
-
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        self.store.contains_key(key).await
-    }
-
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        if keys.is_empty() {
-            Ok(Vec::new())
-        } else {
-            self.store.contains_keys(keys).await
-        }
-    }
-
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        if keys.is_empty() {
-            Ok(Vec::new())
-        } else {
-            self.store.read_multi_values_bytes(keys).await
-        }
-    }
-
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        self.store.find_keys_by_prefix(key_prefix).await
-    }
-
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
-        self.store.find_key_values_by_prefix(key_prefix).await
-    }
-
-    async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        self.store.write_batch(batch).await
     }
 
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
@@ -295,7 +195,7 @@ impl DeletePrefixExpander for MemoryContext<()> {
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
         for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
-            &self.find_keys_by_prefix(key_prefix).await?,
+            &self.store().find_keys_by_prefix(key_prefix).await?,
         ) {
             vector_list.push(key?.to_vec());
         }

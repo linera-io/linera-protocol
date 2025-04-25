@@ -20,7 +20,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, Update},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    store::KeyIterable,
+    store::{KeyIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -203,7 +203,7 @@ where
             return Ok(false);
         }
         let key = self.context.base_index(short_key);
-        Ok(self.context.contains_key(&key).await?)
+        Ok(self.context.store().contains_key(&key).await?)
     }
 }
 
@@ -286,7 +286,13 @@ where
         let mut update = updates.next();
         if !self.delete_storage_first {
             let base = self.context.base_key();
-            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
+            for index in self
+                .context
+                .store()
+                .find_keys_by_prefix(&base)
+                .await?
+                .iterator()
+            {
                 let index = index?;
                 loop {
                     match update {

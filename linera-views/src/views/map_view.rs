@@ -56,7 +56,7 @@ use crate::{
     },
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    store::{KeyIterable, KeyValueIterable},
+    store::{KeyIterable, KeyValueIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -288,7 +288,7 @@ where
             return Ok(false);
         }
         let key = self.context.base_index(short_key);
-        Ok(self.context.contains_key(&key).await?)
+        Ok(self.context.store().contains_key(&key).await?)
     }
 }
 
@@ -322,7 +322,7 @@ where
             return Ok(None);
         }
         let key = self.context.base_index(short_key);
-        Ok(self.context.read_value(&key).await?)
+        Ok(self.context.store().read_value(&key).await?)
     }
 
     /// Reads the values at the given positions, if any.
@@ -354,7 +354,11 @@ where
                 vector_query.push(key);
             }
         }
-        let values = self.context.read_multi_values_bytes(vector_query).await?;
+        let values = self
+            .context
+            .store()
+            .read_multi_values_bytes(vector_query)
+            .await?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             results[i] = from_bytes_option(&value)?;
         }
@@ -383,7 +387,7 @@ where
                     None
                 } else {
                     let key = self.context.base_index(short_key);
-                    let value = self.context.read_value(&key).await?;
+                    let value = self.context.store().read_value(&key).await?;
                     value.map(|value| e.insert(Update::Set(value)))
                 }
             }
@@ -443,7 +447,13 @@ where
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = self.context.base_index(&prefix);
-            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
+            for index in self
+                .context
+                .store()
+                .find_keys_by_prefix(&base)
+                .await?
+                .iterator()
+            {
                 let index = index?;
                 loop {
                     match update {
@@ -637,6 +647,7 @@ where
             let base = self.context.base_index(&prefix);
             for entry in self
                 .context
+                .store()
                 .find_key_values_by_prefix(&base)
                 .await?
                 .into_iterator_owned()
@@ -886,7 +897,12 @@ where
             }
             Entry::Vacant(e) => {
                 let key = self.context.base_index(short_key);
-                let value = self.context.read_value(&key).await?.unwrap_or_default();
+                let value = self
+                    .context
+                    .store()
+                    .read_value(&key)
+                    .await?
+                    .unwrap_or_default();
                 e.insert(Update::Set(value))
             }
             Entry::Occupied(entry) => {

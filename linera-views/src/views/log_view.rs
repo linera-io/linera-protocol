@@ -20,6 +20,7 @@ use crate::{
     common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -82,7 +83,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -213,7 +214,7 @@ where
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
             let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
-            self.context.read_value(&key).await?
+            self.context.store().read_value(&key).await?
         } else {
             self.new_values.get(index - self.stored_count).cloned()
         };
@@ -255,7 +256,7 @@ where
                     result.push(self.new_values.get(index - self.stored_count).cloned());
                 }
             }
-            let values = self.context.read_multi_values(keys).await?;
+            let values = self.context.store().read_multi_values(keys).await?;
             for (pos, value) in positions.into_iter().zip(values) {
                 *result.get_mut(pos).unwrap() = value;
             }
@@ -271,7 +272,7 @@ where
             keys.push(key);
         }
         let mut values = Vec::with_capacity(count);
-        for entry in self.context.read_multi_values(keys).await? {
+        for entry in self.context.store().read_multi_values(keys).await? {
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries);

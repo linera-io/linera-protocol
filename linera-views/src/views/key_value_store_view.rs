@@ -269,7 +269,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -379,7 +379,7 @@ where
 {
     fn max_key_size(&self) -> usize {
         let prefix_len = self.context.base_key().len();
-        C::MAX_KEY_SIZE - 1 - prefix_len
+        <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE - 1 - prefix_len
     }
 
     /// Getting the total sizes that will be used for keys and values when stored
@@ -432,6 +432,7 @@ where
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for index in self
                 .context
+                .store()
                 .find_keys_by_prefix(&key_prefix)
                 .await?
                 .iterator()
@@ -536,6 +537,7 @@ where
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for entry in self
                 .context
+                .store()
                 .find_key_values_by_prefix(&key_prefix)
                 .await?
                 .iterator()
@@ -706,7 +708,7 @@ where
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
-        Ok(self.context.read_value_bytes(&key).await?)
+        Ok(self.context.store().read_value_bytes(&key).await?)
     }
 
     /// Tests whether the store contains a specific index.
@@ -737,7 +739,7 @@ where
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
-        Ok(self.context.contains_key(&key).await?)
+        Ok(self.context.store().contains_key(&key).await?)
     }
 
     /// Tests whether the view contains a range of indices
@@ -777,7 +779,7 @@ where
                 }
             }
         }
-        let values = self.context.contains_keys(vector_query).await?;
+        let values = self.context.store().contains_keys(vector_query).await?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             results[i] = value;
         }
@@ -825,7 +827,11 @@ where
                 }
             }
         }
-        let values = self.context.read_multi_values_bytes(vector_query).await?;
+        let values = self
+            .context
+            .store()
+            .read_multi_values_bytes(vector_query)
+            .await?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             result[i] = value;
         }
@@ -1008,6 +1014,7 @@ where
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for key in self
                 .context
+                .store()
                 .find_keys_by_prefix(&key_prefix_full)
                 .await?
                 .iterator()
@@ -1084,6 +1091,7 @@ where
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
             for entry in self
                 .context
+                .store()
                 .find_key_values_by_prefix(&key_prefix_full)
                 .await?
                 .into_iterator_owned()
@@ -1211,7 +1219,7 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    const MAX_KEY_SIZE: usize = C::MAX_KEY_SIZE;
+    const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -1265,7 +1273,7 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = <C::Store as WritableKeyValueStore>::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewContainerError> {
         let mut view = self.view.write().await;
@@ -1273,6 +1281,7 @@ where
         let mut batch = Batch::new();
         view.flush(&mut batch)?;
         view.context()
+            .store()
             .write_batch(batch)
             .await
             .map_err(ViewError::from)?;

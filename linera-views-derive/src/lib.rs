@@ -177,13 +177,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
 
             async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
-                use linera_views::context::Context as _;
+                use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
                 #load_metrics
                 if Self::NUM_INIT_KEYS == 0 {
                     Self::post_load(context, &[])
                 } else {
                     let keys = Self::pre_load(&context)?;
-                    let values = context.read_multi_values_bytes(keys).await?;
+                    let values = context.store().read_multi_values_bytes(keys).await?;
                     Self::post_load(context, &values)
                 }
             }
@@ -250,12 +250,12 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
             Self: Send + Sync,
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{context::Context, batch::Batch, views::View};
+                use linera_views::{context::Context, batch::Batch, store::WritableKeyValueStore as _, views::View};
                 #increment_counter
                 let mut batch = Batch::new();
                 #(#flushes)*
                 if !batch.is_empty() {
-                    self.context().write_batch(batch).await?;
+                    self.context().store().write_batch(batch).await?;
                 }
                 Ok(())
             }

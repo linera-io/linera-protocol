@@ -27,7 +27,7 @@ use crate::{
     common::{CustomSerialize, HasherOutput, Update},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    store::KeyIterable,
+    store::{KeyIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -300,7 +300,9 @@ where
             }
             btree_map::Entry::Vacant(entry) => {
                 let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                if !self.delete_storage_first && self.context.contains_key(&key_index).await? {
+                if !self.delete_storage_first
+                    && self.context.store().contains_key(&key_index).await?
+                {
                     let key = self
                         .context
                         .base_tag_index(KeyTag::Subview as u8, short_key);
@@ -376,7 +378,7 @@ where
             },
             None => {
                 let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                !self.delete_storage_first && self.context.contains_key(&key_index).await?
+                !self.delete_storage_first && self.context.store().contains_key(&key_index).await?
             }
         })
     }
@@ -492,7 +494,13 @@ where
         let mut update = updates.next();
         if !self.delete_storage_first {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
+            for index in self
+                .context
+                .store()
+                .find_keys_by_prefix(&base)
+                .await?
+                .iterator()
+            {
                 let index = index?;
                 loop {
                     match update {

@@ -644,6 +644,7 @@ mod tests {
     use linera_views::{
         batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
         context::{Context, MemoryContext},
+        store::WritableKeyValueStore as _,
     };
 
     #[test]
@@ -706,7 +707,7 @@ mod tests {
         batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
         batch.put_key_value_bytes(vec![1, 2, 5], vec![]);
         batch.put_key_value_bytes(vec![1, 3, 3], vec![]);
-        context.write_batch(batch).await.unwrap();
+        context.store().write_batch(batch).await.unwrap();
         let mut batch = Batch::new();
         batch.delete_key_prefix(vec![1, 2]);
         let unordered_batch = batch.simplify();

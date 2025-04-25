@@ -30,7 +30,7 @@ use linera_views::{
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    store::TestKeyValueStore as _,
+    store::{TestKeyValueStore as _, WritableKeyValueStore as _},
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         span_random_reordering_put_delete,
@@ -831,14 +831,14 @@ async fn test_collection_removal() -> Result<()> {
     entry.set(1);
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
     collection.remove_entry(&1)?;
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     // Check that the entry was removed.
     let collection = CollectionViewType::load(context.clone()).await?;
@@ -862,7 +862,7 @@ async fn test_removal_api_first_second_condition(
     entry.set(100);
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     // Reload the collection view and remove the entry, but don't commit yet
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
@@ -883,7 +883,7 @@ async fn test_removal_api_first_second_condition(
     // We commit
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
     let expected_val = if second_condition {

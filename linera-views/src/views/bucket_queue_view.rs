@@ -20,6 +20,7 @@ use crate::{
     common::{from_bytes_option, from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -191,7 +192,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -462,7 +463,7 @@ where
                     let index = *index;
                     if !bucket.is_loaded() {
                         let key = self.get_index_key(index)?;
-                        let value = self.context.read_value_bytes(&key).await?;
+                        let value = self.context.store().read_value_bytes(&key).await?;
                         let value = value.ok_or(ViewError::MissingEntries)?;
                         let data = bcs::from_bytes(&value)?;
                         self.stored_data[i_block].1 = Bucket::Loaded { data };
@@ -535,7 +536,7 @@ where
         };
         if !bucket.is_loaded() {
             let key = self.get_index_key(*index)?;
-            let value = self.context.read_value_bytes(&key).await?;
+            let value = self.context.store().read_value_bytes(&key).await?;
             let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
             let data = bcs::from_bytes::<Vec<T>>(value)?;
             self.stored_data.back_mut().unwrap().1 = Bucket::Loaded { data };
@@ -573,7 +574,7 @@ where
                 count_remain -= size;
                 position = 0;
             }
-            let values = self.context.read_multi_values_bytes(keys).await?;
+            let values = self.context.store().read_multi_values_bytes(keys).await?;
             position = pair.1;
             let mut value_pos = 0;
             count_remain = count;

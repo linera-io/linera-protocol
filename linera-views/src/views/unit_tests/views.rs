@@ -21,6 +21,7 @@ use crate::{
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::{HashedRegisterView, RegisterView},
+    store::WritableKeyValueStore as _,
     test_utils::test_views::{
         TestBucketQueueView, TestCollectionView, TestLogView, TestMapView, TestQueueView,
         TestRegisterView, TestSetView, TestView,
@@ -514,7 +515,7 @@ where
 {
     let mut batch = Batch::new();
     view.flush(&mut batch)?;
-    context.write_batch(batch).await?;
+    context.store().write_batch(batch).await?;
     Ok(())
 }
 
