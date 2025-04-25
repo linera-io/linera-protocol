@@ -78,8 +78,8 @@ pub trait WithError {
 }
 
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
-#[trait_variant::make(ReadableKeyValueStore: Send)]
-pub trait LocalReadableKeyValueStore: WithError {
+#[trait_variant::make(Send)]
+pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
@@ -150,8 +150,8 @@ pub trait LocalReadableKeyValueStore: WithError {
 }
 
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
-#[trait_variant::make(WritableKeyValueStore: Send)]
-pub trait LocalWritableKeyValueStore: WithError {
+#[trait_variant::make(Send)]
+pub trait WritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -164,8 +164,8 @@ pub trait LocalWritableKeyValueStore: WithError {
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
-#[trait_variant::make(AdminKeyValueStore: Send)]
-pub trait LocalAdminKeyValueStore: WithError + Sized {
+#[trait_variant::make(Send)]
+pub trait AdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
     /// The name of this class of stores
@@ -240,17 +240,6 @@ pub trait RestrictedKeyValueStore: ReadableKeyValueStore + WritableKeyValueStore
 
 impl<T> RestrictedKeyValueStore for T where T: ReadableKeyValueStore + WritableKeyValueStore {}
 
-/// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
-pub trait LocalRestrictedKeyValueStore:
-    LocalReadableKeyValueStore + LocalWritableKeyValueStore
-{
-}
-
-impl<T> LocalRestrictedKeyValueStore for T where
-    T: LocalReadableKeyValueStore + LocalWritableKeyValueStore
-{
-}
-
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
     ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
@@ -259,17 +248,6 @@ pub trait KeyValueStore:
 
 impl<T> KeyValueStore for T where
     T: ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
-{
-}
-
-/// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
-pub trait LocalKeyValueStore:
-    LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
-{
-}
-
-impl<T> LocalKeyValueStore for T where
-    T: LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
 {
 }
 
