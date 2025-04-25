@@ -25,7 +25,7 @@ use linera_base::{
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::Committee,
-    system::{AdminOperation, SystemOperation},
+    system::{AdminOperation, OpenChainConfig, SystemOperation},
     ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
@@ -286,23 +286,25 @@ impl TestValidator {
 
         let (epoch, committee) = self.committee.lock().await.clone();
 
-        let new_chain_config = InitialChainConfig {
+        let open_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
-            committees: [(
+            balance: Amount::ZERO,
+            application_permissions: ApplicationPermissions::default(),
+        };
+        let new_chain_config = open_chain_config.init_chain_config(
+            epoch,
+            Some(admin_id),
+            [(
                 epoch,
                 bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),
             )]
             .into_iter()
             .collect(),
-            admin_id: Some(admin_id),
-            epoch,
-            balance: Amount::ZERO,
-            application_permissions: ApplicationPermissions::default(),
-        };
+        );
 
         let certificate = admin_chain
             .add_block(|block| {
-                block.with_system_operation(SystemOperation::OpenChain(new_chain_config.clone()));
+                block.with_system_operation(SystemOperation::OpenChain(open_chain_config));
             })
             .await;
         let block = certificate.inner().block();

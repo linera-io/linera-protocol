@@ -92,28 +92,10 @@ async fn application_message_index() -> anyhow::Result<()> {
 #[tokio::test]
 async fn open_chain_message_index() {
     let (mut view, context) = new_view_and_context().await;
-    let epoch = view.system.epoch.get().unwrap();
-    let admin_id = view.system.admin_id.get().unwrap();
-    let committees = view
-        .system
-        .committees
-        .get()
-        .clone()
-        .into_iter()
-        .map(|(epoch, committee)| {
-            (
-                epoch,
-                bcs::to_bytes(&committee).expect("serializing a committee shouldn't fail"),
-            )
-        })
-        .collect();
     let owner = linera_base::crypto::AccountPublicKey::test_key(0).into();
     let ownership = ChainOwnership::single(owner);
-    let config = InitialChainConfig {
+    let config = OpenChainConfig {
         ownership,
-        committees,
-        epoch,
-        admin_id: Some(admin_id),
         balance: Amount::ZERO,
         application_permissions: Default::default(),
     };

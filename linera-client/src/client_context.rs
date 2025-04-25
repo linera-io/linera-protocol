@@ -32,11 +32,15 @@ use {
     crate::benchmark::{Benchmark, BenchmarkError},
     futures::{stream, StreamExt, TryStreamExt},
     linera_base::{
-        data_types::{Amount, Epoch, InitialChainConfig},
+        data_types::{Amount, Epoch},
         identifiers::ApplicationId,
     },
     linera_core::client::ChainClientError,
-    linera_execution::{committee::Committee, system::SystemOperation, Operation},
+    linera_execution::{
+        committee::Committee,
+        system::{OpenChainConfig, SystemOperation},
+        Operation,
+    },
     std::{collections::HashMap, iter},
     tokio::task,
 };
@@ -870,7 +874,6 @@ where
             key_pairs.push(self.wallet.generate_key_pair());
         }
         let mut key_pairs_iter = key_pairs.into_iter();
-        let admin_id = self.wallet.genesis_admin_chain();
         let default_chain_client = self.make_chain_client(default_chain_id).await?;
 
         for i in (0..num_chains_to_create).step_by(operations_per_block) {
@@ -882,7 +885,6 @@ where
                 &default_chain_client,
                 balance,
                 &key_pair,
-                admin_id,
             )
             .await?;
             info!("Block executed successfully");
@@ -939,25 +941,9 @@ where
         chain_client: &ChainClient<Env>,
         balance: Amount,
         key_pair: &AccountSecretKey,
-        admin_id: ChainId,
     ) -> Result<ConfirmedBlockCertificate, Error> {
-        let chain_id = chain_client.chain_id();
-        let (epoch, committees) = chain_client.epoch_and_committees(chain_id).await?;
-        let committees = committees
-            .into_iter()
-            .map(|(epoch, committee)| {
-                (
-                    epoch,
-                    bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-                )
-            })
-            .collect();
-        let epoch = epoch.expect("default chain should be active");
-        let config = InitialChainConfig {
+        let config = OpenChainConfig {
             ownership: ChainOwnership::single_super(key_pair.public().into()),
-            committees,
-            admin_id: Some(admin_id),
-            epoch,
             balance,
             application_permissions: Default::default(),
         };

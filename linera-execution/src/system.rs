@@ -100,6 +100,37 @@ pub struct EventSubscriptions {
     pub applications: BTreeSet<ApplicationId>,
 }
 
+/// The initial configuration for a new chain.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
+pub struct OpenChainConfig {
+    /// The ownership configuration of the new chain.
+    pub ownership: ChainOwnership,
+    /// The initial chain balance.
+    pub balance: Amount,
+    /// The initial application permissions.
+    pub application_permissions: ApplicationPermissions,
+}
+
+impl OpenChainConfig {
+    /// Creates an [`InitialChainConfig`] based on this [`OpenChainConfig`] and additional
+    /// parameters.
+    pub fn init_chain_config(
+        &self,
+        epoch: Epoch,
+        admin_id: Option<ChainId>,
+        committees: BTreeMap<Epoch, Vec<u8>>,
+    ) -> InitialChainConfig {
+        InitialChainConfig {
+            admin_id,
+            application_permissions: self.application_permissions.clone(),
+            balance: self.balance,
+            committees,
+            epoch,
+            ownership: self.ownership.clone(),
+        }
+    }
+}
+
 /// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemOperation {
@@ -121,7 +152,7 @@ pub enum SystemOperation {
     },
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    OpenChain(InitialChainConfig),
+    OpenChain(OpenChainConfig),
     /// Closes the chain.
     CloseChain,
     /// Changes the ownership of the chain.
@@ -770,7 +801,7 @@ where
     /// from this chain's.
     pub async fn open_chain(
         &mut self,
-        config: InitialChainConfig,
+        config: OpenChainConfig,
         parent: ChainId,
         block_height: BlockHeight,
         timestamp: Timestamp,
@@ -782,24 +813,14 @@ where
             block_height,
             chain_index,
         };
-        let chain_description = ChainDescription::new(chain_origin, config.clone(), timestamp);
+        let committees = self.get_committees();
+        let init_chain_config = config.init_chain_config(
+            (*self.epoch.get()).unwrap_or(Epoch::ZERO),
+            *self.admin_id.get(),
+            committees,
+        );
+        let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
-        ensure!(
-            *self.admin_id.get() == config.admin_id,
-            ExecutionError::InvalidNewChainAdminId(child_id)
-        );
-        let self_committees = self.get_committees();
-        ensure!(
-            self_committees == config.committees,
-            ExecutionError::InvalidCommittees
-        );
-        ensure!(
-            self.epoch.get().as_ref() == Some(&config.epoch),
-            ExecutionError::InvalidEpoch {
-                chain_id: child_id,
-                epoch: config.epoch,
-            }
-        );
         self.debit(&AccountOwner::CHAIN, config.balance).await?;
         let blob = Blob::new_chain_description(&chain_description);
         txn_tracker.add_created_blob(blob);

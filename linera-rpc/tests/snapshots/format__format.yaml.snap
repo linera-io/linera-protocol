@@ -731,6 +731,14 @@ NodeError:
       ResponseHandlingError:
         STRUCT:
           - error: STR
+OpenChainConfig:
+  STRUCT:
+    - ownership:
+        TYPENAME: ChainOwnership
+    - balance:
+        TYPENAME: Amount
+    - application_permissions:
+        TYPENAME: ApplicationPermissions
 Operation:
   ENUM:
     0:
@@ -1096,7 +1104,7 @@ SystemOperation:
     2:
       OpenChain:
         NEWTYPE:
-          TYPENAME: InitialChainConfig
+          TYPENAME: OpenChainConfig
     3:
       CloseChain: UNIT
     4:

@@ -29,7 +29,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight, Epoch,
-        InitialChainConfig, Round, Timestamp,
+        Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -54,7 +54,8 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, Recipient, SystemOperation, EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
+        AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
+        REMOVED_EPOCH_STREAM_NAME,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
@@ -2950,22 +2951,8 @@ impl<Env: Environment> ChainClient<Env> {
         balance: Amount,
     ) -> Result<ClientOutcome<(ChainId, ConfirmedBlockCertificate)>, ChainClientError> {
         loop {
-            let (epoch, committees) = self.client.epoch_and_committees(self.chain_id).await?;
-            let committees = committees
-                .into_iter()
-                .map(|(epoch, committee)| {
-                    (
-                        epoch,
-                        bcs::to_bytes(&committee).expect("Serializing a committee shouldn't fail!"),
-                    )
-                })
-                .collect();
-            let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-            let config = InitialChainConfig {
+            let config = OpenChainConfig {
                 ownership: ownership.clone(),
-                committees,
-                admin_id: Some(self.admin_id),
-                epoch,
                 balance,
                 application_permissions: application_permissions.clone(),
             };

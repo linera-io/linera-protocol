@@ -16,8 +16,7 @@ use linera_base::prometheus_util::{
 };
 use linera_base::{
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight,
-        InitialChainConfig, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -30,7 +29,7 @@ use prometheus::HistogramVec;
 use reqwest::{header::HeaderMap, Client, Url};
 
 use crate::{
-    system::{CreateApplicationResult, Recipient},
+    system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
     ExecutionStateView, ModuleId, OutgoingMessage, ResourceController, TransactionTracker,
@@ -297,12 +296,8 @@ where
                 callback,
                 mut txn_tracker,
             } => {
-                let inactive_err = || ExecutionError::InactiveChain;
-                let config = InitialChainConfig {
+                let config = OpenChainConfig {
                     ownership,
-                    admin_id: Some(self.system.admin_id.get().ok_or_else(inactive_err)?),
-                    epoch: self.system.epoch.get().ok_or_else(inactive_err)?,
-                    committees: self.system.get_committees(),
                     balance,
                     application_permissions,
                 };

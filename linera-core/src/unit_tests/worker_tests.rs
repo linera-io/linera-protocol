@@ -42,7 +42,7 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, Recipient, SystemMessage, SystemOperation,
+        AdminOperation, OpenChainConfig, Recipient, SystemMessage, SystemOperation,
         EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
@@ -2286,11 +2286,8 @@ where
         }
         .with(
             make_first_block(admin_id)
-                .with_operation(SystemOperation::OpenChain(InitialChainConfig {
+                .with_operation(SystemOperation::OpenChain(OpenChainConfig {
                     ownership: ChainOwnership::single(env.admin_public_key().into()),
-                    epoch: Epoch::ZERO,
-                    committees: serialize_committees(committees.clone()),
-                    admin_id: Some(admin_id),
                     balance: Amount::ZERO,
                     application_permissions: Default::default(),
                 }))
