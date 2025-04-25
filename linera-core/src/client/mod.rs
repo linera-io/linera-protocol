@@ -1427,6 +1427,12 @@ impl<Env: Environment> ChainClient<Env> {
         let remote_max_heights = Self::max_height_per_chain(&remote_log);
 
         // Obtain the next block height we need in the local node, for each chain.
+        // But first, ensure we have the chain descriptions!
+        for chain in remote_max_heights.keys() {
+            self.client
+                .ensure_has_chain_description(*chain, self.admin_id)
+                .await?;
+        }
         let local_next_heights = self
             .client
             .local_node
