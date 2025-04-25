@@ -71,7 +71,7 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_tag(KeyTag::Store as u8)])
+        Ok(vec![context.base_key().base_tag(KeyTag::Store as u8)])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -111,18 +111,21 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             delete_view = true;
         }
         if self.stored_count() == 0 {
-            let key_prefix = self.context.base_tag(KeyTag::Index as u8);
+            let key_prefix = self.context.base_key().base_tag(KeyTag::Index as u8);
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
             self.stored_indices.start += self.front_delete_count;
             for index in deletion_range {
-                let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+                let key = self
+                    .context
+                    .base_key()
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.delete_key(key);
             }
         }
@@ -131,6 +134,7 @@ where
             for value in &self.new_back_values {
                 let key = self
                     .context
+                    .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &self.stored_indices.end)?;
                 batch.put_key_value(key, value)?;
                 self.stored_indices.end += 1;
@@ -138,7 +142,7 @@ where
             self.new_back_values.clear();
         }
         if !self.delete_storage_first || !self.stored_indices.is_empty() {
-            let key = self.context.base_tag(KeyTag::Store as u8);
+            let key = self.context.base_key().base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
         }
         self.front_delete_count = 0;
@@ -186,7 +190,10 @@ where
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
-        let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+        let key = self
+            .context
+            .base_key()
+            .derive_tag_key(KeyTag::Index as u8, &index)?;
         Ok(self.context.store().read_value(&key).await?)
     }
 
@@ -297,7 +304,10 @@ where
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
-            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
             keys.push(key)
         }
         let mut values = Vec::with_capacity(count);

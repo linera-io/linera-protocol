@@ -18,7 +18,7 @@ use {
 use crate::{
     batch::Batch,
     common::{CustomSerialize, HasherOutput, Update},
-    context::Context,
+    context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     store::{KeyIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -87,17 +87,17 @@ where
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(_) = update {
-                    let key = self.context.base_index(&index);
+                    let key = self.context.base_key().base_index(&index);
                     batch.put_key_value_bytes(key, Vec::new());
                     delete_view = false;
                 }
             }
         } else {
             for (index, update) in mem::take(&mut self.updates) {
-                let key = self.context.base_index(&index);
+                let key = self.context.base_key().base_index(&index);
                 match update {
                     Update::Removed => batch.delete_key(key),
                     Update::Set(_) => batch.put_key_value_bytes(key, Vec::new()),
@@ -202,7 +202,7 @@ where
         if self.delete_storage_first {
             return Ok(false);
         }
-        let key = self.context.base_index(short_key);
+        let key = self.context.base_key().base_index(short_key);
         Ok(self.context.store().contains_key(&key).await?)
     }
 }
@@ -285,11 +285,11 @@ where
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.delete_storage_first {
-            let base = self.context.base_key();
+            let base = &self.context.base_key().bytes;
             for index in self
                 .context
                 .store()
-                .find_keys_by_prefix(&base)
+                .find_keys_by_prefix(base)
                 .await?
                 .iterator()
             {
@@ -479,7 +479,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.set.insert(short_key);
         Ok(())
     }
@@ -500,7 +500,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.set.remove(short_key);
         Ok(())
     }
@@ -534,7 +534,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.set.contains(&short_key).await
     }
 }
@@ -610,7 +610,7 @@ where
     {
         self.set
             .for_each_key_while(|key| {
-                let index = C::deserialize_value(key)?;
+                let index = BaseKey::deserialize_value(key)?;
                 f(index)
             })
             .await?;
@@ -645,7 +645,7 @@ where
     {
         self.set
             .for_each_key(|key| {
-                let index = C::deserialize_value(key)?;
+                let index = BaseKey::deserialize_value(key)?;
                 f(index)
             })
             .await?;

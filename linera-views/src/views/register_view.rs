@@ -57,7 +57,7 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_key()])
+        Ok(vec![context.base_key().bytes.clone()])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -93,11 +93,11 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
-            batch.delete_key(self.context.base_key());
+            batch.delete_key(self.context.base_key().bytes.clone());
             self.stored_value = Box::default();
             delete_view = true;
         } else if let Some(value) = self.update.take() {
-            let key = self.context.base_key();
+            let key = self.context.base_key().bytes.clone();
             batch.put_key_value(key, &value)?;
             self.stored_value = value;
         }

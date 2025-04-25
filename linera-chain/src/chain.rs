@@ -33,6 +33,7 @@ use linera_views::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, CryptoHashView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
@@ -458,7 +459,7 @@ where
     pub async fn validate_incoming_bundles(&self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let pairs = self.inboxes.try_load_all_entries().await?;
-        let max_stream_queries = self.context().max_stream_queries();
+        let max_stream_queries = self.context().store().max_stream_queries();
         let stream = stream::iter(pairs)
             .map(|(origin, inbox)| async move {
                 if let Some(bundle) = inbox.removed_bundles.front().await? {

@@ -67,7 +67,7 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_tag(KeyTag::Count as u8)])
+        Ok(vec![context.base_key().base_tag(KeyTag::Count as u8)])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -102,7 +102,7 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             self.stored_count = 0;
             delete_view = true;
         }
@@ -111,11 +111,12 @@ where
             for value in &self.new_values {
                 let key = self
                     .context
+                    .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &self.stored_count)?;
                 batch.put_key_value(key, value)?;
                 self.stored_count += 1;
             }
-            let key = self.context.base_tag(KeyTag::Count as u8);
+            let key = self.context.base_key().base_tag(KeyTag::Count as u8);
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
@@ -213,7 +214,10 @@ where
         let value = if self.delete_storage_first {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
-            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
             self.context.store().read_value(&key).await?
         } else {
             self.new_values.get(index - self.stored_count).cloned()
@@ -248,7 +252,10 @@ where
             let mut positions = Vec::new();
             for (pos, index) in indices.into_iter().enumerate() {
                 if index < self.stored_count {
-                    let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+                    let key = self
+                        .context
+                        .base_key()
+                        .derive_tag_key(KeyTag::Index as u8, &index)?;
                     keys.push(key);
                     positions.push(pos);
                     result.push(None);
@@ -268,7 +275,10 @@ where
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
-            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
             keys.push(key);
         }
         let mut values = Vec::with_capacity(count);

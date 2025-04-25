@@ -114,13 +114,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
         pre_load_keys_quotes.push(quote! {
             let index = #idx_lit;
-            let base_key = context.derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
             keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
         });
         post_load_keys_quotes.push(quote! {
             let index = #idx_lit;
             let pos_next = pos + #g :: NUM_INIT_KEYS;
-            let base_key = context.derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
             let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
             pos = pos_next;
         });
@@ -136,7 +136,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             linera_views::metrics::increment_counter(
                 &linera_views::metrics::LOAD_VIEW_COUNTER,
                 stringify!(#struct_name),
-                &context.base_key(),
+                &context.base_key().bytes,
             );
             #[cfg(not(target_arch = "wasm32"))]
             use linera_views::metrics::prometheus_util::MeasureLatency as _;
@@ -234,7 +234,7 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
             linera_views::metrics::increment_counter(
                 &linera_views::metrics::SAVE_VIEW_COUNTER,
                 stringify!(#struct_name),
-                &self.context().base_key(),
+                &self.context().base_key().bytes,
             );
         }
     } else {

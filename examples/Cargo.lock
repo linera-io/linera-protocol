@@ -3835,6 +3835,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case",
+ "derive_more 1.0.0",
  "futures",
  "generic-array",
  "hex",

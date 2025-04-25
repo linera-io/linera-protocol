@@ -26,7 +26,7 @@ use {
 use crate::{
     batch::Batch,
     common::{CustomSerialize, HasherOutput, Update},
-    context::Context,
+    context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     store::{KeyIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
@@ -146,7 +146,7 @@ where
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(view) = update {
                     let mut view = Arc::try_unwrap(view)
@@ -223,11 +223,15 @@ where
 
 impl<C: Context, W> ReentrantByteCollectionView<C, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context.base_tag_index(KeyTag::Index as u8, index)
+        self.context
+            .base_key()
+            .base_tag_index(KeyTag::Index as u8, index)
     }
 
     fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context.base_tag_index(KeyTag::Subview as u8, index)
+        self.context
+            .base_key()
+            .base_tag_index(KeyTag::Subview as u8, index)
     }
 
     fn add_index(&self, batch: &mut Batch, index: &[u8]) {
@@ -248,7 +252,9 @@ where
         delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
-        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
+        let key = context
+            .base_key()
+            .base_tag_index(KeyTag::Subview as u8, short_key);
         let context = context.clone_with_base_key(key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let view = if delete_storage_first {
@@ -306,7 +312,10 @@ where
             if let Some(view) = view {
                 Some(view.clone())
             } else {
-                let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+                let key_index = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Index as u8, short_key);
                 if self.context.store().contains_key(&key_index).await? {
                     let view = Self::wrapped_view(&self.context, false, short_key).await?;
                     let mut cached_entries = self.cached_entries.lock().unwrap();
@@ -406,7 +415,10 @@ where
         } else if self.cached_entries.lock().unwrap().contains_key(short_key) {
             true
         } else {
-            let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+            let key_index = self
+                .context
+                .base_key()
+                .base_tag_index(KeyTag::Index as u8, short_key);
             self.context.store().contains_key(&key_index).await?
         })
     }
@@ -463,6 +475,7 @@ where
     pub fn try_reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         let key = self
             .context
+            .base_key()
             .base_tag_index(KeyTag::Subview as u8, short_key);
         let context = self.context.clone_with_base_key(key);
         let view = W::new(context)?;
@@ -518,6 +531,7 @@ where
         for short_key in &short_keys {
             let key = self
                 .context
+                .base_key()
                 .base_tag_index(KeyTag::Subview as u8, short_key);
             let context = self.context.clone_with_base_key(key);
             match self.updates.entry(short_key.to_vec()) {
@@ -551,6 +565,7 @@ where
         {
             let key = self
                 .context
+                .base_key()
                 .base_tag_index(KeyTag::Subview as u8, &short_key);
             let context = self.context.clone_with_base_key(key);
             let view = W::post_load(context, loaded_values)?;
@@ -613,7 +628,10 @@ where
                 } else if let Some(view) = cached_entries.get(&short_key) {
                     results[position] = Some((short_key, view.clone()));
                 } else if !self.delete_storage_first {
-                    let key_index = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+                    let key_index = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Index as u8, &short_key);
                     keys_to_check.push(key_index);
                     keys_to_check_metadata.push((position, short_key));
                 }
@@ -628,6 +646,7 @@ where
             .map(|(position, short_key)| {
                 let subview_key = self
                     .context
+                    .base_key()
                     .base_tag_index(KeyTag::Subview as u8, &short_key);
                 let subview_context = self.context.clone_with_base_key(subview_key);
                 (position, short_key.to_owned(), subview_context)
@@ -698,6 +717,7 @@ where
                     {
                         let key = self
                             .context
+                            .base_key()
                             .base_tag_index(KeyTag::Subview as u8, short_key);
                         let context = self.context.clone_with_base_key(key);
                         keys.extend(W::pre_load(&context)?);
@@ -714,6 +734,7 @@ where
                 {
                     let key = self
                         .context
+                        .base_key()
                         .base_tag_index(KeyTag::Subview as u8, &short_key);
                     let context = self.context.clone_with_base_key(key);
                     let view = W::post_load(context, loaded_values)?;
@@ -775,6 +796,7 @@ where
                         } else {
                             let key = self
                                 .context
+                                .base_key()
                                 .base_tag_index(KeyTag::Subview as u8, short_key);
                             let context = self.context.clone_with_base_key(key);
                             keys.extend(W::pre_load(&context)?);
@@ -790,6 +812,7 @@ where
             {
                 let key = self
                     .context
+                    .base_key()
                     .base_tag_index(KeyTag::Subview as u8, &short_key);
                 let context = self.context.clone_with_base_key(key);
                 let view = W::post_load(context, loaded_values)?;
@@ -1014,7 +1037,10 @@ where
                     .ok_or_else(|| ViewError::TryLockError(key))?;
                 view.hash_mut().await?
             } else {
-                let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &key);
                 let context = self.context.clone_with_base_key(key);
                 let mut view = W::load(context).await?;
                 view.hash_mut().await?
@@ -1054,7 +1080,10 @@ where
                     .ok_or_else(|| ViewError::TryLockError(key))?;
                 view.hash().await?
             } else {
-                let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Subview as u8, &key);
                 let context = self.context.clone_with_base_key(key);
                 let view = W::load(context).await?;
                 view.hash().await?
@@ -1167,7 +1196,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.try_load_entry_mut(&short_key).await
     }
 
@@ -1198,7 +1227,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.try_load_entry(&short_key).await
     }
 
@@ -1222,7 +1251,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.contains_key(&short_key).await
     }
 
@@ -1249,7 +1278,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.remove_entry(short_key);
         Ok(())
     }
@@ -1280,7 +1309,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.try_reset_entry_to_default(&short_key)
     }
 
@@ -1326,7 +1355,7 @@ where
     {
         let short_keys = indices
             .into_iter()
-            .map(|index| C::derive_short_key(index))
+            .map(|index| BaseKey::derive_short_key(index))
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries_mut(short_keys).await
     }
@@ -1362,7 +1391,7 @@ where
     {
         let short_keys = indices
             .into_iter()
-            .map(|index| C::derive_short_key(index))
+            .map(|index| BaseKey::derive_short_key(index))
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries(short_keys).await
     }
@@ -1396,7 +1425,7 @@ where
         results
             .into_iter()
             .map(|(short_key, view)| {
-                let index = C::deserialize_value(&short_key)?;
+                let index = BaseKey::deserialize_value(&short_key)?;
                 Ok((index, view))
             })
             .collect()
@@ -1431,7 +1460,7 @@ where
         results
             .into_iter()
             .map(|(short_key, view)| {
-                let index = C::deserialize_value(&short_key)?;
+                let index = BaseKey::deserialize_value(&short_key)?;
                 Ok((index, view))
             })
             .collect()
@@ -1521,7 +1550,7 @@ where
     {
         self.collection
             .for_each_key_while(|key| {
-                let index = C::deserialize_value(key)?;
+                let index = BaseKey::deserialize_value(key)?;
                 f(index)
             })
             .await?;
@@ -1557,7 +1586,7 @@ where
     {
         self.collection
             .for_each_key(|key| {
-                let index = C::deserialize_value(key)?;
+                let index = BaseKey::deserialize_value(key)?;
                 f(index)
             })
             .await?;

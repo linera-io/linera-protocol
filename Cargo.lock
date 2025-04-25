@@ -5348,6 +5348,7 @@ dependencies = [
  "cfg_aliases",
  "convert_case",
  "criterion",
+ "derive_more 1.0.0",
  "futures",
  "generic-array",
  "hex",

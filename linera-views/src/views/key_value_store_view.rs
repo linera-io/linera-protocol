@@ -36,7 +36,7 @@ use crate::{
     },
     context::Context,
     map_view::ByteMapView,
-    store::{KeyIterable, KeyValueIterable},
+    store::{KeyIterable, KeyValueIterable, ReadableKeyValueStore},
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -132,7 +132,7 @@ static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> = LazyLo
 
 #[cfg(with_testing)]
 use {
-    crate::store::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    crate::store::{KeyValueStoreError, WithError, WritableKeyValueStore},
     async_lock::RwLock,
     std::sync::Arc,
     thiserror::Error,
@@ -236,10 +236,10 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        let key_hash = context.base_tag(KeyTag::Hash as u8);
-        let key_total_size = context.base_tag(KeyTag::TotalSize as u8);
+        let key_hash = context.base_key().base_tag(KeyTag::Hash as u8);
+        let key_total_size = context.base_key().base_tag(KeyTag::TotalSize as u8);
         let mut v = vec![key_hash, key_total_size];
-        let base_key = context.base_tag(KeyTag::Sizes as u8);
+        let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
         v.extend(ByteMapView::<C, u32>::pre_load(&context_sizes)?);
         Ok(v)
@@ -249,7 +249,7 @@ where
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let total_size =
             from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
-        let base_key = context.base_tag(KeyTag::Sizes as u8);
+        let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
         let sizes = ByteMapView::post_load(
             context_sizes,
@@ -303,10 +303,13 @@ where
         if self.deletion_set.delete_storage_first {
             delete_view = true;
             self.stored_total_size = SizeData::default();
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(value) = update {
-                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                    let key = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value_bytes(key, value);
                     delete_view = false;
                 }
@@ -314,11 +317,17 @@ where
             self.stored_hash = None
         } else {
             for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
-                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Index as u8, &index);
                 batch.delete_key_prefix(key);
             }
             for (index, update) in mem::take(&mut self.updates) {
-                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                let key = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Index as u8, &index);
                 match update {
                     Update::Removed => batch.delete_key(key),
                     Update::Set(value) => batch.put_key_value_bytes(key, value),
@@ -328,7 +337,7 @@ where
         self.sizes.flush(batch)?;
         let hash = *self.hash.get_mut().unwrap();
         if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
+            let key = self.context.base_key().base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
@@ -336,7 +345,7 @@ where
             self.stored_hash = hash;
         }
         if self.stored_total_size != self.total_size {
-            let key = self.context.base_tag(KeyTag::TotalSize as u8);
+            let key = self.context.base_key().base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
             self.stored_total_size = self.total_size;
         }
@@ -378,7 +387,7 @@ where
     ViewError: From<C::Error>,
 {
     fn max_key_size(&self) -> usize {
-        let prefix_len = self.context.base_key().len();
+        let prefix_len = self.context.base_key().bytes.len();
         <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE - 1 - prefix_len
     }
 
@@ -424,7 +433,7 @@ where
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
-        let key_prefix = self.context.base_tag(KeyTag::Index as u8);
+        let key_prefix = self.context.base_key().base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.deletion_set.delete_storage_first {
@@ -529,7 +538,7 @@ where
     where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
-        let key_prefix = self.context.base_tag(KeyTag::Index as u8);
+        let key_prefix = self.context.base_key().base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         if !self.deletion_set.delete_storage_first {
@@ -707,7 +716,10 @@ where
         if self.deletion_set.contains_prefix_of(index) {
             return Ok(None);
         }
-        let key = self.context.base_tag_index(KeyTag::Index as u8, index);
+        let key = self
+            .context
+            .base_key()
+            .base_tag_index(KeyTag::Index as u8, index);
         Ok(self.context.store().read_value_bytes(&key).await?)
     }
 
@@ -738,7 +750,10 @@ where
         if self.deletion_set.contains_prefix_of(index) {
             return Ok(false);
         }
-        let key = self.context.base_tag_index(KeyTag::Index as u8, index);
+        let key = self
+            .context
+            .base_key()
+            .base_tag_index(KeyTag::Index as u8, index);
         Ok(self.context.store().contains_key(&key).await?)
     }
 
@@ -774,7 +789,10 @@ where
                 results.push(false);
                 if !self.deletion_set.contains_prefix_of(&index) {
                     missed_indices.push(i);
-                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                    let key = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);
                 }
             }
@@ -822,7 +840,10 @@ where
                 result.push(None);
                 if !self.deletion_set.contains_prefix_of(&index) {
                     missed_indices.push(i);
-                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                    let key = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);
                 }
             }
@@ -1002,7 +1023,10 @@ where
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
-        let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
+        let key_prefix_full = self
+            .context
+            .base_key()
+            .base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
         let key_prefix_upper = get_upper_bound(key_prefix);
         let mut updates = self
@@ -1079,7 +1103,10 @@ where
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
-        let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
+        let key_prefix_full = self
+            .context
+            .base_key()
+            .base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
         let key_prefix_upper = get_upper_bound(key_prefix);
         let mut updates = self
