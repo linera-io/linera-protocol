@@ -19,8 +19,9 @@ async fn test_check_service_schema() {
     let mut file_base = std::fs::File::open("gql/service_schema.graphql").unwrap();
     let mut graphql_schema = String::new();
     file_base.read_to_string(&mut graphql_schema).unwrap();
-    assert_eq!(
-        graphql_schema, service_schema,
+    similar_asserts::assert_eq!(
+        graphql_schema,
+        service_schema,
         "\nGraphQL service schema has changed -> \
          regenerate schema following steps in linera-service-graphql-client/README.md\n"
     )
