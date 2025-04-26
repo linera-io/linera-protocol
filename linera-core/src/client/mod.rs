@@ -754,7 +754,7 @@ where
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 
-    /// Returns chain IDs that this chain subcribes to.
+    /// Returns chain IDs that this chain subscribes to.
     #[instrument(level = "trace", skip(self))]
     pub async fn event_stream_publishers(&self) -> Result<BTreeSet<ChainId>, LocalNodeError> {
         let mut publishers = self
