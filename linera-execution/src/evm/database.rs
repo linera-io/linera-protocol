@@ -19,6 +19,7 @@ use revm::{
     },
     Database, DatabaseCommit, DatabaseRef,
 };
+use revm_primitives::{address, BlockEnv};
 
 use crate::{BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ViewError};
 
@@ -239,5 +240,50 @@ where
     fn block_hash_ref(&self, number: u64) -> Result<B256, ExecutionError> {
         self.throw_error()?;
         Ok(keccak256(number.to_string().as_bytes()))
+    }
+}
+
+impl<Runtime> DatabaseRuntime<Runtime>
+where
+    Runtime: BaseRuntime,
+{
+    pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        // The block height being used
+        let block_height_linera = runtime.block_height()?;
+        let block_height_evm = U256::from(block_height_linera.0);
+        // The coinbase receiving the minted ethereum in Proof Of Work.
+        // Not relevant anymore
+        let coinbase = address!("00000000000000000000000000000000000000bb");
+        // The difficulty which is no longer relevant after The Merge.
+        let difficulty = U256::ZERO;
+        // We do not have access to the Resources so we keep it to the maximum
+        // and the control is done elsewhere.
+        let gas_limit = U256::MAX;
+        // The timestamp. Both the EVM and Linera use the same UNIX epoch.
+        // But the Linera epoch is in microseconds since the start and the
+        // Ethereum epoch is in seconds
+        let timestamp_linera = runtime.read_system_timestamp()?;
+        let timestamp_evm = U256::from(timestamp_linera.micros() / 1_000_000);
+        // The basefee is the minimum feee for executing. We have no such
+        // concept in Linera
+        let basefee = U256::ZERO;
+        // The randomness beacon being used.
+        let chain_id = runtime.chain_id()?;
+        let entry = format!("{}{}", chain_id, block_height_linera);
+        let prevrandao = keccak256(entry.as_bytes());
+        // The blob excess gas and price is not relevant to the execution
+        // on Linera.
+        let blob_excess_gas_and_price = None;
+        Ok(BlockEnv {
+            number: block_height_evm,
+            coinbase,
+            difficulty,
+            gas_limit,
+            timestamp: timestamp_evm,
+            basefee,
+            prevrandao: Some(prevrandao),
+            blob_excess_gas_and_price,
+        })
     }
 }
