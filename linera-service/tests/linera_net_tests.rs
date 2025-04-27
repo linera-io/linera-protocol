@@ -719,9 +719,6 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
-    use linera_sdk::abis::evm::EvmAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
 
@@ -815,11 +812,88 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
 
+
     net.ensure_is_running().await?;
     net.terminate().await?;
 
     Ok(())
 }
+
+
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolCall};
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_sdk::abis::evm::EvmAbi;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Creating the EVM smart contract
+
+    sol! {
+        function test_chain_id();
+        function test_read_data_blob();
+        function test_assert_data_blob_exists();
+        function test_chain_ownership();
+    }
+
+    let (contract, _dir) =
+        get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
+
+    let instantiation_argument = Vec::new();
+    let application_id = client
+        .publish_and_create::<EvmAbi, (), Vec<u8>>(
+            contract.clone(),
+            contract,
+            VmRuntime::Evm,
+            &(),
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await?;
+
+
+    /*
+    let query = test_chain_idCall {};
+    let query = EvmQuery::Query(query.abi_encode());
+    application.run_json_query(query.clone()).await?;
+    */
+
+    let query = test_chain_ownershipCall {};
+    let query = EvmQuery::Query(query.abi_encode());
+    application.run_json_query(query.clone()).await?;
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+
+
+
+
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
