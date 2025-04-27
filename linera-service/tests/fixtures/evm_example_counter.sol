@@ -17,4 +17,10 @@ contract ExampleCounter {
     function get_value() external view returns (uint64) {
         return value;
     }
+
+
+  function failing_function() external view returns (uint64) {
+    require(false);
+    return 0;
+  }
 }
