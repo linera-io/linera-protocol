@@ -619,6 +619,14 @@ pub enum ChainClientError {
 
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
+
+    #[error("Unexpected quorum: got {hash}, {round}, expected {expected_hash}, {expected_round}")]
+    UnexpectedQuorum {
+        hash: CryptoHash,
+        round: Round,
+        expected_hash: CryptoHash,
+        expected_round: Round,
+    },
 }
 
 impl From<Infallible> for ChainClientError {
@@ -1228,7 +1236,12 @@ where
         .await?;
         ensure!(
             (votes_hash, votes_round) == (value.hash(), action.round()),
-            ChainClientError::ProtocolError("Unexpected response from validators")
+            ChainClientError::UnexpectedQuorum {
+                hash: votes_hash,
+                round: votes_round,
+                expected_hash: value.hash(),
+                expected_round: action.round(),
+            }
         );
         // Certificate is valid because
         // * `communicate_with_quorum` ensured a sufficient "weight" of
