@@ -22,7 +22,7 @@ where
         keys.extend(
             RegisterView::<C, usize>::pre_load(&context.clone_with_base_key(base_key))?,
         );
-        let index = 1;
+        let index = 2;
         let base_key = context
             .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
@@ -49,7 +49,7 @@ where
             usize,
         >::post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
         pos = pos_next;
-        let index = 1;
+        let index = 2;
         let pos_next = pos
             + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;
         let base_key = context
@@ -91,8 +91,8 @@ where
     ) -> Result<bool, linera_views::views::ViewError> {
         use linera_views::views::View;
         let deleted0 = self.register.flush(batch)?;
-        let deleted1 = self.collection.flush(batch)?;
-        Ok(deleted0 && deleted1)
+        let deleted2 = self.collection.flush(batch)?;
+        Ok(deleted0 && deleted2)
     }
     fn clear(&mut self) {
         self.register.clear();

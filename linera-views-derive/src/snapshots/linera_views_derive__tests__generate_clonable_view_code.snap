@@ -9,6 +9,7 @@ where
     fn clone_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
         Ok(Self {
             register: self.register.clone_unchecked()?,
+            ignored: self.ignored.clone_unchecked()?,
             collection: self.collection.clone_unchecked()?,
         })
     }

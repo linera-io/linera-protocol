@@ -11,6 +11,19 @@ use syn::{
     WhereClause,
 };
 
+#[derive(Debug, deluxe::ParseAttributes)]
+#[deluxe(attributes(view))]
+struct StructAttrs {
+    context: Option<syn::Type>,
+}
+
+#[derive(Debug, deluxe::ParseAttributes)]
+#[deluxe(attributes(view))]
+struct FieldAttrs {
+    #[deluxe(default)]
+    skip: bool,
+}
+
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     let mut generic_vect = Vec::new();
     for param in generics.params {
@@ -21,17 +34,11 @@ fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     generic_vect
 }
 
-#[derive(Debug, deluxe::ExtractAttributes)]
-#[deluxe(attributes(view))]
-struct StructAttrs {
-    context: Option<syn::Type>,
-}
-
 fn context_and_constraints(
-    item: &mut syn::ItemStruct,
+    item: &syn::ItemStruct,
     template_vect: &[syn::Ident],
 ) -> (Type, WhereClause) {
-    let attrs: StructAttrs = deluxe::extract_attributes(item).unwrap();
+    let attrs: StructAttrs = deluxe::parse_attributes(item).unwrap();
 
     if let Some(context) = attrs.context {
         (context, empty_where_clause())
@@ -72,9 +79,9 @@ fn get_extended_entry(e: Type) -> TokenStream2 {
     quote! { #ident :: #arguments }
 }
 
-fn generate_view_code(mut input: ItemStruct, root: bool) -> TokenStream2 {
+fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let template_vect = get_seq_parameter(input.generics.clone());
-    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
+    let (context, context_constraints) = context_and_constraints(&input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
 
@@ -95,6 +102,11 @@ fn generate_view_code(mut input: ItemStruct, root: bool) -> TokenStream2 {
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
+        let attrs: FieldAttrs = deluxe::parse_attributes(&e).unwrap();
+        if attrs.skip {
+            continue;
+        }
+
         let name = e.clone().ident.unwrap();
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
@@ -204,9 +216,9 @@ fn generate_view_code(mut input: ItemStruct, root: bool) -> TokenStream2 {
     }
 }
 
-fn generate_save_delete_view_code(mut input: ItemStruct) -> TokenStream2 {
+fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
     let template_vect = get_seq_parameter(input.generics.clone());
-    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
+    let (context, context_constraints) = context_and_constraints(&input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
 
@@ -220,6 +232,11 @@ fn generate_save_delete_view_code(mut input: ItemStruct) -> TokenStream2 {
     let mut flushes = Vec::new();
     let mut deletes = Vec::new();
     for e in input.fields {
+        let attrs: FieldAttrs = deluxe::parse_attributes(&e).unwrap();
+        if attrs.skip {
+            continue;
+        }
+
         let name = e.clone().ident.unwrap();
         flushes.push(quote! { self.#name.flush(&mut batch)?; });
         deletes.push(quote! { self.#name.delete(batch); });
@@ -257,9 +274,9 @@ fn generate_save_delete_view_code(mut input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_hash_view_code(mut input: ItemStruct) -> TokenStream2 {
+fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     let template_vect = get_seq_parameter(input.generics.clone());
-    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
+    let (context, context_constraints) = context_and_constraints(&input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
 
@@ -273,6 +290,10 @@ fn generate_hash_view_code(mut input: ItemStruct) -> TokenStream2 {
     let mut field_hashes_mut = Vec::new();
     let mut field_hashes = Vec::new();
     for e in input.fields {
+        let attrs: FieldAttrs = deluxe::parse_attributes(&e).unwrap();
+        if attrs.skip {
+            continue;
+        }
         let name = e.clone().ident.unwrap();
         field_hashes_mut.push(quote! { hasher.write_all(self.#name.hash_mut().await?.as_ref())?; });
         field_hashes.push(quote! { hasher.write_all(self.#name.hash().await?.as_ref())?; });
@@ -304,9 +325,9 @@ fn generate_hash_view_code(mut input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_crypto_hash_code(mut input: ItemStruct) -> TokenStream2 {
+fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let template_vect = get_seq_parameter(input.generics.clone());
-    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
+    let (context, context_constraints) = context_and_constraints(&input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
 
@@ -359,9 +380,9 @@ fn generate_crypto_hash_code(mut input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_clonable_view_code(mut input: ItemStruct) -> TokenStream2 {
+fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
     let template_vect = get_seq_parameter(input.generics.clone());
-    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
+    let (context, context_constraints) = context_and_constraints(&input, &template_vect);
     let struct_name = input.ident;
     let generics = input.generics;
 
@@ -596,6 +617,8 @@ pub mod tests {
                 #where_clause
                 {
                     register: RegisterView<#context, usize>,
+                    #[view(skip)]
+                    ignored: bool,
                     collection: CollectionView<#context, usize, RegisterView<#context, usize>>,
                 }
             }
