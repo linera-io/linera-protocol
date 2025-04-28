@@ -59,7 +59,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
-use linera_storage::{Clock as _, Storage};
+use linera_storage::{Clock as _, Storage as _};
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom as _;
 use serde::{Deserialize, Serialize};
@@ -72,10 +72,11 @@ use crate::{
     data_types::{
         BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
     },
+    environment::Environment,
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
-        ValidatorNodeProvider,
+        ValidatorNodeProvider as _,
     },
     notifier::ChannelNotifier,
     remote_node::RemoteNode,
@@ -143,15 +144,11 @@ mod metrics {
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
-pub struct Client<ValidatorNodeProvider, Storage>
-where
-    Storage: linera_storage::Storage,
-{
-    /// How to talk to the validators.
-    validator_node_provider: ValidatorNodeProvider,
+pub struct Client<Env: Environment> {
+    environment: Env,
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
-    local_node: LocalNodeClient<Storage>,
+    local_node: LocalNodeClient<Env::Storage>,
     /// Maximum number of pending message bundles processed at a time in a block.
     max_pending_message_bundles: usize,
     /// The policy for automatically handling incoming messages.
@@ -166,9 +163,6 @@ where
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
-    /// A copy of the storage client so that we don't have to lock the local node client
-    /// to retrieve it.
-    storage: Storage,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
     /// The maximum active chain workers.
@@ -177,13 +171,12 @@ where
     blob_download_timeout: Duration,
 }
 
-impl<P, S: Storage + Clone> Client<P, S> {
+impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[expect(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
     pub fn new(
-        validator_node_provider: P,
-        storage: S,
+        environment: Env,
         max_pending_message_bundles: usize,
         cross_chain_message_delivery: CrossChainMessageDelivery,
         long_lived_services: bool,
@@ -196,7 +189,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
             name.into(),
-            storage.clone(),
+            environment.storage().clone(),
             tracked_chains.clone(),
             max_loaded_chains,
         )
@@ -206,7 +199,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         let local_node = LocalNodeClient::new(state);
 
         Self {
-            validator_node_provider,
+            environment,
             local_node,
             chains: DashMap::new(),
             max_pending_message_bundles,
@@ -215,21 +208,23 @@ impl<P, S: Storage + Clone> Client<P, S> {
             grace_period,
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
-            storage,
             max_loaded_chains,
             blob_download_timeout,
         }
     }
 
     /// Returns the storage client used by this client's local node.
-    #[instrument(level = "trace", skip(self))]
-    pub fn storage_client(&self) -> &S {
-        &self.storage
+    pub fn storage_client(&self) -> &Env::Storage {
+        self.environment.storage()
+    }
+
+    pub fn validator_node_provider(&self) -> &Env::Network {
+        self.environment.network()
     }
 
     /// Returns a reference to the [`LocalNodeClient`] of the client.
     #[instrument(level = "trace", skip(self))]
-    pub fn local_node(&self) -> &LocalNodeClient<S> {
+    pub fn local_node(&self) -> &LocalNodeClient<Env::Storage> {
         &self.local_node
     }
 
@@ -254,7 +249,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
-    ) -> ChainClient<P, S> {
+    ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
@@ -280,13 +275,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             },
         }
     }
-}
 
-impl<P, S> Client<P, S>
-where
-    P: ValidatorNodeProvider + Sync + 'static,
-    S: Storage + Sync + Send + Clone + 'static,
-{
     /// Downloads and processes all certificates up to (excluding) the specified height.
     #[instrument(level = "trace", skip(self, validators))]
     pub async fn download_certificates(
@@ -487,13 +476,10 @@ pub struct ChainClientOptions {
 /// * As a rule, operations are considered successful (and communication may stop) when
 ///   they succeeded in gathering a quorum of responses.
 #[derive(Debug)]
-pub struct ChainClient<ValidatorNodeProvider, Storage>
-where
-    Storage: linera_storage::Storage,
-{
+pub struct ChainClient<Env: Environment> {
     /// The Linera [`Client`] that manages operations for this chain client.
     #[debug(skip)]
-    client: Arc<Client<ValidatorNodeProvider, Storage>>,
+    client: Arc<Client<Env>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
     /// The ID of the admin chain.
@@ -504,10 +490,7 @@ where
     options: ChainClientOptions,
 }
 
-impl<P, S> Clone for ChainClient<P, S>
-where
-    S: linera_storage::Storage,
-{
+impl<Env: Environment> Clone for ChainClient<Env> {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
@@ -633,7 +616,7 @@ pub type ChainGuard<'a, T> = Unsend<DashMapRef<'a, ChainId, T>>;
 pub type ChainGuardMut<'a, T> = Unsend<DashMapRefMut<'a, ChainId, T>>;
 pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainClientState, T>>;
 
-impl<P: 'static, S: Storage> ChainClient<P, S> {
+impl<Env: Environment> ChainClient<Env> {
     /// Gets a shared reference to the chain's state.
     #[instrument(level = "trace", skip(self))]
     pub fn state(&self) -> ChainGuard<ChainClientState> {
@@ -749,16 +732,12 @@ pub async fn create_bytecode_blobs(
     }
 }
 
-impl<P, S> ChainClient<P, S>
-where
-    P: ValidatorNodeProvider + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
-{
+impl<Env: Environment> ChainClient<Env> {
     /// Obtains a `ChainStateView` for this client's chain.
     #[instrument(level = "trace")]
     pub async fn chain_state_view(
         &self,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
+    ) -> Result<OwnedRwLockReadGuard<ChainStateView<Env::StorageContext>>, LocalNodeError> {
         self.client.local_node.chain_state_view(self.chain_id).await
     }
 
@@ -801,8 +780,8 @@ where
 
     /// Returns the storage client used by this client's local node.
     #[instrument(level = "trace")]
-    pub fn storage_client(&self) -> S {
-        self.client.storage_client().clone()
+    pub fn storage_client(&self) -> &Env::Storage {
+        self.client.storage_client()
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
@@ -1000,10 +979,13 @@ where
     }
 
     #[instrument(level = "trace")]
-    fn make_nodes(&self, committee: &Committee) -> Result<Vec<RemoteNode<P::Node>>, NodeError> {
+    fn make_nodes(
+        &self,
+        committee: &Committee,
+    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, NodeError> {
         Ok(self
             .client
-            .validator_node_provider
+            .validator_node_provider()
             .make_nodes(committee)?
             .map(|(public_key, node)| RemoteNode { public_key, node })
             .collect())
@@ -1011,7 +993,9 @@ where
 
     /// Obtains the validators for the latest epoch.
     #[instrument(level = "trace")]
-    async fn validator_nodes(&self) -> Result<Vec<RemoteNode<P::Node>>, ChainClientError> {
+    async fn validator_nodes(
+        &self,
+    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, ChainClientError> {
         let committee = self.latest_committee().await?;
         Ok(self.make_nodes(&committee)?)
     }
@@ -1326,7 +1310,7 @@ where
         &self,
         certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
-        nodes: Option<Vec<RemoteNode<P::Node>>>,
+        nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), ChainClientError> {
         let block = certificate.block();
 
@@ -1384,7 +1368,7 @@ where
     async fn synchronize_received_certificates_from_validator(
         &self,
         chain_id: ChainId,
-        remote_node: &RemoteNode<P::Node>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_worker_limit: usize,
     ) -> Result<ReceivedCertificatesFromValidator, ChainClientError> {
         let mut tracker = self
@@ -1842,7 +1826,7 @@ where
     #[instrument(level = "trace", skip(self, remote_node, chain_id))]
     async fn try_synchronize_chain_state_from(
         &self,
-        remote_node: &RemoteNode<P::Node>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
         let local_info = self.client.local_node.chain_info(chain_id).await?;
@@ -1963,7 +1947,7 @@ where
 
     async fn try_process_locking_block_from(
         &self,
-        remote_node: &RemoteNode<P::Node>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
         certificate: GenericCertificate<ValidatedBlock>,
     ) -> Result<(), ChainClientError> {
         let chain_id = certificate.inner().chain_id();
@@ -1994,7 +1978,7 @@ where
     async fn update_local_node_with_blobs_from(
         &self,
         blob_ids: Vec<BlobId>,
-        remote_node: &RemoteNode<P::Node>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), ChainClientError> {
         try_join_all(blob_ids.into_iter().map(|blob_id| async move {
             let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
@@ -3242,7 +3226,7 @@ where
             stream_id: StreamId::system(stream_name),
             index,
         };
-        match self.client.storage.read_event(event_id).await {
+        match self.client.storage_client().read_event(event_id).await {
             Ok(_) => Ok(true),
             Err(ViewError::EventsNotFound(_)) => Ok(false),
             Err(error) => Err(error.into()),
@@ -3330,7 +3314,7 @@ where
     async fn local_chain_info(
         &self,
         chain_id: ChainId,
-        local_node: &mut LocalNodeClient<S>,
+        local_node: &mut LocalNodeClient<Env::Storage>,
     ) -> Option<Box<ChainInfo>> {
         let Ok(info) = local_node.chain_info(chain_id).await else {
             error!("Fail to read local chain info for {chain_id}");
@@ -3345,7 +3329,7 @@ where
     async fn local_next_block_height(
         &self,
         chain_id: ChainId,
-        local_node: &mut LocalNodeClient<S>,
+        local_node: &mut LocalNodeClient<Env::Storage>,
     ) -> Option<BlockHeight> {
         let info = self.local_chain_info(chain_id, local_node).await?;
         Some(info.next_block_height)
@@ -3354,8 +3338,8 @@ where
     #[instrument(level = "trace", skip(remote_node, local_node, notification))]
     async fn process_notification(
         &self,
-        remote_node: RemoteNode<P::Node>,
-        mut local_node: LocalNodeClient<S>,
+        remote_node: RemoteNode<Env::ValidatorNode>,
+        mut local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) {
         match notification.reason {
@@ -3517,7 +3501,7 @@ where
             let committee = self.local_committee().await?;
             let nodes: HashMap<_, _> = self
                 .client
-                .validator_node_provider
+                .validator_node_provider()
                 .make_nodes(&committee)?
                 .collect();
             (self.chain_id, nodes, self.client.local_node.clone())
@@ -3575,7 +3559,7 @@ where
     #[instrument(level = "trace")]
     async fn find_received_certificates_from_validator(
         &self,
-        remote_node: RemoteNode<P::Node>,
+        remote_node: RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), ChainClientError> {
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
@@ -3610,7 +3594,10 @@ where
 
     /// Attempts to update a validator with the local information.
     #[instrument(level = "trace", skip(remote_node))]
-    pub async fn sync_validator(&self, remote_node: P::Node) -> Result<(), ChainClientError> {
+    pub async fn sync_validator(
+        &self,
+        remote_node: Env::ValidatorNode,
+    ) -> Result<(), ChainClientError> {
         let validator_chain_state = remote_node
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await?;
@@ -3642,7 +3629,7 @@ where
 
         let certificates = self
             .client
-            .storage
+            .storage_client()
             .read_certificates(missing_certificate_hashes)
             .await?;
 

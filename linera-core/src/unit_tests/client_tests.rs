@@ -26,8 +26,6 @@ use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
     SystemMessage, SystemQuery, SystemResponse,
 };
-use linera_storage::{DbStorage, TestClock};
-use linera_views::memory::MemoryStore;
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
@@ -54,13 +52,11 @@ use crate::{
         NodeError::{self, ClientIoError},
         ValidatorNode,
     },
-    test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
+    test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder},
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
+    Environment,
 };
-
-type MemoryChainClient =
-    ChainClient<NodeProvider<DbStorage<MemoryStore, TestClock>>, DbStorage<MemoryStore, TestClock>>;
 
 /// A test to ensure that our chain client listener remains `Send`.  This is a bit of a
 /// hack, but requires that we not hold a `std::sync::Mutex` over `await` points, a
@@ -72,7 +68,9 @@ type MemoryChainClient =
 fn test_listener_is_send() {
     fn ensure_send(_: &impl Send) {}
 
-    async fn check_listener(chain_client: MemoryChainClient) -> Result<(), ChainClientError> {
+    async fn check_listener(
+        chain_client: ChainClient<impl Environment>,
+    ) -> Result<(), ChainClientError> {
         let (listener, _abort_notifications, _notifications) = chain_client.listen().await?;
         ensure_send(&listener);
         Ok(())

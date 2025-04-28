@@ -36,7 +36,6 @@ use linera_execution::{
     Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
 };
 use linera_sdk::linera_base_types::BlobContent;
-use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error as ThisError;
@@ -156,13 +155,8 @@ where
         mut f: F,
     ) -> Result<T, Error>
     where
-        F: FnMut(ChainClient<C::ValidatorNodeProvider, C::Storage>) -> Fut,
-        Fut: Future<
-            Output = (
-                Result<ClientOutcome<T>, Error>,
-                ChainClient<C::ValidatorNodeProvider, C::Storage>,
-            ),
-        >,
+        F: FnMut(ChainClient<C::Environment>) -> Fut,
+        Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<C::Environment>)>,
     {
         loop {
             let client = self.context.lock().await.make_chain_client(*chain_id)?;
@@ -582,7 +576,10 @@ where
     async fn chain(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainStateExtendedView<<C::Storage as Storage>::Context>, Error> {
+    ) -> Result<
+        ChainStateExtendedView<<C::Environment as linera_core::Environment>::StorageContext>,
+        Error,
+    > {
         let client = self.context.lock().await.make_chain_client(chain_id)?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
@@ -768,7 +765,6 @@ where
     config: ChainListenerConfig,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
-    storage: C::Storage,
     context: Arc<Mutex<C>>,
 }
 
@@ -781,7 +777,6 @@ where
             config: self.config.clone(),
             port: self.port,
             default_chain: self.default_chain,
-            storage: self.storage.clone(),
             context: Arc::clone(&self.context),
         }
     }
@@ -796,14 +791,12 @@ where
         config: ChainListenerConfig,
         port: NonZeroU16,
         default_chain: Option<ChainId>,
-        storage: C::Storage,
         context: C,
     ) -> Self {
         Self {
             config,
             port,
             default_chain,
-            storage,
             context: Arc::new(Mutex::new(context)),
         }
     }
@@ -847,8 +840,10 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
+        let storage = self.context.lock().await.storage().clone();
+
         let chain_listener =
-            ChainListener::new(self.config, self.context, self.storage, cancellation_token).run();
+            ChainListener::new(self.config, self.context, storage, cancellation_token).run();
         let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;

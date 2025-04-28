@@ -322,7 +322,7 @@ type ChainStateExtendedView {
 	"""
 	The incomplete sets of blobs for upcoming proposals.
 	"""
-	pendingProposedBlobs: ReentrantCollectionView_AccountOwner_PendingBlobsView_673534848!
+	pendingProposedBlobs: ReentrantCollectionView_AccountOwner_PendingBlobsView_1774202114!
 	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -339,7 +339,7 @@ type ChainStateExtendedView {
 	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
-	inboxes: ReentrantCollectionView_ChainId_InboxStateView_1897134286!
+	inboxes: ReentrantCollectionView_ChainId_InboxStateView_1502311823!
 	"""
 	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
@@ -355,7 +355,7 @@ type ChainStateExtendedView {
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
-	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_1682262239!
+	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_1536326071!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
@@ -447,7 +447,7 @@ type Entry_AccountOwner_Amount_aaf96548 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_AccountOwner_PendingBlobsView_f0b6a64b {
+type Entry_AccountOwner_PendingBlobsView_2740f04d {
 	key: AccountOwner!
 	value: PendingBlobsView!
 }
@@ -479,7 +479,7 @@ type Entry_ChainId_BlockHeight_2fe78645 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChainId_InboxStateView_a719a606 {
+type Entry_ChainId_InboxStateView_685a16a3 {
 	key: ChainId!
 	value: InboxStateView!
 }
@@ -487,7 +487,7 @@ type Entry_ChainId_InboxStateView_a719a606 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChainId_OutboxStateView_b73c476d {
+type Entry_ChainId_OutboxStateView_258a4684 {
 	key: ChainId!
 	value: OutboxStateView!
 }
@@ -940,22 +940,22 @@ The recipient of a transfer
 """
 scalar Recipient
 
-type ReentrantCollectionView_AccountOwner_PendingBlobsView_673534848 {
+type ReentrantCollectionView_AccountOwner_PendingBlobsView_1774202114 {
 	keys: [AccountOwner!]!
-	entry(key: AccountOwner!): Entry_AccountOwner_PendingBlobsView_f0b6a64b!
-	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_f0b6a64b!]!
+	entry(key: AccountOwner!): Entry_AccountOwner_PendingBlobsView_2740f04d!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_PendingBlobsView_2740f04d!]!
 }
 
-type ReentrantCollectionView_ChainId_InboxStateView_1897134286 {
+type ReentrantCollectionView_ChainId_InboxStateView_1502311823 {
 	keys: [ChainId!]!
-	entry(key: ChainId!): Entry_ChainId_InboxStateView_a719a606!
-	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_InboxStateView_a719a606!]!
+	entry(key: ChainId!): Entry_ChainId_InboxStateView_685a16a3!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_InboxStateView_685a16a3!]!
 }
 
-type ReentrantCollectionView_ChainId_OutboxStateView_1682262239 {
+type ReentrantCollectionView_ChainId_OutboxStateView_1536326071 {
 	keys: [ChainId!]!
-	entry(key: ChainId!): Entry_ChainId_OutboxStateView_b73c476d!
-	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_OutboxStateView_b73c476d!]!
+	entry(key: ChainId!): Entry_ChainId_OutboxStateView_258a4684!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_OutboxStateView_258a4684!]!
 }
 
 """

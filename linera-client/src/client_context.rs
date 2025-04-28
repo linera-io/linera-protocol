@@ -21,11 +21,10 @@ use linera_core::{
     join_set_ext::JoinSet,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     remote_node::RemoteNode,
-    JoinSetExt,
+    Environment, JoinSetExt,
 };
 use linera_execution::{Message, SystemMessage};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
-use linera_storage::Storage;
 use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
@@ -69,12 +68,9 @@ use crate::{
     Error,
 };
 
-pub struct ClientContext<Storage, W>
-where
-    Storage: linera_storage::Storage,
-{
+pub struct ClientContext<Env: Environment, W> {
     pub wallet: WalletState<W>,
-    pub client: Arc<Client<NodeProvider, Storage>>,
+    pub client: Arc<Client<Env>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub retry_delay: Duration,
@@ -86,19 +82,21 @@ where
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
-impl<S, W> chain_listener::ClientContext for ClientContext<S, W>
+impl<Env: Environment, W> chain_listener::ClientContext for ClientContext<Env, W>
 where
-    S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet> + 'static,
 {
-    type ValidatorNodeProvider = NodeProvider;
-    type Storage = S;
+    type Environment = Env;
 
     fn wallet(&self) -> &Wallet {
         &self.wallet
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
+    fn storage(&self) -> &Env::Storage {
+        self.client.storage_client()
+    }
+
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         self.make_chain_client(chain_id)
     }
 
@@ -113,44 +111,23 @@ where
         self.save_wallet().await
     }
 
-    async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
+    async fn update_wallet(&mut self, client: &ChainClient<Env>) -> Result<(), Error> {
         self.update_wallet_from_client(client).await
     }
 }
 
-impl<S, W> ClientContext<S, W>
+impl<S, W> ClientContext<linera_core::environment::Impl<S, NodeProvider>, W>
 where
-    S: Storage + Clone + Send + Sync + 'static,
+    S: linera_core::environment::Storage,
     W: Persist<Target = Wallet>,
 {
-    /// Returns a reference to the wallet.
-    pub fn wallet(&self) -> &Wallet {
-        &self.wallet
-    }
-
-    /// Returns the [`WalletState`] as a mutable reference.
-    pub fn wallet_mut(&mut self) -> &mut WalletState<W> {
-        &mut self.wallet
-    }
-
-    pub async fn mutate_wallet<R: Send>(
-        &mut self,
-        mutation: impl FnOnce(&mut Wallet) -> R + Send,
-    ) -> Result<R, Error> {
-        self.wallet
-            .mutate(mutation)
-            .await
-            .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
-    }
-
-    pub fn new(storage: S, options: ClientContextOptions, wallet: W) -> Self {
-        let node_options = NodeOptions {
+    pub fn new(storage: S, wallet: W, options: ClientContextOptions) -> Self {
+        let node_provider = NodeProvider::new(NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
-        };
-        let node_provider = NodeProvider::new(node_options);
+        });
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
@@ -159,8 +136,10 @@ where
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
         let client = Client::new(
-            node_provider,
-            storage,
+            linera_core::environment::Impl {
+                network: node_provider,
+                storage,
+            },
             options.max_pending_message_bundles,
             delivery,
             options.long_lived_services,
@@ -198,7 +177,6 @@ where
             retry_delay,
             max_retries,
         };
-        let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(true);
         let chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
@@ -207,8 +185,10 @@ where
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
         let client = Client::new(
-            node_provider,
-            storage,
+            linera_core::environment::Impl {
+                storage,
+                network: NodeProvider::new(node_options),
+            },
             10,
             delivery,
             false,
@@ -231,6 +211,31 @@ where
             restrict_chain_ids_to: None,
         }
     }
+}
+
+impl<Env: Environment, W> ClientContext<Env, W>
+where
+    W: Persist<Target = Wallet>,
+{
+    /// Returns a reference to the wallet.
+    pub fn wallet(&self) -> &Wallet {
+        &self.wallet
+    }
+
+    /// Returns the [`WalletState`] as a mutable reference.
+    pub fn wallet_mut(&mut self) -> &mut WalletState<W> {
+        &mut self.wallet
+    }
+
+    pub async fn mutate_wallet<R: Send>(
+        &mut self,
+        mutation: impl FnOnce(&mut Wallet) -> R + Send,
+    ) -> Result<R, Error> {
+        self.wallet
+            .mutate(mutation)
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
+    }
 
     /// Retrieve the default account. Current this is the common account of the default
     /// chain.
@@ -245,7 +250,7 @@ where
             .expect("No chain specified in wallet with no default chain")
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
         let chain = match self.wallet.get(chain_id) {
             Some(chain) => chain.clone(),
@@ -270,7 +275,7 @@ where
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
-    ) -> ChainClient<NodeProvider, S> {
+    ) -> ChainClient<Env> {
         let mut chain_client = self.client.create_chain_client(
             chain_id,
             known_key_pairs,
@@ -307,9 +312,9 @@ where
             .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    pub async fn update_wallet_from_client(
+    pub async fn update_wallet_from_client<Env_: Environment>(
         &mut self,
-        client: &ChainClient<NodeProvider, S>,
+        client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
         self.wallet.as_mut().update_from_state(client).await;
         self.save_wallet().await
@@ -351,7 +356,7 @@ where
 
     pub async fn process_inbox(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<Env>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
@@ -399,10 +404,7 @@ where
         message_id: MessageId,
         owner: AccountOwner,
         validators: Option<Vec<(ValidatorPublicKey, String)>>,
-    ) -> Result<(), Error>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-    {
+    ) -> Result<(), Error> {
         let node_provider = self.make_node_provider();
         self.client.track_chain(chain_id);
 
@@ -475,11 +477,11 @@ where
     /// timeout, it will wait and retry.
     pub async fn apply_client_command<E, F, Fut, T>(
         &mut self,
-        client: &ChainClient<NodeProvider, S>,
+        client: &ChainClient<Env>,
         mut f: F,
     ) -> Result<T, Error>
     where
-        F: FnMut(&ChainClient<NodeProvider, S>) -> Fut,
+        F: FnMut(&ChainClient<Env>) -> Fut,
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
@@ -541,14 +543,13 @@ where
 }
 
 #[cfg(feature = "fs")]
-impl<S, W> ClientContext<S, W>
+impl<Env: Environment, W> ClientContext<Env, W>
 where
-    S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
     pub async fn publish_module(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<Env>,
         contract: PathBuf,
         service: PathBuf,
         vm_runtime: VmRuntime,
@@ -586,7 +587,7 @@ where
 
     pub async fn publish_data_blob(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<Env>,
         blob_path: PathBuf,
     ) -> Result<CryptoHash, Error> {
         info!("Loading data blob file");
@@ -615,7 +616,7 @@ where
     // TODO(#2490): Consider removing or renaming this.
     pub async fn read_data_blob(
         &mut self,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<Env>,
         hash: CryptoHash,
     ) -> Result<(), Error> {
         info!("Verifying data blob");
@@ -636,9 +637,8 @@ where
 }
 
 #[cfg(feature = "benchmark")]
-impl<S, W> ClientContext<S, W>
+impl<Env: Environment, W> ClientContext<Env, W>
 where
-    S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
     pub async fn prepare_for_benchmark(
@@ -649,7 +649,7 @@ where
         fungible_application_id: Option<ApplicationId>,
     ) -> Result<
         (
-            HashMap<ChainId, ChainClient<NodeProvider, S>>,
+            HashMap<ChainId, ChainClient<Env>>,
             Epoch,
             Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
             Committee,
@@ -697,7 +697,7 @@ where
         let committee = committees
             .remove(&epoch)
             .expect("current epoch should have a committee");
-        let blocks_infos = Benchmark::<S>::make_benchmark_block_info(
+        let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             key_pairs,
             transactions_per_block,
             fungible_application_id,
@@ -708,7 +708,7 @@ where
 
     pub async fn wrap_up_benchmark(
         &mut self,
-        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
+        chain_clients: HashMap<ChainId, ChainClient<Env>>,
         close_chains: bool,
         wrap_up_max_in_flight: usize,
     ) -> Result<(), Error> {
@@ -716,7 +716,7 @@ where
             info!("Closing chains...");
             let stream = stream::iter(chain_clients.values().cloned())
                 .map(|chain_client| async move {
-                    Benchmark::<S>::close_benchmark_chain(&chain_client).await?;
+                    Benchmark::<Env>::close_benchmark_chain(&chain_client).await?;
                     info!("Closed chain {:?}", chain_client.chain_id());
                     Ok::<(), BenchmarkError>(())
                 })
@@ -771,7 +771,7 @@ where
     }
 
     async fn process_inbox_without_updating_wallet(
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<Env>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
         // Try processing the inbox optimistically without waiting for validator notifications.
         chain_client.synchronize_from_validators().await?;
@@ -793,7 +793,7 @@ where
     ) -> Result<
         (
             HashMap<ChainId, AccountSecretKey>,
-            HashMap<ChainId, ChainClient<NodeProvider, S>>,
+            HashMap<ChainId, ChainClient<Env>>,
         ),
         Error,
     > {
@@ -903,7 +903,7 @@ where
 
     async fn execute_open_chains_operations(
         num_new_chains: usize,
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<Env>,
         balance: Amount,
         key_pair: &AccountSecretKey,
         admin_id: ChainId,
@@ -953,7 +953,7 @@ where
         let operations: Vec<_> = key_pairs
             .iter()
             .map(|(chain_id, key_pair)| {
-                Benchmark::<S>::fungible_transfer(
+                Benchmark::<Env>::fungible_transfer(
                     application_id,
                     *chain_id,
                     default_key,

@@ -15,13 +15,12 @@ use linera_base::{
 };
 use linera_core::{
     client::{ChainClient, Client},
+    environment,
     node::CrossChainMessageDelivery,
-    test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
+    test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
     DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::system::Recipient;
-use linera_storage::{DbStorage, TestClock};
-use linera_views::memory::MemoryStore;
 use rand::SeedableRng as _;
 use tokio_util::sync::CancellationToken;
 
@@ -32,28 +31,28 @@ use crate::{
     Error,
 };
 
-type TestStorage = DbStorage<MemoryStore, TestClock>;
-type TestProvider = NodeProvider<TestStorage>;
-
 struct ClientContext {
     wallet: Wallet,
-    client: Arc<Client<TestProvider, TestStorage>>,
+    client: Arc<Client<environment::Test>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 impl chain_listener::ClientContext for ClientContext {
-    type ValidatorNodeProvider = TestProvider;
-    type Storage = TestStorage;
+    type Environment = environment::Test;
 
     fn wallet(&self) -> &Wallet {
         &self.wallet
     }
 
+    fn storage(&self) -> &environment::TestStorage {
+        self.client.storage_client()
+    }
+
     fn make_chain_client(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainClient<TestProvider, TestStorage>, Error> {
+    ) -> Result<ChainClient<environment::Test>, Error> {
         let chain = self
             .wallet
             .get(chain_id)
@@ -97,7 +96,7 @@ impl chain_listener::ClientContext for ClientContext {
 
     async fn update_wallet(
         &mut self,
-        client: &ChainClient<TestProvider, TestStorage>,
+        client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
         self.wallet.update_from_state(client).await;
         Ok(())
@@ -125,8 +124,10 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let mut context = ClientContext {
         wallet: Wallet::new(genesis_config, Some(37)),
         client: Arc::new(Client::new(
-            builder.make_node_provider(),
-            storage.clone(),
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+            },
             10,
             delivery,
             false,

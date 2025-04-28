@@ -4684,6 +4684,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "cfg-if",
  "cfg_aliases",
  "clap",
  "counter",
@@ -4718,6 +4719,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-subscriber",
+ "trait-set",
  "trait-variant",
  "wasm-bindgen-futures",
 ]
@@ -5949,7 +5951,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
  "syn 2.0.100",
@@ -8979,6 +8981,17 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "trait-set"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b79e2e9c9ab44c6d7c20d5976961b47e8f49ac199154daa514b77cd1ab536625"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
