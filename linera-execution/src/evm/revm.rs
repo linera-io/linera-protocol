@@ -339,8 +339,10 @@ impl GeneralContractCall {
                 }
                 PrecompileTag::SendMessage => {
                     ensure!(vec.len() >= 33, format!("vec.size() should be at least 33"));
-                    let destination = ChainId(CryptoHash::try_from(&vec[1..33])
-                        .map_err(|error| format!("TryError: {error}"))?);
+                    let destination = ChainId(
+                        CryptoHash::try_from(&vec[1..33])
+                            .map_err(|error| format!("TryError: {error}"))?,
+                    );
                     let authenticated = true;
                     let is_tracked = true;
                     let grant = Resources::default();
@@ -442,7 +444,6 @@ impl GeneralServiceCall {
         }
     }
 }
-
 
 fn failing_outcome() -> CallOutcome {
     let result = InstructionResult::Revert;
@@ -841,10 +842,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    fn init_transact(
-        &mut self,
-        vec: &[u8],
-    ) -> Result<ExecutionResultSuccess, ExecutionError> {
+    fn init_transact(&mut self, vec: &[u8]) -> Result<ExecutionResultSuccess, ExecutionError> {
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
