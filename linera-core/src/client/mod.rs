@@ -1812,6 +1812,9 @@ where
         {
             return Ok(());
         };
+        if let Some(timeout) = info.manager.timeout {
+            self.client.handle_certificate(*timeout).await?;
+        }
         let mut proposals = Vec::new();
         if let Some(proposal) = info.manager.requested_proposed {
             proposals.push(*proposal);
