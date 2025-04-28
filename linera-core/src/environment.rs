@@ -43,6 +43,7 @@ impl<S: Storage, N: Network> Environment for Impl<S, N> {
     fn storage(&self) -> &S {
         &self.storage
     }
+
     fn network(&self) -> &N {
         &self.network
     }
