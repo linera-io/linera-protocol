@@ -15,6 +15,8 @@ library Linera {
         bool result = false;
         if (val == 1) {
             result = true;
+        } else {
+            require(val == 0);
         }
         return (pos + 1, result);
     }

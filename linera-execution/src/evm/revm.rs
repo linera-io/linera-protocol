@@ -282,15 +282,15 @@ fn address_to_user_application_id(address: Address) -> ApplicationId {
 #[repr(u8)]
 #[derive(Debug, TryFromPrimitive)]
 enum PrecompileTag {
-    /// Key prefix for try_call_application
+    /// Key prefix for `try_call_application`
     TryCallApplication,
-    /// Key prefix for try_query_application
+    /// Key prefix for `try_query_application`
     TryQueryApplication,
-    /// Key prefix for send_message
+    /// Key prefix for `send_message`
     SendMessage,
-    /// Key prefix for message_id
+    /// Key prefix for `message_id`
     MessageId,
-    /// Key prefix for message_is_bouncing
+    /// Key prefix for `message_is_bouncing`
     MessageIsBouncing,
 }
 
