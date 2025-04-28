@@ -745,9 +745,6 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 
     let instantiation_argument: Vec<u8> = u64::abi_encode(&original_value);
 
-    // Publishing the EVM contract and instantiating it on the two chains.
-    // Making sure that they have the same application_id
-
     let (evm_contract, _dir) =
         get_evm_contract_path("tests/fixtures/evm_example_execute_message.sol")?;
 

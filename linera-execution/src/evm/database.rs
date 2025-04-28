@@ -116,31 +116,20 @@ where
     type Error = ExecutionError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, ExecutionError> {
-        tracing::info!("basic_ref call at address={address:?}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let val = self.get_contract_address_key(&address);
-        if let Some(val) = val {
-            let key_info = vec![val, KeyCategory::AccountInfo as u8];
-            let promise = runtime.read_value_bytes_new(key_info)?;
-            let result = runtime.read_value_bytes_wait(&promise)?;
-            let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
-            if let Some(account_info_clone) = account_info.clone() {
-                if let Some(code) = account_info_clone.code {
-                    tracing::info!("basic_ref Some: |code|={}", code.len());
-                } else {
-                    tracing::info!("basic_ref Some: |code|=None");
-                }
-            } else {
-                tracing::info!("basic_ref None");
-            }
-            Ok(account_info)
-        } else {
-            Ok(Some(AccountInfo::default()))
-        }
+        let Some(val) = val else {
+            return Ok(Some(AccountInfo::default()));
+        };
+        let key_info = vec![val, KeyCategory::AccountInfo as u8];
+        let promise = runtime.read_value_bytes_new(key_info)?;
+        let result = runtime.read_value_bytes_wait(&promise)?;
+        let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
+        Ok(account_info)
     }
 
     fn code_by_hash_ref(
@@ -151,7 +140,6 @@ where
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, ExecutionError> {
-        tracing::info!("storage_ref call at address={address:?} index={index:?}");
         if !self.changes.is_empty() {
             let account = self.changes.get(&address).unwrap();
             return Ok(match account.storage.get(&index) {
@@ -161,7 +149,7 @@ where
         }
         let val = self.get_contract_address_key(&address);
         let Some(val) = val else {
-            panic!("There is no storage associated to Externally Owned Account");
+            panic!("There is no storage associated to externally owned account");
         };
         let key = Self::get_uint256_key(val, index)?;
         let result = {

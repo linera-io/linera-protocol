@@ -611,7 +611,7 @@ where
         let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         if !instantiation_argument.is_empty() {
             let argument = get_revm_instantiation_bytes(instantiation_argument);
-            let result = self.transact_commit_tx_data(Choice::Call, &argument)?;
+            let result = self.transact_commit(Choice::Call, &argument)?;
             self.write_logs(result.logs, "instantiate")?;
         }
         Ok(())
@@ -622,12 +622,12 @@ where
         let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
-            let result = self.init_transact_commit_tx_data(Choice::Call, &operation[4..])?;
+            let result = self.init_transact_commit(Choice::Call, &operation[4..])?;
             result.interpreter_result_and_logs()?
         } else {
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            let result = self.init_transact_commit_tx_data(Choice::Call, &operation)?;
+            let result = self.init_transact_commit(Choice::Call, &operation)?;
             result.output_and_logs()
         };
         self.write_logs(logs, "operation")?;
@@ -636,7 +636,7 @@ where
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         let operation = get_revm_execute_message_bytes(message);
-        let result = self.init_transact_commit_tx_data(Choice::Call, &operation)?;
+        let result = self.init_transact_commit(Choice::Call, &operation)?;
         let (output, logs) = result.output_and_logs();
         self.write_logs(logs, "message")?;
         assert_eq!(output.len(), 0);
@@ -688,20 +688,22 @@ where
         Self { module, db }
     }
 
-    /// Executes the transaction. If needed instantiate the contract
-    fn init_transact_commit_tx_data(
+    /// Executes the transaction. If needed initializes the contract.
+    fn init_transact_commit(
         &mut self,
         ch: Choice,
         vec: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        // In case of a not yet instanstated application, we need first to create it.
+        // An application can be instantiated in Linera sense, but not in EVM sense,
+        // that is the contract entries corresponding to the deployed contract may
+        // be missing.
         if !self.db.is_initialized()? {
             self.initialize_contract()?;
         }
-        self.transact_commit_tx_data(ch, vec)
+        self.transact_commit(ch, vec)
     }
 
-    /// Executes the transaction. If needed instantiate the contract
+    /// Initializes the contract.
     fn initialize_contract(&mut self) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
         let argument = {
@@ -710,11 +712,11 @@ where
         };
         let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         vec_init.extend_from_slice(&argument);
-        let result = self.transact_commit_tx_data(Choice::Create, &vec_init)?;
+        let result = self.transact_commit(Choice::Create, &vec_init)?;
         self.write_logs(result.logs, "deploy")
     }
 
-    fn transact_commit_tx_data(
+    fn transact_commit(
         &mut self,
         ch: Choice,
         vec: &[u8],
@@ -813,11 +815,11 @@ where
 
         ensure_message_length(query.len(), 4)?;
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
-            let result = self.init_transact_tx_data(&query[4..])?;
+            let result = self.init_transact(&query[4..])?;
             let (answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
-            let result = self.init_transact_tx_data(&query)?;
+            let result = self.init_transact(&query)?;
             let (output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
@@ -830,7 +832,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    fn init_transact_tx_data(
+    fn init_transact(
         &mut self,
         vec: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
@@ -847,7 +849,7 @@ where
                 vec_init.extend_from_slice(&argument);
                 let kind = TxKind::Create;
                 let tx_data = Bytes::copy_from_slice(&vec_init);
-                let (_, changes) = self.transact_tx_data(kind, tx_data)?;
+                let (_, changes) = self.transact(kind, tx_data)?;
                 changes
             };
             self.db.changes = changes;
@@ -857,11 +859,11 @@ where
         let contract_address = Address::ZERO.create(0);
         let kind = TxKind::Call(contract_address);
         let tx_data = Bytes::copy_from_slice(vec);
-        let (execution_result, _) = self.transact_tx_data(kind, tx_data)?;
+        let (execution_result, _) = self.transact(kind, tx_data)?;
         Ok(execution_result)
     }
 
-    fn transact_tx_data(
+    fn transact(
         &mut self,
         kind: TxKind,
         tx_data: Bytes,
