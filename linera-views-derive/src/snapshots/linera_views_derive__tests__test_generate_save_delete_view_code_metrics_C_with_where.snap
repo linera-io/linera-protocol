@@ -7,6 +7,7 @@ impl<C, MyParam> linera_views::views::RootView<C> for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
     C: linera_views::context::Context + Send + Sync + Clone + 'static,
+    Self: Send + Sync,
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
         use linera_views::{context::Context, batch::Batch, views::View};

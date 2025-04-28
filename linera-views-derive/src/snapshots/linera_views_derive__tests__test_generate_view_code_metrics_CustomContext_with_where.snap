@@ -6,6 +6,13 @@ expression: "pretty(generate_view_code(input, true))"
 impl<MyParam> linera_views::views::View<CustomContext> for TestView<MyParam>
 where
     MyParam: Send + Sync + 'static,
+    RegisterView<CustomContext, usize>: linera_views::views::View<CustomContext>,
+    CollectionView<
+        CustomContext,
+        usize,
+        RegisterView<CustomContext, usize>,
+    >: linera_views::views::View<CustomContext>,
+    Self: Send + Sync,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<CustomContext, usize>::NUM_INIT_KEYS
         + CollectionView::<

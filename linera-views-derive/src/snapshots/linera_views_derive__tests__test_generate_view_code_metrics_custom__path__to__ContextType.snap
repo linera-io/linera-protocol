@@ -3,7 +3,19 @@ source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
 #[linera_views::async_trait]
-impl linera_views::views::View<custom::path::to::ContextType> for TestView {
+impl linera_views::views::View<custom::path::to::ContextType> for TestView
+where
+    RegisterView<
+        custom::path::to::ContextType,
+        usize,
+    >: linera_views::views::View<custom::path::to::ContextType>,
+    CollectionView<
+        custom::path::to::ContextType,
+        usize,
+        RegisterView<custom::path::to::ContextType, usize>,
+    >: linera_views::views::View<custom::path::to::ContextType>,
+    Self: Send + Sync,
+{
     const NUM_INIT_KEYS: usize = RegisterView::<
         custom::path::to::ContextType,
         usize,
