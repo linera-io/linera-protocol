@@ -252,9 +252,8 @@ where
         // The block height being used
         let block_height_linera = runtime.block_height()?;
         let block_height_evm = U256::from(block_height_linera.0);
-        // The coinbase receiving the minted ethereum in Proof Of Work.
-        // Not relevant anymore
-        let coinbase = address!("00000000000000000000000000000000000000bb");
+        // This is the receiver address of all the gas spent in the block.
+        let beneficiary = address!("00000000000000000000000000000000000000bb");
         // The difficulty which is no longer relevant after The Merge.
         let difficulty = U256::ZERO;
         // We do not have access to the Resources so we keep it to the maximum
@@ -281,7 +280,7 @@ where
         let blob_excess_gas_and_price = Some(entry);
         Ok(BlockEnv {
             number: block_height_evm,
-            coinbase,
+            coinbase: beneficiary,
             difficulty,
             gas_limit,
             timestamp: timestamp_evm,
