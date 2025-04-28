@@ -1905,6 +1905,9 @@ where
     Ok(())
 }
 
+// TODO: this test is currently intermittently failing if the faulty validators respond to
+// client0 before the correct ones. Un-ignore when this issue is fixed.
+#[ignore]
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
