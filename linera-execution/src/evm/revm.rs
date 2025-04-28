@@ -603,6 +603,7 @@ where
         let mut inspector = CallInterceptorContract {
             db: self.db.clone(),
         };
+        let block_env = self.db.get_block_env()?;
         let mut evm: Evm<'_, _, _> = Evm::builder()
             .with_ref_db(&mut self.db)
             .with_external_context(&mut inspector)
@@ -610,6 +611,9 @@ where
                 tx.clear();
                 tx.transact_to = kind;
                 tx.data = tx_data;
+            })
+            .modify_block_env(|block| {
+                *block = block_env;
             })
             .append_handler_register(|handler| {
                 inspector_handle_register(handler);
@@ -705,6 +709,7 @@ where
             db: self.db.clone(),
         };
 
+        let block_env = self.db.get_block_env()?;
         let mut evm: Evm<'_, _, _> = Evm::builder()
             .with_ref_db(&mut self.db)
             .with_external_context(&mut inspector)
@@ -712,6 +717,9 @@ where
                 tx.clear();
                 tx.transact_to = TxKind::Call(contract_address);
                 tx.data = tx_data;
+            })
+            .modify_block_env(|block| {
+                *block = block_env;
             })
             .append_handler_register(|handler| {
                 inspector_handle_register(handler);

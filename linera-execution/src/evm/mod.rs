@@ -19,13 +19,13 @@ pub enum EvmExecutionError {
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service EVM module: {_0}")]
     LoadServiceModule(#[source] anyhow::Error),
-    #[error("Commit error")]
+    #[error("Commit error {0}")]
     CommitError(String),
     #[error("It is illegal to call execute_message from an operation")]
     OperationCallExecuteMessage,
     #[error("The operation should contain the evm selector and so have length 4 or more")]
     OperationIsTooShort,
-    #[error("Transact commit error")]
+    #[error("Transact commit error {0}")]
     TransactCommitError(String),
     #[error("The operation was reverted")]
     Revert {
