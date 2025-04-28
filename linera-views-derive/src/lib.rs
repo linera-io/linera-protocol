@@ -79,6 +79,11 @@ fn get_extended_entry(e: Type) -> TokenStream2 {
     quote! { #ident :: #arguments }
 }
 
+fn should_process(field: &syn::Field) -> bool {
+    let attrs: FieldAttrs = deluxe::parse_attributes(field).unwrap();
+    !attrs.skip
+}
+
 fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let template_vect = get_seq_parameter(input.generics.clone());
     let (context, context_constraints) = context_and_constraints(&input, &template_vect);
@@ -101,12 +106,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
-    for (idx, e) in input.fields.into_iter().enumerate() {
-        let attrs: FieldAttrs = deluxe::parse_attributes(&e).unwrap();
-        if attrs.skip {
-            continue;
-        }
-
+    for (idx, e) in input.fields.into_iter().filter(should_process).enumerate() {
         let name = e.clone().ident.unwrap();
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
@@ -231,12 +231,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
 
     let mut flushes = Vec::new();
     let mut deletes = Vec::new();
-    for e in input.fields {
-        let attrs: FieldAttrs = deluxe::parse_attributes(&e).unwrap();
-        if attrs.skip {
-            continue;
-        }
-
+    for e in input.fields.into_iter().filter(should_process) {
         let name = e.clone().ident.unwrap();
         flushes.push(quote! { self.#name.flush(&mut batch)?; });
         deletes.push(quote! { self.#name.delete(batch); });
@@ -289,11 +284,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
 
     let mut field_hashes_mut = Vec::new();
     let mut field_hashes = Vec::new();
-    for e in input.fields {
-        let attrs: FieldAttrs = deluxe::parse_attributes(&e).unwrap();
-        if attrs.skip {
-            continue;
-        }
+    for e in input.fields.into_iter().filter(should_process) {
         let name = e.clone().ident.unwrap();
         field_hashes_mut.push(quote! { hasher.write_all(self.#name.hash_mut().await?.as_ref())?; });
         field_hashes.push(quote! { hasher.write_all(self.#name.hash().await?.as_ref())?; });
@@ -388,7 +379,11 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
 
     let clone_unchecked_quotes = input.fields.iter().map(|field| {
         let name = &field.ident;
-        quote! { #name: self.#name.clone_unchecked()?, }
+        if should_process(field) {
+            quote! { #name: self.#name.clone_unchecked()?, }
+        } else {
+            quote! { #name: self.#name.clone(), }
+        }
     });
 
     quote! {
