@@ -1838,13 +1838,17 @@ where
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let observer = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client.chain_id();
     let owner0 = client.public_key().await.unwrap().into();
     let owner1 = AccountSecretKey::generate().public().into();
 
     let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
-    client.change_ownership(ownership).await.unwrap();
+    client.change_ownership(ownership.clone()).await.unwrap();
+
+    let info = observer.synchronize_chain_state(chain_id).await?;
+    assert_eq!(info.manager.ownership, ownership);
 
     let manager = client.chain_info().await.unwrap().manager;
 
@@ -1879,6 +1883,10 @@ where
     builder
         .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), expected_round, 3)
         .await;
+
+    // Another client can process the timeout certificate, to arrive at the same round.
+    let info = observer.synchronize_chain_state(chain_id).await?;
+    assert_eq!(info.manager.current_round, expected_round);
 
     let round = loop {
         let manager = client.chain_info().await.unwrap().manager;
