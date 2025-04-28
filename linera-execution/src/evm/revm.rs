@@ -260,23 +260,16 @@ impl UserServiceModule for EvmServiceModule {
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-fn u8_slice_to_cryptohash(vec: &[u8]) -> CryptoHash {
-    let mut output = [0u64; 4];
-    for (i, chunk) in vec.chunks_exact(8).enumerate() {
-        output[i] = u64::from_be_bytes(chunk.try_into().unwrap());
-    }
-    output.into()
-}
-
 fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
-    let hash = u8_slice_to_cryptohash(vec);
+    // In calls the length is 32, so no problem unwrapping
+    let hash = CryptoHash::try_from(vec).unwrap();
     ApplicationId::new(hash)
 }
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
     vec[..20].copy_from_slice(address.as_ref());
-    u8_slice_to_application_id(&vec)
+    ApplicationId::new(CryptoHash::try_from(&vec as &[u8]).unwrap())
 }
 
 #[repr(u8)]
@@ -323,6 +316,7 @@ impl GeneralContractCall {
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<PrecompileOutput, String> {
         let vec = input.to_vec();
+        ensure!(!vec.is_empty(), format!("vec.size() should be at least 1"));
         let tag = vec[0];
         let tag = PrecompileTag::try_from(tag)
             .map_err(|error| format!("{error} when trying to convert tag={tag}"))?;
@@ -335,6 +329,7 @@ impl GeneralContractCall {
                 .expect("The lock should be possible");
             match tag {
                 PrecompileTag::TryCallApplication => {
+                    ensure!(vec.len() >= 33, format!("vec.size() should be at least 33"));
                     let target = u8_slice_to_application_id(&vec[1..33]);
                     let argument = vec[33..].to_vec();
                     let authenticated = true;
@@ -343,7 +338,9 @@ impl GeneralContractCall {
                         .map_err(|error| format!("TryCallApplication error: {error}"))
                 }
                 PrecompileTag::SendMessage => {
-                    let destination = ChainId(u8_slice_to_cryptohash(&vec[1..33]));
+                    ensure!(vec.len() >= 33, format!("vec.size() should be at least 33"));
+                    let destination = ChainId(CryptoHash::try_from(&vec[1..33])
+                        .map_err(|error| format!("TryError: {error}"))?);
                     let authenticated = true;
                     let is_tracked = true;
                     let grant = Resources::default();
@@ -361,6 +358,7 @@ impl GeneralContractCall {
                     Ok(vec![])
                 }
                 PrecompileTag::MessageId => {
+                    ensure!(vec.len() == 1, format!("vec.size() should be exactly 1"));
                     let message_id = runtime
                         .message_id()
                         .map_err(|error| format!("MessageId error {error}"))?;
@@ -368,6 +366,7 @@ impl GeneralContractCall {
                         .map_err(|error| format!("MessageId serialization error {error}"))
                 }
                 PrecompileTag::MessageIsBouncing => {
+                    ensure!(vec.len() == 1, format!("vec.size() should be exactly 1"));
                     let message_is_bouncing = runtime
                         .message_is_bouncing()
                         .map_err(|error| format!("MessageIsBouncing error {error}"))?;
@@ -398,16 +397,29 @@ impl<Runtime: ServiceRuntime>
     fn call(
         &self,
         input: &Bytes,
-        _gas_limit: u64,
+        gas_limit: u64,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
+        self.call_or_fail(input, gas_limit, context)
+            .map_err(|msg| PrecompileErrors::Fatal { msg })
+    }
+}
+
+impl GeneralServiceCall {
+    fn call_or_fail<Runtime: ServiceRuntime>(
+        &self,
+        input: &Bytes,
+        _gas_limit: u64,
+        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+    ) -> Result<PrecompileOutput, String> {
         let vec = input.to_vec();
+        ensure!(!vec.is_empty(), format!("vec.size() should be at least 1"));
         let tag = vec[0];
-        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileErrors::Fatal {
-            msg: format!("{error} when trying to convert tag={tag}"),
-        })?;
+        let tag = PrecompileTag::try_from(tag)
+            .map_err(|error| format!("{error} when trying to convert tag={tag}"))?;
         match tag {
             PrecompileTag::TryQueryApplication => {
+                ensure!(vec.len() >= 33, format!("vec.size() should be at least 33"));
                 let target = u8_slice_to_application_id(&vec[1..33]);
                 let argument = vec[33..].to_vec();
                 let result = {
@@ -419,21 +431,18 @@ impl<Runtime: ServiceRuntime>
                         .expect("The lock should be possible");
                     runtime.try_query_application(target, argument)
                 }
-                .map_err(|error| PrecompileErrors::Fatal {
-                    msg: format!("{}", error),
-                })?;
+                .map_err(|error| format!("{}", error))?;
                 // We do not know how much gas was used.
                 let gas_used = 0;
                 let bytes = Bytes::copy_from_slice(&result);
                 let result = PrecompileOutput { gas_used, bytes };
                 Ok(result)
             }
-            _ => Err(PrecompileErrors::Fatal {
-                msg: format!("{tag:?} is not available in GeneralServiceCall"),
-            }),
+            _ => Err(format!("{tag:?} is not available in GeneralServiceCall")),
         }
     }
 }
+
 
 fn failing_outcome() -> CallOutcome {
     let result = InstructionResult::Revert;

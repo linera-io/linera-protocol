@@ -23,7 +23,6 @@ library Linera {
 
     function bcs_deserialize_offset_bytes32(uint256 pos, bytes memory src) internal pure returns (uint256, bytes32) {
         bytes32 dest;
-        require(src.length >= pos + 32, "out of bounds");
         assembly {
             dest := mload(add(add(src, 0x20), pos))
         }
