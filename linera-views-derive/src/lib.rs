@@ -7,8 +7,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, parse_quote, punctuated::Punctuated, Attribute, ItemStruct, Lit, LitStr,
-    MetaNameValue, Token, Type, TypePath, WhereClause,
+    parse_macro_input, parse_quote, punctuated::Punctuated, ItemStruct, Token, Type, TypePath,
+    WhereClause,
 };
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
@@ -21,40 +21,22 @@ fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     generic_vect
 }
 
-fn custom_attribute(attributes: &[Attribute], key: &str) -> Option<LitStr> {
-    attributes
-        .iter()
-        .filter(|attribute| attribute.path().is_ident("view"))
-        .filter_map(|attribute| match attribute.parse_args() {
-            Ok(MetaNameValue {
-                path,
-                value:
-                    syn::Expr::Lit(syn::ExprLit {
-                        lit: Lit::Str(value),
-                        ..
-                    }),
-                ..
-            }) => path.is_ident(key).then_some(value),
-            _ => panic!(
-                r#"Invalid `view` attribute syntax. \
-                Expected syntax: `#[view(key = "value")]`"#,
-            ),
-        })
-        .next()
+#[derive(Debug, deluxe::ExtractAttributes)]
+#[deluxe(attributes(view))]
+struct StructAttrs {
+    context: Option<syn::Type>,
 }
 
 fn context_and_constraints(
-    attributes: &[Attribute],
+    item: &mut syn::ItemStruct,
     template_vect: &[syn::Ident],
 ) -> (Type, WhereClause) {
-    let context;
-    let constraints;
+    let attrs: StructAttrs = deluxe::extract_attributes(item).unwrap();
 
-    if let Some(context_literal) = custom_attribute(attributes, "context") {
-        context = context_literal.parse().expect("Invalid context");
-        constraints = empty_where_clause();
+    if let Some(context) = attrs.context {
+        (context, empty_where_clause())
     } else {
-        context = Type::Path(TypePath {
+        let context = Type::Path(TypePath {
             qself: None,
             path: template_vect
                 .first()
@@ -62,13 +44,14 @@ fn context_and_constraints(
                 .clone()
                 .into(),
         });
-        constraints = parse_quote! {
+
+        let constraints = parse_quote! {
             where
                 #context: linera_views::context::Context + Send + Sync + Clone + 'static,
         };
-    }
 
-    (context, constraints)
+        (context, constraints)
+    }
 }
 
 /// Returns an empty [`WhereClause`].
@@ -89,12 +72,11 @@ fn get_extended_entry(e: Type) -> TokenStream2 {
     quote! { #ident :: #arguments }
 }
 
-fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
+fn generate_view_code(mut input: ItemStruct, root: bool) -> TokenStream2 {
+    let template_vect = get_seq_parameter(input.generics.clone());
+    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
-    let template_vect = get_seq_parameter(input.generics.clone());
-
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut where_clause = maybe_where_clause
         .cloned()
@@ -222,12 +204,11 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     }
 }
 
-fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_save_delete_view_code(mut input: ItemStruct) -> TokenStream2 {
+    let template_vect = get_seq_parameter(input.generics.clone());
+    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
-    let template_vect = get_seq_parameter(input.generics.clone());
-
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut where_clause = maybe_where_clause
         .cloned()
@@ -276,12 +257,11 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_hash_view_code(mut input: ItemStruct) -> TokenStream2 {
+    let template_vect = get_seq_parameter(input.generics.clone());
+    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
-    let template_vect = get_seq_parameter(input.generics.clone());
-
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut where_clause = maybe_where_clause
         .cloned()
@@ -324,12 +304,11 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
+fn generate_crypto_hash_code(mut input: ItemStruct) -> TokenStream2 {
+    let template_vect = get_seq_parameter(input.generics.clone());
+    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
-    let template_vect = get_seq_parameter(input.generics.clone());
-
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut where_clause = maybe_where_clause
         .cloned()
@@ -380,12 +359,11 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_clonable_view_code(mut input: ItemStruct) -> TokenStream2 {
+    let template_vect = get_seq_parameter(input.generics.clone());
+    let (context, context_constraints) = context_and_constraints(&mut input, &template_vect);
     let struct_name = input.ident;
     let generics = input.generics;
-    let template_vect = get_seq_parameter(generics.clone());
-
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let clone_unchecked_quotes = input.fields.iter().map(|field| {
         let name = &field.ident;
@@ -555,17 +533,20 @@ pub mod tests {
             SpecificContextInfo {
                 name: "C".to_string(),
                 attribute: None,
-                context: syn::parse_str("C").unwrap(),
-                generics: parse_quote! { <C> },
+                context: syn::parse_quote! { C },
+                generics: syn::parse_quote! { <C> },
                 where_clause: None,
             }
         }
 
-        pub fn new(context: &str) -> Self {
+        pub fn new(context: syn::Type) -> Self {
+            let name = quote! { #context };
             SpecificContextInfo {
-                name: context.replace([':', '<', '>'], "_"),
+                name: format!("{name}")
+                    .replace(' ', "")
+                    .replace([':', '<', '>'], "_"),
                 attribute: Some(quote! { #[view(context = #context)] }),
-                context: syn::parse_str(context).unwrap(),
+                context,
                 generics: parse_quote! { <> },
                 where_clause: None,
             }
@@ -590,9 +571,9 @@ pub mod tests {
                 .into_iter()
                 .chain(
                     [
-                        "CustomContext",
-                        "custom::path::to::ContextType",
-                        "custom::GenericContext<T>",
+                        syn::parse_quote! { CustomContext },
+                        syn::parse_quote! { custom::path::to::ContextType },
+                        syn::parse_quote! { custom::GenericContext<T> },
                     ]
                     .into_iter()
                     .map(Self::new),
