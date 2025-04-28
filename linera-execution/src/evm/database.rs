@@ -274,7 +274,10 @@ where
         let prevrandao = keccak256(entry.as_bytes());
         // The blob excess gas and price is not relevant to the execution
         // on Linera. We set up a default value as in REVM.
-        let entry = BlobExcessGasAndPrice { excess_blob_gas: 0, blob_gasprice: 1 };
+        let entry = BlobExcessGasAndPrice {
+            excess_blob_gas: 0,
+            blob_gasprice: 1,
+        };
         let blob_excess_gas_and_price = Some(entry);
         Ok(BlockEnv {
             number: block_height_evm,
