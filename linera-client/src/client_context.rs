@@ -24,6 +24,7 @@ use linera_core::{
     Environment, JoinSetExt,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror_context::Context;
 use tracing::{debug, info};
@@ -96,10 +97,7 @@ where
         self.client.storage_client()
     }
 
-    async fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainClient<Env>, Error> {
+    async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         self.make_chain_client(chain_id).await
     }
 
@@ -253,10 +251,7 @@ where
             .expect("No chain specified in wallet with no default chain")
     }
 
-    async fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainClient<Env>, Error> {
+    async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
         let chain = match self.wallet.get(chain_id) {
             Some(chain) => chain.clone(),

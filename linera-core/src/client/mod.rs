@@ -430,9 +430,12 @@ impl<Env: Environment> Client<Env> {
         Ok((epoch, committees))
     }
 
-    fn make_nodes(&self, committee: &Committee) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, NodeError> {
+    fn make_nodes(
+        &self,
+        committee: &Committee,
+    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, NodeError> {
         Ok(self
-            .validator_node_provider
+            .validator_node_provider()
             .make_nodes(committee)?
             .map(|(public_key, node)| RemoteNode { public_key, node })
             .collect())
