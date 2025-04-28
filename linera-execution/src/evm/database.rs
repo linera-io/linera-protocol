@@ -19,7 +19,7 @@ use revm::{
     },
     Database, DatabaseCommit, DatabaseRef,
 };
-use revm_primitives::{address, BlockEnv};
+use revm_primitives::{address, BlobExcessGasAndPrice, BlockEnv};
 
 use crate::{BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ViewError};
 
@@ -268,13 +268,14 @@ where
         // The basefee is the minimum feee for executing. We have no such
         // concept in Linera
         let basefee = U256::ZERO;
-        // The randomness beacon being used.
         let chain_id = runtime.chain_id()?;
         let entry = format!("{}{}", chain_id, block_height_linera);
+        // The randomness beacon being used.
         let prevrandao = keccak256(entry.as_bytes());
         // The blob excess gas and price is not relevant to the execution
-        // on Linera.
-        let blob_excess_gas_and_price = None;
+        // on Linera. We set up a default value as in REVM.
+        let entry = BlobExcessGasAndPrice { excess_blob_gas: 0, blob_gasprice: 1 };
+        let blob_excess_gas_and_price = Some(entry);
         Ok(BlockEnv {
             number: block_height_evm,
             coinbase,
