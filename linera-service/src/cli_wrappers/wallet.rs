@@ -519,15 +519,22 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         chain_id: ChainId,
         amount: Amount,
+        max_chain_length: Option<u64>,
     ) -> Result<FaucetService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
-        let child = command
+        command
             .arg("faucet")
             .arg(chain_id.to_string())
             .args(["--port".to_string(), port.to_string()])
-            .args(["--amount".to_string(), amount.to_string()])
-            .spawn_into()?;
+            .args(["--amount".to_string(), amount.to_string()]);
+        if let Some(max_chain_length) = max_chain_length {
+            command.args([
+                "--max-chain-length".to_string(),
+                max_chain_length.to_string(),
+            ]);
+        }
+        let child = command.spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;

@@ -22,7 +22,7 @@ use command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, Wa
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
-    data_types::{ApplicationPermissions, Timestamp},
+    data_types::{ApplicationPermissions, BlockHeight, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -834,6 +834,7 @@ impl Runnable for Job {
                 port,
                 amount,
                 limit_rate_until,
+                max_chain_length,
                 config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -851,6 +852,7 @@ impl Runnable for Job {
                     chain_id,
                     context,
                     amount,
+                    BlockHeight(max_chain_length),
                     end_timestamp,
                     genesis_config,
                     config,
