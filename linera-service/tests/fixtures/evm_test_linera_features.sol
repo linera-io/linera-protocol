@@ -11,14 +11,13 @@ contract ExampleLineraFeatures {
     require(chain_id == creator_chain_id);
   }
 
-  function test_read_data_blob(bytes32 hash, uint256 len) external {
+  function test_read_data_blob(bytes32 hash, uint32 len) external {
     bytes memory blob = Linera.read_data_blob(hash);
     require(blob.length == len);
   }
 
   function test_assert_data_blob_exists(bytes32 hash) external {
-    bool test = Linera.assert_data_blob_exists(hash);
-    require(test);
+    Linera.assert_data_blob_exists(hash);
   }
 
   function test_chain_ownership() external {

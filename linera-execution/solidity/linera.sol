@@ -326,18 +326,20 @@ library Linera {
         address precompile = address(0x0b);
         bytes memory input1 = new bytes(1);
         input1[0] = bytes1(uint8(3));
-        (bool success, bytes memory output1) = precompile.call(input1);
+        bytes memory input2 = abi.encodePacked(input1, hash);
+        (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
         return output1;
     }
 
-    function assert_data_blob_exists(bytes32 hash) internal returns (bool) {
+    function assert_data_blob_exists(bytes32 hash) internal {
         address precompile = address(0x0b);
         bytes memory input1 = new bytes(1);
         input1[0] = bytes1(uint8(4));
-        (bool success, bytes memory output1) = precompile.call(input1);
+        bytes memory input2 = abi.encodePacked(input1, hash);
+        (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
-        return bcs_deserialize_bool(output1);
+        assert(output1.length == 0);
     }
 
     struct OptionU32 {

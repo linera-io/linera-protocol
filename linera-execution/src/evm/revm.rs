@@ -415,10 +415,10 @@ fn base_runtime_call<Runtime: BaseRuntime>(
         BasePrecompileTag::AssertDataBlobExists => {
             ensure!(vec.len() == 32, format!("vec.size() should be 32"));
             let hash = CryptoHash::try_from(vec).unwrap();
-            let test = runtime
+            runtime
                 .assert_data_blob_exists(&hash)
                 .map_err(|error| format!("AssertDataBlobExists error: {error}"))?;
-            bcs::to_bytes(&test).map_err(|error| format!("bool serialization error {error}"))
+            Ok(Vec::new())
         }
     }
 }
@@ -517,9 +517,9 @@ impl GeneralContractCall {
             PrecompileTag::Contract(contract_tag) => {
                 Self::contract_runtime_call(contract_tag, &vec[1..], context)
             }
-            PrecompileTag::Service(_) => Err(format!(
-                "Service tags are not available in GeneralContractCall"
-            )),
+            PrecompileTag::Service(_) => {
+                Err("Service tags are not available in GeneralContractCall".to_string())
+            }
         }
     }
 }
@@ -581,9 +581,9 @@ impl GeneralServiceCall {
         let tag = PrecompileTag::from_u8(tag)?;
         match tag {
             PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[1..], context),
-            PrecompileTag::Contract(_) => Err(format!(
-                "Contract tags are not available in ServiceContractCall"
-            )),
+            PrecompileTag::Contract(_) => {
+                Err("Contract tags are not available in ServiceContractCall".to_string())
+            }
             PrecompileTag::Service(service_tag) => {
                 Self::service_runtime_call(service_tag, &vec[1..], context)
             }

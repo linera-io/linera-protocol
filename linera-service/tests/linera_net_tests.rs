@@ -827,6 +827,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall};
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::get_evm_contract_path;
@@ -841,8 +842,8 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     sol! {
         function test_chain_id();
-        function test_read_data_blob();
-        function test_assert_data_blob_exists();
+        function test_read_data_blob(bytes32 hash, uint32 len);
+        function test_assert_data_blob_exists(bytes32 hash);
         function test_chain_ownership();
     }
 
@@ -865,6 +866,13 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
+    let nft_blob_bytes = b"nft1_data".to_vec();
+    let len = nft_blob_bytes.len() as u32;
+    let hash = node_service
+        .publish_data_blob(&chain, nft_blob_bytes)
+        .await?;
+    let hash: B256 = <[u8; 32]>::from(hash).into();
+
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
@@ -875,7 +883,15 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     let query = test_chain_ownershipCall {};
     let query = EvmQuery::Query(query.abi_encode());
-    application.run_json_query(query.clone()).await?;
+    application.run_json_query(query).await?;
+
+    let query = test_assert_data_blob_existsCall { hash };
+    let query = EvmQuery::Query(query.abi_encode());
+    application.run_json_query(query).await?;
+
+    let query = test_read_data_blobCall { hash, len };
+    let query = EvmQuery::Query(query.abi_encode());
+    application.run_json_query(query).await?;
 
     node_service.ensure_is_running()?;
 
