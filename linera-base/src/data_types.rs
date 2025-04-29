@@ -811,7 +811,7 @@ impl Epoch {
 }
 
 /// The initial configuration for a new chain.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct InitialChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
@@ -827,8 +827,8 @@ pub struct InitialChainConfig {
     pub application_permissions: ApplicationPermissions,
 }
 
-/// How to create a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
+/// Initial chain configuration and chain origin.
+#[derive(Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct ChainDescription {
     origin: ChainOrigin,
     timestamp: Timestamp,
@@ -1459,7 +1459,10 @@ doc_scalar!(
     Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
-doc_scalar!(ChainDescription, "How to create a chain");
+doc_scalar!(
+    ChainDescription,
+    "Initial chain configuration and chain origin."
+);
 doc_scalar!(OracleResponse, "A record of a single oracle response.");
 doc_scalar!(BlobContent, "A blob of binary data.");
 doc_scalar!(

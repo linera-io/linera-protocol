@@ -55,7 +55,7 @@ pub struct TestValidator {
     storage: DbStorage<MemoryStore, TestClock>,
     worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
     clock: TestClock,
-    admin_chain_id: Option<ChainId>,
+    admin_chain_id: ChainId,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
 
@@ -79,13 +79,11 @@ impl TestValidator {
     pub async fn new() -> Self {
         let validator_keypair = ValidatorKeypair::generate();
         let account_secret = AccountSecretKey::generate();
-        let committee = Arc::new(Mutex::new((
-            Epoch::ZERO,
-            Committee::make_simple(vec![(
-                validator_keypair.public_key,
-                account_secret.public(),
-            )]),
-        )));
+        let epoch = Epoch::ZERO;
+        let committee = Committee::make_simple(vec![(
+            validator_keypair.public_key,
+            account_secret.public(),
+        )]);
         let wasm_runtime = Some(WasmRuntime::default());
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()
@@ -98,18 +96,48 @@ impl TestValidator {
             NonZeroUsize::new(40).expect("Chain worker limit should not be zero"),
         );
 
-        let mut validator = TestValidator {
+        // Create an admin chain.
+        let key_pair = AccountSecretKey::generate();
+
+        let new_chain_config = InitialChainConfig {
+            ownership: ChainOwnership::single(key_pair.public().into()),
+            committees: [(
+                epoch,
+                bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),
+            )]
+            .into_iter()
+            .collect(),
+            admin_id: None,
+            epoch,
+            balance: Amount::from_tokens(1_000_000),
+            application_permissions: ApplicationPermissions::default(),
+        };
+
+        let origin = ChainOrigin::Root(0);
+        let description = ChainDescription::new(origin, new_chain_config, Timestamp::from(0));
+        let admin_chain_id = description.id();
+
+        worker
+            .storage_client()
+            .create_chain(description.clone())
+            .await
+            .expect("Failed to create root admin chain");
+
+        let validator = TestValidator {
             validator_secret: validator_keypair.secret_key,
             account_secret,
-            committee,
+            committee: Arc::new(Mutex::new((epoch, committee))),
             storage,
             worker,
             clock,
-            admin_chain_id: None,
+            admin_chain_id,
             chains: Arc::default(),
         };
 
-        validator.create_admin_chain().await;
+        let chain = ActiveChain::new(key_pair, description.clone(), validator.clone());
+
+        validator.chains.insert(description.id(), chain);
+
         validator
     }
 
@@ -180,10 +208,7 @@ impl TestValidator {
 
     /// Returns the ID of the admin chain.
     pub fn admin_chain_id(&self) -> ChainId {
-        *self
-            .admin_chain_id
-            .as_ref()
-            .expect("should create admin chain first")
+        self.admin_chain_id
     }
 
     /// Returns the latest committee that this test validator is part of.
@@ -211,11 +236,7 @@ impl TestValidator {
             (*epoch, committee.clone())
         };
 
-        if self.admin_chain_id.is_none() {
-            self.create_admin_chain().await;
-        }
-        let admin_chain_id = self.admin_chain_id.unwrap();
-        let admin_chain = self.get_chain(&admin_chain_id);
+        let admin_chain = self.get_chain(&self.admin_chain_id);
 
         let committee_blob = Blob::new(BlobContent::new_committee(
             bcs::to_bytes(&committee).unwrap(),
@@ -237,7 +258,7 @@ impl TestValidator {
         for entry in self.chains.iter() {
             let chain = entry.value();
 
-            if chain.id() != admin_chain_id {
+            if chain.id() != self.admin_chain_id {
                 chain
                     .add_block(|block| {
                         block.with_system_operation(SystemOperation::ProcessNewEpoch(epoch));
@@ -278,7 +299,7 @@ impl TestValidator {
     ///
     /// Returns the [`ChainDescription`] of the new chain.
     async fn request_new_chain_from_admin_chain(&self, owner: AccountOwner) -> ChainDescription {
-        let admin_id = self.admin_chain_id.expect("Should have an admin chain");
+        let admin_id = self.admin_chain_id;
         let admin_chain = self
             .chains
             .get(&admin_id)
@@ -321,39 +342,5 @@ impl TestValidator {
     /// Returns the [`ActiveChain`] reference to the microchain identified by `chain_id`.
     pub fn get_chain(&self, chain_id: &ChainId) -> ActiveChain {
         self.chains.get(chain_id).expect("Chain not found").clone()
-    }
-
-    /// Creates the root admin microchain and returns the [`ActiveChain`] map with it.
-    async fn create_admin_chain(&mut self) {
-        let key_pair = AccountSecretKey::generate();
-        let (epoch, committee) = self.committee.lock().await.clone();
-
-        let new_chain_config = InitialChainConfig {
-            ownership: ChainOwnership::single(key_pair.public().into()),
-            committees: [(
-                epoch,
-                bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),
-            )]
-            .into_iter()
-            .collect(),
-            admin_id: None,
-            epoch,
-            balance: Amount::MAX,
-            application_permissions: ApplicationPermissions::default(),
-        };
-
-        let origin = ChainOrigin::Root(0);
-        let description = ChainDescription::new(origin, new_chain_config, Timestamp::from(0));
-        self.admin_chain_id = Some(description.id());
-
-        self.worker()
-            .storage_client()
-            .create_chain(description.clone())
-            .await
-            .expect("Failed to create root admin chain");
-
-        let chain = ActiveChain::new(key_pair, description.clone(), self.clone());
-
-        self.chains.insert(description.id(), chain);
     }
 }

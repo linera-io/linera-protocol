@@ -683,20 +683,13 @@ struct GenesisStorageBuilder {
 struct GenesisAccount {
     description: ChainDescription,
     public_key: AccountPublicKey,
-    balance: Amount,
 }
 
 impl GenesisStorageBuilder {
-    fn add(
-        &mut self,
-        description: ChainDescription,
-        public_key: AccountPublicKey,
-        balance: Amount,
-    ) {
+    fn add(&mut self, description: ChainDescription, public_key: AccountPublicKey) {
         self.accounts.push(GenesisAccount {
             description,
             public_key,
-            balance,
         })
     }
 
@@ -831,7 +824,7 @@ where
         }
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
-            .add(description.clone(), public_key, balance);
+            .add(description.clone(), public_key);
         for validator in &self.validator_clients {
             let storage = self
                 .validator_storages
@@ -865,7 +858,10 @@ where
                 genesis_account.description.origin(),
                 ChainOrigin::Root(i as u32)
             );
-            result.push((genesis_account.public_key, genesis_account.balance));
+            result.push((
+                genesis_account.public_key,
+                genesis_account.description.config().balance,
+            ));
         }
         result
     }

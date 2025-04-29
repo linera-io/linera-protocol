@@ -89,7 +89,7 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let chain_id = *self.chain_id.lock().await;        
+        let chain_id = *self.chain_id.lock().await;
         let client = self
             .context
             .lock()

@@ -24,7 +24,8 @@ use linera_base::{
     bcs,
     crypto::{AccountSecretKey, CryptoHash, CryptoRng, Ed25519SecretKey},
     data_types::{
-        ApplicationPermissions, BlockHeight, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
+        ApplicationPermissions, BlockHeight, ChainDescription, ChainOrigin, Epoch,
+        InitialChainConfig, Timestamp,
     },
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
@@ -154,15 +155,6 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let timestamp = certificate.block().header.timestamp;
-                storage
-                    .write_blobs(
-                        &certificate
-                            .block()
-                            .created_blobs()
-                            .into_values()
-                            .collect::<Vec<_>>(),
-                    )
-                    .await?;
                 context
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
@@ -218,7 +210,7 @@ impl Runnable for Job {
                     time_total.as_millis()
                 );
                 debug!("{:?}", certificate);
-                // Print the new chain ID and message ID on stdout for scripting purposes.
+                // Print the new chain ID on stdout for scripting purposes.
                 println!("{}", id);
             }
 
@@ -1022,9 +1014,7 @@ impl Runnable for Job {
                     "Linking chain {chain_id} to its corresponding key in the wallet, owned by \
                     {owner}",
                 );
-                context
-                    .assign_new_chain_to_key(chain_id, owner, None)
-                    .await?;
+                context.assign_new_chain_to_key(chain_id, owner).await?;
                 context.save_wallet().await?;
                 info!(
                     "Chain linked to owner in {} ms",
@@ -1130,12 +1120,11 @@ impl Runnable for Job {
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&owner).await?;
-                let validators = faucet.current_validators().await?;
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.certificate_hash);
                 println!("{}", owner);
                 context
-                    .assign_new_chain_to_key(outcome.chain_id, owner, Some(validators))
+                    .assign_new_chain_to_key(outcome.chain_id, owner)
                     .await?;
                 let admin_id = context.wallet().genesis_admin_chain();
                 let chains = with_other_chains
@@ -1169,12 +1158,11 @@ impl Runnable for Job {
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&owner).await?;
-                let validators = faucet.current_validators().await?;
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.certificate_hash);
                 println!("{}", owner);
                 context
-                    .assign_new_chain_to_key(outcome.chain_id, owner, Some(validators))
+                    .assign_new_chain_to_key(outcome.chain_id, owner)
                     .await?;
                 if set_default {
                     context
@@ -1763,7 +1751,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     }
                 };
                 let description = ChainDescription::new(origin, config, timestamp);
-                // TODO: store the description blob!
                 let chain = UserChain::make_initial(key_pair, description, timestamp);
                 // Public "genesis" state.
                 let key = chain.key_pair.as_ref().unwrap().public();

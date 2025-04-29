@@ -427,15 +427,17 @@ where
 
     /// Invariant for the states of active chains.
     pub async fn ensure_is_active(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
-        if self.is_active() {
-            return Ok(());
-        }
         // Initialize ourselves.
-        self.execution_state
+        if self
+            .execution_state
             .system
             .initialize_chain(self.chain_id())
             .await
-            .with_execution_context(ChainExecutionContext::Block)?;
+            .with_execution_context(ChainExecutionContext::Block)?
+        {
+            // the chain was already initialized
+            return Ok(());
+        }
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
         self.execution_state_hash.set(Some(hash));
@@ -525,7 +527,7 @@ where
         match self.ensure_is_active(local_time).await {
             Ok(_) => (),
             // if the only issue was that we couldn't initialize the chain because of a
-            // missing chain description blob, we might still want to process the inbox
+            // missing chain description blob, we might still want to update the inbox
             Err(ChainError::ExecutionError(exec_err, _))
                 if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
                 if blobs.iter().all(|blob_id| {

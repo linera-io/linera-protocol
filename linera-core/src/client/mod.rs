@@ -288,6 +288,7 @@ impl<Env: Environment> Client<Env> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                // TODO(#2351): make sure the blobs are legitimate!
                 let blobs =
                     RemoteNode::download_blobs(&blob_ids, validators, self.blob_download_timeout)
                         .await
@@ -466,6 +467,7 @@ impl<Env: Environment> Client<Env> {
             .get(&admin_epoch)
             .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
         // Recover history from the network.
+        // TODO(#2351): make sure that the blob is legitimately created!
         let nodes = self.make_nodes(remote_committee)?;
         let blob = RemoteNode::download_blob(&nodes, chain_desc_id, self.blob_download_timeout)
             .await

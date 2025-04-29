@@ -8,8 +8,8 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
-    data_types::{BlockHeight, ChainDescription, ChainOrigin, Timestamp},
+    crypto::{AccountSecretKey, CryptoHash},
+    data_types::{BlockHeight, ChainDescription, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -17,10 +17,9 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
-    data_types::{ChainInfoQuery, ClientOutcome},
+    data_types::ClientOutcome,
     join_set_ext::JoinSet,
-    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
-    remote_node::RemoteNode,
+    node::CrossChainMessageDelivery,
     Environment, JoinSetExt,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
@@ -407,9 +406,7 @@ where
         &mut self,
         chain_id: ChainId,
         owner: AccountOwner,
-        validators: Option<Vec<(ValidatorPublicKey, String)>>,
     ) -> Result<(), Error> {
-        let node_provider = self.make_node_provider();
         self.client.track_chain(chain_id);
         let chain_description_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         let chain_description_blob = match self
@@ -433,57 +430,8 @@ where
         let chain_description: ChainDescription =
             bcs::from_bytes(&chain_description_blob.into_bytes())
                 .map_err(|e| error::Inner::Persistence(Box::new(e)))?;
-        let (parent_id, parent_height) = if let ChainOrigin::Child {
-            parent,
-            block_height,
-            ..
-        } = chain_description.origin()
-        {
-            (parent, block_height)
-        } else {
-            todo!("should this even be reachable?")
-        };
-
-        // Take the latest committee we know of.
-        let admin_chain_id = chain_description.config().admin_id.unwrap_or(chain_id);
-        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let nodes: Vec<_> = if let Some(validators) = validators {
-            node_provider
-                .make_nodes_from_list(validators)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        } else {
-            let info = self
-                .client
-                .local_node()
-                .handle_chain_info_query(query)
-                .await?;
-            let committee = info
-                .latest_committee()
-                .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
-            node_provider
-                .make_nodes(committee)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        };
-
-        // Download the parent chain.
-        let target_height = parent_height.try_add_one()?;
-        self.client
-            .download_certificates(&nodes, parent_id, target_height)
-            .await
-            .context("downloading parent chain")?;
 
         let config = chain_description.config();
-
-        // The initial timestamp for the new chain is taken from the block with the message.
-        let certificate = self
-            .client
-            .local_node()
-            .certificate_for_block(parent_id, parent_height)
-            .await
-            .context("looking for the block that opened the chain")?;
-        let block = certificate.block();
 
         if !config.ownership.verify_owner(&owner) {
             tracing::error!(
@@ -494,7 +442,7 @@ where
         }
 
         self.wallet_mut()
-            .mutate(|w| w.assign_new_chain_to_owner(owner, chain_id, block.header.timestamp))
+            .mutate(|w| w.assign_new_chain_to_owner(owner, chain_id, chain_description.timestamp()))
             .await
             .map_err(|e| error::Inner::Persistence(Box::new(e)))?
             .context("assigning new chain")?;

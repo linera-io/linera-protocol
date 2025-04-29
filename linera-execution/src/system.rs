@@ -101,7 +101,7 @@ pub struct EventSubscriptions {
 }
 
 /// The initial configuration for a new chain.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct OpenChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
@@ -325,7 +325,7 @@ where
         Some((*epoch, committee))
     }
 
-    /// Returns a map of epochs to blob IDs of corresponding committee blobs.
+    /// Returns a map of epochs to serialized_committees.
     pub fn get_committees(&self) -> BTreeMap<Epoch, Vec<u8>> {
         self.committees
             .get()
@@ -745,11 +745,12 @@ where
     }
 
     /// Initializes the system application state on a newly opened chain.
-    pub async fn initialize_chain(&mut self, chain_id: ChainId) -> Result<(), ExecutionError> {
-        // Guaranteed under BFT assumptions.
-        assert!(self.description.get().is_none());
-        assert!(!self.ownership.get().is_active());
-        assert!(self.committees.get().is_empty());
+    /// Returns `Ok(true)` if the chain was already initialized, `Ok(false)` if it wasn't.
+    pub async fn initialize_chain(&mut self, chain_id: ChainId) -> Result<bool, ExecutionError> {
+        if self.description.get().is_some() {
+            // already initialized
+            return Ok(true);
+        }
         let description_blob = self
             .read_blob_content(BlobId::new(chain_id.0, BlobType::ChainDescription))
             .await?;
@@ -779,7 +780,7 @@ where
         self.ownership.set(ownership);
         self.balance.set(balance);
         self.application_permissions.set(application_permissions);
-        Ok(())
+        Ok(false)
     }
 
     pub async fn handle_query(
@@ -815,7 +816,7 @@ where
         };
         let committees = self.get_committees();
         let init_chain_config = config.init_chain_config(
-            (*self.epoch.get()).unwrap_or(Epoch::ZERO),
+            (*self.epoch.get()).ok_or(ExecutionError::InactiveChain)?,
             *self.admin_id.get(),
             committees,
         );

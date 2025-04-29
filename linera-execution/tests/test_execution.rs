@@ -32,10 +32,7 @@ use test_case::test_case;
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (app_id, app_desc, contract_blob, service_blob) =
@@ -77,10 +74,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 #[tokio::test]
 // TODO(#1484): Split this test into multiple more specialized tests.
 async fn test_simple_user_operation() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -229,10 +223,7 @@ enum SessionCall {
 /// Tests a simulated session.
 #[tokio::test]
 async fn test_simulated_session() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -311,10 +302,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 /// Tests if execution fails if a simulated session isn't properly closed.
 #[tokio::test]
 async fn test_simulated_session_leak() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -381,10 +369,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 /// Tests if `finalize` can cause execution to fail.
 #[tokio::test]
 async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (id, application, blobs) = view.register_mock_application(0).await?;
@@ -420,10 +405,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
 /// Tests if `finalize` from a called application can cause execution to fail.
 #[tokio::test]
 async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (first_id, first_application, first_app_blobs) = view.register_mock_application(0).await?;
@@ -491,10 +473,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
 /// Tests if `finalize` can send messages.
 #[tokio::test]
 async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (first_id, first_application, first_app_blobs) = view.register_mock_application(0).await?;
@@ -637,10 +616,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 /// Tests if an application can't perform cross-application calls during `finalize`.
 #[tokio::test]
 async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -686,10 +662,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
 /// have already called the same application.
 #[tokio::test]
 async fn test_cross_application_call_from_finalize_of_called_application() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -741,10 +714,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
 /// Tests if a called application can't perform cross-application calls during `finalize`.
 #[tokio::test]
 async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -799,10 +769,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
 /// without panicking.
 #[tokio::test]
 async fn test_cross_application_error() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -846,10 +813,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
 /// other chains.
 #[tokio::test]
 async fn test_simple_message() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (application_id, application, blobs) = view.register_mock_application(0).await?;
@@ -908,10 +872,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
 /// call.
 #[tokio::test]
 async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -978,10 +939,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 /// Tests if a message is scheduled to be sent by a deeper cross-application call.
 #[tokio::test]
 async fn test_message_from_deeper_call() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
@@ -1067,10 +1025,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 /// for the applications that will receive messages on them.
 #[tokio::test]
 async fn test_multiple_messages_from_different_applications() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    let description = dummy_chain_description(0);
-    let chain_id = description.id();
-    state.description = Some(description);
+    let (state, chain_id) = SystemExecutionState::dummy_chain_state(0);
     let mut view = state.into_view().await;
 
     // The entrypoint application, which sends a message and calls other applications
@@ -1204,10 +1159,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         ValidatorPublicKey::test_key(0),
         AccountPublicKey::test_key(0),
     )]);
-    let committees = BTreeMap::from([(
-        Epoch::ZERO,
-        bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-    )]);
+    let committees = BTreeMap::from([(Epoch::ZERO, bcs::to_bytes(&committee)?)]);
     let chain_key = AccountPublicKey::test_key(1);
     let ownership = ChainOwnership::single(chain_key.into());
     let child_ownership = ChainOwnership::single(AccountPublicKey::test_key(2).into());
@@ -1287,7 +1239,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     assert_eq!(created_description.config().ownership, child_ownership);
     assert_eq!(created_description.config().committees, committees);
 
-    // Initialize the child chain using the config from the message.
+    // Initialize the child chain using the new blob.
     let mut child_view = SystemExecutionState::default()
         .into_view_with(child_id, Default::default())
         .await;
@@ -1309,8 +1261,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
             .into_iter()
             .map(|(epoch, serialized_committee)| (
                 epoch,
-                bcs::from_bytes::<Committee>(&serialized_committee)
-                    .expect("deserializing a committee should not fail")
+                bcs::from_bytes::<Committee>(&serialized_committee).unwrap()
             ))
             .collect::<BTreeMap<_, _>>()
     );

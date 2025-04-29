@@ -108,7 +108,13 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     async fn new(storage: S, is_client: bool, has_long_lived_services: bool) -> Self {
-        Self::new_with_amount(storage, is_client, has_long_lived_services, Amount::MAX).await
+        Self::new_with_amount(
+            storage,
+            is_client,
+            has_long_lived_services,
+            Amount::from_tokens(1_000_000),
+        )
+        .await
     }
 
     async fn new_with_amount(

@@ -3279,7 +3279,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Since the faucet chain exceeds the configured maximum length, the faucet should have
     // switched after the first new chain.
-    assert!(other_outcome.message_id.chain_id != outcome.message_id.chain_id);
+    assert!(other_outcome.chain_id != outcome.chain_id);
 
     let chain = outcome.chain_id;
     assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());

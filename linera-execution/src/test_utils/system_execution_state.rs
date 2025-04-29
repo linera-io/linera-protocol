@@ -20,7 +20,7 @@ use linera_views::{
     views::{CryptoHashView, View, ViewError},
 };
 
-use super::{MockApplication, RegisterMockApplication};
+use super::{dummy_chain_description, MockApplication, RegisterMockApplication};
 use crate::{
     committee::Committee, execution::UserAction, ApplicationDescription, ExecutionError,
     ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, OperationContext,
@@ -77,6 +77,12 @@ impl SystemExecutionState {
             committees,
             ..SystemExecutionState::default()
         }
+    }
+
+    pub fn dummy_chain_state(index: u32) -> (Self, ChainId) {
+        let description = dummy_chain_description(index);
+        let chain_id = description.id();
+        (Self::new(description), chain_id)
     }
 
     pub async fn into_hash(self) -> CryptoHash {
