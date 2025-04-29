@@ -20,7 +20,7 @@ use linera_base::vm::VmRuntime;
 use linera_base::{
     crypto::Secp256k1SecretKey,
     data_types::{Amount, BlockHeight, Epoch},
-    identifiers::{Account, AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_faucet::ClaimOutcome;
@@ -80,7 +80,10 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     let client_2 = net.make_client().await;
     client_2.wallet_init(&[], FaucetOption::None).await?;
-    let chain_1 = ChainId::root(0);
+    let chain_1 = client
+        .load_wallet()?
+        .default_chain()
+        .expect("should have a default chain");
 
     let chain_2 = client
         .open_and_assign(&client_2, Amount::from_tokens(3))
@@ -293,12 +296,8 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 
     // Create a new chain starting on the new epoch
     let new_owner = client.keygen().await?;
-    let ClaimOutcome {
-        chain_id,
-        message_id,
-        ..
-    } = faucet.claim(&new_owner).await?;
-    client.assign(new_owner, message_id).await?;
+    let ClaimOutcome { chain_id, .. } = faucet.claim(&new_owner).await?;
+    client.assign(new_owner, chain_id).await?;
 
     // Attempt to receive the existing epoch change message
     client.process_inbox(chain_id).await?;
@@ -423,12 +422,8 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Create a new chain starting on the new epoch
     let new_owner = client.keygen().await?;
-    let ClaimOutcome {
-        chain_id,
-        message_id,
-        ..
-    } = faucet.claim(&new_owner).await?;
-    client.assign(new_owner, message_id).await?;
+    let ClaimOutcome { chain_id, .. } = faucet.claim(&new_owner).await?;
+    client.assign(new_owner, chain_id).await?;
 
     // Attempt to receive the existing epoch change messages
     client.process_inbox(chain_id).await?;
@@ -449,8 +444,13 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 
     let (mut net, client1) = config.instantiate().await?;
 
+    let (chain, chain1) = {
+        let wallet = client1.load_wallet()?;
+        let chains = wallet.chain_ids();
+        (chains[0], chains[1])
+    };
+
     let client2 = net.make_client().await;
-    let chain = ChainId::root(0);
     let mut height = 0;
     client2.wallet_init(&[chain], FaucetOption::None).await?;
 
@@ -476,7 +476,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
         for i in 0..10 {
             // Add a new block on the chain, triggering a notification.
             client1
-                .transfer(Amount::from_tokens(1), chain, ChainId::root(1))
+                .transfer(Amount::from_tokens(1), chain, chain1)
                 .await?;
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             height += 1;
@@ -510,7 +510,11 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
 
     // Create runner and client.
     let (mut net, client) = config.instantiate().await?;
-    let chain_id = client.load_wallet()?.default_chain().unwrap();
+    let (chain_id, chain1) = {
+        let wallet = client.load_wallet()?;
+        let chains = wallet.chain_ids();
+        (chains[0], chains[1])
+    };
     let account = Account::chain(chain_id);
     let balance = client.local_balance(account).await?;
     // Stop validators.
@@ -518,7 +522,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
         net.remove_validator(i)?;
     }
     let result = client
-        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, ChainId::root(1))
+        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, chain1)
         .await;
     assert!(result.is_err());
     // The transfer didn't get confirmed.
@@ -789,7 +793,7 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
 
     // Create some blocks
     let sender_chain = client.default_chain().expect("Client has no default chain");
-    let (_, receiver_chain, _) = client
+    let (receiver_chain, _) = client
         .open_chain(sender_chain, None, Amount::from_tokens(1_000))
         .await?;
 

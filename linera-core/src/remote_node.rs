@@ -313,8 +313,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.node.download_certificates(hashes).await
     }
 
+    /// Downloads a blob, but does not verify if it has actually been published and
+    /// accepted by a quorum of validators.
     #[instrument(level = "trace", skip(validators))]
-    async fn download_blob(
+    pub async fn download_blob(
         validators: &[Self],
         blob_id: BlobId,
         timeout: Duration,

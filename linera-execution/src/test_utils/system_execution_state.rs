@@ -10,8 +10,8 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId},
+    data_types::{Amount, ApplicationPermissions, Blob, ChainDescription, Epoch, Timestamp},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -20,7 +20,7 @@ use linera_views::{
     views::{CryptoHashView, View, ViewError},
 };
 
-use super::{MockApplication, RegisterMockApplication};
+use super::{dummy_chain_description, MockApplication, RegisterMockApplication};
 use crate::{
     committee::Committee, execution::UserAction, ApplicationDescription, ExecutionError,
     ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, OperationContext,
@@ -51,13 +51,38 @@ pub struct SystemExecutionState {
 }
 
 impl SystemExecutionState {
-    pub fn new(epoch: Epoch, description: ChainDescription, admin_id: impl Into<ChainId>) -> Self {
+    pub fn new(description: ChainDescription) -> Self {
+        let ownership = description.config().ownership.clone();
+        let balance = description.config().balance;
+        let epoch = description.config().epoch;
+        let admin_id = Some(description.config().admin_id.unwrap_or(description.id()));
+        let committees = description
+            .config()
+            .committees
+            .iter()
+            .map(|(epoch, serialized_committee)| {
+                (
+                    *epoch,
+                    bcs::from_bytes::<Committee>(serialized_committee)
+                        .expect("should correctly deserialize a committee"),
+                )
+            })
+            .collect();
         SystemExecutionState {
             epoch: Some(epoch),
             description: Some(description),
-            admin_id: Some(admin_id.into()),
+            admin_id,
+            ownership,
+            balance,
+            committees,
             ..SystemExecutionState::default()
         }
+    }
+
+    pub fn dummy_chain_state(index: u32) -> (Self, ChainId) {
+        let description = dummy_chain_description(index);
+        let chain_id = description.id();
+        (Self::new(description), chain_id)
     }
 
     pub async fn into_hash(self) -> CryptoHash {
@@ -70,6 +95,7 @@ impl SystemExecutionState {
     pub async fn into_view(self) -> ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>> {
         let chain_id = self
             .description
+            .as_ref()
             .expect("Chain description should be set")
             .into();
         self.into_view_with(chain_id, ExecutionRuntimeConfig::default())
@@ -143,7 +169,7 @@ impl SystemExecutionState {
 
 impl RegisterMockApplication for SystemExecutionState {
     fn creator_chain_id(&self) -> ChainId {
-        self.description.expect(
+        self.description.as_ref().expect(
             "Can't register applications on a system state with no associated `ChainDescription`",
         ).into()
     }

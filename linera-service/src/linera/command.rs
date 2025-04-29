@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     time::Duration,
     vm::VmRuntime,
 };
@@ -741,10 +741,9 @@ pub enum ClientCommand {
         #[arg(long)]
         owner: AccountOwner,
 
-        /// The ID of the message that created the chain. (This uniquely describes the
-        /// chain and where it was created.)
+        /// The ID of the chain.
         #[arg(long)]
-        message_id: MessageId,
+        chain_id: ChainId,
     },
 
     /// Retry a block we unsuccessfully tried to propose earlier.

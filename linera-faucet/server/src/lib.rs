@@ -12,7 +12,7 @@ use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, ChainId, MessageId},
+    identifiers::{AccountOwner, ChainId},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -60,8 +60,6 @@ pub struct MutationRoot<C> {
 /// The result of a successful `claim` mutation.
 #[derive(SimpleObject)]
 pub struct ClaimOutcome {
-    /// The ID of the message that created the new chain.
-    pub message_id: MessageId,
     /// The ID of the new chain.
     pub chain_id: ChainId,
     /// The hash of the parent chain's certificate containing the `OpenChain` operation.
@@ -92,7 +90,12 @@ where
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
         let chain_id = *self.chain_id.lock().await;
-        let client = self.context.lock().await.make_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -122,7 +125,12 @@ where
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
         let chain_id = *self.chain_id.lock().await;
-        let client = self.context.lock().await.make_chain_client(chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -153,19 +161,27 @@ where
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;
         self.context.lock().await.update_wallet(&client).await?;
-        let (message_id, certificate) = result?.try_unwrap()?;
+        let (chain_id, certificate) = match result? {
+            ClientOutcome::Committed(result) => result,
+            ClientOutcome::WaitForTimeout(timeout) => {
+                return Err(Error::new(format!(
+                    "This faucet is using a multi-owner chain and is not the leader right now. \
+                    Try again at {}",
+                    timeout.timestamp,
+                )));
+            }
+        };
 
         if client.next_block_height() >= self.end_block_height {
             let key_pair = client.key_pair().await?;
             let balance = client.local_balance().await?.try_sub(Amount::ONE)?;
             let ownership = client.chain_state_view().await?.ownership().clone();
-            let (message_id, certificate) = client
+            let (chain_id, certificate) = client
                 .open_chain(ownership, ApplicationPermissions::default(), balance)
                 .await?
                 .try_unwrap()?;
             // TODO(#1795): Move the remaining tokens to the new chain.
             client.close_chain().await?.try_unwrap()?;
-            let chain_id = ChainId::child(message_id);
             info!("Switching to a new faucet chain {chain_id:8}; remaining balance: {balance}");
             self.context
                 .lock()
@@ -179,9 +195,7 @@ where
             *self.chain_id.lock().await = chain_id;
         }
 
-        let chain_id = ChainId::child(message_id);
         Ok(ClaimOutcome {
-            message_id,
             chain_id,
             certificate_hash: certificate.hash(),
         })
@@ -256,7 +270,7 @@ where
         config: ChainListenerConfig,
         storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
-        let client = context.make_chain_client(chain_id)?;
+        let client = context.make_chain_client(chain_id).await?;
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;

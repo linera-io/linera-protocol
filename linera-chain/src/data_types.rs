@@ -16,9 +16,7 @@ use linera_base::{
     doc_scalar, ensure, hex_debug,
     identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId},
 };
-use linera_execution::{
-    committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemMessage,
-};
+use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -183,25 +181,6 @@ impl IncomingBundle {
             let message_id = chain_and_height.to_message_id(posted_message.index);
             (message_id, posted_message)
         })
-    }
-
-    /// Rearranges the messages in the bundle so that the first message is an `OpenChain` message.
-    /// Returns whether the `OpenChain` message was found at all.
-    pub fn put_openchain_at_front(bundles: &mut [IncomingBundle]) -> bool {
-        let Some(index) = bundles.iter().position(|msg| {
-            matches!(
-                msg.bundle.messages.first(),
-                Some(PostedMessage {
-                    message: Message::System(SystemMessage::OpenChain(_)),
-                    ..
-                })
-            )
-        }) else {
-            return false;
-        };
-
-        bundles[0..=index].rotate_right(1);
-        true
     }
 }
 

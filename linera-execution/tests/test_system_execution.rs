@@ -6,26 +6,36 @@
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, ChainDescription, ChainId, MessageId},
+    identifiers::{AccountOwner, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    system::Recipient, test_utils::SystemExecutionState, Message, MessageContext, Operation,
-    OperationContext, Query, QueryContext, QueryOutcome, QueryResponse, ResourceController,
-    SystemMessage, SystemOperation, SystemQuery, SystemResponse, TransactionTracker,
+    system::Recipient,
+    test_utils::{
+        dummy_chain_description, dummy_chain_description_with_ownership_and_balance,
+        SystemExecutionState,
+    },
+    Message, MessageContext, Operation, OperationContext, Query, QueryContext, QueryOutcome,
+    QueryResponse, ResourceController, SystemMessage, SystemOperation, SystemQuery, SystemResponse,
+    TransactionTracker,
 };
 
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
     let owner_key_pair = AccountSecretKey::generate();
     let owner = AccountOwner::from(owner_key_pair.public());
+    let ownership = ChainOwnership {
+        super_owners: [owner].into_iter().collect(),
+        ..ChainOwnership::default()
+    };
+    let balance = Amount::from_tokens(4);
+    let description =
+        dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+    let chain_id = description.id();
     let state = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
-        balance: Amount::from_tokens(4),
-        ownership: ChainOwnership {
-            super_owners: [owner].into_iter().collect(),
-            ..ChainOwnership::default()
-        },
+        description: Some(description),
+        balance,
+        ownership,
         ..SystemExecutionState::default()
     };
     let mut view = state.into_view().await;
@@ -35,11 +45,12 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         recipient: Recipient::Burn,
     };
     let context = OperationContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         height: BlockHeight(0),
         round: Some(0),
         authenticated_signer: Some(owner),
         authenticated_caller_id: None,
+        timestamp: Default::default(),
     };
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
@@ -60,7 +71,9 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     let mut view = state.into_view().await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
@@ -68,17 +81,18 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         source: AccountOwner::CHAIN,
     };
     let context = MessageContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         is_bouncing: false,
         height: BlockHeight(0),
         round: Some(0),
         message_id: MessageId {
-            chain_id: ChainId::root(1),
+            chain_id: dummy_chain_description(1).id(),
             height: BlockHeight(0),
             index: 0,
         },
         authenticated_signer: None,
         refund_grant_to: None,
+        timestamp: Default::default(),
     };
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
@@ -100,11 +114,13 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_simple_system_query() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    state.description = Some(description);
     state.balance = Amount::from_tokens(4);
     let mut view = state.into_view().await;
     let context = QueryContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
@@ -118,7 +134,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
     assert_eq!(
         response,
         QueryResponse::System(SystemResponse {
-            chain_id: ChainId::root(0),
+            chain_id,
             balance: Amount::from_tokens(4)
         })
     );

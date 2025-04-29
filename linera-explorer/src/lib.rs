@@ -23,11 +23,7 @@ use gql_service::{
 };
 use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::BlockHeight,
-    identifiers::{ChainDescription, ChainId},
-};
+use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_indexer_graphql_client::{
     indexer::{plugins, Plugins},
     operations as gql_operations,
@@ -133,7 +129,10 @@ pub fn data() -> JsValue {
         config: Config::load(),
         page: Page::Unloaded,
         chains: Vec::new(),
-        chain: ChainId::from(ChainDescription::Root(0)),
+        chain: ChainId::from_str(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap(),
         plugins: Vec::new(),
     };
     data.serialize(&SER).unwrap()
@@ -284,10 +283,10 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
         .serialize(&SER)
         .expect("failed to serialize ChainIds");
     setf(app, "chains", &chains_js);
-    Ok(chains.default.unwrap_or_else(|| match chains.list.first() {
-        None => ChainId::from(ChainDescription::Root(0)),
-        Some(chain_id) => *chain_id,
-    }))
+    chains
+        .default
+        .or_else(|| chains.list.first().copied())
+        .ok_or_else(|| anyhow::Error::msg("no chains available"))
 }
 
 /// Queries indexer plugins.

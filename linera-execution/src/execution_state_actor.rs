@@ -19,7 +19,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, MessageId, StreamId},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -289,20 +289,23 @@ where
             OpenChain {
                 ownership,
                 balance,
-                next_message_id,
+                parent_id,
+                block_height,
                 application_permissions,
+                timestamp,
                 callback,
+                mut txn_tracker,
             } => {
-                let inactive_err = || ExecutionError::InactiveChain;
                 let config = OpenChainConfig {
                     ownership,
-                    admin_id: self.system.admin_id.get().ok_or_else(inactive_err)?,
-                    epoch: self.system.epoch.get().ok_or_else(inactive_err)?,
-                    committees: self.system.committees.get().clone(),
                     balance,
                     application_permissions,
                 };
-                callback.respond(self.system.open_chain(config, next_message_id).await?);
+                let chain_id = self
+                    .system
+                    .open_chain(config, parent_id, block_height, timestamp, &mut txn_tracker)
+                    .await?;
+                callback.respond((chain_id, txn_tracker));
             }
 
             CloseChain {
@@ -697,10 +700,14 @@ pub enum ExecutionRequest {
         ownership: ChainOwnership,
         #[debug(skip_if = Amount::is_zero)]
         balance: Amount,
-        next_message_id: MessageId,
+        parent_id: ChainId,
+        block_height: BlockHeight,
         application_permissions: ApplicationPermissions,
+        timestamp: Timestamp,
         #[debug(skip)]
-        callback: Sender<OutgoingMessage>,
+        txn_tracker: TransactionTracker,
+        #[debug(skip)]
+        callback: Sender<(ChainId, TransactionTracker)>,
     },
 
     CloseChain {

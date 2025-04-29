@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Amount, Epoch, Timestamp},
+    data_types::{Amount, ChainDescription, Epoch, Timestamp},
     doc_scalar,
-    identifiers::{AccountOwner, ChainDescription, ChainId},
+    identifiers::{AccountOwner, ChainId},
     ownership::ChainOwnership,
 };
 use linera_views::{context::Context, map_view::MapView};

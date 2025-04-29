@@ -38,7 +38,7 @@ impl chain_listener::ClientContext for ClientContext {
         self.client.storage_client()
     }
 
-    fn make_chain_client(
+    async fn make_chain_client(
         &self,
         chain_id: ChainId,
     ) -> Result<ChainClient<environment::Test>, linera_client::Error> {

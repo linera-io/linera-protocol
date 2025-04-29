@@ -13,9 +13,13 @@ mod system_execution_state;
 use std::{collections::BTreeMap, sync::Arc, thread, vec};
 
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash},
-    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
+    crypto::{AccountPublicKey, BcsSignable, CryptoHash, ValidatorPublicKey},
+    data_types::{
+        Amount, Blob, BlockHeight, ChainDescription, ChainOrigin, CompressedBytecode, Epoch,
+        InitialChainConfig, OracleResponse, Timestamp,
+    },
     identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, MessageId, ModuleId},
+    ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_views::{
@@ -30,16 +34,63 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ApplicationDescription, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
-    ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
+    committee::Committee, ApplicationDescription, ExecutionRequest, ExecutionRuntimeContext,
+    ExecutionStateView, MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint,
+    ServiceRuntimeRequest, ServiceSyncRuntime, SystemExecutionStateView,
+    TestExecutionRuntimeContext,
 };
+
+pub fn dummy_chain_description_with_ownership_and_balance(
+    index: u32,
+    ownership: ChainOwnership,
+    balance: Amount,
+) -> ChainDescription {
+    let committee = Committee::make_simple(vec![(
+        ValidatorPublicKey::test_key(index as u8),
+        AccountPublicKey::test_key(2 * (index % 128) as u8),
+    )]);
+    let committees = BTreeMap::from([(
+        Epoch::ZERO,
+        bcs::to_bytes(&committee).expect("serializing a committee shouldn't fail"),
+    )]);
+    let origin = ChainOrigin::Root(index);
+    let config = InitialChainConfig {
+        admin_id: if index == 0 {
+            None
+        } else {
+            Some(
+                dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance)
+                    .id(),
+            )
+        },
+        application_permissions: Default::default(),
+        balance,
+        committees,
+        epoch: Epoch::ZERO,
+        ownership,
+    };
+    ChainDescription::new(origin, config, Timestamp::default())
+}
+
+pub fn dummy_chain_description_with_owner(index: u32, owner: AccountOwner) -> ChainDescription {
+    dummy_chain_description_with_ownership_and_balance(
+        index,
+        ChainOwnership::single(owner),
+        Amount::MAX,
+    )
+}
+
+pub fn dummy_chain_description(index: u32) -> ChainDescription {
+    let chain_key = AccountPublicKey::test_key(2 * (index % 128) as u8 + 1);
+    let ownership = ChainOwnership::single(chain_key.into());
+    dummy_chain_description_with_ownership_and_balance(index, ownership, Amount::MAX)
+}
 
 /// Creates a dummy [`ApplicationDescription`] for use in tests.
 pub fn create_dummy_user_application_description(
     index: u32,
 ) -> (ApplicationDescription, Blob, Blob) {
-    let chain_id = ChainId::root(1);
+    let chain_id = dummy_chain_description(1).id();
     let mut contract_bytes = b"contract".to_vec();
     let mut service_bytes = b"service".to_vec();
     contract_bytes.push(index as u8);
@@ -67,37 +118,42 @@ pub fn create_dummy_user_application_description(
 }
 
 /// Creates a dummy [`OperationContext`] to use in tests.
-pub fn create_dummy_operation_context() -> OperationContext {
+pub fn create_dummy_operation_context(chain_id: ChainId) -> OperationContext {
     OperationContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         height: BlockHeight(0),
         round: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
+        timestamp: Default::default(),
     }
 }
 
 /// Creates a dummy [`MessageContext`] to use in tests.
-pub fn create_dummy_message_context(authenticated_signer: Option<AccountOwner>) -> MessageContext {
+pub fn create_dummy_message_context(
+    chain_id: ChainId,
+    authenticated_signer: Option<AccountOwner>,
+) -> MessageContext {
     MessageContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         is_bouncing: false,
         authenticated_signer,
         refund_grant_to: None,
         height: BlockHeight(0),
         round: Some(0),
         message_id: MessageId {
-            chain_id: ChainId::root(0),
+            chain_id,
             height: BlockHeight(0),
             index: 0,
         },
+        timestamp: Default::default(),
     }
 }
 
 /// Creates a dummy [`QueryContext`] to use in tests.
 pub fn create_dummy_query_context() -> QueryContext {
     QueryContext {
-        chain_id: ChainId::root(0),
+        chain_id: dummy_chain_description(0).id(),
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     }
@@ -169,7 +225,7 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     fn creator_chain_id(&self) -> ChainId {
-        self.description.get().expect(
+        self.description.get().as_ref().expect(
             "Can't register applications on a system state with no associated `ChainDescription`",
         ).into()
     }

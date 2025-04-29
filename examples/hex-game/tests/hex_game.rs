@@ -8,7 +8,7 @@
 use hex_game::{HexAbi, Operation, Timeouts};
 use linera_sdk::{
     linera_base_types::{
-        AccountSecretKey, Amount, ChainDescription, Secp256k1SecretKey, TimeDelta,
+        AccountSecretKey, Amount, BlobType, ChainDescription, Secp256k1SecretKey, TimeDelta,
     },
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
@@ -34,8 +34,15 @@ async fn hex_game() {
         .await;
 
     let block = certificate.inner().block();
-    let message_id = block.message_id_for_operation(0, 0).unwrap();
-    let description = ChainDescription::Child(message_id);
+    let description = block
+        .created_blobs()
+        .into_iter()
+        .filter_map(|(blob_id, blob)| {
+            (blob_id.blob_type == BlobType::ChainDescription)
+                .then(|| bcs::from_bytes::<ChainDescription>(blob.content().bytes()).unwrap())
+        })
+        .next()
+        .unwrap();
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator);
 
     chain
@@ -108,8 +115,15 @@ async fn hex_game_clock() {
         .await;
 
     let block = certificate.inner().block();
-    let message_id = block.message_id_for_operation(0, 0).unwrap();
-    let description = ChainDescription::Child(message_id);
+    let description = block
+        .created_blobs()
+        .into_iter()
+        .filter_map(|(blob_id, blob)| {
+            (blob_id.blob_type == BlobType::ChainDescription)
+                .then(|| bcs::from_bytes::<ChainDescription>(blob.content().bytes()).unwrap())
+        })
+        .next()
+        .unwrap();
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator.clone());
 
     chain

@@ -720,12 +720,12 @@ Create an unassigned key pair
 
 Link an owner with a key pair in the wallet to a chain that was created for that owner
 
-**Usage:** `linera assign --owner <OWNER> --message-id <MESSAGE_ID>`
+**Usage:** `linera assign --owner <OWNER> --chain-id <CHAIN_ID>`
 
 ###### **Options:**
 
 * `--owner <OWNER>` — The owner to assign
-* `--message-id <MESSAGE_ID>` — The ID of the message that created the chain. (This uniquely describes the chain and where it was created.)
+* `--chain-id <CHAIN_ID>` — The ID of the chain
 
 
 

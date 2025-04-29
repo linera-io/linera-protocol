@@ -19,7 +19,7 @@ use linera_base::{
         Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, Epoch, OracleResponse,
         Timestamp,
     },
-    identifiers::{ChainDescription, ChainId, ModuleId},
+    identifiers::ModuleId,
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -46,7 +46,7 @@ use linera_views::{
 };
 use test_case::test_case;
 
-use super::{init_worker_with_chains, make_certificate};
+use super::TestEnvironment;
 use crate::worker::WorkerError;
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
@@ -100,19 +100,11 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     let vm_runtime = VmRuntime::Wasm;
-    let admin_id = ChainDescription::Root(0);
     let publisher_owner = AccountSecretKey::generate().public().into();
-    let publisher_chain = ChainDescription::Root(1);
     let creator_owner = AccountSecretKey::generate().public().into();
-    let creator_chain = ChainDescription::Root(2);
-    let (committee, worker) = init_worker_with_chains(
-        storage.clone(),
-        vec![
-            (publisher_chain, publisher_owner, Amount::ZERO),
-            (creator_chain, creator_owner, Amount::ZERO),
-        ],
-    )
-    .await;
+    let mut env = TestEnvironment::new(storage.clone(), false, false).await;
+    let publisher_chain = env.add_root_chain(1, publisher_owner, Amount::ZERO).await;
+    let creator_chain = env.add_root_chain(2, creator_owner, Amount::ZERO).await;
 
     // Load the bytecode files for a module.
     let (contract_path, service_path) =
@@ -134,15 +126,17 @@ where
 
     // Publish the module.
     let publish_operation = SystemOperation::PublishModule { module_id };
-    let publish_block = make_first_block(publisher_chain.into())
+    let publish_block = make_first_block(publisher_chain.id())
         .with_timestamp(1)
         .with_operation(publish_operation);
     let publisher_system_state = SystemExecutionState {
-        committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
+        committees: [(Epoch::ZERO, env.committee().clone())]
+            .into_iter()
+            .collect(),
         ownership: ChainOwnership::single(publisher_owner),
         timestamp: Timestamp::from(1),
         used_blobs: BTreeSet::from([contract_blob_id, service_blob_id]),
-        ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
+        ..SystemExecutionState::new(publisher_chain.clone())
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
     let publish_block_proposal = ConfirmedBlock::new(
@@ -157,10 +151,10 @@ where
         }
         .with(publish_block),
     );
-    let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
+    let publish_certificate = env.make_certificate(publish_block_proposal);
 
     assert_matches!(
-        worker
+        env.worker()
             .fully_handle_certificate_with_notifications(publish_certificate.clone(), &())
             .await,
         Err(WorkerError::BlobsNotFound(_))
@@ -168,12 +162,13 @@ where
     storage
         .write_blobs(&[contract_blob.clone(), service_blob.clone()])
         .await?;
-    let info = worker
+    let info = env
+        .worker()
         .fully_handle_certificate_with_notifications(publish_certificate.clone(), &())
         .await
         .unwrap()
         .info;
-    assert_eq!(ChainId::from(publisher_chain), info.chain_id);
+    assert_eq!(publisher_chain.id(), info.chain_id);
     assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
@@ -181,10 +176,12 @@ where
     assert!(info.manager.pending.is_none());
 
     let mut creator_system_state = SystemExecutionState {
-        committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
+        committees: [(Epoch::ZERO, env.committee().clone())]
+            .into_iter()
+            .collect(),
         ownership: ChainOwnership::single(creator_owner),
         timestamp: Timestamp::from(1),
-        ..SystemExecutionState::new(Epoch::ZERO, creator_chain, admin_id)
+        ..SystemExecutionState::new(creator_chain.clone())
     };
 
     // Create an application.
@@ -199,7 +196,7 @@ where
     };
     let application_description = ApplicationDescription {
         module_id,
-        creator_chain_id: creator_chain.into(),
+        creator_chain_id: creator_chain.id(),
         block_height: BlockHeight::from(0),
         application_index: 0,
         required_application_ids: vec![],
@@ -208,7 +205,7 @@ where
     let application_description_blob = Blob::new_application_description(&application_description);
     let application_description_blob_id = application_description_blob.id();
     let application_id = From::from(&application_description);
-    let create_block = make_first_block(creator_chain.into())
+    let create_block = make_first_block(creator_chain.id())
         .with_timestamp(2)
         .with_operation(create_operation);
     creator_system_state.timestamp = Timestamp::from(2);
@@ -238,7 +235,7 @@ where
         }
         .with(create_block),
     );
-    let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
+    let create_certificate = env.make_certificate(create_block_proposal);
 
     storage
         .write_blobs(&[application_description_blob.clone()])
@@ -248,12 +245,13 @@ where
         .extra()
         .add_blobs([application_description_blob])
         .await?;
-    let info = worker
+    let info = env
+        .worker()
         .fully_handle_certificate_with_notifications(create_certificate.clone(), &())
         .await
         .unwrap()
         .info;
-    assert_eq!(ChainId::root(2), info.chain_id);
+    assert_eq!(creator_chain.id(), info.chain_id);
     assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(2), info.timestamp);
@@ -270,11 +268,12 @@ where
             bytes: user_operation.clone(),
         });
     let operation_context = OperationContext {
-        chain_id: creator_chain.into(),
+        chain_id: creator_chain.id(),
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: run_block.height,
         round: Some(0),
+        timestamp: Timestamp::from(3),
     };
     let mut controller = ResourceController::default();
     creator_state
@@ -286,6 +285,7 @@ where
             },
             &mut TransactionTracker::new(
                 Timestamp::from(3),
+                0,
                 0,
                 0,
                 0,
@@ -311,14 +311,15 @@ where
         }
         .with(run_block),
     );
-    let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
+    let run_certificate = env.make_certificate(run_block_proposal);
 
-    let info = worker
+    let info = env
+        .worker()
         .fully_handle_certificate_with_notifications(run_certificate.clone(), &())
         .await
         .unwrap()
         .info;
-    assert_eq!(ChainId::root(2), info.chain_id);
+    assert_eq!(creator_chain.id(), info.chain_id);
     assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Some(run_certificate.hash()), info.block_hash);

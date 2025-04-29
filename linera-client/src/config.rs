@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     iter::IntoIterator,
     ops::{Deref, DerefMut},
 };
@@ -12,8 +13,9 @@ use linera_base::{
         AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, Ed25519SecretKey,
         ValidatorPublicKey, ValidatorSecretKey,
     },
-    data_types::{Amount, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
+    identifiers::ChainId,
+    ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
@@ -222,18 +224,28 @@ impl GenesisConfig {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let committee = self.create_committee();
+        let committees: BTreeMap<_, _> = [(
+            Epoch::ZERO,
+            bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
+        )]
+        .into_iter()
+        .collect();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
-            let description = ChainDescription::Root(chain_number);
-            storage
-                .create_chain(
-                    committee.clone(),
-                    self.admin_id,
-                    description,
-                    (*public_key).into(),
-                    *balance,
-                    self.timestamp,
-                )
-                .await?;
+            let origin = ChainOrigin::Root(chain_number);
+            let config = InitialChainConfig {
+                admin_id: if chain_number == 0 {
+                    None
+                } else {
+                    Some(self.admin_id)
+                },
+                application_permissions: Default::default(),
+                balance: *balance,
+                committees: committees.clone(),
+                epoch: Epoch::ZERO,
+                ownership: ChainOwnership::single((*public_key).into()),
+            };
+            let description = ChainDescription::new(origin, config, self.timestamp);
+            storage.create_chain(description).await?;
         }
         Ok(())
     }

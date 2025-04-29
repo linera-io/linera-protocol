@@ -295,6 +295,8 @@ mod test {
             destinations: vec![],
         };
 
+        let dummy_chain_id = ChainId(CryptoHash::test_hash("root1"));
+
         let block = BlockExecutionOutcome {
             messages: vec![Vec::new()],
             previous_message_blocks: BTreeMap::new(),
@@ -304,9 +306,7 @@ mod test {
             blobs: vec![Vec::new()],
             operation_results: vec![OperationResult::default()],
         }
-        .with(
-            make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE),
-        );
+        .with(make_first_block(dummy_chain_id).with_simple_transfer(dummy_chain_id, Amount::ONE));
         let confirmed_block = ConfirmedBlock::new(block);
         let expected_byte_size = bcs::serialized_size(&confirmed_block).unwrap(); // here just to avoid cloning after the move below.
         let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);

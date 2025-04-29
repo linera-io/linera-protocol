@@ -8,13 +8,12 @@ use std::sync::Arc;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
-    identifiers::ChainDescription,
     vm::EvmQuery,
 };
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
-        create_dummy_user_application_description,
+        create_dummy_user_application_description, dummy_chain_description,
         solidity::{load_solidity_example, read_evm_u64_entry},
         SystemExecutionState,
     },
@@ -44,7 +43,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     let instantiation_argument = Vec::<u8>::new();
     let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
     let state = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
+        description: Some(dummy_chain_description(0)),
         ..Default::default()
     };
     let (mut app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
@@ -88,6 +87,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         round: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
+        timestamp: Default::default(),
     };
 
     let query_context = QueryContext {
