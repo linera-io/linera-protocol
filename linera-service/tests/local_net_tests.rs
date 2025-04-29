@@ -69,7 +69,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
 
     let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, Amount::from_tokens(2))
+        .run_faucet(None, faucet_chain, Amount::from_tokens(2), None)
         .await?;
 
     faucet_service.ensure_is_running()?;
@@ -246,7 +246,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 
     if matches!(network, Network::Grpc) {
         let mut faucet_service = faucet_client
-            .run_faucet(None, faucet_chain, Amount::from_tokens(2))
+            .run_faucet(None, faucet_chain, Amount::from_tokens(2), None)
             .await?;
 
         faucet_service.ensure_is_running()?;
@@ -280,7 +280,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
     faucet_client.process_inbox(faucet_chain).await?;
 
     let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, Amount::from_tokens(2))
+        .run_faucet(None, faucet_chain, Amount::from_tokens(2), None)
         .await?;
 
     faucet_service.ensure_is_running()?;
@@ -338,7 +338,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     if matches!(network, Network::Grpc) {
         let mut faucet_service = faucet_client
-            .run_faucet(None, faucet_chain, Amount::from_tokens(2))
+            .run_faucet(None, faucet_chain, Amount::from_tokens(2), None)
             .await?;
 
         faucet_service.ensure_is_running()?;
@@ -374,7 +374,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     if matches!(network, Network::Grpc) {
         let mut faucet_service = faucet_client
-            .run_faucet(None, faucet_chain, Amount::from_tokens(2))
+            .run_faucet(None, faucet_chain, Amount::from_tokens(2), None)
             .await?;
 
         faucet_service.ensure_is_running()?;
@@ -410,7 +410,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     faucet_client.process_inbox(faucet_chain).await?;
 
     let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, Amount::from_tokens(2))
+        .run_faucet(None, faucet_chain, Amount::from_tokens(2), None)
         .await?;
 
     faucet_service.ensure_is_running()?;
