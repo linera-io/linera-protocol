@@ -1211,6 +1211,19 @@ impl Operation {
             _ => vec![],
         }
     }
+
+    /// Returns whether this operation is allowed regardless of application permissions.
+    pub fn is_exempt_from_permissions(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        match **system_op {
+            SystemOperation::ProcessNewEpoch(_)
+            | SystemOperation::ProcessRemovedEpoch(_)
+            | SystemOperation::UpdateStreams(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<SystemMessage> for Message {
