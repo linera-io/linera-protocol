@@ -333,6 +333,8 @@ pub enum ExecutionError {
     InternalError(&'static str),
     #[error("UpdateStreams contains an unknown event")]
     EventNotFound(EventId),
+    #[error("UpdateStreams is outdated")]
+    OutdatedUpdateStreams,
 }
 
 impl From<ViewError> for ExecutionError {
@@ -1217,12 +1219,12 @@ impl Operation {
         let Operation::System(system_op) = self else {
             return false;
         };
-        match **system_op {
+        matches!(
+            **system_op,
             SystemOperation::ProcessNewEpoch(_)
-            | SystemOperation::ProcessRemovedEpoch(_)
-            | SystemOperation::UpdateStreams(_) => true,
-            _ => false,
-        }
+                | SystemOperation::ProcessRemovedEpoch(_)
+                | SystemOperation::UpdateStreams(_)
+        )
     }
 }
 

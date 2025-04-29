@@ -519,9 +519,10 @@ where
                         .event_subscriptions
                         .get_mut_or_default(&(chain_id, stream_id.clone()))
                         .await?;
-                    if subscriptions.next_index >= next_index {
-                        continue;
-                    }
+                    ensure!(
+                        subscriptions.next_index < next_index,
+                        ExecutionError::OutdatedUpdateStreams
+                    );
                     for application_id in &subscriptions.applications {
                         txn_tracker.add_stream_to_process(
                             *application_id,
