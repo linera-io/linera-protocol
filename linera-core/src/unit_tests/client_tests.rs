@@ -1246,6 +1246,8 @@ where
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(3));
 
+    // Despite the restrictive application permissions, some system operations are still allowed,
+    // and the user chain can migrate to the new epoch.
     user.synchronize_from_validators().await?;
     user.process_inbox().await?;
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(3));
