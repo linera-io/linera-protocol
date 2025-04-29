@@ -2103,9 +2103,6 @@ where
         blobs: Vec<Blob>,
         guard: Option<OwnedMutexGuard<()>>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
-        #[cfg(with_metrics)]
-        let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
-
         let _guard = if let Some(guard) = guard {
             guard
         } else {
@@ -2114,6 +2111,10 @@ where
             let mutex = self.state().client_mutex();
             mutex.lock_owned().await
         };
+
+        #[cfg(with_metrics)]
+        let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
+
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
