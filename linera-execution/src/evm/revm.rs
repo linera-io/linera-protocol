@@ -8,9 +8,10 @@ use std::{convert::TryFrom, sync::Arc};
 
 use alloy::primitives::Address;
 use linera_base::{
-    data_types::{Bytecode, StreamUpdate},
+    crypto::CryptoHash,
+    data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
     ensure,
-    identifiers::{ApplicationId, StreamName},
+    identifiers::{ApplicationId, ChainId, StreamName},
     vm::EvmQuery,
 };
 use num_enum::TryFromPrimitive;
@@ -21,8 +22,8 @@ use revm::{
 use revm_interpreter::{CallInputs, CallOutcome, Gas, InstructionResult, InterpreterResult};
 use revm_precompile::PrecompileResult;
 use revm_primitives::{
-    address, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput, SuccessReason,
-    TxKind,
+    address, EvmState, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput,
+    SuccessReason, TxKind,
 };
 #[cfg(with_metrics)]
 use {
@@ -43,10 +44,18 @@ use crate::{
 /// only from a submitted message
 const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 
+/// This is the selector of the `instantiate` that should be called
+/// only when creating a new instance of a shared contract
+const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
+
 fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), ExecutionError> {
     ensure!(
         vec != EXECUTE_MESSAGE_SELECTOR,
         ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
+    );
+    ensure!(
+        vec != INSTANTIATE_SELECTOR,
+        ExecutionError::EvmError(EvmExecutionError::OperationCallInstantiate)
     );
     Ok(())
 }
@@ -67,7 +76,7 @@ const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
 mod tests {
     use revm_primitives::keccak256;
 
-    use crate::evm::revm::EXECUTE_MESSAGE_SELECTOR;
+    use crate::evm::revm::{EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR};
 
     // The function keccak256 is not const so we cannot build the execute_message
     // selector directly.
@@ -75,6 +84,12 @@ mod tests {
     fn check_execute_message_selector() {
         let selector = &keccak256("execute_message(bytes)".as_bytes())[..4];
         assert_eq!(selector, EXECUTE_MESSAGE_SELECTOR);
+    }
+
+    #[test]
+    fn check_instantiate_selector() {
+        let selector = &keccak256("instantiate(bytes)".as_bytes())[..4];
+        assert_eq!(selector, INSTANTIATE_SELECTOR);
     }
 }
 
@@ -97,6 +112,28 @@ static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| 
         exponential_bucket_latencies(1.0),
     )
 });
+
+fn get_revm_instantiation_bytes(value: Vec<u8>) -> Vec<u8> {
+    use alloy_primitives::Bytes;
+    use alloy_sol_types::{sol, SolCall};
+    sol! {
+        function instantiate(bytes value);
+    }
+    let bytes = Bytes::copy_from_slice(&value);
+    let argument = instantiateCall { value: bytes };
+    argument.abi_encode()
+}
+
+fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
+    use alloy_primitives::Bytes;
+    use alloy_sol_types::{sol, SolCall};
+    sol! {
+        function execute_message(bytes value);
+    }
+    let bytes = Bytes::copy_from_slice(&value);
+    let argument = execute_messageCall { value: bytes };
+    argument.abi_encode()
+}
 
 #[derive(Clone)]
 pub enum EvmContractModule {
@@ -224,27 +261,30 @@ impl UserServiceModule for EvmServiceModule {
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
 fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
-    let mut output = [0u64; 4];
-    for (i, chunk) in vec.chunks_exact(8).enumerate() {
-        output[i] = u64::from_be_bytes(chunk.try_into().unwrap());
-    }
-    let hash = output.into();
+    // In calls the length is 32, so no problem unwrapping
+    let hash = CryptoHash::try_from(vec).unwrap();
     ApplicationId::new(hash)
 }
 
 fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
     vec[..20].copy_from_slice(address.as_ref());
-    u8_slice_to_application_id(&vec)
+    ApplicationId::new(CryptoHash::try_from(&vec as &[u8]).unwrap())
 }
 
 #[repr(u8)]
-#[derive(TryFromPrimitive)]
+#[derive(Debug, TryFromPrimitive)]
 enum PrecompileTag {
-    /// Key prefix for the try_call_application
+    /// Key prefix for `try_call_application`
     TryCallApplication,
-    /// Key prefix for the try_query_application
+    /// Key prefix for `try_query_application`
     TryQueryApplication,
+    /// Key prefix for `send_message`
+    SendMessage,
+    /// Key prefix for `message_id`
+    MessageId,
+    /// Key prefix for `message_is_bouncing`
+    MessageIsBouncing,
 }
 
 struct GeneralContractCall;
@@ -256,42 +296,97 @@ impl<Runtime: ContractRuntime>
     fn call(
         &self,
         input: &Bytes,
-        _gas_limit: u64,
+        gas_limit: u64,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
+        self.call_or_fail(input, gas_limit, context)
+            .map_err(|msg| PrecompileErrors::Fatal { msg })
+    }
+}
+
+const MESSAGE_IS_BOUNCING_NONE: u8 = 0;
+const MESSAGE_IS_BOUNCING_SOME_TRUE: u8 = 1;
+const MESSAGE_IS_BOUNCING_SOME_FALSE: u8 = 2;
+
+impl GeneralContractCall {
+    fn call_or_fail<Runtime: ContractRuntime>(
+        &self,
+        input: &Bytes,
+        _gas_limit: u64,
+        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+    ) -> Result<PrecompileOutput, String> {
         let vec = input.to_vec();
+        ensure!(!vec.is_empty(), format!("vec.size() should be at least 1"));
         let tag = vec[0];
-        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileErrors::Fatal {
-            msg: format!("{error} when trying to convert tag={tag}"),
-        })?;
-        match tag {
-            PrecompileTag::TryCallApplication => {
-                let target = u8_slice_to_application_id(&vec[1..33]);
-                let argument = vec[33..].to_vec();
-                let result = {
+        let tag = PrecompileTag::try_from(tag)
+            .map_err(|error| format!("{error} when trying to convert tag={tag}"))?;
+        let result = {
+            let mut runtime = context
+                .db
+                .0
+                .runtime
+                .lock()
+                .expect("The lock should be possible");
+            match tag {
+                PrecompileTag::TryCallApplication => {
+                    ensure!(vec.len() >= 33, format!("vec.size() should be at least 33"));
+                    let target = u8_slice_to_application_id(&vec[1..33]);
+                    let argument = vec[33..].to_vec();
                     let authenticated = true;
-                    let mut runtime = context
-                        .db
-                        .0
-                        .runtime
-                        .lock()
-                        .expect("The lock should be possible");
-                    runtime.try_call_application(authenticated, target, argument)
+                    runtime
+                        .try_call_application(authenticated, target, argument)
+                        .map_err(|error| format!("TryCallApplication error: {error}"))
                 }
-                .map_err(|error| PrecompileErrors::Fatal {
-                    msg: format!("{}", error),
-                })?;
-                // We do not know how much gas was used.
-                let gas_used = 0;
-                let bytes = Bytes::copy_from_slice(&result);
-                let result = PrecompileOutput { gas_used, bytes };
-                Ok(result)
+                PrecompileTag::SendMessage => {
+                    ensure!(vec.len() >= 33, format!("vec.size() should be at least 33"));
+                    let destination = ChainId(
+                        CryptoHash::try_from(&vec[1..33])
+                            .map_err(|error| format!("TryError: {error}"))?,
+                    );
+                    let authenticated = true;
+                    let is_tracked = true;
+                    let grant = Resources::default();
+                    let message = vec[33..].to_vec();
+                    let send_message_request = SendMessageRequest {
+                        destination,
+                        authenticated,
+                        is_tracked,
+                        grant,
+                        message,
+                    };
+                    runtime
+                        .send_message(send_message_request)
+                        .map_err(|error| format!("SendMessage error: {error}"))?;
+                    Ok(vec![])
+                }
+                PrecompileTag::MessageId => {
+                    ensure!(vec.len() == 1, format!("vec.size() should be exactly 1"));
+                    let message_id = runtime
+                        .message_id()
+                        .map_err(|error| format!("MessageId error {error}"))?;
+                    bcs::to_bytes(&message_id)
+                        .map_err(|error| format!("MessageId serialization error {error}"))
+                }
+                PrecompileTag::MessageIsBouncing => {
+                    ensure!(vec.len() == 1, format!("vec.size() should be exactly 1"));
+                    let message_is_bouncing = runtime
+                        .message_is_bouncing()
+                        .map_err(|error| format!("MessageIsBouncing error {error}"))?;
+                    let value = match message_is_bouncing {
+                        None => MESSAGE_IS_BOUNCING_NONE,
+                        Some(true) => MESSAGE_IS_BOUNCING_SOME_TRUE,
+                        Some(false) => MESSAGE_IS_BOUNCING_SOME_FALSE,
+                    };
+                    Ok(vec![value])
+                }
+                _ => Err(format!("{tag:?} is not available in GeneralContractCall")),
             }
-            PrecompileTag::TryQueryApplication => Err(PrecompileErrors::Fatal {
-                msg: "try_query_application is not available in the GeneralContractCall"
-                    .to_string(),
-            }),
-        }
+        }?;
+        // The gas usage count is done somewhere else.
+        let gas_used = 0;
+        let bytes = Bytes::copy_from_slice(&result);
+        let result = PrecompileOutput { gas_used, bytes };
+        Ok(result)
     }
 }
 
@@ -304,19 +399,29 @@ impl<Runtime: ServiceRuntime>
     fn call(
         &self,
         input: &Bytes,
-        _gas_limit: u64,
+        gas_limit: u64,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
+        self.call_or_fail(input, gas_limit, context)
+            .map_err(|msg| PrecompileErrors::Fatal { msg })
+    }
+}
+
+impl GeneralServiceCall {
+    fn call_or_fail<Runtime: ServiceRuntime>(
+        &self,
+        input: &Bytes,
+        _gas_limit: u64,
+        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+    ) -> Result<PrecompileOutput, String> {
         let vec = input.to_vec();
+        ensure!(!vec.is_empty(), format!("vec.size() should be at least 1"));
         let tag = vec[0];
-        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileErrors::Fatal {
-            msg: format!("{error} when trying to convert tag={tag}"),
-        })?;
+        let tag = PrecompileTag::try_from(tag)
+            .map_err(|error| format!("{error} when trying to convert tag={tag}"))?;
         match tag {
-            PrecompileTag::TryCallApplication => Err(PrecompileErrors::Fatal {
-                msg: "try_call_application is not available in the GeneralServiceCall".to_string(),
-            }),
             PrecompileTag::TryQueryApplication => {
+                ensure!(vec.len() >= 33, format!("vec.size() should be at least 33"));
                 let target = u8_slice_to_application_id(&vec[1..33]);
                 let argument = vec[33..].to_vec();
                 let result = {
@@ -328,15 +433,14 @@ impl<Runtime: ServiceRuntime>
                         .expect("The lock should be possible");
                     runtime.try_query_application(target, argument)
                 }
-                .map_err(|error| PrecompileErrors::Fatal {
-                    msg: format!("{}", error),
-                })?;
+                .map_err(|error| format!("{}", error))?;
                 // We do not know how much gas was used.
                 let gas_used = 0;
                 let bytes = Bytes::copy_from_slice(&result);
                 let result = PrecompileOutput { gas_used, bytes };
                 Ok(result)
             }
+            _ => Err(format!("{tag:?} is not available in GeneralServiceCall")),
         }
     }
 }
@@ -476,6 +580,7 @@ enum Choice {
     Call,
 }
 
+#[derive(Debug)]
 struct ExecutionResultSuccess {
     reason: SuccessReason,
     logs: Vec<Log>,
@@ -512,33 +617,40 @@ where
     Runtime: ContractRuntime,
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
-        let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
-        let mut vec = self.module.clone();
-        vec.extend_from_slice(&argument);
-        let result = self.transact_commit_tx_data(Choice::Create, &vec)?;
-        self.write_logs(result.logs, "deploy")?;
-        let Output::Create(_, _) = result.output else {
-            unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
-        };
+        self.initialize_contract()?;
+        let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
+        if !instantiation_argument.is_empty() {
+            let argument = get_revm_instantiation_bytes(instantiation_argument);
+            let result = self.transact_commit(Choice::Call, &argument)?;
+            self.write_logs(result.logs, "instantiate")?;
+        }
         Ok(())
     }
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         ensure_message_length(operation.len(), 4)?;
         let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
-            let result = self.transact_commit_tx_data(Choice::Call, &operation[4..])?;
+            ensure_message_length(operation.len(), 8)?;
+            forbid_execute_operation_origin(&operation[4..8])?;
+            let result = self.init_transact_commit(Choice::Call, &operation[4..])?;
             result.interpreter_result_and_logs()?
         } else {
-            let result = self.transact_commit_tx_data(Choice::Call, &operation)?;
+            ensure_message_length(operation.len(), 4)?;
+            forbid_execute_operation_origin(&operation[..4])?;
+            let result = self.init_transact_commit(Choice::Call, &operation)?;
             result.output_and_logs()
         };
         self.write_logs(logs, "operation")?;
         Ok(output)
     }
 
-    fn execute_message(&mut self, _message: Vec<u8>) -> Result<(), ExecutionError> {
-        // TODO(#3760): Implement execute_message for EVM
-        todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
+    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
+        let operation = get_revm_execute_message_bytes(message);
+        let result = self.init_transact_commit(Choice::Call, &operation)?;
+        let (output, logs) = result.output_and_logs();
+        self.write_logs(logs, "message")?;
+        assert_eq!(output.len(), 0);
+        Ok(())
     }
 
     fn process_streams(&mut self, _streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
@@ -586,7 +698,35 @@ where
         Self { module, db }
     }
 
-    fn transact_commit_tx_data(
+    /// Executes the transaction. If needed initializes the contract.
+    fn init_transact_commit(
+        &mut self,
+        ch: Choice,
+        vec: &[u8],
+    ) -> Result<ExecutionResultSuccess, ExecutionError> {
+        // An application can be instantiated in Linera sense, but not in EVM sense,
+        // that is the contract entries corresponding to the deployed contract may
+        // be missing.
+        if !self.db.is_initialized()? {
+            self.initialize_contract()?;
+        }
+        self.transact_commit(ch, vec)
+    }
+
+    /// Initializes the contract.
+    fn initialize_contract(&mut self) -> Result<(), ExecutionError> {
+        let mut vec_init = self.module.clone();
+        let argument = {
+            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            runtime.application_parameters()?
+        };
+        let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
+        vec_init.extend_from_slice(&argument);
+        let result = self.transact_commit(Choice::Create, &vec_init)?;
+        self.write_logs(result.logs, "deploy")
+    }
+
+    fn transact_commit(
         &mut self,
         ch: Choice,
         vec: &[u8],
@@ -594,8 +734,6 @@ where
         let (kind, tx_data) = match ch {
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(vec)),
             Choice::Call => {
-                ensure_message_length(vec.len(), 4)?;
-                forbid_execute_operation_origin(&vec[..4])?;
                 let tx_data = Bytes::copy_from_slice(vec);
                 (TxKind::Call(Address::ZERO.create(0)), tx_data)
             }
@@ -604,36 +742,39 @@ where
             db: self.db.clone(),
         };
         let block_env = self.db.get_block_env()?;
-        let mut evm: Evm<'_, _, _> = Evm::builder()
-            .with_ref_db(&mut self.db)
-            .with_external_context(&mut inspector)
-            .modify_tx_env(|tx| {
-                tx.clear();
-                tx.transact_to = kind;
-                tx.data = tx_data;
-            })
-            .modify_block_env(|block| {
-                *block = block_env;
-            })
-            .append_handler_register(|handler| {
-                inspector_handle_register(handler);
-                let precompiles = handler.pre_execution.load_precompiles();
-                handler.pre_execution.load_precompiles = Arc::new(move || {
-                    let mut precompiles = precompiles.clone();
-                    precompiles.extend([(
-                        PRECOMPILE_ADDRESS,
-                        ContextPrecompile::ContextStateful(Arc::new(GeneralContractCall)),
-                    )]);
-                    precompiles
-                });
-            })
-            .build();
+        let result = {
+            let mut evm: Evm<'_, _, _> = Evm::builder()
+                .with_ref_db(&mut self.db)
+                .with_external_context(&mut inspector)
+                .modify_tx_env(|tx| {
+                    tx.clear();
+                    tx.transact_to = kind;
+                    tx.data = tx_data;
+                })
+                .modify_block_env(|block| {
+                    *block = block_env;
+                })
+                .append_handler_register(|handler| {
+                    inspector_handle_register(handler);
+                    let precompiles = handler.pre_execution.load_precompiles();
+                    handler.pre_execution.load_precompiles = Arc::new(move || {
+                        let mut precompiles = precompiles.clone();
+                        precompiles.extend([(
+                            PRECOMPILE_ADDRESS,
+                            ContextPrecompile::ContextStateful(Arc::new(GeneralContractCall)),
+                        )]);
+                        precompiles
+                    });
+                })
+                .build();
 
-        let result = evm.transact_commit().map_err(|error| {
-            let error = format!("{:?}", error);
-            let error = EvmExecutionError::TransactCommitError(error);
-            ExecutionError::EvmError(error)
-        })?;
+            evm.transact_commit().map_err(|error| {
+                let error = format!("{:?}", error);
+                let error = EvmExecutionError::TransactCommitError(error);
+                ExecutionError::EvmError(error)
+            })
+        }?;
+        self.db.commit_changes()?;
         process_execution_result(result)
     }
 
@@ -653,6 +794,7 @@ where
 }
 
 pub struct RevmServiceInstance<Runtime> {
+    module: Vec<u8>,
     db: DatabaseRuntime<Runtime>,
 }
 
@@ -660,9 +802,9 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    pub fn prepare(_module: Vec<u8>, runtime: Runtime) -> Self {
+    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = DatabaseRuntime::new(runtime);
-        Self { db }
+        Self { module, db }
     }
 }
 
@@ -683,11 +825,11 @@ where
 
         ensure_message_length(query.len(), 4)?;
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
-            let result = self.transact_tx_data(&query[4..])?;
+            let result = self.init_transact(&query[4..])?;
             let (answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
-            let result = self.transact_tx_data(&query)?;
+            let result = self.init_transact(&query)?;
             let (output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
@@ -700,11 +842,39 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    fn transact_tx_data(&mut self, vec: &[u8]) -> Result<ExecutionResultSuccess, ExecutionError> {
+    fn init_transact(&mut self, vec: &[u8]) -> Result<ExecutionResultSuccess, ExecutionError> {
+        // In case of a shared application, we need to instantiate it first
+        // However, since in ServiceRuntime, we cannot modify the storage,
+        // therefore the compiled contract is saved in the changes.
+        if !self.db.is_initialized()? {
+            let changes = {
+                let mut vec_init = self.module.clone();
+                let argument = {
+                    let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+                    runtime.application_parameters()?
+                };
+                vec_init.extend_from_slice(&argument);
+                let kind = TxKind::Create;
+                let tx_data = Bytes::copy_from_slice(&vec_init);
+                let (_, changes) = self.transact(kind, tx_data)?;
+                changes
+            };
+            self.db.changes = changes;
+        }
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
-        let tx_data = Bytes::copy_from_slice(vec);
         let contract_address = Address::ZERO.create(0);
+        let kind = TxKind::Call(contract_address);
+        let tx_data = Bytes::copy_from_slice(vec);
+        let (execution_result, _) = self.transact(kind, tx_data)?;
+        Ok(execution_result)
+    }
+
+    fn transact(
+        &mut self,
+        kind: TxKind,
+        tx_data: Bytes,
+    ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
         let mut inspector = CallInterceptorService {
             db: self.db.clone(),
         };
@@ -715,7 +885,7 @@ where
             .with_external_context(&mut inspector)
             .modify_tx_env(|tx| {
                 tx.clear();
-                tx.transact_to = TxKind::Call(contract_address);
+                tx.transact_to = kind;
                 tx.data = tx_data;
             })
             .modify_block_env(|block| {
@@ -737,9 +907,12 @@ where
 
         let result_state = evm.transact().map_err(|error| {
             let error = format!("{:?}", error);
-            let error = EvmExecutionError::TransactCommitError(error);
+            let error = EvmExecutionError::TransactError(error);
             ExecutionError::EvmError(error)
         })?;
-        process_execution_result(result_state.result)
+        Ok((
+            process_execution_result(result_state.result)?,
+            result_state.state,
+        ))
     }
 }

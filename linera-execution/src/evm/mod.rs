@@ -23,8 +23,12 @@ pub enum EvmExecutionError {
     CommitError(String),
     #[error("It is illegal to call execute_message from an operation")]
     OperationCallExecuteMessage,
+    #[error("It is illegal to call instantiate from an operation")]
+    OperationCallInstantiate,
     #[error("The operation should contain the evm selector and so have length 4 or more")]
     OperationIsTooShort,
+    #[error("Transact error {0}")]
+    TransactError(String),
     #[error("Transact commit error {0}")]
     TransactCommitError(String),
     #[error("The operation was reverted")]

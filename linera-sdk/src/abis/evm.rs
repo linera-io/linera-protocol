@@ -8,6 +8,7 @@ use linera_base::{
 };
 
 /// An ABI for applications that implement an EVM runtime.
+#[derive(PartialEq)]
 pub struct EvmAbi;
 
 impl ContractAbi for EvmAbi {

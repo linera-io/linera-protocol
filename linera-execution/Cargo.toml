@@ -19,6 +19,7 @@ revm = [
     "dep:revm-precompile",
     "dep:revm-interpreter",
     "dep:alloy",
+    "dep:alloy-primitives",
     "dep:alloy-sol-types",
     "dep:hex",
     "dep:tempfile",
@@ -33,6 +34,7 @@ web = ["linera-base/web", "linera-views/web", "js-sys"]
 alloy = { workspace = true, default-features = false, optional = true, features = [
     "rpc-types-eth",
 ] }
+alloy-primitives = { workspace = true, optional = true }
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
 async-graphql.workspace = true
