@@ -718,8 +718,8 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
-    use linera_sdk::abis::evm::EvmAbi;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
+    use linera_sdk::abis::evm::EvmAbi;
 
     let (mut net, client1) = config.instantiate().await?;
 
@@ -813,14 +813,11 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
 
-
     net.ensure_is_running().await?;
     net.terminate().await?;
 
     Ok(())
 }
-
-
 
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
@@ -849,8 +846,7 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         function test_chain_ownership();
     }
 
-    let (contract, _dir) =
-        get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
+    let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
 
     let instantiation_argument = Vec::new();
     let application_id = client
@@ -872,7 +868,6 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         .make_application(&chain, &application_id)
         .await?;
 
-
     /*
     let query = test_chain_idCall {};
     let query = EvmQuery::Query(query.abi_encode());
@@ -890,11 +885,6 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     Ok(())
 }
-
-
-
-
-
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

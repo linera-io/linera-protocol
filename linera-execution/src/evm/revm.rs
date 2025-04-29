@@ -34,9 +34,10 @@ use {
 };
 
 use crate::{
-    evm::database::DatabaseRuntime, BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError,
-    EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract,
-    UserContractInstance, UserContractModule, UserService, UserServiceInstance, UserServiceModule,
+    evm::database::DatabaseRuntime, BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle,
+    EvmExecutionError, EvmRuntime, ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle,
+    UserContract, UserContractInstance, UserContractModule, UserService, UserServiceInstance,
+    UserServiceModule,
 };
 
 /// This is the selector of the `execute_message` that should be called
@@ -320,20 +321,29 @@ impl PrecompileTag {
     fn from_u8(tag: u8) -> Result<Self, String> {
         match tag {
             0 => Ok(PrecompileTag::Base(BasePrecompileTag::ChainId)),
-            1 => Ok(PrecompileTag::Base(BasePrecompileTag::ApplicationCreatorChainId)),
+            1 => Ok(PrecompileTag::Base(
+                BasePrecompileTag::ApplicationCreatorChainId,
+            )),
             2 => Ok(PrecompileTag::Base(BasePrecompileTag::ChainOwnership)),
             3 => Ok(PrecompileTag::Base(BasePrecompileTag::ReadDataBlob)),
             4 => Ok(PrecompileTag::Base(BasePrecompileTag::AssertDataBlobExists)),
-            5 => Ok(PrecompileTag::Contract(ContractPrecompileTag::TryCallApplication)),
-            6 => Ok(PrecompileTag::Contract(ContractPrecompileTag::ValidationRound)),
+            5 => Ok(PrecompileTag::Contract(
+                ContractPrecompileTag::TryCallApplication,
+            )),
+            6 => Ok(PrecompileTag::Contract(
+                ContractPrecompileTag::ValidationRound,
+            )),
             7 => Ok(PrecompileTag::Contract(ContractPrecompileTag::SendMessage)),
             8 => Ok(PrecompileTag::Contract(ContractPrecompileTag::MessageId)),
-            9 => Ok(PrecompileTag::Contract(ContractPrecompileTag::MessageIsBouncing)),
-            10 => Ok(PrecompileTag::Service(ServicePrecompileTag::TryQueryApplication)),
+            9 => Ok(PrecompileTag::Contract(
+                ContractPrecompileTag::MessageIsBouncing,
+            )),
+            10 => Ok(PrecompileTag::Service(
+                ServicePrecompileTag::TryQueryApplication,
+            )),
             _ => Err(format!("Failed to get PrecompileTag from tag={tag}")),
         }
     }
-
 }
 
 struct GeneralContractCall;
@@ -355,12 +365,16 @@ impl<Runtime: ContractRuntime>
                 let bytes = Bytes::from(vec);
                 let result = PrecompileOutput { gas_used, bytes };
                 Ok(result)
-            },
+            }
         }
     }
 }
 
-fn base_runtime_call<Runtime: BaseRuntime>(tag: BasePrecompileTag, vec: &[u8], context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>) -> Result<Vec<u8>, String> {
+fn base_runtime_call<Runtime: BaseRuntime>(
+    tag: BasePrecompileTag,
+    vec: &[u8],
+    context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+) -> Result<Vec<u8>, String> {
     let mut runtime = context
         .db
         .0
@@ -370,21 +384,22 @@ fn base_runtime_call<Runtime: BaseRuntime>(tag: BasePrecompileTag, vec: &[u8], c
     match tag {
         BasePrecompileTag::ChainId => {
             ensure!(vec.is_empty(), format!("vec should be empty"));
-            let chain_id = runtime.chain_id()
+            let chain_id = runtime
+                .chain_id()
                 .map_err(|error| format!("ChainId error: {error}"))?;
-            bcs::to_bytes(&chain_id)
-                .map_err(|error| format!("ChainId serialization error {error}"))
-        },
+            bcs::to_bytes(&chain_id).map_err(|error| format!("ChainId serialization error {error}"))
+        }
         BasePrecompileTag::ApplicationCreatorChainId => {
             ensure!(vec.is_empty(), format!("vec should be empty"));
-            let chain_id = runtime.application_creator_chain_id()
+            let chain_id = runtime
+                .application_creator_chain_id()
                 .map_err(|error| format!("ApplicationCreatorChainId error: {error}"))?;
-            bcs::to_bytes(&chain_id)
-                .map_err(|error| format!("ChainId serialization error {error}"))
-        },
+            bcs::to_bytes(&chain_id).map_err(|error| format!("ChainId serialization error {error}"))
+        }
         BasePrecompileTag::ChainOwnership => {
             ensure!(vec.is_empty(), format!("vec should be empty"));
-            let chain_ownership = runtime.chain_ownership()
+            let chain_ownership = runtime
+                .chain_ownership()
                 .map_err(|error| format!("ChainOwnership error: {error}"))?;
             bcs::to_bytes(&chain_ownership)
                 .map_err(|error| format!("ChainOwnership serialization error {error}"))
@@ -392,21 +407,21 @@ fn base_runtime_call<Runtime: BaseRuntime>(tag: BasePrecompileTag, vec: &[u8], c
         BasePrecompileTag::ReadDataBlob => {
             ensure!(vec.len() == 32, format!("vec.size() should be 32"));
             let hash = CryptoHash::try_from(vec).unwrap();
-            let blob = runtime.read_data_blob(&hash)
+            let blob = runtime
+                .read_data_blob(&hash)
                 .map_err(|error| format!("ReadDataBlob error: {error}"))?;
             Ok(blob)
         }
         BasePrecompileTag::AssertDataBlobExists => {
             ensure!(vec.len() == 32, format!("vec.size() should be 32"));
             let hash = CryptoHash::try_from(vec).unwrap();
-            let test = runtime.assert_data_blob_exists(&hash)
+            let test = runtime
+                .assert_data_blob_exists(&hash)
                 .map_err(|error| format!("AssertDataBlobExists error: {error}"))?;
-            bcs::to_bytes(&test)
-                .map_err(|error| format!("bool serialization error {error}"))
+            bcs::to_bytes(&test).map_err(|error| format!("bool serialization error {error}"))
         }
     }
 }
-
 
 const MESSAGE_IS_BOUNCING_NONE: u8 = 0;
 const MESSAGE_IS_BOUNCING_SOME_TRUE: u8 = 1;
@@ -436,14 +451,14 @@ impl GeneralContractCall {
             }
             ContractPrecompileTag::ValidationRound => {
                 ensure!(vec.is_empty(), format!("vec should be empty"));
-                let validation_round = runtime.validation_round()
+                let validation_round = runtime
+                    .validation_round()
                     .map_err(|error| format!("ValidationRound error: {error}"))?;
                 let value = match validation_round {
                     None => 0,
                     Some(value) => value + 1,
                 };
-                bcs::to_bytes(&value)
-                    .map_err(|error| format!("u32 serialization error {error}"))
+                bcs::to_bytes(&value).map_err(|error| format!("u32 serialization error {error}"))
             }
             ContractPrecompileTag::SendMessage => {
                 ensure!(vec.len() >= 32, format!("vec.size() should be at least 32"));
@@ -499,8 +514,12 @@ impl GeneralContractCall {
         let tag = PrecompileTag::from_u8(tag)?;
         match tag {
             PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[1..], context),
-            PrecompileTag::Contract(contract_tag) => Self::contract_runtime_call(contract_tag, &vec[1..], context),
-            PrecompileTag::Service(_) => Err(format!("Service tags are not available in GeneralContractCall")),
+            PrecompileTag::Contract(contract_tag) => {
+                Self::contract_runtime_call(contract_tag, &vec[1..], context)
+            }
+            PrecompileTag::Service(_) => Err(format!(
+                "Service tags are not available in GeneralContractCall"
+            )),
         }
     }
 }
@@ -524,11 +543,10 @@ impl<Runtime: ServiceRuntime>
                 let bytes = Bytes::from(vec);
                 let result = PrecompileOutput { gas_used, bytes };
                 Ok(result)
-            },
+            }
         }
     }
 }
-
 
 impl GeneralServiceCall {
     fn service_runtime_call<Runtime: ServiceRuntime>(
@@ -549,7 +567,7 @@ impl GeneralServiceCall {
                 runtime
                     .try_query_application(target, argument)
                     .map_err(|error| format!("TryQueryApplication error: {error}"))
-            },
+            }
         }
     }
 
@@ -563,8 +581,12 @@ impl GeneralServiceCall {
         let tag = PrecompileTag::from_u8(tag)?;
         match tag {
             PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[1..], context),
-            PrecompileTag::Contract(_) => Err(format!("Contract tags are not available in ServiceContractCall")),
-            PrecompileTag::Service(service_tag) => Self::service_runtime_call(service_tag, &vec[1..], context),
+            PrecompileTag::Contract(_) => Err(format!(
+                "Contract tags are not available in ServiceContractCall"
+            )),
+            PrecompileTag::Service(service_tag) => {
+                Self::service_runtime_call(service_tag, &vec[1..], context)
+            }
         }
     }
 }
