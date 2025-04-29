@@ -93,7 +93,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.subscribe().await?;
@@ -145,7 +145,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner = sender.identity().await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -264,7 +264,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = AccountSecretKey::generate();
     let new_owner = AccountOwner::from(new_key_pair.public());
@@ -304,7 +304,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
     let new_owner = AccountSecretKey::generate().public().into();
@@ -995,7 +995,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let certificate = client1
@@ -1248,7 +1248,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
     let obtained_error = sender

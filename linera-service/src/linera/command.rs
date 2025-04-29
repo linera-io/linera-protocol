@@ -224,10 +224,6 @@ pub enum ClientCommand {
 
     /// View or update the resource control policy
     ResourceControlPolicy {
-        /// Set the base price for creating a block.
-        #[arg(long)]
-        block: Option<Amount>,
-
         /// Set the price per unit of fuel.
         #[arg(long)]
         fuel_unit: Option<Amount>,
@@ -425,11 +421,6 @@ pub enum ClientCommand {
         /// settings.
         #[arg(long, default_value = "no-fees")]
         policy_config: ResourceControlPolicyConfig,
-
-        /// Set the base price for creating a block.
-        /// (This will overwrite value from `--policy-config`)
-        #[arg(long)]
-        block_price: Option<Amount>,
 
         /// Set the price per unit of fuel.
         /// (This will overwrite value from `--policy-config`)

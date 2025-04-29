@@ -587,7 +587,6 @@ impl Runnable for Job {
                                     }
                                 }
                                 ResourceControlPolicy {
-                                    block,
                                     fuel_unit,
                                     read_operation,
                                     write_operation,
@@ -620,7 +619,6 @@ impl Runnable for Job {
                                 } => {
                                     let existing_policy = policy.clone();
                                     policy = linera_execution::ResourceControlPolicy {
-                                        block: block.unwrap_or(existing_policy.block),
                                         fuel_unit: fuel_unit.unwrap_or(existing_policy.fuel_unit),
                                         read_operation: read_operation
                                             .unwrap_or(existing_policy.read_operation),
@@ -1622,7 +1620,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             start_timestamp,
             num_other_initial_chains,
             policy_config,
-            block_price,
             fuel_unit_price,
             read_operation_price,
             write_operation_price,
@@ -1660,7 +1657,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 .expect("Unable to read committee config file");
             let existing_policy = policy_config.into_policy();
             let policy = linera_execution::ResourceControlPolicy {
-                block: block_price.unwrap_or(existing_policy.block),
                 fuel_unit: fuel_unit_price.unwrap_or(existing_policy.fuel_unit),
                 read_operation: read_operation_price.unwrap_or(existing_policy.read_operation),
                 write_operation: write_operation_price.unwrap_or(existing_policy.write_operation),

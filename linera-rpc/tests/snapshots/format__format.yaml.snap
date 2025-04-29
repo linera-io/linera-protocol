@@ -833,8 +833,6 @@ Recipient:
           TYPENAME: Account
 ResourceControlPolicy:
   STRUCT:
-    - block:
-        TYPENAME: Amount
     - fuel_unit:
         TYPENAME: Amount
     - read_operation:

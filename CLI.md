@@ -456,7 +456,6 @@ View or update the resource control policy
 
 ###### **Options:**
 
-* `--block <BLOCK>` — Set the base price for creating a block
 * `--fuel-unit <FUEL_UNIT>` — Set the price per unit of fuel
 * `--read-operation <READ_OPERATION>` — Set the price per read operation
 * `--write-operation <WRITE_OPERATION>` — Set the price per write operation
@@ -516,7 +515,6 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Possible values: `no-fees`, `testnet`
 
-* `--block-price <BLOCK_PRICE>` — Set the base price for creating a block. (This will overwrite value from `--policy-config`)
 * `--fuel-unit-price <FUEL_UNIT_PRICE>` — Set the price per unit of fuel. (This will overwrite value from `--policy-config`)
 * `--read-operation-price <READ_OPERATION_PRICE>` — Set the price per read operation. (This will overwrite value from `--policy-config`)
 * `--write-operation-price <WRITE_OPERATION_PRICE>` — Set the price per write operation. (This will overwrite value from `--policy-config`)

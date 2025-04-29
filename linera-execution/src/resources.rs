@@ -143,7 +143,7 @@ where
             .blocks
             .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
-        self.update_balance(self.policy.block)
+        Ok(())
     }
 
     /// Tracks the execution of an operation in block.
