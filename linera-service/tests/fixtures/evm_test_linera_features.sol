@@ -23,7 +23,7 @@ contract ExampleLineraFeatures {
 
   function test_chain_ownership() external {
     Linera.ChainOwnership memory chain_ownership = Linera.chain_ownership();
-    require(chain_ownership.super_owners.length == 1);
+    require(chain_ownership.super_owners.length == 0);
     require(chain_ownership.owners.length == 1);
   }
 

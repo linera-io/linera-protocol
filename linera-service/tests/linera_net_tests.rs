@@ -848,13 +848,14 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
 
     let (contract, _dir) = get_evm_contract_path("tests/fixtures/evm_test_linera_features.sol")?;
 
+    let constructor_argument = Vec::new();
     let instantiation_argument = Vec::new();
     let application_id = client
-        .publish_and_create::<EvmAbi, (), Vec<u8>>(
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
             contract.clone(),
             contract,
             VmRuntime::Evm,
-            &(),
+            &constructor_argument,
             &instantiation_argument,
             &[],
             None,
@@ -868,11 +869,9 @@ async fn test_evm_linera_features(config: impl LineraNetConfig) -> Result<()> {
         .make_application(&chain, &application_id)
         .await?;
 
-    /*
     let query = test_chain_idCall {};
     let query = EvmQuery::Query(query.abi_encode());
-    application.run_json_query(query.clone()).await?;
-    */
+    application.run_json_query(query).await?;
 
     let query = test_chain_ownershipCall {};
     let query = EvmQuery::Query(query.abi_encode());
