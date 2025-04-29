@@ -9,9 +9,9 @@ mod wasm;
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
-    crypto::AccountSecretKey,
+    crypto::{AccountSecretKey, CryptoHash},
     data_types::*,
-    identifiers::{Account, AccountOwner, ChainId, MessageId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -1163,7 +1163,7 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
     // Create a new committee.
-    let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
+    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.next_block_height(), BlockHeight::from(5));
     assert!(admin.pending_proposal().is_none());
@@ -1238,6 +1238,22 @@ where
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
+
+    user.change_application_permissions(ApplicationPermissions::new_single(ApplicationId::new(
+        CryptoHash::test_hash("foo"),
+    )))
+    .await?;
+
+    let committee = Committee::new(validators, ResourceControlPolicy::default());
+    admin.stage_new_committee(committee).await.unwrap();
+    assert_eq!(admin.epoch().await.unwrap(), Epoch::from(3));
+
+    // Despite the restrictive application permissions, some system operations are still allowed,
+    // and the user chain can migrate to the new epoch.
+    user.synchronize_from_validators().await?;
+    user.process_inbox().await?;
+    assert_eq!(user.epoch().await.unwrap(), Epoch::from(3));
+
     Ok(())
 }
 

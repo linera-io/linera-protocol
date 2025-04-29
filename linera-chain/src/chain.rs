@@ -1137,6 +1137,10 @@ where
             app_permissions.mandatory_applications.iter().cloned(),
         );
         for operation in &block.operations {
+            if operation.is_exempt_from_permissions() {
+                mandatory.clear();
+                continue;
+            }
             ensure!(
                 app_permissions.can_execute_operations(&operation.application_id()),
                 ChainError::AuthorizedApplications(
