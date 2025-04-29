@@ -11,7 +11,7 @@ use axum::{Extension, Router};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Timestamp},
     identifiers::{AccountOwner, ChainId, MessageId},
     ownership::ChainOwnership,
 };
@@ -42,14 +42,15 @@ mod tests;
 pub struct QueryRoot<C> {
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
-    chain_id: ChainId,
+    chain_id: Arc<Mutex<ChainId>>,
 }
 
 /// The root GraphQL mutation type.
 pub struct MutationRoot<C> {
-    chain_id: ChainId,
+    chain_id: Arc<Mutex<ChainId>>,
     context: Arc<Mutex<C>>,
     amount: Amount,
+    end_block_height: BlockHeight,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
@@ -89,7 +90,8 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
+        let chain_id = *self.chain_id.lock().await;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -118,7 +120,8 @@ where
     C: ClientContext,
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
+        let chain_id = *self.chain_id.lock().await;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -149,16 +152,32 @@ where
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;
         self.context.lock().await.update_wallet(&client).await?;
-        let (message_id, certificate) = match result? {
-            ClientOutcome::Committed(result) => result,
-            ClientOutcome::WaitForTimeout(timeout) => {
-                return Err(Error::new(format!(
-                    "This faucet is using a multi-owner chain and is not the leader right now. \
-                    Try again at {}",
-                    timeout.timestamp,
-                )));
-            }
-        };
+        let (message_id, certificate) = result?.try_unwrap()?;
+
+        if client.next_block_height() >= self.end_block_height {
+            let key_pair = client.key_pair().await?;
+            let balance = client.local_balance().await?.try_sub(Amount::ONE)?;
+            let ownership = client.chain_state_view().await?.ownership().clone();
+            let (message_id, certificate) = client
+                .open_chain(ownership, ApplicationPermissions::default(), balance)
+                .await?
+                .try_unwrap()?;
+            // TODO(#1795): Move the remaining tokens to the new chain.
+            client.close_chain().await?.try_unwrap()?;
+            let chain_id = ChainId::child(message_id);
+            info!("Switching to a new faucet chain {chain_id:8}; remaining balance: {balance}");
+            self.context
+                .lock()
+                .await
+                .update_wallet_for_new_chain(
+                    chain_id,
+                    Some(key_pair),
+                    certificate.block().header.timestamp,
+                )
+                .await?;
+            *self.chain_id.lock().await = chain_id;
+        }
+
         let chain_id = ChainId::child(message_id);
         Ok(ClaimOutcome {
             message_id,
@@ -185,7 +204,7 @@ pub struct FaucetService<C>
 where
     C: ClientContext,
 {
-    chain_id: ChainId,
+    chain_id: Arc<Mutex<ChainId>>,
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
@@ -193,6 +212,7 @@ where
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
+    end_block_height: BlockHeight,
     start_timestamp: Timestamp,
     start_balance: Amount,
 }
@@ -203,13 +223,14 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            chain_id: self.chain_id,
+            chain_id: self.chain_id.clone(),
             context: Arc::clone(&self.context),
             genesis_config: Arc::clone(&self.genesis_config),
             config: self.config.clone(),
             storage: self.storage.clone(),
             port: self.port,
             amount: self.amount,
+            end_block_height: self.end_block_height,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
@@ -228,6 +249,7 @@ where
         chain_id: ChainId,
         context: C,
         amount: Amount,
+        end_block_height: BlockHeight,
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
         config: ChainListenerConfig,
@@ -239,13 +261,14 @@ where
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
         Ok(Self {
-            chain_id,
+            chain_id: Arc::new(Mutex::new(chain_id)),
             context,
             genesis_config,
             config,
             storage,
             port,
             amount,
+            end_block_height,
             end_timestamp,
             start_timestamp,
             start_balance,
@@ -254,9 +277,10 @@ where
 
     pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
         let mutation_root = MutationRoot {
-            chain_id: self.chain_id,
+            chain_id: self.chain_id.clone(),
             context: Arc::clone(&self.context),
             amount: self.amount,
+            end_block_height: self.end_block_height,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
@@ -264,7 +288,7 @@ where
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),
             context: Arc::clone(&self.context),
-            chain_id: self.chain_id,
+            chain_id: self.chain_id.clone(),
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
@@ -301,5 +325,29 @@ where
     async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
         let schema = service.0.schema();
         schema.execute(request.into_inner()).await.into()
+    }
+}
+
+trait ClientOutcomeExt {
+    type Output;
+
+    /// Returns the committed result or an error if we are not the leader.
+    ///
+    /// It is recommended to use single-owner chains for the faucet to avoid this error.
+    fn try_unwrap(self) -> Result<Self::Output, Error>;
+}
+
+impl<T> ClientOutcomeExt for ClientOutcome<T> {
+    type Output = T;
+
+    fn try_unwrap(self) -> Result<Self::Output, Error> {
+        match self {
+            ClientOutcome::Committed(result) => Ok(result),
+            ClientOutcome::WaitForTimeout(timeout) => Err(Error::new(format!(
+                "This faucet is using a multi-owner chain and is not the leader right now. \
+                Try again at {}",
+                timeout.timestamp,
+            ))),
+        }
     }
 }

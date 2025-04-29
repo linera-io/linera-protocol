@@ -603,6 +603,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
   Default value: `8080`
 * `--amount <AMOUNT>` — The number of tokens to send to each new chain
 * `--limit-rate-until <LIMIT_RATE_UNTIL>` — The end timestamp: The faucet will rate-limit the token supply so it runs out of money no earlier than this
+* `--max-chain-length <MAX_CHAIN_LENGTH>` — The maximum number of blocks in the faucet chain, before a new one is created
+
+  Default value: `100`
 * `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
 
