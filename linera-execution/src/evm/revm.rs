@@ -345,7 +345,7 @@ impl<Runtime: ContractRuntime>
     fn call(
         &self,
         input: &Bytes,
-        gas_limit: u64,
+        _gas_limit: u64,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
         match Self::call_or_fail(input, context) {
@@ -369,31 +369,36 @@ fn base_runtime_call<Runtime: BaseRuntime>(tag: BasePrecompileTag, vec: &[u8], c
         .expect("The lock should be possible");
     match tag {
         BasePrecompileTag::ChainId => {
+            ensure!(vec.is_empty(), format!("vec should be empty"));
             let chain_id = runtime.chain_id()
                 .map_err(|error| format!("ChainId error: {error}"))?;
             bcs::to_bytes(&chain_id)
                 .map_err(|error| format!("ChainId serialization error {error}"))
         },
         BasePrecompileTag::ApplicationCreatorChainId => {
+            ensure!(vec.is_empty(), format!("vec should be empty"));
             let chain_id = runtime.application_creator_chain_id()
                 .map_err(|error| format!("ApplicationCreatorChainId error: {error}"))?;
             bcs::to_bytes(&chain_id)
                 .map_err(|error| format!("ChainId serialization error {error}"))
         },
         BasePrecompileTag::ChainOwnership => {
+            ensure!(vec.is_empty(), format!("vec should be empty"));
             let chain_ownership = runtime.chain_ownership()
                 .map_err(|error| format!("ChainOwnership error: {error}"))?;
             bcs::to_bytes(&chain_ownership)
                 .map_err(|error| format!("ChainOwnership serialization error {error}"))
         }
         BasePrecompileTag::ReadDataBlob => {
-            let hash = u8_slice_to_cryptohash(vec);
+            ensure!(vec.len() == 32, format!("vec.size() should be 32"));
+            let hash = CryptoHash::try_from(vec).unwrap();
             let blob = runtime.read_data_blob(&hash)
                 .map_err(|error| format!("ReadDataBlob error: {error}"))?;
             Ok(blob)
         }
         BasePrecompileTag::AssertDataBlobExists => {
-            let hash = u8_slice_to_cryptohash(vec);
+            ensure!(vec.len() == 32, format!("vec.size() should be 32"));
+            let hash = CryptoHash::try_from(vec).unwrap();
             let test = runtime.assert_data_blob_exists(&hash)
                 .map_err(|error| format!("AssertDataBlobExists error: {error}"))?;
             bcs::to_bytes(&test)
@@ -470,7 +475,7 @@ impl GeneralContractCall {
                 bcs::to_bytes(&message_id)
                     .map_err(|error| format!("MessageId serialization error {error}"))
             }
-            PrecompileTag::MessageIsBouncing => {
+            ContractPrecompileTag::MessageIsBouncing => {
                 ensure!(vec.is_empty(), format!("vec should be empty"));
                 let message_is_bouncing = runtime
                     .message_is_bouncing()
@@ -509,7 +514,7 @@ impl<Runtime: ServiceRuntime>
     fn call(
         &self,
         input: &Bytes,
-        gas_limit: u64,
+        _gas_limit: u64,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> PrecompileResult {
         match Self::call_or_fail(input, context) {

@@ -718,6 +718,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use alloy_primitives::B256;
     use alloy_sol_types::{sol, SolCall, SolValue};
     use linera_base::vm::EvmQuery;
+    use linera_sdk::abis::evm::EvmAbi;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
 
     let (mut net, client1) = config.instantiate().await?;
