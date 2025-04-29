@@ -260,7 +260,7 @@ jobs:
     - uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Switch to nightly Rust toolchain
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
