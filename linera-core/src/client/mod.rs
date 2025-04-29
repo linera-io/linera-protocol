@@ -2106,14 +2106,13 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
-        let _guard = match guard {
-            Some(guard) => guard,
-            None => {
-                // Acquire a lock if we don't already have it, so that we don't accidentally
-                // create a conflicting block in another task.
-                let mutex = self.state().client_mutex();
-                mutex.lock_owned().await
-            }
+        let _guard = if let Some(guard) = guard {
+            guard
+        } else {
+            // Acquire a lock if we don't already have it, so that we don't accidentally
+            // create a conflicting block in another task.
+            let mutex = self.state().client_mutex();
+            mutex.lock_owned().await
         };
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
