@@ -333,6 +333,8 @@ pub enum ExecutionError {
     InternalError(&'static str),
     #[error("UpdateStreams contains an unknown event")]
     EventNotFound(EventId),
+    #[error("UpdateStreams is outdated")]
+    OutdatedUpdateStreams,
 }
 
 impl From<ViewError> for ExecutionError {
@@ -1210,6 +1212,19 @@ impl Operation {
             Some(SystemOperation::PublishModule { module_id }) => module_id.bytecode_blob_ids(),
             _ => vec![],
         }
+    }
+
+    /// Returns whether this operation is allowed regardless of application permissions.
+    pub fn is_exempt_from_permissions(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        matches!(
+            **system_op,
+            SystemOperation::ProcessNewEpoch(_)
+                | SystemOperation::ProcessRemovedEpoch(_)
+                | SystemOperation::UpdateStreams(_)
+        )
     }
 }
 
