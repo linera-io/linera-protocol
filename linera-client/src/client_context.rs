@@ -410,41 +410,34 @@ where
         S: Storage + Clone + Send + Sync + 'static,
     {
         let node_provider = self.make_node_provider();
-        let client = self.client.clone_with(
-            node_provider.clone(),
-            "Temporary client for fetching the parent chain",
-            vec![message_id.chain_id, chain_id],
-            false,
-        );
+        self.client.track_chain(chain_id);
 
         // Take the latest committee we know of.
         let admin_chain_id = self.wallet.genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let nodes: Vec<_> = if let Some(validators) = validators {
-            node_provider
-                .make_nodes_from_list(validators)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        } else {
-            let info = client.local_node().handle_chain_info_query(query).await?;
-            let committee = info
-                .latest_committee()
-                .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
-            node_provider
-                .make_nodes(committee)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        };
+        let info = self
+            .client
+            .local_node()
+            .handle_chain_info_query(query)
+            .await?;
+        let committee = info
+            .latest_committee()
+            .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
+        let nodes: Vec<_> = node_provider
+            .make_nodes(committee)?
+            .map(|(public_key, node)| RemoteNode { public_key, node })
+            .collect();
 
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
-        client
-            .download_certificates(&nodes, message_id.chain_id, target_height)
+        self.client
+            .download_certificates(&nodes, message_id.chain_id, target_height, committee.clone())
             .await
             .context("downloading parent chain")?;
 
         // The initial timestamp for the new chain is taken from the block with the message.
-        let certificate = client
+        let certificate = self
+            .client
             .local_node()
             .certificate_for(&message_id)
             .await
