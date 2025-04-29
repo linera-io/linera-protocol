@@ -163,6 +163,7 @@ where
                 .open_chain(ownership, ApplicationPermissions::default(), balance)
                 .await?
                 .try_unwrap()?;
+            // TODO(#1795): Move the remaining tokens to the new chain.
             client.close_chain().await?.try_unwrap()?;
             let chain_id = ChainId::child(message_id);
             info!("Switching to a new faucet chain {chain_id:8}; remaining balance: {balance}");
