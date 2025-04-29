@@ -412,30 +412,23 @@ where
         // Take the latest committee we know of.
         let admin_chain_id = self.wallet.genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let nodes: Vec<_> = if let Some(validators) = validators {
-            node_provider
-                .make_nodes_from_list(validators)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        } else {
-            let info = self
-                .client
-                .local_node()
-                .handle_chain_info_query(query)
-                .await?;
-            let committee = info
-                .latest_committee()
-                .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
-            node_provider
-                .make_nodes(committee)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        };
+        let info = self
+            .client
+            .local_node()
+            .handle_chain_info_query(query)
+            .await?;
+        let committee = info
+            .latest_committee()
+            .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
+        let nodes: Vec<_> = node_provider
+            .make_nodes(committee)?
+            .map(|(public_key, node)| RemoteNode { public_key, node })
+            .collect();
 
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
         self.client
-            .download_certificates(&nodes, message_id.chain_id, target_height)
+            .download_certificates(&nodes, message_id.chain_id, target_height, committee.clone())
             .await
             .context("downloading parent chain")?;
 
