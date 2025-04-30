@@ -344,7 +344,9 @@ where
             .await?;
         } else {
             self.mutate_wallet(|w| {
-                w.get_mut(chain_id).unwrap().key_pair = key_pair;
+                let user_chain = w.get_mut(chain_id).unwrap();
+                user_chain.timestamp = timestamp.max(user_chain.timestamp);
+                user_chain.key_pair = key_pair;
             })
             .await?;
         }

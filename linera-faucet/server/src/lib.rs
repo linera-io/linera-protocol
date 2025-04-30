@@ -378,8 +378,9 @@ where
                     })
                     .ok_or_else(|| anyhow::anyhow!("No OpenChain message found"))?;
                 info!("Found new faucet chain {chain_id:8}");
+                let timestamp = certificate.block().header.timestamp;
                 guard
-                    .update_wallet_for_new_chain(chain_id, Some(key_pair), Timestamp::now())
+                    .update_wallet_for_new_chain(chain_id, Some(key_pair), timestamp)
                     .await?;
                 (chain_id, guard.make_chain_client(chain_id)?)
             };
