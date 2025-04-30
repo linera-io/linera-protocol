@@ -58,7 +58,7 @@ impl Default for CommonStoreConfig {
 
 /// The error type for the key-value stores.
 pub trait KeyValueStoreError:
-    std::error::Error + Debug + From<bcs::Error> + Send + Sync + 'static
+    std::error::Error + Debug + From<bcs::Error> + 'static
 {
     /// The name of the backend.
     const BACKEND: &'static str;
@@ -80,7 +80,7 @@ pub trait WithError {
 }
 
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
-#[trait_variant::make(Send)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
@@ -152,7 +152,7 @@ pub trait ReadableKeyValueStore: WithError {
 }
 
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
-#[trait_variant::make(Send)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait WritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
@@ -166,7 +166,7 @@ pub trait WritableKeyValueStore: WithError {
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
-#[trait_variant::make(Send)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait AdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;

@@ -377,6 +377,7 @@ where
 /// Type wrapping `LogView` while memoizing the hash.
 pub type HashedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;
 
+#[cfg(not(web))]
 mod graphql {
     use std::borrow::Cow;
 

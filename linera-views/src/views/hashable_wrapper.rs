@@ -36,7 +36,6 @@ enum KeyTag {
     Hash,
 }
 
-#[async_trait]
 impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
@@ -193,6 +192,7 @@ impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
     }
 }
 
+#[cfg(not(web))]
 mod graphql {
     use std::borrow::Cow;
 

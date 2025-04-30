@@ -3831,7 +3831,6 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-lock",
- "async-trait",
  "bcs",
  "cfg_aliases",
  "convert_case",

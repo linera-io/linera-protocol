@@ -2,7 +2,6 @@
 source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
-#[linera_views::async_trait]
 impl<MyParam> linera_views::views::View<custom::GenericContext<T>> for TestView<MyParam>
 where
     MyParam: Send + Sync + 'static,
@@ -37,6 +36,7 @@ where
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
+            .base_key()
             .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             RegisterView::<
@@ -46,6 +46,7 @@ where
         );
         let index = 1;
         let base_key = context
+            .base_key()
             .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             CollectionView::<
@@ -66,6 +67,7 @@ where
         let pos_next = pos
             + RegisterView::<custom::GenericContext<T>, usize>::NUM_INIT_KEYS;
         let base_key = context
+            .base_key()
             .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let register = RegisterView::<
             custom::GenericContext<T>,
@@ -80,6 +82,7 @@ where
                 RegisterView<custom::GenericContext<T>, usize>,
             >::NUM_INIT_KEYS;
         let base_key = context
+            .base_key()
             .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let collection = CollectionView::<
             custom::GenericContext<T>,
@@ -92,12 +95,12 @@ where
     async fn load(
         context: custom::GenericContext<T>,
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::context::Context as _;
+        use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::metrics::increment_counter(
             &linera_views::metrics::LOAD_VIEW_COUNTER,
             stringify!(TestView),
-            &context.base_key(),
+            &context.base_key().bytes,
         );
         #[cfg(not(target_arch = "wasm32"))]
         use linera_views::metrics::prometheus_util::MeasureLatency as _;
@@ -106,7 +109,7 @@ where
             Self::post_load(context, &[])
         } else {
             let keys = Self::pre_load(&context)?;
-            let values = context.read_multi_values_bytes(keys).await?;
+            let values = context.store().read_multi_values_bytes(keys).await?;
             Self::post_load(context, &values)
         }
     }

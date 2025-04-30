@@ -150,11 +150,6 @@ revm-primitives = "15.2.0"
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
 scylla = "0.15.1"
-secp256k1 = { version = "0.30.0", default-features = false, features = [
-    "alloc",
-    "rand",
-    "serde",
-] }
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
 serde-name = "0.2.1"
@@ -204,7 +199,6 @@ url = "2.4"
 wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.42"
-wasm-encoder = "0.24.1"
 wasm-instrument = { package = "linera-wasm-instrument", version = "0.4.0-linera.1" }
 wasm_thread = "0.3.0"
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.7", default-features = false }
@@ -213,7 +207,6 @@ wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", ve
     "unwind",
     "avx",
 ] }
-wasmparser = "0.101.1"
 wasmtime = { version = "25.0.0", default-features = false, features = [
     "cranelift",
     "runtime",
@@ -278,9 +271,6 @@ max_combination_size = 1
 
 # Make sure to compile VMs with high optimization level
 [profile.dev.package.linera-wasmer]
-opt-level = 3
-
-[profile.dev.package.wasmparser]
 opt-level = 3
 
 [profile.dev.package.wasmtime]
