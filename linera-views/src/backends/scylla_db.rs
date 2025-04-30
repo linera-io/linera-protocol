@@ -813,7 +813,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         // Create a keyspace if it doesn't exist
         let query = format!(
             "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = {{ \
-                'class' : 'SimpleStrategy', \
+                'class' : 'NetworkTopologyStrategy', \
                 'replication_factor' : {} \
             }}",
             config.common_config.replication_factor
