@@ -352,6 +352,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         }
         function increment(uint64 input);
         function get_value();
+        function failing_function();
     }
 
     let original_counter_value = 35;
@@ -385,6 +386,12 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
+
+    let failing_function = failing_functionCall {};
+    let failing_function = failing_function.abi_encode();
+    let failing_function = EvmQuery::Query(failing_function);
+    let result = application.run_json_query(failing_function).await;
+    assert!(result.is_err());
 
     let query = get_valueCall {};
     let query = query.abi_encode();
