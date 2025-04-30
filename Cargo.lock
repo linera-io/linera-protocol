@@ -4759,6 +4759,7 @@ dependencies = [
  "linera-base",
  "linera-client",
  "linera-core",
+ "linera-execution",
  "linera-storage",
  "linera-version",
  "linera-views",
