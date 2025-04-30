@@ -16,6 +16,7 @@ pragma solidity ^0.8.0;
 // (2,0): try_query_application
 library Linera {
     function bcs_deserialize_offset_bytes32(uint256 pos, bytes memory src) internal pure returns (uint256, bytes32) {
+        // First offset of 0x20 is because the first 32 bytes contains the size of src.
         bytes32 dest;
         assembly {
             dest := mload(add(add(src, 0x20), pos))
