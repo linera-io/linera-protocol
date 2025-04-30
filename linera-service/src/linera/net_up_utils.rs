@@ -290,7 +290,7 @@ async fn print_messages_and_create_faucet(
             ChainId::root(1)
         };
         let service = client
-            .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount, None)
+            .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount)
             .await?;
         Some(service)
     } else {

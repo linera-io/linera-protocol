@@ -2862,7 +2862,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     let owner2 = client2.keygen().await?;
 
     let mut faucet_service = client1
-        .run_faucet(None, chain1, Amount::from_tokens(2), None)
+        .run_faucet(None, chain1, Amount::from_tokens(2))
         .await?;
     let faucet = faucet_service.instance();
     let outcome = faucet.claim(&owner2).await?;
@@ -2955,17 +2955,8 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     }
 
     let amount = Amount::ONE;
-    let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, amount, Some(chain_count as u64))
-        .await?;
+    let mut faucet_service = faucet_client.run_faucet(None, faucet_chain, amount).await?;
     let faucet = faucet_service.instance();
-
-    // Create a new wallet using the faucet
-    let other_client = net.make_client().await;
-    let (other_outcome, _) = other_client
-        .wallet_init(&[], FaucetOption::NewChain(&faucet))
-        .await?
-        .unwrap();
 
     // Create a new wallet using the faucet
     let client = net.make_client().await;
@@ -2973,10 +2964,6 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await?
         .unwrap();
-
-    // Since the faucet chain exceeds the configured maximum length, the faucet should have
-    // switched after the first new chain.
-    assert!(other_outcome.message_id.chain_id != outcome.message_id.chain_id);
 
     let chain = outcome.chain_id;
     assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());
@@ -3020,7 +3007,7 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
 
-    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE, None).await?;
+    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE).await?;
     let faucet = faucet_service.instance();
 
     let path =
