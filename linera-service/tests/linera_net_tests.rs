@@ -720,6 +720,8 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use linera_base::vm::EvmQuery;
     use linera_execution::test_utils::solidity::{get_evm_contract_path, read_evm_u64_entry};
     use linera_sdk::abis::evm::EvmAbi;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
 
