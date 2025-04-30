@@ -3,17 +3,17 @@
 pragma solidity ^0.8.0;
 
 // Precompile keys:
-// 0: chain_id
-// 1: application_creator_chain_id
-// 2: chain_ownership
-// 3: read data blob
-// 4: assert data blob exists
-// 5: try_call_application
-// 6: validation round
-// 7: send_message
-// 8: message_id
-// 9: message_is_bouncing
-// 10: try_query_application
+// (0,0): chain_id
+// (0,1): application_creator_chain_id
+// (0,2): chain_ownership
+// (0,3): read data blob
+// (0,4): assert data blob exists
+// (1,0): try_call_application
+// (1,1): validation round
+// (1,2): send_message
+// (1,3): message_id
+// (1,4): message_is_bouncing
+// (2,0): try_query_application
 library Linera {
     function bcs_deserialize_offset_bytes32(uint256 pos, bytes memory src) internal pure returns (uint256, bytes32) {
         bytes32 dest;
@@ -298,8 +298,9 @@ library Linera {
 
     function inner_chain_id(uint8 val) internal returns (bytes32) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(1);
-        input1[0] = bytes1(val);
+        bytes memory input1 = new bytes(2);
+        input1[0] = bytes1(uint8(0));
+        input1[1] = bytes1(val);
         (bool success, bytes memory output1) = precompile.call(input1);
         require(success);
         return bcs_deserialize_bytes32(output1);
@@ -315,8 +316,9 @@ library Linera {
 
     function chain_ownership() internal returns (ChainOwnership memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(1);
-        input1[0] = bytes1(uint8(2));
+        bytes memory input1 = new bytes(2);
+        input1[0] = bytes1(uint8(0));
+        input1[1] = bytes1(uint8(2));
         (bool success, bytes memory output1) = precompile.call(input1);
         require(success);
         return bcs_deserialize_ChainOwnership(output1);
@@ -324,8 +326,9 @@ library Linera {
 
     function read_data_blob(bytes32 hash) internal returns (bytes memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(1);
-        input1[0] = bytes1(uint8(3));
+        bytes memory input1 = new bytes(2);
+        input1[0] = bytes1(uint8(0));
+        input1[1] = bytes1(uint8(3));
         bytes memory input2 = abi.encodePacked(input1, hash);
         (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
@@ -334,8 +337,9 @@ library Linera {
 
     function assert_data_blob_exists(bytes32 hash) internal {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(1);
-        input1[0] = bytes1(uint8(4));
+        bytes memory input1 = new bytes(2);
+        input1[0] = bytes1(uint8(0));
+        input1[1] = bytes1(uint8(4));
         bytes memory input2 = abi.encodePacked(input1, hash);
         (bool success, bytes memory output1) = precompile.call(input2);
         require(success);
@@ -404,8 +408,7 @@ library Linera {
 
     function try_call_application(bytes32 universal_address, bytes memory operation) internal returns (bytes memory) {
         address precompile = address(0x0b);
-        bytes1 input1 = bytes1(uint8(5));
-        bytes memory input2 = abi.encodePacked(input1, universal_address, operation);
+        bytes memory input2 = abi.encodePacked(uint8(1), uint8(0), universal_address, operation);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         return output;
@@ -413,8 +416,9 @@ library Linera {
 
     function validation_round() internal returns (OptionU32 memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(1);
-        input1[0] = bytes1(uint8(6));
+        bytes memory input1 = new bytes(2);
+        input1[0] = bytes1(uint8(1));
+        input1[1] = bytes1(uint8(1));
         (bool success, bytes memory output1) = precompile.call(input1);
         require(success);
         uint32 val = bcs_deserialize_uint32(output1);
@@ -430,8 +434,7 @@ library Linera {
 
     function send_message(bytes32 input_chain_id, bytes memory message) internal {
         address precompile = address(0x0b);
-        bytes1 input1 = bytes1(uint8(7));
-        bytes memory input2 = abi.encodePacked(input1, input_chain_id, message);
+        bytes memory input2 = abi.encodePacked(uint8(1), uint8(2), input_chain_id, message);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         require(output.length == 0);
@@ -439,8 +442,9 @@ library Linera {
 
     function message_id() internal returns (OptionMessageId memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(1);
-        input1[0] = bytes1(uint8(8));
+        bytes memory input1 = new bytes(2);
+        input1[0] = bytes1(uint8(1));
+        input1[1] = bytes1(uint8(3));
         (bool success, bytes memory output1) = precompile.call(input1);
         require(success);
         OptionMessageId memory output2 = bcs_deserialize_OptionMessageId(output1);
@@ -449,8 +453,9 @@ library Linera {
 
     function message_is_bouncing() internal returns (MessageIsBouncing) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(1);
-        input1[0] = bytes1(uint8(9));
+        bytes memory input1 = new bytes(2);
+        input1[0] = bytes1(uint8(1));
+        input1[1] = bytes1(uint8(4));
         (bool success, bytes memory output1) = precompile.call(input1);
         require(success);
         MessageIsBouncing output2 = abi.decode(output1, (MessageIsBouncing));
@@ -459,8 +464,7 @@ library Linera {
 
     function try_query_application(bytes32 universal_address, bytes memory argument) internal returns (bytes memory) {
         address precompile = address(0x0b);
-        bytes1 input1 = bytes1(uint8(10));
-        bytes memory input2 = abi.encodePacked(input1, universal_address, argument);
+        bytes memory input2 = abi.encodePacked(uint8(2), uint8(0), universal_address, argument);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         return output;

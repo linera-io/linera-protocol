@@ -24,6 +24,7 @@ use revm_primitives::{
     address, EvmState, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput,
     SuccessReason, TxKind,
 };
+use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
@@ -273,7 +274,7 @@ fn address_to_user_application_id(address: Address) -> ApplicationId {
 }
 
 /// Some functionalities from the BaseRuntime
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 enum BasePrecompileTag {
     /// Key prefix for `chain_id`
     ChainId,
@@ -288,7 +289,7 @@ enum BasePrecompileTag {
 }
 
 /// Some functionalities from the ContractRuntime not in BaseRuntime
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 enum ContractPrecompileTag {
     /// Key prefix for `try_call_application`
     TryCallApplication,
@@ -303,47 +304,18 @@ enum ContractPrecompileTag {
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 enum ServicePrecompileTag {
     /// Try query application
     TryQueryApplication,
 }
 
 /// Key prefixes used to transmit precompiles.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 enum PrecompileTag {
     Base(BasePrecompileTag),
     Contract(ContractPrecompileTag),
     Service(ServicePrecompileTag),
-}
-
-impl PrecompileTag {
-    fn from_u8(tag: u8) -> Result<Self, String> {
-        match tag {
-            0 => Ok(PrecompileTag::Base(BasePrecompileTag::ChainId)),
-            1 => Ok(PrecompileTag::Base(
-                BasePrecompileTag::ApplicationCreatorChainId,
-            )),
-            2 => Ok(PrecompileTag::Base(BasePrecompileTag::ChainOwnership)),
-            3 => Ok(PrecompileTag::Base(BasePrecompileTag::ReadDataBlob)),
-            4 => Ok(PrecompileTag::Base(BasePrecompileTag::AssertDataBlobExists)),
-            5 => Ok(PrecompileTag::Contract(
-                ContractPrecompileTag::TryCallApplication,
-            )),
-            6 => Ok(PrecompileTag::Contract(
-                ContractPrecompileTag::ValidationRound,
-            )),
-            7 => Ok(PrecompileTag::Contract(ContractPrecompileTag::SendMessage)),
-            8 => Ok(PrecompileTag::Contract(ContractPrecompileTag::MessageId)),
-            9 => Ok(PrecompileTag::Contract(
-                ContractPrecompileTag::MessageIsBouncing,
-            )),
-            10 => Ok(PrecompileTag::Service(
-                ServicePrecompileTag::TryQueryApplication,
-            )),
-            _ => Err(format!("Failed to get PrecompileTag from tag={tag}")),
-        }
-    }
 }
 
 struct GeneralContractCall;
@@ -463,7 +435,7 @@ impl GeneralContractCall {
             ContractPrecompileTag::SendMessage => {
                 ensure!(vec.len() >= 32, format!("vec.size() should be at least 32"));
                 let destination = ChainId(
-                    CryptoHash::try_from(&vec[0..32])
+                    CryptoHash::try_from(&vec[..32])
                         .map_err(|error| format!("TryError: {error}"))?,
                 );
                 let authenticated = true;
@@ -510,12 +482,11 @@ impl GeneralContractCall {
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
         let vec = input.to_vec();
-        let tag = vec[0];
-        let tag = PrecompileTag::from_u8(tag)?;
-        match tag {
-            PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[1..], context),
+        ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
+        match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
+            PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
             PrecompileTag::Contract(contract_tag) => {
-                Self::contract_runtime_call(contract_tag, &vec[1..], context)
+                Self::contract_runtime_call(contract_tag, &vec[2..], context)
             }
             PrecompileTag::Service(_) => {
                 Err("Service tags are not available in GeneralContractCall".to_string())
@@ -576,16 +547,14 @@ impl GeneralServiceCall {
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
         let vec = input.to_vec();
-        ensure!(!vec.is_empty(), format!("vec.size() should be at least 1"));
-        let tag = vec[0];
-        let tag = PrecompileTag::from_u8(tag)?;
-        match tag {
-            PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[1..], context),
+        ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
+        match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
+            PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
             PrecompileTag::Contract(_) => {
                 Err("Contract tags are not available in ServiceContractCall".to_string())
             }
             PrecompileTag::Service(service_tag) => {
-                Self::service_runtime_call(service_tag, &vec[1..], context)
+                Self::service_runtime_call(service_tag, &vec[2..], context)
             }
         }
     }
