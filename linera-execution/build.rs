@@ -7,6 +7,7 @@ fn main() {
 
         with_fs: { all(not(target_arch = "wasm32"), feature = "fs") },
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
+        with_graphql: { not(web) },
         with_testing: { any(test, feature = "test") },
         with_tokio_multi_thread: { not(target_arch = "wasm32") },
         with_wasmer: { feature = "wasmer" },

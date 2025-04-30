@@ -10,6 +10,7 @@ pub mod committee;
 pub mod evm;
 mod execution;
 mod execution_state_actor;
+#[cfg(with_graphql)]
 mod graphql;
 mod policy;
 mod resources;
