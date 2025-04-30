@@ -2961,6 +2961,64 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     let faucet = faucet_service.instance();
 
     // Create a new wallet using the faucet
+    let client = net.make_client().await;
+    let (outcome, _) = client
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
+        .await?
+        .unwrap();
+
+    let chain = outcome.chain_id;
+    let initial_balance = client.query_balance(Account::chain(chain)).await?;
+    let fees_paid = amount - initial_balance;
+    assert!(initial_balance > Amount::ZERO);
+
+    client
+        .transfer(initial_balance - fees_paid, chain, faucet_chain)
+        .await?;
+
+    let final_balance = client.query_balance(Account::chain(chain)).await?;
+    assert_eq!(final_balance, Amount::ZERO);
+
+    faucet_service.ensure_is_running()?;
+    faucet_service.terminate().await?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+/// Tests rotating faucet chains.
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_faucet_chain_rotation(config: impl LineraNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let chain_count = 4;
+
+    let (mut net, faucet_client) = config.instantiate().await?;
+
+    let faucet_chain = faucet_client.load_wallet()?.default_chain().unwrap();
+
+    // Use the faucet directly to initialize chains
+    for _ in 0..chain_count {
+        faucet_client
+            .open_chain(faucet_chain, None, Amount::ONE)
+            .await?;
+    }
+
+    let amount = Amount::ONE;
+    let mut faucet_service = faucet_client
+        .run_faucet(None, faucet_chain, amount, Some(chain_count as u64))
+        .await?;
+    let faucet = faucet_service.instance();
+
+    // Create a new wallet using the faucet
     let client1 = net.make_client().await;
     let (outcome1, _) = client1
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
@@ -2996,18 +3054,56 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     // with it.
     assert_eq!(outcome2.message_id.chain_id, outcome3.message_id.chain_id);
 
-    let chain = outcome3.chain_id;
-    assert_eq!(chain, client3.load_wallet()?.default_chain().unwrap());
+    faucet_service.ensure_is_running()?;
+    faucet_service.terminate().await?;
 
-    let initial_balance = client3.query_balance(Account::chain(chain)).await?;
+    faucet_client.sync(outcome3.message_id.chain_id).await?;
+    let owner = faucet_client
+        .load_wallet()?
+        .chains
+        .values()
+        .next()
+        .unwrap()
+        .key_pair
+        .as_ref()
+        .unwrap()
+        .public()
+        .into();
+    let balance = faucet_client
+        .query_balance(Account::chain(outcome3.message_id.chain_id))
+        .await?
+        - Amount::ONE;
+    faucet_client
+        .open_chain(outcome3.message_id.chain_id, Some(owner), balance)
+        .await?;
+
+    let mut faucet_service = faucet_client
+        .run_faucet(None, faucet_chain, amount, Some(chain_count as u64))
+        .await?;
+
+    // Create a new wallet using the faucet
+    let client4 = net.make_client().await;
+    let (outcome4, _) = client4
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
+        .await?
+        .unwrap();
+
+    // After restarting, the faucet found its second chain, even though it was not initialized
+    // with it.
+    assert_ne!(outcome3.message_id.chain_id, outcome4.message_id.chain_id);
+
+    let chain = outcome4.chain_id;
+    assert_eq!(chain, client4.load_wallet()?.default_chain().unwrap());
+
+    let initial_balance = client4.query_balance(Account::chain(chain)).await?;
     let fees_paid = amount - initial_balance;
     assert!(initial_balance > Amount::ZERO);
 
-    client3
+    client4
         .transfer(initial_balance - fees_paid, chain, faucet_chain)
         .await?;
 
-    let final_balance = client3.query_balance(Account::chain(chain)).await?;
+    let final_balance = client4.query_balance(Account::chain(chain)).await?;
     assert_eq!(final_balance, Amount::ZERO);
 
     faucet_service.ensure_is_running()?;

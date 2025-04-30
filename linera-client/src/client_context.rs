@@ -342,6 +342,11 @@ where
                 })
             })
             .await?;
+        } else {
+            self.mutate_wallet(|w| {
+                w.get_mut(chain_id).unwrap().key_pair = key_pair;
+            })
+            .await?;
         }
 
         Ok(())

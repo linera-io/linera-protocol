@@ -154,6 +154,11 @@ where
             .await;
         self.context.lock().await.update_wallet(&client).await?;
         let (message_id, certificate) = result?.try_unwrap()?;
+        let outcome = ClaimOutcome {
+            message_id,
+            chain_id: ChainId::child(message_id),
+            certificate_hash: certificate.hash(),
+        };
 
         if client.next_block_height() >= self.end_block_height {
             let key_pair = client.key_pair().await?;
@@ -163,10 +168,9 @@ where
                 .open_chain(ownership, ApplicationPermissions::default(), balance)
                 .await?
                 .try_unwrap()?;
-            // TODO(#1795): Move the remaining tokens to the new chain.
-            client.close_chain().await?.try_unwrap()?;
             let chain_id = ChainId::child(message_id);
             info!("Switching to a new faucet chain {chain_id:8}; remaining balance: {balance}");
+            *self.chain_id.lock().await = chain_id;
             self.context
                 .lock()
                 .await
@@ -176,15 +180,11 @@ where
                     certificate.block().header.timestamp,
                 )
                 .await?;
-            *self.chain_id.lock().await = chain_id;
+            // TODO(#1795): Move the remaining tokens to the new chain.
+            client.close_chain().await?.try_unwrap()?;
         }
 
-        let chain_id = ChainId::child(message_id);
-        Ok(ClaimOutcome {
-            message_id,
-            chain_id,
-            certificate_hash: certificate.hash(),
-        })
+        Ok(outcome)
     }
 }
 
@@ -295,7 +295,7 @@ where
     }
 
     /// Runs the faucet.
-    #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
+    #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port))]
     pub async fn run(self) -> anyhow::Result<()> {
         self.find_current_chain().await?;
 
@@ -338,15 +338,17 @@ where
         client.synchronize_from_validators().await?;
         loop {
             let chain = client.chain_state_view().await?;
-            if !chain.execution_state.system.closed.get() {
-                break; // This is the current chain; it has not been closed yet.
+            let is_closed = *chain.execution_state.system.closed.get();
+            if !is_closed && *chain.execution_state.system.balance.get() > self.amount {
+                break;
             }
             // The faucet closes each chain in the last block; the next-to-last block opens the
-            // new chain.
+            // new chain. If the chain was not closed, we check whether the last block opened
+            // a new faucet chain instead.
             let index = chain
                 .confirmed_log
                 .count()
-                .checked_sub(2)
+                .checked_sub(if is_closed { 2 } else { 1 })
                 .ok_or(ArithmeticError::Underflow)?;
             let hash = chain
                 .confirmed_log
@@ -354,22 +356,33 @@ where
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Missing confirmed_log entry"))?;
             let certificate = client.storage_client().read_certificate(hash).await?;
-            chain_id = certificate
-                .block()
-                .messages()
-                .iter()
-                .flatten()
-                .find_map(|message| {
-                    if let linera_execution::Message::System(SystemMessage::OpenChain(_)) =
-                        &message.message
-                    {
-                        Some(message.destination.recipient()?)
-                    } else {
-                        None
-                    }
-                })
-                .ok_or_else(|| anyhow::anyhow!("No OpenChain message found"))?;
-            client = self.context.lock().await.make_chain_client(chain_id)?;
+            (chain_id, client) = {
+                let mut guard = self.context.lock().await;
+                let (chain_id, key_pair) = certificate
+                    .block()
+                    .messages()
+                    .iter()
+                    .flatten()
+                    .find_map(|message| {
+                        let linera_execution::Message::System(SystemMessage::OpenChain(config)) =
+                            &message.message
+                        else {
+                            return None;
+                        };
+                        let key_pair = config
+                            .ownership
+                            .all_owners()
+                            .find_map(|owner| guard.wallet().key_pair_for_owner(owner))?
+                            .copy();
+                        Some((message.destination.recipient()?, key_pair))
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("No OpenChain message found"))?;
+                info!("Found new faucet chain {chain_id:8}");
+                guard
+                    .update_wallet_for_new_chain(chain_id, Some(key_pair), Timestamp::now())
+                    .await?;
+                (chain_id, guard.make_chain_client(chain_id)?)
+            };
             client.synchronize_from_validators().await?;
         }
         *self.chain_id.lock().await = chain_id;

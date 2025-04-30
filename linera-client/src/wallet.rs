@@ -60,6 +60,10 @@ impl Wallet {
         self.chains.get(&chain_id)
     }
 
+    pub fn get_mut(&mut self, chain_id: ChainId) -> Option<&mut UserChain> {
+        self.chains.get_mut(&chain_id)
+    }
+
     pub fn insert(&mut self, chain: UserChain) {
         if self.default.is_none() {
             self.default = Some(chain.chain_id);
