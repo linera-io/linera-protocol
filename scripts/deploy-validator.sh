@@ -54,7 +54,7 @@ GENESIS_CONFIG="docker/genesis.json"
 
 if [ -z "$REMOTE_IMAGE" ]; then
   echo "Building local image from commit $GIT_COMMIT..."
-  docker build --build-arg git_commit="$GIT_COMMIT" -f  docker/Dockerfile . -t linera
+  docker build --build-arg git_commit="$GIT_COMMIT" --build-arg build_flag="--release" --build-arg build_folder="release" -f  docker/Dockerfile . -t linera
   export LINERA_IMAGE=linera
 else
   export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:${BRANCH_NAME}_release"
