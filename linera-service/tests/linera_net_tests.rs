@@ -2961,35 +2961,53 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     let faucet = faucet_service.instance();
 
     // Create a new wallet using the faucet
-    let other_client = net.make_client().await;
-    let (other_outcome, _) = other_client
+    let client1 = net.make_client().await;
+    let (outcome1, _) = client1
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await?
         .unwrap();
 
     // Create a new wallet using the faucet
-    let client = net.make_client().await;
-    let (outcome, _) = client
+    let client2 = net.make_client().await;
+    let (outcome2, _) = client2
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await?
         .unwrap();
 
     // Since the faucet chain exceeds the configured maximum length, the faucet should have
     // switched after the first new chain.
-    assert!(other_outcome.message_id.chain_id != outcome.message_id.chain_id);
+    assert_ne!(outcome1.message_id.chain_id, outcome2.message_id.chain_id);
 
-    let chain = outcome.chain_id;
-    assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());
+    faucet_service.ensure_is_running()?;
+    faucet_service.terminate().await?;
 
-    let initial_balance = client.query_balance(Account::chain(chain)).await?;
+    let mut faucet_service = faucet_client
+        .run_faucet(None, faucet_chain, amount, Some(chain_count as u64))
+        .await?;
+
+    // Create a new wallet using the faucet
+    let client3 = net.make_client().await;
+    let (outcome3, _) = client3
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
+        .await?
+        .unwrap();
+
+    // After restarting, the faucet found its second chain, even though it was not initialized
+    // with it.
+    assert_eq!(outcome2.message_id.chain_id, outcome3.message_id.chain_id);
+
+    let chain = outcome3.chain_id;
+    assert_eq!(chain, client3.load_wallet()?.default_chain().unwrap());
+
+    let initial_balance = client3.query_balance(Account::chain(chain)).await?;
     let fees_paid = amount - initial_balance;
     assert!(initial_balance > Amount::ZERO);
 
-    client
+    client3
         .transfer(initial_balance - fees_paid, chain, faucet_chain)
         .await?;
 
-    let final_balance = client.query_balance(Account::chain(chain)).await?;
+    let final_balance = client3.query_balance(Account::chain(chain)).await?;
     assert_eq!(final_balance, Amount::ZERO);
 
     faucet_service.ensure_is_running()?;
