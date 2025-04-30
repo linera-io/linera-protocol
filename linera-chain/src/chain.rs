@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
@@ -173,7 +172,8 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
-#[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimestampedBundleInInbox {
     /// The origin and cursor of the bundle.
     pub entry: BundleInInbox,
@@ -182,9 +182,8 @@ pub struct TimestampedBundleInInbox {
 }
 
 /// An origin and cursor of a unskippable bundle that is no longer in our inbox.
-#[derive(
-    Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, async_graphql::SimpleObject,
-)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BundleInInbox {
     /// The origin from which we received the bundle.
     pub origin: ChainId,
@@ -206,8 +205,12 @@ impl BundleInInbox {
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 
 /// A view accessing the state of a chain.
-#[derive(Debug, RootView, ClonableView, SimpleObject)]
-#[graphql(cache_control(no_cache))]
+#[cfg_attr(
+    with_graphql,
+    derive(async_graphql::SimpleObject),
+    graphql(cache_control(no_cache))
+)]
+#[derive(Debug, RootView, ClonableView)]
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -253,7 +256,8 @@ where
 }
 
 /// Block-chaining state.
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ChainTipState {
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<CryptoHash>,

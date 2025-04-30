@@ -70,7 +70,6 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::{ComplexObject, SimpleObject};
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
@@ -138,8 +137,8 @@ impl LockingBlock {
 }
 
 /// The state of the certification process for a chain's next block.
-#[derive(Debug, View, ClonableView, SimpleObject)]
-#[graphql(complex)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject), graphql(complex))]
+#[derive(Debug, View, ClonableView)]
 pub struct ChainManager<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -149,37 +148,37 @@ where
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: RegisterView<C, u64>,
     /// The probability distribution for choosing a round leader.
-    #[graphql(skip)] // Derived from ownership.
+    #[cfg_attr(with_graphql, graphql(skip))] // Derived from ownership.
     pub distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// The probability distribution for choosing a fallback round leader.
-    #[graphql(skip)] // Derived from validator weights.
+    #[cfg_attr(with_graphql, graphql(skip))] // Derived from validator weights.
     pub fallback_distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub proposed: RegisterView<C, Option<BlockProposal>>,
     /// These are blobs published or read by the proposed block.
     pub proposed_blobs: MapView<C, BlobId, Blob>,
     /// Latest validated proposal that a validator may have voted to confirm. This is either the
     /// latest `ValidatedBlock` we have seen, or the proposal from the `Fast` round.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub locking_block: RegisterView<C, Option<LockingBlock>>,
     /// These are blobs published or read by the locking block.
     pub locking_blobs: MapView<C, BlobId, Blob>,
     /// Latest leader timeout certificate we have received.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub timeout: RegisterView<C, Option<TimeoutCertificate>>,
     /// Latest vote we cast to confirm a block.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub confirmed_vote: RegisterView<C, Option<Vote<ConfirmedBlock>>>,
     /// Latest vote we cast to validate a block.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub validated_vote: RegisterView<C, Option<Vote<ValidatedBlock>>>,
     /// Latest timeout vote we cast.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub timeout_vote: RegisterView<C, Option<Vote<Timeout>>>,
     /// Fallback vote we cast.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub fallback_vote: RegisterView<C, Option<Vote<Timeout>>>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
     pub round_timeout: RegisterView<C, Option<Timestamp>>,
@@ -189,13 +188,14 @@ where
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
     pub fallback_owners: RegisterView<C, BTreeMap<AccountOwner, u64>>,
 }
 
-#[ComplexObject]
+#[cfg(with_graphql)]
+#[async_graphql::ComplexObject]
 impl<C> ChainManager<C>
 where
     C: Context + Clone + Send + Sync + 'static,
