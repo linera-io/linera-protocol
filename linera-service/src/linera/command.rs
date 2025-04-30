@@ -615,7 +615,7 @@ pub enum ClientCommand {
         limit_rate_until: Option<DateTime<Utc>>,
 
         /// The maximum number of blocks in the faucet chain, before a new one is created.
-        #[arg(long, default_value = "500")]
+        #[arg(long, default_value = "100")]
         max_chain_length: u64,
 
         /// Configuration for the faucet chain listener.

@@ -11,7 +11,7 @@ use axum::{Extension, Router};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Timestamp},
     identifiers::{AccountOwner, ChainId, MessageId},
     ownership::ChainOwnership,
 };
@@ -20,7 +20,6 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
-use linera_execution::SystemMessage;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
@@ -297,8 +296,6 @@ where
     /// Runs the faucet.
     #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
     pub async fn run(self) -> anyhow::Result<()> {
-        self.find_current_chain().await?;
-
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
@@ -328,52 +325,6 @@ where
     async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
         let schema = service.0.schema();
         schema.execute(request.into_inner()).await.into()
-    }
-
-    /// Finds the current chain ID, even if the configured chain has been closed and the tokens
-    /// moved to a new one.
-    async fn find_current_chain(&self) -> anyhow::Result<()> {
-        let mut chain_id = *self.chain_id.lock().await;
-        let mut client = self.context.lock().await.make_chain_client(chain_id)?;
-        client.synchronize_from_validators().await?;
-        loop {
-            let chain = client.chain_state_view().await?;
-            if !chain.execution_state.system.closed.get() {
-                break; // This is the current chain; it has not been closed yet.
-            }
-            // The faucet closes each chain in the last block; the next-to-last block opens the
-            // new chain.
-            let index = chain
-                .confirmed_log
-                .count()
-                .checked_sub(2)
-                .ok_or(ArithmeticError::Underflow)?;
-            let hash = chain
-                .confirmed_log
-                .get(index)
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("Missing confirmed_log entry"))?;
-            let certificate = client.storage_client().read_certificate(hash).await?;
-            chain_id = certificate
-                .block()
-                .messages()
-                .iter()
-                .flatten()
-                .find_map(|message| {
-                    if let linera_execution::Message::System(SystemMessage::OpenChain(_)) =
-                        &message.message
-                    {
-                        Some(message.destination.recipient()?)
-                    } else {
-                        None
-                    }
-                })
-                .ok_or_else(|| anyhow::anyhow!("No OpenChain message found"))?;
-            client = self.context.lock().await.make_chain_client(chain_id)?;
-            client.synchronize_from_validators().await?;
-        }
-        *self.chain_id.lock().await = chain_id;
-        Ok(())
     }
 }
 
