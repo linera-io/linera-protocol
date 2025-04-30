@@ -13,7 +13,6 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
@@ -945,7 +944,6 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     }
 }
 
-#[async_trait]
 impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     const MAX_BATCH_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;

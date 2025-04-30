@@ -57,9 +57,7 @@ impl Default for CommonStoreConfig {
 }
 
 /// The error type for the key-value stores.
-pub trait KeyValueStoreError:
-    std::error::Error + Debug + From<bcs::Error> + 'static
-{
+pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'static {
     /// The name of the backend.
     const BACKEND: &'static str;
 }
@@ -257,16 +255,13 @@ impl<T> KeyValueStore for T where
 #[cfg(with_testing)]
 pub trait TestKeyValueStore: KeyValueStore {
     /// Obtains a test config
-    fn new_test_config(
-    ) -> impl std::future::Future<Output = Result<Self::Config, Self::Error>> + Send;
+    async fn new_test_config() -> Result<Self::Config, Self::Error>;
 
     /// Creates a store for testing purposes
-    fn new_test_store() -> impl std::future::Future<Output = Result<Self, Self::Error>> + Send {
-        async {
-            let config = Self::new_test_config().await?;
-            let namespace = generate_test_namespace();
-            Self::recreate_and_connect(&config, &namespace).await
-        }
+    async fn new_test_store() -> Result<Self, Self::Error> {
+        let config = Self::new_test_config().await?;
+        let namespace = generate_test_namespace();
+        Self::recreate_and_connect(&config, &namespace).await
     }
 }
 

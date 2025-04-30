@@ -5,7 +5,6 @@
 use std::sync::LazyLock;
 use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData, mem};
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -43,7 +42,6 @@ pub struct ByteSetView<C> {
     updates: BTreeMap<Vec<u8>, Update<()>>,
 }
 
-#[async_trait]
 impl<C> View<C> for ByteSetView<C>
 where
     C: Context + Send + Sync,
@@ -361,7 +359,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C> HashableView<C> for ByteSetView<C>
 where
     C: Context + Send + Sync,
@@ -396,7 +393,6 @@ pub struct SetView<C, I> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I> View<C> for SetView<C, I>
 where
     C: Context + Send + Sync,
@@ -653,7 +649,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I> HashableView<C> for SetView<C, I>
 where
     C: Context + Send + Sync,
@@ -679,7 +674,6 @@ pub struct CustomSetView<C, I> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I> View<C> for CustomSetView<C, I>
 where
     C: Context + Send + Sync,
@@ -943,7 +937,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I> HashableView<C> for CustomSetView<C, I>
 where
     C: Context + Send + Sync,
@@ -971,6 +964,7 @@ pub type HashedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, Ha
 pub type HashedCustomSetView<C, I> =
     WrappedHashableContainerView<C, CustomSetView<C, I>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

@@ -7,7 +7,6 @@ use std::{
     sync::Mutex,
 };
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -139,7 +138,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, W, O> HashableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
@@ -192,7 +190,7 @@ impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
     }
 }
 
-#[cfg(not(web))]
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

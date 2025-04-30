@@ -5,7 +5,6 @@ use std::ops::{Bound, Range, RangeBounds};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -53,7 +52,6 @@ pub struct LogView<C, T> {
     new_values: Vec<T>,
 }
 
-#[async_trait]
 impl<C, T> View<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
@@ -351,7 +349,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T> HashableView<C> for LogView<C, T>
 where
     C: Context + Send + Sync,

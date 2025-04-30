@@ -45,7 +45,6 @@ use std::{
     mem,
 };
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -102,7 +101,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, V> View<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
@@ -923,7 +921,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, V> HashableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
@@ -966,12 +963,11 @@ pub struct MapView<C, I, V> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Sync,
+    I: Send + Sync,
     V: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
@@ -1017,7 +1013,7 @@ impl<C, I, V> ClonableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Sync,
+    I: Send + Sync,
     V: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1435,7 +1431,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I, V> HashableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -1461,7 +1456,6 @@ pub struct CustomMapView<C, I, V> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, V> View<C> for CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -1935,7 +1929,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I, V> HashableView<C> for CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -1964,6 +1957,7 @@ pub type HashedMapView<C, I, V> = WrappedHashableContainerView<C, MapView<C, I, 
 pub type HashedCustomMapView<C, I, V> =
     WrappedHashableContainerView<C, CustomMapView<C, I, V>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

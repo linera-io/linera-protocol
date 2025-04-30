@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -81,7 +80,6 @@ impl BaseKey {
 
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
-#[async_trait]
 pub trait Context: Clone {
     /// The type of the key-value store used by this context.
     type Store: ReadableKeyValueStore
@@ -155,7 +153,6 @@ impl<E, S> ViewContext<E, S> {
     }
 }
 
-#[async_trait]
 impl<E, S> Context for ViewContext<E, S>
 where
     E: Clone + Send + Sync,

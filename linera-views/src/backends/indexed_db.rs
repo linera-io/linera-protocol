@@ -15,8 +15,8 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::DEFAULT_STORAGE_CACHE_CONFIG,
     store::{
-        CommonStoreConfig, KeyValueStoreError, AdminKeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore, WithError,
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
 };
 

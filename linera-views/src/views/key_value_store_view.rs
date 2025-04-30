@@ -17,7 +17,6 @@
 use std::sync::LazyLock;
 use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
 
-use async_trait::async_trait;
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
@@ -223,7 +222,6 @@ pub struct KeyValueStoreView<C> {
     hash: Mutex<Option<HasherOutput>>,
 }
 
-#[async_trait]
 impl<C> View<C> for KeyValueStoreView<C>
 where
     C: Context + Send + Sync,
@@ -1175,7 +1173,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C> HashableView<C> for KeyValueStoreView<C>
 where
     C: Context + Send + Sync,

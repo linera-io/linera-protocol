@@ -8,7 +8,6 @@ use std::{
     ops::Range,
 };
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -57,7 +56,6 @@ pub struct QueueView<C, T> {
     new_back_values: VecDeque<T>,
 }
 
-#[async_trait]
 impl<C, T> View<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
@@ -456,7 +454,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T> HashableView<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
@@ -482,6 +479,7 @@ where
 /// Type wrapping `QueueView` while memoizing the hash.
 pub type HashedQueueView<C, T> = WrappedHashableContainerView<C, QueueView<C, T>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

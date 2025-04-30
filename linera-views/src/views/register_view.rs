@@ -4,7 +4,6 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -43,7 +42,6 @@ pub struct RegisterView<C, T> {
     update: Option<Box<T>>,
 }
 
-#[async_trait]
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
@@ -212,7 +210,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T> HashableView<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,

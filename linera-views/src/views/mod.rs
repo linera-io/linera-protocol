@@ -3,7 +3,6 @@
 
 use std::{fmt::Debug, io::Write};
 
-use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
     data_types::ArithmeticError,
@@ -234,7 +233,7 @@ pub trait RootView<C>: View<C> {
 }
 
 /// A [`View`] that also supports crypto hash
-#[cfg(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait CryptoHashView<C>: HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;

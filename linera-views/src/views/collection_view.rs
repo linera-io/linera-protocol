@@ -12,7 +12,6 @@ use std::{
 };
 
 use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -83,7 +82,6 @@ enum KeyTag {
     Subview,
 }
 
-#[async_trait]
 impl<C, W> View<C> for ByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
@@ -636,7 +634,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, W> HashableView<C> for ByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
@@ -718,7 +715,6 @@ pub struct CollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -1072,7 +1068,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -1098,7 +1093,6 @@ pub struct CustomCollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, W> View<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -1453,7 +1447,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I, W> HashableView<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -1484,6 +1477,7 @@ pub type HashedCollectionView<C, I, W> =
 pub type HashedCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CustomCollectionView<C, I, W>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

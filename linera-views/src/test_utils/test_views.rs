@@ -8,8 +8,6 @@ use std::{
     fmt::Debug,
 };
 
-use async_trait::async_trait;
-
 use crate::{
     self as linera_views,
     bucket_queue_view::BucketQueueView,
@@ -24,7 +22,6 @@ use crate::{
 };
 
 /// A [`View`][`crate::views::View`] to be used in test cases.
-#[async_trait]
 pub trait TestView:
     RootView<MemoryContext<()>> + ClonableView<MemoryContext<()>> + Send + Sync + 'static
 {
@@ -57,7 +54,6 @@ pub struct TestRegisterView<C> {
     byte: RegisterView<C, u8>,
 }
 
-#[async_trait]
 impl TestView for TestRegisterView<MemoryContext<()>> {
     type State = u8;
 
@@ -92,7 +88,6 @@ pub struct TestLogView<C> {
     log: LogView<C, u16>,
 }
 
-#[async_trait]
 impl TestView for TestLogView<MemoryContext<()>> {
     type State = Vec<u16>;
 
@@ -152,7 +147,6 @@ pub struct TestMapView<C> {
     map: MapView<C, i32, String>,
 }
 
-#[async_trait]
 impl TestView for TestMapView<MemoryContext<()>> {
     type State = HashMap<i32, String>;
 
@@ -238,7 +232,6 @@ pub struct TestSetView<C> {
 
 const INITIAL_SET_VIEW_CHANGES: &[i32] = &[0, -1, 2, -3, 4, -5];
 
-#[async_trait]
 impl TestView for TestSetView<MemoryContext<()>> {
     type State = HashSet<i32>;
 
@@ -306,7 +299,6 @@ pub struct TestCollectionView<C> {
     collection: CollectionView<C, i32, RegisterView<C, String>>,
 }
 
-#[async_trait]
 impl TestView for TestCollectionView<MemoryContext<()>> {
     type State = HashMap<i32, String>;
 
@@ -394,7 +386,6 @@ pub struct TestQueueView<C> {
     queue: QueueView<C, u16>,
 }
 
-#[async_trait]
 impl TestView for TestQueueView<MemoryContext<()>> {
     type State = Vec<u16>;
 
@@ -447,7 +438,6 @@ pub struct TestBucketQueueView<C> {
     queue: BucketQueueView<C, u16, 2>,
 }
 
-#[async_trait]
 impl TestView for TestBucketQueueView<MemoryContext<()>> {
     type State = Vec<u16>;
 

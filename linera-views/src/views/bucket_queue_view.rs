@@ -5,7 +5,6 @@ use std::collections::{vec_deque::IterMut, VecDeque};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -142,7 +141,6 @@ pub struct BucketQueueView<C, T, const N: usize> {
     delete_storage_first: bool,
 }
 
-#[async_trait]
 impl<C, T, const N: usize> View<C> for BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
@@ -701,7 +699,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T, const N: usize> HashableView<C> for BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
@@ -728,6 +725,7 @@ where
 pub type HashedBucketQueueView<C, T, const N: usize> =
     WrappedHashableContainerView<C, BucketQueueView<C, T, N>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 
