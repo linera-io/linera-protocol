@@ -4,7 +4,7 @@
 #[cfg(with_testing)]
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     env,
     path::{Path, PathBuf},
     sync::Arc,
@@ -195,8 +195,8 @@ pub struct LocalNet {
     num_shards: usize,
     validator_keys: BTreeMap<usize, (String, String)>,
     running_validators: BTreeMap<usize, Validator>,
+    initialized_validator_storages: BTreeMap<usize, StorageConfigNamespace>,
     namespace: String,
-    validators_with_initialized_storage: HashSet<usize>,
     storage_config: StorageConfig,
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
@@ -395,8 +395,8 @@ impl LocalNet {
             num_shards,
             validator_keys: BTreeMap::new(),
             running_validators: BTreeMap::new(),
+            initialized_validator_storages: BTreeMap::new(),
             namespace,
-            validators_with_initialized_storage: HashSet::new(),
             storage_config,
             cross_chain_config,
             path_provider,
@@ -559,12 +559,15 @@ impl LocalNet {
     }
 
     async fn run_proxy(&mut self, validator: usize) -> Result<Child> {
-        let storage = self.initialize_shared_storage(validator).await?;
+        let storage = self
+            .initialized_validator_storages
+            .get(&validator)
+            .expect("initialized storage");
         let child = self
             .command_for_binary("linera-proxy")
             .await?
             .arg(format!("server_{}.json", validator))
-            .args(["--storage", &storage])
+            .args(["--storage", &storage.to_string()])
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
@@ -588,14 +591,17 @@ impl LocalNet {
     }
 
     async fn run_exporter(&mut self, validator: usize, exporter_id: u32) -> Result<Child> {
-        let storage = self.initialize_shared_storage(validator).await?;
         let config_path = format!("exporter_config_{validator}:{exporter_id}.toml");
+        let storage = self
+            .initialized_validator_storages
+            .get(&validator)
+            .expect("initialized storage");
 
         let child = self
             .command_for_binary("linera-exporter")
             .await?
             .arg(config_path)
-            .args(["--storage", &storage])
+            .args(["--storage", &storage.to_string()])
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
@@ -652,84 +658,43 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
-    async fn initialize_storage_internal(&mut self, storage: &str, genesis: &str) -> Result<()> {
-        let max_try = 4;
-        let mut i_try = 0;
-        loop {
-            let mut command = self.command_for_binary("linera-server").await?;
-            if let Ok(var) = env::var(SERVER_ENV) {
-                command.args(var.split_whitespace());
-            }
-            command.arg("initialize");
-            let result = command
-                .args(["--storage", storage])
-                .args(["--genesis", genesis])
-                .spawn_and_wait_for_stdout()
-                .await;
-            if result.is_ok() {
-                return Ok(());
-            }
-            warn!(
-                "Failed to initialize storage={} using linera-server, i_try={}, error={:?}",
-                storage, i_try, result
-            );
-            i_try += 1;
-            if i_try == max_try {
-                bail!("Failed to initialize after {} attempts", max_try);
-            }
-            let one_second = linera_base::time::Duration::from_secs(1);
-            std::thread::sleep(one_second);
-        }
-    }
-
-    async fn initialize_shared_storage(&mut self, validator: usize) -> Result<String> {
+    async fn initialize_storage(&mut self, validator: usize) -> Result<()> {
         let namespace = format!("{}_server_{}_db", self.namespace, validator);
-        let storage_config = self.storage_config.get_shared_storage();
+        let storage_config = self.storage_config.clone();
         let storage = StorageConfigNamespace {
             storage_config,
             namespace,
-        }
-        .to_string();
-        if !self
-            .validators_with_initialized_storage
-            .contains(&validator)
-        {
-            self.initialize_storage_internal(&storage, "genesis.json")
-                .await?;
-            self.validators_with_initialized_storage.insert(validator);
-        }
-        Ok(storage)
-    }
+        };
 
-    async fn initialize_storage(&mut self, validator: usize, shard: usize) -> Result<String> {
-        if self.storage_config.are_chains_shared() {
-            self.initialize_shared_storage(validator).await
-        } else {
-            let namespace = format!("{}_server_{}_db", self.namespace, validator);
-            let mut storage_config = self.storage_config.clone();
-            let shard_str = format!("shard_{}", shard);
-            storage_config.append_shard_str(&shard_str);
-            let storage = StorageConfigNamespace {
-                storage_config,
-                namespace,
-            }
-            .to_string();
-
-            self.initialize_storage_internal(&storage, "genesis.json")
-                .await?;
-            Ok(storage)
+        let mut command = self.command_for_binary("linera-server").await?;
+        if let Ok(var) = env::var(SERVER_ENV) {
+            command.args(var.split_whitespace());
         }
+        command.arg("initialize");
+        command
+            .args(["--storage", &storage.to_string()])
+            .args(["--genesis", "genesis.json"])
+            .spawn_and_wait_for_stdout()
+            .await?;
+
+        self.initialized_validator_storages
+            .insert(validator, storage);
+        Ok(())
     }
 
     async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
-        let storage = self.initialize_storage(validator, shard).await?;
+        let storage = self
+            .initialized_validator_storages
+            .get(&validator)
+            .expect("initialized storage");
+
         let mut command = self.command_for_binary("linera-server").await?;
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
         }
         command
             .arg("run")
-            .args(["--storage", &storage])
+            .args(["--storage", &storage.to_string()])
             .args(["--server", &format!("server_{}.json", validator)])
             .args(["--shard", &shard.to_string()])
             .args(["--genesis", "genesis.json"])
@@ -762,28 +727,34 @@ impl LocalNet {
         Ok(())
     }
 
-    pub async fn start_validator(&mut self, validator: usize) -> Result<()> {
-        let proxy = self.run_proxy(validator).await?;
-        let mut validator_proxy = Validator::new(proxy);
+    /// Start a validator.
+    pub async fn start_validator(&mut self, index: usize) -> Result<()> {
+        self.initialize_storage(index).await?;
+        self.restart_validator(index).await
+    }
+
+    /// Restart a validator. This is similar to `start_validator` except that the
+    /// database was already initialized once.
+    pub async fn restart_validator(&mut self, index: usize) -> Result<()> {
+        let proxy = self.run_proxy(index).await?;
+        let mut validator = Validator::new(proxy);
         for shard in 0..self.num_shards {
-            let server = self.run_server(validator, shard).await?;
-            validator_proxy.add_server(server);
+            let server = self.run_server(index, shard).await?;
+            validator.add_server(server);
         }
-
         for block_exporter in 0..self.num_block_exporters {
-            let exporter = self.run_exporter(validator, block_exporter).await?;
-            validator_proxy.add_block_exporter(exporter);
+            let exporter = self.run_exporter(index, block_exporter).await?;
+            validator.add_block_exporter(exporter);
         }
-
-        self.running_validators.insert(validator, validator_proxy);
+        self.running_validators.insert(index, validator);
         Ok(())
     }
 
     /// Terminates all the processes of a given validator.
-    pub async fn stop_validator(&mut self, validator_index: usize) -> Result<()> {
-        if let Some(mut validator) = self.running_validators.remove(&validator_index) {
+    pub async fn stop_validator(&mut self, index: usize) -> Result<()> {
+        if let Some(mut validator) = self.running_validators.remove(&index) {
             if let Err(error) = validator.terminate().await {
-                error!("Failed to stop validator {validator_index}: {error}");
+                error!("Failed to stop validator {index}: {error}");
                 return Err(error);
             }
         }
@@ -857,7 +828,7 @@ impl LocalNet {
         let server = self.run_server(validator, shard).await?;
         self.running_validators
             .get_mut(&validator)
-            .context("could not find server")?
+            .context("could not find validator")?
             .add_server(server);
         Ok(())
     }

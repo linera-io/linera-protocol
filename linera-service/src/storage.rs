@@ -123,45 +123,6 @@ pub enum StorageConfig {
     },
 }
 
-impl StorageConfig {
-    pub fn get_shared_storage(&self) -> Self {
-        match self {
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard: _,
-                spawn_mode: _,
-                uri,
-            } => {
-                let uri = uri.clone();
-                StorageConfig::ScyllaDb { uri }
-            }
-            x => x.clone(),
-        }
-    }
-
-    pub fn are_chains_shared(&self) -> bool {
-        match self {
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb { .. } => false,
-            _ => true,
-        }
-    }
-
-    pub fn append_shard_str(&mut self, _shard_str: &str) {
-        match self {
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard,
-                spawn_mode: _,
-                uri: _,
-            } => {
-                path_with_guard.path_buf.push(_shard_str);
-            }
-            _ => panic!("append_shard_str is not available for this storage"),
-        }
-    }
-}
-
 /// The description of a storage implementation.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
