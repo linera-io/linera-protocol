@@ -196,8 +196,8 @@ pub struct LocalNet {
     validator_keys: BTreeMap<usize, (String, String)>,
     running_validators: BTreeMap<usize, Validator>,
     initialized_validator_storages: BTreeMap<usize, StorageConfigNamespace>,
-    namespace: String,
-    storage_config: StorageConfig,
+    common_namespace: String,
+    common_storage_config: StorageConfig,
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
     num_block_exporters: u32,
@@ -379,10 +379,10 @@ impl LocalNet {
     fn new(
         network: NetworkConfig,
         testing_prng_seed: Option<u64>,
-        namespace: String,
+        common_namespace: String,
         num_initial_validators: usize,
         num_shards: usize,
-        storage_config: StorageConfig,
+        common_storage_config: StorageConfig,
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
         num_block_exporters: u32,
@@ -396,8 +396,8 @@ impl LocalNet {
             validator_keys: BTreeMap::new(),
             running_validators: BTreeMap::new(),
             initialized_validator_storages: BTreeMap::new(),
-            namespace,
-            storage_config,
+            common_namespace,
+            common_storage_config,
             cross_chain_config,
             path_provider,
             num_block_exporters,
@@ -659,8 +659,8 @@ impl LocalNet {
     }
 
     async fn initialize_storage(&mut self, validator: usize) -> Result<()> {
-        let namespace = format!("{}_server_{}_db", self.namespace, validator);
-        let storage_config = self.storage_config.clone();
+        let namespace = format!("{}_server_{}_db", self.common_namespace, validator);
+        let storage_config = self.common_storage_config.clone();
         let storage = StorageConfigNamespace {
             storage_config,
             namespace,
