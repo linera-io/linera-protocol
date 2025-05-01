@@ -349,9 +349,14 @@ dependencies = [
  "cfg-if",
  "const-hex",
  "derive_more 2.0.1",
+ "hashbrown 0.15.2",
+ "indexmap 2.5.0",
  "itoa",
+ "k256",
  "paste",
+ "rand 0.9.0",
  "ruint",
+ "serde",
  "tiny-keccak",
 ]
 
@@ -3510,7 +3515,7 @@ checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 name = "linera-base"
 version = "0.15.0"
 dependencies = [
- "alloy-primitives 0.8.25",
+ "alloy-primitives 1.0.0",
  "anyhow",
  "async-graphql",
  "async-graphql-derive",
@@ -3615,7 +3620,6 @@ name = "linera-ethereum"
 version = "0.15.0"
 dependencies = [
  "alloy",
- "alloy-signer-local",
  "anyhow",
  "async-lock",
  "async-trait",
@@ -4924,6 +4928,7 @@ checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
+ "serde",
  "zerocopy 0.8.24",
 ]
 
@@ -4964,6 +4969,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 dependencies = [
  "getrandom 0.3.2",
+ "serde",
 ]
 
 [[package]]
