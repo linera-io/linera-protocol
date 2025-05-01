@@ -5,7 +5,7 @@ use std::{collections::HashMap, iter, sync::Arc};
 
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, Epoch, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
     time::Instant,
@@ -14,15 +14,13 @@ use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
     types::ConfirmedBlock,
 };
-use linera_core::{client::ChainClient, local_node::LocalNodeClient};
+use linera_core::{client::ChainClient, local_node::LocalNodeClient, Environment};
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::Committee,
     system::{Recipient, SystemOperation},
     Operation,
 };
-use linera_rpc::node_provider::NodeProvider;
 use linera_sdk::abis::fungible;
-use linera_storage::Storage;
 use num_format::{Locale, ToFormattedString};
 use prometheus_parse::{HistogramCount, Scrape, Value};
 use tokio::{
@@ -87,27 +85,21 @@ struct HistogramSnapshot {
     sum: f64,
 }
 
-pub struct Benchmark<Storage>
-where
-    Storage: linera_storage::Storage,
-{
-    _phantom: std::marker::PhantomData<Storage>,
+pub struct Benchmark<Env: Environment> {
+    _phantom: std::marker::PhantomData<Env>,
 }
 
-impl<S> Benchmark<S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
+impl<Env: Environment> Benchmark<Env> {
     #[expect(clippy::too_many_arguments)]
     pub async fn run_benchmark(
         num_chains: usize,
         transactions_per_block: usize,
         bps: Option<usize>,
-        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
+        chain_clients: HashMap<ChainId, ChainClient<Env>>,
         epoch: Epoch,
         blocks_infos: Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
         committee: Committee,
-        local_node: LocalNodeClient<S>,
+        local_node: LocalNodeClient<Env::Storage>,
         health_check_endpoints: Option<String>,
     ) -> Result<(), BenchmarkError> {
         let shutdown_notifier = CancellationToken::new();
@@ -504,11 +496,11 @@ where
         operations: Vec<Operation>,
         key_pair: AccountSecretKey,
         epoch: Epoch,
-        chain_client: ChainClient<NodeProvider, S>,
+        chain_client: ChainClient<Env>,
         shutdown_notifier: CancellationToken,
         sender: crossbeam_channel::Sender<()>,
         committee: Committee,
-        local_node: LocalNodeClient<S>,
+        local_node: LocalNodeClient<Env::Storage>,
         bps_tasks_logger_sender: mpsc::Sender<()>,
         barrier: Arc<Barrier>,
     ) -> Result<(), BenchmarkError> {
@@ -584,7 +576,7 @@ where
 
     /// Closes the chain that was created for the benchmark.
     pub async fn close_benchmark_chain(
-        chain_client: &ChainClient<NodeProvider, S>,
+        chain_client: &ChainClient<Env>,
     ) -> Result<(), BenchmarkError> {
         let start = Instant::now();
         chain_client

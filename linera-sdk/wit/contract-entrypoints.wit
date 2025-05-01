@@ -4,5 +4,42 @@ interface contract-entrypoints {
     instantiate: func(argument: list<u8>);
     execute-operation: func(operation: list<u8>) -> list<u8>;
     execute-message: func(message: list<u8>);
+    process-streams: func(streams: list<stream-update>);
     finalize: func();
+
+    record application-id {
+        application-description-hash: crypto-hash,
+    }
+
+    record chain-id {
+        inner0: crypto-hash,
+    }
+
+    record crypto-hash {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
+    }
+
+    variant generic-application-id {
+        system,
+        user(application-id),
+    }
+
+    record stream-id {
+        application-id: generic-application-id,
+        stream-name: stream-name,
+    }
+
+    record stream-name {
+        inner0: list<u8>,
+    }
+
+    record stream-update {
+        chain-id: chain-id,
+        stream-id: stream-id,
+        previous-index: u32,
+        next-index: u32,
+    }
 }

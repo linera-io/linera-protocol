@@ -120,8 +120,12 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     );
 
     // making a few transfers
-    let chain0 = ChainId::root(0);
-    let chain1 = Account::chain(ChainId::root(1));
+    let node_chains = {
+        let wallet = client.load_wallet().unwrap();
+        wallet.chain_ids()
+    };
+    let chain0 = node_chains[0];
+    let chain1 = Account::chain(node_chains[1]);
     for _ in 0..10 {
         transfer(&req_client, chain0, chain1, "0.1").await;
         linera_base::time::timer::sleep(Duration::from_millis(TRANSFER_DELAY_MILLIS)).await;

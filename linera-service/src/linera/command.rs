@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     time::Duration,
     vm::VmRuntime,
 };
@@ -388,6 +388,10 @@ pub enum ClientCommand {
         /// closing chains.
         #[arg(long, default_value = "5")]
         wrap_up_max_in_flight: usize,
+
+        /// Confirm before starting the benchmark.
+        #[arg(long)]
+        confirm_before_start: bool,
     },
 
     /// Create genesis configuration for a Linera deployment.
@@ -616,6 +620,10 @@ pub enum ClientCommand {
         #[arg(long)]
         limit_rate_until: Option<DateTime<Utc>>,
 
+        /// The maximum number of blocks in the faucet chain, before a new one is created.
+        #[arg(long, default_value = "100")]
+        max_chain_length: u64,
+
         /// Configuration for the faucet chain listener.
         #[command(flatten)]
         config: ChainListenerConfig,
@@ -733,10 +741,9 @@ pub enum ClientCommand {
         #[arg(long)]
         owner: AccountOwner,
 
-        /// The ID of the message that created the chain. (This uniquely describes the
-        /// chain and where it was created.)
+        /// The ID of the chain.
         #[arg(long)]
-        message_id: MessageId,
+        chain_id: ChainId,
     },
 
     /// Retry a block we unsuccessfully tried to propose earlier.
@@ -876,11 +883,11 @@ pub enum NetCommand {
         #[arg(long, default_value = "1000000")]
         initial_amount: u128,
 
-        /// The number of validators in the local test network. Default is 1.
+        /// The number of validators in the local test network.
         #[arg(long, default_value = "1")]
         validators: usize,
 
-        /// The number of shards per validator in the local test network. Default is 1.
+        /// The number of shards per validator in the local test network.
         #[arg(long, default_value = "1")]
         shards: usize,
 
@@ -952,6 +959,10 @@ pub enum NetCommand {
         /// The number of tokens to send to each new chain created by the faucet.
         #[arg(long, default_value = "1000")]
         faucet_amount: Amount,
+
+        /// The number of block exporters per validator in the local test network. Default is 0.
+        #[arg(long, default_value = "0")]
+        block_exporters: u32,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

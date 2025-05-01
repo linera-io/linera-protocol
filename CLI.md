@@ -603,6 +603,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
   Default value: `8080`
 * `--amount <AMOUNT>` — The number of tokens to send to each new chain
 * `--limit-rate-until <LIMIT_RATE_UNTIL>` — The end timestamp: The faucet will rate-limit the token supply so it runs out of money no earlier than this
+* `--max-chain-length <MAX_CHAIN_LENGTH>` — The maximum number of blocks in the faucet chain, before a new one is created
+
+  Default value: `100`
 * `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
 * `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
 
@@ -717,12 +720,12 @@ Create an unassigned key pair
 
 Link an owner with a key pair in the wallet to a chain that was created for that owner
 
-**Usage:** `linera assign --owner <OWNER> --message-id <MESSAGE_ID>`
+**Usage:** `linera assign --owner <OWNER> --chain-id <CHAIN_ID>`
 
 ###### **Options:**
 
 * `--owner <OWNER>` — The owner to assign
-* `--message-id <MESSAGE_ID>` — The ID of the message that created the chain. (This uniquely describes the chain and where it was created.)
+* `--chain-id <CHAIN_ID>` — The ID of the chain
 
 
 
@@ -950,10 +953,10 @@ Start a Local Linera Network
 * `--initial-amount <INITIAL_AMOUNT>` — The initial amount of native tokens credited in the initial "root" chains, including the default "admin" chain
 
   Default value: `1000000`
-* `--validators <VALIDATORS>` — The number of validators in the local test network. Default is 1
+* `--validators <VALIDATORS>` — The number of validators in the local test network
 
   Default value: `1`
-* `--shards <SHARDS>` — The number of shards per validator in the local test network. Default is 1
+* `--shards <SHARDS>` — The number of shards per validator in the local test network
 
   Default value: `1`
 * `--policy-config <POLICY_CONFIG>` — Configure the resource control policy (notably fees) according to pre-defined settings
@@ -995,6 +998,9 @@ Start a Local Linera Network
 * `--faucet-amount <FAUCET_AMOUNT>` — The number of tokens to send to each new chain created by the faucet
 
   Default value: `1000`
+* `--block-exporters <BLOCK_EXPORTERS>` — The number of block exporters per validator in the local test network. Default is 0
+
+  Default value: `0`
 
 
 

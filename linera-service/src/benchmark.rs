@@ -11,6 +11,7 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     time::timer::Instant,
+    vm::VmRuntime,
 };
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
@@ -136,7 +137,12 @@ async fn benchmark_with_fungible(
 
     info!("Publishing the fungible application module.");
     let module_id = publisher
-        .publish_module::<FungibleTokenAbi, Parameters, InitialState>(contract, service, None)
+        .publish_module::<FungibleTokenAbi, Parameters, InitialState>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            None,
+        )
         .await?;
 
     struct BenchmarkContext {

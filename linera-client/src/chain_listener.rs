@@ -3,7 +3,6 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    iter,
     sync::Arc,
     time::Duration,
 };
@@ -16,17 +15,17 @@ use futures::{
 };
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash},
-    data_types::Timestamp,
-    identifiers::{ChainId, Destination},
+    data_types::{ChainDescription, Timestamp},
+    identifiers::{BlobType, ChainId},
     task::NonBlockingFuture,
 };
 use linera_core::{
     client::{AbortOnDrop, ChainClient, ChainClientError},
-    node::{NotificationStream, ValidatorNodeProvider},
+    node::NotificationStream,
     worker::{Notification, Reason},
+    Environment,
 };
-use linera_execution::{Message, OutgoingMessage, SystemMessage};
-use linera_storage::{Clock as _, Storage};
+use linera_storage::{Clock as _, Storage as _};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
@@ -59,18 +58,19 @@ pub struct ChainListenerConfig {
     pub delay_after_ms: u64,
 }
 
-type ContextChainClient<C> =
-    ChainClient<<C as ClientContext>::ValidatorNodeProvider, <C as ClientContext>::Storage>;
+type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
 #[cfg_attr(not(web), async_trait, trait_variant::make(Send))]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait ClientContext: 'static {
-    type ValidatorNodeProvider: ValidatorNodeProvider + Sync;
-    type Storage: Storage + Clone + Send + Sync + 'static;
+    type Environment: linera_core::Environment;
 
     fn wallet(&self) -> &Wallet;
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
+    fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
+
+    async fn make_chain_client(&self, chain_id: ChainId)
+        -> Result<ContextChainClient<Self>, Error>;
 
     async fn update_wallet_for_new_chain(
         &mut self,
@@ -81,10 +81,10 @@ pub trait ClientContext: 'static {
 
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
 
-    fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+    async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
         let mut clients = vec![];
         for chain_id in &self.wallet().chain_ids() {
-            clients.push(self.make_chain_client(*chain_id)?);
+            clients.push(self.make_chain_client(*chain_id).await?);
         }
         Ok(clients)
     }
@@ -137,9 +137,12 @@ impl<C: ClientContext> ListeningClient<C> {
 /// appropriately.
 pub struct ChainListener<C: ClientContext> {
     context: Arc<Mutex<C>>,
-    storage: C::Storage,
+    storage: <C::Environment as Environment>::Storage,
     config: Arc<ChainListenerConfig>,
     listening: BTreeMap<ChainId, ListeningClient<C>>,
+    /// Map from publishing chain to subscriber chains.
+    /// Events emitted on the _publishing chain_ are of interest to the _subscriber chains_.
+    event_subscribers: BTreeMap<ChainId, BTreeSet<ChainId>>,
     cancellation_token: CancellationToken,
 }
 
@@ -148,7 +151,7 @@ impl<C: ClientContext> ChainListener<C> {
     pub fn new(
         config: ChainListenerConfig,
         context: Arc<Mutex<C>>,
-        storage: C::Storage,
+        storage: <C::Environment as Environment>::Storage,
         cancellation_token: CancellationToken,
     ) -> Self {
         Self {
@@ -156,6 +159,7 @@ impl<C: ClientContext> ChainListener<C> {
             context,
             config: Arc::new(config),
             listening: Default::default(),
+            event_subscribers: Default::default(),
             cancellation_token,
         }
     }
@@ -165,12 +169,9 @@ impl<C: ClientContext> ChainListener<C> {
     pub async fn run(mut self) -> Result<(), Error> {
         let chain_ids = {
             let guard = self.context.lock().await;
-            let chain_ids = guard.wallet().chain_ids().into_iter();
-            chain_ids.chain(iter::once(guard.wallet().genesis_admin_chain()))
+            BTreeSet::from_iter(guard.wallet().chain_ids())
         };
-        for chain_id in chain_ids {
-            self.listen(chain_id).await?;
-        }
+        self.listen_recursively(chain_ids).await?;
         loop {
             match self.next_action().await? {
                 Action::ProcessInbox(chain_id) => self.maybe_process_inbox(chain_id).await?,
@@ -196,6 +197,13 @@ impl<C: ClientContext> ChainListener<C> {
                 self.update_validators(&notification).await?;
                 self.update_wallet(notification.chain_id).await?;
                 self.add_new_chains(*hash).await?;
+                let publishers = self
+                    .update_event_subscriptions(notification.chain_id)
+                    .await?;
+                if !publishers.is_empty() {
+                    self.listen_recursively(publishers).await?;
+                    self.maybe_process_inbox(notification.chain_id).await?;
+                }
                 self.process_new_events(notification.chain_id).await?;
             }
         }
@@ -207,17 +215,14 @@ impl<C: ClientContext> ChainListener<C> {
     /// add them to the wallet and start listening for notifications.
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
         let block = self.storage.read_confirmed_block(hash).await?.into_block();
-        let messages = block.messages().iter().flatten();
-        let new_chains = messages
-            .filter_map(|outgoing_message| {
-                if let OutgoingMessage {
-                    destination: Destination::Recipient(new_id),
-                    message: Message::System(SystemMessage::OpenChain(open_chain_config)),
-                    ..
-                } = outgoing_message
-                {
-                    let owners = open_chain_config.ownership.all_owners().cloned();
-                    Some((new_id, owners.collect::<Vec<_>>()))
+        let blobs = block.created_blobs().into_iter();
+        let new_chains = blobs
+            .filter_map(|(blob_id, blob)| {
+                if blob_id.blob_type == BlobType::ChainDescription {
+                    let chain_desc: ChainDescription = bcs::from_bytes(blob.content().bytes())
+                        .expect("ChainDescription should deserialize correctly");
+                    let owners = chain_desc.config().ownership.all_owners().cloned();
+                    Some((ChainId(blob_id.hash), owners.collect::<Vec<_>>()))
                 } else {
                     None
                 }
@@ -234,39 +239,49 @@ impl<C: ClientContext> ChainListener<C> {
                 .find_map(|owner| context_guard.wallet().key_pair_for_owner(owner));
             if key_pair.is_some() {
                 context_guard
-                    .update_wallet_for_new_chain(*new_id, key_pair, block.header.timestamp)
+                    .update_wallet_for_new_chain(new_id, key_pair, block.header.timestamp)
                     .await?;
-                new_ids.insert(*new_id);
+                new_ids.insert(new_id);
             }
         }
         drop(context_guard);
-        for new_id in new_ids {
-            self.listen(new_id).await?;
-        }
+        self.listen_recursively(new_ids).await?;
         Ok(())
     }
 
-    /// Processes the inboxes of all chains that are subscribed to streams with new events.
+    /// Processes the inboxes of all chains that are subscribed to `chain_id`.
     async fn process_new_events(&mut self, chain_id: ChainId) -> Result<(), Error> {
-        // TODO(#365): Support subscriptions to chains other than the admin chain.
-        let admin_id = self.context.lock().await.wallet().genesis_admin_chain();
-        if chain_id == admin_id {
-            let chain_ids = self.listening.keys().cloned().collect::<Vec<_>>();
-            for chain_id in chain_ids {
-                if chain_id != admin_id {
-                    self.maybe_process_inbox(chain_id).await?;
-                }
-            }
+        let Some(subscribers) = self.event_subscribers.get(&chain_id).cloned() else {
+            return Ok(());
+        };
+        for subscriber_id in subscribers {
+            self.maybe_process_inbox(subscriber_id).await?;
         }
         Ok(())
     }
 
-    /// Start listening for notifications about the given chain.
-    async fn listen(&mut self, chain_id: ChainId) -> Result<(), Error> {
-        if self.listening.contains_key(&chain_id) {
-            return Ok(());
+    /// Starts listening for notifications about the given chains, and any chains that publish
+    /// event streams those chains are subscribed to.
+    async fn listen_recursively(&mut self, mut chain_ids: BTreeSet<ChainId>) -> Result<(), Error> {
+        while let Some(chain_id) = chain_ids.pop_first() {
+            chain_ids.extend(self.listen(chain_id).await?);
         }
-        let client = self.context.lock().await.make_chain_client(chain_id)?;
+        Ok(())
+    }
+
+    /// Starts listening for notifications about the given chain.
+    ///
+    /// Returns all publishing chains, that we also need to listen to.
+    async fn listen(&mut self, chain_id: ChainId) -> Result<BTreeSet<ChainId>, Error> {
+        if self.listening.contains_key(&chain_id) {
+            return Ok(BTreeSet::new());
+        }
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         if client.is_tracked() {
             client.synchronize_from_validators().await?;
@@ -277,8 +292,28 @@ impl<C: ClientContext> ChainListener<C> {
         let listening_client =
             ListeningClient::new(client, abort_handle, join_handle, notification_stream);
         self.listening.insert(chain_id, listening_client);
+        let publishing_chains = self.update_event_subscriptions(chain_id).await?;
         self.maybe_process_inbox(chain_id).await?;
-        Ok(())
+        Ok(publishing_chains)
+    }
+
+    /// Updates the event subscribers map, and returns all publishing chains we need to listen to.
+    async fn update_event_subscriptions(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<BTreeSet<ChainId>, Error> {
+        let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
+        if !listening_client.client.is_tracked() {
+            return Ok(BTreeSet::new());
+        }
+        let publishing_chains = listening_client.client.event_stream_publishers().await?;
+        for publisher_id in &publishing_chains {
+            self.event_subscribers
+                .entry(*publisher_id)
+                .or_default()
+                .insert(chain_id);
+        }
+        Ok(publishing_chains)
     }
 
     /// Returns the next notification or timeout to process.
@@ -356,11 +391,15 @@ impl<C: ClientContext> ChainListener<C> {
     /// is returned if persisting the wallet fails.
     async fn maybe_process_inbox(&mut self, chain_id: ChainId) -> Result<(), Error> {
         if self.config.skip_process_inbox {
-            debug!("Not processing inbox due to listener configuration");
+            debug!("Not processing inbox for {chain_id:.8} due to listener configuration");
             return Ok(());
         }
         let listening_client = self.listening.get_mut(&chain_id).expect("missing client");
-        debug!("Processing inbox");
+        if !listening_client.client.is_tracked() {
+            debug!("Not processing inbox for non-tracked chain {chain_id:.8}");
+            return Ok(());
+        }
+        debug!("Processing inbox for {chain_id:.8}");
         listening_client.timeout = Timestamp::from(u64::MAX);
         match listening_client
             .client

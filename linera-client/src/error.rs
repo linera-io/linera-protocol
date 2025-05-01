@@ -28,12 +28,8 @@ pub(crate) enum Inner {
     LocalNode(#[from] linera_core::local_node::LocalNodeError),
     #[error("remote node operation failed: {0}")]
     RemoteNode(#[from] linera_core::node::NodeError),
-    #[error("chain info response missing latest committee")]
-    ChainInfoResponseMissingCommittee,
     #[error("arithmetic error: {0}")]
     Arithmetic(#[from] linera_base::data_types::ArithmeticError),
-    #[error("invalid open message")]
-    InvalidOpenMessage(Option<Box<linera_execution::Message>>),
     #[error("incorrect chain ownership")]
     ChainOwnership,
     #[cfg(feature = "benchmark")]

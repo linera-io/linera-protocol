@@ -11,20 +11,18 @@ use std::{
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{Blob, BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Event, OracleResponse, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, ChainId, MessageId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, MessageId},
 };
-use linera_execution::{
-    committee::Epoch, system::OpenChainConfig, BlobState, Operation, OutgoingMessage,
-};
+use linera_execution::{BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, IncomingBundle, Medium, MessageAction, MessageBundle,
-        OperationResult, OutgoingMessageExt, PostedMessage, ProposedBlock,
+        BlockExecutionOutcome, IncomingBundle, MessageBundle, OperationResult, OutgoingMessageExt,
+        ProposedBlock,
     },
     types::CertificateValue,
 };
@@ -407,12 +405,11 @@ impl Block {
     /// recipient. Messages originating from different transactions of the original block
     /// are kept in separate bundles. If the medium is a channel, does not verify that the
     /// recipient is actually subscribed to that channel.
-    pub fn message_bundles_for<'a>(
-        &'a self,
-        medium: &'a Medium,
+    pub fn message_bundles_for(
+        &self,
         recipient: ChainId,
         certificate_hash: CryptoHash,
-    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
+    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + '_ {
         let mut index = 0u32;
         let block_height = self.header.height;
         let block_timestamp = self.header.timestamp;
@@ -423,7 +420,7 @@ impl Block {
             .filter_map(move |(transaction_index, txn_messages)| {
                 let messages = (index..)
                     .zip(txn_messages)
-                    .filter(|(_, message)| message.has_destination(medium, recipient))
+                    .filter(|(_, message)| message.destination == recipient)
                     .map(|(idx, message)| message.clone().into_posted(idx))
                     .collect::<Vec<_>>();
                 index += txn_messages.len() as u32;
@@ -500,14 +497,24 @@ impl Block {
         let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
         blob_ids.extend(self.created_blob_ids());
+        if self.header.height == BlockHeight(0) {
+            // the initial block implicitly depends on the chain description blob
+            blob_ids.insert(BlobId::new(
+                self.header.chain_id.0,
+                BlobType::ChainDescription,
+            ));
+        }
         blob_ids
     }
 
     /// Returns whether this block requires the blob with the specified ID.
-    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
+    pub fn requires_or_creates_blob(&self, blob_id: &BlobId) -> bool {
         self.oracle_blob_ids().contains(blob_id)
             || self.published_blob_ids().contains(blob_id)
             || self.created_blob_ids().contains(blob_id)
+            || (self.header.height == BlockHeight(0)
+                && (blob_id.blob_type == BlobType::ChainDescription
+                    && blob_id.hash == self.header.chain_id.0))
     }
 
     /// Returns all the published blob IDs in this block's operations.
@@ -637,20 +644,6 @@ impl Block {
             .iter()
             .flatten()
             .map(|blob| (blob.id(), blob.clone()))
-    }
-
-    /// If the block's first message is `OpenChain`, returns the bundle, the message and
-    /// the configuration for the new chain.
-    pub fn starts_with_open_chain_message(
-        &self,
-    ) -> Option<(&IncomingBundle, &PostedMessage, &OpenChainConfig)> {
-        let in_bundle = self.body.incoming_bundles.first()?;
-        if in_bundle.action != MessageAction::Accept {
-            return None;
-        }
-        let posted_message = in_bundle.bundle.messages.first()?;
-        let config = posted_message.message.matches_open_chain()?;
-        Some((in_bundle, posted_message, config))
     }
 }
 

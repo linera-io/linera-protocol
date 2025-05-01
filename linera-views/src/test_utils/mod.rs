@@ -822,7 +822,7 @@ pub async fn root_key_admin_test<S: TestKeyValueStore>() {
 /// or in shared access where only values are stored and (key, value) once
 /// written are never modified nor erased.
 ///
-/// In case of no exclusive access the following scenarion is checked
+/// In case of no exclusive access the following scenario is checked
 /// * Store 1 deletes a key and does not mark it as missing in its cache.
 /// * Store 2 writes the key
 /// * Store 1 reads the key, but since it is not in the cache it can read

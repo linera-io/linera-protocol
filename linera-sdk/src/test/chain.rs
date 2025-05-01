@@ -13,16 +13,19 @@ use std::{
 };
 
 use cargo_toml::Manifest;
+use futures::future;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, CompressedBytecode},
-    identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
+    data_types::{
+        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, ChainDescription,
+        CompressedBytecode, Epoch,
+    },
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     vm::VmRuntime,
 };
 use linera_chain::ChainExecutionContext;
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
-    committee::Epoch,
     system::{SystemOperation, SystemQuery, SystemResponse},
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse,
 };
@@ -45,7 +48,7 @@ impl Clone for ActiveChain {
     fn clone(&self) -> Self {
         ActiveChain {
             key_pair: self.key_pair.copy(),
-            description: self.description,
+            description: self.description.clone(),
             tip: self.tip.clone(),
             validator: self.validator.clone(),
         }
@@ -73,7 +76,7 @@ impl ActiveChain {
 
     /// Returns the [`ChainId`] of this microchain.
     pub fn id(&self) -> ChainId {
-        self.description.into()
+        self.description.id()
     }
 
     /// Returns the [`AccountPublicKey`] of the active owner of this microchain.
@@ -251,7 +254,7 @@ impl ActiveChain {
     ) -> Result<CertifiedBlock, WorkerError> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
-            self.description.into(),
+            self.description.id(),
             self.key_pair.public().into(),
             self.epoch().await,
             tip.as_ref(),
@@ -300,6 +303,54 @@ impl ActiveChain {
 
         self.add_block(|block| {
             block.with_incoming_bundles(messages);
+        })
+        .await;
+    }
+
+    /// Processes all new events from streams this chain subscribes to.
+    ///
+    /// Adds a block to this microchain that processes the new events.
+    pub async fn handle_new_events(&self) {
+        let chain_id = self.id();
+        let worker = self.validator.worker();
+        let subscription_map = worker
+            .chain_state_view(chain_id)
+            .await
+            .expect("Failed to query chain state view")
+            .execution_state
+            .system
+            .event_subscriptions
+            .index_values()
+            .await
+            .expect("Failed to query chain's event subscriptions");
+        // Collect the indices of all new events.
+        let futures = subscription_map
+            .into_iter()
+            .map(|((chain_id, stream_id), subscriptions)| {
+                let worker = worker.clone();
+                async move {
+                    worker
+                        .chain_state_view(chain_id)
+                        .await
+                        .expect("Failed to query chain state view")
+                        .execution_state
+                        .stream_event_counts
+                        .get(&stream_id)
+                        .await
+                        .expect("Failed to query chain's event counts")
+                        .filter(|next_index| *next_index > subscriptions.next_index)
+                        .map(|next_index| (chain_id, stream_id, next_index))
+                }
+            });
+        let updates = future::join_all(futures)
+            .await
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        assert!(!updates.is_empty(), "No new events to process");
+
+        self.add_block(|block| {
+            block.with_system_operation(SystemOperation::UpdateStreams(updates));
         })
         .await;
     }

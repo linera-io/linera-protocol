@@ -14,22 +14,19 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ApplicationDescription, Blob, BlockHeight},
+    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch},
     ensure,
     hashed::Hashed,
-    identifiers::{ApplicationId, BlobId, ChainId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, Medium, MessageBundle, Origin, ProposedBlock, Target,
-    },
+    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
     manager,
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, ExecutionStateView, Message, Query, QueryContext, QueryOutcome,
-    ResourceTracker, ServiceRuntimeEndpoint, SystemMessage,
+    ExecutionStateView, Query, QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -150,7 +147,7 @@ where
     #[cfg(with_testing)]
     pub(super) async fn find_bundle_in_inbox(
         &mut self,
-        inbox_id: Origin,
+        inbox_id: ChainId,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
@@ -214,7 +211,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        self.ensure_is_active()?;
+        self.ensure_is_active().await?;
         if ChainWorkerStateWithTemporaryChanges::new(&mut *self)
             .await
             .check_proposed_block(&proposal)
@@ -279,7 +276,7 @@ where
     #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_cross_chain_update(
         &mut self,
-        origin: Origin,
+        origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
@@ -291,11 +288,12 @@ where
     /// Handles the cross-chain request confirming that the recipient was updated.
     pub(super) async fn confirm_updated_recipient(
         &mut self,
-        latest_heights: Vec<(Target, BlockHeight)>,
+        recipient: ChainId,
+        latest_height: BlockHeight,
     ) -> Result<(), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .confirm_updated_recipient(latest_heights)
+            .confirm_updated_recipient(recipient, latest_height)
             .await
     }
 
@@ -347,9 +345,10 @@ where
     }
 
     /// Ensures that the current chain is active, returning an error otherwise.
-    fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
+    async fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
-            self.chain.ensure_is_active()?;
+            let local_time = self.storage.clock().current_time();
+            self.chain.ensure_is_active(local_time).await?;
             self.knows_chain_is_active = true;
         }
         Ok(())
@@ -431,17 +430,11 @@ where
             {
                 return; // The parent chain is not tracked; don't track the child.
             }
-            let messages = outcome.messages.iter().flatten();
-            let open_chain_message_indices =
-                messages
-                    .enumerate()
-                    .filter_map(|(index, outgoing_message)| match outgoing_message.message {
-                        Message::System(SystemMessage::OpenChain(_)) => Some(index),
-                        _ => None,
-                    });
-            let open_chain_message_ids =
-                open_chain_message_indices.map(|index| proposed_block.message_id(index as u32));
-            let new_chain_ids = open_chain_message_ids.map(ChainId::child);
+            let new_chain_ids = outcome
+                .created_blobs_ids()
+                .into_iter()
+                .filter(|blob_id| blob_id.blob_type == BlobType::ChainDescription)
+                .map(|blob_id| ChainId(blob_id.hash));
 
             tracked_chains
                 .write()
@@ -452,36 +445,29 @@ where
 
     /// Loads pending cross-chain requests.
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
-        let mut heights_by_recipient = BTreeMap::<_, BTreeMap<_, _>>::new();
+        let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
         let mut targets = self.chain.outboxes.indices().await?;
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
             let tracked_chains = tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`");
-            targets.retain(|target| tracked_chains.contains(&target.recipient));
+            targets.retain(|target| tracked_chains.contains(target));
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
             let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let heights = outbox.queue.elements().await?;
-            heights_by_recipient
-                .entry(target.recipient)
-                .or_default()
-                .insert(target.medium, heights);
+            heights_by_recipient.insert(target, heights);
         }
         self.create_cross_chain_requests(heights_by_recipient).await
     }
 
     async fn create_cross_chain_requests(
         &self,
-        heights_by_recipient: BTreeMap<ChainId, BTreeMap<Medium, Vec<BlockHeight>>>,
+        heights_by_recipient: BTreeMap<ChainId, Vec<BlockHeight>>,
     ) -> Result<NetworkActions, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
-        let heights = BTreeSet::from_iter(
-            heights_by_recipient
-                .iter()
-                .flat_map(|(_, height_map)| height_map.iter().flat_map(|(_, vec)| vec).copied()),
-        );
+        let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
         let heights_usize = heights
             .iter()
             .copied()
@@ -505,24 +491,18 @@ where
             .collect::<HashMap<_, _>>();
         // For each medium, select the relevant messages.
         let mut actions = NetworkActions::default();
-        for (recipient, height_map) in heights_by_recipient {
-            let mut bundle_vecs = Vec::new();
-            for (medium, heights) in height_map {
-                let mut bundles = Vec::new();
-                for height in heights {
-                    let cert = certificates.get(&height).ok_or_else(|| {
-                        ChainError::InternalError("missing certificates".to_string())
-                    })?;
-                    bundles.extend(cert.message_bundles_for(&medium, recipient));
-                }
-                if !bundles.is_empty() {
-                    bundle_vecs.push((medium, bundles));
-                }
+        for (recipient, heights) in heights_by_recipient {
+            let mut bundles = Vec::new();
+            for height in heights {
+                let cert = certificates
+                    .get(&height)
+                    .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
+                bundles.extend(cert.message_bundles_for(recipient));
             }
             let request = CrossChainRequest::UpdateRecipient {
                 sender: self.chain.chain_id(),
                 recipient,
-                bundle_vecs,
+                bundles,
             };
             actions.cross_chain_requests.push(request);
         }
@@ -544,7 +524,7 @@ where
         let mut targets = self.chain.outboxes.indices().await?;
         {
             let tracked_chains = tracked_chains.read().unwrap();
-            targets.retain(|target| tracked_chains.contains(&target.recipient));
+            targets.retain(|target| tracked_chains.contains(target));
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for outbox in outboxes {

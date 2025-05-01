@@ -35,6 +35,7 @@ linera-execution.workspace = true
 fungible.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-service = { workspace = true, features = ["test"] }
+similar-asserts.workspace = true
 tempfile.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }

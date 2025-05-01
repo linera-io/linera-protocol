@@ -8,19 +8,17 @@ use std::{borrow::Cow, collections::BTreeMap};
 use futures::future::Either;
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Blob, BlockHeight, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Timestamp},
     ensure,
     identifiers::{AccountOwner, ChainId},
 };
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, ProposalContent, Target,
-    },
+    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposalContent},
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
-use linera_execution::committee::{Committee, Epoch};
+use linera_execution::committee::Committee;
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
@@ -70,7 +68,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.state.ensure_is_active()?;
+        self.state.ensure_is_active().await?;
         let (chain_epoch, committee) = self.state.chain.current_committee()?;
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -210,7 +208,7 @@ where
         let height = header.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.state.ensure_is_active()?;
+        self.state.ensure_is_active().await?;
         let (epoch, committee) = self.state.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -305,13 +303,7 @@ where
         }
         let local_time = self.state.storage.clock().current_time();
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
-        if tip.is_first_block() && self.state.chain.is_child() {
-            self.state
-                .chain
-                .execute_init_message_from(block, local_time)
-                .await?;
-        }
-        self.state.ensure_is_active()?;
+        self.state.ensure_is_active().await?;
         // Verify the certificate.
         let (epoch, committee) = self.state.chain.current_committee()?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
@@ -369,13 +361,13 @@ where
             .await?;
         let oracle_responses = Some(block.body.oracle_responses.clone());
         let (proposed_block, outcome) = block.clone().into_proposal();
-        let (verified_outcome, subscribe, unsubscribe) = if let Some(execution_state) =
+        let verified_outcome = if let Some(execution_state) =
             self.state.execution_state_cache.remove(&outcome.state_hash)
         {
             chain.execution_state = execution_state;
-            (outcome.clone(), Vec::new(), Vec::new())
+            outcome.clone()
         } else {
-            let (outcome, _resources, subscribe, unsubscribe) = chain
+            let (outcome, _resources) = chain
                 .execute_block(
                     &proposed_block,
                     local_time,
@@ -384,7 +376,7 @@ where
                     oracle_responses,
                 )
                 .await?;
-            (outcome, subscribe, unsubscribe)
+            outcome
         };
         // We should always agree on the messages and state hash.
         ensure!(
@@ -395,11 +387,9 @@ where
             }
         );
         // Update the rest of the chain state.
-        chain.process_unsubscribes(unsubscribe).await?;
         chain
             .apply_confirmed_block(certificate.value(), local_time)
             .await?;
-        chain.process_subscribes(subscribe).await?;
         self.state
             .track_newly_created_chains(&proposed_block, &outcome);
         let mut actions = self.state.create_network_actions().await?;
@@ -452,7 +442,7 @@ where
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     pub(super) async fn process_cross_chain_update(
         &mut self,
-        origin: Origin,
+        origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         // Only process certificates with relevant heights and epochs.
@@ -508,30 +498,23 @@ where
     /// Handles the cross-chain request confirming that the recipient was updated.
     pub(super) async fn confirm_updated_recipient(
         &mut self,
-        latest_heights: Vec<(Target, BlockHeight)>,
+        recipient: ChainId,
+        latest_height: BlockHeight,
     ) -> Result<(), WorkerError> {
-        let mut height_with_fully_delivered_messages = None;
-
-        for (target, height) in latest_heights {
-            let fully_delivered = self
+        let fully_delivered = self
+            .state
+            .chain
+            .mark_messages_as_received(&recipient, latest_height)
+            .await?
+            && self
                 .state
-                .chain
-                .mark_messages_as_received(&target, height)
-                .await?
-                && self
-                    .state
-                    .all_messages_to_tracked_chains_delivered_up_to(height)
-                    .await?;
-
-            if fully_delivered && Some(height) > height_with_fully_delivered_messages {
-                height_with_fully_delivered_messages = Some(height);
-            }
-        }
+                .all_messages_to_tracked_chains_delivered_up_to(latest_height)
+                .await?;
 
         self.save().await?;
 
-        if let Some(height) = height_with_fully_delivered_messages {
-            self.state.delivery_notifier.notify(height);
+        if fully_delivered {
+            self.state.delivery_notifier.notify(latest_height);
         }
 
         Ok(())
@@ -696,7 +679,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
     ///   correctly.
     pub fn select_message_bundles(
         &self,
-        origin: &'a Origin,
+        origin: &'a ChainId,
         recipient: ChainId,
         next_height_to_receive: BlockHeight,
         last_anticipated_block_height: Option<BlockHeight>,

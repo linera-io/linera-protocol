@@ -4,13 +4,13 @@
 
 use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, TestString},
-    data_types::{BlobContent, OracleResponse, Round},
-    identifiers::{AccountOwner, BlobType, ChainDescription, Destination, GenericApplicationId},
+    data_types::{BlobContent, ChainDescription, ChainOrigin, OracleResponse, Round},
+    identifiers::{AccountOwner, BlobType, GenericApplicationId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_chain::{
-    data_types::{Medium, MessageAction},
+    data_types::MessageAction,
     manager::{ChainManagerInfo, LockingBlock},
     types::{Certificate, CertificateKind, ConfirmedBlock, Timeout, ValidatedBlock},
 };
@@ -71,9 +71,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ConfirmedBlock>(&samples)?;
     tracer.trace_type::<ValidatedBlock>(&samples)?;
     tracer.trace_type::<Timeout>(&samples)?;
-    tracer.trace_type::<Medium>(&samples)?;
-    tracer.trace_type::<Destination>(&samples)?;
     tracer.trace_type::<ChainDescription>(&samples)?;
+    tracer.trace_type::<ChainOrigin>(&samples)?;
     tracer.trace_type::<ChainOwnership>(&samples)?;
     tracer.trace_type::<GenericApplicationId>(&samples)?;
     tracer.trace_type::<LockingBlock>(&samples)?;

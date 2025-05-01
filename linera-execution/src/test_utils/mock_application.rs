@@ -17,11 +17,14 @@ use std::{
 
 #[cfg(web)]
 use js_sys::wasm_bindgen;
+use linera_base::{
+    data_types::StreamUpdate,
+    identifiers::{ChainId, StreamId},
+};
 
 use crate::{
-    ContractSyncRuntimeHandle, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceSyncRuntimeHandle, UserContract, UserContractModule, UserService,
-    UserServiceModule,
+    ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContract,
+    UserContractModule, UserService, UserServiceModule,
 };
 
 /// A mocked implementation of a user application.
@@ -120,43 +123,25 @@ impl<Runtime> Drop for MockApplicationInstance<Runtime> {
 }
 
 type InstantiateHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntimeHandle,
-            OperationContext,
-            Vec<u8>,
-        ) -> Result<(), ExecutionError>
-        + Send
-        + Sync,
+    dyn FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<(), ExecutionError> + Send + Sync,
 >;
 type ExecuteOperationHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntimeHandle,
-            OperationContext,
-            Vec<u8>,
-        ) -> Result<Vec<u8>, ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
         + Send
         + Sync,
 >;
 type ExecuteMessageHandler = Box<
-    dyn FnOnce(
-            &mut ContractSyncRuntimeHandle,
-            MessageContext,
-            Vec<u8>,
-        ) -> Result<(), ExecutionError>
+    dyn FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<(), ExecutionError> + Send + Sync,
+>;
+type ProcessStreamHandler = Box<
+    dyn FnOnce(&mut ContractSyncRuntimeHandle, Vec<StreamUpdate>) -> Result<(), ExecutionError>
         + Send
         + Sync,
 >;
-type FinalizeHandler = Box<
-    dyn FnOnce(&mut ContractSyncRuntimeHandle, FinalizeContext) -> Result<(), ExecutionError>
-        + Send
-        + Sync,
->;
+type FinalizeHandler =
+    Box<dyn FnOnce(&mut ContractSyncRuntimeHandle) -> Result<(), ExecutionError> + Send + Sync>;
 type HandleQueryHandler = Box<
-    dyn FnOnce(
-            &mut ServiceSyncRuntimeHandle,
-            QueryContext,
-            Vec<u8>,
-        ) -> Result<Vec<u8>, ExecutionError>
+    dyn FnOnce(&mut ServiceSyncRuntimeHandle, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
         + Send
         + Sync,
 >;
@@ -170,6 +155,8 @@ pub enum ExpectedCall {
     ExecuteOperation(#[debug(skip)] ExecuteOperationHandler),
     /// An expected call to [`UserContract::execute_message`].
     ExecuteMessage(#[debug(skip)] ExecuteMessageHandler),
+    /// An expected call to [`UserContract::process_streams`].
+    ProcessStreams(#[debug(skip)] ProcessStreamHandler),
     /// An expected call to [`UserContract::finalize`].
     Finalize(#[debug(skip)] FinalizeHandler),
     /// An expected call to [`UserService::handle_query`].
@@ -182,6 +169,7 @@ impl Display for ExpectedCall {
             ExpectedCall::Instantiate(_) => "instantiate",
             ExpectedCall::ExecuteOperation(_) => "execute_operation",
             ExpectedCall::ExecuteMessage(_) => "execute_message",
+            ExpectedCall::ProcessStreams(_) => "process_streams",
             ExpectedCall::Finalize(_) => "finalize",
             ExpectedCall::HandleQuery(_) => "handle_query",
         };
@@ -194,11 +182,7 @@ impl ExpectedCall {
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
     /// [`UserContract::instantiate`] implementation, which is handled by the provided `handler`.
     pub fn instantiate(
-        handler: impl FnOnce(
-                &mut ContractSyncRuntimeHandle,
-                OperationContext,
-                Vec<u8>,
-            ) -> Result<(), ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -210,11 +194,7 @@ impl ExpectedCall {
     /// [`UserContract::execute_operation`] implementation, which is handled by the provided
     /// `handler`.
     pub fn execute_operation(
-        handler: impl FnOnce(
-                &mut ContractSyncRuntimeHandle,
-                OperationContext,
-                Vec<u8>,
-            ) -> Result<Vec<u8>, ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -226,11 +206,7 @@ impl ExpectedCall {
     /// [`UserContract::execute_message`] implementation, which is handled by the provided
     /// `handler`.
     pub fn execute_message(
-        handler: impl FnOnce(
-                &mut ContractSyncRuntimeHandle,
-                MessageContext,
-                Vec<u8>,
-            ) -> Result<(), ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, Vec<u8>) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -238,10 +214,22 @@ impl ExpectedCall {
         ExpectedCall::ExecuteMessage(Box::new(handler))
     }
 
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
+    /// [`UserContract::process_streams`] implementation, which is handled by the provided
+    /// `handler`.
+    pub fn process_streams(
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, Vec<StreamUpdate>) -> Result<(), ExecutionError>
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        ExpectedCall::ProcessStreams(Box::new(handler))
+    }
+
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
     /// implementation, which is handled by the provided `handler`.
     pub fn finalize(
-        handler: impl FnOnce(&mut ContractSyncRuntimeHandle, FinalizeContext) -> Result<(), ExecutionError>
+        handler: impl FnOnce(&mut ContractSyncRuntimeHandle) -> Result<(), ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -252,17 +240,13 @@ impl ExpectedCall {
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
     /// implementation, which is handled by the default implementation which does nothing.
     pub fn default_finalize() -> Self {
-        Self::finalize(|_, _| Ok(()))
+        Self::finalize(|_| Ok(()))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
     /// [`UserService::handle_query`] implementation, which is handled by the provided `handler`.
     pub fn handle_query(
-        handler: impl FnOnce(
-                &mut ServiceSyncRuntimeHandle,
-                QueryContext,
-                Vec<u8>,
-            ) -> Result<Vec<u8>, ExecutionError>
+        handler: impl FnOnce(&mut ServiceSyncRuntimeHandle, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -300,15 +284,9 @@ impl<Runtime> MockApplicationInstance<Runtime> {
 }
 
 impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
-    fn instantiate(
-        &mut self,
-        context: OperationContext,
-        argument: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::Instantiate(handler)) => {
-                handler(&mut self.runtime, context, argument)
-            }
+            Some(ExpectedCall::Instantiate(handler)) => handler(&mut self.runtime, argument),
             Some(unexpected_call) => panic!(
                 "Expected a call to `instantiate`, got a call to `{unexpected_call}` instead."
             ),
@@ -316,15 +294,9 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn execute_operation(
-        &mut self,
-        context: OperationContext,
-        operation: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::ExecuteOperation(handler)) => {
-                handler(&mut self.runtime, context, operation)
-            }
+            Some(ExpectedCall::ExecuteOperation(handler)) => handler(&mut self.runtime, operation),
             Some(unexpected_call) => panic!(
                 "Expected a call to `execute_operation`, got a call to `{unexpected_call}` instead."
             ),
@@ -332,15 +304,9 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn execute_message(
-        &mut self,
-        context: MessageContext,
-        message: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::ExecuteMessage(handler)) => {
-                handler(&mut self.runtime, context, message)
-            }
+            Some(ExpectedCall::ExecuteMessage(handler)) => handler(&mut self.runtime, message),
             Some(unexpected_call) => panic!(
                 "Expected a call to `execute_message`, got a call to `{unexpected_call}` instead."
             ),
@@ -348,9 +314,19 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::Finalize(handler)) => handler(&mut self.runtime, context),
+            Some(ExpectedCall::ProcessStreams(handler)) => handler(&mut self.runtime, updates),
+            Some(unexpected_call) => panic!(
+                "Expected a call to `process_streams`, got a call to `{unexpected_call}` instead."
+            ),
+            None => panic!("Unexpected call to `process_streams`"),
+        }
+    }
+
+    fn finalize(&mut self) -> Result<(), ExecutionError> {
+        match self.next_expected_call() {
+            Some(ExpectedCall::Finalize(handler)) => handler(&mut self.runtime),
             Some(unexpected_call) => {
                 panic!("Expected a call to `finalize`, got a call to `{unexpected_call}` instead.")
             }
@@ -360,13 +336,9 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
 }
 
 impl UserService for MockApplicationInstance<ServiceSyncRuntimeHandle> {
-    fn handle_query(
-        &mut self,
-        context: QueryContext,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    fn handle_query(&mut self, query: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         match self.next_expected_call() {
-            Some(ExpectedCall::HandleQuery(handler)) => handler(&mut self.runtime, context, query),
+            Some(ExpectedCall::HandleQuery(handler)) => handler(&mut self.runtime, query),
             Some(unexpected_call) => panic!(
                 "Expected a call to `handle_query`, got a call to `{unexpected_call}` instead."
             ),

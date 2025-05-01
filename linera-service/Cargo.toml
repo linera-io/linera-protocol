@@ -51,6 +51,7 @@ metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 storage-service = ["linera-storage-service"]
 
 [dependencies]
+alloy-primitives.workspace = true
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
 assert_matches.workspace = true
@@ -60,6 +61,8 @@ async-lock.workspace = true
 async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
+bcs.workspace = true
+bincode.workspace = true
 cargo_toml.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
@@ -173,6 +176,10 @@ path = "src/schema_export.rs"
 name = "linera-benchmark"
 path = "src/benchmark.rs"
 required-features = ["benchmark"]
+
+[[bin]]
+name = "linera-exporter"
+path = "src/linera-exporter/main.rs"
 
 [[bench]]
 name = "transfers"

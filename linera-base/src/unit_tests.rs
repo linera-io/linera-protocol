@@ -11,10 +11,7 @@ use test_case::test_case;
 use crate::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
@@ -33,8 +30,6 @@ use crate::{
 #[test_case(message_id_test_case(); "of_message_id")]
 #[test_case(application_id_test_case(); "of_application_id")]
 #[test_case(module_id_test_case(); "of_module_id")]
-#[test_case(ChannelName::from(b"channel name".to_vec()); "of_channel_name")]
-#[test_case(Destination::Recipient(ChainId::root(0)); "of_destination")]
 #[test_case(timeout_config_test_case(); "of_timeout_config")]
 #[test_case(chain_ownership_test_case(); "of_chain_ownership")]
 fn test_wit_roundtrip<T>(input: T)
@@ -72,7 +67,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
     SendMessageRequest {
         authenticated: true,
         is_tracked: false,
-        destination: Destination::Subscribers(b"channel".to_vec().into()),
+        destination: ChainId(CryptoHash::test_hash("chain_id_0")),
         grant: Resources {
             bytes_to_read: 200,
             bytes_to_write: 0,
@@ -96,7 +91,7 @@ fn send_message_request_test_case() -> SendMessageRequest<Vec<u8>> {
 /// Creates a dummy [`Account`] instance to use for the WIT roundtrip test.
 fn account_test_case() -> Account {
     Account {
-        chain_id: ChainId::root(10),
+        chain_id: ChainId(CryptoHash::test_hash("chain_id_10")),
         owner: AccountOwner::from(CryptoHash::test_hash("account")),
     }
 }
@@ -104,7 +99,7 @@ fn account_test_case() -> Account {
 /// Creates a dummy [`MessageId`] instance to use for the WIT roundtrip test.
 fn message_id_test_case() -> MessageId {
     MessageId {
-        chain_id: ChainId::root(3),
+        chain_id: ChainId(CryptoHash::test_hash("chain_id_3")),
         height: BlockHeight(9_812_394),
         index: 7,
     }

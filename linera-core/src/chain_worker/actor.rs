@@ -12,18 +12,18 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ApplicationDescription, Blob, BlockHeight, Timestamp},
+    data_types::{ApplicationDescription, Blob, BlockHeight, Epoch, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, MessageBundle, Origin, ProposedBlock, Target},
+    data_types::{BlockProposal, MessageBundle, ProposedBlock},
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, ExecutionStateView, Query, QueryContext, QueryOutcome, ResourceTracker,
-    ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    ExecutionStateView, Query, QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
+    ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -53,7 +53,7 @@ where
     /// Search for a bundle in one of the chain's inboxes.
     #[cfg(with_testing)]
     FindBundleInInbox {
-        inbox_id: Origin,
+        inbox_id: ChainId,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
@@ -123,7 +123,7 @@ where
 
     /// Process a cross-chain update.
     ProcessCrossChainUpdate {
-        origin: Origin,
+        origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<Option<BlockHeight>, WorkerError>>,
@@ -131,7 +131,8 @@ where
 
     /// Handle cross-chain request to confirm that the recipient was updated.
     ConfirmUpdatedRecipient {
-        latest_heights: Vec<(Target, BlockHeight)>,
+        recipient: ChainId,
+        latest_height: BlockHeight,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(), WorkerError>>,
     },
@@ -403,10 +404,15 @@ where
                 )
                 .is_ok(),
             ChainWorkerRequest::ConfirmUpdatedRecipient {
-                latest_heights,
+                recipient,
+                latest_height,
                 callback,
             } => callback
-                .send(self.worker.confirm_updated_recipient(latest_heights).await)
+                .send(
+                    self.worker
+                        .confirm_updated_recipient(recipient, latest_height)
+                        .await,
+                )
                 .is_ok(),
             ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                 .send(self.worker.handle_chain_info_query(query).await)

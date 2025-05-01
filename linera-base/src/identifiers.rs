@@ -21,10 +21,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     bcs_scalar,
     crypto::{
-        AccountPublicKey, BcsHashable, CryptoError, CryptoHash, Ed25519PublicKey, EvmPublicKey,
+        AccountPublicKey, CryptoError, CryptoHash, Ed25519PublicKey, EvmPublicKey,
         Secp256k1PublicKey,
     },
-    data_types::BlockHeight,
+    data_types::{BlobContent, BlockHeight, ChainDescription},
     doc_scalar, hex_debug,
     vm::VmRuntime,
 };
@@ -112,22 +112,6 @@ impl FromStr for Account {
     }
 }
 
-/// How to create a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub enum ChainDescription {
-    /// The chain was created by the genesis configuration.
-    Root(u32),
-    /// The chain was created by a message from another chain.
-    Child(MessageId),
-}
-
-impl ChainDescription {
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        matches!(self, ChainDescription::Child(_))
-    }
-}
-
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
 /// of a [`ChainDescription`].
 #[derive(
@@ -181,6 +165,8 @@ pub enum BlobType {
     ApplicationDescription,
     /// A blob containing a committee of validators.
     Committee,
+    /// A blob containing a chain description.
+    ChainDescription,
 }
 
 impl Display for BlobType {
@@ -404,54 +390,6 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
-/// The name of a subscription channel.
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-pub struct ChannelName(
-    #[serde(with = "serde_bytes")]
-    #[debug(with = "hex_debug")]
-    Vec<u8>,
-);
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-/// A channel name together with its application ID.
-pub struct ChannelFullName {
-    /// The application owning the channel.
-    pub application_id: ApplicationId,
-    /// The name of the channel.
-    pub name: ChannelName,
-}
-
-impl fmt::Display for ChannelFullName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = hex::encode(&self.name);
-        let app_id = self.application_id;
-        write!(f, "user channel {name} for app {app_id}")
-    }
-}
-
-impl ChannelFullName {
-    /// Creates a full user channel name.
-    pub fn new(name: ChannelName, application_id: ApplicationId) -> Self {
-        Self {
-            application_id,
-            name,
-        }
-    }
-}
-
 /// The name of an event stream.
 #[derive(
     Clone,
@@ -536,74 +474,6 @@ pub struct EventId {
     pub stream_id: StreamId,
     /// The event index, i.e. the number of events in the stream before this one.
     pub index: u32,
-}
-
-/// The destination of a message, relative to a particular application.
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    WitLoad,
-    WitStore,
-    WitType,
-)]
-pub enum Destination {
-    /// Direct message to a chain.
-    Recipient(ChainId),
-    /// Broadcast to the current subscribers of our channel.
-    Subscribers(ChannelName),
-}
-
-impl Destination {
-    /// Whether the destination is a broadcast channel.
-    pub fn is_channel(&self) -> bool {
-        matches!(self, Destination::Subscribers(_))
-    }
-
-    /// Returns the recipient chain, or `None` if it is `Subscribers`.
-    pub fn recipient(&self) -> Option<ChainId> {
-        match self {
-            Destination::Recipient(chain_id) => Some(*chain_id),
-            Destination::Subscribers(_) => None,
-        }
-    }
-}
-
-impl From<ChainId> for Destination {
-    fn from(chain_id: ChainId) -> Self {
-        Destination::Recipient(chain_id)
-    }
-}
-
-impl From<ChannelName> for Destination {
-    fn from(channel_name: ChannelName) -> Self {
-        Destination::Subscribers(channel_name)
-    }
-}
-
-impl AsRef<[u8]> for ChannelName {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl From<Vec<u8>> for ChannelName {
-    fn from(name: Vec<u8>) -> Self {
-        ChannelName(name)
-    }
-}
-
-impl ChannelName {
-    /// Turns the channel name into bytes.
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.0
-    }
 }
 
 impl StreamName {
@@ -1080,25 +950,19 @@ impl fmt::Debug for ChainId {
     }
 }
 
+impl<'a> From<&'a ChainDescription> for ChainId {
+    fn from(description: &'a ChainDescription) -> Self {
+        Self(CryptoHash::new(&BlobContent::new_chain_description(
+            description,
+        )))
+    }
+}
+
 impl From<ChainDescription> for ChainId {
     fn from(description: ChainDescription) -> Self {
-        Self(CryptoHash::new(&description))
+        From::from(&description)
     }
 }
-
-impl ChainId {
-    /// The chain ID representing the N-th chain created at genesis time.
-    pub fn root(index: u32) -> Self {
-        Self(CryptoHash::new(&ChainDescription::Root(index)))
-    }
-
-    /// The chain ID representing the chain created by the given message.
-    pub fn child(id: MessageId) -> Self {
-        Self(CryptoHash::new(&ChainDescription::Child(id)))
-    }
-}
-
-impl BcsHashable<'_> for ChainDescription {}
 
 bcs_scalar!(ApplicationId, "A unique identifier for a user application");
 doc_scalar!(
@@ -1106,19 +970,13 @@ doc_scalar!(
     "A unique identifier for a user application or for the system application"
 );
 bcs_scalar!(ModuleId, "A unique identifier for an application module");
-doc_scalar!(ChainDescription, "How to create a chain");
 doc_scalar!(
     ChainId,
     "The unique identifier (UID) of a chain. This is currently computed as the hash value of a \
     ChainDescription."
 );
-doc_scalar!(ChannelName, "The name of a subscription channel");
 doc_scalar!(StreamName, "The name of an event stream");
 bcs_scalar!(MessageId, "The index of a message in a chain");
-doc_scalar!(
-    Destination,
-    "The destination of a message, relative to a particular application."
-);
 doc_scalar!(
     AccountOwner,
     "A unique identifier for a user or an application."
@@ -1128,10 +986,6 @@ doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"
 );
-doc_scalar!(
-    ChannelFullName,
-    "A channel name together with its application ID."
-);
 
 #[cfg(test)]
 mod tests {
@@ -1139,31 +993,32 @@ mod tests {
 
     use assert_matches::assert_matches;
 
-    use super::{AccountOwner, BlobType, ChainId};
+    use super::{AccountOwner, BlobType};
+    use crate::{
+        data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
+        ownership::ChainOwnership,
+    };
 
-    /// Verifies that chain IDs that are explicitly used in some example and test scripts don't
-    /// change.
+    /// Verifies that the way of computing chain IDs doesn't change.
     #[test]
-    fn chain_ids() {
-        assert_eq!(
-            &ChainId::root(0).to_string(),
-            "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
+    fn chain_id_computing() {
+        let example_chain_origin = ChainOrigin::Root(0);
+        let example_chain_config = InitialChainConfig {
+            admin_id: None,
+            epoch: Epoch::ZERO,
+            ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
+            balance: Amount::ZERO,
+            committees: [(Epoch::ZERO, vec![])].into_iter().collect(),
+            application_permissions: Default::default(),
+        };
+        let description = ChainDescription::new(
+            example_chain_origin,
+            example_chain_config,
+            Timestamp::from(0),
         );
         assert_eq!(
-            &ChainId::root(1).to_string(),
-            "a3edc33d8e951a1139333be8a4b56646b5598a8f51216e86592d881808972b07"
-        );
-        assert_eq!(
-            &ChainId::root(2).to_string(),
-            "678e9f66507069d38955b593e93ddf192a23a4087225fd307eadad44e5544ae3"
-        );
-        assert_eq!(
-            &ChainId::root(9).to_string(),
-            "63620ea465af9e9e0e8e4dd8d21593cc3a719feac5f096df8440f90738f4dbd8"
-        );
-        assert_eq!(
-            &ChainId::root(999).to_string(),
-            "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
+            description.id().to_string(),
+            "f8c2f02adc0ac763ffd74a32d02aa37490d869605c356a2da55e1d09e7d253bf"
         );
     }
 

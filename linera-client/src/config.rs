@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     iter::IntoIterator,
     ops::{Deref, DerefMut},
 };
@@ -12,14 +13,17 @@ use linera_base::{
         AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, Ed25519SecretKey,
         ValidatorPublicKey, ValidatorSecretKey,
     },
-    data_types::{Amount, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
+    identifiers::ChainId,
+    ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
-use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
+use linera_rpc::config::{
+    ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+};
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 
@@ -220,18 +224,28 @@ impl GenesisConfig {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let committee = self.create_committee();
+        let committees: BTreeMap<_, _> = [(
+            Epoch::ZERO,
+            bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
+        )]
+        .into_iter()
+        .collect();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
-            let description = ChainDescription::Root(chain_number);
-            storage
-                .create_chain(
-                    committee.clone(),
-                    self.admin_id,
-                    description,
-                    (*public_key).into(),
-                    *balance,
-                    self.timestamp,
-                )
-                .await?;
+            let origin = ChainOrigin::Root(chain_number);
+            let config = InitialChainConfig {
+                admin_id: if chain_number == 0 {
+                    None
+                } else {
+                    Some(self.admin_id)
+                },
+                application_permissions: Default::default(),
+                balance: *balance,
+                committees: committees.clone(),
+                epoch: Epoch::ZERO,
+                ownership: ChainOwnership::single((*public_key).into()),
+            };
+            let description = ChainDescription::new(origin, config, self.timestamp);
+            storage.create_chain(description).await?;
         }
         Ok(())
     }
@@ -243,4 +257,38 @@ impl GenesisConfig {
     pub fn hash(&self) -> CryptoHash {
         CryptoHash::new(self)
     }
+}
+
+/// The configuration file for the linera-exporter.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlockExporterConfig {
+    /// The server configuration for the linera-exporter.
+    pub service_config: ExporterServiceConfig,
+
+    /// The configuration file for the export destinations.
+    #[serde(default)]
+    pub destination_config: DestinationConfig,
+
+    /// Identity for the block exporter state.
+    pub id: u32,
+}
+
+/// Configuration file for the exports.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct DestinationConfig {
+    /// The destination URIs to export to.
+    pub destinations: Vec<Destination>,
+}
+
+// Each destination has an ID and a configuration.
+pub type DestinationId = u16;
+
+/// The uri to provide export services to.
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Destination {
+    /// The host name of the target destination (IP or hostname).
+    pub endpoint: String,
+    /// The port number of the target destination.
+    pub port: u16,
 }

@@ -153,14 +153,14 @@ message CrossChainRequest {
 message UpdateRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
-  bytes bundle_vecs = 3;
+  bytes bundles = 3;
 }
 
 // Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
 message ConfirmUpdatedRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
-  bytes latest_heights = 3;
+  BlockHeight latest_height = 3;
 }
 
 // Request information on a chain.
