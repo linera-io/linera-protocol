@@ -469,7 +469,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 
     // Oh no! The first validator has an outage and gets restarted!
     net.remove_validator(0)?;
-    net.start_validator(0).await?;
+    net.restart_validator(0).await?;
 
     // The node service should try to reconnect.
     'success: {
@@ -529,7 +529,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
     assert_eq!(client.local_balance(account).await?, balance);
     // Restart validators.
     for i in 0..4 {
-        net.start_validator(i).await?;
+        net.restart_validator(i).await?;
     }
     let result = client.retry_pending_block(Some(chain_id)).await;
     assert!(result?.is_some());
@@ -808,7 +808,7 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
     }
 
     // Restart the stopped validator
-    net.start_validator(LAGGING_VALIDATOR_INDEX).await?;
+    net.restart_validator(LAGGING_VALIDATOR_INDEX).await?;
 
     let lagging_validator = net.validator_client(LAGGING_VALIDATOR_INDEX).await?;
 
