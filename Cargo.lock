@@ -4784,7 +4784,7 @@ name = "linera-execution"
 version = "0.15.0"
 dependencies = [
  "alloy",
- "alloy-primitives 0.8.25",
+ "alloy-primitives 1.0.0",
  "alloy-sol-types 1.0.0",
  "anyhow",
  "assert_matches",
@@ -5089,7 +5089,7 @@ name = "linera-service"
 version = "0.15.0"
 dependencies = [
  "alloy",
- "alloy-primitives 0.8.25",
+ "alloy-primitives 1.0.0",
  "alloy-sol-types 1.0.0",
  "amm",
  "anyhow",
