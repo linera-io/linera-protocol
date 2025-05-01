@@ -683,10 +683,15 @@ impl LocalNet {
     }
 
     async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
-        let storage = self
+        let mut storage = self
             .initialized_validator_storages
             .get(&validator)
-            .expect("initialized storage");
+            .expect("initialized storage")
+            .clone();
+
+        // For the storage backends with a local directory, make sure that we don't reuse
+        // the same directory for all the shards.
+        storage.storage_config.maybe_append_shard_path(shard)?;
 
         let mut command = self.command_for_binary("linera-server").await?;
         if let Ok(var) = env::var(SERVER_ENV) {
