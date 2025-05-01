@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+// This library provides Linera functionalities to EVM contracts
+// It should not be modified.
+
 // Precompile keys:
 // (0,0): chain_id
 // (0,1): application_creator_chain_id
@@ -59,18 +62,7 @@ library Linera {
         } else {
             require(val == 0);
         }
-        if (val == 1) {
-            result = true;
-        }
         return (pos + 1, result);
-    }
-
-    function bcs_deserialize_bool(bytes memory input) public pure returns (bool) {
-        uint256 new_pos;
-        bool value;
-        (new_pos, value) = bcs_deserialize_offset_bool(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
     }
 
     function bcs_deserialize_offset_uint32(uint256 pos, bytes memory input) internal pure returns (uint256, uint32) {
