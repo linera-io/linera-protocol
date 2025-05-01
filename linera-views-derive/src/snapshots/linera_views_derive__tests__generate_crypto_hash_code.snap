@@ -6,6 +6,13 @@ expression: pretty(generate_crypto_hash_code(input))
 impl<C> linera_views::views::CryptoHashView<C> for TestView<C>
 where
     C: linera_views::context::Context + Send + Sync + Clone + 'static,
+    RegisterView<C, usize>: linera_views::views::HashableView<C>,
+    CollectionView<
+        C,
+        usize,
+        RegisterView<C, usize>,
+    >: linera_views::views::HashableView<C>,
+    Self: Send + Sync,
 {
     async fn crypto_hash(
         &self,

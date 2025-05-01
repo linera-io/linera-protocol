@@ -12,7 +12,7 @@ use linera_sdk::{
 
 /// The application state.
 #[derive(RootView, SimpleObject)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct GenNftState {
     // Map from token ID to the NFT data
     pub nfts: MapView<TokenId, Nft>,

@@ -1,11 +1,11 @@
 ---
 source: linera-views-derive/src/lib.rs
-expression: pretty(generate_save_delete_view_code(input))
+expression: pretty(generate_root_view_code(input))
 ---
 #[linera_views::async_trait]
-impl<MyParam> linera_views::views::RootView<CustomContext> for TestView<MyParam>
+impl linera_views::views::RootView<custom::GenericContext<T>> for TestView
 where
-    MyParam: Send + Sync + 'static,
+    Self: Send + Sync,
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
         use linera_views::{context::Context, batch::Batch, views::View};

@@ -7,6 +7,16 @@ impl<MyParam> linera_views::views::View<custom::path::to::ContextType>
 for TestView<MyParam>
 where
     MyParam: Send + Sync + 'static,
+    RegisterView<
+        custom::path::to::ContextType,
+        usize,
+    >: linera_views::views::View<custom::path::to::ContextType>,
+    CollectionView<
+        custom::path::to::ContextType,
+        usize,
+        RegisterView<custom::path::to::ContextType, usize>,
+    >: linera_views::views::View<custom::path::to::ContextType>,
+    Self: Send + Sync,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<
         custom::path::to::ContextType,
