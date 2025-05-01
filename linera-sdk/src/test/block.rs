@@ -7,20 +7,18 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, ApplicationPermissions, Blob, Resources, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Resources, Round, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId, MessageId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
-        IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin, ProposedBlock,
-        SignatureAggregator,
+        IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock, SignatureAggregator,
     },
     types::{BlockHeader, ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
 use linera_execution::{
-    committee::Epoch,
     system::{Recipient, SystemOperation},
     Operation, OutgoingMessage, ResourceTracker,
 };
@@ -174,30 +172,26 @@ impl BlockBuilder {
         self
     }
 
-    /// Receives all direct messages that were sent to this chain by the given certificate.
-    pub fn with_messages_from(&mut self, block: &CertifiedBlock) -> &mut Self {
-        self.with_messages_from_by_medium(block, &Medium::Direct, MessageAction::Accept)
+    /// Receives all direct messages  that were sent to this chain by the given certificate.
+    pub fn with_messages_from(&mut self, certificate: &ConfirmedBlockCertificate) -> &mut Self {
+        self.with_messages_from_by_action(certificate, MessageAction::Accept)
     }
 
     /// Receives all messages that were sent to this chain by the given certificate.
-    pub fn with_messages_from_by_medium(
+    pub fn with_messages_from_by_action(
         &mut self,
-        block: &CertifiedBlock,
-        medium: &Medium,
+        certificate: &ConfirmedBlockCertificate,
         action: MessageAction,
     ) -> &mut Self {
-        let origin = Origin {
-            sender: block.certificate.inner().chain_id(),
-            medium: medium.clone(),
-        };
-        let bundles = block
-            .certificate
-            .message_bundles_for(medium, self.block.chain_id)
-            .map(|(_epoch, bundle)| IncomingBundle {
-                origin: origin.clone(),
-                bundle,
-                action,
-            });
+        let origin = certificate.inner().chain_id();
+        let bundles =
+            certificate
+                .message_bundles_for(self.block.chain_id)
+                .map(|(_epoch, bundle)| IncomingBundle {
+                    origin,
+                    bundle,
+                    action,
+                });
         self.with_incoming_bundles(bundles)
     }
 

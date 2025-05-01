@@ -10,18 +10,15 @@ use linera_base::{
         BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey,
         ValidatorSignature,
     },
-    data_types::{Amount, BlockHeight, Round, Timestamp},
-    identifiers::{AccountOwner, ChainDescription, ChainId},
+    data_types::{Amount, BlockHeight, ChainDescription, Epoch, Round, Timestamp},
+    identifiers::{AccountOwner, ChainId},
 };
 use linera_chain::{
-    data_types::{ChainAndHeight, IncomingBundle, Medium, MessageBundle},
+    data_types::{ChainAndHeight, IncomingBundle, MessageBundle},
     manager::ChainManagerInfo,
     ChainStateView,
 };
-use linera_execution::{
-    committee::{Committee, Epoch},
-    ExecutionRuntimeContext,
-};
+use linera_execution::{committee::Committee, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
 use linera_views::context::Context;
 use serde::{Deserialize, Serialize};
@@ -231,13 +228,13 @@ pub enum CrossChainRequest {
     UpdateRecipient {
         sender: ChainId,
         recipient: ChainId,
-        bundle_vecs: Vec<(Medium, Vec<(Epoch, MessageBundle)>)>,
+        bundles: Vec<(Epoch, MessageBundle)>,
     },
     /// Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
         sender: ChainId,
         recipient: ChainId,
-        latest_heights: Vec<(Medium, BlockHeight)>,
+        latest_height: BlockHeight,
     },
 }
 
@@ -254,11 +251,9 @@ impl CrossChainRequest {
     /// Returns true if the cross-chain request has messages lower or equal than `height`.
     pub fn has_messages_lower_or_equal_than(&self, height: BlockHeight) -> bool {
         match self {
-            CrossChainRequest::UpdateRecipient { bundle_vecs, .. } => {
-                bundle_vecs.iter().any(|(_, bundles)| {
-                    debug_assert!(bundles.windows(2).all(|w| w[0].1.height <= w[1].1.height));
-                    matches!(bundles.first(), Some((_, h)) if h.height <= height)
-                })
+            CrossChainRequest::UpdateRecipient { bundles, .. } => {
+                debug_assert!(bundles.windows(2).all(|w| w[0].1.height <= w[1].1.height));
+                matches!(bundles.first(), Some((_, h)) if h.height <= height)
             }
             _ => false,
         }
@@ -276,7 +271,7 @@ where
         ChainInfo {
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
-            description: *system_state.description.get(),
+            description: system_state.description.get().clone(),
             manager: Box::new(ChainManagerInfo::from(&view.manager)),
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,

@@ -4,16 +4,15 @@
 
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
-    data_types::Round,
-    identifiers::{BlobId, ChainId, MessageId},
+    data_types::{Epoch, Round},
+    identifiers::{ChainId, MessageId},
 };
-use linera_execution::committee::Epoch;
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 
 use super::{generic::GenericCertificate, Certificate};
 use crate::{
     block::{Block, ConfirmedBlock, ConversionError},
-    data_types::{Medium, MessageBundle},
+    data_types::MessageBundle,
 };
 
 impl GenericCertificate<ConfirmedBlock> {
@@ -27,22 +26,16 @@ impl GenericCertificate<ConfirmedBlock> {
         self.block().message_by_id(message_id).is_some()
     }
 
-    /// Returns the bundles of messages sent via the given medium to the specified
-    /// recipient. Messages originating from different transactions of the original block
-    /// are kept in separate bundles. If the medium is a channel, does not verify that the
-    /// recipient is actually subscribed to that channel.
-    pub fn message_bundles_for<'a>(
-        &'a self,
-        medium: &'a Medium,
+    /// Returns the bundles of messages sent to the specified recipient.
+    /// Messages originating from different transactions of the original block
+    /// are kept in separate bundles.
+    pub fn message_bundles_for(
+        &self,
         recipient: ChainId,
-    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
+    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + '_ {
         let certificate_hash = self.hash();
         self.block()
-            .message_bundles_for(medium, recipient, certificate_hash)
-    }
-
-    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.block().requires_blob(blob_id)
+            .message_bundles_for(recipient, certificate_hash)
     }
 
     #[cfg(with_testing)]

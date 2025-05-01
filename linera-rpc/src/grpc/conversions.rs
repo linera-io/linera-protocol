@@ -242,20 +242,22 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
             Inner::UpdateRecipient(api::UpdateRecipient {
                 sender,
                 recipient,
-                bundle_vecs,
+                bundles,
             }) => CrossChainRequest::UpdateRecipient {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
-                bundle_vecs: bincode::deserialize(&bundle_vecs)?,
+                bundles: bincode::deserialize(&bundles)?,
             },
             Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
-                latest_heights,
+                latest_height,
             }) => CrossChainRequest::ConfirmUpdatedRecipient {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
-                latest_heights: bincode::deserialize(&latest_heights)?,
+                latest_height: latest_height
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .into(),
             },
         };
         Ok(ccr)
@@ -272,20 +274,20 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
             CrossChainRequest::UpdateRecipient {
                 sender,
                 recipient,
-                bundle_vecs,
+                bundles,
             } => Inner::UpdateRecipient(api::UpdateRecipient {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                bundle_vecs: bincode::serialize(&bundle_vecs)?,
+                bundles: bincode::serialize(&bundles)?,
             }),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
-                latest_heights,
+                latest_height,
             } => Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                latest_heights: bincode::serialize(&latest_heights)?,
+                latest_height: Some(latest_height.into()),
             }),
         };
         Ok(Self { inner: Some(inner) })
@@ -982,8 +984,12 @@ pub mod tests {
 
     impl BcsSignable<'_> for Foo {}
 
+    fn dummy_chain_id(index: u32) -> ChainId {
+        ChainId(CryptoHash::test_hash(format!("chain{}", index)))
+    }
+
     fn get_block() -> ProposedBlock {
-        make_first_block(ChainId::root(0))
+        make_first_block(dummy_chain_id(0))
     }
 
     /// A convenience function for testing. It converts a type into its
@@ -1035,14 +1041,14 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_id() {
-        let chain_id = ChainId::root(0);
+        let chain_id = dummy_chain_id(0);
         round_trip_check::<_, api::ChainId>(chain_id);
     }
 
     #[test]
     pub fn test_chain_info_response() {
         let chain_info = Box::new(ChainInfo {
-            chain_id: ChainId::root(0),
+            chain_id: dummy_chain_id(0),
             epoch: None,
             description: None,
             manager: Box::default(),
@@ -1079,11 +1085,11 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_info_query() {
-        let chain_info_query_none = ChainInfoQuery::new(ChainId::root(0));
+        let chain_info_query_none = ChainInfoQuery::new(dummy_chain_id(0));
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_none);
 
         let chain_info_query_some = ChainInfoQuery {
-            chain_id: ChainId::root(0),
+            chain_id: dummy_chain_id(0),
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
@@ -1104,7 +1110,7 @@ pub mod tests {
 
     #[test]
     pub fn test_pending_blob_request() {
-        let chain_id = ChainId::root(2);
+        let chain_id = dummy_chain_id(2);
         let blob_id = Blob::new(BlobContent::new_data(*b"foo")).id();
         let pending_blob_request = (chain_id, blob_id);
         round_trip_check::<_, api::PendingBlobRequest>(pending_blob_request);
@@ -1118,7 +1124,7 @@ pub mod tests {
 
     #[test]
     pub fn test_handle_pending_blob_request() {
-        let chain_id = ChainId::root(2);
+        let chain_id = dummy_chain_id(2);
         let blob_content = BlobContent::new_data(*b"foo");
         let pending_blob_request = (chain_id, blob_content);
         round_trip_check::<_, api::HandlePendingBlobRequest>(pending_blob_request);
@@ -1130,7 +1136,7 @@ pub mod tests {
         let certificate = LiteCertificate {
             value: LiteValue {
                 value_hash: CryptoHash::new(&Foo("value".into())),
-                chain_id: ChainId::root(0),
+                chain_id: dummy_chain_id(0),
                 kind: CertificateKind::Validated,
             },
             round: Round::MultiLeader(2),
@@ -1172,20 +1178,17 @@ pub mod tests {
     #[test]
     pub fn test_cross_chain_request() {
         let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
-            sender: ChainId::root(0),
-            recipient: ChainId::root(0),
-            bundle_vecs: vec![(linera_chain::data_types::Medium::Direct, vec![])],
+            sender: dummy_chain_id(0),
+            recipient: dummy_chain_id(0),
+            bundles: vec![],
         };
         round_trip_check::<_, api::CrossChainRequest>(cross_chain_request_update_recipient);
 
         let cross_chain_request_confirm_updated_recipient =
             CrossChainRequest::ConfirmUpdatedRecipient {
-                sender: ChainId::root(0),
-                recipient: ChainId::root(0),
-                latest_heights: vec![(
-                    linera_chain::data_types::Medium::Direct,
-                    Default::default(),
-                )],
+                sender: dummy_chain_id(0),
+                recipient: dummy_chain_id(0),
+                latest_height: BlockHeight(1),
             };
         round_trip_check::<_, api::CrossChainRequest>(
             cross_chain_request_confirm_updated_recipient,
@@ -1227,7 +1230,7 @@ pub mod tests {
     #[test]
     pub fn test_notification() {
         let notification = Notification {
-            chain_id: ChainId::root(0),
+            chain_id: dummy_chain_id(0),
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
                 hash: CryptoHash::new(&Foo("".into())),

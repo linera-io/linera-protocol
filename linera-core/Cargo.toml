@@ -53,6 +53,7 @@ anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
+cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
 dashmap.workspace = true
@@ -76,6 +77,7 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
 tracing.workspace = true
+trait-set = "0.3.0"
 trait-variant.workspace = true
 wasm-bindgen-futures = { workspace = true, optional = true }
 

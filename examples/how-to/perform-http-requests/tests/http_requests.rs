@@ -22,7 +22,7 @@ async fn service_query_performs_http_request() -> anyhow::Result<()> {
     let port = http_server.port();
     let url = format!("http://localhost:{port}/");
 
-    let (validator, application_id, chain) =
+    let (mut validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
 
     validator
@@ -89,7 +89,7 @@ async fn service_sends_valid_http_response_to_contract() -> anyhow::Result<()> {
     let port = http_server.port();
     let url = format!("http://localhost:{port}/");
 
-    let (validator, application_id, chain) =
+    let (mut validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
 
     validator
@@ -119,7 +119,7 @@ async fn contract_rejects_invalid_http_response_from_service() {
     let port = http_server.port();
     let url = format!("http://localhost:{port}/");
 
-    let (validator, application_id, chain) =
+    let (mut validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url.clone(), ()).await;
 
     validator
@@ -151,7 +151,7 @@ async fn contract_accepts_valid_http_response_it_obtains_by_itself() -> anyhow::
     let port = http_server.port();
     let url = format!("http://localhost:{port}/");
 
-    let (validator, application_id, chain) =
+    let (mut validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
 
     validator
@@ -181,7 +181,7 @@ async fn contract_rejects_invalid_http_response_it_obtains_by_itself() {
     let port = http_server.port();
     let url = format!("http://localhost:{port}/");
 
-    let (validator, application_id, chain) =
+    let (mut validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
 
     validator
@@ -214,7 +214,7 @@ async fn contract_accepts_valid_http_response_from_oracle() -> anyhow::Result<()
     let port = http_server.port();
     let url = format!("http://localhost:{port}/");
 
-    let (validator, application_id, chain) =
+    let (mut validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
 
     validator
@@ -245,7 +245,7 @@ async fn contract_rejects_invalid_http_response_from_oracle() {
     let port = http_server.port();
     let url = format!("http://localhost:{port}/");
 
-    let (validator, application_id, chain) =
+    let (mut validator, application_id, chain) =
         TestValidator::with_current_application::<Abi, _, _>(url, ()).await;
 
     validator

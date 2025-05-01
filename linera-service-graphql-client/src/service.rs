@@ -4,11 +4,8 @@
 use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
-    identifiers::{
-        Account, AccountOwner, BlobId, ChainDescription, ChainId, Destination,
-        GenericApplicationId, StreamName,
-    },
+    data_types::{Amount, Blob, BlockHeight, ChainDescription, OracleResponse, Round, Timestamp},
+    identifiers::{Account, AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
 };
 use thiserror::Error;
 
@@ -24,7 +21,6 @@ mod types {
 
     pub type ChainManager = Value;
     pub type ChainOwnership = Value;
-    pub type ChannelFullName = Value;
     pub type Epoch = Value;
     pub type MessageBundle = Value;
     pub type MessageKind = Value;
@@ -32,7 +28,6 @@ mod types {
     pub type MessageAction = Value;
     pub type Operation = Value;
     pub type Origin = Value;
-    pub type Target = Value;
     pub type ApplicationDescription = Value;
     pub type OperationResult = Value;
 
@@ -63,14 +58,15 @@ mod types {
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
     pub use linera_base::{
-        data_types::ApplicationDescription, identifiers::ChannelFullName, ownership::ChainOwnership,
+        data_types::{ApplicationDescription, Epoch},
+        ownership::ChainOwnership,
     };
     pub use linera_chain::{
-        data_types::{MessageAction, MessageBundle, OperationResult, Origin, Target},
+        data_types::{MessageAction, MessageBundle, OperationResult},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
-    pub use linera_execution::{committee::Epoch, Message, MessageKind, Operation};
+    pub use linera_execution::{Message, MessageKind, Operation};
 }
 
 pub use types::*;

@@ -20,7 +20,8 @@ use linera_base::{
         AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey,
     },
     data_types::*,
-    identifiers::{BlobId, ChainDescription, ChainId},
+    identifiers::{BlobId, ChainId},
+    ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -50,7 +51,7 @@ use {
 };
 
 use crate::{
-    client::{ChainClient, Client},
+    client::Client,
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -658,7 +659,7 @@ where
 pub struct TestBuilder<B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
-    admin_id: ChainId,
+    admin_description: Option<ChainDescription>,
     genesis_storage_builder: GenesisStorageBuilder,
     validator_clients: Vec<LocalValidatorClient<B::Storage>>,
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
@@ -682,43 +683,31 @@ struct GenesisStorageBuilder {
 struct GenesisAccount {
     description: ChainDescription,
     public_key: AccountPublicKey,
-    balance: Amount,
 }
 
 impl GenesisStorageBuilder {
-    fn add(
-        &mut self,
-        description: ChainDescription,
-        public_key: AccountPublicKey,
-        balance: Amount,
-    ) {
+    fn add(&mut self, description: ChainDescription, public_key: AccountPublicKey) {
         self.accounts.push(GenesisAccount {
             description,
             public_key,
-            balance,
         })
     }
 
-    async fn build<S>(&self, storage: S, initial_committee: Committee, admin_id: ChainId) -> S
+    async fn build<S>(&self, storage: S) -> S
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
         for account in &self.accounts {
             storage
-                .create_chain(
-                    initial_committee.clone(),
-                    admin_id,
-                    account.description,
-                    account.public_key.into(),
-                    account.balance,
-                    Timestamp::from(0),
-                )
+                .create_chain(account.description.clone())
                 .await
                 .unwrap();
         }
         storage
     }
 }
+
+pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
 
 impl<B> TestBuilder<B>
 where
@@ -767,7 +756,7 @@ where
         Ok(Self {
             storage_builder,
             initial_committee,
-            admin_id: ChainId::root(0),
+            admin_description: None,
             genesis_storage_builder: GenesisStorageBuilder::default(),
             validator_clients,
             validator_storages,
@@ -803,62 +792,62 @@ where
         &mut self,
         index: u32,
         balance: Amount,
-    ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Make sure the admin chain is initialized.
-        if self.genesis_storage_builder.accounts.is_empty() && index != 0 {
+        if self.admin_description.is_none() && index != 0 {
             Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
         }
-        let description = ChainDescription::Root(index);
+        let origin = ChainOrigin::Root(index);
+        let mut committees = BTreeMap::new();
+        committees.insert(
+            Epoch(0),
+            bcs::to_bytes(&self.initial_committee)
+                .expect("Serializing a committee should not fail!"),
+        );
         let key_pair = AccountSecretKey::generate();
         let public_key = key_pair.public();
+        let open_chain_config = InitialChainConfig {
+            ownership: ChainOwnership::single(public_key.into()),
+            admin_id: if index == 0 {
+                None
+            } else {
+                Some(self.admin_id())
+            },
+            epoch: Epoch(0),
+            committees,
+            balance,
+            application_permissions: ApplicationPermissions::default(),
+        };
+        let description = ChainDescription::new(origin, open_chain_config, Timestamp::from(0));
+        if index == 0 {
+            self.admin_description = Some(description.clone());
+        }
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
-            .add(description, public_key, balance);
+            .add(description.clone(), public_key);
         for validator in &self.validator_clients {
             let storage = self
                 .validator_storages
                 .get_mut(&validator.public_key)
                 .unwrap();
             if validator.fault_type().await == FaultType::Malicious {
+                let origin = description.origin();
+                let config = InitialChainConfig {
+                    balance: Amount::ZERO,
+                    ..description.config().clone()
+                };
                 storage
-                    .create_chain(
-                        self.initial_committee.clone(),
-                        self.admin_id,
-                        description,
-                        public_key.into(),
-                        Amount::ZERO,
-                        Timestamp::from(0),
-                    )
+                    .create_chain(ChainDescription::new(origin, config, Timestamp::from(0)))
                     .await
                     .unwrap();
             } else {
-                storage
-                    .create_chain(
-                        self.initial_committee.clone(),
-                        self.admin_id,
-                        description,
-                        public_key.into(),
-                        balance,
-                        Timestamp::from(0),
-                    )
-                    .await
-                    .unwrap();
+                storage.create_chain(description.clone()).await.unwrap();
             }
         }
         for storage in self.chain_client_storages.iter_mut() {
-            storage
-                .create_chain(
-                    self.initial_committee.clone(),
-                    self.admin_id,
-                    description,
-                    public_key.into(),
-                    balance,
-                    Timestamp::from(0),
-                )
-                .await
-                .unwrap();
+            storage.create_chain(description.clone()).await.unwrap();
         }
-        self.make_client(description.into(), key_pair, None, BlockHeight::ZERO)
+        self.make_client(description.id(), key_pair, None, BlockHeight::ZERO)
             .await
     }
 
@@ -866,16 +855,26 @@ where
         let mut result = Vec::new();
         for (i, genesis_account) in self.genesis_storage_builder.accounts.iter().enumerate() {
             assert_eq!(
-                genesis_account.description,
-                ChainDescription::Root(i as u32)
+                genesis_account.description.origin(),
+                ChainOrigin::Root(i as u32)
             );
-            result.push((genesis_account.public_key, genesis_account.balance));
+            result.push((
+                genesis_account.public_key,
+                genesis_account.description.config().balance,
+            ));
         }
         result
     }
 
     pub fn admin_id(&self) -> ChainId {
-        self.admin_id
+        self.admin_description
+            .as_ref()
+            .expect("admin chain not initialized")
+            .id()
+    }
+
+    pub fn admin_description(&self) -> Option<&ChainDescription> {
+        self.admin_description.as_ref()
     }
 
     pub fn make_node_provider(&self) -> NodeProvider<B::Storage> {
@@ -889,11 +888,7 @@ where
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
         Ok(self
             .genesis_storage_builder
-            .build(
-                self.storage_builder.build().await?,
-                self.initial_committee.clone(),
-                self.admin_id,
-            )
+            .build(self.storage_builder.build().await?)
             .await)
     }
 
@@ -903,15 +898,16 @@ where
         key_pair: AccountSecretKey,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
-    ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
-        let provider = self.make_node_provider();
         let builder = Arc::new(Client::new(
-            provider,
-            storage,
+            crate::environment::Impl {
+                network: self.make_node_provider(),
+                storage,
+            },
             10,
             CrossChainMessageDelivery::NonBlocking,
             false,
@@ -921,15 +917,17 @@ where
             DEFAULT_GRACE_PERIOD,
             Duration::from_secs(1),
         ));
-        Ok(builder.create_chain_client(
-            chain_id,
-            vec![key_pair],
-            self.admin_id,
-            block_hash,
-            Timestamp::from(0),
-            block_height,
-            None,
-        ))
+        Ok(builder
+            .create_chain_client(
+                chain_id,
+                vec![key_pair],
+                self.admin_id(),
+                block_hash,
+                Timestamp::from(0),
+                block_height,
+                None,
+            )
+            .await?)
     }
 
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.

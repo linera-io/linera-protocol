@@ -9,40 +9,39 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::ChainId,
 };
 use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
     client::ChainClient,
-    test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
+    environment,
+    test_utils::{FaultType, MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
 };
-use linera_storage::{DbStorage, TestClock};
-use linera_views::memory::MemoryStore;
 
 use super::MutationRoot;
 
 struct ClientContext {
-    client: ChainClient<TestProvider, TestStorage>,
+    client: ChainClient<environment::Test>,
     update_calls: usize,
 }
 
-type TestStorage = DbStorage<MemoryStore, TestClock>;
-type TestProvider = NodeProvider<TestStorage>;
-
 #[async_trait]
 impl chain_listener::ClientContext for ClientContext {
-    type ValidatorNodeProvider = TestProvider;
-    type Storage = TestStorage;
+    type Environment = environment::Test;
 
     fn wallet(&self) -> &Wallet {
         unimplemented!()
     }
 
-    fn make_chain_client(
+    fn storage(&self) -> &environment::TestStorage {
+        self.client.storage_client()
+    }
+
+    async fn make_chain_client(
         &self,
         chain_id: ChainId,
-    ) -> Result<ChainClient<TestProvider, TestStorage>, linera_client::Error> {
+    ) -> Result<ChainClient<environment::Test>, linera_client::Error> {
         assert_eq!(chain_id, self.client.chain_id());
         Ok(self.client.clone())
     }
@@ -59,7 +58,7 @@ impl chain_listener::ClientContext for ClientContext {
 
     async fn update_wallet(
         &mut self,
-        _: &ChainClient<TestProvider, TestStorage>,
+        _: &ChainClient<environment::Test>,
     ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
         Ok(())
@@ -83,9 +82,10 @@ async fn test_faucet_rate_limiting() {
     };
     let context = Arc::new(Mutex::new(context));
     let root = MutationRoot {
-        chain_id,
+        chain_id: Arc::new(Mutex::new(chain_id)),
         context: context.clone(),
         amount: Amount::from_tokens(1),
+        end_block_height: BlockHeight::from(10),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),

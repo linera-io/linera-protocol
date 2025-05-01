@@ -9,10 +9,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     ensure, http,
-    identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
-        ModuleId, StreamName,
-    },
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
@@ -218,11 +215,7 @@ where
     }
 
     /// Schedules a message to be sent to this application on another chain.
-    pub fn send_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Application::Message,
-    ) {
+    pub fn send_message(&mut self, destination: ChainId, message: Application::Message) {
         self.prepare_message(message).send_to(destination)
     }
 
@@ -232,16 +225,6 @@ where
         message: Application::Message,
     ) -> MessageBuilder<Application::Message> {
         MessageBuilder::new(message)
-    }
-
-    /// Subscribes to a message channel from another chain.
-    pub fn subscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        contract_wit::subscribe(chain.into(), &channel.into());
-    }
-
-    /// Unsubscribes from a message channel from another chain.
-    pub fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) {
-        contract_wit::unsubscribe(chain.into(), &channel.into());
     }
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
@@ -296,6 +279,26 @@ where
         bcs::from_bytes(&event).expect("Failed to deserialize event")
     }
 
+    /// Subscribes this application to an event stream.
+    pub fn subscribe_to_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        name: StreamName,
+    ) {
+        contract_wit::subscribe_to_events(chain_id.into(), application_id.into(), &name.into())
+    }
+
+    /// Unsubscribes this application from an event stream.
+    pub fn unsubscribe_from_events(
+        &mut self,
+        chain_id: ChainId,
+        application_id: ApplicationId,
+        name: StreamName,
+    ) {
+        contract_wit::unsubscribe_from_events(chain_id.into(), application_id.into(), &name.into())
+    }
+
     /// Queries an application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute
@@ -320,13 +323,13 @@ where
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> (MessageId, ChainId) {
-        let (message_id, chain_id) = contract_wit::open_chain(
+    ) -> ChainId {
+        let chain_id = contract_wit::open_chain(
             &chain_ownership.into(),
             &application_permissions.into(),
             balance.into(),
         );
-        (message_id.into(), chain_id.into())
+        chain_id.into()
     }
 
     /// Closes the current chain. Returns an error if the application doesn't have
@@ -428,12 +431,12 @@ where
     }
 
     /// Schedules this `Message` to be sent to the `destination`.
-    pub fn send_to(self, destination: impl Into<Destination>) {
+    pub fn send_to(self, destination: ChainId) {
         let serialized_message =
             bcs::to_bytes(&self.message).expect("Failed to serialize message to be sent");
 
         let raw_message = SendMessageRequest {
-            destination: destination.into(),
+            destination,
             authenticated: self.authenticated,
             is_tracked: self.is_tracked,
             grant: self.grant,

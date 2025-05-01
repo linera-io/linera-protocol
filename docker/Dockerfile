@@ -77,8 +77,6 @@ RUN mv \
     target/"$target"/"$build_folder"/linera-server \
     ./
 
-RUN strip linera linera-proxy linera-server
-
 # Optionally copy binaries instead of using the build images above
 FROM scratch AS builder_copy
 ARG binaries

@@ -349,9 +349,14 @@ dependencies = [
  "cfg-if",
  "const-hex",
  "derive_more 2.0.1",
+ "hashbrown 0.15.2",
+ "indexmap 2.5.0",
  "itoa",
+ "k256",
  "paste",
+ "rand 0.9.0",
  "ruint",
+ "serde",
  "tiny-keccak",
 ]
 
@@ -2981,6 +2986,7 @@ name = "hex-game"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "bcs",
  "linera-sdk",
  "log",
  "serde",
@@ -3509,7 +3515,7 @@ checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 name = "linera-base"
 version = "0.15.0"
 dependencies = [
- "alloy-primitives 0.8.25",
+ "alloy-primitives 1.0.0",
  "anyhow",
  "async-graphql",
  "async-graphql-derive",
@@ -3579,6 +3585,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "cfg-if",
  "cfg_aliases",
  "clap",
  "custom_debug_derive",
@@ -3604,6 +3611,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tracing",
+ "trait-set",
  "trait-variant",
 ]
 
@@ -3612,7 +3620,6 @@ name = "linera-ethereum"
 version = "0.15.0"
 dependencies = [
  "alloy",
- "alloy-signer-local",
  "anyhow",
  "async-lock",
  "async-trait",
@@ -4374,7 +4381,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
  "syn 2.0.100",
@@ -4921,6 +4928,7 @@ checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
+ "serde",
  "zerocopy 0.8.24",
 ]
 
@@ -4961,6 +4969,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 dependencies = [
  "getrandom 0.3.2",
+ "serde",
 ]
 
 [[package]]
@@ -6521,6 +6530,17 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-serde",
+]
+
+[[package]]
+name = "trait-set"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b79e2e9c9ab44c6d7c20d5976961b47e8f49ac199154daa514b77cd1ab536625"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]

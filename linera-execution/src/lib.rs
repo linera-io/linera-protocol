@@ -25,7 +25,6 @@ use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
-use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
@@ -36,19 +35,19 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Resources, SendMessageRequest, Timestamp,
+        DecompressionError, Epoch, Resources, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
-        EventId, GenericApplicationId, MessageId, ModuleId, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
+        GenericApplicationId, MessageId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
     task,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use system::{AdminOperation, OpenChainConfig};
+use system::AdminOperation;
 use thiserror::Error;
 
 #[cfg(with_revm)]
@@ -328,8 +327,14 @@ pub enum ExecutionError {
     InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+    #[error("process_streams was not called for all stream updates")]
+    UnprocessedStreams,
     #[error("Internal error: {0}")]
     InternalError(&'static str),
+    #[error("UpdateStreams contains an unknown event")]
+    EventNotFound(EventId),
+    #[error("UpdateStreams is outdated")]
+    OutdatedUpdateStreams,
 }
 
 impl From<ViewError> for ExecutionError {
@@ -344,38 +349,25 @@ impl From<ViewError> for ExecutionError {
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.
-    fn instantiate(
-        &mut self,
-        context: OperationContext,
-        argument: Vec<u8>,
-    ) -> Result<(), ExecutionError>;
+    fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError>;
 
     /// Applies an operation from the current block.
-    fn execute_operation(
-        &mut self,
-        context: OperationContext,
-        operation: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
+    fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
-    fn execute_message(
-        &mut self,
-        context: MessageContext,
-        message: Vec<u8>,
-    ) -> Result<(), ExecutionError>;
+    fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError>;
+
+    /// Reacts to new events on streams this application subscribes to.
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
 
     /// Finishes execution of the current transaction.
-    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError>;
+    fn finalize(&mut self) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
 pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
-    fn handle_query(
-        &mut self,
-        context: QueryContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
+    fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 }
 
 /// Configuration options for the execution runtime available to applications.
@@ -411,6 +403,8 @@ pub trait ExecutionRuntimeContext {
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError>;
+
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
@@ -439,9 +433,8 @@ pub struct OperationContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
-    /// The current index of the operation.
-    #[debug(skip_if = Option::is_none)]
-    pub index: Option<u32>,
+    /// The timestamp of the block containing the operation.
+    pub timestamp: Timestamp,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -460,11 +453,45 @@ pub struct MessageContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
-    /// The hash of the remote certificate that created the message.
-    pub certificate_hash: CryptoHash,
+    /// The timestamp of the block executing the message.
+    pub timestamp: Timestamp,
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProcessStreamsContext {
+    /// The current chain ID.
+    pub chain_id: ChainId,
+    /// The current block height.
+    pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
+    /// The timestamp of the current block.
+    pub timestamp: Timestamp,
+}
+
+impl From<MessageContext> for ProcessStreamsContext {
+    fn from(context: MessageContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            height: context.height,
+            round: context.round,
+            timestamp: context.timestamp,
+        }
+    }
+}
+
+impl From<OperationContext> for ProcessStreamsContext {
+    fn from(context: OperationContext) -> Self {
+        Self {
+            chain_id: context.chain_id,
+            height: context.height,
+            round: context.round,
+            timestamp: context.timestamp,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -700,12 +727,6 @@ pub trait ContractRuntime: BaseRuntime {
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;
 
-    /// Schedules to subscribe to some `channel` on a `chain`.
-    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
-
-    /// Schedules to unsubscribe to some `channel` on a `chain`.
-    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError>;
-
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
@@ -773,7 +794,7 @@ pub trait ContractRuntime: BaseRuntime {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<(MessageId, ChainId), ExecutionError>;
+    ) -> Result<ChainId, ExecutionError>;
 
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
@@ -897,7 +918,7 @@ pub enum QueryResponse {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct RawOutgoingMessage<Message, Grant> {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// Whether the message is authenticated.
     pub authenticated: bool,
     /// The grant needed for message execution, typically specified as an `Amount` or as `Resources`.
@@ -953,7 +974,7 @@ pub enum MessageKind {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OutgoingMessage {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// The user authentication carried by the message, if any.
     #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<AccountOwner>,
@@ -975,7 +996,7 @@ impl OutgoingMessage {
     /// Creates a new simple outgoing message with no grant and no authenticated signer.
     pub fn new(recipient: ChainId, message: impl Into<Message>) -> Self {
         OutgoingMessage {
-            destination: Destination::Recipient(recipient),
+            destination: recipient,
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
@@ -1005,14 +1026,6 @@ impl OperationContext {
             chain_id: self.chain_id,
             owner,
         })
-    }
-
-    fn next_message_id(&self, next_message_index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index: next_message_index,
-        }
     }
 }
 
@@ -1109,6 +1122,10 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         Ok(self.blobs.contains_key(&blob_id))
     }
 
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        Ok(self.events.contains_key(&event_id))
+    }
+
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
@@ -1196,6 +1213,19 @@ impl Operation {
             _ => vec![],
         }
     }
+
+    /// Returns whether this operation is allowed regardless of application permissions.
+    pub fn is_exempt_from_permissions(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        matches!(
+            **system_op,
+            SystemOperation::ProcessNewEpoch(_)
+                | SystemOperation::ProcessRemovedEpoch(_)
+                | SystemOperation::UpdateStreams(_)
+        )
+    }
 }
 
 impl From<SystemMessage> for Message {
@@ -1227,13 +1257,6 @@ impl Message {
         match self {
             Self::System(_) => GenericApplicationId::System,
             Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
-        }
-    }
-
-    pub fn matches_open_chain(&self) -> Option<&OpenChainConfig> {
-        match self {
-            Message::System(SystemMessage::OpenChain(config)) => Some(config),
-            _ => None,
         }
     }
 }

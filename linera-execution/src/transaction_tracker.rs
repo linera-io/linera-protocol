@@ -1,16 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, vec};
+use std::{collections::BTreeMap, mem, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ArithmeticError, Blob, Event, OracleResponse, Timestamp},
+    data_types::{ArithmeticError, Blob, Event, OracleResponse, StreamUpdate, Timestamp},
     ensure,
-    identifiers::{BlobId, ChainId, ChannelFullName, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, StreamId},
 };
 
 use crate::{ExecutionError, OutgoingMessage};
+
+type AppStreamUpdates = BTreeMap<(ChainId, StreamId), (u32, u32)>;
 
 /// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
 /// as replayed oracle responses.
@@ -28,16 +30,15 @@ pub struct TransactionTracker {
     transaction_index: u32,
     next_message_index: u32,
     next_application_index: u32,
+    next_chain_index: u32,
     /// Events recorded by contracts' `emit` calls.
     events: Vec<Event>,
     /// Blobs created by contracts.
     blobs: BTreeMap<BlobId, Blob>,
-    /// Subscribe chains to channels.
-    subscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Unsubscribe chains from channels.
-    unsubscribe: Vec<(ChannelFullName, ChainId)>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
+    /// Streams that have been updated but not yet processed during this transaction.
+    streams_to_process: BTreeMap<ApplicationId, AppStreamUpdates>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -49,14 +50,11 @@ pub struct TransactionOutcome {
     pub outgoing_messages: Vec<OutgoingMessage>,
     pub next_message_index: u32,
     pub next_application_index: u32,
+    pub next_chain_index: u32,
     /// Events recorded by contracts' `emit` calls.
     pub events: Vec<Event>,
     /// Blobs created by contracts.
     pub blobs: Vec<Blob>,
-    /// Subscribe chains to channels.
-    pub subscribe: Vec<(ChannelFullName, ChainId)>,
-    /// Unsubscribe chains from channels.
-    pub unsubscribe: Vec<(ChannelFullName, ChainId)>,
     /// Operation result.
     pub operation_result: Vec<u8>,
 }
@@ -67,6 +65,7 @@ impl TransactionTracker {
         transaction_index: u32,
         next_message_index: u32,
         next_application_index: u32,
+        next_chain_index: u32,
         oracle_responses: Option<Vec<OracleResponse>>,
     ) -> Self {
         TransactionTracker {
@@ -74,6 +73,7 @@ impl TransactionTracker {
             transaction_index,
             next_message_index,
             next_application_index,
+            next_chain_index,
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
             ..Self::default()
         }
@@ -103,6 +103,12 @@ impl TransactionTracker {
     pub fn next_application_index(&mut self) -> u32 {
         let index = self.next_application_index;
         self.next_application_index += 1;
+        index
+    }
+
+    pub fn next_chain_index(&mut self) -> u32 {
+        let index = self.next_chain_index;
+        self.next_chain_index += 1;
         index
     }
 
@@ -144,20 +150,68 @@ impl TransactionTracker {
         &self.blobs
     }
 
-    pub fn subscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
-        self.subscribe.push((name, subscriber));
-    }
-
-    pub fn unsubscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
-        self.unsubscribe.push((name, subscriber));
-    }
-
     pub fn add_oracle_response(&mut self, oracle_response: OracleResponse) {
         self.oracle_responses.push(oracle_response);
     }
 
     pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
         self.operation_result = result
+    }
+
+    pub fn add_stream_to_process(
+        &mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        stream_id: StreamId,
+        previous_index: u32,
+        next_index: u32,
+    ) {
+        if next_index == previous_index {
+            return; // No new events in the stream.
+        }
+        self.streams_to_process
+            .entry(application_id)
+            .or_default()
+            .entry((chain_id, stream_id))
+            .and_modify(|(pi, ni)| {
+                *pi = (*pi).min(previous_index);
+                *ni = (*ni).max(next_index);
+            })
+            .or_insert_with(|| (previous_index, next_index));
+    }
+
+    pub fn remove_stream_to_process(
+        &mut self,
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) {
+        let Some(streams) = self.streams_to_process.get_mut(&application_id) else {
+            return;
+        };
+        if streams.remove(&(chain_id, stream_id)).is_some() && streams.is_empty() {
+            self.streams_to_process.remove(&application_id);
+        }
+    }
+
+    pub fn take_streams_to_process(&mut self) -> BTreeMap<ApplicationId, Vec<StreamUpdate>> {
+        mem::take(&mut self.streams_to_process)
+            .into_iter()
+            .map(|(app_id, streams)| {
+                let updates = streams
+                    .into_iter()
+                    .map(
+                        |((chain_id, stream_id), (previous_index, next_index))| StreamUpdate {
+                            chain_id,
+                            stream_id,
+                            previous_index,
+                            next_index,
+                        },
+                    )
+                    .collect();
+                (app_id, updates)
+            })
+            .collect()
     }
 
     /// Adds the oracle response to the record.
@@ -207,12 +261,16 @@ impl TransactionTracker {
             transaction_index: _,
             next_message_index,
             next_application_index,
+            next_chain_index,
             events,
             blobs,
-            subscribe,
-            unsubscribe,
             operation_result,
+            streams_to_process,
         } = self;
+        ensure!(
+            streams_to_process.is_empty(),
+            ExecutionError::UnprocessedStreams
+        );
         if let Some(mut responses) = replaying_oracle_responses {
             ensure!(
                 responses.next().is_none(),
@@ -224,10 +282,9 @@ impl TransactionTracker {
             oracle_responses,
             next_message_index,
             next_application_index,
+            next_chain_index,
             events,
             blobs: blobs.into_values().collect(),
-            subscribe,
-            unsubscribe,
             operation_result: operation_result.unwrap_or_default(),
         })
     }
@@ -238,7 +295,7 @@ impl TransactionTracker {
     /// Creates a new [`TransactionTracker`] for testing, with default values and the given
     /// oracle responses.
     pub fn new_replaying(oracle_responses: Vec<OracleResponse>) -> Self {
-        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, Some(oracle_responses))
+        TransactionTracker::new(Timestamp::from(0), 0, 0, 0, 0, Some(oracle_responses))
     }
 
     /// Creates a new [`TransactionTracker`] for testing, with default values and oracle responses

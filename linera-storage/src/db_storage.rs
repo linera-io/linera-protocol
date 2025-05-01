@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, TimeDelta, Timestamp},
+    data_types::{Blob, Epoch, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -17,8 +17,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode,
-    WasmRuntime,
+    BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
@@ -196,6 +195,16 @@ pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     )
 });
 
+/// The metric counting how often an event is tested for existence from storage
+#[cfg(with_metrics)]
+static CONTAINS_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "contains_event",
+        "The metric counting how often an event is tested for existence from storage",
+        &[],
+    )
+});
+
 /// The metric counting how often an event is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
@@ -258,7 +267,7 @@ impl BatchExt for Batch {
 
 /// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
-pub struct DbStorage<Store, Clock> {
+pub struct DbStorage<Store, Clock = WallClock> {
     store: Arc<Store>,
     clock: Clock,
     wasm_runtime: Option<WasmRuntime>,
@@ -782,6 +791,14 @@ where
         #[cfg(with_metrics)]
         READ_EVENT_COUNTER.with_label_values(&[]).inc();
         maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
+    }
+
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+        let exists = self.store.contains_key(&event_key).await?;
+        #[cfg(with_metrics)]
+        CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
+        Ok(exists)
     }
 
     async fn write_events(

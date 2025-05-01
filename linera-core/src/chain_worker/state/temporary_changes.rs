@@ -22,10 +22,7 @@ use linera_views::views::{ClonableView, View};
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::{
-        data_types::{MessageBundle, Origin},
-        types::ConfirmedBlockCertificate,
-    },
+    linera_chain::{data_types::MessageBundle, types::ConfirmedBlockCertificate},
 };
 
 use super::ChainWorkerState;
@@ -62,7 +59,7 @@ where
         &mut self,
         height: BlockHeight,
     ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
         let certificate_hash = match self.0.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -75,12 +72,12 @@ where
     #[cfg(with_testing)]
     pub(super) async fn find_bundle_in_inbox(
         &mut self,
-        inbox_id: Origin,
+        inbox_id: linera_base::identifiers::ChainId,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
     ) -> Result<Option<MessageBundle>, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
 
         let mut inbox = self.0.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
         let mut bundles = inbox.added_bundles.iter_mut().await?;
@@ -99,7 +96,7 @@ where
         &mut self,
         query: Query,
     ) -> Result<QueryOutcome, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let outcome = self
             .0
@@ -114,7 +111,7 @@ where
         &mut self,
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, WorkerError> {
-        self.0.ensure_is_active()?;
+        self.0.ensure_is_active().await?;
         let response = self.0.chain.describe_application(application_id).await?;
         Ok(response)
     }
@@ -126,6 +123,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(Block, ResourceTracker, ChainInfoResponse), WorkerError> {
+        self.0.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.0.chain.current_committee()?;
@@ -246,6 +244,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
+        self.0.ensure_is_active().await?;
         let chain = &self.0.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
@@ -281,7 +280,7 @@ where
             for (origin, inbox) in pairs {
                 for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
-                        origin: origin.clone(),
+                        origin,
                         bundle,
                         action,
                     });
@@ -320,19 +319,17 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), WorkerError> {
-        let (outcome, resources, subscribe, unsubscribe) =
+        let (outcome, resources) =
             Box::pin(
                 self.0
                     .chain
                     .execute_block(block, local_time, round, published_blobs, None),
             )
             .await?;
-        if subscribe.is_empty() && unsubscribe.is_empty() {
-            self.0.execution_state_cache.insert_owned(
-                &outcome.state_hash,
-                self.0.chain.execution_state.clone_unchecked()?,
-            );
-        }
+        self.0.execution_state_cache.insert_owned(
+            &outcome.state_hash,
+            self.0.chain.execution_state.clone_unchecked()?,
+        );
         Ok((outcome, resources))
     }
 }

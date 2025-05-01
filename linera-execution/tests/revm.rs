@@ -8,13 +8,12 @@ use std::sync::Arc;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
-    identifiers::ChainDescription,
     vm::EvmQuery,
 };
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     test_utils::{
-        create_dummy_user_application_description,
+        create_dummy_user_application_description, dummy_chain_description,
         solidity::{load_solidity_example, read_evm_u64_entry},
         SystemExecutionState,
     },
@@ -39,14 +38,16 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     let initial_value = 10000;
     let mut value = initial_value;
     let args = ConstructorArgs { initial_value };
-    let instantiation_argument = args.abi_encode();
+    let constructor_argument = args.abi_encode();
+    let constructor_argument = serde_json::to_string(&constructor_argument)?.into_bytes();
+    let instantiation_argument = Vec::<u8>::new();
     let instantiation_argument = serde_json::to_string(&instantiation_argument)?.into_bytes();
-
     let state = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
+        description: Some(dummy_chain_description(0)),
         ..Default::default()
     };
-    let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
+    let (mut app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
+    app_desc.parameters = constructor_argument;
     let chain_id = app_desc.creator_chain_id;
     let mut view = state
         .into_view_with(chain_id, ExecutionRuntimeConfig::default())
@@ -84,9 +85,9 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
+        timestamp: Default::default(),
     };
 
     let query_context = QueryContext {

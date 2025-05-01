@@ -8,14 +8,15 @@
 use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash},
+    crypto::AccountPublicKey,
     data_types::{Amount, BlockHeight, OracleResponse},
     http,
-    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId},
+    identifiers::{Account, AccountOwner, MessageId},
 };
 use linera_execution::{
     test_utils::{
-        blob_oracle_responses, ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        blob_oracle_responses, dummy_chain_description, ExpectedCall, RegisterMockApplication,
+        SystemExecutionState,
     },
     ContractRuntime, ExecutionError, Message, MessageContext, ResourceControlPolicy,
     ResourceController, TransactionTracker,
@@ -186,8 +187,10 @@ async fn test_fee_consumption(
     owner_balance: Option<Amount>,
     initial_grant: Option<Amount>,
 ) -> anyhow::Result<()> {
+    let chain_description = dummy_chain_description(0);
+    let chain_id = chain_description.id();
     let mut state = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
+        description: Some(chain_description.clone()),
         ..SystemExecutionState::default()
     };
     let (application_id, application, blobs) = state.register_mock_application(0).await?;
@@ -256,31 +259,26 @@ async fn test_fee_consumption(
         oracle_responses.extend(spend.expected_oracle_responses());
     }
 
-    application.expect_call(ExpectedCall::execute_message(
-        move |runtime, _context, _operation| {
-            for spend in spends {
-                spend.execute(runtime)?;
-            }
-            Ok(())
-        },
-    ));
+    application.expect_call(ExpectedCall::execute_message(move |runtime, _operation| {
+        for spend in spends {
+            spend.execute(runtime)?;
+        }
+        Ok(())
+    }));
     application.expect_call(ExpectedCall::default_finalize());
 
     let refund_grant_to = authenticated_signer
-        .map(|owner| Account {
-            chain_id: ChainId::root(0),
-            owner,
-        })
+        .map(|owner| Account { chain_id, owner })
         .or(None);
     let context = MessageContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         is_bouncing: false,
         authenticated_signer,
         refund_grant_to,
         height: BlockHeight(0),
         round: Some(0),
-        certificate_hash: CryptoHash::default(),
         message_id: MessageId::default(),
+        timestamp: Default::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);

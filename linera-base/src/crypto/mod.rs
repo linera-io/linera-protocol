@@ -414,7 +414,7 @@ pub(crate) fn u64_array_to_le_bytes(integers: [u64; 4]) -> [u8; 32] {
 }
 
 /// Returns the bytes that represent the `integers` in big-endian.
-pub(crate) fn u64_array_to_be_bytes(integers: [u64; 4]) -> [u8; 32] {
+pub fn u64_array_to_be_bytes(integers: [u64; 4]) -> [u8; 32] {
     let mut bytes = [0u8; 32];
 
     bytes[0..8].copy_from_slice(&integers[0].to_be_bytes());

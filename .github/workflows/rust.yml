@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -64,7 +64,7 @@ jobs:
         cargo build --bin linera
         cargo run --bin linera -- resource-control-policy --block 0.0000001
         cargo run --bin linera -- resource-control-policy --block 0.000000
-        cargo run --bin linera -- faucet --amount 1000 --port 8079 a3edc33d8e951a1139333be8a4b56646b5598a8f51216e86592d881808972b07 &
+        cargo run --bin linera -- faucet --amount 1000 --port 8079 &
     - name: Run the remote-net tests
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net
@@ -74,7 +74,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Run some extra execution tests with wasmtime
       run: |
@@ -85,7 +85,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Run metrics tests
       run: |
@@ -96,7 +96,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -112,7 +112,7 @@ jobs:
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -134,7 +134,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -154,7 +154,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -173,9 +173,9 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - uses: foundry-rs/foundry-toolchain@v1.2.0
+    - uses: foundry-rs/foundry-toolchain@v1.4.0
     - name: Ensure Solc Directory Exists
       run: mkdir -p /home/runner/.solc
     - name: Cache Solc
@@ -211,14 +211,13 @@ jobs:
         cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service
     - name: Run REVM test
       run: |
-        cargo test -p linera-execution test_fuel_for_counter_revm_application --features revm
-        cargo test test_evm_end_to_end_counter --features revm,storage-service
+        cargo test evm --features revm,storage-service
 
   storage-service-tests:
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -237,7 +236,7 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 40
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -261,7 +260,7 @@ jobs:
     - uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Switch to nightly Rust toolchain
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -287,7 +286,7 @@ jobs:
   check-wit-files:
     runs-on: ubuntu-latest-16-cores
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Check WIT files
       run: |
@@ -298,7 +297,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Check for unexpected chain load operations
       run: |
         ./scripts/check_chain_loads.sh
@@ -308,7 +307,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build check_copyright_header script
       run: |
         cd ./scripts/check_copyright_header
@@ -323,7 +322,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -340,7 +339,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -354,7 +353,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install `taplo-cli`
       run: RUSTFLAGS='' cargo install taplo-cli@0.9.3 --locked
@@ -366,7 +365,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -383,7 +382,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -406,7 +405,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -430,7 +429,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -448,7 +447,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -463,7 +462,7 @@ jobs:
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml

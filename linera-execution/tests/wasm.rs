@@ -5,12 +5,11 @@
 
 use std::sync::Arc;
 
-use linera_base::{
-    data_types::{Amount, Blob, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId},
-};
+use linera_base::data_types::{Amount, Blob, BlockHeight, Timestamp};
 use linera_execution::{
-    test_utils::{create_dummy_user_application_description, SystemExecutionState},
+    test_utils::{
+        create_dummy_user_application_description, dummy_chain_description, SystemExecutionState,
+    },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
     QueryContext, QueryOutcome, QueryResponse, ResourceControlPolicy, ResourceController,
     ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime, WasmServiceModule,
@@ -30,12 +29,14 @@ async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
     expected_fuel: u64,
 ) -> anyhow::Result<()> {
+    let chain_description = dummy_chain_description(0);
+    let chain_id = chain_description.id();
     let state = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
+        description: Some(chain_description),
         ..Default::default()
     };
     let mut view = state
-        .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
+        .into_view_with(chain_id, ExecutionRuntimeConfig::default())
         .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
     let app_id = From::from(&app_desc);
@@ -67,12 +68,12 @@ async fn test_fuel_for_counter_wasm_application(
         .await?;
 
     let context = OperationContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         height: BlockHeight(0),
         round: Some(0),
-        index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
+        timestamp: Default::default(),
     };
     let increments = [2_u64, 9, 7, 1000];
     let policy = ResourceControlPolicy {
@@ -116,7 +117,7 @@ async fn test_fuel_for_counter_wasm_application(
     );
 
     let context = QueryContext {
-        chain_id: ChainId::root(0),
+        chain_id,
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };

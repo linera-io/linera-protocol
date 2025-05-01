@@ -13,7 +13,8 @@ use futures::future::Either;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, DecompressionError, Round,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, DecompressionError, Epoch,
+        Round,
     },
     doc_scalar,
     hashed::Hashed,
@@ -23,18 +24,14 @@ use linera_base::{
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, ProposedBlock, Target,
-    },
+    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{
-    committee::Epoch, ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker,
-};
+use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -137,7 +134,7 @@ pub enum Reason {
         hash: CryptoHash,
     },
     NewIncomingBundle {
-        origin: Origin,
+        origin: ChainId,
         height: BlockHeight,
     },
     NewRound {
@@ -647,7 +644,7 @@ where
     #[instrument(level = "trace", skip(self, origin, recipient, bundles))]
     async fn process_cross_chain_update(
         &self,
-        origin: Origin,
+        origin: ChainId,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
@@ -1033,51 +1030,38 @@ where
             CrossChainRequest::UpdateRecipient {
                 sender,
                 recipient,
-                bundle_vecs,
+                bundles,
             } => {
-                let mut height_by_origin = Vec::new();
                 let mut actions = NetworkActions::default();
-                for (medium, bundles) in bundle_vecs {
-                    let origin = Origin { sender, medium };
-                    if let Some(height) = self
-                        .process_cross_chain_update(origin.clone(), recipient, bundles)
-                        .await?
-                    {
-                        height_by_origin.push((origin, height));
-                    }
-                }
-                if height_by_origin.is_empty() {
-                    return Ok(NetworkActions::default());
-                }
-                let mut latest_heights = Vec::new();
-                for (origin, height) in height_by_origin {
-                    latest_heights.push((origin.medium.clone(), height));
-                    actions.notifications.push(Notification {
-                        chain_id: recipient,
-                        reason: Reason::NewIncomingBundle { origin, height },
-                    });
-                }
+                let origin = sender;
+                let Some(height) = self
+                    .process_cross_chain_update(origin, recipient, bundles)
+                    .await?
+                else {
+                    return Ok(actions);
+                };
+                actions.notifications.push(Notification {
+                    chain_id: recipient,
+                    reason: Reason::NewIncomingBundle { origin, height },
+                });
                 actions
                     .cross_chain_requests
                     .push(CrossChainRequest::ConfirmUpdatedRecipient {
                         sender,
                         recipient,
-                        latest_heights,
+                        latest_height: height,
                     });
                 Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
-                latest_heights,
+                latest_height,
             } => {
-                let latest_heights = latest_heights
-                    .into_iter()
-                    .map(|(medium, height)| (Target { recipient, medium }, height))
-                    .collect();
                 self.query_chain_worker(sender, move |callback| {
                     ChainWorkerRequest::ConfirmUpdatedRecipient {
-                        latest_heights,
+                        recipient,
+                        latest_height,
                         callback,
                     }
                 })

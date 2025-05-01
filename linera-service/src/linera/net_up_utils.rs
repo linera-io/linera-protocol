@@ -4,9 +4,7 @@
 use std::{num::NonZeroU16, str::FromStr};
 
 use colored::Colorize as _;
-use linera_base::{
-    data_types::Amount, identifiers::ChainId, listen_for_shutdown_signals, time::Duration,
-};
+use linera_base::{data_types::Amount, listen_for_shutdown_signals, time::Duration};
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_rpc::config::CrossChainConfig;
 use linera_service::{
@@ -180,6 +178,7 @@ pub async fn handle_net_up_service(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    num_block_exporters: u32,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -217,6 +216,7 @@ pub async fn handle_net_up_service(
         cross_chain_config,
         storage_config_builder,
         path_provider,
+        num_block_exporters,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
@@ -280,19 +280,25 @@ async fn print_messages_and_create_faucet(
         format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
     );
 
+    let wallet = client.load_wallet()?;
+    let chains = wallet.chain_ids();
+
     // Run the faucet,
     let faucet_service = if with_faucet {
-        let faucet_chain = if let Some(faucet_chain) = faucet_chain {
-            ChainId::root(faucet_chain)
-        } else {
-            assert!(
-                num_other_initial_chains > 1,
-                "num_other_initial_chains must be greater than 1 if with_faucet is true"
-            );
-            ChainId::root(1)
-        };
+        let faucet_chain_idx = faucet_chain.unwrap_or(0);
+        assert!(
+            num_other_initial_chains > faucet_chain_idx,
+            "num_other_initial_chains must be strictly greater than the faucet chain index if \
+            with_faucet is true"
+        );
+        // This picks a lexicographically faucet_chain_idx-th non-admin chain.
+        let faucet_chain = chains
+            .into_iter()
+            .filter(|chain_id| *chain_id != wallet.genesis_admin_chain())
+            .nth(faucet_chain_idx as usize)
+            .unwrap(); // we checked that there are enough chains above, so this should be safe
         let service = client
-            .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount)
+            .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount, None)
             .await?;
         Some(service)
     } else {

@@ -18,8 +18,8 @@ use linera_base::{
     },
     ensure, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, ChannelFullName, ChannelName, EventId,
-        GenericApplicationId, MessageId, StreamId, StreamName,
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId, MessageId,
+        StreamId, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -43,8 +43,25 @@ use crate::{
 #[path = "unit_tests/runtime_tests.rs"]
 mod tests;
 
+pub trait WithContext {
+    type UserContext;
+}
+
+impl WithContext for UserContractInstance {
+    type UserContext = Timestamp;
+}
+
+impl WithContext for UserServiceInstance {
+    type UserContext = ();
+}
+
+#[cfg(test)]
+impl WithContext for Arc<dyn std::any::Any + Send + Sync> {
+    type UserContext = ();
+}
+
 #[derive(Debug)]
-pub struct SyncRuntime<UserInstance>(Option<SyncRuntimeHandle<UserInstance>>);
+pub struct SyncRuntime<UserInstance: WithContext>(Option<SyncRuntimeHandle<UserInstance>>);
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 
@@ -54,14 +71,16 @@ pub struct ServiceSyncRuntime {
 }
 
 #[derive(Debug)]
-pub struct SyncRuntimeHandle<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
+pub struct SyncRuntimeHandle<UserInstance: WithContext>(
+    Arc<Mutex<SyncRuntimeInternal<UserInstance>>>,
+);
 
 pub type ContractSyncRuntimeHandle = SyncRuntimeHandle<UserContractInstance>;
 pub type ServiceSyncRuntimeHandle = SyncRuntimeHandle<UserServiceInstance>;
 
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
 #[derive(Debug)]
-pub struct SyncRuntimeInternal<UserInstance> {
+pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     /// The current chain ID.
     chain_id: ChainId,
     /// The height of the next block that will be added to this chain. During operations
@@ -110,6 +129,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     refund_grant_to: Option<Account>,
     /// Controller to track fuel and storage consumption.
     resource_controller: ResourceController,
+    /// Additional context for the runtime.
+    user_context: UserInstance::UserContext,
 }
 
 /// The runtime status of an application.
@@ -257,7 +278,7 @@ impl ViewUserState {
     }
 }
 
-impl<UserInstance> Deref for SyncRuntime<UserInstance> {
+impl<UserInstance: WithContext> Deref for SyncRuntime<UserInstance> {
     type Target = SyncRuntimeHandle<UserInstance>;
 
     fn deref(&self) -> &Self::Target {
@@ -267,7 +288,7 @@ impl<UserInstance> Deref for SyncRuntime<UserInstance> {
     }
 }
 
-impl<UserInstance> DerefMut for SyncRuntime<UserInstance> {
+impl<UserInstance: WithContext> DerefMut for SyncRuntime<UserInstance> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.as_mut().expect(
             "`SyncRuntime` should not be used after its `inner` contents have been moved out",
@@ -275,7 +296,7 @@ impl<UserInstance> DerefMut for SyncRuntime<UserInstance> {
     }
 }
 
-impl<UserInstance> Drop for SyncRuntime<UserInstance> {
+impl<UserInstance: WithContext> Drop for SyncRuntime<UserInstance> {
     fn drop(&mut self) {
         // Ensure the `loaded_applications` are cleared to prevent circular references in
         // the runtime
@@ -285,7 +306,7 @@ impl<UserInstance> Drop for SyncRuntime<UserInstance> {
     }
 }
 
-impl<UserInstance> SyncRuntimeInternal<UserInstance> {
+impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
     #[expect(clippy::too_many_arguments)]
     fn new(
         chain_id: ChainId,
@@ -298,6 +319,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         transaction_tracker: TransactionTracker,
+        user_context: UserInstance::UserContext,
     ) -> Self {
         Self {
             chain_id,
@@ -317,6 +339,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             resource_controller,
             transaction_tracker,
             scheduled_operations: Vec::new(),
+            user_context,
         }
     }
 
@@ -441,13 +464,14 @@ impl SyncRuntimeInternal<UserContractInstance> {
             _ => None,
         };
         let authenticated_caller_id = authenticated.then_some(caller_id);
+        let timestamp = self.user_context;
         let callee_context = OperationContext {
             chain_id: self.chain_id,
             authenticated_signer,
             authenticated_caller_id,
             height: self.height,
             round: self.round,
-            index: None,
+            timestamp,
         };
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
@@ -549,7 +573,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     }
 }
 
-impl<UserInstance> SyncRuntime<UserInstance> {
+impl<UserInstance: WithContext> SyncRuntime<UserInstance> {
     fn into_inner(mut self) -> Option<SyncRuntimeInternal<UserInstance>> {
         let handle = self.0.take().expect(
             "`SyncRuntime` should not be used after its `inner` contents have been moved out",
@@ -561,13 +585,15 @@ impl<UserInstance> SyncRuntime<UserInstance> {
     }
 }
 
-impl<UserInstance> From<SyncRuntimeInternal<UserInstance>> for SyncRuntimeHandle<UserInstance> {
+impl<UserInstance: WithContext> From<SyncRuntimeInternal<UserInstance>>
+    for SyncRuntimeHandle<UserInstance>
+{
     fn from(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
         SyncRuntimeHandle(Arc::new(Mutex::new(runtime)))
     }
 }
 
-impl<UserInstance> SyncRuntimeHandle<UserInstance> {
+impl<UserInstance: WithContext> SyncRuntimeHandle<UserInstance> {
     fn inner(&self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
         self.0
             .try_lock()
@@ -575,7 +601,7 @@ impl<UserInstance> SyncRuntimeHandle<UserInstance> {
     }
 }
 
-impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance>
+impl<UserInstance: WithContext> BaseRuntime for SyncRuntimeHandle<UserInstance>
 where
     Self: ContractOrServiceRuntime,
 {
@@ -942,7 +968,7 @@ impl ContractOrServiceRuntime for ServiceSyncRuntimeHandle {
     const LIMIT_HTTP_RESPONSE_SIZE_TO_ORACLE_RESPONSE_SIZE: bool = false;
 }
 
-impl<UserInstance> Clone for SyncRuntimeHandle<UserInstance> {
+impl<UserInstance: WithContext> Clone for SyncRuntimeHandle<UserInstance> {
     fn clone(&self) -> Self {
         SyncRuntimeHandle(self.0.clone())
     }
@@ -973,6 +999,7 @@ impl ContractSyncRuntime {
                 refund_grant_to,
                 resource_controller,
                 txn_tracker,
+                action.timestamp(),
             ),
         )))
     }
@@ -1045,14 +1072,15 @@ impl ContractSyncRuntimeHandle {
 
         let signer = action.signer();
         let closure = move |code: &mut UserContractInstance| match action {
-            UserAction::Instantiate(context, argument) => {
-                code.instantiate(context, argument).map(|()| None)
+            UserAction::Instantiate(_context, argument) => {
+                code.instantiate(argument).map(|()| None)
             }
-            UserAction::Operation(context, operation) => {
-                code.execute_operation(context, operation).map(Option::Some)
+            UserAction::Operation(_context, operation) => {
+                code.execute_operation(operation).map(Option::Some)
             }
-            UserAction::Message(context, message) => {
-                code.execute_message(context, message).map(|()| None)
+            UserAction::Message(_context, message) => code.execute_message(message).map(|()| None),
+            UserAction::ProcessStreams(_context, updates) => {
+                code.process_streams(updates).map(|()| None)
             }
         };
 
@@ -1071,7 +1099,7 @@ impl ContractSyncRuntimeHandle {
 
         for application in applications {
             self.execute(application, context.authenticated_signer, |contract| {
-                contract.finalize(context).map(|_| None)
+                contract.finalize().map(|_| None)
             })?;
             self.inner().loaded_applications.remove(&application);
         }
@@ -1192,24 +1220,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(())
     }
 
-    fn subscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
-        let mut this = self.inner();
-        let application_id = this.current_application().id;
-        let full_name = ChannelFullName::new(name, application_id);
-        this.transaction_tracker.subscribe(full_name, chain);
-
-        Ok(())
-    }
-
-    fn unsubscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
-        let mut this = self.inner();
-        let application_id = this.current_application().id;
-        let full_name = ChannelFullName::new(name, application_id);
-        this.transaction_tracker.unsubscribe(full_name, chain);
-
-        Ok(())
-    }
-
     fn transfer(
         &mut self,
         source: AccountOwner,
@@ -1270,14 +1280,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         callee_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (contract, context) =
+        let (contract, _context) =
             self.inner()
                 .prepare_for_call(self.clone(), authenticated, callee_id)?;
 
         let value = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .execute_operation(context, argument)?;
+            .execute_operation(argument)?;
 
         self.inner().finish_call()?;
 
@@ -1351,7 +1361,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError> {
-        let this = self.inner();
+        let mut this = self.inner();
         ensure!(
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
@@ -1361,14 +1371,22 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             application_id: application_id.into(),
         };
         let subscriber_app_id = this.current_application().id;
-        this.execution_state_sender
+        let next_index = this
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::SubscribeToEvents {
                 chain_id,
-                stream_id,
+                stream_id: stream_id.clone(),
                 subscriber_app_id,
                 callback,
             })?
             .recv_response()?;
+        this.transaction_tracker.add_stream_to_process(
+            subscriber_app_id,
+            chain_id,
+            stream_id,
+            0,
+            next_index,
+        );
         Ok(())
     }
 
@@ -1378,7 +1396,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         application_id: ApplicationId,
         stream_name: StreamName,
     ) -> Result<(), ExecutionError> {
-        let this = self.inner();
+        let mut this = self.inner();
         ensure!(
             stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
@@ -1391,11 +1409,13 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::UnsubscribeFromEvents {
                 chain_id,
-                stream_id,
+                stream_id: stream_id.clone(),
                 subscriber_app_id,
                 callback,
             })?
             .recv_response()?;
+        this.transaction_tracker
+            .remove_stream_to_process(application_id, chain_id, stream_id);
         Ok(())
     }
 
@@ -1439,27 +1459,31 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<(MessageId, ChainId), ExecutionError> {
-        let mut this = self.inner();
-        let message_id = MessageId {
-            chain_id: this.chain_id,
-            height: this.height,
-            index: this.transaction_tracker.next_message_index(),
-        };
-        let chain_id = ChainId::child(message_id);
-        let open_chain_message = this
+    ) -> Result<ChainId, ExecutionError> {
+        let parent_id = self.inner().chain_id;
+        let block_height = self.block_height()?;
+
+        let txn_tracker_moved = mem::take(&mut self.inner().transaction_tracker);
+        let timestamp = self.inner().user_context;
+
+        let (chain_id, txn_tracker_moved) = self
+            .inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OpenChain {
                 ownership,
                 balance,
-                next_message_id: message_id,
+                parent_id,
+                block_height,
+                timestamp,
                 application_permissions,
                 callback,
+                txn_tracker: txn_tracker_moved,
             })?
             .recv_response()?;
-        this.transaction_tracker
-            .add_outgoing_message(open_chain_message)?;
-        Ok((message_id, chain_id))
+
+        self.inner().transaction_tracker = txn_tracker_moved;
+
+        Ok(chain_id)
     }
 
     fn close_chain(&mut self) -> Result<(), ExecutionError> {
@@ -1519,12 +1543,12 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         self.inner().transaction_tracker = txn_tracker_moved;
 
-        let (contract, context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
+        let (contract, _context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
         contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .instantiate(context, argument)?;
+            .instantiate(argument)?;
 
         self.inner().finish_call()?;
 
@@ -1598,6 +1622,7 @@ impl ServiceSyncRuntime {
                 None,
                 ResourceController::default(),
                 txn_tracker,
+                (),
             )
             .into(),
         ));
@@ -1699,29 +1724,24 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
         queried_id: ApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (query_context, service) = {
+        let service = {
             let mut this = self.inner();
 
             // Load the application.
             let application = this.load_service_instance(self.clone(), queried_id)?;
             // Make the call to user code.
-            let query_context = QueryContext {
-                chain_id: this.chain_id,
-                next_block_height: this.height,
-                local_time: this.transaction_tracker.local_time(),
-            };
             this.push_application(ApplicationStatus {
                 caller_id: None,
                 id: queried_id,
                 description: application.description,
                 signer: None,
             });
-            (query_context, application.instance)
+            application.instance
         };
         let response = service
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .handle_query(query_context, argument)?;
+            .handle_query(argument)?;
         self.inner().pop_application();
         Ok(response)
     }

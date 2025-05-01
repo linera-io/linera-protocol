@@ -4,15 +4,13 @@
 use anyhow::anyhow;
 use linera_base::{
     crypto::{AccountSecretKey, Ed25519SecretKey},
-    data_types::{Amount, Blob, BlockHeight},
-    identifiers::{ChainDescription, ChainId},
+    data_types::{Amount, Blob, BlockHeight, Epoch},
 };
 use linera_chain::data_types::ProposedBlock;
 use linera_core::{
     client::PendingProposal,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
-use linera_execution::committee::Epoch;
 use rand::{rngs::StdRng, SeedableRng as _};
 
 use super::util::make_genesis_config;
@@ -29,8 +27,8 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let chain_id = ChainId::root(0);
     builder.add_root_chain(0, Amount::ONE).await?;
+    let chain_id = builder.admin_id();
     let storage = builder.make_storage().await?;
 
     let genesis_config = make_genesis_config(&builder);
@@ -53,7 +51,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     wallet
         .add_chains(Some(UserChain::make_initial(
             key_pair,
-            ChainDescription::Root(0),
+            builder.admin_description().unwrap().clone(),
             clock.current_time(),
         )))
         .await?;

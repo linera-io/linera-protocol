@@ -9,6 +9,7 @@ use std::ops;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
+    collections::BTreeMap,
     fmt::{self, Display},
     fs,
     hash::Hash,
@@ -31,13 +32,13 @@ use crate::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
 };
 use crate::{
-    crypto::{BcsHashable, CryptoHash},
+    crypto::{BcsHashable, CryptoError, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
-        ModuleId, StreamId,
+        ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, ModuleId, StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
+    ownership::ChainOwnership,
     time::{Duration, SystemTime},
     vm::VmRuntime,
 };
@@ -307,7 +308,7 @@ pub struct Resources {
 #[witty_specialize_with(Message = Vec<u8>)]
 pub struct SendMessageRequest<Message> {
     /// The destination of the message.
-    pub destination: Destination,
+    pub destination: ChainId,
     /// Whether the message is authenticated.
     pub authenticated: bool,
     /// Whether the message is tracked.
@@ -707,12 +708,179 @@ impl Amount {
     }
 }
 
+/// What created a chain.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub enum ChainOrigin {
+    /// The chain was created by the genesis configuration.
+    Root(u32),
+    /// The chain was created by a call from another chain.
+    Child {
+        /// The parent of this chain.
+        parent: ChainId,
+        /// The block height in the parent at which this chain was created.
+        block_height: BlockHeight,
+        /// The index of this chain among chains created at the same block height in the parent
+        /// chain.
+        chain_index: u32,
+    },
+}
+
+impl ChainOrigin {
+    /// Whether the chain was created by another chain.
+    pub fn is_child(&self) -> bool {
+        matches!(self, ChainOrigin::Child { .. })
+    }
+}
+
+/// A number identifying the configuration of the chain (aka the committee).
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
+pub struct Epoch(pub u32);
+
+impl Epoch {
+    /// The zero epoch.
+    pub const ZERO: Epoch = Epoch(0);
+}
+
+impl Serialize for Epoch {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.0.to_string())
+        } else {
+            serializer.serialize_newtype_struct("Epoch", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Epoch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Ok(Epoch(u32::from_str(&s).map_err(serde::de::Error::custom)?))
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "Epoch")]
+            struct EpochDerived(u32);
+
+            let value = EpochDerived::deserialize(deserializer)?;
+            Ok(Self(value.0))
+        }
+    }
+}
+
+impl std::fmt::Display for Epoch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for Epoch {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Epoch(s.parse()?))
+    }
+}
+
+impl From<u32> for Epoch {
+    fn from(value: u32) -> Self {
+        Epoch(value)
+    }
+}
+
+impl Epoch {
+    /// Tries to return an epoch with a number increased by one. Returns an error if an overflow
+    /// happens.
+    #[inline]
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(Self(val))
+    }
+
+    /// Tries to add one to this epoch's number. Returns an error if an overflow happens.
+    #[inline]
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+}
+
+/// The initial configuration for a new chain.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct InitialChainConfig {
+    /// The ownership configuration of the new chain.
+    pub ownership: ChainOwnership,
+    /// The ID of the admin chain.
+    pub admin_id: Option<ChainId>,
+    /// The epoch in which the chain is created.
+    pub epoch: Epoch,
+    /// Serialized committees corresponding to epochs.
+    pub committees: BTreeMap<Epoch, Vec<u8>>,
+    /// The initial chain balance.
+    pub balance: Amount,
+    /// The initial application permissions.
+    pub application_permissions: ApplicationPermissions,
+}
+
+/// Initial chain configuration and chain origin.
+#[derive(Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct ChainDescription {
+    origin: ChainOrigin,
+    timestamp: Timestamp,
+    config: InitialChainConfig,
+}
+
+impl ChainDescription {
+    /// Creates a new [`ChainDescription`].
+    pub fn new(origin: ChainOrigin, config: InitialChainConfig, timestamp: Timestamp) -> Self {
+        Self {
+            origin,
+            config,
+            timestamp,
+        }
+    }
+
+    /// Returns the [`ChainId`] based on this [`ChainDescription`].
+    pub fn id(&self) -> ChainId {
+        ChainId::from(self)
+    }
+
+    /// Returns the [`ChainOrigin`] describing who created this chain.
+    pub fn origin(&self) -> ChainOrigin {
+        self.origin
+    }
+
+    /// Returns a reference to the [`InitialChainConfig`] of the chain.
+    pub fn config(&self) -> &InitialChainConfig {
+        &self.config
+    }
+
+    /// Returns the timestamp of when the chain was created.
+    pub fn timestamp(&self) -> Timestamp {
+        self.timestamp
+    }
+
+    /// Whether the chain was created by another chain.
+    pub fn is_child(&self) -> bool {
+        self.origin.is_child()
+    }
+}
+
+impl BcsHashable<'_> for ChainDescription {}
+
 /// Permissions for applications on a chain.
 #[derive(
     Default,
     Debug,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Clone,
     Serialize,
@@ -1060,6 +1228,13 @@ impl BlobContent {
         BlobContent::new(BlobType::Committee, committee)
     }
 
+    /// Creates a new chain description [`BlobContent`] from a [`ChainDescription`].
+    pub fn new_chain_description(chain_description: &ChainDescription) -> Self {
+        let bytes = bcs::to_bytes(&chain_description)
+            .expect("Serializing a ChainDescription should not fail!");
+        BlobContent::new(BlobType::ChainDescription, bytes)
+    }
+
     /// Gets a reference to the blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
@@ -1121,7 +1296,7 @@ impl Blob {
         Blob::new(BlobContent::new_data(bytes))
     }
 
-    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    /// Creates a new contract bytecode [`Blob`] from the provided bytes.
     pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         Blob::new(BlobContent::new_contract_bytecode(compressed_bytecode))
     }
@@ -1131,17 +1306,26 @@ impl Blob {
         Blob::new(BlobContent::new_evm_bytecode(compressed_bytecode))
     }
 
-    /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
+    /// Creates a new service bytecode [`Blob`] from the provided bytes.
     pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         Blob::new(BlobContent::new_service_bytecode(compressed_bytecode))
     }
 
-    /// Creates a new application description [`BlobContent`] from the provided
-    /// description.
+    /// Creates a new application description [`Blob`] from the provided description.
     pub fn new_application_description(application_description: &ApplicationDescription) -> Self {
         Blob::new(BlobContent::new_application_description(
             application_description,
         ))
+    }
+
+    /// Creates a new committee [`Blob`] from the provided bytes.
+    pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
+        Blob::new(BlobContent::new_committee(committee))
+    }
+
+    /// Creates a new chain description [`Blob`] from a [`ChainDescription`].
+    pub fn new_chain_description(chain_description: &ChainDescription) -> Self {
+        Blob::new(BlobContent::new_chain_description(chain_description))
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
@@ -1237,10 +1421,34 @@ impl Event {
     }
 }
 
+/// An update for a stream with new events.
+#[derive(Clone, Debug, Serialize, Deserialize, WitType, WitLoad, WitStore)]
+pub struct StreamUpdate {
+    /// The publishing chain.
+    pub chain_id: ChainId,
+    /// The stream ID.
+    pub stream_id: StreamId,
+    /// The lowest index of a new event. See [`StreamUpdate::new_indices`].
+    pub previous_index: u32,
+    /// The index of the next event, i.e. the lowest for which no event is known yet.
+    pub next_index: u32,
+}
+
+impl StreamUpdate {
+    /// Returns the indices of all new events in the stream.
+    pub fn new_indices(&self) -> impl Iterator<Item = u32> {
+        self.previous_index..self.next_index
+    }
+}
+
 impl BcsHashable<'_> for Event {}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
+doc_scalar!(
+    Epoch,
+    "A number identifying the configuration of the chain (aka the committee)"
+);
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
     Timestamp,
@@ -1250,6 +1458,10 @@ doc_scalar!(TimeDelta, "A duration in microseconds");
 doc_scalar!(
     Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."
+);
+doc_scalar!(
+    ChainDescription,
+    "Initial chain configuration and chain origin."
 );
 doc_scalar!(OracleResponse, "A record of a single oracle response.");
 doc_scalar!(BlobContent, "A blob of binary data.");
