@@ -123,6 +123,24 @@ pub enum StorageConfig {
     },
 }
 
+impl StorageConfig {
+    pub fn maybe_append_shard_path(&mut self, _shard: usize) -> std::io::Result<()> {
+        match self {
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StorageConfig::DualRocksDbScyllaDb {
+                path_with_guard,
+                spawn_mode: _,
+                uri: _,
+            } => {
+                let shard_str = format!("shard_{}", _shard);
+                path_with_guard.path_buf.push(shard_str);
+                std::fs::create_dir_all(&path_with_guard.path_buf)
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 /// The description of a storage implementation.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
