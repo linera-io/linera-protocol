@@ -21,7 +21,6 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
-
 use linera_rpc::config::{
     ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
