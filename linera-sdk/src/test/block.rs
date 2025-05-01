@@ -7,20 +7,20 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Resources, Round, Timestamp},
+    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock, SignatureAggregator,
     },
-    types::{ConfirmedBlock, ConfirmedBlockCertificate},
+    types::{Block, BlockHeader, ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
 use linera_execution::{
     system::{Recipient, SystemOperation},
-    Operation,
+    Operation, OutgoingMessage, ResourceTracker,
 };
 
 use super::TestValidator;
@@ -48,13 +48,14 @@ impl BlockBuilder {
         chain_id: ChainId,
         owner: AccountOwner,
         epoch: Epoch,
-        previous_block: Option<&ConfirmedBlockCertificate>,
+        previous_block: Option<&CertifiedBlock>,
         validator: TestValidator,
     ) -> Self {
-        let previous_block_hash = previous_block.map(|certificate| certificate.hash());
+        let previous_block_hash = previous_block.map(|block| block.certificate.hash());
         let height = previous_block
-            .map(|certificate| {
-                certificate
+            .map(|block| {
+                block
+                    .certificate
                     .inner()
                     .height()
                     .try_add_one()
@@ -172,34 +173,31 @@ impl BlockBuilder {
     }
 
     /// Receives all direct messages  that were sent to this chain by the given certificate.
-    pub fn with_messages_from(&mut self, certificate: &ConfirmedBlockCertificate) -> &mut Self {
-        self.with_messages_from_by_action(certificate, MessageAction::Accept)
+    pub fn with_messages_from(&mut self, block: &CertifiedBlock) -> &mut Self {
+        self.with_messages_from_by_action(block, MessageAction::Accept)
     }
 
     /// Receives all messages that were sent to this chain by the given certificate.
     pub fn with_messages_from_by_action(
         &mut self,
-        certificate: &ConfirmedBlockCertificate,
+        block: &CertifiedBlock,
         action: MessageAction,
     ) -> &mut Self {
-        let origin = certificate.inner().chain_id();
-        let bundles =
-            certificate
-                .message_bundles_for(self.block.chain_id)
-                .map(|(_epoch, bundle)| IncomingBundle {
-                    origin,
-                    bundle,
-                    action,
-                });
+        let origin = block.certificate.inner().chain_id();
+        let bundles = block
+            .certificate
+            .message_bundles_for(self.block.chain_id)
+            .map(|(_epoch, bundle)| IncomingBundle {
+                origin,
+                bundle,
+                action,
+            });
         self.with_incoming_bundles(bundles)
     }
 
     /// Tries to sign the prepared block with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
-    pub(crate) async fn try_sign(
-        self,
-        blobs: &[Blob],
-    ) -> Result<ConfirmedBlockCertificate, WorkerError> {
+    pub(crate) async fn try_sign(self, blobs: &[Blob]) -> Result<CertifiedBlock, WorkerError> {
         let published_blobs = self
             .block
             .published_blob_ids()
@@ -212,7 +210,7 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (block, _) = self
+        let (block, resources, _) = self
             .validator
             .worker()
             .stage_block_execution(self.block, None, published_blobs)
@@ -231,6 +229,113 @@ impl BlockBuilder {
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
 
-        Ok(certificate)
+        Ok(CertifiedBlock {
+            certificate,
+            resources,
+        })
+    }
+}
+
+/// A block that has been confirmed and certified by the validators.
+#[derive(Clone, Debug)]
+pub struct CertifiedBlock {
+    pub(super) certificate: ConfirmedBlockCertificate,
+    pub(super) resources: ResourceTracker,
+}
+
+impl CertifiedBlock {
+    /// Returns the header of this [`CertifiedBlock`].
+    pub fn header(&self) -> &BlockHeader {
+        &self.certificate.inner().block().header
+    }
+
+    /// Returns the block of this [`CertifiedBlock`].
+    pub fn block(&self) -> &Block {
+        self.certificate.inner().block()
+    }
+
+    /// Returns the messages in this [`CertifiedBlock`].
+    pub fn messages(&self) -> &[Vec<OutgoingMessage>] {
+        self.certificate.inner().block().messages()
+    }
+
+    /// Returns the number of messages produced by this [`CertifiedBlock`].
+    pub fn outgoing_message_count(&self) -> usize {
+        self.certificate.outgoing_message_count()
+    }
+
+    /// Returns the [`MessageId`] for the `message_index`th outgoing message produced by the
+    /// `operation_index`th operation in this [`CertifiedBlock`].
+    pub fn message_id_for_operation(
+        &self,
+        operation_index: usize,
+        message_index: u32,
+    ) -> MessageId {
+        self.certificate
+            .inner()
+            .block()
+            .message_id_for_operation(operation_index, message_index)
+            .expect(
+                "Missing {message_index}th outgoing message \
+                produced by {operation_index}th operation",
+            )
+    }
+
+    /// Returns [`true`] if this block used less than the [`Resources`] listed for comparison.
+    pub fn consumed_less_than_or_equal_resources(&self, resources: Resources) -> bool {
+        let Resources {
+            fuel: maximum_fuel,
+            read_operations: maximum_read_operations,
+            write_operations: maximum_write_operations,
+            bytes_to_read,
+            bytes_to_write,
+            blobs_to_read,
+            blobs_to_publish,
+            blob_bytes_to_read,
+            blob_bytes_to_publish,
+            messages: maximum_messages,
+            message_size,
+            storage_size_delta,
+            service_as_oracle_queries,
+            http_requests: maximum_http_requests,
+        } = resources;
+
+        let ResourceTracker {
+            blocks: _,
+            block_size: _,
+            fuel,
+            read_operations,
+            write_operations,
+            bytes_read,
+            bytes_written,
+            blobs_read,
+            blobs_published,
+            blob_bytes_read,
+            blob_bytes_published,
+            bytes_stored,
+            operations: _,
+            operation_bytes: _,
+            messages,
+            message_bytes,
+            http_requests,
+            service_oracle_queries,
+            service_oracle_execution: _,
+            grants: _,
+        } = self.resources;
+
+        fuel <= maximum_fuel
+            && read_operations <= maximum_read_operations
+            && write_operations <= maximum_write_operations
+            && bytes_read <= bytes_to_read.into()
+            && bytes_written <= bytes_to_write.into()
+            && blobs_read <= blobs_to_read
+            && blobs_published <= blobs_to_publish
+            && blob_bytes_read <= blob_bytes_to_read.into()
+            && blob_bytes_published <= blob_bytes_to_publish.into()
+            && messages <= maximum_messages
+            && message_bytes <= message_size.into()
+            && bytes_stored <= storage_size_delta.try_into().unwrap_or(i32::MAX)
+            && service_oracle_queries <= service_as_oracle_queries
+            && http_requests <= maximum_http_requests
     }
 }

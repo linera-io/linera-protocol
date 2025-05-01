@@ -21,7 +21,7 @@ async fn hex_game() {
     let (validator, app_id, creation_chain) =
         TestValidator::with_current_application::<HexAbi, _, _>((), Timeouts::default()).await;
 
-    let certificate = creation_chain
+    let start_block = creation_chain
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
@@ -33,8 +33,8 @@ async fn hex_game() {
         })
         .await;
 
-    let block = certificate.inner().block();
-    let description = block
+    let description = start_block
+        .block()
         .created_blobs()
         .into_iter()
         .filter_map(|(blob_id, blob)| {
@@ -47,7 +47,7 @@ async fn hex_game() {
 
     chain
         .add_block(|block| {
-            block.with_messages_from(&certificate);
+            block.with_messages_from(&start_block);
             block.with_operation(app_id, Operation::MakeMove { x: 0, y: 0 });
         })
         .await;
@@ -102,7 +102,7 @@ async fn hex_game_clock() {
             .saturating_sub(TimeDelta::from_millis(1)),
     );
 
-    let certificate = creation_chain
+    let start_block = creation_chain
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
@@ -114,8 +114,8 @@ async fn hex_game_clock() {
         })
         .await;
 
-    let block = certificate.inner().block();
-    let description = block
+    let description = start_block
+        .block()
         .created_blobs()
         .into_iter()
         .filter_map(|(blob_id, blob)| {
@@ -129,7 +129,7 @@ async fn hex_game_clock() {
     chain
         .add_block(|block| {
             block
-                .with_messages_from(&certificate)
+                .with_messages_from(&start_block)
                 .with_operation(app_id, Operation::MakeMove { x: 0, y: 0 })
                 .with_timestamp(time);
         })

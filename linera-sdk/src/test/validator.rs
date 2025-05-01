@@ -323,16 +323,15 @@ impl TestValidator {
             .collect(),
         );
 
-        let certificate = admin_chain
+        let block = admin_chain
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::OpenChain(open_chain_config));
             })
             .await;
-        let block = certificate.inner().block();
 
         let origin = ChainOrigin::Child {
-            parent: block.header.chain_id,
-            block_height: block.header.height,
+            parent: block.header().chain_id,
+            block_height: block.header().height,
             chain_index: 0,
         };
 

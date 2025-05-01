@@ -683,7 +683,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<BlockExecutionOutcome, ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
@@ -913,7 +913,7 @@ where
             chain.crypto_hash().await?
         };
 
-        Ok(BlockExecutionOutcome {
+        let outcome = BlockExecutionOutcome {
             messages,
             previous_message_blocks,
             state_hash,
@@ -921,7 +921,9 @@ where
             events,
             blobs,
             operation_results,
-        })
+        };
+
+        Ok((outcome, resource_controller.tracker))
     }
 
     /// Executes a block: first the incoming messages, then the main operation.
@@ -933,7 +935,7 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Result<BlockExecutionOutcome, ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()

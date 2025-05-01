@@ -16,7 +16,7 @@ use linera_chain::{
     manager,
     types::Block,
 };
-use linera_execution::{Query, QueryOutcome};
+use linera_execution::{Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, View};
 #[cfg(with_testing)]
@@ -122,14 +122,14 @@ where
         block: ProposedBlock,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<(Block, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Block, ResourceTracker, ChainInfoResponse), WorkerError> {
         self.0.ensure_is_active().await?;
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
         let (_, committee) = self.0.chain.current_committee()?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
-        let outcome = self
+        let (outcome, resources) = self
             .execute_block(&block, local_time, round, published_blobs)
             .await?;
 
@@ -145,7 +145,7 @@ where
                 .await?;
         }
 
-        Ok((outcome.with(block), response))
+        Ok((outcome.with(block), resources, response))
     }
 
     /// Validates a proposal's signatures; returns `manager::Outcome::Skip` if we already voted
@@ -217,8 +217,10 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            self.execute_block(block, local_time, round.multi_leader(), published_blobs)
-                .await?
+            let (outcome, _resources) = self
+                .execute_block(block, local_time, round.multi_leader(), published_blobs)
+                .await?;
+            outcome
         };
 
         ensure!(
@@ -316,8 +318,8 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-    ) -> Result<BlockExecutionOutcome, WorkerError> {
-        let outcome =
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker), WorkerError> {
+        let (outcome, resources) =
             Box::pin(
                 self.0
                     .chain
@@ -328,7 +330,7 @@ where
             &outcome.state_hash,
             self.0.chain.execution_state.clone_unchecked()?,
         );
-        Ok(outcome)
+        Ok((outcome, resources))
     }
 }
 

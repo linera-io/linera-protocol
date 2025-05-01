@@ -178,11 +178,13 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), LocalNodeError> {
-        Ok(self
+        let (block, _resources, response) = self
             .node
             .state
             .stage_block_execution(block, round, published_blobs)
-            .await?)
+            .await?;
+
+        Ok((block, response))
     }
 
     /// Reads blobs from storage.
