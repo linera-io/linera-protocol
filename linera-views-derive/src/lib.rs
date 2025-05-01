@@ -211,7 +211,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     }
 }
 
-fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     let ContextAndConstraints {
         context,
         context_constraints,
@@ -434,7 +434,7 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_save_delete_view_code(input));
+    stream.extend(generate_root_view_code(input));
     stream.into()
 }
 
@@ -451,7 +451,7 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_save_delete_view_code(input.clone()));
+    stream.extend(generate_root_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
     stream.into()
@@ -462,7 +462,7 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_save_delete_view_code(input.clone()));
+    stream.extend(generate_root_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input));
     stream.into()
 }
@@ -518,12 +518,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_generate_save_delete_view_code() {
+    fn test_generate_root_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
             insta::assert_snapshot!(
                 format!(
-                    "test_generate_save_delete_view_code{}_{}",
+                    "test_generate_root_view_code{}_{}",
                     if cfg!(feature = "metrics") {
                         "_metrics"
                     } else {
@@ -531,7 +531,7 @@ pub mod tests {
                     },
                     context.name,
                 ),
-                pretty(generate_save_delete_view_code(input))
+                pretty(generate_root_view_code(input))
             );
         }
     }
