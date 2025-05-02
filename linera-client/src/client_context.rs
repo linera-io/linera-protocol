@@ -546,7 +546,7 @@ where
         &self,
         address: &str,
         node: &impl ValidatorNode,
-    ) -> anyhow::Result<VersionInfo> {
+    ) -> Result<VersionInfo, Error> {
         match node.get_version_info().await {
             Ok(version_info) if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {
                 info!(
@@ -555,18 +555,16 @@ where
                 );
                 Ok(version_info)
             }
-            Ok(version_info) => {
-                anyhow::bail!(
-                    "Validator version {} is not compatible with local version {}.",
-                    version_info,
-                    linera_version::VERSION_INFO
-                );
+            Ok(version_info) => Err(error::Inner::UnexpectedVersionInfo {
+                remote: version_info,
+                local: linera_version::VERSION_INFO.clone(),
             }
-            Err(error) => {
-                anyhow::bail!(
-                    "Failed to get version information for validator {address}:\n{error}"
-                );
+            .into()),
+            Err(error) => Err(error::Inner::UnavailableVersionInfo {
+                address: address.to_string(),
+                error,
             }
+            .into()),
         }
     }
 
@@ -574,23 +572,25 @@ where
         &self,
         address: &str,
         node: &impl ValidatorNode,
-    ) -> anyhow::Result<CryptoHash> {
+    ) -> Result<CryptoHash, Error> {
         let network_description = self.wallet().genesis_config().network_description();
         match node.get_network_description().await {
             Ok(description) => {
                 if description == network_description {
                     Ok(description.genesis_config_hash)
                 } else {
-                    anyhow::bail!(
-                        "Validator's network description {description:?} does not match our own: {network_description:?}."
-                    );
+                    Err(error::Inner::UnexpectedNetworkDescription {
+                        remote: description,
+                        local: network_description,
+                    }
+                    .into())
                 }
             }
-            Err(error) => {
-                anyhow::bail!(
-                    "Failed to get network description for validator {address}:\n{error}"
-                );
+            Err(error) => Err(error::Inner::UnavailableNetworkDescription {
+                address: address.to_string(),
+                error,
             }
+            .into()),
         }
     }
 
@@ -600,7 +600,7 @@ where
         address: &str,
         node: &impl ValidatorNode,
         chain_id: ChainId,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let query = linera_core::data_types::ChainInfoQuery::new(chain_id);
         match node.handle_chain_info_query(query).await {
             Ok(response) => {
@@ -612,17 +612,21 @@ where
                     if response.check(public_key).is_ok() {
                         info!("Signature for public key {public_key} is OK.");
                     } else {
-                        anyhow::bail!("Signature for public key {public_key} is NOT OK.");
+                        return Err(error::Inner::InvalidSignature {
+                            public_key: *public_key,
+                        }
+                        .into());
                     }
                 }
+                Ok(())
             }
-            Err(e) => {
-                anyhow::bail!(
-                    "Failed to get chain info for validator {address} and chain {chain_id}:\n{e}"
-                );
+            Err(error) => Err(error::Inner::UnavailableChainInfo {
+                address: address.to_string(),
+                chain_id,
+                error,
             }
+            .into()),
         }
-        Ok(())
     }
 
     pub async fn publish_module(

@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
+use linera_core::node::NodeError;
+use linera_storage::NetworkDescription;
+use linera_version::VersionInfo;
 use thiserror_context::Context;
 
 #[cfg(feature = "benchmark")]
@@ -35,6 +39,28 @@ pub(crate) enum Inner {
     #[cfg(feature = "benchmark")]
     #[error("Benchmark error: {0}")]
     Benchmark(#[from] BenchmarkError),
+    #[error("Validator version {remote} is not compatible with local version {local}.")]
+    UnexpectedVersionInfo {
+        remote: VersionInfo,
+        local: VersionInfo,
+    },
+    #[error("Failed to get version information for validator {address}:\n{error}")]
+    UnavailableVersionInfo { address: String, error: NodeError },
+    #[error("Validator's network description {remote:?} does not match our own: {local:?}.")]
+    UnexpectedNetworkDescription {
+        remote: NetworkDescription,
+        local: NetworkDescription,
+    },
+    #[error("Failed to get network description for validator {address}:\n{error}")]
+    UnavailableNetworkDescription { address: String, error: NodeError },
+    #[error("Signature for public key {public_key} is invalid.")]
+    InvalidSignature { public_key: ValidatorPublicKey },
+    #[error("Failed to get chain info for validator {address} and chain {chain_id}:\n{error}")]
+    UnavailableChainInfo {
+        address: String,
+        chain_id: ChainId,
+        error: NodeError,
+    },
 }
 
 thiserror_context::impl_context!(Error(Inner));
