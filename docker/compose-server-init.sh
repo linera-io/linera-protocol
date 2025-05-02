@@ -1,7 +1,9 @@
 #!/bin/sh
 
+storage=$1
+
 while true; do
-  ./linera storage check-existence --storage "scylladb:tcp:scylla:9042"
+  ./linera storage check-existence --storage $storage
   status=$?
 
   if [ $status -eq 0 ]; then
@@ -10,7 +12,7 @@ while true; do
   elif [ $status -eq 1 ]; then
     echo "Database does not exist, attempting to initialize..."
     if ./linera-server initialize \
-      --storage scylladb:tcp:scylla:9042 \
+      --storage $storage \
       --genesis /config/genesis.json; then
       echo "Initialization successful."
       exit 0

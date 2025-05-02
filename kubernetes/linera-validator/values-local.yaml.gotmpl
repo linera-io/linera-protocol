@@ -4,9 +4,12 @@
 lineraImage: {{ env "LINERA_HELMFILE_LINERA_IMAGE" | default "linera:latest" }}
 lineraImagePullPolicy: Never
 logLevel: "debug"
+# Size of the RocksDB storage per shard, IF using `DualStore`. Otherwise will be ignored.
+rocksdbStorageSize: {{ env "LINERA_HELMFILE_SET_ROCKSDB_STORAGE_SIZE" | default "2Gi" }}
 proxyPort: 19100
 metricsPort: 21100
 numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
+storage: {{ env "LINERA_HELMFILE_SET_STORAGE" | default "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042" }}
 
 # Loki
 loki-stack:

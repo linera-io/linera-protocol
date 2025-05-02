@@ -17,14 +17,24 @@ impl HelmFile {
         num_shards: usize,
         cluster_id: u32,
         docker_image_name: String,
+        dual_store: bool,
     ) -> Result<()> {
         let chart_dir = format!("{}/kubernetes/linera-validator", github_root.display());
 
         let temp_dir = tempfile::tempdir()?;
         fs_extra::copy_items(&[&chart_dir], temp_dir.path(), &CopyOptions::new())?;
 
-        Command::new("helmfile")
-            .current_dir(temp_dir.path().join("linera-validator"))
+        let mut command = Command::new("helmfile");
+        command.current_dir(temp_dir.path().join("linera-validator"));
+
+        if dual_store {
+            command.env(
+                "LINERA_HELMFILE_SET_STORAGE",
+                "dualrocksdbscylladb:/linera.db:spawn_blocking:tcp:scylla-client.scylla.svc.cluster.local:9042",
+            );
+        }
+
+        command
             .env(
                 "LINERA_HELMFILE_SET_SERVER_CONFIG",
                 format!("working/server_{server_config_id}.json"),

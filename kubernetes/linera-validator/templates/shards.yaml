@@ -35,7 +35,7 @@ spec:
         - name: linera-server-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./server-init.sh"]
+          command: ["./server-init.sh", {{ .Values.storage | quote }}]
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -45,11 +45,15 @@ spec:
             - name: config
               mountPath: "/config"
               readOnly: true
+            {{- if eq (substr 0 4 .Values.storage) "dual" }}
+            - name: linera-db
+              mountPath: "/linera.db"
+            {{- end }}
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./server-entrypoint.sh"]
+          command: ["./server-entrypoint.sh", {{ .Values.storage | quote }}]
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -57,6 +61,10 @@ spec:
             - name: config
               mountPath: "/config"
               readOnly: true
+            {{- if eq (substr 0 4 .Values.storage) "dual" }}
+            - name: linera-db
+              mountPath: "/linera.db"
+            {{- end }}
       volumes:
         - name: config
           configMap:
@@ -66,3 +74,13 @@ spec:
                 path: server.json
               - key: genesisConfig
                 path: genesis.json
+  {{- if eq (substr 0 4 .Values.storage) "dual" }}
+  volumeClaimTemplates:
+    - metadata:
+        name: linera-db
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.rocksdbStorageSize }}
+  {{- end }}
