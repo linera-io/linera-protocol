@@ -24,6 +24,7 @@ use linera_core::{
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
+use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use thiserror_context::Context;
 use tracing::{debug, info};
@@ -53,7 +54,6 @@ use {
         vm::VmRuntime,
     },
     linera_core::client::create_bytecode_blobs,
-    linera_version::VersionInfo,
     std::{fs, path::PathBuf},
 };
 
@@ -535,13 +535,7 @@ where
         info!("New preferred owner set");
         Ok(())
     }
-}
 
-#[cfg(feature = "fs")]
-impl<Env: Environment, W> ClientContext<Env, W>
-where
-    W: Persist<Target = Wallet>,
-{
     pub async fn check_compatible_version_info(
         &self,
         address: &str,
@@ -628,7 +622,13 @@ where
             .into()),
         }
     }
+}
 
+#[cfg(feature = "fs")]
+impl<Env: Environment, W> ClientContext<Env, W>
+where
+    W: Persist<Target = Wallet>,
+{
     pub async fn publish_module(
         &mut self,
         chain_client: &ChainClient<Env>,
