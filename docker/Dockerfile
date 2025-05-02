@@ -11,6 +11,7 @@
 #   `aarch64-unknown-linux-gnu`.
 # - `build_flag` is either "--release" or an empty string.
 # - `build_folder` is either "release" or "debug".
+# - `build_features` is a comma-separated list of features to build the binaries with.
 
 # Stage 1 - Generate recipe file for dependencies
 
@@ -24,12 +25,14 @@ ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
+ARG build_features=scylladb,metrics
 
 FROM rust:1.74-slim-bookworm AS builder
 ARG git_commit
 ARG target
 ARG build_flag
 ARG build_folder
+ARG build_features
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -69,7 +72,7 @@ RUN cargo build ${build_flag:+"$build_flag"} \
     --bin linera \
     --bin linera-proxy \
     --bin linera-server \
-    --features scylladb,metrics
+    --features $build_features
 
 RUN mv \
     target/"$target"/"$build_folder"/linera \

@@ -2000,6 +2000,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                dual_store,
                 ..
             } => {
                 net_up_utils::handle_net_up_kubernetes(
@@ -2017,6 +2018,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    *dual_store,
                 )
                 .boxed()
                 .await?;
