@@ -11,7 +11,7 @@ use linera_base::{
     crypto::AccountPublicKey,
     data_types::{Amount, BlockHeight, OracleResponse},
     http,
-    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId},
+    identifiers::{Account, AccountOwner, MessageId},
     vm::VmRuntime,
 };
 use linera_execution::{

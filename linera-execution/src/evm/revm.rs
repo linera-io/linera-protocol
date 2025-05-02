@@ -288,11 +288,11 @@ enum PrecompileTag {
     MessageIsBouncing,
 }
 
-fn get_precompile_output(result: &[u8]) -> PrecompileOutput {
+fn get_precompile_output(result: Vec<u8>) -> PrecompileOutput {
     // The gas usage is set to zero since the proper accounting is done
     // by the called application
     let gas_used = 0;
-    let bytes = Bytes::copy_from_slice(result);
+    let bytes = Bytes::copy_from_slice(&result);
     PrecompileOutput { gas_used, bytes }
 }
 
@@ -659,7 +659,8 @@ where
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         let operation = get_revm_execute_message_bytes(message);
         let result = self.init_transact_commit(Choice::Call, &operation)?;
-        let (output, logs) = result.output_and_logs();
+        let (gas_final, output, logs) = result.output_and_logs();
+        self.consume_fuel(gas_final)?;
         self.write_logs(logs, "message")?;
         assert_eq!(output.len(), 0);
         Ok(())

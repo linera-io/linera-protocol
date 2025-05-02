@@ -18,7 +18,7 @@ use revm::{
 };
 use revm_primitives::{address, BlobExcessGasAndPrice, BlockEnv, EvmState};
 
-use crate::{BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ViewError};
+use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ViewError};
 
 /// The cost of loading from storage
 const SLOAD_COST: u64 = 2100;
@@ -65,17 +65,17 @@ impl StorageStats {
 }
 
 pub(crate) struct DatabaseRuntime<Runtime> {
-    commit_error: Option<Arc<ExecutionError>>,
     storage_stats: Arc<Mutex<StorageStats>>,
     pub runtime: Arc<Mutex<Runtime>>,
+    pub changes: EvmState,
 }
 
 impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
         Self {
-            commit_error: self.commit_error.clone(),
             storage_stats: self.storage_stats.clone(),
             runtime: self.runtime.clone(),
+            changes: self.changes.clone(),
         }
     }
 }
@@ -93,20 +93,6 @@ pub enum KeyCategory {
     AccountInfo,
     AccountState,
     Storage,
-}
-
-pub(crate) struct DatabaseRuntime<Runtime> {
-    pub runtime: Arc<Mutex<Runtime>>,
-    pub changes: EvmState,
-}
-
-impl<Runtime> Clone for DatabaseRuntime<Runtime> {
-    fn clone(&self) -> Self {
-        Self {
-            runtime: self.runtime.clone(),
-            changes: self.changes.clone(),
-        }
-    }
 }
 
 impl<Runtime> DatabaseRuntime<Runtime> {
@@ -290,8 +276,8 @@ where
                         }
                     };
                     batch.put_key_value(key_state, &account_state)?;
-                    for (index, value) in account.storage {
-                        let key = Self::get_uint256_key(val, index)?;
+                    for (index, value) in &account.storage {
+                        let key = Self::get_uint256_key(val, *index)?;
                         if value.original_value() == U256::ZERO {
                             if value.present_value() != U256::ZERO {
                                 batch.put_key_value(key, &value.present_value())?;
