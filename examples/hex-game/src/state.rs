@@ -21,7 +21,7 @@ pub struct GameChain {
 /// The application state.
 #[derive(RootView, SimpleObject)]
 #[graphql(complex)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct HexState {
     /// The `AccountOwner`s controlling players `One` and `Two`.
     pub owners: RegisterView<Option<[AccountOwner; 2]>>,

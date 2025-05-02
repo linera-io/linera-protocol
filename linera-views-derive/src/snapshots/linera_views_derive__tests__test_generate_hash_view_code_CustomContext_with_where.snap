@@ -6,6 +6,13 @@ expression: pretty(generate_hash_view_code(input))
 impl<MyParam> linera_views::views::HashableView<CustomContext> for TestView<MyParam>
 where
     MyParam: Send + Sync + 'static,
+    RegisterView<CustomContext, usize>: linera_views::views::HashableView<CustomContext>,
+    CollectionView<
+        CustomContext,
+        usize,
+        RegisterView<CustomContext, usize>,
+    >: linera_views::views::HashableView<CustomContext>,
+    Self: Send + Sync,
 {
     type Hasher = linera_views::sha3::Sha3_256;
     async fn hash_mut(

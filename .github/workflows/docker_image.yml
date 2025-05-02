@@ -49,7 +49,7 @@ jobs:
   
       - name: Build Docker image
         run: |
-          docker build --build-arg git_commit=${{ env.GIT_COMMIT_LONG }} \
+          docker build --build-arg git_commit=${{ env.GIT_COMMIT_LONG }} --build-arg build_flag="--release" --build-arg build_folder="release" \
             -f docker/Dockerfile . \
             -t ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }} \
             -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }} \

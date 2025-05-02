@@ -84,7 +84,7 @@ pub struct TempChainState {
 }
 
 #[derive(RootView, SimpleObject)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct RfqState {
     next_seq_number: RegisterView<u64>,
     requests: MapView<RequestId, RequestData>,

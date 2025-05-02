@@ -46,93 +46,85 @@ use {
 pub enum StoreConfig {
     /// The storage service key-value store
     #[cfg(feature = "storage-service")]
-    Service(ServiceStoreConfig, String),
+    Service {
+        config: ServiceStoreConfig,
+        namespace: String,
+    },
     /// The memory key value store
-    Memory(MemoryStoreConfig, String),
+    Memory {
+        config: MemoryStoreConfig,
+        namespace: String,
+    },
     /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
-    RocksDb(RocksDbStoreConfig, String),
+    RocksDb {
+        config: RocksDbStoreConfig,
+        namespace: String,
+    },
     /// The DynamoDB key value store
     #[cfg(feature = "dynamodb")]
-    DynamoDb(DynamoDbStoreConfig, String),
+    DynamoDb {
+        config: DynamoDbStoreConfig,
+        namespace: String,
+    },
     /// The ScyllaDB key value store
     #[cfg(feature = "scylladb")]
-    ScyllaDb(ScyllaDbStoreConfig, String),
+    ScyllaDb {
+        config: ScyllaDbStoreConfig,
+        namespace: String,
+    },
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-    DualRocksDbScyllaDb(
-        DualStoreConfig<RocksDbStoreConfig, ScyllaDbStoreConfig>,
-        String,
-    ),
+    DualRocksDbScyllaDb {
+        config: DualStoreConfig<RocksDbStoreConfig, ScyllaDbStoreConfig>,
+        namespace: String,
+    },
 }
 
 /// The description of a storage implementation.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
-    /// The storage service description
+    /// The storage service description.
     #[cfg(feature = "storage-service")]
     Service {
-        /// The endpoint used
+        /// The endpoint used.
         endpoint: String,
     },
-    /// The memory description
+    /// The memory description.
     Memory,
-    /// The RocksDB description
+    /// The RocksDB description.
     #[cfg(feature = "rocksdb")]
     RocksDb {
-        /// The path used
+        /// The path used.
         path: PathBuf,
         /// Whether to use `block_in_place` or `spawn_blocking`.
         spawn_mode: RocksDbSpawnMode,
     },
-    /// The DynamoDB description
+    /// The DynamoDB description.
     #[cfg(feature = "dynamodb")]
     DynamoDb {
         /// Whether to use the DynamoDB Local system
         use_dynamodb_local: bool,
     },
-    /// The ScyllaDB description
+    /// The ScyllaDB description.
     #[cfg(feature = "scylladb")]
     ScyllaDb {
-        /// The URI for accessing the database
+        /// The URI for accessing the database.
         uri: String,
     },
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
     DualRocksDbScyllaDb {
-        /// The path used
+        /// The path used.
         path_with_guard: PathWithGuard,
         /// Whether to use `block_in_place` or `spawn_blocking`.
         spawn_mode: RocksDbSpawnMode,
-        /// The URI for accessing the database
+        /// The URI for accessing the database.
         uri: String,
     },
 }
 
 impl StorageConfig {
-    pub fn get_shared_storage(&self) -> Self {
-        match self {
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard: _,
-                spawn_mode: _,
-                uri,
-            } => {
-                let uri = uri.clone();
-                StorageConfig::ScyllaDb { uri }
-            }
-            x => x.clone(),
-        }
-    }
-
-    pub fn are_chains_shared(&self) -> bool {
-        match self {
-            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StorageConfig::DualRocksDbScyllaDb { .. } => false,
-            _ => true,
-        }
-    }
-
-    pub fn append_shard_str(&mut self, _shard_str: &str) {
+    pub fn maybe_append_shard_path(&mut self, _shard: usize) -> std::io::Result<()> {
         match self {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
@@ -140,9 +132,11 @@ impl StorageConfig {
                 spawn_mode: _,
                 uri: _,
             } => {
-                path_with_guard.path_buf.push(_shard_str);
+                let shard_str = format!("shard_{}", _shard);
+                path_with_guard.path_buf.push(shard_str);
+                std::fs::create_dir_all(&path_with_guard.path_buf)
             }
-            _ => panic!("append_shard_str is not available for this storage"),
+            _ => Ok(()),
         }
     }
 }
@@ -402,30 +396,30 @@ impl StorageConfigNamespace {
                     inner_config,
                     storage_cache_config: common_config.storage_cache_config,
                 };
-                Ok(StoreConfig::Service(config, namespace))
+                Ok(StoreConfig::Service { config, namespace })
             }
             StorageConfig::Memory => {
                 let config = MemoryStoreConfig {
                     common_config: common_config.reduced(),
                 };
-                Ok(StoreConfig::Memory(config, namespace))
+                Ok(StoreConfig::Memory { config, namespace })
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path, spawn_mode } => {
                 let path_buf = path.to_path_buf();
                 let path_with_guard = PathWithGuard::new(path_buf);
                 let config = RocksDbStoreConfig::new(*spawn_mode, path_with_guard, common_config);
-                Ok(StoreConfig::RocksDb(config, namespace))
+                Ok(StoreConfig::RocksDb { config, namespace })
             }
             #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_dynamodb_local } => {
                 let config = DynamoDbStoreConfig::new(*use_dynamodb_local, common_config);
-                Ok(StoreConfig::DynamoDb(config, namespace))
+                Ok(StoreConfig::DynamoDb { config, namespace })
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri } => {
                 let config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
-                Ok(StoreConfig::ScyllaDb(config, namespace))
+                Ok(StoreConfig::ScyllaDb { config, namespace })
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
@@ -443,7 +437,7 @@ impl StorageConfigNamespace {
                     first_config,
                     second_config,
                 };
-                Ok(StoreConfig::DualRocksDbScyllaDb(config, namespace))
+                Ok(StoreConfig::DualRocksDbScyllaDb { config, namespace })
             }
         }
     }
@@ -528,7 +522,7 @@ impl StoreConfig {
         Job: Runnable,
     {
         match self {
-            StoreConfig::Memory(config, namespace) => {
+            StoreConfig::Memory { config, namespace } => {
                 let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
                 let mut storage = DbStorage::<MemoryStore, _>::maybe_create_and_connect(
                     &store_config,
@@ -541,35 +535,35 @@ impl StoreConfig {
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
+            StoreConfig::Service { config, namespace } => {
                 let storage =
                     DbStorage::<ServiceStoreClient, _>::connect(&config, &namespace, wasm_runtime)
                         .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
+            StoreConfig::RocksDb { config, namespace } => {
                 let storage =
                     DbStorage::<RocksDbStore, _>::connect(&config, &namespace, wasm_runtime)
                         .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
+            StoreConfig::DynamoDb { config, namespace } => {
                 let storage =
                     DbStorage::<DynamoDbStore, _>::connect(&config, &namespace, wasm_runtime)
                         .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
+            StoreConfig::ScyllaDb { config, namespace } => {
                 let storage =
                     DbStorage::<ScyllaDbStore, _>::connect(&config, &namespace, wasm_runtime)
                         .await?;
                 Ok(job.run(storage).await)
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+            StoreConfig::DualRocksDbScyllaDb { config, namespace } => {
                 let storage = DbStorage::<
                     DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
                     _,
@@ -586,27 +580,27 @@ impl StoreConfig {
         Job: RunnableWithStore,
     {
         match self {
-            StoreConfig::Memory(_, _) => {
+            StoreConfig::Memory { .. } => {
                 Err(anyhow!("Cannot run admin operations on the memory store"))
             }
             #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
+            StoreConfig::Service { config, namespace } => {
                 Ok(job.run::<ServiceStoreClient>(config, namespace).await?)
             }
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
+            StoreConfig::RocksDb { config, namespace } => {
                 Ok(job.run::<RocksDbStore>(config, namespace).await?)
             }
             #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
+            StoreConfig::DynamoDb { config, namespace } => {
                 Ok(job.run::<DynamoDbStore>(config, namespace).await?)
             }
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
+            StoreConfig::ScyllaDb { config, namespace } => {
                 Ok(job.run::<ScyllaDbStore>(config, namespace).await?)
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
-            StoreConfig::DualRocksDbScyllaDb(config, namespace) => Ok(job
+            StoreConfig::DualRocksDbScyllaDb { config, namespace } => Ok(job
                 .run::<DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>>(
                     config, namespace,
                 )

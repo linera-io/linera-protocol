@@ -77,6 +77,7 @@ criterion = { version = "0.5.1", default-features = false }
 crossbeam-channel = "0.5.14"
 custom_debug_derive = "0.6.1"
 dashmap = "5.5.3"
+deluxe = "0.5.0"
 derive_more = "1.0.0"
 dirs = "5.0.1"
 dyn-clone = "1.0.17"

@@ -8,7 +8,7 @@ use linera_sdk::{
 };
 
 #[derive(RootView, async_graphql::SimpleObject)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct AmmState {
     pub shares: MapView<Account, Amount>,
     pub total_shares_supply: RegisterView<Amount>,

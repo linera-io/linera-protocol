@@ -88,6 +88,17 @@ pub enum ClientCommand {
         ownership_config: ChainOwnershipConfig,
     },
 
+    /// Change the preferred owner of a chain.
+    SetPreferredOwner {
+        /// The ID of the chain whose preferred owner will be changed.
+        #[clap(long)]
+        chain_id: Option<ChainId>,
+
+        /// The new preferred owner.
+        #[arg(long)]
+        owner: AccountOwner,
+    },
+
     /// Changes the application permissions configuration.
     ChangeApplicationPermissions {
         /// The ID of the chain to which the new permissions will be applied.
@@ -735,7 +746,9 @@ pub enum ClientCommand {
     /// Create an unassigned key pair.
     Keygen,
 
-    /// Link an owner with a key pair in the wallet to a chain that was created for that owner.
+    /// Link the owner to the chain.
+    /// Expects that the caller has a private key corresponding to the `public_key`,
+    /// otherwise block proposals will fail when signing with it.
     Assign {
         /// The owner to assign.
         #[arg(long)]
@@ -800,6 +813,7 @@ impl ClientCommand {
             | ClientCommand::OpenChain { .. }
             | ClientCommand::OpenMultiOwnerChain { .. }
             | ClientCommand::ChangeOwnership { .. }
+            | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }
             | ClientCommand::CloseChain { .. }
             | ClientCommand::LocalBalance { .. }

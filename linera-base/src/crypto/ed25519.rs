@@ -284,8 +284,12 @@ impl Ed25519Signature {
     where
         T: BcsSignable<'de>,
     {
-        let prehash = CryptoHash::new(value).as_bytes().0;
-        let signature = secret.0.sign(&prehash);
+        Self::sign_prehash(secret, CryptoHash::new(value))
+    }
+
+    /// Computes a signature from a prehash.
+    pub fn sign_prehash(secret: &Ed25519SecretKey, prehash: CryptoHash) -> Self {
+        let signature = secret.0.sign(&prehash.as_bytes().0);
         Ed25519Signature(signature)
     }
 
