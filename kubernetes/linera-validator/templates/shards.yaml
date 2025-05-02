@@ -80,6 +80,9 @@ spec:
         name: linera-db
       spec:
         accessModes: ["ReadWriteOnce"]
+        {{- if .Values.runLocalCsiSetup }}
+        storageClassName: nvme-ssd-block
+        {{- end }}
         resources:
           requests:
             storage: {{ .Values.rocksdbStorageSize }}

@@ -3,7 +3,7 @@ sysctls:
   - "fs.aio-max-nr=4082080"
 datacenter: validator
 racks:
-  - name: rack-1
+  - name: rack
     members: 1
     scyllaConfig: "scylla-config"
     storage:

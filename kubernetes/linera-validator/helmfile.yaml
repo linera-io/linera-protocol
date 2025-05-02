@@ -3,6 +3,30 @@ environments:
     values:
       - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
         validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
+        runLocalCsiSetup: {{ env "LINERA_RUN_LOCAL_CSI_SETUP" | default "false" }}
+
+helmDefaults:
+  wait: true
+  recreatePods: false
+
+{{- if .Values.runLocalCsiSetup }}
+hooks:
+  - events: ["prepare"]
+    showlogs: true
+    command: bash
+    args:
+      - -c
+      - |
+        echo "Ensuring RAID0 and Local‑CSI driver are setup..."
+
+        kubectl create -f ./scylla-setup/gke-daemonset-raid-disks.yaml
+        kubectl -n default rollout status daemonset/gke-raid-disks
+
+        kubectl apply -f ./scylla-setup/local-csi-driver
+        kubectl -n local-csi-driver rollout status daemonset.apps/local-csi-driver
+
+        kubectl apply -f ./scylla-setup/local-ssd-sc.yaml
+{{- end }}
 
 ---
 
@@ -69,4 +93,3 @@ releases:
     set:
       - name: crds.enabled
         value: "true"
-
