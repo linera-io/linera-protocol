@@ -301,7 +301,6 @@ impl CertifiedBlock {
         } = resources;
 
         let ResourceTracker {
-            blocks: _,
             block_size: _,
             fuel,
             read_operations,

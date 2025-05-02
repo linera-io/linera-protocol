@@ -29,8 +29,6 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
 /// The resources used so far by an execution process.
 #[derive(Copy, Debug, Clone, Default)]
 pub struct ResourceTracker {
-    /// The number of blocks created.
-    pub blocks: u32,
     /// The total size of the block so far.
     pub block_size: u64,
     /// The fuel used so far.
@@ -137,12 +135,6 @@ where
 
     /// Tracks the creation of a block.
     pub fn track_block(&mut self) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().blocks = self
-            .tracker
-            .as_mut()
-            .blocks
-            .checked_add(1)
-            .ok_or(ArithmeticError::Overflow)?;
         self.update_balance(self.policy.block)
     }
 
