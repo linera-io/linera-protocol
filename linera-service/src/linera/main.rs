@@ -463,7 +463,7 @@ impl Runnable for Job {
                     has_errors = true;
                 }
                 if has_errors {
-                    bail!("Found error(s) while querying validator {address}");
+                    bail!("Found one or several issue(s) while querying validator {address}");
                 }
             }
 
