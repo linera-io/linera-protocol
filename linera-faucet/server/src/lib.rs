@@ -173,7 +173,7 @@ where
         };
 
         if client.next_block_height() >= self.end_block_height {
-            let key_pair = client.key_pair().await?;
+            let preferred_owner = client.preferred_owner();
             let balance = client.local_balance().await?.try_sub(Amount::ONE)?;
             let ownership = client.chain_state_view().await?.ownership().clone();
             let (chain_id, certificate) = client
@@ -188,7 +188,7 @@ where
                 .await
                 .update_wallet_for_new_chain(
                     chain_id,
-                    Some(key_pair),
+                    preferred_owner,
                     certificate.block().header.timestamp,
                 )
                 .await?;

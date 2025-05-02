@@ -2,15 +2,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    error::Error,
+};
 
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
-        CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
+        AccountPublicKey, AccountSignature, BcsHashable, BcsSignable, CryptoError, CryptoHash,
+        Signer, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
@@ -490,26 +493,34 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: ProposedBlock, secret: &AccountSecretKey) -> Self {
+    pub async fn new_initial(
+        owner: AccountOwner,
+        round: Round,
+        block: ProposedBlock,
+        signer: &(impl Signer + ?Sized),
+    ) -> Result<Self, Box<dyn Error>> {
         let content = ProposalContent {
             round,
             block,
             outcome: None,
         };
-        let signature = secret.sign(&content);
-        Self {
+        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
+        let public_key = signer.get_public_key(&owner).await?;
+
+        Ok(Self {
             content,
-            public_key: secret.public(),
+            public_key,
             signature,
             validated_block_certificate: None,
-        }
+        })
     }
 
-    pub fn new_retry(
+    pub async fn new_retry(
+        owner: AccountOwner,
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
-        secret: &AccountSecretKey,
-    ) -> Self {
+        signer: &(impl Signer + ?Sized),
+    ) -> Result<Self, Box<dyn Error>> {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
         let (block, outcome) = block.into_proposal();
@@ -518,13 +529,15 @@ impl BlockProposal {
             round,
             outcome: Some(outcome),
         };
-        let signature = secret.sign(&content);
-        Self {
+        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
+
+        let public_key = signer.get_public_key(&owner).await?;
+        Ok(Self {
             content,
-            public_key: secret.public(),
+            public_key,
             signature,
             validated_block_certificate: Some(lite_cert),
-        }
+        })
     }
 
     pub fn check_signature(&self) -> Result<(), CryptoError> {

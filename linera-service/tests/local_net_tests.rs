@@ -629,6 +629,7 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
     let (mut net, client) = config.instantiate().await?;
 
     let wallet_state = WalletState::read_from_file(client.wallet_path().as_path())?;
+
     let chain_id = wallet_state.default_chain().unwrap();
 
     let lock = wallet_state;
@@ -698,6 +699,10 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
         .next()
         .unwrap()?
         .starts_with("export LINERA_WALLET="));
+    assert!(exports
+        .next()
+        .unwrap()?
+        .starts_with("export LINERA_KEYSTORE="));
     assert!(exports
         .next()
         .unwrap()?
@@ -878,12 +883,13 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     let owner1 = {
         let wallet = client.load_wallet()?;
         let user_chain = wallet.get(chain).unwrap();
-        user_chain.key_pair.as_ref().unwrap().public().into()
+        *user_chain.owner.as_ref().unwrap()
     };
-    client.change_ownership(chain, vec![], vec![owner1]).await?;
 
+    client.change_ownership(chain, vec![], vec![owner1]).await?;
     let (contract, service) = client.build_example("ethereum-tracker").await?;
 
+    tracing::info!("Publishing Ethereum tracker contract");
     let application_id = client
         .publish_and_create::<EthereumTrackerAbi, (), InstantiationArgument>(
             contract,
@@ -895,6 +901,8 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
             None,
         )
         .await?;
+
+    tracing::info!("Application ID: {:?}", application_id);
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 

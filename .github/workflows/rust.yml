@@ -33,6 +33,7 @@ env:
   RUST_LOG_FORMAT: plain
   LINERA_STORAGE_SERVICE: 127.0.0.1:1235
   LINERA_WALLET: /tmp/local-linera-net/wallet_0.json
+  LINERA_KEYSTORE: /tmp/local-linera-net/keystore_0.json
   LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
   LINERA_FAUCET_URL: http://localhost:8079
 

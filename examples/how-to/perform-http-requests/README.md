@@ -91,6 +91,7 @@ We then create a wallet and obtain a chain to use with the application.
 
 ```bash
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 linera wallet init --faucet $FAUCET_URL

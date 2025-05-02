@@ -1289,12 +1289,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1);
-    let account_owner2 = {
-        let wallet = client1.load_wallet()?;
-        let user_chain = wallet.get(chain2).unwrap();
-        let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        AccountOwner::from(public_key)
-    };
+    let account_owner2 = client1.keygen().await?;
+
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
         (account_owner1, Amount::from_tokens(5)),
@@ -1340,14 +1336,11 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         }
     );
 
-    let expected_balances = [
-        (account_owner1, Amount::from_tokens(5)),
-        (account_owner2, Amount::from_tokens(2)),
-    ];
-    app1.assert_balances(expected_balances).await;
+    let expected_balances: Vec<(AccountOwner, Amount)> = state.accounts.into_iter().collect();
+
+    app1.assert_balances(expected_balances.clone()).await;
     app1.assert_entries(expected_balances).await;
     app1.assert_keys([account_owner1, account_owner2]).await;
-
     // Transferring
     app1.transfer(
         &account_owner1,
@@ -2806,16 +2799,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let (mut net, client) = config.instantiate().await?;
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
-    let owner1 = AccountOwner::from(
-        client
-            .load_wallet()?
-            .get(chain1)
-            .unwrap()
-            .key_pair
-            .as_ref()
-            .unwrap()
-            .public(),
-    );
+    let owner1 = client.load_wallet()?.get(chain1).unwrap().owner.unwrap();
 
     // Create a fungible token application with 10 tokens for owner 1.
     let owner = get_fungible_account_owner(&client);
@@ -3050,8 +3034,9 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
     let owner1 = {
         let wallet = client.load_wallet()?;
         let user_chain = wallet.get(chain).unwrap();
-        user_chain.key_pair.as_ref().unwrap().public().into()
+        user_chain.owner.unwrap()
     };
+    // Generate an owner for which we don't have a secret key in the Signer.
     let owner2 = AccountPublicKey::test_key(2).into();
 
     // Make both keys owners.
@@ -3061,7 +3046,7 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
 
     // Make owner2 the only (super) owner.
     client.change_ownership(chain, vec![owner2], vec![]).await?;
-
+    client.set_preffered_owner(chain, Some(owner2)).await?;
     // Now we're not the owner anymore.
     let result = client.change_ownership(chain, vec![], vec![owner1]).await;
     assert_matches::assert_matches!(result, Err(_));
