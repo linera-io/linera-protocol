@@ -34,6 +34,7 @@ impl IndexedDbStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
             storage_cache_config: DEFAULT_STORAGE_CACHE_CONFIG,
+            replication_factor: 1,
         };
         Self { common_config }
     }

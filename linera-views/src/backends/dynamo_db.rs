@@ -1159,6 +1159,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+            replication_factor: 1,
         };
         Ok(DynamoDbStoreInternalConfig {
             use_dynamodb_local: true,

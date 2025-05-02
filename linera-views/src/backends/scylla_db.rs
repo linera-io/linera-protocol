@@ -811,10 +811,13 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .boxed()
             .await?;
         // Create a keyspace if it doesn't exist
-        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
-            'class' : 'SimpleStrategy', \
-            'replication_factor' : 1 \
-        }";
+        let query = format!(
+            "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = {{ \
+                'class' : 'SimpleStrategy', \
+                'replication_factor' : {} \
+            }}",
+            config.common_config.replication_factor
+        );
 
         // Execute the query
         let prepared = session.prepare(query).await?;
@@ -889,6 +892,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+            replication_factor: 1,
         };
         Ok(ScyllaDbStoreInternalConfig { uri, common_config })
     }

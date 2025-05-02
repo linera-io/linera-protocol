@@ -11,6 +11,7 @@ metricsPort: 21100
 numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
 storage: {{ env "LINERA_HELMFILE_SET_STORAGE" | default "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042" }}
 runLocalCsiSetup: {{ env "LINERA_RUN_LOCAL_CSI_SETUP" | default "false" }}
+storageReplicationFactor: {{ env "LINERA_HELMFILE_SET_STORAGE_REPLICATION_FACTOR" | default 1 }}
 
 # Loki
 loki-stack:

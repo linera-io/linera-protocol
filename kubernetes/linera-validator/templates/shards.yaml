@@ -35,7 +35,7 @@ spec:
         - name: linera-server-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./server-init.sh", {{ .Values.storage | quote }}]
+          command: ["./server-init.sh", {{ .Values.storage | quote }}, {{ .Values.storageReplicationFactor | quote }}]
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -53,7 +53,7 @@ spec:
         - name: linera-server
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./server-entrypoint.sh", {{ .Values.storage | quote }}]
+          command: ["./server-entrypoint.sh", {{ .Values.storage | quote }}, {{ .Values.storageReplicationFactor | quote }}]
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
