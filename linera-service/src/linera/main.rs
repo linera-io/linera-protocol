@@ -456,12 +456,15 @@ impl Runnable for Job {
                 }
 
                 let genesis_config_hash = context.wallet().genesis_config().hash();
-                match node.get_genesis_config_hash().await {
-                    Ok(hash) if hash == genesis_config_hash => {}
-                    Ok(hash) => error!(
-                        "Validator's genesis config hash {} does not match our own: {}.",
-                        hash, genesis_config_hash
-                    ),
+                match node.get_network_description().await {
+                    Ok(description) => {
+                        if description.genesis_config_hash != genesis_config_hash {
+                            error!(
+                                "Validator's genesis config hash {} does not match our own: {}.",
+                                description.genesis_config_hash, genesis_config_hash
+                            );
+                        }
+                    }
                     Err(error) => {
                         error!(
                             "Failed to get genesis config hash for validator {address}:\n{error}"
@@ -631,16 +634,20 @@ impl Runnable for Job {
                         ),
                     }
                     let genesis_config_hash = context.wallet().genesis_config().hash();
-                    match node.get_genesis_config_hash().await {
-                        Ok(hash) if hash == genesis_config_hash => {}
-                        Ok(hash) => bail!(
-                            "Validator's genesis config hash {} does not match our own: {}.",
-                            hash,
-                            genesis_config_hash
-                        ),
-                        Err(error) => bail!(
-                            "Failed to get genesis config hash for validator {public_key:?} at {address}:\n{error}"
-                        ),
+                    match node.get_network_description().await {
+                        Ok(description) => {
+                            if description.genesis_config_hash != genesis_config_hash {
+                                error!(
+                                "Validator's genesis config hash {} does not match our own: {}.",
+                                description.genesis_config_hash, genesis_config_hash
+                            );
+                            }
+                        }
+                        Err(error) => {
+                            error!(
+                            "Failed to get genesis config hash for validator {address}:\n{error}"
+                        )
+                        }
                     }
                 }
                 let chain_client = context

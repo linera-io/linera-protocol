@@ -24,7 +24,7 @@ use linera_execution::{
 use linera_rpc::config::{
     ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
-use linera_storage::Storage;
+use linera_storage::{NetworkDescription, Storage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -35,6 +35,8 @@ pub enum Error {
     Chain(#[from] linera_chain::ChainError),
     #[error("persistence error: {0}")]
     Persistence(Box<dyn std::error::Error + Send + Sync>),
+    #[error("storage is already initialized: {0:?}")]
+    StorageIsAlreadyInitialized(NetworkDescription),
 }
 
 use crate::{
@@ -284,6 +286,13 @@ impl GenesisConfig {
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
+        if let Some(description) = storage
+            .read_network_description()
+            .await
+            .map_err(linera_chain::ChainError::from)?
+        {
+            return Err(Error::StorageIsAlreadyInitialized(description));
+        }
         let committee = self.create_committee();
         let committees: BTreeMap<_, _> = [(
             Epoch::ZERO,
@@ -308,6 +317,15 @@ impl GenesisConfig {
             let description = ChainDescription::new(origin, config, self.timestamp);
             storage.create_chain(description).await?;
         }
+        let network_description = NetworkDescription {
+            name: self.network_name.clone(),
+            genesis_config_hash: CryptoHash::new(self),
+            genesis_timestamp: self.timestamp,
+        };
+        storage
+            .write_network_description(&network_description)
+            .await
+            .map_err(linera_chain::ChainError::from)?;
         Ok(())
     }
 

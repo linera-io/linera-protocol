@@ -636,6 +636,13 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+NetworkDescription:
+  STRUCT:
+    - name: STR
+    - genesis_config_hash:
+        TYPENAME: CryptoHash
+    - genesis_timestamp:
+        TYPENAME: Timestamp
 NodeError:
   ENUM:
     0:
@@ -984,7 +991,7 @@ RpcMessage:
     14:
       VersionInfoQuery: UNIT
     15:
-      GenesisConfigHashQuery: UNIT
+      NetworkDescriptionQuery: UNIT
     16:
       Vote:
         NEWTYPE:
@@ -1002,9 +1009,9 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: VersionInfo
     20:
-      GenesisConfigHashResponse:
+      NetworkDescriptionResponse:
         NEWTYPE:
-          TYPENAME: CryptoHash
+          TYPENAME: NetworkDescription
     21:
       UploadBlobResponse:
         NEWTYPE:
