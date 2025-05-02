@@ -4,6 +4,7 @@ kind: Ingress
 metadata:
   name: validator-ingress
   annotations:
+    cloud.google.com/backend-config: '{"default":"proxy-backend-config"}'
     kubernetes.io/ingress.global-static-ip-name: {{ .Values.staticIpGcpName }}
     networking.gke.io/managed-certificates: managed-cert
     spec.ingressClassName: "gce"
