@@ -521,7 +521,11 @@ impl Runnable for Job {
                 if !faulty_validators.is_empty() {
                     println!("{:#?}", faulty_validators);
                 }
-                println!("{}/{} OK.", num_ok_validators, committee.validators().len());
+                info!(
+                    "{}/{} validators are OK.",
+                    num_ok_validators,
+                    committee.validators().len()
+                );
             }
 
             SyncValidator {
