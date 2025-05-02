@@ -35,7 +35,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, Resources, SendMessageRequest, StreamUpdate, Timestamp,
+        DecompressionError, Epoch, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -911,48 +911,6 @@ pub enum QueryResponse {
         #[debug(with = "hex_debug")]
         Vec<u8>,
     ),
-}
-
-/// A message together with routing information.
-#[derive(Clone, Debug)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawOutgoingMessage<Message, Grant> {
-    /// The destination of the message.
-    pub destination: ChainId,
-    /// Whether the message is authenticated.
-    pub authenticated: bool,
-    /// The grant needed for message execution, typically specified as an `Amount` or as `Resources`.
-    pub grant: Grant,
-    /// The kind of outgoing message being sent.
-    pub kind: MessageKind,
-    /// The message itself.
-    pub message: Message,
-}
-
-impl<Message> From<SendMessageRequest<Message>> for RawOutgoingMessage<Message, Resources> {
-    fn from(request: SendMessageRequest<Message>) -> Self {
-        let SendMessageRequest {
-            destination,
-            authenticated,
-            grant,
-            is_tracked,
-            message,
-        } = request;
-
-        let kind = if is_tracked {
-            MessageKind::Tracked
-        } else {
-            MessageKind::Simple
-        };
-
-        RawOutgoingMessage {
-            destination,
-            authenticated,
-            grant,
-            kind,
-            message,
-        }
-    }
 }
 
 /// The kind of outgoing message being sent.
