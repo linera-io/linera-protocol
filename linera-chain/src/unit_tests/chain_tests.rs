@@ -156,7 +156,7 @@ async fn test_block_size_limit() -> anyhow::Result<()> {
     let time = Timestamp::from(0);
 
     // The size of the executed valid block below.
-    let maximum_block_size = 880;
+    let maximum_block_size = 260;
 
     let mut config = env.make_open_chain_config();
     config.committees.insert(
