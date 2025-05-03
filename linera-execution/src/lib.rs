@@ -535,6 +535,9 @@ pub trait BaseRuntime {
     /// The current application ID.
     fn application_id(&mut self) -> Result<ApplicationId, ExecutionError>;
 
+    /// Returns the resource control policy being used.
+    fn resource_control_policy(&mut self) -> Result<ResourceControlPolicy, ExecutionError>;
+
     /// The current application creator's chain ID.
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError>;
 
@@ -720,9 +723,6 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
-
-    /// Returns the amount of execution fuel remaining before execution is aborted.
-    fn resource_control_policy(&mut self) -> Result<ResourceControlPolicy, ExecutionError>;
 
     /// Consumes some of the execution fuel.
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;

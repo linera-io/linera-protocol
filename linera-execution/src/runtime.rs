@@ -625,6 +625,10 @@ where
         Ok(self.inner().current_application().id)
     }
 
+    fn resource_control_policy(&mut self) -> Result<ResourceControlPolicy, ExecutionError> {
+        Ok(self.inner().resource_controller.policy.deref().clone())
+    }
+
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
         Ok(self
             .inner()
@@ -1175,10 +1179,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
         Ok(self.inner().resource_controller.remaining_fuel())
-    }
-
-    fn resource_control_policy(&mut self) -> Result<ResourceControlPolicy, ExecutionError> {
-        Ok(self.inner().resource_controller.policy.deref().clone())
     }
 
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {

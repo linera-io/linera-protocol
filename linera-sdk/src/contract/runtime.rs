@@ -85,6 +85,11 @@ where
             .clone()
     }
 
+    /// Returns the resource control policy
+    pub fn resource_control_policy(&mut self) -> Amount {
+        base_wit::get_resource_control_policy().into()
+    }
+
     /// Returns the ID of the current application.
     pub fn application_id(&mut self) -> ApplicationId<Application::Abi> {
         *self
