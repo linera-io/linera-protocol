@@ -103,7 +103,7 @@ pub struct ClientContextOptions {
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
-    /// as a fraction of time taken to reach quorum.
+    /// as a fraction of the time taken to reach quorum.
     #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
     pub grace_period: f64,
 
@@ -185,7 +185,7 @@ pub struct ChainOwnershipConfig {
     )]
     timeout_increment: TimeDelta,
 
-    /// The age of an incoming tracked or protected message after which the validators start
+    /// The age of an incoming tracked or protected messages after which the validators start
     /// transitioning the chain to fallback mode, in milliseconds.
     #[arg(
         long = "fallback-duration-ms",
