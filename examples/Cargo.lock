@@ -6164,6 +6164,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-runtime"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "test-strategy"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

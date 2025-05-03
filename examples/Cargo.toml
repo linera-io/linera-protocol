@@ -18,6 +18,7 @@ members = [
     "non-fungible",
     "rfq",
     "social",
+    "test-runtime",
 ]
 
 [workspace.dependencies]
