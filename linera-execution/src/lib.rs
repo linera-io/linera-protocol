@@ -721,6 +721,9 @@ pub trait ContractRuntime: BaseRuntime {
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
 
+    /// Returns the amount of execution fuel remaining before execution is aborted.
+    fn resource_control_policy(&mut self) -> Result<ResourceControlPolicy, ExecutionError>;
+
     /// Consumes some of the execution fuel.
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
 
