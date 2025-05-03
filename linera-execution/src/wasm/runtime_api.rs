@@ -15,7 +15,9 @@ use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
 use super::WasmExecutionError;
-use crate::{BaseRuntime, ContractRuntime, ExecutionError, ModuleId, ResourceControlPolicy, ServiceRuntime};
+use crate::{
+    BaseRuntime, ContractRuntime, ExecutionError, ModuleId, ResourceControlPolicy, ServiceRuntime,
+};
 
 /// Common host data used as the `UserData` of the system API implementations.
 pub struct RuntimeApiData<Runtime> {
@@ -109,7 +111,9 @@ where
     }
 
     /// Returns the resource control policy
-    fn get_resource_control_policy(caller: &mut Caller) -> Result<ResourceControlPolicy, RuntimeError> {
+    fn get_resource_control_policy(
+        caller: &mut Caller,
+    ) -> Result<ResourceControlPolicy, RuntimeError> {
         caller
             .user_data_mut()
             .runtime

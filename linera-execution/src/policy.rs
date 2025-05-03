@@ -11,12 +11,25 @@ use linera_base::{
     ensure,
     identifiers::BlobType,
 };
+use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
 use crate::ExecutionError;
 
 /// A collection of prices and limits associated with block execution.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
+#[derive(
+    Eq,
+    PartialEq,
+    Hash,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    InputObject,
+    WitLoad,
+    WitStore,
+    WitType,
+)]
 pub struct ResourceControlPolicy {
     /// The base price for creating a new block.
     pub block: Amount,
