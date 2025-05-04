@@ -6,3 +6,4 @@
 pub use linera_base::{
     abi::*, crypto::*, data_types::*, identifiers::*, ownership::*, vm::EvmQuery, BcsHexParseError,
 };
+pub use linera_execution::policy::ResourceControlPolicy;

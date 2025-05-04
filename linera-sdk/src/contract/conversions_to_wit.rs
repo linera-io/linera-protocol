@@ -183,7 +183,10 @@ impl From<ResourceControlPolicy> for wit_contract_api::ResourceControlPolicy {
             maximum_oracle_response_bytes: policy.maximum_oracle_response_bytes,
             maximum_http_response_bytes: policy.maximum_http_response_bytes,
             http_request_timeout_ms: policy.http_request_timeout_ms,
-            http_request_allow_list: policy.http_request_allow_list.into_iter().collect::<Vec<_>>(),
+            http_request_allow_list: policy
+                .http_request_allow_list
+                .into_iter()
+                .collect::<Vec<_>>(),
         }
     }
 }

@@ -19,6 +19,7 @@ use linera_base::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
 };
+use linera_execution::ResourceControlPolicy;
 use serde::Serialize;
 
 use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
@@ -53,6 +54,7 @@ where
     can_close_chain: Option<bool>,
     can_change_application_permissions: Option<bool>,
     call_application_handler: Option<CallApplicationHandler>,
+    resource_control_policy: ResourceControlPolicy,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     outgoing_transfers: HashMap<Account, Amount>,
     created_events: BTreeMap<StreamName, Vec<Vec<u8>>>,
@@ -89,6 +91,7 @@ where
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
+            resource_control_policy: ResourceControlPolicy::default(),
             round: None,
             message_id: None,
             message_is_bouncing: None,
@@ -157,6 +160,15 @@ where
         self
     }
 
+    /// Configures the resource control policy
+    pub fn with_resource_control_policy(
+        mut self,
+        resource_control_policy: ResourceControlPolicy,
+    ) -> Self {
+        self.resource_control_policy = resource_control_policy;
+        self
+    }
+
     /// Configures the application ID to return during the test.
     pub fn set_application_id(
         &mut self,
@@ -172,6 +184,11 @@ where
             "Application ID has not been mocked, \
             please call `MockContractRuntime::set_application_id` first",
         )
+    }
+
+    /// Returns the resource control policy
+    pub fn resource_control_policy(&mut self) -> ResourceControlPolicy {
+        self.resource_control_policy.clone()
     }
 
     /// Configures the application creator chain ID to return during the test.

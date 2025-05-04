@@ -11,7 +11,7 @@ pub mod evm;
 mod execution;
 mod execution_state_actor;
 mod graphql;
-mod policy;
+pub mod policy;
 mod resources;
 mod runtime;
 pub mod system;
