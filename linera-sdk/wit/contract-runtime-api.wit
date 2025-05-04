@@ -100,23 +100,6 @@ interface contract-runtime-api {
         vm-runtime: vm-runtime,
     }
 
-    record resources {
-        fuel: u64,
-        read-operations: u32,
-        write-operations: u32,
-        bytes-to-read: u32,
-        bytes-to-write: u32,
-        blobs-to-read: u32,
-        blobs-to-publish: u32,
-        blob-bytes-to-read: u32,
-        blob-bytes-to-publish: u32,
-        messages: u32,
-        message-size: u32,
-        storage-size-delta: u32,
-        service-as-oracle-queries: u32,
-        http-requests: u32,
-    }
-
     record resource-control-policy {
         block: amount,
         fuel-unit: amount,
@@ -148,6 +131,23 @@ interface contract-runtime-api {
         maximum-http-response-bytes: u64,
         http-request-timeout-ms: u64,
         http-request-allow-list: list<string>,
+    }
+
+    record resources {
+        fuel: u64,
+        read-operations: u32,
+        write-operations: u32,
+        bytes-to-read: u32,
+        bytes-to-write: u32,
+        blobs-to-read: u32,
+        blobs-to-publish: u32,
+        blob-bytes-to-read: u32,
+        blob-bytes-to-publish: u32,
+        messages: u32,
+        message-size: u32,
+        storage-size-delta: u32,
+        service-as-oracle-queries: u32,
+        http-requests: u32,
     }
 
     record send-message-request {
