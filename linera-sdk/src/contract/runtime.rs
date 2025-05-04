@@ -13,8 +13,8 @@ use linera_base::{
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
+    policy::ResourceControlPolicy,
 };
-use linera_execution::ResourceControlPolicy;
 use serde::Serialize;
 
 use super::wit::{base_runtime_api as base_wit, contract_runtime_api as contract_wit};

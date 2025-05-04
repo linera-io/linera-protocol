@@ -4,6 +4,6 @@
 //! Types reexported from [`linera_base`].
 
 pub use linera_base::{
-    abi::*, crypto::*, data_types::*, identifiers::*, ownership::*, vm::EvmQuery, BcsHexParseError,
+    abi::*, crypto::*, data_types::*, identifiers::*, ownership::*, policy::ResourceControlPolicy,
+    vm::EvmQuery, BcsHexParseError,
 };
-pub use linera_execution::policy::ResourceControlPolicy;

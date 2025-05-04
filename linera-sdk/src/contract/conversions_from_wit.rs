@@ -13,9 +13,9 @@ use linera_base::{
         StreamName,
     },
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
+    policy::ResourceControlPolicy,
     vm::VmRuntime,
 };
-use linera_execution::ResourceControlPolicy;
 
 use super::wit::{
     contract_runtime_api as wit_contract_api,

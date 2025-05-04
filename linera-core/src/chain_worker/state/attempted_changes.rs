@@ -18,7 +18,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{check_blob_size, committee::Committee};
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
@@ -596,8 +596,7 @@ where
             if !pending_blobs.validated.get() {
                 let (_, committee) = self.state.chain.current_committee()?;
                 let policy = committee.policy();
-                policy
-                    .check_blob_size(blob.content())
+                check_blob_size(policy, blob.content())
                     .with_execution_context(ChainExecutionContext::Block)?;
                 ensure!(
                     u64::try_from(pending_blobs.pending_blobs.count().await?)

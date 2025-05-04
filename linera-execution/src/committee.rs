@@ -5,10 +5,11 @@
 use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use async_graphql::InputObject;
-use linera_base::crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey};
+use linera_base::{
+    crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey},
+    policy::ResourceControlPolicy,
+};
 use serde::{Deserialize, Serialize};
-
-use crate::policy::ResourceControlPolicy;
 
 /// The identity of a validator.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]

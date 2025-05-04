@@ -18,9 +18,9 @@ assert_matches.workspace = true
 linera-sdk = { workspace = true, features = ["test"] }
 
 [[bin]]
-name = "counter_no_graphql_contract"
+name = "test_runtime_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "counter_no_graphql_service"
+name = "test_runtime_service"
 path = "src/service.rs"

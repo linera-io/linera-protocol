@@ -20,6 +20,7 @@ use linera_base::{
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
+    policy::ResourceControlPolicy,
     vm::VmRuntime,
 };
 use linera_execution::{
@@ -27,7 +28,7 @@ use linera_execution::{
     system::Recipient,
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    Operation, ResourceControlPolicy, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
+    Operation, ServiceRuntime, SystemOperation, TestExecutionRuntimeContext,
 };
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},

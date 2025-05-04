@@ -12,14 +12,15 @@ use linera_base::{
     data_types::{Amount, BlockHeight, OracleResponse},
     http,
     identifiers::{Account, AccountOwner, MessageId},
+    policy::ResourceControlPolicy,
 };
 use linera_execution::{
     test_utils::{
         blob_oracle_responses, dummy_chain_description, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
-    ContractRuntime, ExecutionError, Message, MessageContext, ResourceControlPolicy,
-    ResourceController, TransactionTracker,
+    ContractRuntime, ExecutionError, Message, MessageContext, ResourceController,
+    TransactionTracker,
 };
 use test_case::test_case;
 

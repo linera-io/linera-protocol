@@ -5,14 +5,17 @@
 
 use std::sync::Arc;
 
-use linera_base::data_types::{Amount, Blob, BlockHeight, Timestamp};
+use linera_base::{
+    data_types::{Amount, Blob, BlockHeight, Timestamp},
+    policy::ResourceControlPolicy,
+};
 use linera_execution::{
     test_utils::{
         create_dummy_user_application_description, dummy_chain_description, SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
-    QueryContext, QueryOutcome, QueryResponse, ResourceControlPolicy, ResourceController,
-    ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime, WasmServiceModule,
+    QueryContext, QueryOutcome, QueryResponse, ResourceController, ResourceTracker,
+    TransactionTracker, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
 use linera_views::{context::Context as _, views::View};
 use serde_json::json;

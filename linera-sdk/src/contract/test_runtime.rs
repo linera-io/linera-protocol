@@ -18,8 +18,8 @@ use linera_base::{
     ownership::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
+    policy::ResourceControlPolicy,
 };
-use linera_execution::ResourceControlPolicy;
 use serde::Serialize;
 
 use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};

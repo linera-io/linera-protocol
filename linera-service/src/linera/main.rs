@@ -726,7 +726,7 @@ impl Runnable for Job {
                                     http_request_allow_list,
                                 } => {
                                     let existing_policy = policy.clone();
-                                    policy = linera_execution::ResourceControlPolicy {
+                                    policy = linera_base::policy::ResourceControlPolicy {
                                         block: block.unwrap_or(existing_policy.block),
                                         fuel_unit: fuel_unit.unwrap_or(existing_policy.fuel_unit),
                                         read_operation: read_operation
@@ -1875,7 +1875,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
             let existing_policy = policy_config.into_policy();
-            let policy = linera_execution::ResourceControlPolicy {
+            let policy = linera_base::policy::ResourceControlPolicy {
                 block: block_price.unwrap_or(existing_policy.block),
                 fuel_unit: fuel_unit_price.unwrap_or(existing_policy.fuel_unit),
                 read_operation: read_operation_price.unwrap_or(existing_policy.read_operation),

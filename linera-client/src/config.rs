@@ -16,11 +16,9 @@ use linera_base::{
     data_types::{Amount, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp},
     identifiers::ChainId,
     ownership::ChainOwnership,
+    policy::ResourceControlPolicy,
 };
-use linera_execution::{
-    committee::{Committee, ValidatorState},
-    ResourceControlPolicy,
-};
+use linera_execution::committee::{Committee, ValidatorState};
 use linera_rpc::config::{
     ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };

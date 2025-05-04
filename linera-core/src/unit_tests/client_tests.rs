@@ -13,6 +13,7 @@ use linera_base::{
     data_types::*,
     identifiers::{Account, AccountOwner, ApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
+    policy::ResourceControlPolicy,
 };
 use linera_chain::{
     data_types::{IncomingBundle, MessageBundle, PostedMessage},
@@ -23,8 +24,8 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{Recipient, SystemOperation},
-    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, SystemQuery, SystemResponse,
+    ExecutionError, Message, MessageKind, Operation, QueryOutcome, SystemMessage, SystemQuery,
+    SystemResponse,
 };
 use rand::Rng;
 use test_case::test_case;

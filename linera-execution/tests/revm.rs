@@ -8,6 +8,7 @@ use std::sync::Arc;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Timestamp},
+    policy::ResourceControlPolicy,
     vm::EvmQuery,
 };
 use linera_execution::{
@@ -18,8 +19,7 @@ use linera_execution::{
         SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
-    QueryContext, QueryResponse, ResourceControlPolicy, ResourceController, ResourceTracker,
-    TransactionTracker,
+    QueryContext, QueryResponse, ResourceController, ResourceTracker, TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
 

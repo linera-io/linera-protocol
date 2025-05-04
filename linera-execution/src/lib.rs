@@ -11,7 +11,6 @@ pub mod evm;
 mod execution;
 mod execution_state_actor;
 mod graphql;
-pub mod policy;
 mod resources;
 mod runtime;
 pub mod system;
@@ -35,14 +34,16 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, SendMessageRequest, StreamUpdate, Timestamp,
+        CompressedBytecode, DecompressionError, Epoch, Resources, SendMessageRequest, StreamUpdate,
+        Timestamp,
     },
-    doc_scalar, hex_debug, http,
+    doc_scalar, ensure, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
         GenericApplicationId, MessageId, ModuleId, StreamName,
     },
     ownership::ChainOwnership,
+    policy::ResourceControlPolicy,
     task,
 };
 use linera_views::{batch::Batch, views::ViewError};
@@ -63,7 +64,6 @@ pub use crate::wasm::{
 pub use crate::{
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
-    policy::ResourceControlPolicy,
     resources::{ResourceController, ResourceTracker},
     runtime::{
         ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,
@@ -344,6 +344,34 @@ impl From<ViewError> for ExecutionError {
             error => ExecutionError::ViewError(error),
         }
     }
+}
+
+pub fn check_blob_size(
+    policy: &ResourceControlPolicy,
+    content: &BlobContent,
+) -> Result<(), ExecutionError> {
+    ensure!(
+        u64::try_from(content.bytes().len())
+            .ok()
+            .is_some_and(|size| size <= policy.maximum_blob_size),
+        ExecutionError::BlobTooLarge
+    );
+    match content.blob_type() {
+        BlobType::ContractBytecode | BlobType::ServiceBytecode | BlobType::EvmBytecode => {
+            ensure!(
+                CompressedBytecode::decompressed_size_at_most(
+                    content.bytes(),
+                    policy.maximum_bytecode_size
+                )?,
+                ExecutionError::BytecodeTooLarge
+            );
+        }
+        BlobType::Data
+        | BlobType::ApplicationDescription
+        | BlobType::Committee
+        | BlobType::ChainDescription => {}
+    }
+    Ok(())
 }
 
 /// The public entry points provided by the contract part of an application.

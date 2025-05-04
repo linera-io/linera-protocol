@@ -7,10 +7,10 @@ use linera_base::{
     data_types::{ApplicationPermissions, TimeDelta},
     identifiers::{AccountOwner, ApplicationId, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
+    policy::ResourceControlPolicy,
     time::Duration,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
-use linera_execution::ResourceControlPolicy;
 
 #[cfg(any(with_indexed_db, not(with_persist)))]
 use crate::{config::WalletState, wallet::Wallet};

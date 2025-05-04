@@ -21,12 +21,13 @@ use linera_base::{
     },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
+    policy::ResourceControlPolicy,
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::Committee,
     system::{AdminOperation, OpenChainConfig, SystemOperation},
-    ResourceControlPolicy, WasmRuntime,
+    WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::memory::MemoryStore;

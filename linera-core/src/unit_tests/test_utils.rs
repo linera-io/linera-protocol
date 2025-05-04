@@ -20,6 +20,7 @@ use linera_base::{
     data_types::*,
     identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
+    policy::ResourceControlPolicy,
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -28,7 +29,7 @@ use linera_chain::{
         LiteCertificate, Timeout, ValidatedBlock,
     },
 };
-use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
+use linera_execution::{committee::Committee, WasmRuntime};
 use linera_storage::{DbStorage, NetworkDescription, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;

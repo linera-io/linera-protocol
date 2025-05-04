@@ -23,12 +23,13 @@ use linera_base::{
     data_types::{Amount, Bytecode, Event, OracleResponse},
     identifiers::{ApplicationId, BlobId, BlobType, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
+    policy::ResourceControlPolicy,
     vm::VmRuntime,
 };
 use linera_chain::{data_types::MessageAction, ChainError, ChainExecutionContext};
 use linera_execution::{
-    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, SystemOperation, WasmRuntime,
+    ExecutionError, Message, MessageKind, Operation, QueryOutcome, SystemMessage, SystemOperation,
+    WasmRuntime,
 };
 use linera_storage::Storage as _;
 use serde_json::json;

@@ -10,9 +10,9 @@ use linera_base::{
     },
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
+    policy::ResourceControlPolicy,
     vm::VmRuntime,
 };
-use linera_execution::ResourceControlPolicy;
 use linera_views::batch::WriteOperation;
 
 use super::wit::contract_runtime_api as wit_contract_api;

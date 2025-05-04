@@ -14,7 +14,10 @@ use linera_base::{
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
 
-use crate::{ExecutionError, Message, Operation, ResourceControlPolicy, SystemExecutionStateView};
+use crate::{
+    check_blob_size, ExecutionError, Message, Operation, ResourceControlPolicy,
+    SystemExecutionStateView,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
@@ -293,7 +296,7 @@ where
 
     /// Tracks a number of blob bytes published.
     pub fn track_blob_published(&mut self, content: &BlobContent) -> Result<(), ExecutionError> {
-        self.policy.check_blob_size(content)?;
+        check_blob_size(&self.policy, content)?;
         let size = content.bytes().len() as u64;
         {
             let tracker = self.tracker.as_mut();

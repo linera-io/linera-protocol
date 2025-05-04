@@ -6,15 +6,10 @@
 use std::{collections::BTreeSet, fmt};
 
 use async_graphql::InputObject;
-use linera_base::{
-    data_types::{Amount, ArithmeticError, BlobContent, CompressedBytecode, Resources},
-    ensure,
-    identifiers::BlobType,
-};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
-use crate::ExecutionError;
+use crate::data_types::{Amount, ArithmeticError, Resources};
 
 /// A collection of prices and limits associated with block execution.
 #[derive(
@@ -296,10 +291,12 @@ impl ResourceControlPolicy {
         }
     }
 
+    /// Returns the price of a block.
     pub fn block_price(&self) -> Amount {
         self.block
     }
 
+    /// Returns the total price by combining all the contribution to the cost.
     pub fn total_price(&self, resources: &Resources) -> Result<Amount, ArithmeticError> {
         let mut amount = Amount::ZERO;
         amount.try_add_assign(self.fuel_price(resources.fuel)?)?;
@@ -330,37 +327,45 @@ impl ResourceControlPolicy {
         Ok(amount)
     }
 
-    pub(crate) fn operation_bytes_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
+    /// Returns the price in the bytes of the user argument.
+    pub fn operation_bytes_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
         self.operation_byte.try_mul(size as u128)
     }
 
-    pub(crate) fn message_bytes_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
+    /// Returns of the price of sending a message.
+    pub fn message_bytes_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
         self.message_byte.try_mul(size as u128)
     }
 
-    pub(crate) fn read_operations_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
+    /// Returns the price of reading data by the number of operations.
+    pub fn read_operations_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
         self.read_operation.try_mul(count as u128)
     }
 
-    pub(crate) fn write_operations_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
+    /// Returns the price of writing data by the number of operations.
+    pub fn write_operations_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
         self.write_operation.try_mul(count as u128)
     }
 
-    pub(crate) fn bytes_read_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+    /// Returns the price of reading data by the number of bytes.
+    pub fn bytes_read_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
         self.byte_read.try_mul(count as u128)
     }
 
-    pub(crate) fn bytes_written_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+    /// Returns the price of writing data by the number of bytes.
+    pub fn bytes_written_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
         self.byte_written.try_mul(count as u128)
     }
 
-    pub(crate) fn blob_read_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+    /// Returns the price of reading blobs.
+    pub fn blob_read_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
         self.blob_byte_read
             .try_mul(count as u128)?
             .try_add(self.blob_read)
     }
 
-    pub(crate) fn blob_published_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+    /// Returns the price of published blobs.
+    pub fn blob_published_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
         self.blob_byte_published
             .try_mul(count as u128)?
             .try_add(self.blob_published)
@@ -384,37 +389,13 @@ impl ResourceControlPolicy {
         self.http_request.try_mul(count as u128)
     }
 
-    pub(crate) fn fuel_price(&self, fuel: u64) -> Result<Amount, ArithmeticError> {
+    /// Returns the price associated to fuel execution
+    pub fn fuel_price(&self, fuel: u64) -> Result<Amount, ArithmeticError> {
         self.fuel_unit.try_mul(u128::from(fuel))
     }
 
     /// Returns how much fuel can be paid with the given balance.
-    pub(crate) fn remaining_fuel(&self, balance: Amount) -> u64 {
+    pub fn remaining_fuel(&self, balance: Amount) -> u64 {
         u64::try_from(balance.saturating_div(self.fuel_unit)).unwrap_or(u64::MAX)
-    }
-
-    pub fn check_blob_size(&self, content: &BlobContent) -> Result<(), ExecutionError> {
-        ensure!(
-            u64::try_from(content.bytes().len())
-                .ok()
-                .is_some_and(|size| size <= self.maximum_blob_size),
-            ExecutionError::BlobTooLarge
-        );
-        match content.blob_type() {
-            BlobType::ContractBytecode | BlobType::ServiceBytecode | BlobType::EvmBytecode => {
-                ensure!(
-                    CompressedBytecode::decompressed_size_at_most(
-                        content.bytes(),
-                        self.maximum_bytecode_size
-                    )?,
-                    ExecutionError::BytecodeTooLarge
-                );
-            }
-            BlobType::Data
-            | BlobType::ApplicationDescription
-            | BlobType::Committee
-            | BlobType::ChainDescription => {}
-        }
-        Ok(())
     }
 }

@@ -28,6 +28,7 @@ pub mod http;
 pub mod identifiers;
 mod limited_writer;
 pub mod ownership;
+pub mod policy;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod port;
 #[cfg(with_metrics)]
