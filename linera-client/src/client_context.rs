@@ -550,13 +550,13 @@ where
                 Ok(version_info)
             }
             Ok(version_info) => Err(error::Inner::UnexpectedVersionInfo {
-                remote: version_info,
-                local: linera_version::VERSION_INFO.clone(),
+                remote: Box::new(version_info),
+                local: Box::new(linera_version::VERSION_INFO.clone()),
             }
             .into()),
             Err(error) => Err(error::Inner::UnavailableVersionInfo {
                 address: address.to_string(),
-                error,
+                error: Box::new(error),
             }
             .into()),
         }
@@ -574,15 +574,15 @@ where
                     Ok(description.genesis_config_hash)
                 } else {
                     Err(error::Inner::UnexpectedNetworkDescription {
-                        remote: description,
-                        local: network_description,
+                        remote: Box::new(description),
+                        local: Box::new(network_description),
                     }
                     .into())
                 }
             }
             Err(error) => Err(error::Inner::UnavailableNetworkDescription {
                 address: address.to_string(),
-                error,
+                error: Box::new(error),
             }
             .into()),
         }
@@ -617,7 +617,7 @@ where
             Err(error) => Err(error::Inner::UnavailableChainInfo {
                 address: address.to_string(),
                 chain_id,
-                error,
+                error: Box::new(error),
             }
             .into()),
         }

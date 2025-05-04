@@ -41,25 +41,31 @@ pub(crate) enum Inner {
     Benchmark(#[from] BenchmarkError),
     #[error("Validator version {remote} is not compatible with local version {local}.")]
     UnexpectedVersionInfo {
-        remote: VersionInfo,
-        local: VersionInfo,
+        remote: Box<VersionInfo>,
+        local: Box<VersionInfo>,
     },
     #[error("Failed to get version information for validator {address}:\n{error}")]
-    UnavailableVersionInfo { address: String, error: NodeError },
+    UnavailableVersionInfo {
+        address: String,
+        error: Box<NodeError>,
+    },
     #[error("Validator's network description {remote:?} does not match our own: {local:?}.")]
     UnexpectedNetworkDescription {
-        remote: NetworkDescription,
-        local: NetworkDescription,
+        remote: Box<NetworkDescription>,
+        local: Box<NetworkDescription>,
     },
     #[error("Failed to get network description for validator {address}:\n{error}")]
-    UnavailableNetworkDescription { address: String, error: NodeError },
+    UnavailableNetworkDescription {
+        address: String,
+        error: Box<NodeError>,
+    },
     #[error("Signature for public key {public_key} is invalid.")]
     InvalidSignature { public_key: ValidatorPublicKey },
     #[error("Failed to get chain info for validator {address} and chain {chain_id}:\n{error}")]
     UnavailableChainInfo {
         address: String,
         chain_id: ChainId,
-        error: NodeError,
+        error: Box<NodeError>,
     },
 }
 
