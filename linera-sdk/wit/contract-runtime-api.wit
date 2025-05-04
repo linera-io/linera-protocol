@@ -2,6 +2,7 @@ package linera:app;
 
 interface contract-runtime-api {
     authenticated-signer: func() -> option<account-owner>;
+    get-resource-control-policy: func() -> resource-control-policy;
     get-message-id: func() -> option<message-id>;
     message-is-bouncing: func() -> option<bool>;
     authenticated-caller-id: func() -> option<application-id>;
@@ -114,6 +115,39 @@ interface contract-runtime-api {
         storage-size-delta: u32,
         service-as-oracle-queries: u32,
         http-requests: u32,
+    }
+
+    record resource-control-policy {
+        block: amount,
+        fuel-unit: amount,
+        read-operation: amount,
+        write-operation: amount,
+        byte-read: amount,
+        byte-written: amount,
+        blob-read: amount,
+        blob-published: amount,
+        blob-byte-read: amount,
+        blob-byte-published: amount,
+        byte-stored: amount,
+        operation: amount,
+        operation-byte: amount,
+        message: amount,
+        message-byte: amount,
+        service-as-oracle-query: amount,
+        http-request: amount,
+        maximum-fuel-per-block: u64,
+        maximum-service-oracle-execution-ms: u64,
+        maximum-block-size: u64,
+        maximum-bytecode-size: u64,
+        maximum-blob-size: u64,
+        maximum-published-blobs: u64,
+        maximum-block-proposal-size: u64,
+        maximum-bytes-read-per-block: u64,
+        maximum-bytes-written-per-block: u64,
+        maximum-oracle-response-bytes: u64,
+        maximum-http-response-bytes: u64,
+        http-request-timeout-ms: u64,
+        http-request-allow-list: list<string>,
     }
 
     record send-message-request {

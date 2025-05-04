@@ -110,17 +110,6 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Returns the resource control policy
-    fn get_resource_control_policy(
-        caller: &mut Caller,
-    ) -> Result<ResourceControlPolicy, RuntimeError> {
-        caller
-            .user_data_mut()
-            .runtime
-            .resource_control_policy()
-            .map_err(|error| RuntimeError::Custom(error.into()))
-    }
-
     /// Returns the chain ID of the current application creator.
     fn get_application_creator_chain_id(caller: &mut Caller) -> Result<ChainId, RuntimeError> {
         caller
@@ -407,6 +396,17 @@ where
             .user_data_mut()
             .runtime
             .authenticated_signer()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the resource control policy
+    fn get_resource_control_policy(
+        caller: &mut Caller,
+    ) -> Result<ResourceControlPolicy, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .resource_control_policy()
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

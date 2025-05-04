@@ -14,6 +14,7 @@ use linera_base::{
         AccountPermissionError, ChainOwnership, ChangeApplicationPermissionsError, CloseChainError,
     },
 };
+use linera_execution::ResourceControlPolicy;
 use serde::Serialize;
 
 use super::wit::{base_runtime_api as base_wit, contract_runtime_api as contract_wit};
@@ -83,11 +84,6 @@ where
                     .expect("Application parameters must be deserializable")
             })
             .clone()
-    }
-
-    /// Returns the resource control policy
-    pub fn resource_control_policy(&mut self) -> Amount {
-        base_wit::get_resource_control_policy().into()
     }
 
     /// Returns the ID of the current application.
@@ -180,6 +176,11 @@ where
         *self
             .authenticated_signer
             .get_or_insert_with(|| contract_wit::authenticated_signer().map(AccountOwner::from))
+    }
+
+    /// Returns the resource control policy
+    pub fn resource_control_policy(&mut self) -> ResourceControlPolicy {
+        contract_wit::get_resource_control_policy().into()
     }
 
     /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing

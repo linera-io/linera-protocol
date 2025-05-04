@@ -4,7 +4,6 @@ interface base-runtime-api {
     get-chain-id: func() -> chain-id;
     get-block-height: func() -> block-height;
     get-application-id: func() -> application-id;
-    get-resource-control-policy: func() -> resource-control-policy;
     get-application-creator-chain-id: func() -> chain-id;
     application-parameters: func() -> list<u8>;
     get-chain-ownership: func() -> chain-ownership;
@@ -110,39 +109,6 @@ interface base-runtime-api {
         info,
         debug,
         trace,
-    }
-
-    record resource-control-policy {
-        block: amount,
-        fuel-unit: amount,
-        read-operation: amount,
-        write-operation: amount,
-        byte-read: amount,
-        byte-written: amount,
-        blob-read: amount,
-        blob-published: amount,
-        blob-byte-read: amount,
-        blob-byte-published: amount,
-        byte-stored: amount,
-        operation: amount,
-        operation-byte: amount,
-        message: amount,
-        message-byte: amount,
-        service-as-oracle-query: amount,
-        http-request: amount,
-        maximum-fuel-per-block: u64,
-        maximum-service-oracle-execution-ms: u64,
-        maximum-block-size: u64,
-        maximum-bytecode-size: u64,
-        maximum-blob-size: u64,
-        maximum-published-blobs: u64,
-        maximum-block-proposal-size: u64,
-        maximum-bytes-read-per-block: u64,
-        maximum-bytes-written-per-block: u64,
-        maximum-oracle-response-bytes: u64,
-        maximum-http-response-bytes: u64,
-        http-request-timeout-ms: u64,
-        http-request-allow-list: list<string>,
     }
 
     record time-delta {

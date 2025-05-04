@@ -12,6 +12,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
+use linera_execution::ResourceControlPolicy;
 use linera_views::batch::WriteOperation;
 
 use super::wit::contract_runtime_api as wit_contract_api;
@@ -146,6 +147,43 @@ impl From<Resources> for wit_contract_api::Resources {
             storage_size_delta: resources.storage_size_delta,
             service_as_oracle_queries: resources.service_as_oracle_queries,
             http_requests: resources.http_requests,
+        }
+    }
+}
+
+impl From<ResourceControlPolicy> for wit_contract_api::ResourceControlPolicy {
+    fn from(policy: ResourceControlPolicy) -> Self {
+        wit_contract_api::ResourceControlPolicy {
+            block: policy.block.into(),
+            fuel_unit: policy.fuel_unit.into(),
+            read_operation: policy.read_operation.into(),
+            write_operation: policy.write_operation.into(),
+            byte_read: policy.byte_read.into(),
+            byte_written: policy.byte_written.into(),
+            blob_read: policy.blob_read.into(),
+            blob_published: policy.blob_published.into(),
+            blob_byte_read: policy.blob_byte_read.into(),
+            blob_byte_published: policy.blob_byte_published.into(),
+            byte_stored: policy.byte_stored.into(),
+            operation: policy.operation.into(),
+            operation_byte: policy.operation_byte.into(),
+            message: policy.message.into(),
+            message_byte: policy.message_byte.into(),
+            service_as_oracle_query: policy.service_as_oracle_query.into(),
+            http_request: policy.http_request.into(),
+            maximum_fuel_per_block: policy.maximum_fuel_per_block,
+            maximum_service_oracle_execution_ms: policy.maximum_service_oracle_execution_ms,
+            maximum_block_size: policy.maximum_block_size,
+            maximum_bytecode_size: policy.maximum_bytecode_size,
+            maximum_blob_size: policy.maximum_blob_size,
+            maximum_published_blobs: policy.maximum_published_blobs,
+            maximum_block_proposal_size: policy.maximum_block_proposal_size,
+            maximum_bytes_read_per_block: policy.maximum_bytes_read_per_block,
+            maximum_bytes_written_per_block: policy.maximum_bytes_written_per_block,
+            maximum_oracle_response_bytes: policy.maximum_oracle_response_bytes,
+            maximum_http_response_bytes: policy.maximum_http_response_bytes,
+            http_request_timeout_ms: policy.http_request_timeout_ms,
+            http_request_allow_list: policy.http_request_allow_list.into_iter().collect::<Vec<_>>(),
         }
     }
 }
