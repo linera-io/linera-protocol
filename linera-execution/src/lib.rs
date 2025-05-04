@@ -33,9 +33,9 @@ use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        CompressedBytecode, DecompressionError, Epoch, Resources, SendMessageRequest, StreamUpdate,
-        Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlobContent,
+        BlockHeight, CompressedBytecode, DecompressionError, Epoch, SendMessageRequest,
+        StreamUpdate, Timestamp,
     },
     doc_scalar, ensure, hex_debug, http,
     identifiers::{
