@@ -44,7 +44,7 @@ pub(crate) enum Inner {
         remote: Box<VersionInfo>,
         local: Box<VersionInfo>,
     },
-    #[error("Failed to get version information for validator {address}:\n{error}")]
+    #[error("Failed to get version information for validator {address}: {error}")]
     UnavailableVersionInfo {
         address: String,
         error: Box<NodeError>,
@@ -54,14 +54,14 @@ pub(crate) enum Inner {
         remote: Box<NetworkDescription>,
         local: Box<NetworkDescription>,
     },
-    #[error("Failed to get network description for validator {address}:\n{error}")]
+    #[error("Failed to get network description for validator {address}: {error}")]
     UnavailableNetworkDescription {
         address: String,
         error: Box<NodeError>,
     },
     #[error("Signature for public key {public_key} is invalid.")]
     InvalidSignature { public_key: ValidatorPublicKey },
-    #[error("Failed to get chain info for validator {address} and chain {chain_id}:\n{error}")]
+    #[error("Failed to get chain info for validator {address} and chain {chain_id}: {error}")]
     UnavailableChainInfo {
         address: String,
         chain_id: ChainId,
