@@ -17,7 +17,7 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
-    data_types::ClientOutcome,
+    data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::{CrossChainMessageDelivery, ValidatorNode},
     Environment, JoinSetExt as _,
@@ -595,7 +595,7 @@ where
         node: &impl ValidatorNode,
         chain_id: ChainId,
     ) -> Result<(), Error> {
-        let query = linera_core::data_types::ChainInfoQuery::new(chain_id);
+        let query = ChainInfoQuery::new(chain_id);
         match node.handle_chain_info_query(query).await {
             Ok(response) => {
                 info!(
