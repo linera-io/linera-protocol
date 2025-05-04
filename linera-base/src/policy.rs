@@ -377,6 +377,7 @@ impl ResourceControlPolicy {
         self.byte_stored.try_mul(count as u128)
     }
 
+    // TODO(#3884): Implement the use of those functions.
     /// Returns how much it would cost to perform `count` queries to services running as oracles.
     pub(crate) fn service_as_oracle_queries_price(
         &self,
@@ -385,6 +386,7 @@ impl ResourceControlPolicy {
         self.service_as_oracle_query.try_mul(count as u128)
     }
 
+    // TODO(#3884): Implement the use of those functions.
     pub(crate) fn http_requests_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
         self.http_request.try_mul(count as u128)
     }
