@@ -40,27 +40,27 @@ const SSTORE_REFUND_RELEASE: u64 = 4800;
 
 #[derive(Clone, Default)]
 pub(crate) struct StorageStats {
-    number_key_reset_eq: u64,
-    number_key_reset_neq: u64,
-    number_key_set: u64,
-    number_key_set_zero: u64,
-    number_key_release: u64,
-    number_key_read: u64,
+    key_reset_eq: u64,
+    key_reset_neq: u64,
+    key_set: u64,
+    key_set_zero: u64,
+    key_release: u64,
+    key_read: u64,
 }
 
 impl StorageStats {
     pub fn storage_costs(&self) -> u64 {
         let mut storage_costs = 0;
-        storage_costs += self.number_key_reset_eq * SSTORE_COST_RESET_EQ;
-        storage_costs += self.number_key_reset_neq * SSTORE_COST_RESET_NEQ;
-        storage_costs += self.number_key_set * SSTORE_COST_SET;
-        storage_costs += self.number_key_set_zero * SSTORE_COST_SET_ZERO;
-        storage_costs += self.number_key_read * SLOAD_COST;
+        storage_costs += self.key_reset_eq * SSTORE_COST_RESET_EQ;
+        storage_costs += self.key_reset_neq * SSTORE_COST_RESET_NEQ;
+        storage_costs += self.key_set * SSTORE_COST_SET;
+        storage_costs += self.key_set_zero * SSTORE_COST_SET_ZERO;
+        storage_costs += self.key_read * SLOAD_COST;
         storage_costs
     }
 
     pub fn storage_refund(&self) -> u64 {
-        self.number_key_release * SSTORE_REFUND_RELEASE
+        self.key_release * SSTORE_REFUND_RELEASE
     }
 }
 
@@ -220,7 +220,7 @@ where
                 .storage_stats
                 .lock()
                 .expect("The lock should be possible");
-            storage_stats.number_key_read += 1;
+            storage_stats.key_read += 1;
         }
         let result = {
             let mut runtime = self.runtime.lock().expect("The lock should be possible");
@@ -241,11 +241,10 @@ where
 {
     /// Effectively commits changes to storage.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
-        let mut number_key_reset_eq = 0;
-        let mut number_key_reset_neq = 0;
-        let mut number_key_set = 0;
-        let mut number_key_set_zero = 0;
-        let mut number_key_release = 0;
+        let mut storage_stats = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let mut batch = Batch::new();
         let mut list_new_balances = Vec::new();
@@ -286,20 +285,20 @@ where
                         if value.original_value() == U256::ZERO {
                             if value.present_value() != U256::ZERO {
                                 batch.put_key_value(key, &value.present_value())?;
-                                number_key_set += 1;
+                                storage_stats.key_set += 1;
                             } else {
-                                number_key_set_zero += 1;
+                                storage_stats.key_set_zero += 1;
                             }
                         } else if value.present_value() != U256::ZERO {
                             if value.present_value() == value.original_value() {
-                                number_key_reset_eq += 1;
+                                storage_stats.key_reset_eq += 1;
                             } else {
                                 batch.put_key_value(key, &value.present_value())?;
-                                number_key_reset_neq += 1;
+                                storage_stats.key_reset_neq += 1;
                             }
                         } else {
                             batch.delete_key(key);
-                            number_key_release += 1;
+                            storage_stats.key_release += 1;
                         }
                     }
                 }
@@ -317,15 +316,6 @@ where
             }
         }
         runtime.write_batch(batch)?;
-        let mut storage_stats = self
-            .storage_stats
-            .lock()
-            .expect("The lock should be possible");
-        storage_stats.number_key_reset_eq += number_key_reset_eq;
-        storage_stats.number_key_reset_neq += number_key_reset_neq;
-        storage_stats.number_key_set += number_key_set;
-        storage_stats.number_key_set_zero += number_key_set_zero;
-        storage_stats.number_key_release += number_key_release;
         if !list_new_balances.is_empty() {
             panic!("The conversion Ethereum address / Linera address is not yet implemented");
         }

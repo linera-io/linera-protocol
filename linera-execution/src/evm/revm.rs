@@ -857,6 +857,7 @@ where
         ensure_message_length(query.len(), 4)?;
         // We drop the logs since the "eth_call" execution does not return any log.
         // Also, for handle_query, we do not have associated costs.
+        // More generally, there is gas costs associated to service operation.
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
             let result = self.init_transact(&query[4..])?;
             let (_gas_final, answer, _logs) = result.interpreter_result_and_logs()?;
