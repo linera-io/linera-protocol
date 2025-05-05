@@ -26,24 +26,20 @@ const SLOAD_COST: u64 = 2100;
 /// The cost of storing a non-zero value in the storage for the first time.
 const SSTORE_COST_SET: u64 = 20000;
 
-/// The cost of storing a zero value in the storage.
-const SSTORE_COST_SET_ZERO: u64 = 100;
-
-/// The cost of storing the storage to the same value.
-const SSTORE_COST_RESET_EQ: u64 = 100;
+/// The cost of not changing the state of the variable in the storage.
+const SSTORE_COST_NO_OPERATION: u64 = 100;
 
 /// The cost of overwriting the storage to a different value.
-const SSTORE_COST_RESET_NEQ: u64 = 2900;
+const SSTORE_COST_RESET: u64 = 2900;
 
 /// The refund from releasing data.
 const SSTORE_REFUND_RELEASE: u64 = 4800;
 
 #[derive(Clone, Default)]
 pub(crate) struct StorageStats {
-    key_reset_eq: u64,
-    key_reset_neq: u64,
+    key_no_operation: u64,
+    key_reset: u64,
     key_set: u64,
-    key_set_zero: u64,
     key_release: u64,
     key_read: u64,
 }
@@ -51,10 +47,9 @@ pub(crate) struct StorageStats {
 impl StorageStats {
     pub fn storage_costs(&self) -> u64 {
         let mut storage_costs = 0;
-        storage_costs += self.key_reset_eq * SSTORE_COST_RESET_EQ;
-        storage_costs += self.key_reset_neq * SSTORE_COST_RESET_NEQ;
+        storage_costs += self.key_no_operation * SSTORE_COST_NO_OPERATION;
+        storage_costs += self.key_reset * SSTORE_COST_RESET;
         storage_costs += self.key_set * SSTORE_COST_SET;
-        storage_costs += self.key_set_zero * SSTORE_COST_SET_ZERO;
         storage_costs += self.key_read * SLOAD_COST;
         storage_costs
     }
@@ -281,24 +276,20 @@ where
                     };
                     batch.put_key_value(key_state, &account_state)?;
                     for (index, value) in &account.storage {
-                        let key = Self::get_linera_key(val, *index)?;
-                        if value.original_value() == U256::ZERO {
-                            if value.present_value() != U256::ZERO {
+                        if value.present_value() == value.original_value() {
+                            storage_stats.key_no_operation += 1;
+                        } else {
+                            let key = Self::get_linera_key(val, *index)?;
+                            if value.original_value() == U256::ZERO {
                                 batch.put_key_value(key, &value.present_value())?;
                                 storage_stats.key_set += 1;
-                            } else {
-                                storage_stats.key_set_zero += 1;
-                            }
-                        } else if value.present_value() != U256::ZERO {
-                            if value.present_value() == value.original_value() {
-                                storage_stats.key_reset_eq += 1;
+                            } else if value.present_value() == U256::ZERO {
+                                batch.delete_key(key);
+                                storage_stats.key_release += 1;
                             } else {
                                 batch.put_key_value(key, &value.present_value())?;
-                                storage_stats.key_reset_neq += 1;
+                                storage_stats.key_reset += 1;
                             }
-                        } else {
-                            batch.delete_key(key);
-                            storage_stats.key_release += 1;
                         }
                     }
                 }
