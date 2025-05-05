@@ -497,7 +497,10 @@ where
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let chain_client = self.make_chain_client(chain_id).await?;
-        info!(?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(), "Changing ownership of a chain");
+        info!(
+            ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
+            "Changing ownership of a chain"
+        );
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
 

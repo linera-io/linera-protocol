@@ -29,7 +29,7 @@ pub trait Signer: Send + Sync {
         owner: &AccountOwner,
     ) -> Result<AccountPublicKey, Box<dyn std::error::Error>>;
 
-    /// Returnes whether the given `owner` is a known signer.
+    /// Returns whether the given `owner` is a known signer.
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Box<dyn std::error::Error>>;
 }
 
@@ -55,7 +55,7 @@ impl Signer for Box<dyn Signer> {
     }
 }
 
-/// In-memory implementatio of the [`Signer`] trait.
+/// In-memory implementation of the [`Signer`] trait.
 mod in_mem {
     use std::{
         collections::BTreeMap,
@@ -77,14 +77,14 @@ mod in_mem {
     pub struct InMemorySigner(Arc<RwLock<InMemSignerInner>>);
 
     impl InMemorySigner {
-        /// Creates a new `InMemSigner` seeded with `prng_seed`.
+        /// Creates a new [`InMemorySigner`] seeded with `prng_seed`.
         /// If `prng_seed` is `None`, an `OsRng` will be used.
         #[cfg(with_getrandom)]
         pub fn new(prng_seed: Option<u64>) -> Self {
             InMemorySigner(Arc::new(RwLock::new(InMemSignerInner::new(prng_seed))))
         }
 
-        /// Creates a new `InMemSigner`.
+        /// Creates a new [`InMemorySigner`].
         #[cfg(not(with_getrandom))]
         pub fn new() -> Self {
             InMemorySigner(Arc::new(RwLock::new(InMemSignerInner::new())))
@@ -202,7 +202,7 @@ mod in_mem {
             }
         }
 
-        /// Returnes whether the given `owner` is a known signer.
+        /// Returns whether the given `owner` is a known signer.
         async fn contains_key(
             &self,
             owner: &AccountOwner,
