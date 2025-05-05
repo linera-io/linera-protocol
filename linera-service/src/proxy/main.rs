@@ -255,7 +255,7 @@ where
 {
     #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
-        info!("Starting simple server");
+        info!("Starting proxy");
         let mut join_set = JoinSet::new();
         let address = self.get_listen_address(self.public_config.port);
 

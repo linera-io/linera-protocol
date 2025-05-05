@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{CryptoHash, Signer},
+    crypto::{CryptoHash, Signer, ValidatorPublicKey},
     data_types::{BlockHeight, ChainDescription, Timestamp},
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
@@ -17,13 +17,14 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
-    data_types::ClientOutcome,
+    data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
-    node::CrossChainMessageDelivery,
-    Environment, JoinSetExt,
+    node::{CrossChainMessageDelivery, ValidatorNode},
+    Environment, JoinSetExt as _,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
+use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use thiserror_context::Context;
 use tracing::{debug, info};
@@ -536,6 +537,93 @@ where
         self.update_wallet_from_client(&chain_client).await?;
         info!("New preferred owner set");
         Ok(())
+    }
+
+    pub async fn check_compatible_version_info(
+        &self,
+        address: &str,
+        node: &impl ValidatorNode,
+    ) -> Result<VersionInfo, Error> {
+        match node.get_version_info().await {
+            Ok(version_info) if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {
+                info!(
+                    "Version information for validator {address}: {}",
+                    version_info
+                );
+                Ok(version_info)
+            }
+            Ok(version_info) => Err(error::Inner::UnexpectedVersionInfo {
+                remote: Box::new(version_info),
+                local: Box::new(linera_version::VERSION_INFO.clone()),
+            }
+            .into()),
+            Err(error) => Err(error::Inner::UnavailableVersionInfo {
+                address: address.to_string(),
+                error: Box::new(error),
+            }
+            .into()),
+        }
+    }
+
+    pub async fn check_matching_network_description(
+        &self,
+        address: &str,
+        node: &impl ValidatorNode,
+    ) -> Result<CryptoHash, Error> {
+        let network_description = self.wallet().genesis_config().network_description();
+        match node.get_network_description().await {
+            Ok(description) => {
+                if description == network_description {
+                    Ok(description.genesis_config_hash)
+                } else {
+                    Err(error::Inner::UnexpectedNetworkDescription {
+                        remote: Box::new(description),
+                        local: Box::new(network_description),
+                    }
+                    .into())
+                }
+            }
+            Err(error) => Err(error::Inner::UnavailableNetworkDescription {
+                address: address.to_string(),
+                error: Box::new(error),
+            }
+            .into()),
+        }
+    }
+
+    pub async fn check_validator_chain_info_response(
+        &self,
+        public_key: Option<&ValidatorPublicKey>,
+        address: &str,
+        node: &impl ValidatorNode,
+        chain_id: ChainId,
+    ) -> Result<(), Error> {
+        let query = ChainInfoQuery::new(chain_id);
+        match node.handle_chain_info_query(query).await {
+            Ok(response) => {
+                info!(
+                    "Validator {address} sees chain {chain_id} at block height {} and epoch {:?}",
+                    response.info.next_block_height, response.info.epoch,
+                );
+                if let Some(public_key) = public_key {
+                    if response.check(public_key).is_ok() {
+                        info!("Signature for public key {public_key} is OK.");
+                    } else {
+                        return Err(error::Inner::InvalidSignature {
+                            public_key: *public_key,
+                        }
+                        .into());
+                    }
+                }
+                Ok(())
+            }
+            Err(error) => Err(error::Inner::UnavailableChainInfo {
+                address: address.to_string(),
+                chain_id,
+                error: Box::new(error),
+            }
+            .into()),
+        }
     }
 }
 

@@ -4729,6 +4729,7 @@ dependencies = [
  "linera-rpc",
  "linera-sdk",
  "linera-storage",
+ "linera-version",
  "linera-views",
  "matching-engine",
  "native-fungible",

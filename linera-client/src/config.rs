@@ -336,6 +336,14 @@ impl GenesisConfig {
     pub fn hash(&self) -> CryptoHash {
         CryptoHash::new(self)
     }
+
+    pub fn network_description(&self) -> NetworkDescription {
+        NetworkDescription {
+            name: self.network_name.clone(),
+            genesis_config_hash: CryptoHash::new(self),
+            genesis_timestamp: self.timestamp,
+        }
+    }
 }
 
 /// The configuration file for the linera-exporter.

@@ -236,7 +236,7 @@ where
         err,
     )]
     pub async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
-        info!("Starting gRPC server");
+        info!("Starting proxy");
         let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]

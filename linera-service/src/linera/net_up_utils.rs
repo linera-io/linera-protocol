@@ -264,8 +264,9 @@ async fn print_messages_and_create_faucet(
     info!("Local test network successfully started.");
 
     eprintln!(
-        "To use the initial wallet of this test network, you may set \
-         the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n"
+        "To use the admin wallet of this test network, you may set \
+         the environment variables LINERA_WALLET, LINERA_KEYSTORE, \
+         and LINERA_STORAGE as follows.\n"
     );
     println!(
         "{}",
