@@ -571,20 +571,20 @@ impl LocalNet {
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
+        let port = Self::proxy_port(validator);
+        let nickname = format!("validator proxy {validator}");
         match self.network.external {
             Network::Grpc => {
-                let port = Self::proxy_port(validator);
-                let nickname = format!("validator proxy {validator}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
             }
             Network::Grpcs => {
-                let port = Self::proxy_port(validator);
-                let nickname = format!("validator proxy {validator}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
             }
-            Network::Tcp | Network::Udp => {
-                info!("Letting validator proxy {validator} start");
-                linera_base::time::timer::sleep(Duration::from_secs(2)).await;
+            Network::Tcp => {
+                Self::ensure_simple_server_has_started(&nickname, port, "tcp").await?;
+            }
+            Network::Udp => {
+                Self::ensure_simple_server_has_started(&nickname, port, "udp").await?;
             }
         }
         Ok(child)
@@ -658,6 +658,38 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
+    pub async fn ensure_simple_server_has_started(
+        nickname: &str,
+        port: usize,
+        protocol: &str,
+    ) -> Result<()> {
+        use linera_core::node::ValidatorNode as _;
+
+        let options = linera_rpc::NodeOptions {
+            send_timeout: Duration::from_secs(5),
+            recv_timeout: Duration::from_secs(5),
+            retry_delay: Duration::from_secs(1),
+            max_retries: 1,
+        };
+        let provider = linera_rpc::simple::SimpleNodeProvider::new(options);
+        let address = format!("{protocol}:127.0.0.1:{port}");
+        // All "simple" services (i.e. proxy and "server") are based on `RpcMessage` and
+        // support `VersionInfoQuery`.
+        let node = provider.make_node(&address)?;
+        linera_base::time::timer::sleep(Duration::from_millis(100)).await;
+        for i in 0..10 {
+            linera_base::time::timer::sleep(Duration::from_millis(i * 500)).await;
+            let result = node.get_version_info().await;
+            if result.is_ok() {
+                info!("Successfully started {nickname}");
+                return Ok(());
+            } else {
+                warn!("Waiting for {nickname} to start");
+            }
+        }
+        bail!("Failed to start {nickname}");
+    }
+
     async fn initialize_storage(&mut self, validator: usize) -> Result<()> {
         let namespace = format!("{}_server_{}_db", self.common_namespace, validator);
         let storage_config = self.common_storage_config.clone();
@@ -706,20 +738,20 @@ impl LocalNet {
             .args(self.cross_chain_config.to_args());
         let child = command.spawn_into()?;
 
+        let port = Self::shard_port(validator, shard);
+        let nickname = format!("validator server {validator}:{shard}");
         match self.network.internal {
             Network::Grpc => {
-                let port = Self::shard_port(validator, shard);
-                let nickname = format!("validator server {validator}:{shard}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
             }
             Network::Grpcs => {
-                let port = Self::shard_port(validator, shard);
-                let nickname = format!("validator server {validator}:{shard}");
                 Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
             }
-            Network::Tcp | Network::Udp => {
-                info!("Letting validator server {validator}:{shard} start");
-                linera_base::time::timer::sleep(Duration::from_secs(2)).await;
+            Network::Tcp => {
+                Self::ensure_simple_server_has_started(&nickname, port, "tcp").await?;
+            }
+            Network::Udp => {
+                Self::ensure_simple_server_has_started(&nickname, port, "udp").await?;
             }
         }
         Ok(child)
