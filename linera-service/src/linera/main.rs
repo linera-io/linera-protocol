@@ -25,8 +25,7 @@ use linera_base::{
     bcs,
     crypto::{CryptoHash, InMemorySigner, Signer},
     data_types::{
-        ApplicationPermissions, BlockHeight, ChainDescription, ChainOrigin, Epoch,
-        InitialChainConfig, Timestamp,
+        ApplicationPermissions, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
     identifiers::{AccountOwner, ChainId},
     listen_for_shutdown_signals,
@@ -974,7 +973,6 @@ impl Runnable for Job {
                 port,
                 amount,
                 limit_rate_until,
-                max_chain_length,
                 config,
             } => {
                 let context = ClientContext::new(
@@ -999,7 +997,6 @@ impl Runnable for Job {
                     chain_id,
                     context,
                     amount,
-                    BlockHeight(max_chain_length),
                     end_timestamp,
                     genesis_config,
                     config,
