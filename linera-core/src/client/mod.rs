@@ -2361,7 +2361,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Using the round number during execution counts as an oracle.
         // Accessing the round number in single-leader rounds where we are not the leader
         // is not currently supported.
-        let round = match Self::round_for_new_proposal(&info, &identity, &proposed_block, true)? {
+        let round = match Self::round_for_new_proposal(&info, &identity, true)? {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
@@ -2716,7 +2716,7 @@ impl<Env: Environment> ChainClient<Env> {
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
             let proposed_block = pending_proposal.block;
-            let round = match Self::round_for_new_proposal(&info, &owner, &proposed_block, true)? {
+            let round = match Self::round_for_new_proposal(&info, &owner, true)? {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
@@ -2731,12 +2731,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let has_oracle_responses = block.has_oracle_responses();
         let (proposed_block, outcome) = block.into_proposal();
-        let round = match Self::round_for_new_proposal(
-            &info,
-            &owner,
-            &proposed_block,
-            has_oracle_responses,
-        )? {
+        let round = match Self::round_for_new_proposal(&info, &owner, has_oracle_responses)? {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
@@ -2855,16 +2850,17 @@ impl<Env: Environment> ChainClient<Env> {
     fn round_for_new_proposal(
         info: &ChainInfo,
         identity: &AccountOwner,
-        block: &ProposedBlock,
         has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         let manager = &info.manager;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
-        let conflict = manager.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == manager.current_round && proposal.content.block != *block
-        }) || (manager.current_round.is_fast() && has_oracle_responses);
+        let conflict = manager
+            .requested_proposed
+            .as_ref()
+            .is_some_and(|proposal| proposal.content.round == manager.current_round)
+            || (manager.current_round.is_fast() && has_oracle_responses);
         let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager
