@@ -1565,7 +1565,7 @@ where
     client2.set_preferred_owner(owner2);
     client2.synchronize_from_validators().await.unwrap();
 
-    // Take two validators down
+    // Client 1 makes a proposal to only validators 0 and 1.
     builder
         .set_fault_type([2, 3], FaultType::OfflineWithInfo)
         .await;
@@ -1574,6 +1574,7 @@ where
         .await
         .is_err());
 
+    // Client 2's proposal reaches only 2 and 3.
     builder
         .set_fault_type([0, 1], FaultType::OfflineWithInfo)
         .await;
@@ -1583,6 +1584,7 @@ where
         .await
         .is_err());
 
+    // Once all validators are functional again, a new proposal should succeed.
     builder.set_fault_type([0, 1], FaultType::Honest).await;
 
     for i in 0..4 {
