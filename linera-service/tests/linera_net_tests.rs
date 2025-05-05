@@ -3073,6 +3073,9 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
 
+    let client3 = net.make_client().await;
+    client3.wallet_init(&[], FaucetOption::None).await?;
+
     let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
 
     // Generate keys for client 2.
@@ -3096,6 +3099,11 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     client2.sync(chain2).await?;
     client2.process_inbox(chain2).await?;
     assert!(client2.local_balance(account2).await? > Amount::ZERO);
+
+    // Verify that a third party can also follow the chain.
+    client3.follow_chain(chain2).await?;
+    client3.sync(chain2).await?;
+    assert!(client3.local_balance(account2).await? > Amount::ZERO);
 
     net.ensure_is_running().await?;
     net.terminate().await?;
