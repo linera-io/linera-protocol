@@ -163,7 +163,7 @@ pub struct Client<Env: Environment> {
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
-    /// A reference to the Signer used to sign messages.
+    /// A reference to the [`Signer`] used to sign block proposals.
     signer: Box<dyn Signer>,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
@@ -232,7 +232,7 @@ impl<Env: Environment> Client<Env> {
         &self.local_node
     }
 
-    /// Returns a reference to the `Signer`] of the client.
+    /// Returns a reference to the [`Signer`] of the client.
     #[instrument(level = "trace", skip(self))]
     pub fn signer(&self) -> &impl Signer {
         &self.signer
@@ -1120,38 +1120,32 @@ impl<Env: Environment> ChainClient<Env> {
             .chain(&manager.leader)
             .any(|owner| *owner == preferred_owner);
 
+        if !is_owner {
+            let accepted_owners = manager
+                .ownership
+                .all_owners()
+                .chain(&manager.leader)
+                .collect::<Vec<_>>();
+            warn!(%self.chain_id, ?accepted_owners, ?preferred_owner,
+                "Chain has multiple owners configured but none is preferred owner",
+            );
+            return Err(ChainClientError::NotAnOwner(self.chain_id));
+        }
+
         let has_signer = self
             .signer()
             .contains_key(&preferred_owner)
             .await
             .map_err(ChainClientError::signer_failure)?;
 
-        if is_owner && has_signer {
-            Ok(preferred_owner)
-        } else {
-            if !is_owner {
-                let accepted_owners = manager
-                    .ownership
-                    .all_owners()
-                    .chain(&manager.leader)
-                    .collect::<Vec<_>>();
-                warn!(%self.chain_id, ?accepted_owners, ?preferred_owner,
-                    "Chain has multiple owners configured but none is preferred owner",
-                );
-                return Err(ChainClientError::NotAnOwner(self.chain_id));
-            }
-
-            if !has_signer {
-                warn!(%self.chain_id, ?preferred_owner,
-                    "Chain is one of the owners but its Signer instance doesn't contain the key",
-                );
-                return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
-            }
-            unreachable!(
-                "Either is_owner and has_signer are both true, 
-                or one of them if false - all three cases are covered."
+        if !has_signer {
+            warn!(%self.chain_id, ?preferred_owner,
+                "Chain is one of the owners but its Signer instance doesn't contain the key",
             );
+            return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         }
+
+        Ok(preferred_owner)
     }
 
     /// Obtains the public key associated to the current identity.
