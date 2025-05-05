@@ -20,22 +20,22 @@ use revm_primitives::{address, BlobExcessGasAndPrice, BlockEnv, EvmState};
 
 use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ViewError};
 
-/// The cost of loading from storage
+/// The cost of loading from storage.
 const SLOAD_COST: u64 = 2100;
 
-/// The cost of storing a non-zero value in the storage
+/// The cost of storing a non-zero value in the storage for the first time.
 const SSTORE_COST_SET: u64 = 20000;
 
-/// The cost of storing a zero value in the storage
+/// The cost of storing a zero value in the storage.
 const SSTORE_COST_SET_ZERO: u64 = 100;
 
-/// The cost of storing the storage to the same value
+/// The cost of storing the storage to the same value.
 const SSTORE_COST_RESET_EQ: u64 = 100;
 
-/// The cost of storing the storage to a different value
+/// The cost of overwriting the storage to a different value.
 const SSTORE_COST_RESET_NEQ: u64 = 2900;
 
-/// The refund from releasing data
+/// The refund from releasing data.
 const SSTORE_REFUND_RELEASE: u64 = 4800;
 
 #[derive(Clone, Default)]
@@ -96,12 +96,15 @@ pub enum KeyCategory {
 }
 
 impl<Runtime> DatabaseRuntime<Runtime> {
-    fn get_uint256_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
+    /// Encode the `index` of the EVM storage associated to the smart contract
+    /// in a linera key.
+    fn get_linera_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
         let mut key = vec![val, KeyCategory::Storage as u8];
         bcs::serialize_into(&mut key, &index)?;
         Ok(key)
     }
 
+    /// Returns the tag associated to the contract.
     fn get_contract_address_key(&self, address: &Address) -> Option<u8> {
         if address == &Address::ZERO {
             return Some(KeyTag::ZeroContractAddress as u8);
@@ -112,6 +115,7 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         None
     }
 
+    /// Creates a new `DatabaseRuntime`.
     pub fn new(runtime: Runtime) -> Self {
         let storage_stats = StorageStats::default();
         Self {
@@ -121,7 +125,8 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         }
     }
 
-    pub fn reset_storage_stats(&self) -> StorageStats {
+    /// Returns the current storage states and clears it to default.
+    pub fn take_storage_stats(&self) -> StorageStats {
         let mut storage_stats_read = self
             .storage_stats
             .lock()
@@ -209,7 +214,7 @@ where
         let Some(val) = val else {
             panic!("There is no storage associated to externally owned account");
         };
-        let key = Self::get_uint256_key(val, index)?;
+        let key = Self::get_linera_key(val, index)?;
         {
             let mut storage_stats = self
                 .storage_stats
@@ -277,7 +282,7 @@ where
                     };
                     batch.put_key_value(key_state, &account_state)?;
                     for (index, value) in &account.storage {
-                        let key = Self::get_uint256_key(val, *index)?;
+                        let key = Self::get_linera_key(val, *index)?;
                         if value.original_value() == U256::ZERO {
                             if value.present_value() != U256::ZERO {
                                 batch.put_key_value(key, &value.present_value())?;

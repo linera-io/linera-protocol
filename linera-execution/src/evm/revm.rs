@@ -799,7 +799,7 @@ where
                 ExecutionError::EvmError(error)
             })
         }?;
-        let storage_stats = self.db.reset_storage_stats();
+        let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
         process_execution_result(storage_stats, result)
     }
@@ -944,7 +944,7 @@ where
                 ExecutionError::EvmError(error)
             })
         }?;
-        let storage_stats = self.db.reset_storage_stats();
+        let storage_stats = self.db.take_storage_stats();
         Ok((
             process_execution_result(storage_stats, result_state.result)?,
             result_state.state,
