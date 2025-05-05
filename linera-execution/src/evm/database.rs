@@ -83,7 +83,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
 #[repr(u8)]
 enum KeyTag {
     /// Key prefix for the storage of the zero contract.
-    ZeroContractAddress,
+    NullAddress,
     /// Key prefix for the storage of the contract address.
     ContractAddress,
 }
@@ -107,7 +107,7 @@ impl<Runtime> DatabaseRuntime<Runtime> {
     /// Returns the tag associated to the contract.
     fn get_contract_address_key(&self, address: &Address) -> Option<u8> {
         if address == &Address::ZERO {
-            return Some(KeyTag::ZeroContractAddress as u8);
+            return Some(KeyTag::NullAddress as u8);
         }
         if address == &Address::ZERO.create(0) {
             return Some(KeyTag::ContractAddress as u8);
@@ -330,7 +330,7 @@ where
 {
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
         let mut keys = Vec::new();
-        for key_tag in [KeyTag::ZeroContractAddress, KeyTag::ContractAddress] {
+        for key_tag in [KeyTag::NullAddress, KeyTag::ContractAddress] {
             let key = vec![key_tag as u8, KeyCategory::AccountInfo as u8];
             keys.push(key);
         }
