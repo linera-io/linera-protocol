@@ -396,7 +396,7 @@ impl ResourceControlPolicy {
         self.http_request.try_mul(count as u128)
     }
 
-    fn fuel_unit(&self, vm_runtime: VmRuntime) -> Amount {
+    fn fuel_unit_price(&self, vm_runtime: VmRuntime) -> Amount {
         match vm_runtime {
             VmRuntime::Wasm => self.wasm_fuel_unit,
             VmRuntime::Evm => self.evm_fuel_unit,
@@ -408,12 +408,12 @@ impl ResourceControlPolicy {
         fuel: u64,
         vm_runtime: VmRuntime,
     ) -> Result<Amount, ArithmeticError> {
-        self.fuel_unit(vm_runtime).try_mul(u128::from(fuel))
+        self.fuel_unit_price(vm_runtime).try_mul(u128::from(fuel))
     }
 
     /// Returns how much fuel can be paid with the given balance.
     pub(crate) fn remaining_fuel(&self, balance: Amount, vm_runtime: VmRuntime) -> u64 {
-        let fuel_unit = self.fuel_unit(vm_runtime);
+        let fuel_unit = self.fuel_unit_price(vm_runtime);
         u64::try_from(balance.saturating_div(fuel_unit)).unwrap_or(u64::MAX)
     }
 

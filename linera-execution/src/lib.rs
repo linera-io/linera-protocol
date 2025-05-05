@@ -227,7 +227,7 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
-    #[error("Block execution required too much fuel")]
+    #[error("Block execution required too much fuel for VM {0}")]
     MaximumFuelExceeded(VmRuntime),
     #[error("Services running as oracles in block took longer than allowed")]
     MaximumServiceOracleExecutionTimeExceeded,
