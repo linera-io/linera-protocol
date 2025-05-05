@@ -81,6 +81,8 @@ pub trait ClientContext: 'static {
         }
         Ok(clients)
     }
+
+    async fn forget_chain(&mut self, chain_id: &ChainId) -> Result<(), Error>;
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts

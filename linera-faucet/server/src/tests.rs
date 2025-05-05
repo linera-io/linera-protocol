@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -23,7 +23,7 @@ use linera_views::memory::MemoryStore;
 use super::MutationRoot;
 
 struct ClientContext {
-    client: ChainClient<TestProvider, TestStorage>,
+    clients: BTreeMap<ChainId, ChainClient<TestProvider, TestStorage>>,
     update_calls: usize,
 }
 
@@ -43,8 +43,7 @@ impl chain_listener::ClientContext for ClientContext {
         &self,
         chain_id: ChainId,
     ) -> Result<ChainClient<TestProvider, TestStorage>, linera_client::Error> {
-        assert_eq!(chain_id, self.client.chain_id());
-        Ok(self.client.clone())
+        Ok(self.clients[&chain_id].clone())
     }
 
     async fn update_wallet_for_new_chain(
@@ -64,6 +63,11 @@ impl chain_listener::ClientContext for ClientContext {
         self.update_calls += 1;
         Ok(())
     }
+
+    async fn forget_chain(&mut self, chain_id: &ChainId) -> Result<(), linera_client::Error> {
+        self.clients.remove(chain_id);
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -76,16 +80,20 @@ async fn test_faucet_rate_limiting() {
         .add_root_chain(1, Amount::from_tokens(6))
         .await
         .unwrap();
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await.unwrap();
     let chain_id = client.chain_id();
+    let main_chain_id = client2.chain_id();
     let context = ClientContext {
-        client,
+        clients: BTreeMap::from_iter([(client.chain_id(), client), (client2.chain_id(), client2)]),
         update_calls: 0,
     };
     let context = Arc::new(Mutex::new(context));
     let root = MutationRoot {
-        chain_id,
+        main_chain_id,
+        tmp_chain_id: Arc::new(Mutex::new(Some(chain_id))),
         context: context.clone(),
         amount: Amount::from_tokens(1),
+        max_claims_per_chain: 10,
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),

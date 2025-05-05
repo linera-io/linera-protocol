@@ -371,7 +371,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating addition.
-            pub fn saturating_add(self, other: Self) -> Self {
+            pub const fn saturating_add(self, other: Self) -> Self {
                 let val = self.0.saturating_add(other.0);
                 Self(val)
             }
@@ -392,7 +392,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating subtraction.
-            pub fn saturating_sub(self, other: Self) -> Self {
+            pub const fn saturating_sub(self, other: Self) -> Self {
                 let val = self.0.saturating_sub(other.0);
                 Self(val)
             }
@@ -413,7 +413,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating in-place addition.
-            pub fn saturating_add_assign(&mut self, other: Self) {
+            pub const fn saturating_add_assign(&mut self, other: Self) {
                 self.0 = self.0.saturating_add(other.0);
             }
 
@@ -427,7 +427,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating multiplication.
-            pub fn saturating_mul(&self, other: $wrapped) -> Self {
+            pub const fn saturating_mul(&self, other: $wrapped) -> Self {
                 Self(self.0.saturating_mul(other))
             }
 
@@ -662,37 +662,37 @@ impl Amount {
     pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
 
     /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
-    pub fn from_tokens(tokens: u128) -> Amount {
+    pub const fn from_tokens(tokens: u128) -> Amount {
         Self::ONE.saturating_mul(tokens)
     }
 
     /// Returns an `Amount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
-    pub fn from_millis(millitokens: u128) -> Amount {
+    pub const fn from_millis(millitokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 3)).saturating_mul(millitokens)
     }
 
     /// Returns an `Amount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
-    pub fn from_micros(microtokens: u128) -> Amount {
+    pub const fn from_micros(microtokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 6)).saturating_mul(microtokens)
     }
 
     /// Returns an `Amount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
-    pub fn from_nanos(nanotokens: u128) -> Amount {
+    pub const fn from_nanos(nanotokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 9)).saturating_mul(nanotokens)
     }
 
     /// Returns an `Amount` corresponding to that many attotokens.
-    pub fn from_attos(attotokens: u128) -> Amount {
+    pub const fn from_attos(attotokens: u128) -> Amount {
         Amount(attotokens)
     }
 
     /// Helper function to obtain the 64 most significant bits of the balance.
-    pub fn upper_half(self) -> u64 {
+    pub const fn upper_half(self) -> u64 {
         (self.0 >> 64) as u64
     }
 
     /// Helper function to obtain the 64 least significant bits of the balance.
-    pub fn lower_half(self) -> u64 {
+    pub const fn lower_half(self) -> u64 {
         self.0 as u64
     }
 

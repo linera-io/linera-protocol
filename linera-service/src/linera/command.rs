@@ -614,6 +614,12 @@ pub enum ClientCommand {
         #[arg(long)]
         limit_rate_until: Option<DateTime<Utc>>,
 
+        /// The maximum number of claims per faucet chain, after which a new one is created.
+        ///
+        /// A lower number improves performance for clients but creates overhead in the faucet.
+        #[arg(long, default_value = "100")]
+        max_claims_per_chain: u32,
+
         /// Configuration for the faucet chain listener.
         #[command(flatten)]
         config: ChainListenerConfig,

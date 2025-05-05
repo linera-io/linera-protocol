@@ -25,6 +25,9 @@ use serde::Deserialize;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
+/// A rough estimate of the maximum fee for a block.
+const MAX_FEE: Amount = Amount::from_millis(100);
+
 /// Returns an HTML response constructing the GraphiQL web page for the given URI.
 pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
     axum::response::Html(
@@ -47,9 +50,11 @@ pub struct QueryRoot<C> {
 
 /// The root GraphQL mutation type.
 pub struct MutationRoot<C> {
-    chain_id: ChainId,
+    main_chain_id: ChainId,
+    tmp_chain_id: Arc<Mutex<Option<ChainId>>>,
     context: Arc<Mutex<C>>,
     amount: Amount,
+    max_claims_per_chain: u32,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
@@ -118,17 +123,55 @@ where
     C: ClientContext,
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
+        let main_client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(self.main_chain_id)?;
+        let maybe_tmp_chain_id = *self.tmp_chain_id.lock().await;
+        let tmp_chain_id = match maybe_tmp_chain_id {
+            Some(tmp_chain_id) => tmp_chain_id,
+            None => {
+                let key_pair = main_client.key_pair().await?;
+                let balance = self
+                    .amount
+                    .try_add(MAX_FEE)?
+                    .try_mul(u128::from(self.max_claims_per_chain))?
+                    .try_add(MAX_FEE)?; // One more block fee for closing the chain.
+                let ownership = main_client.chain_state_view().await?.ownership().clone();
+                let (message_id, certificate) = main_client
+                    .open_chain(ownership, ApplicationPermissions::default(), balance)
+                    .await?
+                    .try_unwrap()?;
+                let chain_id = ChainId::child(message_id);
+                info!("Switching to a new faucet chain {chain_id:8}");
+                self.context
+                    .lock()
+                    .await
+                    .update_wallet_for_new_chain(
+                        chain_id,
+                        Some(key_pair),
+                        certificate.block().header.timestamp,
+                    )
+                    .await?;
+                *self.tmp_chain_id.lock().await = Some(chain_id);
+                chain_id
+            }
+        };
+        let tmp_client = self.context.lock().await.make_chain_client(tmp_chain_id)?;
 
         if self.start_timestamp < self.end_timestamp {
-            let local_time = client.storage_client().clock().current_time();
+            let local_time = tmp_client.storage_client().clock().current_time();
             if local_time < self.end_timestamp {
                 let full_duration = self
                     .end_timestamp
                     .delta_since(self.start_timestamp)
                     .as_micros();
                 let remaining_duration = self.end_timestamp.delta_since(local_time).as_micros();
-                let balance = client.local_balance().await?;
+                let balance = tmp_client
+                    .local_balance()
+                    .await?
+                    .try_add(main_client.local_balance().await?)?;
                 let Ok(remaining_balance) = balance.try_sub(self.amount) else {
                     return Err(Error::new("The faucet is empty."));
                 };
@@ -145,20 +188,29 @@ where
         }
 
         let ownership = ChainOwnership::single(owner);
-        let result = client
+        let result = tmp_client
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;
-        self.context.lock().await.update_wallet(&client).await?;
-        let (message_id, certificate) = match result? {
-            ClientOutcome::Committed(result) => result,
-            ClientOutcome::WaitForTimeout(timeout) => {
-                return Err(Error::new(format!(
-                    "This faucet is using a multi-owner chain and is not the leader right now. \
-                    Try again at {}",
-                    timeout.timestamp,
-                )));
+        self.context.lock().await.update_wallet(&tmp_client).await?;
+        let (message_id, certificate) = result?.try_unwrap()?;
+
+        // Only keep using this chain if there will still be enough balance to close it.
+        if tmp_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)? {
+            // TODO(#1795): Move the remaining tokens back to the main chain.
+            match tmp_client.close_chain().await {
+                Ok(outcome) => {
+                    outcome.try_unwrap()?;
+                }
+                Err(err) => tracing::warn!("Failed to close the chain: {err:?}"),
             }
-        };
+            self.context
+                .lock()
+                .await
+                .forget_chain(&tmp_chain_id)
+                .await?;
+            self.tmp_chain_id.lock().await.take();
+        }
+
         let chain_id = ChainId::child(message_id);
         Ok(ClaimOutcome {
             message_id,
@@ -185,7 +237,8 @@ pub struct FaucetService<C>
 where
     C: ClientContext,
 {
-    chain_id: ChainId,
+    main_chain_id: ChainId,
+    tmp_chain_id: Arc<Mutex<Option<ChainId>>>,
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
@@ -193,6 +246,7 @@ where
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
+    max_claims_per_chain: u32,
     start_timestamp: Timestamp,
     start_balance: Amount,
 }
@@ -203,13 +257,15 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            chain_id: self.chain_id,
+            main_chain_id: self.main_chain_id,
+            tmp_chain_id: Arc::clone(&self.tmp_chain_id),
             context: Arc::clone(&self.context),
             genesis_config: Arc::clone(&self.genesis_config),
             config: self.config.clone(),
             storage: self.storage.clone(),
             port: self.port,
             amount: self.amount,
+            max_claims_per_chain: self.max_claims_per_chain,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
@@ -228,6 +284,7 @@ where
         chain_id: ChainId,
         context: C,
         amount: Amount,
+        max_claims_per_chain: u32,
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
         config: ChainListenerConfig,
@@ -239,13 +296,15 @@ where
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
         Ok(Self {
-            chain_id,
+            main_chain_id: chain_id,
+            tmp_chain_id: Arc::new(Mutex::new(None)),
             context,
             genesis_config,
             config,
             storage,
             port,
             amount,
+            max_claims_per_chain,
             end_timestamp,
             start_timestamp,
             start_balance,
@@ -254,9 +313,11 @@ where
 
     pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
         let mutation_root = MutationRoot {
-            chain_id: self.chain_id,
+            main_chain_id: self.main_chain_id,
+            tmp_chain_id: Arc::clone(&self.tmp_chain_id),
             context: Arc::clone(&self.context),
             amount: self.amount,
+            max_claims_per_chain: self.max_claims_per_chain,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
@@ -264,13 +325,16 @@ where
         let query_root = QueryRoot {
             genesis_config: Arc::clone(&self.genesis_config),
             context: Arc::clone(&self.context),
-            chain_id: self.chain_id,
+            chain_id: self.main_chain_id,
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
 
     /// Runs the faucet.
-    #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
+    #[tracing::instrument(
+        name = "FaucetService::run",
+        skip_all, fields(port = self.port, chain_id = ?self.main_chain_id))
+    ]
     pub async fn run(self) -> anyhow::Result<()> {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
@@ -301,5 +365,29 @@ where
     async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
         let schema = service.0.schema();
         schema.execute(request.into_inner()).await.into()
+    }
+}
+
+trait ClientOutcomeExt {
+    type Output;
+
+    /// Returns the committed result or an error if we are not the leader.
+    ///
+    /// It is recommended to use single-owner chains for the faucet to avoid this error.
+    fn try_unwrap(self) -> Result<Self::Output, Error>;
+}
+
+impl<T> ClientOutcomeExt for ClientOutcome<T> {
+    type Output = T;
+
+    fn try_unwrap(self) -> Result<Self::Output, Error> {
+        match self {
+            ClientOutcome::Committed(result) => Ok(result),
+            ClientOutcome::WaitForTimeout(timeout) => Err(Error::new(format!(
+                "This faucet is using a multi-owner chain and is not the leader right now. \
+                Try again at {}",
+                timeout.timestamp,
+            ))),
+        }
     }
 }
