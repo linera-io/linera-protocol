@@ -762,6 +762,10 @@ where
             db: self.db.clone(),
         };
         let block_env = self.db.get_block_env()?;
+        let gas_limit = {
+            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            runtime.remaining_fuel(VmRuntime::Evm)
+        }?;
         let result = {
             let mut evm: Evm<'_, _, _> = Evm::builder()
                 .with_ref_db(&mut self.db)
@@ -770,6 +774,7 @@ where
                     tx.clear();
                     tx.transact_to = kind;
                     tx.data = tx_data;
+                    tx.gas_limit = gas_limit;
                 })
                 .modify_block_env(|block| {
                     *block = block_env;
