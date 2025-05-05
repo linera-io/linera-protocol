@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    ops::Range,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use anyhow::Result;
 use linera_views::{
@@ -465,6 +468,14 @@ async fn bucket_log_view_mutability_check() -> Result<()> {
                         vec2.push(Some(new_vector[pos]));
                     }
                     let vec1 = view.log.multi_get(indices).await?;
+                    assert_eq!(vec1, vec2);
+                }
+                for _ in 0..3 {
+                    let start = rng.gen_range(0..count);
+                    let end = rng.gen_range(start..count);
+                    let range = Range { start, end };
+                    let vec1: Vec<u8> = view.log.read(range.clone()).await?;
+                    let vec2: Vec<u8> = new_vector[range].to_vec();
                     assert_eq!(vec1, vec2);
                 }
             }

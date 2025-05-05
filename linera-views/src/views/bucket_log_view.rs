@@ -4,6 +4,7 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
+    cmp::min,
     collections::{BTreeSet, HashMap},
     ops::{Bound, Range, RangeBounds},
 };
@@ -347,8 +348,13 @@ where
     }
 
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+        println!("range={:?} count={} stored_count={}", range, self.count(), self.stored_count);
         let (i_bucket_start, position_start) = self.get_position(range.start).unwrap();
-        let (i_bucket_end, position_end) = self.get_position(range.end).unwrap();
+        let effective_end = min(range.end, self.stored_count);
+        let (i_bucket_end, position_end) = match self.get_position(effective_end) {
+            Some(pair) => pair,
+            None => (self.stored_data.len(), 0)
+        };
 
         let mut keys = Vec::new();
         let mut symbols = Vec::new();
@@ -365,22 +371,24 @@ where
                 self.stored_data[i_bucket].len()
             };
             let range = Range { start, end };
-            let access = match self.stored_data[i_bucket] {
-                Bucket::Loaded { data: _ } => None,
-                Bucket::NotLoaded { length: _ } => {
-                    let key = self.context
-                        .derive_tag_key(KeyTag::Index as u8, &i_bucket)?;
-                    keys.push(key);
-                    i_key += 1;
-                    Some(i_key - 1)
-                },
-            };
-            symbols.push((i_bucket, range, access));
+            if !range.is_empty() {
+                let access = match self.stored_data[i_bucket] {
+                    Bucket::Loaded { data: _ } => None,
+                    Bucket::NotLoaded { length: _ } => {
+                        let key = self.context
+                            .derive_tag_key(KeyTag::Index as u8, &i_bucket)?;
+                        keys.push(key);
+                        i_key += 1;
+                        Some(i_key - 1)
+                    },
+                };
+                symbols.push((i_bucket, range, access));
+            }
         }
         let values = self.context.read_multi_values::<Vec<T>>(keys).await?;
-        let mut returned_values: Vec<T> = Vec::new();
+        let mut returned_values = Vec::new();
         for (i_bucket, range, access) in symbols {
-            let vec: Vec<T> = match access {
+            let vec = match access {
                 None => {
                     let Bucket::Loaded { data } = self.stored_data.get(i_bucket).unwrap() else {
                         unreachable!("The data should be loaded");
@@ -392,6 +400,10 @@ where
                 },
             };
             returned_values.extend(vec);
+        }
+        if effective_end < range.end {
+            let last_index = range.end - effective_end;
+            returned_values.extend(self.new_values[0..last_index].to_vec());
         }
         Ok(returned_values)
     }
