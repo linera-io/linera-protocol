@@ -2862,7 +2862,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     let owner2 = client2.keygen().await?;
 
     let mut faucet_service = client1
-        .run_faucet(None, chain1, Amount::from_tokens(2), None)
+        .run_faucet(None, chain1, Amount::from_tokens(2))
         .await?;
     let faucet = faucet_service.instance();
     let outcome = faucet.claim(&owner2).await?;
@@ -2955,59 +2955,28 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     }
 
     let amount = Amount::ONE;
-    let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, amount, Some(chain_count as u64))
-        .await?;
+    let mut faucet_service = faucet_client.run_faucet(None, faucet_chain, amount).await?;
     let faucet = faucet_service.instance();
 
     // Create a new wallet using the faucet
-    let client1 = net.make_client().await;
-    let (outcome1, _) = client1
+    let client = net.make_client().await;
+    let (outcome, _) = client
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await?
         .unwrap();
 
-    // Create a new wallet using the faucet
-    let client2 = net.make_client().await;
-    let (outcome2, _) = client2
-        .wallet_init(&[], FaucetOption::NewChain(&faucet))
-        .await?
-        .unwrap();
+    let chain = outcome.chain_id;
+    assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());
 
-    // Since the faucet chain exceeds the configured maximum length, the faucet should have
-    // switched after the first new chain.
-    assert_ne!(outcome1.message_id.chain_id, outcome2.message_id.chain_id);
-
-    faucet_service.ensure_is_running()?;
-    faucet_service.terminate().await?;
-
-    let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, amount, Some(chain_count as u64))
-        .await?;
-
-    // Create a new wallet using the faucet
-    let client3 = net.make_client().await;
-    let (outcome3, _) = client3
-        .wallet_init(&[], FaucetOption::NewChain(&faucet))
-        .await?
-        .unwrap();
-
-    // After restarting, the faucet found its second chain, even though it was not initialized
-    // with it.
-    assert_eq!(outcome2.message_id.chain_id, outcome3.message_id.chain_id);
-
-    let chain = outcome3.chain_id;
-    assert_eq!(chain, client3.load_wallet()?.default_chain().unwrap());
-
-    let initial_balance = client3.query_balance(Account::chain(chain)).await?;
+    let initial_balance = client.query_balance(Account::chain(chain)).await?;
     let fees_paid = amount - initial_balance;
     assert!(initial_balance > Amount::ZERO);
 
-    client3
+    client
         .transfer(initial_balance - fees_paid, chain, faucet_chain)
         .await?;
 
-    let final_balance = client3.query_balance(Account::chain(chain)).await?;
+    let final_balance = client.query_balance(Account::chain(chain)).await?;
     assert_eq!(final_balance, Amount::ZERO);
 
     faucet_service.ensure_is_running()?;
@@ -3038,7 +3007,7 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
 
-    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE, None).await?;
+    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE).await?;
     let faucet = faucet_service.instance();
 
     let path =
