@@ -25,7 +25,7 @@ ARG copy=${binaries:+_copy}
 ARG build_flag=
 ARG build_folder=
 
-FROM rust:1.74-slim-bookworm AS builder
+FROM rust:1.81-slim-bookworm AS builder
 ARG git_commit
 ARG target
 ARG build_flag
