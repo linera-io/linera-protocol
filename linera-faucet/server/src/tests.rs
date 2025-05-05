@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
 use linera_client::{chain_listener, wallet::Wallet};
@@ -89,10 +89,9 @@ async fn test_faucet_rate_limiting() {
     };
     let context = Arc::new(Mutex::new(context));
     let root = MutationRoot {
-        chain_id: Arc::new(Mutex::new(chain_id)),
+        chain_id,
         context: context.clone(),
         amount: Amount::from_tokens(1),
-        end_block_height: BlockHeight::from(10),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),
