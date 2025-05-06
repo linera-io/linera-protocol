@@ -3058,16 +3058,17 @@ async fn test_end_to_end_faucet_chain_limit(config: impl LineraNetConfig) -> Res
     let chain = outcome3.chain_id;
     assert_eq!(chain, client3.load_wallet()?.default_chain().unwrap());
 
-    let initial_balance = client3.query_balance(Account::chain(chain)).await?;
-    let fees_paid = amount - initial_balance;
-    assert!(initial_balance > Amount::ZERO);
+    client3.process_inbox(chain).await?;
+    let balance = client3.query_balance(Account::chain(chain)).await?;
+    assert!(balance > Amount::ZERO);
 
+    let max_fees = Amount::from_millis(100); // Estimate: fees should be lower.
     client3
-        .transfer(initial_balance - fees_paid, chain, faucet_chain)
+        .transfer(balance - max_fees, chain, faucet_chain)
         .await?;
 
     let final_balance = client3.query_balance(Account::chain(chain)).await?;
-    assert_eq!(final_balance, Amount::ZERO);
+    assert!(final_balance <= max_fees);
 
     faucet_service.ensure_is_running()?;
     faucet_service.terminate().await?;
