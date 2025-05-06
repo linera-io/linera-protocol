@@ -13,7 +13,7 @@ version.workspace = true
 
 [features]
 ethereum = []
-default = ["wasmer", "rocksdb", "storage-service"]
+default = ["wasmer", "rocksdb", "storage-service", "exporter-features"]
 revm = [
     "linera-base/revm",
     "linera-execution/revm",
@@ -49,6 +49,7 @@ kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote-net = []
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 storage-service = ["linera-storage-service"]
+exporter-features = ["mini-moka", "quick_cache"]
 
 [dependencies]
 alloy-primitives.workspace = true
@@ -72,6 +73,8 @@ colored.workspace = true
 comfy-table.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
+custom_debug_derive.workspace = true
+dashmap.workspace = true
 dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
@@ -94,10 +97,12 @@ linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+mini-moka = { version = "0.10.3", optional = true }
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 prost = { workspace = true }
+quick_cache = { version = "0.6.13", optional = true }
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
@@ -180,6 +185,7 @@ required-features = ["benchmark"]
 [[bin]]
 name = "linera-exporter"
 path = "src/linera-exporter/main.rs"
+required-features = ["exporter-features"]
 
 [[bench]]
 name = "transfers"

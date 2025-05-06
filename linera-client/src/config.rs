@@ -22,7 +22,7 @@ use linera_execution::{
     ResourceControlPolicy,
 };
 use linera_rpc::config::{
-    ExporterServiceConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+    ExporterServiceConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
 use linera_storage::{NetworkDescription, Storage};
 use serde::{Deserialize, Serialize};
@@ -349,6 +349,9 @@ impl GenesisConfig {
 /// The configuration file for the linera-exporter.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlockExporterConfig {
+    /// Identity for the block exporter state.
+    pub id: u32,
+
     /// The server configuration for the linera-exporter.
     pub service_config: ExporterServiceConfig,
 
@@ -356,8 +359,10 @@ pub struct BlockExporterConfig {
     #[serde(default)]
     pub destination_config: DestinationConfig,
 
-    /// Identity for the block exporter state.
-    pub id: u32,
+    /// The configuration file to impose various limits
+    /// on the resources used by the linera-exporter.
+    #[serde(default)]
+    pub limits: LimitsConfig,
 }
 
 /// Configuration file for the exports.
@@ -371,11 +376,60 @@ pub struct DestinationConfig {
 pub type DestinationId = u16;
 
 /// The uri to provide export services to.
-#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Destination {
+    /// The gRPC network protocol.
+    pub tls: TlsConfig,
     /// The host name of the target destination (IP or hostname).
     pub endpoint: String,
     /// The port number of the target destination.
     pub port: u16,
+}
+
+impl Destination {
+    pub fn address(&self) -> String {
+        let tls = match self.tls {
+            TlsConfig::ClearText => "http",
+            TlsConfig::Tls => "https",
+        };
+
+        format!("{}://{}:{}", tls, self.endpoint, self.port)
+    }
+}
+
+/// The configuration file to impose various limits
+/// on the resources used by the linera-exporter.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct LimitsConfig {
+    /// Time period in seconds between periodic persistence
+    /// to the shared storage.
+    pub persistence_period: u16,
+    /// Maximum size of the work queue i.e. maximum number
+    /// of blocks queued up for exports per destination.
+    pub work_queue_size: u16,
+    /// Maximum weight of the blob cache in megabytes.
+    pub blob_cache_weight: u16,
+    /// Estimated number of elements for the blob cache.
+    pub blob_cache_items_capacity: u16,
+    /// Maximum weight of the block cache in megabytes.
+    pub block_cache_weight: u16,
+    /// Estimated number of elements for the block cache.
+    pub block_cache_items_capacity: u16,
+    /// Maximum weight in megabytes for the combined
+    /// cache, consisting of small miscellaneous items.
+    pub auxialiary_cache_size: u16,
+}
+
+impl Default for LimitsConfig {
+    fn default() -> Self {
+        Self {
+            persistence_period: 299,
+            work_queue_size: 256,
+            blob_cache_weight: 1024,
+            blob_cache_items_capacity: 8192,
+            block_cache_weight: 1024,
+            block_cache_items_capacity: 8192,
+            auxialiary_cache_size: 1024,
+        }
+    }
 }
