@@ -912,12 +912,11 @@ where
         };
 
         let block_env = self.db.get_block_env()?;
-        // We follow here the same convention as in Ethereum by setting the maximum
-        // gas to the maximum in the block.
-        let gas_limit = {
-            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-            runtime.get_maximum_fuel_per_block(VmRuntime::Evm)
-        }?;
+        // The runtime costs are not available in service operations.
+        // We need to set a limit to gas usage in order to avoid blocking
+        // the validator.
+        // We set up the limit similarly to Infura to 20 million.
+        let gas_limit = 20_000_000;
         let result_state = {
             let mut evm: Evm<'_, _, _> = Evm::builder()
                 .with_ref_db(&mut self.db)

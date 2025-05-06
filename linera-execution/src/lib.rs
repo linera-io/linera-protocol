@@ -702,9 +702,6 @@ pub trait ServiceRuntime: BaseRuntime {
 
     /// Checks if the service has exceeded its execution time limit.
     fn check_execution_time(&mut self) -> Result<(), ExecutionError>;
-
-    /// Gets the maximum fuel per block.
-    fn get_maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;
 }
 
 pub trait ContractRuntime: BaseRuntime {
