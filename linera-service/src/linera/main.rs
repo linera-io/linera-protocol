@@ -1521,7 +1521,7 @@ impl ClientOptions {
         config_dir.push("linera");
         if !config_dir.exists() {
             debug!("Creating default wallet directory {}", config_dir.display());
-            fs_err::create_dir(&config_dir)?;
+            fs_err::create_dir_all(&config_dir)?;
         }
         info!("Using default wallet directory {}", config_dir.display());
         Ok(config_dir)
