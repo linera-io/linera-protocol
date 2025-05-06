@@ -129,6 +129,7 @@ where
             .await
             .make_chain_client(self.main_chain_id)?;
         let maybe_tmp_chain_id = *self.tmp_chain_id.lock().await;
+        let main_balance = main_client.local_balance().await?;
         let tmp_chain_id = match maybe_tmp_chain_id {
             Some(tmp_chain_id) => tmp_chain_id,
             None => {
@@ -137,7 +138,8 @@ where
                     .amount
                     .try_add(MAX_FEE)?
                     .try_mul(u128::from(self.max_claims_per_chain))?
-                    .try_add(MAX_FEE)?; // One more block fee for closing the chain.
+                    .try_add(MAX_FEE)? // One more block fee for closing the chain.
+                    .min(main_balance.try_sub(MAX_FEE)?);
                 let ownership = main_client.chain_state_view().await?.ownership().clone();
                 let (message_id, certificate) = main_client
                     .open_chain(ownership, ApplicationPermissions::default(), balance)

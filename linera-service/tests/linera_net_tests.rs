@@ -2861,8 +2861,9 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     // Generate keys for client 2.
     let owner2 = client2.keygen().await?;
 
+    // We set the temporary chain limit to 1, so unused tokens remain on the main chain.
     let mut faucet_service = client1
-        .run_faucet(None, chain1, Amount::from_tokens(2), None)
+        .run_faucet(None, chain1, Amount::from_tokens(2), Some(1))
         .await?;
     let faucet = faucet_service.instance();
     let outcome = faucet.claim(&owner2).await?;
