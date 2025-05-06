@@ -2,11 +2,11 @@
 
 This example application implements a simple counter contract, it is initialized with an
 unsigned integer that can be increased by the `increment` operation. In contrast with the
-counter application, it works without GraphQL 
+counter application, it works without GraphQL.
 
 ## How It Works
 
-It is a very basic Linera application, which is initialized by a `u64` which can be incremented
+It is a simple Linera application, which is initialized by a `u64` which can be incremented
 by a `u64`.
 
 For example, if the contract was initialized with 1, querying the contract would give us 1. Now if we want to

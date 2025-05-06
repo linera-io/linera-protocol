@@ -8,6 +8,10 @@ contract ExampleExecuteMessage {
     uint64 value;
     Linera.MessageId last_message_id;
 
+    constructor(uint64 test_value) {
+       require(test_value == 42);
+    }
+
     function instantiate(bytes memory input) external {
         uint64 read_value = abi.decode(input, (uint64));
         value = read_value;

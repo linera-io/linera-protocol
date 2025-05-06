@@ -744,11 +744,18 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     // Creating the API of the contracts
 
     sol! {
+        struct ConstructorArgs {
+            uint64 test_value;
+        }
         function move_value_to_chain(bytes32 chain_id, uint64 moved_value);
         function get_value();
     }
+    let query = get_valueCall {};
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
 
-    let constructor_argument = Vec::new();
+    let constructor_argument = ConstructorArgs { test_value: 42 };
+    let constructor_argument = constructor_argument.abi_encode();
 
     let instantiation_argument: Vec<u8> = u64::abi_encode(&original_value);
 
@@ -785,9 +792,6 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     // Now checking the APIs.
     // First: checking the initial value of the contracts.
 
-    let query = get_valueCall {};
-    let query = query.abi_encode();
-    let query = EvmQuery::Query(query);
     let result = application1.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_value);
