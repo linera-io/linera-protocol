@@ -1538,6 +1538,85 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_conflicting_proposals<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let owner2 = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
+    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
+    let chain_id = client1.chain_id();
+    let owner1 = client1.public_key().await?.into();
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(owner1, 50), (owner2, 50)],
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    });
+    client1
+        .execute_operation(owner_change_op.clone())
+        .await
+        .unwrap();
+    let mut client2 = builder
+        .make_client(chain_id, client1.block_hash(), BlockHeight::from(1))
+        .await?;
+    client2.set_preferred_owner(owner2);
+    client2.synchronize_from_validators().await.unwrap();
+
+    // Client 1 makes a proposal to only validators 0 and 1.
+    builder
+        .set_fault_type([2, 3], FaultType::OfflineWithInfo)
+        .await;
+    assert!(client1
+        .burn(AccountOwner::CHAIN, Amount::from_millis(1))
+        .await
+        .is_err());
+
+    // Client 2's proposal reaches only 2 and 3.
+    builder
+        .set_fault_type([0, 1], FaultType::OfflineWithInfo)
+        .await;
+    builder.set_fault_type([2, 3], FaultType::Honest).await;
+    assert!(client2
+        .burn(AccountOwner::CHAIN, Amount::from_millis(2))
+        .await
+        .is_err());
+
+    // TODO(#3894): Make test_utils deterministic.
+    // The following condition is currently satisfied most of the time, but in some cases
+    // the faulty validators return an error before the honest ones process the proposal.
+
+    // for i in 0..4 {
+    //     let info = builder
+    //         .node(i)
+    //         .chain_info_with_manager_values(chain_id)
+    //         .await?;
+    //     assert_eq!(
+    //         AccountOwner::from(info.manager.requested_proposed.unwrap().public_key),
+    //         if i < 2 { owner1 } else { owner2 },
+    //     );
+    // }
+
+    // Once all validators are functional again, a new proposal should succeed.
+    builder
+        .set_fault_type([0, 1, 2, 3], FaultType::Honest)
+        .await;
+
+    client1.synchronize_from_validators().await.unwrap();
+    client1.publish_data_blob(b"foo".to_vec()).await?;
+
+    assert_eq!(client1.next_block_height(), BlockHeight::from(3));
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_re_propose_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
