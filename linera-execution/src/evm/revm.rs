@@ -912,6 +912,8 @@ where
         };
 
         let block_env = self.db.get_block_env()?;
+        // We follow here the same convention as in Ethereum by setting the maximum
+        // gas to the maximum in the block.
         let gas_limit = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.get_maximum_fuel_per_block(VmRuntime::Evm)
