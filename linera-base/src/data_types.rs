@@ -269,8 +269,10 @@ impl Display for Timestamp {
     Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, WitLoad, WitStore, WitType,
 )]
 pub struct Resources {
-    /// An amount of execution fuel.
-    pub fuel: u64,
+    /// An amount of Wasm execution fuel.
+    pub wasm_fuel: u64,
+    /// An amount of EVM execution fuel.
+    pub evm_fuel: u64,
     /// A number of read operations to be executed.
     pub read_operations: u32,
     /// A number of write operations to be executed.

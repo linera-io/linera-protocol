@@ -44,6 +44,7 @@ use linera_base::{
     },
     ownership::ChainOwnership,
     task,
+    vm::VmRuntime,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -226,8 +227,8 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
-    #[error("Block execution required too much fuel")]
-    MaximumFuelExceeded,
+    #[error("Block execution required too much fuel for VM {0}")]
+    MaximumFuelExceeded(VmRuntime),
     #[error("Services running as oracles in block took longer than allowed")]
     MaximumServiceOracleExecutionTimeExceeded,
     #[error("Service running as an oracle produced a response that's too large")]
@@ -719,10 +720,10 @@ pub trait ContractRuntime: BaseRuntime {
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError>;
 
     /// Returns the amount of execution fuel remaining before execution is aborted.
-    fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
+    fn remaining_fuel(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;
 
     /// Consumes some of the execution fuel.
-    fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
+    fn consume_fuel(&mut self, fuel: u64, vm_runtime: VmRuntime) -> Result<(), ExecutionError>;
 
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;

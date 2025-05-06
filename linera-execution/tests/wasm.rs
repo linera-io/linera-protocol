@@ -77,7 +77,7 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let policy = ResourceControlPolicy {
-        fuel_unit: Amount::from_attos(1),
+        wasm_fuel_unit: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
     };
     let amount = Amount::from_tokens(1);
@@ -104,7 +104,7 @@ async fn test_fuel_for_counter_wasm_application(
         let txn_outcome = txn_tracker.into_outcome().unwrap();
         assert!(txn_outcome.outgoing_messages.is_empty());
     }
-    assert_eq!(controller.tracker.fuel, expected_fuel);
+    assert_eq!(controller.tracker.wasm_fuel, expected_fuel);
     assert_eq!(
         controller
             .with_state(&mut view.system)

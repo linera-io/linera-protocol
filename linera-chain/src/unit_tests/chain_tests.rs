@@ -314,7 +314,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     );
 
     // Also, blocks without an application operation or incoming message are forbidden.
-    let invalid_block = make_child_block(&value.clone());
+    let invalid_block = make_child_block(&value);
     let result = chain
         .execute_block(&invalid_block, time, None, &[], None)
         .await;
