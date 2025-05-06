@@ -856,7 +856,9 @@ Recipient:
           TYPENAME: Account
 ResourceControlPolicy:
   STRUCT:
-    - fuel_unit:
+    - wasm_fuel_unit:
+        TYPENAME: Amount
+    - evm_fuel_unit:
         TYPENAME: Amount
     - read_operation:
         TYPENAME: Amount
@@ -888,7 +890,8 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - http_request:
         TYPENAME: Amount
-    - maximum_fuel_per_block: U64
+    - maximum_wasm_fuel_per_block: U64
+    - maximum_evm_fuel_per_block: U64
     - maximum_service_oracle_execution_ms: U64
     - maximum_block_size: U64
     - maximum_bytecode_size: U64

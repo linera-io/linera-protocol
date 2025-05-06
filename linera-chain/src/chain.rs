@@ -109,30 +109,40 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 #[cfg(with_metrics)]
-static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "wasm_num_reads_per_block",
-        "Wasm number of reads per block",
+        "evm_fuel_used_per_block",
+        "EVM fuel used per block",
+        &[],
+        exponential_bucket_interval(10.0, 1_000_000.0),
+    )
+});
+
+#[cfg(with_metrics)]
+static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "vm_num_reads_per_block",
+        "VM number of reads per block",
         &[],
         exponential_bucket_interval(0.1, 100.0),
     )
 });
 
 #[cfg(with_metrics)]
-static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "wasm_bytes_read_per_block",
-        "Wasm number of bytes read per block",
+        "vm_bytes_read_per_block",
+        "VM number of bytes read per block",
         &[],
         exponential_bucket_interval(0.1, 10_000_000.0),
     )
 });
 
 #[cfg(with_metrics)]
-static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "wasm_bytes_written_per_block",
-        "Wasm number of bytes written per block",
+        "vm_bytes_written_per_block",
+        "VM number of bytes written per block",
         &[],
         exponential_bucket_interval(0.1, 10_000_000.0),
     )
@@ -1143,14 +1153,17 @@ where
         NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.fuel as f64);
-        WASM_NUM_READS_PER_BLOCK
+            .observe(tracker.wasm_fuel as f64);
+        EVM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.evm_fuel as f64);
+        VM_NUM_READS_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.read_operations as f64);
-        WASM_BYTES_READ_PER_BLOCK
+        VM_BYTES_READ_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_read as f64);
-        WASM_BYTES_WRITTEN_PER_BLOCK
+        VM_BYTES_WRITTEN_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_written as f64);
     }

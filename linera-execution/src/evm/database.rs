@@ -20,10 +20,65 @@ use revm_primitives::{address, BlobExcessGasAndPrice, BlockEnv, EvmState};
 
 use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ViewError};
 
+/// The cost of loading from storage.
+const SLOAD_COST: u64 = 2100;
+
+/// The cost of storing a non-zero value in the storage for the first time.
+const SSTORE_COST_SET: u64 = 20000;
+
+/// The cost of not changing the state of the variable in the storage.
+const SSTORE_COST_NO_OPERATION: u64 = 100;
+
+/// The cost of overwriting the storage to a different value.
+const SSTORE_COST_RESET: u64 = 2900;
+
+/// The refund from releasing data.
+const SSTORE_REFUND_RELEASE: u64 = 4800;
+
+#[derive(Clone, Default)]
+pub(crate) struct StorageStats {
+    key_no_operation: u64,
+    key_reset: u64,
+    key_set: u64,
+    key_release: u64,
+    key_read: u64,
+}
+
+impl StorageStats {
+    pub fn storage_costs(&self) -> u64 {
+        let mut storage_costs = 0;
+        storage_costs += self.key_no_operation * SSTORE_COST_NO_OPERATION;
+        storage_costs += self.key_reset * SSTORE_COST_RESET;
+        storage_costs += self.key_set * SSTORE_COST_SET;
+        storage_costs += self.key_read * SLOAD_COST;
+        storage_costs
+    }
+
+    pub fn storage_refund(&self) -> u64 {
+        self.key_release * SSTORE_REFUND_RELEASE
+    }
+}
+
+pub(crate) struct DatabaseRuntime<Runtime> {
+    storage_stats: Arc<Mutex<StorageStats>>,
+    pub runtime: Arc<Mutex<Runtime>>,
+    pub changes: EvmState,
+}
+
+impl<Runtime> Clone for DatabaseRuntime<Runtime> {
+    fn clone(&self) -> Self {
+        Self {
+            storage_stats: self.storage_stats.clone(),
+            runtime: self.runtime.clone(),
+            changes: self.changes.clone(),
+        }
+    }
+}
+
 #[repr(u8)]
 enum KeyTag {
     /// Key prefix for the storage of the zero contract.
-    ZeroContractAddress,
+    NullAddress,
     /// Key prefix for the storage of the contract address.
     ContractAddress,
 }
@@ -35,30 +90,19 @@ pub enum KeyCategory {
     Storage,
 }
 
-pub(crate) struct DatabaseRuntime<Runtime> {
-    pub runtime: Arc<Mutex<Runtime>>,
-    pub changes: EvmState,
-}
-
-impl<Runtime> Clone for DatabaseRuntime<Runtime> {
-    fn clone(&self) -> Self {
-        Self {
-            runtime: self.runtime.clone(),
-            changes: self.changes.clone(),
-        }
-    }
-}
-
 impl<Runtime> DatabaseRuntime<Runtime> {
-    fn get_uint256_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
+    /// Encode the `index` of the EVM storage associated to the smart contract
+    /// in a linera key.
+    fn get_linera_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
         let mut key = vec![val, KeyCategory::Storage as u8];
         bcs::serialize_into(&mut key, &index)?;
         Ok(key)
     }
 
+    /// Returns the tag associated to the contract.
     fn get_contract_address_key(&self, address: &Address) -> Option<u8> {
         if address == &Address::ZERO {
-            return Some(KeyTag::ZeroContractAddress as u8);
+            return Some(KeyTag::NullAddress as u8);
         }
         if address == &Address::ZERO.create(0) {
             return Some(KeyTag::ContractAddress as u8);
@@ -66,11 +110,25 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         None
     }
 
+    /// Creates a new `DatabaseRuntime`.
     pub fn new(runtime: Runtime) -> Self {
+        let storage_stats = StorageStats::default();
         Self {
+            storage_stats: Arc::new(Mutex::new(storage_stats)),
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
         }
+    }
+
+    /// Returns the current storage states and clears it to default.
+    pub fn take_storage_stats(&self) -> StorageStats {
+        let mut storage_stats_read = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
+        let storage_stats = storage_stats_read.clone();
+        *storage_stats_read = StorageStats::default();
+        storage_stats
     }
 }
 
@@ -151,7 +209,14 @@ where
         let Some(val) = val else {
             panic!("There is no storage associated to externally owned account");
         };
-        let key = Self::get_uint256_key(val, index)?;
+        let key = Self::get_linera_key(val, index)?;
+        {
+            let mut storage_stats = self
+                .storage_stats
+                .lock()
+                .expect("The lock should be possible");
+            storage_stats.key_read += 1;
+        }
         let result = {
             let mut runtime = self.runtime.lock().expect("The lock should be possible");
             let promise = runtime.read_value_bytes_new(key)?;
@@ -171,6 +236,10 @@ where
 {
     /// Effectively commits changes to storage.
     pub fn commit_changes(&mut self) -> Result<(), ExecutionError> {
+        let mut storage_stats = self
+            .storage_stats
+            .lock()
+            .expect("The lock should be possible");
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let mut batch = Batch::new();
         let mut list_new_balances = Vec::new();
@@ -207,8 +276,21 @@ where
                     };
                     batch.put_key_value(key_state, &account_state)?;
                     for (index, value) in &account.storage {
-                        let key = Self::get_uint256_key(val, *index)?;
-                        batch.put_key_value(key, &value.present_value())?;
+                        if value.present_value() == value.original_value() {
+                            storage_stats.key_no_operation += 1;
+                        } else {
+                            let key = Self::get_linera_key(val, *index)?;
+                            if value.original_value() == U256::ZERO {
+                                batch.put_key_value(key, &value.present_value())?;
+                                storage_stats.key_set += 1;
+                            } else if value.present_value() == U256::ZERO {
+                                batch.delete_key(key);
+                                storage_stats.key_release += 1;
+                            } else {
+                                batch.put_key_value(key, &value.present_value())?;
+                                storage_stats.key_reset += 1;
+                            }
+                        }
                     }
                 }
             } else {
@@ -239,7 +321,7 @@ where
 {
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
         let mut keys = Vec::new();
-        for key_tag in [KeyTag::ZeroContractAddress, KeyTag::ContractAddress] {
+        for key_tag in [KeyTag::NullAddress, KeyTag::ContractAddress] {
             let key = vec![key_tag as u8, KeyCategory::AccountInfo as u8];
             keys.push(key);
         }

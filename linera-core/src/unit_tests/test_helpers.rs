@@ -82,7 +82,7 @@ pub fn assert_insufficient_funding<T>(
 
     assert_matches!(
         *execution_error,
-        ExecutionError::InsufficientFunding { .. },
-        "Expected ExecutionError::InsufficientFunding, found: {execution_error:#?}"
+        ExecutionError::InsufficientBalance { .. },
+        "Expected ExecutionError::InsufficientBalance, found: {execution_error:#?}"
     );
 }

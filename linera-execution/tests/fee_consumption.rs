@@ -12,6 +12,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, OracleResponse},
     http,
     identifiers::{Account, AccountOwner, MessageId},
+    vm::VmRuntime,
 };
 use linera_execution::{
     test_utils::{
@@ -205,7 +206,8 @@ async fn test_fee_consumption(
     }
 
     let prices = ResourceControlPolicy {
-        fuel_unit: Amount::from_tokens(2),
+        wasm_fuel_unit: Amount::from_tokens(3),
+        evm_fuel_unit: Amount::from_tokens(2),
         read_operation: Amount::from_tokens(3),
         write_operation: Amount::from_tokens(5),
         byte_read: Amount::from_tokens(7),
@@ -217,7 +219,8 @@ async fn test_fee_consumption(
         message_byte: Amount::from_tokens(29),
         service_as_oracle_query: Amount::from_millis(31),
         http_request: Amount::from_tokens(37),
-        maximum_fuel_per_block: 4_868_145_137,
+        maximum_wasm_fuel_per_block: 4_868_145_137,
+        maximum_evm_fuel_per_block: 4_868_145_137,
         maximum_block_size: 41,
         maximum_service_oracle_execution_ms: 43,
         maximum_blob_size: 47,
@@ -380,7 +383,7 @@ impl FeeSpend {
     /// The fee amount required for this runtime operation.
     pub fn amount(&self, policy: &ResourceControlPolicy) -> Amount {
         match self {
-            FeeSpend::Fuel(units) => policy.fuel_unit.saturating_mul(*units as u128),
+            FeeSpend::Fuel(units) => policy.wasm_fuel_unit.saturating_mul(*units as u128),
             FeeSpend::Read(_key, value) => {
                 let value_read_fee = value
                     .as_ref()
@@ -397,7 +400,7 @@ impl FeeSpend {
     /// Executes the operation with the `runtime`
     pub fn execute(self, runtime: &mut impl ContractRuntime) -> Result<(), ExecutionError> {
         match self {
-            FeeSpend::Fuel(units) => runtime.consume_fuel(units),
+            FeeSpend::Fuel(units) => runtime.consume_fuel(units, VmRuntime::Wasm),
             FeeSpend::Read(key, value) => {
                 let promise = runtime.read_value_bytes_new(key)?;
                 let response = runtime.read_value_bytes_wait(&promise)?;

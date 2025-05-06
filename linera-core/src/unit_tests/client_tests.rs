@@ -1080,7 +1080,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy {
-            maximum_fuel_per_block: 30_000,
+            maximum_wasm_fuel_per_block: 30_000,
             blob_read: initial_balance + Amount::ONE,
             blob_published: initial_balance + Amount::ONE,
             blob_byte_read: initial_balance + Amount::ONE,
