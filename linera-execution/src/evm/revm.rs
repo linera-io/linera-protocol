@@ -749,12 +749,12 @@ where
     fn transact_commit(
         &mut self,
         ch: Choice,
-        vec: &[u8],
+        input: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         let (kind, tx_data) = match ch {
-            Choice::Create => (TxKind::Create, Bytes::copy_from_slice(vec)),
+            Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
             Choice::Call => {
-                let tx_data = Bytes::copy_from_slice(vec);
+                let tx_data = Bytes::copy_from_slice(input);
                 (TxKind::Call(Address::ZERO.create(0)), tx_data)
             }
         };
@@ -904,9 +904,9 @@ where
     fn transact(
         &mut self,
         kind: TxKind,
-        vec: &[u8],
+        input: &[u8],
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
-        let tx_data = Bytes::copy_from_slice(vec);
+        let tx_data = Bytes::copy_from_slice(input);
         let mut inspector = CallInterceptorService {
             db: self.db.clone(),
         };
