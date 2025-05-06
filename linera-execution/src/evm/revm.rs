@@ -888,8 +888,7 @@ where
                 };
                 vec_init.extend_from_slice(&argument);
                 let kind = TxKind::Create;
-                let tx_data = Bytes::copy_from_slice(&vec_init);
-                let (_, changes) = self.transact(kind, tx_data)?;
+                let (_, changes) = self.transact(kind, &vec_init)?;
                 changes
             };
             self.db.changes = changes;
@@ -898,22 +897,26 @@ where
         forbid_execute_operation_origin(&vec[..4])?;
         let contract_address = Address::ZERO.create(0);
         let kind = TxKind::Call(contract_address);
-        let tx_data = Bytes::copy_from_slice(vec);
-        let (execution_result, _) = self.transact(kind, tx_data)?;
+        let (execution_result, _) = self.transact(kind, vec)?;
         Ok(execution_result)
     }
 
     fn transact(
         &mut self,
         kind: TxKind,
-        tx_data: Bytes,
+        vec: &[u8],
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
+        let tx_data = Bytes::copy_from_slice(vec);
         let mut inspector = CallInterceptorService {
             db: self.db.clone(),
         };
 
+        let block_env = self.db.get_block_env()?;
+        let gas_limit = {
+            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            runtime.get_maximum_fuel_per_block(VmRuntime::Evm)
+        }?;
         let result_state = {
-            let block_env = self.db.get_block_env()?;
             let mut evm: Evm<'_, _, _> = Evm::builder()
                 .with_ref_db(&mut self.db)
                 .with_external_context(&mut inspector)
@@ -921,6 +924,7 @@ where
                     tx.clear();
                     tx.transact_to = kind;
                     tx.data = tx_data;
+                    tx.gas_limit = gas_limit;
                 })
                 .modify_block_env(|block| {
                     *block = block_env;
