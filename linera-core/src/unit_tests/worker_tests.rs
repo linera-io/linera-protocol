@@ -939,7 +939,7 @@ where
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
                     execution_error, ChainExecutionContext::Operation(_)
-                ) if matches!(**execution_error, ExecutionError::InsufficientFunding { .. }))
+                ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
         );
     }
     {
@@ -1186,7 +1186,7 @@ where
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
                 execution_error, ChainExecutionContext::Operation(_)
-        ) if matches!(**execution_error, ExecutionError::InsufficientFunding { .. }))
+        ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());

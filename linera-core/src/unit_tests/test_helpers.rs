@@ -31,7 +31,7 @@ pub fn assert_insufficient_funding_during_operation<T>(
 
     assert_matches!(
         *execution_error,
-        ExecutionError::InsufficientFunding { .. },
+        ExecutionError::InsufficientBalance { .. },
         "Expected ExecutionError::InsufficientFunding, found: {execution_error:#?}"
     );
 }
@@ -55,7 +55,7 @@ pub fn assert_insufficient_funding_fees<T>(obtained_error: Result<T, ChainClient
 
     assert_matches!(
         *execution_error,
-        ExecutionError::InsufficientFundingForFees { .. },
+        ExecutionError::FeesExceedFunding { .. },
         "Expected ExecutionError::InsufficientFundingForFees, found: {execution_error:#?}"
     );
 }

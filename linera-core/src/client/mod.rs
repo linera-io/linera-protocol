@@ -2561,7 +2561,7 @@ impl<Env: Environment> ChainClient<Env> {
                     ChainExecutionContext::Block
                 ) if matches!(
                     **execution_error,
-                    ExecutionError::InsufficientFundingForFees { .. }
+                    ExecutionError::FeesExceedFunding { .. }
                 )
             ) =>
             {

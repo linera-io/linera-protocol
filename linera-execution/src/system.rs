@@ -673,7 +673,7 @@ where
             self.balance.get_mut()
         } else {
             self.balances.get_mut(account).await?.ok_or_else(|| {
-                ExecutionError::InsufficientFunding {
+                ExecutionError::InsufficientBalance {
                     balance: Amount::ZERO,
                     account: *account,
                 }
@@ -682,7 +682,7 @@ where
 
         balance
             .try_sub_assign(amount)
-            .map_err(|_| ExecutionError::InsufficientFunding {
+            .map_err(|_| ExecutionError::InsufficientBalance {
                 balance: *balance,
                 account: *account,
             })?;
