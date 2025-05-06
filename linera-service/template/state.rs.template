@@ -1,7 +1,7 @@
 use linera_sdk::views::{{linera_views, RegisterView, RootView, ViewStorageContext}};
 
 #[derive(RootView, async_graphql::SimpleObject)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct {project_name}State {{
     pub value: RegisterView<u64>,
     // Add fields here.

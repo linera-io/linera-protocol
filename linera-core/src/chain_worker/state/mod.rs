@@ -17,7 +17,7 @@ use linera_base::{
     data_types::{ApplicationDescription, Blob, BlockHeight, Epoch},
     ensure,
     hashed::Hashed,
-    identifiers::{ApplicationId, BlobId, ChainId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::{
     data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposedBlock},
@@ -26,8 +26,7 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    ExecutionStateView, Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
-    SystemMessage,
+    ExecutionStateView, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -212,7 +211,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        self.ensure_is_active()?;
+        self.ensure_is_active().await?;
         if ChainWorkerStateWithTemporaryChanges::new(&mut *self)
             .await
             .check_proposed_block(&proposal)
@@ -346,9 +345,10 @@ where
     }
 
     /// Ensures that the current chain is active, returning an error otherwise.
-    fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
+    async fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
-            self.chain.ensure_is_active()?;
+            let local_time = self.storage.clock().current_time();
+            self.chain.ensure_is_active(local_time).await?;
             self.knows_chain_is_active = true;
         }
         Ok(())
@@ -430,17 +430,11 @@ where
             {
                 return; // The parent chain is not tracked; don't track the child.
             }
-            let messages = outcome.messages.iter().flatten();
-            let open_chain_message_indices =
-                messages
-                    .enumerate()
-                    .filter_map(|(index, outgoing_message)| match outgoing_message.message {
-                        Message::System(SystemMessage::OpenChain(_)) => Some(index),
-                        _ => None,
-                    });
-            let open_chain_message_ids =
-                open_chain_message_indices.map(|index| proposed_block.message_id(index as u32));
-            let new_chain_ids = open_chain_message_ids.map(ChainId::child);
+            let new_chain_ids = outcome
+                .created_blobs_ids()
+                .into_iter()
+                .filter(|blob_id| blob_id.blob_type == BlobType::ChainDescription)
+                .map(|blob_id| ChainId(blob_id.hash));
 
             tracked_chains
                 .write()

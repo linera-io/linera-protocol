@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, ChainId, MessageId},
+    linera_base_types::{AccountOwner, ChainId},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
@@ -14,8 +14,6 @@ use serde::{Deserialize, Serialize};
 /// The IDs of a temporary chain for a single game of Hex.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, SimpleObject)]
 pub struct GameChain {
-    /// The ID of the `OpenChain` message that created the chain.
-    pub message_id: MessageId,
     /// The ID of the temporary game chain itself.
     pub chain_id: ChainId,
 }
@@ -23,7 +21,7 @@ pub struct GameChain {
 /// The application state.
 #[derive(RootView, SimpleObject)]
 #[graphql(complex)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct HexState {
     /// The `AccountOwner`s controlling players `One` and `Two`.
     pub owners: RegisterView<Option<[AccountOwner; 2]>>,

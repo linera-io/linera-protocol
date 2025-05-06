@@ -7,7 +7,7 @@ use linera_base::vm::VmRuntime;
 use linera_views::context::MemoryContext;
 
 use super::*;
-use crate::{ExecutionStateView, Message, TestExecutionRuntimeContext};
+use crate::{test_utils::dummy_chain_description, ExecutionStateView, TestExecutionRuntimeContext};
 
 /// Returns an execution state view and a matching operation context, for epoch 1, with root
 /// chain 0 as the admin ID and one empty committee.
@@ -15,18 +15,19 @@ async fn new_view_and_context() -> (
     ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
     OperationContext,
 ) {
-    let description = ChainDescription::Root(5);
+    let description = dummy_chain_description(5);
     let context = OperationContext {
-        chain_id: ChainId::from(description),
+        chain_id: ChainId::from(&description),
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: BlockHeight::from(7),
         round: Some(0),
+        timestamp: Default::default(),
     };
     let state = SystemExecutionState {
         description: Some(description),
         epoch: Some(Epoch(1)),
-        admin_id: Some(ChainId::root(0)),
+        admin_id: Some(dummy_chain_description(0).id()),
         committees: BTreeMap::new(),
         ..SystemExecutionState::default()
     };
@@ -91,16 +92,10 @@ async fn application_message_index() -> anyhow::Result<()> {
 #[tokio::test]
 async fn open_chain_message_index() {
     let (mut view, context) = new_view_and_context().await;
-    let epoch = view.system.epoch.get().unwrap();
-    let admin_id = view.system.admin_id.get().unwrap();
-    let committees = view.system.committees.get().clone();
     let owner = linera_base::crypto::AccountPublicKey::test_key(0).into();
     let ownership = ChainOwnership::single(owner);
     let config = OpenChainConfig {
         ownership,
-        committees,
-        epoch,
-        admin_id,
         balance: Amount::ZERO,
         application_permissions: Default::default(),
     };
@@ -118,9 +113,8 @@ async fn open_chain_message_index() {
         .unwrap();
     assert_eq!(new_application, None);
     assert_eq!(
-        txn_tracker.into_outcome().unwrap().outgoing_messages[OPEN_CHAIN_MESSAGE_INDEX as usize]
-            .message,
-        Message::System(SystemMessage::OpenChain(Box::new(config)))
+        txn_tracker.into_outcome().unwrap().blobs[0].id().blob_type,
+        BlobType::ChainDescription,
     );
 }
 
@@ -131,7 +125,7 @@ async fn empty_accounts_are_removed() -> anyhow::Result<()> {
     let amount = Amount::from_tokens(99);
 
     let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
+        description: Some(dummy_chain_description(0)),
         balances: BTreeMap::from([(owner, amount)]),
         ..SystemExecutionState::default()
     }

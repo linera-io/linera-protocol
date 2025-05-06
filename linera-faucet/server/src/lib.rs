@@ -12,7 +12,7 @@ use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{AccountOwner, ChainId, MessageId},
+    identifiers::{AccountOwner, ChainId},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -59,8 +59,6 @@ pub struct MutationRoot<C> {
 /// The result of a successful `claim` mutation.
 #[derive(SimpleObject)]
 pub struct ClaimOutcome {
-    /// The ID of the message that created the new chain.
-    pub message_id: MessageId,
     /// The ID of the new chain.
     pub chain_id: ChainId,
     /// The hash of the parent chain's certificate containing the `OpenChain` operation.
@@ -90,7 +88,12 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(self.chain_id)
+            .await?;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -119,7 +122,12 @@ where
     C: ClientContext,
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(self.chain_id)
+            .await?;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -150,7 +158,7 @@ where
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;
         self.context.lock().await.update_wallet(&client).await?;
-        let (message_id, certificate) = match result? {
+        let (chain_id, certificate) = match result? {
             ClientOutcome::Committed(result) => result,
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
@@ -160,9 +168,7 @@ where
                 )));
             }
         };
-        let chain_id = ChainId::child(message_id);
         Ok(ClaimOutcome {
-            message_id,
             chain_id,
             certificate_hash: certificate.hash(),
         })
@@ -234,7 +240,7 @@ where
         config: ChainListenerConfig,
         storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
-        let client = context.make_chain_client(chain_id)?;
+        let client = context.make_chain_client(chain_id).await?;
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;

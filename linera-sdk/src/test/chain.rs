@@ -17,9 +17,10 @@ use futures::future;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{
-        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, CompressedBytecode, Epoch,
+        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, ChainDescription,
+        CompressedBytecode, Epoch,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainExecutionContext};
@@ -47,7 +48,7 @@ impl Clone for ActiveChain {
     fn clone(&self) -> Self {
         ActiveChain {
             key_pair: self.key_pair.copy(),
-            description: self.description,
+            description: self.description.clone(),
             tip: self.tip.clone(),
             validator: self.validator.clone(),
         }
@@ -75,7 +76,7 @@ impl ActiveChain {
 
     /// Returns the [`ChainId`] of this microchain.
     pub fn id(&self) -> ChainId {
-        self.description.into()
+        self.description.id()
     }
 
     /// Returns the [`AccountPublicKey`] of the active owner of this microchain.
@@ -256,7 +257,7 @@ impl ActiveChain {
     ) -> Result<ConfirmedBlockCertificate, WorkerError> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
-            self.description.into(),
+            self.description.id(),
             self.key_pair.public().into(),
             self.epoch().await,
             tip.as_ref(),

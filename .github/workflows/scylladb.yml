@@ -11,6 +11,7 @@ on:
       - 'toolchains/**'
       - 'linera-views/**'
       - 'linera-storage/**'
+      - 'linera-service/src/storage.rs'
       - 'docker_scylla/**'
   workflow_dispatch:
 

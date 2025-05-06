@@ -3,7 +3,6 @@
 
 use linera_base::data_types::Timestamp;
 use linera_core::test_utils::{MemoryStorageBuilder, TestBuilder};
-use linera_execution::ResourceControlPolicy;
 use linera_rpc::{
     config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
     simple::TransportProtocol,
@@ -31,7 +30,7 @@ pub fn make_genesis_config(builder: &TestBuilder<MemoryStorageBuilder>) -> Genes
         CommitteeConfig { validators },
         builder.admin_id(),
         Timestamp::from(0),
-        ResourceControlPolicy::default(),
+        builder.initial_committee.policy().clone(),
         "test network".to_string(),
     );
     genesis_config.chains.extend(builder.genesis_chains());

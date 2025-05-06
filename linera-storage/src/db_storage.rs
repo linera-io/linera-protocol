@@ -42,7 +42,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage};
+use crate::{ChainRuntimeContext, Clock, NetworkDescription, Storage};
 
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
@@ -216,6 +216,28 @@ pub static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     )
 });
 
+/// The metric counting how often the network description is read from storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "network_description",
+        "The metric counting how often the network description is read from storage",
+        &[],
+    )
+});
+
+/// The metric counting how often the network description is written to storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "write_event",
+        "The metric counting how often the network description is written to storage",
+        &[],
+    )
+});
+
 trait BatchExt {
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError>;
 
@@ -225,6 +247,11 @@ trait BatchExt {
         -> Result<(), ViewError>;
 
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError>;
+
+    fn add_network_description(
+        &mut self,
+        information: &NetworkDescription,
+    ) -> Result<(), ViewError>;
 }
 
 impl BatchExt for Batch {
@@ -263,6 +290,17 @@ impl BatchExt for Batch {
         self.put_key_value_bytes(event_key.to_vec(), value);
         Ok(())
     }
+
+    fn add_network_description(
+        &mut self,
+        information: &NetworkDescription,
+    ) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        WRITE_NETWORK_DESCRIPTION.with_label_values(&[]).inc();
+        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
+        self.put_key_value(key, information)?;
+        Ok(())
+    }
 }
 
 /// Main implementation of the [`Storage`] trait.
@@ -285,6 +323,7 @@ enum BaseKey {
     BlobState(BlobId),
     Event(EventId),
     BlockExporterState(u32),
+    NetworkDescription,
 }
 
 const INDEX_CHAIN_ID: u8 = 0;
@@ -810,6 +849,24 @@ where
             batch.add_event(event_id, value)?;
         }
         self.write_batch(batch).await
+    }
+
+    async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
+        let maybe_value = self.store.read_value(&key).await?;
+        #[cfg(with_metrics)]
+        READ_NETWORK_DESCRIPTION.with_label_values(&[]).inc();
+        Ok(maybe_value)
+    }
+
+    async fn write_network_description(
+        &self,
+        information: &NetworkDescription,
+    ) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        batch.add_network_description(information)?;
+        self.write_batch(batch).await?;
+        Ok(())
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {

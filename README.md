@@ -90,6 +90,7 @@ FAUCET_URL=http://localhost:8080
 
 # Set the path of the future wallet.
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 # Initialize a new user wallet.
@@ -99,9 +100,9 @@ linera wallet init --faucet $FAUCET_URL
 INFO1=($(linera wallet request-chain --faucet $FAUCET_URL))
 INFO2=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN1="${INFO1[0]}"
-ACCOUNT1="${INFO1[3]}"
+ACCOUNT1="${INFO1[2]}"
 CHAIN2="${INFO2[0]}"
-ACCOUNT2="${INFO2[3]}"
+ACCOUNT2="${INFO2[2]}"
 
 # Show the different chains tracked by the wallet.
 linera wallet show

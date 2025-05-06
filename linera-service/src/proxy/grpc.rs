@@ -19,7 +19,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
-use linera_client::config::GenesisConfig;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
     config::{
@@ -33,8 +32,8 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
-            HandlePendingBlobRequest, LiteCertificate, Notification, PendingBlobRequest,
-            PendingBlobResult, SubscriptionRequest, VersionInfo,
+            HandlePendingBlobRequest, LiteCertificate, NetworkDescription, Notification,
+            PendingBlobRequest, PendingBlobResult, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -150,7 +149,6 @@ pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 struct GrpcProxyInner<S> {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
-    genesis_config: GenesisConfig,
     worker_connection_pool: GrpcConnectionPool,
     notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
@@ -164,7 +162,6 @@ where
     pub fn new(
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
-        genesis_config: GenesisConfig,
         connect_timeout: Duration,
         timeout: Duration,
         tls: TlsConfig,
@@ -173,7 +170,6 @@ where
         Self(Arc::new(GrpcProxyInner {
             public_config,
             internal_config,
-            genesis_config,
             worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
                 .with_timeout(timeout),
@@ -240,7 +236,7 @@ where
         err,
     )]
     pub async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
-        info!("Starting gRPC server");
+        info!("Starting proxy");
         let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]
@@ -470,11 +466,20 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn get_genesis_config_hash(
+    async fn get_network_description(
         &self,
         _request: Request<()>,
-    ) -> Result<Response<CryptoHash>, Status> {
-        Ok(Response::new(self.0.genesis_config.hash().into()))
+    ) -> Result<Response<NetworkDescription>, Status> {
+        let description = self
+            .0
+            .storage
+            .read_network_description()
+            .await
+            .map_err(Self::error_to_status)?
+            .ok_or(Status::not_found(
+                "Cannot find network description in the database",
+            ))?;
+        Ok(Response::new(description.into()))
     }
 
     #[instrument(skip_all, err(Display))]
@@ -695,6 +700,7 @@ impl<T> GrpcMessageLimiter<T> {
 
 #[cfg(test)]
 mod proto_message_cap {
+    use linera_base::crypto::CryptoHash;
     use linera_chain::{
         data_types::BlockExecutionOutcome,
         types::{Block, Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
@@ -710,7 +716,7 @@ mod proto_message_cap {
         let validator = keypair.public_key;
         let signature = ValidatorSignature::new(&TestString::new("Test"), &keypair.secret_key);
         let block = Block::new(
-            linera_chain::test::make_first_block(ChainId::root(0)),
+            linera_chain::test::make_first_block(ChainId(CryptoHash::test_hash("root_chain"))),
             BlockExecutionOutcome::default(),
         );
         let signatures = vec![(validator, signature)];

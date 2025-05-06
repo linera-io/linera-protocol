@@ -14,32 +14,32 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationDescription, Blob, BlockHeight, CompressedBytecode, Epoch, TimeDelta,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch, TimeDelta,
         Timestamp,
     },
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, EventId},
-    ownership::ChainOwnership,
+    identifiers::{ApplicationId, BlobId, ChainId, EventId},
     vm::VmRuntime,
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
-use linera_execution::{
-    committee::Committee, BlobState, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
-};
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
 };
+use linera_execution::{
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode,
+    UserServiceCode, WasmRuntime,
+};
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{
     context::Context,
-    views::{CryptoHashView, RootView, ViewError},
+    views::{RootView, ViewError},
 };
+use serde::{Deserialize, Serialize};
 
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
@@ -174,6 +174,15 @@ pub trait Storage: Sized {
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError>;
 
+    /// Reads the network description.
+    async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+
+    /// Writes the network description.
+    async fn write_network_description(
+        &self,
+        information: &NetworkDescription,
+    ) -> Result<(), ViewError>;
+
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
     ///
     /// # Notes
@@ -181,41 +190,18 @@ pub trait Storage: Sized {
     /// This method creates a new [`ChainStateView`] instance. If there are multiple instances of
     /// the same chain active at any given moment, they will race to access persistent storage.
     /// This can lead to invalid states and data corruption.
-    async fn create_chain(
-        &self,
-        committee: Committee,
-        admin_id: ChainId,
-        description: ChainDescription,
-        owner: AccountOwner,
-        balance: Amount,
-        timestamp: Timestamp,
-    ) -> Result<(), ChainError>
+    async fn create_chain(&self, description: ChainDescription) -> Result<(), ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
     {
-        let id = description.into();
+        let id = description.id();
+        // Store the description blob.
+        self.write_blob(&Blob::new_chain_description(&description))
+            .await?;
         let mut chain = self.load_chain(id).await?;
         assert!(!chain.is_active(), "Attempting to create a chain twice");
-        chain.manager.reset(
-            ChainOwnership::single(owner),
-            BlockHeight(0),
-            self.clock().current_time(),
-            committee.account_keys_and_weights(),
-        )?;
-        let system_state = &mut chain.execution_state.system;
-        system_state.description.set(Some(description));
-        system_state.epoch.set(Some(Epoch::ZERO));
-        system_state.admin_id.set(Some(admin_id));
-        system_state
-            .committees
-            .get_mut()
-            .insert(Epoch::ZERO, committee);
-        system_state.ownership.set(ChainOwnership::single(owner));
-        system_state.balance.set(balance);
-        system_state.timestamp.set(timestamp);
-
-        let state_hash = chain.execution_state.crypto_hash().await?;
-        chain.execution_state_hash.set(Some(state_hash));
+        let current_time = self.clock().current_time();
+        chain.ensure_is_active(current_time).await?;
         chain.save().await?;
         Ok(())
     }
@@ -342,6 +328,15 @@ pub trait Storage: Sized {
     ) -> Result<Self::BlockExporterContext, ViewError>;
 }
 
+/// A description of the current Linera network to be stored in every node's database.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct NetworkDescription {
+    pub name: String,
+    pub genesis_config_hash: CryptoHash,
+    pub genesis_timestamp: Timestamp,
+}
+
+/// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
     storage: S,

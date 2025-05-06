@@ -8,7 +8,7 @@ use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, Secp256k1SecretKey},
+    crypto::{AccountPublicKey, InMemorySigner},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::{AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -21,7 +21,6 @@ use linera_core::{
     DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::system::Recipient;
-use rand::SeedableRng as _;
 use tokio_util::sync::CancellationToken;
 
 use super::util::make_genesis_config;
@@ -49,7 +48,11 @@ impl chain_listener::ClientContext for ClientContext {
         self.client.storage_client()
     }
 
-    fn make_chain_client(
+    fn client(&self) -> &linera_core::client::Client<Self::Environment> {
+        &self.client
+    }
+
+    async fn make_chain_client(
         &self,
         chain_id: ChainId,
     ) -> Result<ChainClient<environment::Test>, Error> {
@@ -57,33 +60,30 @@ impl chain_listener::ClientContext for ClientContext {
             .wallet
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        let known_key_pairs = chain
-            .key_pair
-            .as_ref()
-            .map(|kp| kp.copy())
-            .into_iter()
-            .collect();
-        Ok(self.client.create_chain_client(
-            chain_id,
-            known_key_pairs,
-            self.wallet.genesis_admin_chain(),
-            chain.block_hash,
-            chain.timestamp,
-            chain.next_block_height,
-            chain.pending_proposal.clone(),
-        ))
+        Ok(self
+            .client
+            .create_chain_client(
+                chain_id,
+                self.wallet.genesis_admin_chain(),
+                chain.block_hash,
+                chain.timestamp,
+                chain.next_block_height,
+                chain.pending_proposal.clone(),
+                chain.owner,
+            )
+            .await?)
     }
 
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.wallet.insert(UserChain {
                 chain_id,
-                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                owner,
                 block_hash: None,
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
@@ -98,7 +98,7 @@ impl chain_listener::ClientContext for ClientContext {
         &mut self,
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
-        self.wallet.update_from_state(client).await;
+        self.wallet.update_from_state(client);
         Ok(())
     }
 }
@@ -108,26 +108,29 @@ impl chain_listener::ClientContext for ClientContext {
 #[test_log::test(tokio::test)]
 async fn test_chain_listener() -> anyhow::Result<()> {
     // Create two chains.
-    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+    let mut signer = InMemorySigner::new(Some(42));
+    let key_pair = signer.generate_new();
+    let owner: AccountOwner = key_pair.into();
     let config = ChainListenerConfig::default();
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
-
     // Start a chain listener for chain 0 with a new key.
     let genesis_config = make_genesis_config(&builder);
     let storage = builder.make_storage().await?;
     let delivery = CrossChainMessageDelivery::NonBlocking;
+
     let mut context = ClientContext {
-        wallet: Wallet::new(genesis_config, Some(37)),
+        wallet: Wallet::new(genesis_config),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
             },
+            Box::new(signer),
             10,
             delivery,
             false,
@@ -138,20 +141,16 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             Duration::from_secs(1),
         )),
     };
-    let key_pair = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate_from(&mut rng));
-    let owner = key_pair.public().into();
     context
-        .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
+        .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time())
         .await?;
-    let context = Arc::new(Mutex::new(context));
-    let cancellation_token = CancellationToken::new();
-    let child_token = cancellation_token.child_token();
-    let handle = linera_base::task::spawn(async move {
-        ChainListener::new(config, context, storage, child_token)
-            .run()
-            .await
-            .unwrap()
-    });
+    context
+        .update_wallet_for_new_chain(
+            client1.chain_id(),
+            client1.preferred_owner(),
+            clock.current_time(),
+        )
+        .await?;
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.
@@ -165,6 +164,15 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         .change_ownership(ChainOwnership::multiple(owners, 0, timeout_config))
         .await?;
 
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let handle = linera_base::task::spawn(async move {
+        ChainListener::new(config, context, storage, child_token)
+            .run()
+            .await
+            .unwrap()
+    });
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
     let recipient0 = Recipient::chain(chain_id0);

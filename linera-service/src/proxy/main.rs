@@ -5,7 +5,7 @@
 
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
 use linera_base::listen_for_shutdown_signals;
@@ -110,7 +110,6 @@ where
 
 struct ProxyContext {
     config: ValidatorServerConfig,
-    genesis_config: GenesisConfig,
     send_timeout: Duration,
     recv_timeout: Duration,
 }
@@ -118,12 +117,10 @@ struct ProxyContext {
 impl ProxyContext {
     pub fn from_options(options: &ProxyOptions) -> Result<Self> {
         let config = util::read_json(&options.config_path)?;
-        let genesis_config = util::read_json(&options.genesis_config_path)?;
         Ok(Self {
             config,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
-            genesis_config,
         })
     }
 }
@@ -159,7 +156,6 @@ where
                 Self::Grpc(GrpcProxy::new(
                     context.config.validator.network,
                     context.config.internal_network,
-                    context.genesis_config,
                     context.send_timeout,
                     context.recv_timeout,
                     tls,
@@ -179,7 +175,6 @@ where
                     .validator
                     .network
                     .clone_with_protocol(public_transport),
-                genesis_config: context.genesis_config,
                 send_timeout: context.send_timeout,
                 recv_timeout: context.recv_timeout,
                 storage,
@@ -204,7 +199,6 @@ where
 {
     public_config: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     internal_config: ValidatorInternalNetworkPreConfig<TransportProtocol>,
-    genesis_config: GenesisConfig,
     send_timeout: Duration,
     recv_timeout: Duration,
     storage: S,
@@ -261,7 +255,7 @@ where
 {
     #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
-        info!("Starting simple server");
+        info!("Starting proxy");
         let mut join_set = JoinSet::new();
         let address = self.get_listen_address(self.public_config.port);
 
@@ -316,9 +310,16 @@ where
                     linera_version::VersionInfo::default().into(),
                 )))
             }
-            GenesisConfigHashQuery => Ok(Some(RpcMessage::GenesisConfigHashResponse(Box::new(
-                self.genesis_config.hash(),
-            )))),
+            NetworkDescriptionQuery => {
+                let description = self
+                    .storage
+                    .read_network_description()
+                    .await?
+                    .ok_or(anyhow!("Cannot find network description in the database"))?;
+                Ok(Some(RpcMessage::NetworkDescriptionResponse(Box::new(
+                    description,
+                ))))
+            }
             UploadBlob(content) => {
                 let blob = Blob::new(*content);
                 let id = blob.id();
@@ -356,7 +357,7 @@ where
             | Error(_)
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
-            | GenesisConfigHashResponse(_)
+            | NetworkDescriptionResponse(_)
             | DownloadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)

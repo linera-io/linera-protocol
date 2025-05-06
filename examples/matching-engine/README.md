@@ -65,6 +65,7 @@ Create the user wallet and add chains to it:
 
 ```bash
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 linera wallet init --faucet $FAUCET_URL
@@ -75,9 +76,9 @@ INFO_3=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
 CHAIN_3="${INFO_3[0]}"
-OWNER_1="${INFO_1[3]}"
-OWNER_2="${INFO_2[3]}"
-OWNER_3="${INFO_3[3]}"
+OWNER_1="${INFO_1[2]}"
+OWNER_2="${INFO_2[2]}"
+OWNER_3="${INFO_3[2]}"
 ```
 
 Publish and create two `fungible` applications whose IDs will be used as a

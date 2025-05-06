@@ -124,6 +124,8 @@ BlobType:
       ApplicationDescription: UNIT
     5:
       Committee: UNIT
+    6:
+      ChainDescription: UNIT
 Block:
   STRUCT:
     - header:
@@ -258,14 +260,13 @@ ChainAndHeight:
     - height:
         TYPENAME: BlockHeight
 ChainDescription:
-  ENUM:
-    0:
-      Root:
-        NEWTYPE: U32
-    1:
-      Child:
-        NEWTYPE:
-          TYPENAME: MessageId
+  STRUCT:
+    - origin:
+        TYPENAME: ChainOrigin
+    - timestamp:
+        TYPENAME: Timestamp
+    - config:
+        TYPENAME: InitialChainConfig
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -375,6 +376,19 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
+ChainOrigin:
+  ENUM:
+    0:
+      Root:
+        NEWTYPE: U32
+    1:
+      Child:
+        STRUCT:
+          - parent:
+              TYPENAME: ChainId
+          - block_height:
+              TYPENAME: BlockHeight
+          - chain_index: U32
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -516,6 +530,25 @@ IncomingBundle:
         TYPENAME: MessageBundle
     - action:
         TYPENAME: MessageAction
+InitialChainConfig:
+  STRUCT:
+    - ownership:
+        TYPENAME: ChainOwnership
+    - admin_id:
+        OPTION:
+          TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
+    - committees:
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            SEQ: U8
+    - balance:
+        TYPENAME: Amount
+    - application_permissions:
+        TYPENAME: ApplicationPermissions
 LiteCertificate:
   STRUCT:
     - value:
@@ -585,13 +618,6 @@ MessageBundle:
     - messages:
         SEQ:
           TYPENAME: PostedMessage
-MessageId:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - height:
-        TYPENAME: BlockHeight
-    - index: U32
 MessageKind:
   ENUM:
     0:
@@ -610,6 +636,13 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+NetworkDescription:
+  STRUCT:
+    - name: STR
+    - genesis_config_hash:
+        TYPENAME: CryptoHash
+    - genesis_timestamp:
+        TYPENAME: Timestamp
 NodeError:
   ENUM:
     0:
@@ -709,16 +742,6 @@ OpenChainConfig:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
-    - admin_id:
-        TYPENAME: ChainId
-    - epoch:
-        TYPENAME: Epoch
-    - committees:
-        MAP:
-          KEY:
-            TYPENAME: Epoch
-          VALUE:
-            TYPENAME: Committee
     - balance:
         TYPENAME: Amount
     - application_permissions:
@@ -966,7 +989,7 @@ RpcMessage:
     14:
       VersionInfoQuery: UNIT
     15:
-      GenesisConfigHashQuery: UNIT
+      NetworkDescriptionQuery: UNIT
     16:
       Vote:
         NEWTYPE:
@@ -984,9 +1007,9 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: VersionInfo
     20:
-      GenesisConfigHashResponse:
+      NetworkDescriptionResponse:
         NEWTYPE:
-          TYPENAME: CryptoHash
+          TYPENAME: NetworkDescription
     21:
       UploadBlobResponse:
         NEWTYPE:
@@ -1060,10 +1083,6 @@ SystemMessage:
           - recipient:
               TYPENAME: Recipient
     2:
-      OpenChain:
-        NEWTYPE:
-          TYPENAME: OpenChainConfig
-    3:
       ApplicationCreated: UNIT
 SystemOperation:
   ENUM:

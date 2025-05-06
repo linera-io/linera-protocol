@@ -35,7 +35,7 @@ use crate::{
     ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
     OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
-    SystemMessage, TransactionTracker,
+    SystemMessage, Timestamp, TransactionTracker,
 };
 
 /// A view accessing the execution state of a chain.
@@ -80,11 +80,13 @@ where
             authenticated_caller_id: None,
             height: application_description.block_height,
             round: None,
+            timestamp: local_time,
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
         let next_message_index = 0;
         let next_application_index = application_description.application_index + 1;
+        let next_chain_index = 0;
 
         let application_id = From::from(&application_description);
         let blob = Blob::new_application_description(&application_description);
@@ -119,6 +121,7 @@ where
             0,
             next_message_index,
             next_application_index,
+            next_chain_index,
             None,
         );
         txn_tracker.add_created_blob(blob);
@@ -168,6 +171,15 @@ impl UserAction {
             UserAction::Operation(context, _) => context.round,
             UserAction::ProcessStreams(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
+        }
+    }
+
+    pub(crate) fn timestamp(&self) -> Timestamp {
+        match self {
+            UserAction::Instantiate(context, _) => context.timestamp,
+            UserAction::Operation(context, _) => context.timestamp,
+            UserAction::ProcessStreams(context, _) => context.timestamp,
+            UserAction::Message(context, _) => context.timestamp,
         }
     }
 }

@@ -7,6 +7,13 @@ impl<C, MyParam> linera_views::views::CryptoHashView<C> for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
     C: linera_views::context::Context + Send + Sync + Clone + 'static,
+    RegisterView<C, usize>: linera_views::views::HashableView<C>,
+    CollectionView<
+        C,
+        usize,
+        RegisterView<C, usize>,
+    >: linera_views::views::HashableView<C>,
+    Self: Send + Sync,
 {
     async fn crypto_hash(
         &self,

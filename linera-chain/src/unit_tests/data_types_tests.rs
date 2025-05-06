@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{Ed25519SecretKey, Secp256k1SecretKey, ValidatorKeypair},
+    crypto::{AccountSecretKey, Ed25519SecretKey, Secp256k1SecretKey, ValidatorKeypair},
     data_types::Amount,
 };
 
@@ -12,6 +12,10 @@ use crate::{
     block::{ConfirmedBlock, ValidatedBlock},
     test::{make_first_block, BlockTestExt},
 };
+
+fn dummy_chain_id(index: u32) -> ChainId {
+    ChainId(CryptoHash::test_hash(format!("chain{}", index)))
+}
 
 #[test]
 fn test_signed_values() {
@@ -27,7 +31,7 @@ fn test_signed_values() {
         blobs: vec![Vec::new()],
         operation_results: vec![OperationResult::default()],
     }
-    .with(make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE));
+    .with(make_first_block(dummy_chain_id(1)).with_simple_transfer(dummy_chain_id(2), Amount::ONE));
     let confirmed_value = ConfirmedBlock::new(block.clone());
 
     let confirmed_vote = LiteVote::new(
@@ -97,7 +101,7 @@ fn test_certificates() {
         blobs: vec![Vec::new()],
         operation_results: vec![OperationResult::default()],
     }
-    .with(make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE));
+    .with(make_first_block(dummy_chain_id(1)).with_simple_transfer(dummy_chain_id(1), Amount::ONE));
     let value = ConfirmedBlock::new(block);
 
     let v1 = LiteVote::new(

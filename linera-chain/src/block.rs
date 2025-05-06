@@ -13,16 +13,16 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlockHeight, Epoch, Event, OracleResponse, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, ChainId, MessageId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, MessageId},
 };
-use linera_execution::{system::OpenChainConfig, BlobState, Operation, OutgoingMessage};
+use linera_execution::{BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, OperationResult,
-        OutgoingMessageExt, PostedMessage, ProposedBlock,
+        BlockExecutionOutcome, IncomingBundle, MessageBundle, OperationResult, OutgoingMessageExt,
+        ProposedBlock,
     },
     types::CertificateValue,
 };
@@ -497,6 +497,13 @@ impl Block {
         let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
         blob_ids.extend(self.created_blob_ids());
+        if self.header.height == BlockHeight(0) {
+            // the initial block implicitly depends on the chain description blob
+            blob_ids.insert(BlobId::new(
+                self.header.chain_id.0,
+                BlobType::ChainDescription,
+            ));
+        }
         blob_ids
     }
 
@@ -505,6 +512,9 @@ impl Block {
         self.oracle_blob_ids().contains(blob_id)
             || self.published_blob_ids().contains(blob_id)
             || self.created_blob_ids().contains(blob_id)
+            || (self.header.height == BlockHeight(0)
+                && (blob_id.blob_type == BlobType::ChainDescription
+                    && blob_id.hash == self.header.chain_id.0))
     }
 
     /// Returns all the published blob IDs in this block's operations.
@@ -634,20 +644,6 @@ impl Block {
             .iter()
             .flatten()
             .map(|blob| (blob.id(), blob.clone()))
-    }
-
-    /// If the block's first message is `OpenChain`, returns the bundle, the message and
-    /// the configuration for the new chain.
-    pub fn starts_with_open_chain_message(
-        &self,
-    ) -> Option<(&IncomingBundle, &PostedMessage, &OpenChainConfig)> {
-        let in_bundle = self.body.incoming_bundles.first()?;
-        if in_bundle.action != MessageAction::Accept {
-            return None;
-        }
-        let posted_message = in_bundle.bundle.messages.first()?;
-        let config = posted_message.message.matches_open_chain()?;
-        Some((in_bundle, posted_message, config))
     }
 }
 

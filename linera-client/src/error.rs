@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
+use linera_core::node::NodeError;
+use linera_storage::NetworkDescription;
+use linera_version::VersionInfo;
 use thiserror_context::Context;
 
 #[cfg(feature = "benchmark")]
@@ -28,17 +32,41 @@ pub(crate) enum Inner {
     LocalNode(#[from] linera_core::local_node::LocalNodeError),
     #[error("remote node operation failed: {0}")]
     RemoteNode(#[from] linera_core::node::NodeError),
-    #[error("chain info response missing latest committee")]
-    ChainInfoResponseMissingCommittee,
     #[error("arithmetic error: {0}")]
     Arithmetic(#[from] linera_base::data_types::ArithmeticError),
-    #[error("invalid open message")]
-    InvalidOpenMessage(Option<Box<linera_execution::Message>>),
     #[error("incorrect chain ownership")]
     ChainOwnership,
     #[cfg(feature = "benchmark")]
     #[error("Benchmark error: {0}")]
     Benchmark(#[from] BenchmarkError),
+    #[error("Validator version {remote} is not compatible with local version {local}.")]
+    UnexpectedVersionInfo {
+        remote: Box<VersionInfo>,
+        local: Box<VersionInfo>,
+    },
+    #[error("Failed to get version information for validator {address}: {error}")]
+    UnavailableVersionInfo {
+        address: String,
+        error: Box<NodeError>,
+    },
+    #[error("Validator's network description {remote:?} does not match our own: {local:?}.")]
+    UnexpectedNetworkDescription {
+        remote: Box<NetworkDescription>,
+        local: Box<NetworkDescription>,
+    },
+    #[error("Failed to get network description for validator {address}: {error}")]
+    UnavailableNetworkDescription {
+        address: String,
+        error: Box<NodeError>,
+    },
+    #[error("Signature for public key {public_key} is invalid.")]
+    InvalidSignature { public_key: ValidatorPublicKey },
+    #[error("Failed to get chain info for validator {address} and chain {chain_id}: {error}")]
+    UnavailableChainInfo {
+        address: String,
+        chain_id: ChainId,
+        error: Box<NodeError>,
+    },
 }
 
 thiserror_context::impl_context!(Error(Inner));

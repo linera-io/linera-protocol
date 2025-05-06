@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, MessageId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     time::Duration,
     vm::VmRuntime,
 };
@@ -86,6 +86,17 @@ pub enum ClientCommand {
 
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
+    },
+
+    /// Change the preferred owner of a chain.
+    SetPreferredOwner {
+        /// The ID of the chain whose preferred owner will be changed.
+        #[clap(long)]
+        chain_id: Option<ChainId>,
+
+        /// The new preferred owner.
+        #[arg(long)]
+        owner: AccountOwner,
     },
 
     /// Changes the application permissions configuration.
@@ -722,16 +733,17 @@ pub enum ClientCommand {
     /// Create an unassigned key pair.
     Keygen,
 
-    /// Link an owner with a key pair in the wallet to a chain that was created for that owner.
+    /// Link the owner to the chain.
+    /// Expects that the caller has a private key corresponding to the `public_key`,
+    /// otherwise block proposals will fail when signing with it.
     Assign {
         /// The owner to assign.
         #[arg(long)]
         owner: AccountOwner,
 
-        /// The ID of the message that created the chain. (This uniquely describes the
-        /// chain and where it was created.)
+        /// The ID of the chain.
         #[arg(long)]
-        message_id: MessageId,
+        chain_id: ChainId,
     },
 
     /// Retry a block we unsuccessfully tried to propose earlier.
@@ -788,6 +800,7 @@ impl ClientCommand {
             | ClientCommand::OpenChain { .. }
             | ClientCommand::OpenMultiOwnerChain { .. }
             | ClientCommand::ChangeOwnership { .. }
+            | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }
             | ClientCommand::CloseChain { .. }
             | ClientCommand::LocalBalance { .. }

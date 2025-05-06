@@ -11,18 +11,14 @@ use std::{
 };
 
 use futures::{channel::mpsc, StreamExt};
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainDescription},
-};
+use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ApplicationId};
 use linera_views::batch::Batch;
 
-use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal};
+use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal, WithContext};
 use crate::{
     execution_state_actor::ExecutionRequest,
     runtime::{LoadedApplication, ResourceController, SyncRuntime},
-    test_utils::create_dummy_user_application_description,
+    test_utils::{create_dummy_user_application_description, dummy_chain_description},
     ContractRuntime, TransactionTracker, UserContractInstance,
 };
 
@@ -168,11 +164,14 @@ fn create_contract_runtime() -> (
 ///
 /// Returns the [`SyncRuntimeInternal`] instance and the receiver endpoint for the requests the
 /// runtime sends to the [`ExecutionStateView`] actor.
-fn create_runtime<Application>() -> (
+fn create_runtime<Application: WithContext>() -> (
     SyncRuntimeInternal<Application>,
     mpsc::UnboundedReceiver<ExecutionRequest>,
-) {
-    let chain_id = ChainDescription::Root(0).into();
+)
+where
+    Application::UserContext: Default,
+{
+    let chain_id = dummy_chain_description(0).id();
     let (execution_state_sender, execution_state_receiver) = mpsc::unbounded();
     let resource_controller = ResourceController::default();
 
@@ -187,6 +186,7 @@ fn create_runtime<Application>() -> (
         None,
         resource_controller,
         TransactionTracker::new_replaying(Vec::new()),
+        Default::default(),
     );
 
     (runtime, execution_state_receiver)

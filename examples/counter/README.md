@@ -43,13 +43,14 @@ Create the user wallet and add chains to it:
 
 ```bash
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 linera wallet init --faucet $FAUCET_URL
 
 INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
-OWNER_1="${INFO_1[3]}"
+OWNER_1="${INFO_1[2]}"
 ```
 
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.

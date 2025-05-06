@@ -3,9 +3,9 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash},
+    crypto::CryptoHash,
     data_types::{BlobContent, Timestamp},
-    identifiers::{BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -30,7 +30,7 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
-use linera_storage::{DbStorage, Storage};
+use linera_storage::{DbStorage, NetworkDescription, Storage};
 use linera_version::VersionInfo;
 use linera_views::memory::MemoryStore;
 
@@ -104,7 +104,7 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
+    async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
@@ -182,14 +182,18 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<Self::Environment>, Error> {
+    fn client(&self) -> &linera_core::client::Client<Self::Environment> {
+        unimplemented!()
+    }
+
+    async fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<Self::Environment>, Error> {
         unimplemented!()
     }
 
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
-        _: Option<AccountSecretKey>,
+        _: Option<AccountOwner>,
         _: Timestamp,
     ) -> Result<(), Error> {
         Ok(())
@@ -199,7 +203,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
         Ok(())
     }
 
-    fn clients(&self) -> Result<Vec<ChainClient<Self::Environment>>, Error> {
+    async fn clients(&self) -> Result<Vec<ChainClient<Self::Environment>>, Error> {
         Ok(vec![])
     }
 }

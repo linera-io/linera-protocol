@@ -8,9 +8,9 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
-    data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, AccountOwner, ChainId, MessageId},
+    crypto::{CryptoHash, Signer, ValidatorPublicKey},
+    data_types::{BlockHeight, ChainDescription, Timestamp},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -19,12 +19,13 @@ use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
     data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
-    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
-    remote_node::RemoteNode,
-    Environment, JoinSetExt,
+    node::{CrossChainMessageDelivery, ValidatorNode},
+    Environment, JoinSetExt as _,
 };
-use linera_execution::{Message, SystemMessage};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
+use linera_storage::Storage;
+use linera_version::VersionInfo;
+use linera_views::views::ViewError;
 use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
@@ -32,13 +33,14 @@ use {
     crate::benchmark::{Benchmark, BenchmarkError},
     futures::{stream, StreamExt, TryStreamExt},
     linera_base::{
+        crypto::AccountPublicKey,
         data_types::{Amount, Epoch},
         identifiers::ApplicationId,
     },
     linera_core::client::ChainClientError,
     linera_execution::{
         committee::Committee,
-        system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
+        system::{OpenChainConfig, SystemOperation},
         Operation,
     },
     std::{collections::HashMap, iter},
@@ -84,7 +86,7 @@ pub struct ClientContext<Env: Environment, W> {
 #[cfg_attr(web, async_trait(?Send))]
 impl<Env: Environment, W> chain_listener::ClientContext for ClientContext<Env, W>
 where
-    W: Persist<Target = Wallet> + 'static,
+    W: Persist<Target = Wallet> + Sync + 'static,
 {
     type Environment = Env;
 
@@ -96,19 +98,22 @@ where
         self.client.storage_client()
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
-        self.make_chain_client(chain_id)
+    async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
+        self.make_chain_client(chain_id).await
+    }
+
+    fn client(&self) -> &Client<Env> {
+        &self.client
     }
 
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp)
-            .await?;
-        self.save_wallet().await
+        self.update_wallet_for_new_chain(chain_id, owner, timestamp)
+            .await
     }
 
     async fn update_wallet(&mut self, client: &ChainClient<Env>) -> Result<(), Error> {
@@ -121,7 +126,12 @@ where
     S: linera_core::environment::Storage,
     W: Persist<Target = Wallet>,
 {
-    pub fn new(storage: S, wallet: W, options: ClientContextOptions) -> Self {
+    pub fn new(
+        storage: S,
+        options: ClientContextOptions,
+        wallet: W,
+        signer: Box<dyn Signer>,
+    ) -> Self {
         let node_provider = NodeProvider::new(NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -140,6 +150,7 @@ where
                 network: node_provider,
                 storage,
             },
+            signer,
             options.max_pending_message_bundles,
             delivery,
             options.long_lived_services,
@@ -164,7 +175,7 @@ where
     }
 
     #[cfg(with_testing)]
-    pub fn new_test_client_context(storage: S, wallet: W) -> Self {
+    pub fn new_test_client_context(storage: S, wallet: W, signer: Box<dyn Signer>) -> Self {
         use linera_core::DEFAULT_GRACE_PERIOD;
 
         let send_recv_timeout = Duration::from_millis(4000);
@@ -189,6 +200,7 @@ where
                 storage,
                 network: NodeProvider::new(node_options),
             },
+            signer,
             10,
             delivery,
             false,
@@ -250,46 +262,50 @@ where
             .expect("No chain specified in wallet with no default chain")
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
+    pub async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain = match self.wallet.get(chain_id) {
+        let chain: UserChain = match self.wallet.get(chain_id) {
             Some(chain) => chain.clone(),
             None => UserChain::make_other(chain_id, Timestamp::from(0)),
         };
-        let known_key_pairs = chain.key_pair.into_iter().collect();
-        Ok(self.make_chain_client_internal(
+
+        self.make_chain_client_internal(
             chain_id,
-            known_key_pairs,
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
             chain.pending_proposal,
-        ))
+            chain.owner,
+        )
+        .await
     }
 
-    fn make_chain_client_internal(
+    async fn make_chain_client_internal(
         &self,
         chain_id: ChainId,
-        known_key_pairs: Vec<AccountSecretKey>,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
-    ) -> ChainClient<Env> {
-        let mut chain_client = self.client.create_chain_client(
-            chain_id,
-            known_key_pairs,
-            self.wallet.genesis_admin_chain(),
-            block_hash,
-            timestamp,
-            next_block_height,
-            pending_proposal,
-        );
+        preferred_owner: Option<AccountOwner>,
+    ) -> Result<ChainClient<Env>, Error> {
+        let mut chain_client = self
+            .client
+            .create_chain_client(
+                chain_id,
+                self.wallet.genesis_admin_chain(),
+                block_hash,
+                timestamp,
+                next_block_height,
+                pending_proposal,
+                preferred_owner,
+            )
+            .await?;
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
         );
-        chain_client
+        Ok(chain_client)
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -316,32 +332,22 @@ where
         &mut self,
         client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
-        self.wallet.as_mut().update_from_state(client).await;
+        self.wallet.as_mut().update_from_state(client);
         self.save_wallet().await
     }
 
-    /// Remembers the new chain and private key (if any) in the wallet.
+    /// Remembers the new chain and its owner (if any) in the wallet.
     pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
-        timestamp: Timestamp,
-    ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp)
-            .await
-    }
-
-    async fn update_wallet_for_new_chain_internal(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<AccountSecretKey>,
+        owner: Option<AccountOwner>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.mutate_wallet(|w| {
                 w.insert(UserChain {
                     chain_id,
-                    key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                    owner,
                     block_hash: None,
                     timestamp,
                     next_block_height: BlockHeight::ZERO,
@@ -401,59 +407,33 @@ where
     pub async fn assign_new_chain_to_key(
         &mut self,
         chain_id: ChainId,
-        message_id: MessageId,
         owner: AccountOwner,
-        validators: Option<Vec<(ValidatorPublicKey, String)>>,
     ) -> Result<(), Error> {
-        let node_provider = self.make_node_provider();
         self.client.track_chain(chain_id);
-
-        // Take the latest committee we know of.
-        let admin_chain_id = self.wallet.genesis_admin_chain();
-        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let nodes: Vec<_> = if let Some(validators) = validators {
-            node_provider
-                .make_nodes_from_list(validators)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        } else {
-            let info = self
-                .client
-                .local_node()
-                .handle_chain_info_query(query)
-                .await?;
-            let committee = info
-                .latest_committee()
-                .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
-            node_provider
-                .make_nodes(committee)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        };
-
-        // Download the parent chain.
-        let target_height = message_id.height.try_add_one()?;
-        self.client
-            .download_certificates(&nodes, message_id.chain_id, target_height)
-            .await
-            .context("downloading parent chain")?;
-
-        // The initial timestamp for the new chain is taken from the block with the message.
-        let certificate = self
+        let chain_description_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+        let chain_description_blob = match self
             .client
-            .local_node()
-            .certificate_for(&message_id)
+            .storage_client()
+            .read_blob(chain_description_blob_id)
             .await
-            .context("looking for `OpenChain` message")?;
-        let block = certificate.block();
-        let message = block.message_by_id(&message_id).map(|msg| &msg.message);
-        let Some(Message::System(SystemMessage::OpenChain(config))) = message else {
-            tracing::error!(
-                "The message with the ID returned by the faucet is not OpenChain. \
-                Please make sure you are connecting to a genuine faucet."
-            );
-            return Err(error::Inner::InvalidOpenMessage(message.cloned().map(Box::new)).into());
+        {
+            Ok(blob) => blob,
+            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [chain_description_blob_id] => {
+                // we're missing the blob describing the chain we're assigning - try to
+                // get it
+                self.client
+                    .ensure_has_chain_description(chain_id, self.wallet.genesis_admin_chain())
+                    .await?
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
         };
+        let chain_description: ChainDescription =
+            bcs::from_bytes(&chain_description_blob.into_bytes())
+                .map_err(|e| error::Inner::Persistence(Box::new(e)))?;
+
+        let config = chain_description.config();
 
         if !config.ownership.verify_owner(&owner) {
             tracing::error!(
@@ -464,7 +444,7 @@ where
         }
 
         self.wallet_mut()
-            .mutate(|w| w.assign_new_chain_to_owner(owner, chain_id, block.header.timestamp))
+            .mutate(|w| w.assign_new_chain_to_owner(owner, chain_id, chain_description.timestamp()))
             .await
             .map_err(|e| error::Inner::Persistence(Box::new(e)))?
             .context("assigning new chain")?;
@@ -517,8 +497,11 @@ where
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id)?;
-        info!("Changing ownership for chain {}", chain_id);
+        let chain_client = self.make_chain_client(chain_id).await?;
+        info!(
+            ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
+            "Changing ownership of a chain"
+        );
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
 
@@ -539,6 +522,108 @@ where
         info!("Operation confirmed after {} ms", time_total.as_millis());
         debug!("{:?}", certificate);
         Ok(())
+    }
+
+    pub async fn set_preferred_owner(
+        &mut self,
+        chain_id: Option<ChainId>,
+        preferred_owner: AccountOwner,
+    ) -> Result<(), Error> {
+        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
+        let mut chain_client = self.make_chain_client(chain_id).await?;
+        let old_owner = chain_client.preferred_owner();
+        info!(%chain_id, ?old_owner, %preferred_owner, "Changing preferred owner for chain");
+        chain_client.set_preferred_owner(preferred_owner);
+        self.update_wallet_from_client(&chain_client).await?;
+        info!("New preferred owner set");
+        Ok(())
+    }
+
+    pub async fn check_compatible_version_info(
+        &self,
+        address: &str,
+        node: &impl ValidatorNode,
+    ) -> Result<VersionInfo, Error> {
+        match node.get_version_info().await {
+            Ok(version_info) if version_info.is_compatible_with(&linera_version::VERSION_INFO) => {
+                info!(
+                    "Version information for validator {address}: {}",
+                    version_info
+                );
+                Ok(version_info)
+            }
+            Ok(version_info) => Err(error::Inner::UnexpectedVersionInfo {
+                remote: Box::new(version_info),
+                local: Box::new(linera_version::VERSION_INFO.clone()),
+            }
+            .into()),
+            Err(error) => Err(error::Inner::UnavailableVersionInfo {
+                address: address.to_string(),
+                error: Box::new(error),
+            }
+            .into()),
+        }
+    }
+
+    pub async fn check_matching_network_description(
+        &self,
+        address: &str,
+        node: &impl ValidatorNode,
+    ) -> Result<CryptoHash, Error> {
+        let network_description = self.wallet().genesis_config().network_description();
+        match node.get_network_description().await {
+            Ok(description) => {
+                if description == network_description {
+                    Ok(description.genesis_config_hash)
+                } else {
+                    Err(error::Inner::UnexpectedNetworkDescription {
+                        remote: Box::new(description),
+                        local: Box::new(network_description),
+                    }
+                    .into())
+                }
+            }
+            Err(error) => Err(error::Inner::UnavailableNetworkDescription {
+                address: address.to_string(),
+                error: Box::new(error),
+            }
+            .into()),
+        }
+    }
+
+    pub async fn check_validator_chain_info_response(
+        &self,
+        public_key: Option<&ValidatorPublicKey>,
+        address: &str,
+        node: &impl ValidatorNode,
+        chain_id: ChainId,
+    ) -> Result<(), Error> {
+        let query = ChainInfoQuery::new(chain_id);
+        match node.handle_chain_info_query(query).await {
+            Ok(response) => {
+                info!(
+                    "Validator {address} sees chain {chain_id} at block height {} and epoch {:?}",
+                    response.info.next_block_height, response.info.epoch,
+                );
+                if let Some(public_key) = public_key {
+                    if response.check(public_key).is_ok() {
+                        info!("Signature for public key {public_key} is OK.");
+                    } else {
+                        return Err(error::Inner::InvalidSignature {
+                            public_key: *public_key,
+                        }
+                        .into());
+                    }
+                }
+                Ok(())
+            }
+            Err(error) => Err(error::Inner::UnavailableChainInfo {
+                address: address.to_string(),
+                chain_id,
+                error: Box::new(error),
+            }
+            .into()),
+        }
     }
 }
 
@@ -647,11 +732,12 @@ where
         transactions_per_block: usize,
         tokens_per_chain: Amount,
         fungible_application_id: Option<ApplicationId>,
+        pub_keys: Vec<AccountPublicKey>,
     ) -> Result<
         (
             HashMap<ChainId, ChainClient<Env>>,
             Epoch,
-            Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
+            Vec<(ChainId, Vec<Operation>, AccountOwner)>,
             Committee,
         ),
         Error,
@@ -668,7 +754,7 @@ where
 
         let start = Instant::now();
         let (key_pairs, chain_clients) = self
-            .make_benchmark_chains(num_chains, tokens_per_chain)
+            .make_benchmark_chains(num_chains, tokens_per_chain, pub_keys)
             .await?;
         info!(
             "Got {} chains in {} ms",
@@ -689,7 +775,7 @@ where
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let default_chain_client = self.make_chain_client(default_chain_id)?;
+        let default_chain_client = self.make_chain_client(default_chain_id).await?;
         let (epoch, mut committees) = default_chain_client
             .epoch_and_committees(default_chain_id)
             .await?;
@@ -735,7 +821,7 @@ where
 
             info!("Updating wallet from chain clients...");
             for chain_client in chain_clients.values() {
-                self.wallet.as_mut().update_from_state(chain_client).await;
+                self.wallet.as_mut().update_from_state(chain_client);
             }
             self.save_wallet().await?;
         }
@@ -744,15 +830,14 @@ where
     }
 
     async fn process_inboxes_and_force_validator_updates(&mut self) {
-        let chain_clients = self
-            .wallet
-            .owned_chain_ids()
-            .iter()
-            .map(|chain_id| {
+        let mut chain_clients = vec![];
+        for chain_id in &self.wallet.owned_chain_ids() {
+            chain_clients.push(
                 self.make_chain_client(*chain_id)
-                    .expect("chains in the wallet must exist")
-            })
-            .collect::<Vec<_>>();
+                    .await
+                    .expect("chains in the wallet must exist"),
+            );
+        }
 
         let mut join_set = task::JoinSet::new();
         for chain_client in chain_clients {
@@ -790,9 +875,10 @@ where
         &mut self,
         num_chains: usize,
         balance: Amount,
+        pub_keys: Vec<AccountPublicKey>,
     ) -> Result<
         (
-            HashMap<ChainId, AccountSecretKey>,
+            HashMap<ChainId, AccountOwner>,
             HashMap<ChainId, ChainClient<Env>>,
         ),
         Error,
@@ -806,17 +892,17 @@ where
             }
             // This should never panic, because `owned_chain_ids` only returns the owned chains that
             // we have a key pair for.
-            let key_pair = self
+            let owner = self
                 .wallet
                 .get(chain_id)
-                .and_then(|chain| chain.key_pair.as_ref().map(|kp| kp.copy()))
+                .and_then(|chain| chain.owner)
                 .unwrap();
-            let chain_client = self.make_chain_client(chain_id)?;
+            let chain_client = self.make_chain_client(chain_id).await?;
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
             }
-            benchmark_chains.insert(chain_client.chain_id(), key_pair);
+            benchmark_chains.insert(chain_client.chain_id(), owner);
             chain_client.process_inbox().await?;
             chain_clients.insert(chain_id, chain_client);
         }
@@ -835,45 +921,43 @@ where
             .expect("should have default chain");
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
-        let mut key_pairs = Vec::new();
-        for _ in (0..num_chains_to_create).step_by(operations_per_block) {
-            key_pairs.push(self.wallet.generate_key_pair());
-        }
-        let mut key_pairs_iter = key_pairs.into_iter();
-        let admin_id = self.wallet.genesis_admin_chain();
-        let default_chain_client = self.make_chain_client(default_chain_id)?;
+        let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
+        let default_chain_client = self.make_chain_client(default_chain_id).await?;
 
         for i in (0..num_chains_to_create).step_by(operations_per_block) {
             let num_new_chains = operations_per_block.min(num_chains_to_create - i);
-            let key_pair = key_pairs_iter.next().unwrap();
+            let pub_key = pub_keys_iter.next().unwrap();
 
             let certificate = Self::execute_open_chains_operations(
                 num_new_chains,
                 &default_chain_client,
                 balance,
-                &key_pair,
-                admin_id,
+                pub_key.into(),
             )
             .await?;
             info!("Block executed successfully");
 
             let block = certificate.block();
             for i in 0..num_new_chains {
-                let message_id = block
-                    .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
-                    .expect("failed to create new chain");
-                let chain_id = ChainId::child(message_id);
-                benchmark_chains.insert(chain_id, key_pair.copy());
+                let chain_id = block.body.blobs[i]
+                    .iter()
+                    .find(|blob| blob.id().blob_type == BlobType::ChainDescription)
+                    .map(|blob| ChainId(blob.id().hash))
+                    .expect("failed to create a new chain");
+                benchmark_chains.insert(chain_id, pub_key.into());
                 self.client.track_chain(chain_id);
 
-                let chain_client = self.make_chain_client_internal(
-                    chain_id,
-                    vec![key_pair.copy()],
-                    None,
-                    certificate.block().header.timestamp,
-                    BlockHeight::ZERO,
-                    None,
-                );
+                let mut chain_client = self
+                    .make_chain_client_internal(
+                        chain_id,
+                        None,
+                        certificate.block().header.timestamp,
+                        BlockHeight::ZERO,
+                        None,
+                        Some(pub_key.into()),
+                    )
+                    .await?;
+                chain_client.set_preferred_owner(pub_key.into());
                 chain_client.process_inbox().await?;
                 chain_clients.insert(chain_id, chain_client);
             }
@@ -905,17 +989,10 @@ where
         num_new_chains: usize,
         chain_client: &ChainClient<Env>,
         balance: Amount,
-        key_pair: &AccountSecretKey,
-        admin_id: ChainId,
+        owner: AccountOwner,
     ) -> Result<ConfirmedBlockCertificate, Error> {
-        let chain_id = chain_client.chain_id();
-        let (epoch, committees) = chain_client.epoch_and_committees(chain_id).await?;
-        let epoch = epoch.expect("default chain should be active");
         let config = OpenChainConfig {
-            ownership: ChainOwnership::single_super(key_pair.public().into()),
-            committees,
-            admin_id,
-            epoch,
+            ownership: ChainOwnership::single_super(owner),
             balance,
             application_permissions: Default::default(),
         };
@@ -934,35 +1011,28 @@ where
     /// Supplies fungible tokens to the chains.
     async fn supply_fungible_tokens(
         &mut self,
-        key_pairs: &HashMap<ChainId, AccountSecretKey>,
+        key_pairs: &HashMap<ChainId, AccountOwner>,
         application_id: ApplicationId,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let default_key = self
-            .wallet
-            .get(default_chain_id)
-            .unwrap()
-            .key_pair
-            .as_ref()
-            .unwrap()
-            .public();
+        let default_key = self.wallet.get(default_chain_id).unwrap().owner.unwrap();
         let amount = Amount::from(1_000_000);
         let operations: Vec<_> = key_pairs
             .iter()
-            .map(|(chain_id, key_pair)| {
+            .map(|(chain_id, owner)| {
                 Benchmark::<Env>::fungible_transfer(
                     application_id,
                     *chain_id,
                     default_key,
-                    key_pair.public(),
+                    *owner,
                     amount,
                 )
             })
             .collect();
-        let chain_client = self.make_chain_client(default_chain_id)?;
+        let chain_client = self.make_chain_client(default_chain_id).await?;
         // Put at most 1000 fungible token operations in each block.
         for operation_chunk in operations.chunks(1000) {
             chain_client

@@ -9,9 +9,9 @@ mod wasm;
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
-    crypto::AccountSecretKey,
+    crypto::{AccountSecretKey, CryptoHash, InMemorySigner},
     data_types::*,
-    identifiers::{Account, AccountOwner, ChainId, MessageId},
+    identifiers::{Account, AccountOwner, ApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -91,10 +91,12 @@ async fn test_initiating_valid_transfer_with_notifications<B>(
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let chain_2 = builder.add_root_chain(2, Amount::ZERO).await?;
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.subscribe().await?;
     let (listener, _listen_handle, _) = sender.listen().await?;
@@ -104,7 +106,7 @@ where
             .transfer_to_account(
                 AccountOwner::CHAIN,
                 Amount::from_tokens(3),
-                Account::chain(ChainId::root(2)),
+                Account::chain(chain_2.chain_id()),
             )
             .await
             .unwrap()
@@ -128,7 +130,7 @@ where
         Some(Notification {
             reason: Reason::NewBlock { height, .. },
             chain_id,
-        }) if chain_id == ChainId::root(1) && height == BlockHeight::ZERO
+        }) if chain_id == sender.chain_id() && height == BlockHeight::ZERO
     );
     Ok(())
 }
@@ -143,7 +145,8 @@ async fn test_claim_amount<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
@@ -207,7 +210,7 @@ where
         .claim(
             owner,
             receiver_id,
-            Recipient::root(1),
+            Recipient::chain(sender.chain_id()),
             Amount::from_tokens(5),
         )
         .await
@@ -217,7 +220,7 @@ where
         .claim(
             owner,
             receiver_id,
-            Recipient::root(1),
+            Recipient::chain(sender.chain_id()),
             Amount::from_tokens(2),
         )
         .await
@@ -262,16 +265,22 @@ async fn test_rotate_key_pair<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let new_public_key = signer.generate_new();
+    let new_owner = AccountOwner::from(new_public_key);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let new_key_pair = AccountSecretKey::generate();
-    let new_owner = AccountOwner::from(new_key_pair.public());
-    let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap().unwrap();
+    let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let certificate = sender
+        .rotate_key_pair(new_public_key)
+        .await
+        .unwrap()
+        .unwrap();
+    sender.set_preferred_owner(new_owner);
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await.unwrap(), new_owner);
+    assert_eq!(sender.identity().await?, new_owner);
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
@@ -302,21 +311,19 @@ async fn test_transfer_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
-    let new_owner = AccountSecretKey::generate().public().into();
+    let new_owner: AccountOwner = builder.signer.generate_new().into();
     let certificate = sender.transfer_ownership(new_owner).await.unwrap().unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_proposal().is_none());
     assert_matches!(
-        sender
-            .key_pair()
-            .await
-            .map(|kp| AccountSecretKey::public(&kp)), // AccountSecretKey isn't Debug; using PublicKey.
-        Err(ChainClientError::CannotFindKeyForChain(_))
+        sender.identity().await,
+        Err(ChainClientError::NotAnOwner(_))
     );
     assert_eq!(
         builder
@@ -335,7 +342,7 @@ where
         sender
             .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
             .await,
-        Err(ChainClientError::CannotFindKeyForChain(_))
+        Err(ChainClientError::NotAnOwner(_))
     );
     Ok(())
 }
@@ -350,10 +357,10 @@ async fn test_share_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let mut signer = InMemorySigner::new(None);
+    let new_owner = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let new_key_pair = AccountSecretKey::generate();
-    let new_owner = new_key_pair.public().into();
     let certificate = sender
         .share_ownership(new_owner, 100)
         .await
@@ -361,7 +368,7 @@ where
         .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_proposal().is_none());
-    assert!(sender.key_pair().await.is_ok());
+    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
@@ -381,14 +388,10 @@ where
         .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
     // Make a client to try the new key.
-    let client = builder
-        .make_client(
-            sender.chain_id,
-            new_key_pair,
-            sender.block_hash(),
-            BlockHeight::from(2),
-        )
+    let mut client = builder
+        .make_client(sender.chain_id, sender.block_hash(), BlockHeight::from(2))
         .await?;
+    client.set_preferred_owner(new_owner);
     // Local balance fails because the client has block height 2 but we haven't downloaded
     // the blocks yet.
     assert_matches!(
@@ -436,13 +439,19 @@ where
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(client.local_balance().await.unwrap(), Amount::ONE);
 
     // The other client doesn't know the new round number yet:
     sender.synchronize_from_validators().await.unwrap();
     sender.process_inbox().await.unwrap();
+    assert_eq!(client.next_block_height(), sender.next_block_height());
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_proposal();
-    sender.burn(AccountOwner::CHAIN, Amount::ONE).await.unwrap();
+    sender
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap()
+        .unwrap();
 
     // That's it, we spent all our money on this test!
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
@@ -462,15 +471,16 @@ async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut signer = InMemorySigner::new(None);
+    let new_public_key = signer.generate_new();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     // New chains use the admin chain to verify their creation certificate.
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let new_key_pair = AccountSecretKey::generate();
     // Open the new chain.
-    let (message_id, certificate) = sender
+    let (new_id, certificate) = sender
         .open_chain(
-            ChainOwnership::single(new_key_pair.public().into()),
+            ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
         )
@@ -478,24 +488,12 @@ where
         .unwrap()
         .unwrap();
 
-    assert_eq!(
-        sender
-            .client
-            .local_node()
-            .certificate_for(&message_id)
-            .await
-            .unwrap(),
-        certificate
-    );
-
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_proposal().is_none());
-    assert!(sender.key_pair().await.is_ok());
+    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     // Make a client to try the new chain.
-    let new_id = ChainId::child(message_id);
-    let client = builder
-        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
-        .await?;
+    let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
+    client.set_preferred_owner(new_public_key.into());
     client
         .receive_certificate_and_update_validators(certificate)
         .await
@@ -515,17 +513,36 @@ async fn test_transfer_then_open_chain<B>(storage_builder: B) -> anyhow::Result<
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     // New chains use the admin chain to verify their creation certificate.
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let parent = builder.add_root_chain(2, Amount::ZERO).await?;
-    let new_key_pair = AccountSecretKey::generate();
-    let new_id = ChainId::child(MessageId {
-        chain_id: parent.chain_id(),
-        height: BlockHeight::ZERO,
-        index: 0,
-    });
+    let new_public_key = builder.signer.generate_new();
+
+    let new_chain_config = InitialChainConfig {
+        ownership: ChainOwnership::single(new_public_key.into()),
+        admin_id: Some(builder.admin_id()),
+        epoch: Epoch::ZERO,
+        committees: builder
+            .admin_description()
+            .unwrap()
+            .config()
+            .committees
+            .clone(),
+        balance: Amount::ZERO,
+        application_permissions: Default::default(),
+    };
+    let new_chain_origin = ChainOrigin::Child {
+        parent: parent.chain_id(),
+        block_height: BlockHeight::ZERO,
+        chain_index: 0,
+    };
+    let new_id =
+        ChainDescription::new(new_chain_origin, new_chain_config, clock.current_time()).id();
+
     // Transfer before creating the chain. The validators will ignore the cross-chain messages.
     sender
         .transfer_to_account(
@@ -536,24 +553,22 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (open_chain_message_id, certificate) = parent
+    let (new_id2, certificate) = parent
         .open_chain(
-            ChainOwnership::single(new_key_pair.public().into()),
+            ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
         )
         .await
         .unwrap()
         .unwrap();
-    let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert_eq!(parent.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_proposal().is_none());
-    assert!(sender.key_pair().await.is_ok());
+    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_matches!(
-        certificate.block().body.operations[open_chain_message_id.index as usize]
-            .as_system_operation(),
+        certificate.block().body.operations[0].as_system_operation(),
         Some(SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
@@ -565,9 +580,8 @@ where
         certificate
     );
     // Make a client to try the new chain.
-    let client = builder
-        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
-        .await?;
+    let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
+    client.set_preferred_owner(new_public_key.into());
     client
         .receive_certificate_and_update_validators(certificate)
         .await
@@ -604,105 +618,24 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_open_chain_must_be_first<B>(storage_builder: B) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    // New chains use the admin chain to verify their creation certificate.
-    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let new_key_pair = AccountSecretKey::generate();
-    let new_id = ChainId::child(MessageId {
-        chain_id: sender.chain_id(),
-        height: BlockHeight::from(1),
-        index: 0,
-    });
-    // Transfer before creating the chain.
-    sender
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::from_tokens(3),
-            Account::chain(new_id),
-        )
-        .await
-        .unwrap();
-    // Open the new chain.
-    let (open_chain_message_id, certificate) = sender
-        .open_chain(
-            ChainOwnership::single(new_key_pair.public().into()),
-            ApplicationPermissions::default(),
-            Amount::ZERO,
-        )
-        .await
-        .unwrap()
-        .unwrap();
-    let new_id2 = ChainId::child(open_chain_message_id);
-    assert_eq!(new_id, new_id2);
-    assert_eq!(sender.next_block_height(), BlockHeight::from(2));
-    assert!(sender.pending_proposal().is_none());
-    assert!(sender.key_pair().await.is_ok());
-    assert_matches!(
-        certificate.block().body.operations[open_chain_message_id.index as usize]
-            .as_system_operation(),
-        Some(SystemOperation::OpenChain(_)),
-        "Unexpected certificate value",
-    );
-    assert_eq!(
-        builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
-            .await
-            .unwrap(),
-        certificate
-    );
-    // Make a client to try the new chain.
-    let client = builder
-        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
-        .await?;
-    client
-        .receive_certificate_and_update_validators(certificate)
-        .await
-        .unwrap();
-    let result = client
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
-        .await;
-    assert_matches!(
-        result,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(&*error, ChainError::CannotSkipMessage { bundle, .. }
-            if matches!(&**bundle, MessageBundle { messages, .. }
-            if matches!(messages[..], [PostedMessage {
-                message: Message::System(SystemMessage::Credit { .. }), ..
-        }])))
-    );
-    Ok(())
-}
-
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test)]
 async fn test_open_chain_then_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     // New chains use the admin chain to verify their creation certificate.
     let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let new_key_pair = AccountSecretKey::generate();
+    let new_public_key = builder.signer.generate_new();
     // Open the new chain. We are both regular and super owner.
-    let ownership = ChainOwnership::single(new_key_pair.public().into())
-        .with_regular_owner(new_key_pair.public().into(), 100);
-    let (message_id, creation_certificate) = sender
+    let ownership = ChainOwnership::single(new_public_key.into())
+        .with_regular_owner(new_public_key.into(), 100);
+    let (new_id, creation_certificate) = sender
         .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
         .await
         .unwrap()
         .unwrap();
-    let new_id = ChainId::child(message_id);
     // Transfer after creating the chain.
     let transfer_certificate = sender
         .transfer_to_account(
@@ -715,11 +648,10 @@ where
         .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
     assert!(sender.pending_proposal().is_none());
-    assert!(sender.key_pair().await.is_ok());
+    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     // Make a client to try the new chain.
-    let client = builder
-        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
-        .await?;
+    let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
+    client.set_preferred_owner(new_public_key.into());
     // Must process the creation certificate before using the new chain.
     client
         .receive_certificate_and_update_validators(creation_certificate)
@@ -752,7 +684,8 @@ async fn test_close_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let client1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
@@ -771,7 +704,7 @@ where
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
     assert!(client1.pending_proposal().is_none());
-    assert!(client1.key_pair().await.is_ok());
+    assert!(client1.identity().await.is_ok());
     assert_eq!(
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
@@ -851,19 +784,23 @@ async fn test_initiating_valid_transfer_too_many_faults<B>(storage_builder: B) -
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 2).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 2, &mut signer).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let chain_2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
     let result = sender
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
+            Account::chain(chain_2.chain_id()),
         )
         .await;
+    // The faulty validators will not have a chain with this ID (as the initial balance
+    // being zero changes it) - they will fail with `BlobsNotFound`.
     assert_matches!(
         result,
         Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
+            CommunicationError::Trusted(crate::node::NodeError::BlobsNotFound(_))
         )),
         "unexpected result"
     );
@@ -886,7 +823,8 @@ async fn test_bidirectional_transfer<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     assert_eq!(
@@ -993,7 +931,8 @@ async fn test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> anyhow::R
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
@@ -1041,7 +980,8 @@ async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let client3 = builder.add_root_chain(3, Amount::ZERO).await?;
@@ -1136,17 +1076,17 @@ where
     // To test that no fees are paid for reading or publishing committee blobs, we set the price
     // higher than the chain balance.
     let initial_balance = Amount::from_tokens(3);
-    let mut builder =
-        TestBuilder::new(storage_builder, 4, 1)
-            .await?
-            .with_policy(ResourceControlPolicy {
-                maximum_fuel_per_block: 30_000,
-                blob_read: initial_balance + Amount::ONE,
-                blob_published: initial_balance + Amount::ONE,
-                blob_byte_read: initial_balance + Amount::ONE,
-                blob_byte_published: initial_balance + Amount::ONE,
-                ..ResourceControlPolicy::default()
-            });
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
+        .await?
+        .with_policy(ResourceControlPolicy {
+            maximum_fuel_per_block: 30_000,
+            blob_read: initial_balance + Amount::ONE,
+            blob_published: initial_balance + Amount::ONE,
+            blob_byte_read: initial_balance + Amount::ONE,
+            blob_byte_published: initial_balance + Amount::ONE,
+            ..ResourceControlPolicy::default()
+        });
     let admin = builder.add_root_chain(0, initial_balance).await?;
     let user = builder.add_root_chain(1, Amount::ZERO).await?;
     let validators = builder.initial_committee.validators().clone();
@@ -1161,11 +1101,11 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
     // Create a new committee.
-    let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
+    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.next_block_height(), BlockHeight::from(5));
     assert!(admin.pending_proposal().is_none());
-    assert!(admin.key_pair().await.is_ok());
+    assert!(admin.identity().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
 
     // Sending money from the admin chain is supported.
@@ -1236,6 +1176,22 @@ where
     admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
+
+    user.change_application_permissions(ApplicationPermissions::new_single(ApplicationId::new(
+        CryptoHash::test_hash("foo"),
+    )))
+    .await?;
+
+    let committee = Committee::new(validators, ResourceControlPolicy::default());
+    admin.stage_new_committee(committee).await.unwrap();
+    assert_eq!(admin.epoch().await.unwrap(), Epoch::from(3));
+
+    // Despite the restrictive application permissions, some system operations are still allowed,
+    // and the user chain can migrate to the new epoch.
+    user.synchronize_from_validators().await?;
+    user.process_inbox().await?;
+    assert_eq!(user.epoch().await.unwrap(), Epoch::from(3));
+
     Ok(())
 }
 
@@ -1246,7 +1202,8 @@ async fn test_insufficient_balance<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
@@ -1273,50 +1230,42 @@ async fn test_finalize_locked_block_with_blobs<B>(storage_builder: B) -> anyhow:
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let client1_a = builder.add_root_chain(1, Amount::ZERO).await?;
-    let chain_id1 = client1_a.chain_id();
-    let owner1_a = client1_a.public_key().await.unwrap().into();
-    let key_pair1_b = AccountSecretKey::generate();
-    let owner1_b = key_pair1_b.public().into();
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
+    let client_1a = builder.add_root_chain(1, Amount::ZERO).await?;
+    let owner_1a = client_1a.public_key().await.unwrap().into();
+    let chain_1 = client_1a.chain_id();
+    let pk_1b = builder.signer.generate_new();
+    let owner_1b = pk_1b.into();
 
-    let owners = [(owner1_a, 50), (owner1_b, 50)];
+    let owners = [(owner_1a, 50), (owner_1b, 50)];
     let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
-    client1_a.change_ownership(ownership).await?;
+    client_1a.change_ownership(ownership).await?;
 
-    let client1_b = builder
-        .make_client(
-            chain_id1,
-            key_pair1_b,
-            client1_a.block_hash(),
-            BlockHeight::from(1),
-        )
+    let client_1b = builder
+        .make_client(chain_1, client_1a.block_hash(), BlockHeight::from(1))
         .await?;
 
-    let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
-    let chain_id2 = client2_a.chain_id();
-    let owner2_a = client2_a.public_key().await.unwrap().into();
-    let key_pair2_b = AccountSecretKey::generate();
-    let owner2_b = key_pair2_b.public().into();
+    let client_2a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+    let owner_2a = client_2a.public_key().await.unwrap().into();
+    let chain_2 = client_2a.chain_id();
+    let pk_2b = builder.signer.generate_new();
+    let owner_2b = pk_2b.into();
 
-    let owners = [(owner2_a, 50), (owner2_b, 50)];
+    let owners = [(owner_2a, 50), (owner_2b, 50)];
     let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
-    client2_a.change_ownership(ownership).await.unwrap();
+    client_2a.change_ownership(ownership).await.unwrap();
 
-    let client2_b = builder
-        .make_client(
-            chain_id2,
-            key_pair2_b,
-            client2_a.block_hash(),
-            BlockHeight::from(1),
-        )
+    let mut client_2b = builder
+        .make_client(chain_2, client_2a.block_hash(), BlockHeight::from(1))
         .await?;
+    client_2b.set_preferred_owner(owner_2b);
 
     let blob0_bytes = b"blob0".to_vec();
     let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
 
     // Try to read a blob without publishing it first, should fail
-    let result = client1_a
+    let result = client_1a
         .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
         .await;
     assert_matches!(
@@ -1329,7 +1278,7 @@ where
     builder.set_fault_type([2], FaultType::Offline).await;
 
     // Publish blob on chain 1
-    let publish_certificate = client1_a
+    let publish_certificate = client_1a
         .publish_data_blob(blob0_bytes)
         .await
         .unwrap()
@@ -1346,8 +1295,8 @@ where
     // Try to read the blob. This is a different client but on the same chain, so when we
     // synchronize this with the validators before executing the block, we'll actually download
     // and cache locally the blobs that were published by `client_a`. So this will succeed.
-    client1_b.prepare_chain().await?;
-    let certificate = client1_b
+    client_1b.prepare_chain().await?;
+    let certificate = client_1b
         .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id })
         .await?
         .unwrap();
@@ -1362,7 +1311,7 @@ where
         .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
         .await;
 
-    client2_a.synchronize_from_validators().await.unwrap();
+    client_2a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
@@ -1372,17 +1321,17 @@ where
             blob_hash: blob1_hash,
         }),
     ];
-    let b0_result = client2_a
+    let b0_result = client_2a
         .execute_operations(blob_0_1_operations.clone(), vec![blob1.clone()])
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client2_a.pending_proposal().is_some());
+    assert!(client_2a.pending_proposal().is_some());
 
     for i in 0..=2 {
         let info = builder
             .node(i)
-            .chain_info_with_manager_values(chain_id2)
+            .chain_info_with_manager_values(chain_2)
             .await?;
         assert_eq!(info.manager.requested_locking, None);
     }
@@ -1392,7 +1341,7 @@ where
     builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
 
     // We make validator 3 (who does not have the block proposal) process the validated block.
-    let info2_a = client2_a.chain_info_with_manager_values().await?;
+    let info2_a = client_2a.chain_info_with_manager_values().await?;
     let locking = *info2_a.manager.requested_locking.unwrap();
     let LockingBlock::Regular(validated) = locking else {
         panic!("Unexpected locking fast block.");
@@ -1400,13 +1349,13 @@ where
     {
         let node3 = builder.node(3);
         let content1 = blob1.into_content();
-        assert_matches!(node3.handle_pending_blob(chain_id2, content1.clone()).await,
+        assert_matches!(node3.handle_pending_blob(chain_2, content1.clone()).await,
             Err(NodeError::WorkerError { error })
             if error.contains("Blob was not required by any pending block")
         );
         let result = node3.handle_validated_certificate(validated.clone()).await;
         assert_matches!(result, Err(NodeError::BlobsNotFound(_)));
-        node3.handle_pending_blob(chain_id2, content1).await?;
+        node3.handle_pending_blob(chain_2, content1).await?;
         let response = node3
             .handle_validated_certificate(validated.clone())
             .await?;
@@ -1417,19 +1366,19 @@ where
     }
 
     // Client 2B should be able to synchronize the locking block and the blobs from validator 3.
-    client2_b.synchronize_from_validators().await.unwrap();
-    let info2_b = client2_b.chain_info_with_manager_values().await?;
+    client_2b.synchronize_from_validators().await.unwrap();
+    let info2_b = client_2b.chain_info_with_manager_values().await?;
     assert_eq!(
         LockingBlock::Regular(validated),
         *info2_b.manager.requested_locking.unwrap()
     );
-    let bt_certificate = client2_b
+    let bt_certificate = client_2b
         .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap()
         .unwrap();
 
-    let certificate_values = client2_b
+    let certificate_values = client_2b
         .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
@@ -1464,13 +1413,17 @@ async fn test_handle_existing_proposal_with_blobs<B>(storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
+
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
     let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+
     let chain_id2 = client2_a.chain_id();
-    let owner2_a = AccountOwner::from(client2_a.public_key().await.unwrap());
-    let key_pair2_b = AccountSecretKey::generate();
-    let owner2_b = AccountOwner::from(key_pair2_b.public());
+
+    let owner2_a = client2_a.public_key().await.unwrap().into();
+    let owner2_b = builder.signer.generate_new().into();
+
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
@@ -1482,14 +1435,11 @@ where
         .execute_operation(owner_change_op.clone())
         .await
         .unwrap();
-    let client2_b = builder
-        .make_client(
-            chain_id2,
-            key_pair2_b,
-            client2_a.block_hash(),
-            BlockHeight::from(1),
-        )
+
+    let mut client2_b = builder
+        .make_client(chain_id2, client2_a.block_hash(), BlockHeight::from(1))
         .await?;
+    client2_b.set_preferred_owner(owner2_b);
 
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
@@ -1588,20 +1538,102 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_conflicting_proposals<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let owner2 = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
+    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
+    let chain_id = client1.chain_id();
+    let owner1 = client1.public_key().await?.into();
+    let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(owner1, 50), (owner2, 50)],
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    });
+    client1
+        .execute_operation(owner_change_op.clone())
+        .await
+        .unwrap();
+    let mut client2 = builder
+        .make_client(chain_id, client1.block_hash(), BlockHeight::from(1))
+        .await?;
+    client2.set_preferred_owner(owner2);
+    client2.synchronize_from_validators().await.unwrap();
+
+    // Client 1 makes a proposal to only validators 0 and 1.
+    builder
+        .set_fault_type([2, 3], FaultType::OfflineWithInfo)
+        .await;
+    assert!(client1
+        .burn(AccountOwner::CHAIN, Amount::from_millis(1))
+        .await
+        .is_err());
+
+    // Client 2's proposal reaches only 2 and 3.
+    builder
+        .set_fault_type([0, 1], FaultType::OfflineWithInfo)
+        .await;
+    builder.set_fault_type([2, 3], FaultType::Honest).await;
+    assert!(client2
+        .burn(AccountOwner::CHAIN, Amount::from_millis(2))
+        .await
+        .is_err());
+
+    // TODO(#3894): Make test_utils deterministic.
+    // The following condition is currently satisfied most of the time, but in some cases
+    // the faulty validators return an error before the honest ones process the proposal.
+
+    // for i in 0..4 {
+    //     let info = builder
+    //         .node(i)
+    //         .chain_info_with_manager_values(chain_id)
+    //         .await?;
+    //     assert_eq!(
+    //         AccountOwner::from(info.manager.requested_proposed.unwrap().public_key),
+    //         if i < 2 { owner1 } else { owner2 },
+    //     );
+    // }
+
+    // Once all validators are functional again, a new proposal should succeed.
+    builder
+        .set_fault_type([0, 1, 2, 3], FaultType::Honest)
+        .await;
+
+    client1.synchronize_from_validators().await.unwrap();
+    client1.publish_data_blob(b"foo".to_vec()).await?;
+
+    assert_eq!(client1.next_block_height(), BlockHeight::from(3));
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_re_propose_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
+
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let client3_a = builder.add_root_chain(3, Amount::from_tokens(10)).await?;
+
     let chain_id3 = client3_a.chain_id();
-    let owner3_a = AccountOwner::from(client3_a.public_key().await.unwrap());
-    let key_pair3_b = AccountSecretKey::generate();
-    let owner3_b = AccountOwner::from(key_pair3_b.public());
-    let key_pair3_c = AccountSecretKey::generate();
-    let owner3_c = AccountOwner::from(key_pair3_c.public());
+
+    let owner3_a = client3_a.public_key().await.unwrap().into();
+    let owner3_b = builder.signer.generate_new().into();
+    let owner3_c = builder.signer.generate_new().into();
+
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
@@ -1609,26 +1641,21 @@ where
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
     });
+
     client3_a
         .execute_operation(owner_change_op.clone())
         .await
         .unwrap();
-    let client3_b = builder
-        .make_client(
-            chain_id3,
-            key_pair3_b,
-            client3_a.block_hash(),
-            BlockHeight::from(1),
-        )
+
+    let mut client3_b = builder
+        .make_client(chain_id3, client3_a.block_hash(), BlockHeight::from(1))
         .await?;
-    let client3_c = builder
-        .make_client(
-            chain_id3,
-            key_pair3_c,
-            client3_a.block_hash(),
-            BlockHeight::from(1),
-        )
+    client3_b.set_preferred_owner(owner3_b);
+
+    let mut client3_c = builder
+        .make_client(chain_id3, client3_a.block_hash(), BlockHeight::from(1))
         .await?;
+    client3_c.set_preferred_owner(owner3_c);
 
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
@@ -1841,11 +1868,13 @@ async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
+    let mut signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let observer = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = client.chain_id();
+    let observer_id = observer.chain_id();
     let owner0 = client.public_key().await.unwrap().into();
     let owner1 = AccountSecretKey::generate().public().into();
 
@@ -1909,7 +1938,11 @@ where
 
     // The other owner is leader now. Trying to submit a block should return `WaitForTimeout`.
     let result = client
-        .transfer(AccountOwner::CHAIN, Amount::ONE, Recipient::root(2))
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Recipient::chain(observer_id),
+        )
         .await
         .unwrap();
     let timeout = match result {
@@ -1936,7 +1969,11 @@ where
 
     // Now we are the leader, and the transfer should succeed.
     let _certificate = client
-        .transfer(AccountOwner::CHAIN, Amount::ONE, Recipient::root(2))
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Recipient::chain(observer_id),
+        )
         .await
         .unwrap()
         .unwrap();
@@ -1953,6 +1990,9 @@ where
     Ok(())
 }
 
+// TODO(#3860): this test is currently intermittently failing if the faulty validators respond to
+// client0 before the correct ones. Un-ignore when this issue is fixed.
+#[ignore]
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
@@ -1964,12 +2004,12 @@ where
     B: StorageBuilder,
 {
     // Configure a chain with two regular and no super owners.
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let owner0 = client0.public_key().await.unwrap().into();
-    let key_pair1 = AccountSecretKey::generate();
-    let owner1 = key_pair1.public().into();
+    let owner0 = client0.preferred_owner.unwrap();
 
     let owners = [(owner0, 100), (owner1, 100)];
     let timeout_config = TimeoutConfig {
@@ -1979,14 +2019,11 @@ where
     let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
     client0.change_ownership(ownership).await.unwrap();
 
-    let client1 = builder
-        .make_client(
-            chain_id,
-            key_pair1,
-            client0.block_hash(),
-            BlockHeight::from(1),
-        )
+    let mut client1 = builder
+        .make_client(chain_id, client0.block_hash(), client0.next_block_height())
         .await?;
+    client1.set_preferred_owner(owner1);
+    assert!(owner0 != owner1);
 
     // Client 0 tries to burn 3 tokens. Two validators are offline, so nothing will get
     // validated or confirmed. However, client 0 now has a pending block.
@@ -2074,7 +2111,8 @@ async fn test_propose_pending_block<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
 
     // The client tries to burn 3 tokens. Two validators are offline, so nothing will get
@@ -2113,12 +2151,12 @@ where
     B: StorageBuilder,
 {
     // Configure a chain with two regular and no super owners.
-    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
     let owner0 = client0.public_key().await.unwrap().into();
-    let key_pair1 = AccountSecretKey::generate();
-    let owner1 = key_pair1.public().into();
+    let owner1 = builder.signer.generate_new().into();
 
     let owners = [(owner0, 100), (owner1, 100)];
     let timeout_config = TimeoutConfig {
@@ -2127,14 +2165,10 @@ where
     };
     let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
     client0.change_ownership(ownership).await.unwrap();
-    let client1 = builder
-        .make_client(
-            chain_id,
-            key_pair1,
-            client0.block_hash(),
-            BlockHeight::from(1),
-        )
+    let mut client1 = builder
+        .make_client(chain_id, client0.block_hash(), BlockHeight::from(1))
         .await?;
+    client1.set_preferred_owner(owner1);
 
     // Client 0 tries to burn 3 tokens. Three validators are faulty: 1 and 2 will validate the
     // block but not receive it for confirmation. Validator 3 is offline.
@@ -2142,6 +2176,7 @@ where
         .set_fault_type([1, 2], FaultType::DontProcessValidated)
         .await;
     builder.set_fault_type([3], FaultType::Offline).await;
+
     let result = client0
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
@@ -2222,7 +2257,8 @@ async fn test_message_policy<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
@@ -2285,7 +2321,8 @@ where
         maximum_block_proposal_size: (blob_bytes.len() * 100) as u64,
         ..ResourceControlPolicy::default()
     };
-    let mut builder = TestBuilder::new(storage_builder, 4, 0)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer)
         .await?
         .with_policy(policy.clone());
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
@@ -2383,7 +2420,8 @@ where
         blob_byte_published: Amount::from_attos(100),
         ..ResourceControlPolicy::default()
     };
-    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+    let mut signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(policy.clone());
     let mut expected_balance = Amount::ONE;

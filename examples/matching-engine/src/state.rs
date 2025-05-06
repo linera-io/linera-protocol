@@ -52,14 +52,14 @@ pub struct AccountInfo {
 /// cancelled order is not the oldest, then it remains
 /// though with a size zero.
 #[derive(View, SimpleObject)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct LevelView {
     pub queue: QueueView<OrderEntry>,
 }
 
 /// The matching engine containing the information.
 #[derive(RootView, SimpleObject)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct MatchingEngineState {
     ///The next_order_number contains the order_id so that
     ///the order_id gets created from 0, to infinity.

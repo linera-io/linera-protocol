@@ -38,6 +38,7 @@ Create the user wallet and add chains to it:
 
 ```bash
 export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_KEYSTORE="$LINERA_TMP_DIR/keystore.json"
 export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 
 linera wallet init --faucet $FAUCET_URL
@@ -46,8 +47,8 @@ INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
 INFO_2=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
-OWNER_1="${INFO_1[3]}"
-OWNER_2="${INFO_2[3]}"
+OWNER_1="${INFO_1[2]}"
+OWNER_2="${INFO_2[2]}"
 ```
 
 Compile the `native-fungible` application WebAssembly binaries, and publish them as an application

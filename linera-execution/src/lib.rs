@@ -35,7 +35,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, Resources, SendMessageRequest, StreamUpdate, Timestamp,
+        DecompressionError, Epoch, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -47,7 +47,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use system::{AdminOperation, OpenChainConfig};
+use system::AdminOperation;
 use thiserror::Error;
 
 #[cfg(with_revm)]
@@ -333,6 +333,8 @@ pub enum ExecutionError {
     InternalError(&'static str),
     #[error("UpdateStreams contains an unknown event")]
     EventNotFound(EventId),
+    #[error("UpdateStreams is outdated")]
+    OutdatedUpdateStreams,
 }
 
 impl From<ViewError> for ExecutionError {
@@ -431,6 +433,8 @@ pub struct OperationContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
+    /// The timestamp of the block containing the operation.
+    pub timestamp: Timestamp,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -449,6 +453,8 @@ pub struct MessageContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
+    /// The timestamp of the block executing the message.
+    pub timestamp: Timestamp,
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
@@ -462,6 +468,8 @@ pub struct ProcessStreamsContext {
     pub height: BlockHeight,
     /// The consensus round number, if this is a block that gets validated in a multi-leader round.
     pub round: Option<u32>,
+    /// The timestamp of the current block.
+    pub timestamp: Timestamp,
 }
 
 impl From<MessageContext> for ProcessStreamsContext {
@@ -470,6 +478,7 @@ impl From<MessageContext> for ProcessStreamsContext {
             chain_id: context.chain_id,
             height: context.height,
             round: context.round,
+            timestamp: context.timestamp,
         }
     }
 }
@@ -480,6 +489,7 @@ impl From<OperationContext> for ProcessStreamsContext {
             chain_id: context.chain_id,
             height: context.height,
             round: context.round,
+            timestamp: context.timestamp,
         }
     }
 }
@@ -784,7 +794,7 @@ pub trait ContractRuntime: BaseRuntime {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<(MessageId, ChainId), ExecutionError>;
+    ) -> Result<ChainId, ExecutionError>;
 
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
@@ -903,48 +913,6 @@ pub enum QueryResponse {
     ),
 }
 
-/// A message together with routing information.
-#[derive(Clone, Debug)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct RawOutgoingMessage<Message, Grant> {
-    /// The destination of the message.
-    pub destination: ChainId,
-    /// Whether the message is authenticated.
-    pub authenticated: bool,
-    /// The grant needed for message execution, typically specified as an `Amount` or as `Resources`.
-    pub grant: Grant,
-    /// The kind of outgoing message being sent.
-    pub kind: MessageKind,
-    /// The message itself.
-    pub message: Message,
-}
-
-impl<Message> From<SendMessageRequest<Message>> for RawOutgoingMessage<Message, Resources> {
-    fn from(request: SendMessageRequest<Message>) -> Self {
-        let SendMessageRequest {
-            destination,
-            authenticated,
-            grant,
-            is_tracked,
-            message,
-        } = request;
-
-        let kind = if is_tracked {
-            MessageKind::Tracked
-        } else {
-            MessageKind::Simple
-        };
-
-        RawOutgoingMessage {
-            destination,
-            authenticated,
-            grant,
-            kind,
-            message,
-        }
-    }
-}
-
 /// The kind of outgoing message being sent.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Copy)]
 pub enum MessageKind {
@@ -1016,14 +984,6 @@ impl OperationContext {
             chain_id: self.chain_id,
             owner,
         })
-    }
-
-    fn next_message_id(&self, next_message_index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index: next_message_index,
-        }
     }
 }
 
@@ -1211,6 +1171,19 @@ impl Operation {
             _ => vec![],
         }
     }
+
+    /// Returns whether this operation is allowed regardless of application permissions.
+    pub fn is_exempt_from_permissions(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        matches!(
+            **system_op,
+            SystemOperation::ProcessNewEpoch(_)
+                | SystemOperation::ProcessRemovedEpoch(_)
+                | SystemOperation::UpdateStreams(_)
+        )
+    }
 }
 
 impl From<SystemMessage> for Message {
@@ -1242,13 +1215,6 @@ impl Message {
         match self {
             Self::System(_) => GenericApplicationId::System,
             Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
-        }
-    }
-
-    pub fn matches_open_chain(&self) -> Option<&OpenChainConfig> {
-        match self {
-            Message::System(SystemMessage::OpenChain(config)) => Some(config),
-            _ => None,
         }
     }
 }

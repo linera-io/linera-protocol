@@ -68,7 +68,7 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.state.ensure_is_active()?;
+        self.state.ensure_is_active().await?;
         let (chain_epoch, committee) = self.state.chain.current_committee()?;
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -208,7 +208,7 @@ where
         let height = header.height;
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        self.state.ensure_is_active()?;
+        self.state.ensure_is_active().await?;
         let (epoch, committee) = self.state.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
@@ -303,13 +303,7 @@ where
         }
         let local_time = self.state.storage.clock().current_time();
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
-        if tip.is_first_block() && self.state.chain.is_child() {
-            self.state
-                .chain
-                .execute_init_message_from(block, local_time)
-                .await?;
-        }
-        self.state.ensure_is_active()?;
+        self.state.ensure_is_active().await?;
         // Verify the certificate.
         let (epoch, committee) = self.state.chain.current_committee()?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;

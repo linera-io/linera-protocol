@@ -64,8 +64,8 @@ service ValidatorNode {
   // Request the node's version info.
   rpc GetVersionInfo(google.protobuf.Empty) returns (VersionInfo);
 
-  // Request the genesis configuration hash of the network this node is part of.
-  rpc GetGenesisConfigHash(google.protobuf.Empty) returns (CryptoHash);
+  // Request the network description seen by this node.
+  rpc GetNetworkDescription(google.protobuf.Empty) returns (NetworkDescription);
 
   // Download a blob.
   rpc DownloadBlob(BlobId) returns (BlobContent);
@@ -118,6 +118,12 @@ message VersionInfo {
     string rpc_hash = 4;
     string graphql_hash = 5;
     string wit_hash = 6;
+}
+
+message NetworkDescription {
+    string name = 1;
+    CryptoHash genesis_config_hash = 2;
+    uint64 genesis_timestamp = 3;
 }
 
 // A request for client to subscribe to notifications for a given `ChainId`

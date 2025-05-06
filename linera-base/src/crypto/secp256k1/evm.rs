@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 
-use alloy_primitives::{eip191_hash_message, PrimitiveSignature};
+use alloy_primitives::{eip191_hash_message, Signature};
 use k256::{
     ecdsa::{SigningKey, VerifyingKey},
     elliptic_curve::sec1::FromEncodedPoint,
@@ -65,7 +65,7 @@ pub struct EvmKeyPair {
 
 /// A secp256k1 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub struct EvmSignature(pub(crate) PrimitiveSignature);
+pub struct EvmSignature(pub(crate) Signature);
 
 #[cfg(with_testing)]
 impl FromStr for EvmSignature {
@@ -73,7 +73,7 @@ impl FromStr for EvmSignature {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = hex::decode(s)?;
-        let sig = PrimitiveSignature::from_erc2098(&bytes);
+        let sig = Signature::from_erc2098(&bytes);
         Ok(EvmSignature(sig))
     }
 }
@@ -377,9 +377,14 @@ impl EvmSignature {
     where
         T: BcsSignable<'de>,
     {
+        Self::sign_prehash(secret, CryptoHash::new(value))
+    }
+
+    /// Computes a signature from a prehash.
+    pub fn sign_prehash(secret: &EvmSecretKey, prehash: CryptoHash) -> Self {
         use k256::ecdsa::signature::hazmat::PrehashSigner;
 
-        let message = eip191_hash_message(CryptoHash::new(value).as_bytes().0).0;
+        let message = eip191_hash_message(prehash.as_bytes().0).0;
         let (signature, rid) = secret
             .0
             .sign_prehash(&message)
@@ -448,7 +453,7 @@ impl EvmSignature {
                 expected: EVM_SECP256K1_SIGNATURE_SIZE,
             });
         }
-        let sig = alloy_primitives::PrimitiveSignature::from_erc2098(bytes);
+        let sig = alloy_primitives::Signature::from_erc2098(bytes);
         Ok(EvmSignature(sig))
     }
 }

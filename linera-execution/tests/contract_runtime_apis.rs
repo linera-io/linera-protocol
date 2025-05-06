@@ -16,14 +16,15 @@ use linera_base::{
         CompressedBytecode, OracleResponse,
     },
     http,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainDescription, ChainId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_execution::{
     test_utils::{
-        create_dummy_message_context, create_dummy_operation_context, test_accounts_strategy,
-        ExpectedCall, RegisterMockApplication, SystemExecutionState,
+        create_dummy_message_context, create_dummy_operation_context, dummy_chain_description,
+        dummy_chain_description_with_ownership_and_balance, test_accounts_strategy, ExpectedCall,
+        RegisterMockApplication, SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, Message, MessageContext, Operation,
     OperationContext, ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext,
@@ -45,6 +46,8 @@ async fn test_transfer_system_api(
 ) -> anyhow::Result<()> {
     let amount = Amount::ONE;
 
+    let state = sender.create_system_state(amount);
+    let chain_id = state.description.unwrap().id();
     let mut view = sender.create_system_state(amount).into_view().await;
 
     let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
@@ -66,7 +69,7 @@ async fn test_transfer_system_api(
                 sender.sender_account_owner(),
                 Account {
                     owner: recipient.recipient_account_owner(),
-                    chain_id: ChainId::root(0),
+                    chain_id: dummy_chain_description(0).id(),
                 },
                 amount,
             )?;
@@ -77,7 +80,7 @@ async fn test_transfer_system_api(
 
     let context = OperationContext {
         authenticated_signer: sender.signer(),
-        ..create_dummy_operation_context()
+        ..create_dummy_operation_context(chain_id)
     };
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -104,7 +107,7 @@ async fn test_transfer_system_api(
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     view.execute_message(
-        create_dummy_message_context(None),
+        create_dummy_message_context(chain_id, None),
         outgoing_messages[0].message.clone(),
         None,
         &mut TransactionTracker::new_replaying(Vec::new()),
@@ -129,6 +132,8 @@ async fn test_unauthorized_transfer_system_api(
 ) -> anyhow::Result<()> {
     let amount = Amount::ONE;
 
+    let state = sender.create_system_state(amount);
+    let chain_id = state.description.unwrap().id();
     let mut view = sender.create_system_state(amount).into_view().await;
 
     let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
@@ -150,7 +155,7 @@ async fn test_unauthorized_transfer_system_api(
                 sender.unauthorized_sender_account_owner(),
                 Account {
                     owner: recipient.recipient_account_owner(),
-                    chain_id: ChainId::root(0),
+                    chain_id: dummy_chain_description(0).id(),
                 },
                 amount,
             )?;
@@ -161,7 +166,7 @@ async fn test_unauthorized_transfer_system_api(
 
     let context = OperationContext {
         authenticated_signer: sender.unauthorized_signer(),
-        ..create_dummy_operation_context()
+        ..create_dummy_operation_context(chain_id)
     };
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -198,7 +203,8 @@ async fn test_claim_system_api(
 ) -> anyhow::Result<()> {
     let amount = Amount::ONE;
 
-    let claimer_chain_description = ChainDescription::Root(1);
+    let claimer_chain_description = dummy_chain_description(1);
+    let claimer_chain_id = claimer_chain_description.id();
 
     let source_state = sender.create_system_state(amount);
     let claimer_state = SystemExecutionState {
@@ -206,12 +212,11 @@ async fn test_claim_system_api(
         ..SystemExecutionState::default()
     };
 
-    let source_chain_id = ChainId::from(
-        source_state
-            .description
-            .expect("System state created by sender should have a `ChainDescription`"),
-    );
-    let claimer_chain_id = ChainId::from(claimer_chain_description);
+    let source_chain_id = source_state
+        .description
+        .as_ref()
+        .expect("System state created by sender should have a `ChainDescription`")
+        .id();
 
     let mut source_view = source_state.into_view().await;
     let mut claimer_view = claimer_state.into_view().await;
@@ -250,7 +255,7 @@ async fn test_claim_system_api(
     let context = OperationContext {
         authenticated_signer: sender.signer(),
         chain_id: claimer_chain_id,
-        ..create_dummy_operation_context()
+        ..create_dummy_operation_context(claimer_chain_id)
     };
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -280,7 +285,7 @@ async fn test_claim_system_api(
     let mut tracker = TransactionTracker::new_replaying(Vec::new());
     source_view
         .execute_message(
-            create_dummy_message_context(None),
+            create_dummy_message_context(source_chain_id, None),
             outgoing_messages[0].message.clone(),
             None,
             &mut tracker,
@@ -314,7 +319,7 @@ async fn test_claim_system_api(
     let mut tracker = TransactionTracker::new_replaying(Vec::new());
     let context = MessageContext {
         chain_id: claimer_chain_id,
-        ..create_dummy_message_context(None)
+        ..create_dummy_message_context(claimer_chain_id, None)
     };
     claimer_view
         .execute_message(
@@ -345,15 +350,15 @@ async fn test_unauthorized_claims(
 ) -> anyhow::Result<()> {
     let amount = Amount::ONE;
 
-    let claimer_chain_description = ChainDescription::Root(1);
+    let claimer_chain_description = dummy_chain_description(1);
+    let claimer_chain_id = claimer_chain_description.id();
 
     let claimer_state = SystemExecutionState {
         description: Some(claimer_chain_description),
         ..SystemExecutionState::default()
     };
 
-    let source_chain_id = ChainId::root(0);
-    let claimer_chain_id = ChainId::from(claimer_chain_description);
+    let source_chain_id = dummy_chain_description(0).id();
 
     let mut claimer_view = claimer_state.into_view().await;
 
@@ -390,8 +395,7 @@ async fn test_unauthorized_claims(
 
     let context = OperationContext {
         authenticated_signer: sender.unauthorized_signer(),
-        chain_id: claimer_chain_id,
-        ..create_dummy_operation_context()
+        ..create_dummy_operation_context(claimer_chain_id)
     };
     let mut controller = ResourceController::default();
     let operation = Operation::User {
@@ -415,10 +419,11 @@ async fn test_unauthorized_claims(
 /// Tests the contract system API to read the chain balance.
 #[proptest(async = "tokio")]
 async fn test_read_chain_balance_system_api(chain_balance: Amount) {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
     let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
         balance: chain_balance,
-        ..SystemExecutionState::default()
+        ..SystemExecutionState::new(description)
     }
     .into_view()
     .await;
@@ -445,7 +450,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -471,10 +476,11 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
 async fn test_read_owner_balance_system_api(
     #[strategy(test_accounts_strategy())] accounts: BTreeMap<AccountOwner, Amount>,
 ) {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
     let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
         balances: accounts.clone(),
-        ..SystemExecutionState::default()
+        ..SystemExecutionState::new(description)
     }
     .into_view()
     .await;
@@ -491,7 +497,7 @@ async fn test_read_owner_balance_system_api(
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -511,12 +517,9 @@ async fn test_read_owner_balance_system_api(
 /// Tests if reading the balance of a missing account returns zero.
 #[proptest(async = "tokio")]
 async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_account: AccountOwner) {
-    let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
-        ..SystemExecutionState::default()
-    }
-    .into_view()
-    .await;
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    let mut view = SystemExecutionState::new(description).into_view().await;
 
     let (application_id, application, blobs) = view.register_mock_application(0).await.unwrap();
 
@@ -531,7 +534,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -553,10 +556,11 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
 async fn test_read_owner_balances_system_api(
     #[strategy(test_accounts_strategy())] accounts: BTreeMap<AccountOwner, Amount>,
 ) {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
     let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
         balances: accounts.clone(),
-        ..SystemExecutionState::default()
+        ..SystemExecutionState::new(description)
     }
     .into_view()
     .await;
@@ -574,7 +578,7 @@ async fn test_read_owner_balances_system_api(
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -596,10 +600,11 @@ async fn test_read_owner_balances_system_api(
 async fn test_read_balance_owners_system_api(
     #[strategy(test_accounts_strategy())] accounts: BTreeMap<AccountOwner, Amount>,
 ) {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
     let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
         balances: accounts.clone(),
-        ..SystemExecutionState::default()
+        ..SystemExecutionState::new(description)
     }
     .into_view()
     .await;
@@ -617,7 +622,7 @@ async fn test_read_balance_owners_system_api(
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -661,7 +666,7 @@ impl TransferTestEndpoint {
 
         ApplicationDescription {
             module_id: ModuleId::new(contract_id, service_id, vm_runtime),
-            creator_chain_id: ChainId::root(1000),
+            creator_chain_id: dummy_chain_description(1000).id(),
             block_height: BlockHeight(0),
             application_index: 0,
             parameters: vec![],
@@ -719,8 +724,11 @@ impl TransferTestEndpoint {
             ..ChainOwnership::default()
         };
 
+        let chain_description =
+            dummy_chain_description_with_ownership_and_balance(0, ownership.clone(), balance);
+
         SystemExecutionState {
-            description: Some(ChainDescription::Root(0)),
+            description: Some(chain_description),
             ownership,
             balance,
             balances: BTreeMap::from_iter(balances),
@@ -804,12 +812,13 @@ impl TransferTestEndpoint {
 #[test_case(Some(vec![]) => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
 #[test_log::test(tokio::test)]
 async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), ExecutionError> {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
     let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
         ownership: ChainOwnership::default(),
         balance: Amount::ONE,
         balances: BTreeMap::new(),
-        ..SystemExecutionState::default()
+        ..SystemExecutionState::new(description)
     }
     .into_view()
     .await;
@@ -847,7 +856,7 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
     application.expect_call(ExpectedCall::default_finalize());
     application.expect_call(ExpectedCall::handle_query(|_service, _query| Ok(vec![])));
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -876,12 +885,13 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
 #[test_case(Some(vec![]) => matches Err(ExecutionError::UnauthorizedApplication(_)); "when unauthorized")]
 #[test_log::test(tokio::test)]
 async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(), ExecutionError> {
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
     let mut view = SystemExecutionState {
-        description: Some(ChainDescription::Root(0)),
         ownership: ChainOwnership::default(),
         balance: Amount::ONE,
         balances: BTreeMap::new(),
-        ..SystemExecutionState::default()
+        ..SystemExecutionState::new(description)
     }
     .into_view()
     .await;
@@ -918,7 +928,7 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = create_dummy_operation_context();
+    let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
