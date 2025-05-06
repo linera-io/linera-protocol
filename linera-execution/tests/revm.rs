@@ -151,9 +151,6 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-
-
 #[tokio::test]
 async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()> {
     let module = load_solidity_example("tests/fixtures/evm_example_counter.sol")?;
@@ -246,18 +243,19 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
         application_id: app_id,
         bytes,
     };
-    let result = view.execute_operation(
-        operation_context,
-        operation,
-        &mut txn_tracker,
-        &mut controller,
-    ).await;
+    let result = view
+        .execute_operation(
+            operation_context,
+            operation,
+            &mut txn_tracker,
+            &mut controller,
+        )
+        .await;
 
     assert!(result.is_err());
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_terminate_query_by_lack_of_fuel() -> anyhow::Result<()> {
@@ -336,5 +334,3 @@ async fn test_terminate_query_by_lack_of_fuel() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-
