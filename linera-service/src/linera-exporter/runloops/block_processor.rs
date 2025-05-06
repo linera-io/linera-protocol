@@ -282,11 +282,9 @@ mod test {
             (1, 3),
         ];
 
-        let mut i = 0;
-        for (x, y) in expected_state {
+        for (i, (x, y)) in expected_state.into_iter().enumerate() {
             let hash = exporter_storage.get_block(i).await?.hash();
             assert_eq!(hash, state[x][y]);
-            i += 1;
         }
 
         Ok(())
@@ -388,11 +386,9 @@ mod test {
 
         let expected_state = [(2, 0), (1, 0), (0, 0), (0, 1), (1, 1), (2, 1)];
 
-        let mut i = 0;
-        for (x, y) in expected_state {
+        for (i, (x, y)) in expected_state.into_iter().enumerate() {
             let hash = exporter_storage.get_block(i).await?.hash();
             assert_eq!(hash, state[x][y]);
-            i += 1;
         }
 
         Ok(())
