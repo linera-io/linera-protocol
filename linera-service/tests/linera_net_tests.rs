@@ -3002,7 +3002,7 @@ async fn test_end_to_end_faucet_chain_limit(config: impl LineraNetConfig) -> Res
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let chain_count = 3;
+    let max_claims_per_chain = 3;
 
     let (mut net, faucet_client) = config.instantiate().await?;
 
@@ -3010,12 +3010,17 @@ async fn test_end_to_end_faucet_chain_limit(config: impl LineraNetConfig) -> Res
 
     let amount = Amount::ONE;
     let mut faucet_service = faucet_client
-        .run_faucet(None, faucet_chain, amount, Some(chain_count as u64))
+        .run_faucet(
+            None,
+            faucet_chain,
+            amount,
+            Some(max_claims_per_chain as u64),
+        )
         .await?;
     let faucet = faucet_service.instance();
 
     // Create one less chain than the configured limit.
-    for _ in 1..chain_count {
+    for _ in 1..max_claims_per_chain {
         let client = net.make_client().await;
         let _ = client
             .wallet_init(&[], FaucetOption::NewChain(&faucet))

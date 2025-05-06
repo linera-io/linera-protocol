@@ -90,10 +90,10 @@ async fn test_faucet_rate_limiting() {
     let context = Arc::new(Mutex::new(context));
     let root = MutationRoot {
         main_chain_id,
-        tmp_chain_id: Arc::new(Mutex::new(Some(chain_id))),
+        faucet_chain_id: Arc::new(Mutex::new(Some(chain_id))),
         context: context.clone(),
         amount: Amount::from_tokens(1),
-        max_claims_per_chain: 10,
+        faucet_init_balance: Amount::from_tokens(10),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
         start_balance: Amount::from_tokens(6),

@@ -50,11 +50,13 @@ pub struct QueryRoot<C> {
 
 /// The root GraphQL mutation type.
 pub struct MutationRoot<C> {
+    /// The chain from which new faucet chains are opened.
     main_chain_id: ChainId,
-    tmp_chain_id: Arc<Mutex<Option<ChainId>>>,
+    /// The chain that is currently used to open requested chains for clients.
+    faucet_chain_id: Arc<Mutex<Option<ChainId>>>,
     context: Arc<Mutex<C>>,
     amount: Amount,
-    max_claims_per_chain: u32,
+    faucet_init_balance: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
     start_balance: Amount,
@@ -123,54 +125,28 @@ where
     C: ClientContext,
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        let main_client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(self.main_chain_id)?;
-        let maybe_tmp_chain_id = *self.tmp_chain_id.lock().await;
-        let main_balance = main_client.local_balance().await?;
-        let tmp_chain_id = match maybe_tmp_chain_id {
-            Some(tmp_chain_id) => tmp_chain_id,
-            None => {
-                let key_pair = main_client.key_pair().await?;
-                let balance = self
-                    .amount
-                    .try_add(MAX_FEE)?
-                    .try_mul(u128::from(self.max_claims_per_chain))?
-                    .try_add(MAX_FEE)? // One more block fee for closing the chain.
-                    .min(main_balance.try_sub(MAX_FEE)?);
-                let ownership = main_client.chain_state_view().await?.ownership().clone();
-                let (message_id, certificate) = main_client
-                    .open_chain(ownership, ApplicationPermissions::default(), balance)
-                    .await?
-                    .try_unwrap()?;
-                let chain_id = ChainId::child(message_id);
-                info!("Switching to a new faucet chain {chain_id:8}");
-                self.context
-                    .lock()
-                    .await
-                    .update_wallet_for_new_chain(
-                        chain_id,
-                        Some(key_pair),
-                        certificate.block().header.timestamp,
-                    )
-                    .await?;
-                *self.tmp_chain_id.lock().await = Some(chain_id);
-                chain_id
-            }
+        let maybe_faucet_chain_id = *self.faucet_chain_id.lock().await;
+        let faucet_chain_id = match maybe_faucet_chain_id {
+            Some(faucet_chain_id) => faucet_chain_id,
+            None => self.open_new_faucet_chain().await?,
         };
-        let tmp_client = self.context.lock().await.make_chain_client(tmp_chain_id)?;
+        let (faucet_client, main_client) = {
+            let guard = self.context.lock().await;
+            (
+                guard.make_chain_client(faucet_chain_id)?,
+                guard.make_chain_client(self.main_chain_id)?,
+            )
+        };
 
         if self.start_timestamp < self.end_timestamp {
-            let local_time = tmp_client.storage_client().clock().current_time();
+            let local_time = faucet_client.storage_client().clock().current_time();
             if local_time < self.end_timestamp {
                 let full_duration = self
                     .end_timestamp
                     .delta_since(self.start_timestamp)
                     .as_micros();
                 let remaining_duration = self.end_timestamp.delta_since(local_time).as_micros();
-                let balance = tmp_client
+                let balance = faucet_client
                     .local_balance()
                     .await?
                     .try_add(main_client.local_balance().await?)?;
@@ -190,27 +166,31 @@ where
         }
 
         let ownership = ChainOwnership::single(owner);
-        let result = tmp_client
+        let (message_id, certificate) = faucet_client
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
-            .await;
-        self.context.lock().await.update_wallet(&tmp_client).await?;
-        let (message_id, certificate) = result?.try_unwrap()?;
+            .await?
+            .try_unwrap()?;
+        self.context
+            .lock()
+            .await
+            .update_wallet(&faucet_client)
+            .await?;
 
         // Only keep using this chain if there will still be enough balance to close it.
-        if tmp_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)? {
+        if faucet_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)? {
             // TODO(#1795): Move the remaining tokens back to the main chain.
-            match tmp_client.close_chain().await {
+            match faucet_client.close_chain().await {
                 Ok(outcome) => {
                     outcome.try_unwrap()?;
                 }
-                Err(err) => tracing::warn!("Failed to close the chain: {err:?}"),
+                Err(err) => tracing::warn!("Failed to close the temporary faucet chain: {err:?}"),
             }
             self.context
                 .lock()
                 .await
-                .forget_chain(&tmp_chain_id)
+                .forget_chain(&faucet_chain_id)
                 .await?;
-            self.tmp_chain_id.lock().await.take();
+            self.faucet_chain_id.lock().await.take();
         }
 
         let chain_id = ChainId::child(message_id);
@@ -219,6 +199,35 @@ where
             chain_id,
             certificate_hash: certificate.hash(),
         })
+    }
+
+    async fn open_new_faucet_chain(&self) -> Result<ChainId, Error> {
+        let main_client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(self.main_chain_id)?;
+        let main_balance = main_client.local_balance().await?;
+        let key_pair = main_client.key_pair().await?;
+        let balance = self.faucet_init_balance.min(main_balance.try_sub(MAX_FEE)?);
+        let ownership = main_client.chain_state_view().await?.ownership().clone();
+        let (message_id, certificate) = main_client
+            .open_chain(ownership, ApplicationPermissions::default(), balance)
+            .await?
+            .try_unwrap()?;
+        let chain_id = ChainId::child(message_id);
+        info!("Switching to a new faucet chain {chain_id:8}");
+        self.context
+            .lock()
+            .await
+            .update_wallet_for_new_chain(
+                chain_id,
+                Some(key_pair),
+                certificate.block().header.timestamp,
+            )
+            .await?;
+        *self.faucet_chain_id.lock().await = Some(chain_id);
+        Ok(chain_id)
     }
 }
 
@@ -240,7 +249,7 @@ where
     C: ClientContext,
 {
     main_chain_id: ChainId,
-    tmp_chain_id: Arc<Mutex<Option<ChainId>>>,
+    faucet_chain_id: Arc<Mutex<Option<ChainId>>>,
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
@@ -248,7 +257,7 @@ where
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
-    max_claims_per_chain: u32,
+    faucet_init_balance: Amount,
     start_timestamp: Timestamp,
     start_balance: Amount,
 }
@@ -260,14 +269,14 @@ where
     fn clone(&self) -> Self {
         Self {
             main_chain_id: self.main_chain_id,
-            tmp_chain_id: Arc::clone(&self.tmp_chain_id),
+            faucet_chain_id: Arc::clone(&self.faucet_chain_id),
             context: Arc::clone(&self.context),
             genesis_config: Arc::clone(&self.genesis_config),
             config: self.config.clone(),
             storage: self.storage.clone(),
             port: self.port,
             amount: self.amount,
-            max_claims_per_chain: self.max_claims_per_chain,
+            faucet_init_balance: self.faucet_init_balance,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
@@ -292,6 +301,10 @@ where
         config: ChainListenerConfig,
         storage: C::Storage,
     ) -> anyhow::Result<Self> {
+        let faucet_init_balance = amount
+            .try_add(MAX_FEE)?
+            .try_mul(u128::from(max_claims_per_chain))?
+            .try_add(MAX_FEE)?; // One more block fee for closing the chain.
         let client = context.make_chain_client(chain_id)?;
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
@@ -299,14 +312,14 @@ where
         let start_balance = client.local_balance().await?;
         Ok(Self {
             main_chain_id: chain_id,
-            tmp_chain_id: Arc::new(Mutex::new(None)),
+            faucet_chain_id: Arc::new(Mutex::new(None)),
             context,
             genesis_config,
             config,
             storage,
             port,
             amount,
-            max_claims_per_chain,
+            faucet_init_balance,
             end_timestamp,
             start_timestamp,
             start_balance,
@@ -316,10 +329,10 @@ where
     pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
         let mutation_root = MutationRoot {
             main_chain_id: self.main_chain_id,
-            tmp_chain_id: Arc::clone(&self.tmp_chain_id),
+            faucet_chain_id: Arc::clone(&self.faucet_chain_id),
             context: Arc::clone(&self.context),
             amount: self.amount,
-            max_claims_per_chain: self.max_claims_per_chain,
+            faucet_init_balance: self.faucet_init_balance,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
