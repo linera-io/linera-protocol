@@ -7,8 +7,8 @@ use linera_execution::ExecutionError;
 
 use crate::{client::ChainClientError, local_node::LocalNodeError, worker::WorkerError};
 
-/// Asserts that an error is due to insufficient funding during an operation.
-pub fn assert_insufficient_funding_during_operation<T>(
+/// Asserts that an error is due to insufficient balance during an operation.
+pub fn assert_insufficient_balance_during_operation<T>(
     obtained_error: Result<T, ChainClientError>,
     operation_index: u32,
 ) {
@@ -32,12 +32,12 @@ pub fn assert_insufficient_funding_during_operation<T>(
     assert_matches!(
         *execution_error,
         ExecutionError::InsufficientBalance { .. },
-        "Expected ExecutionError::InsufficientFunding, found: {execution_error:#?}"
+        "Expected ExecutionError::InsufficientBalance, found: {execution_error:#?}"
     );
 }
 
 /// Asserts that an error is due to insufficient funding for fees.
-pub fn assert_insufficient_funding_fees<T>(obtained_error: Result<T, ChainClientError>) {
+pub fn assert_fees_exceed_funding<T>(obtained_error: Result<T, ChainClientError>) {
     let ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
         error,
     ))) = obtained_error.err().unwrap()
@@ -56,7 +56,7 @@ pub fn assert_insufficient_funding_fees<T>(obtained_error: Result<T, ChainClient
     assert_matches!(
         *execution_error,
         ExecutionError::FeesExceedFunding { .. },
-        "Expected ExecutionError::InsufficientFundingForFees, found: {execution_error:#?}"
+        "Expected ExecutionError::FeesExceedFunding, found: {execution_error:#?}"
     );
 }
 

@@ -29,8 +29,8 @@ use linera_execution::{
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
-    assert_insufficient_funding, assert_insufficient_funding_during_operation,
-    assert_insufficient_funding_fees,
+    assert_insufficient_funding, assert_insufficient_balance_during_operation,
+    assert_fees_exceed_funding,
 };
 
 #[cfg(feature = "dynamodb")]
@@ -1211,12 +1211,12 @@ where
     let obtained_error = sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
         .await;
-    assert_insufficient_funding_during_operation(obtained_error, 0);
+    assert_insufficient_balance_during_operation(obtained_error, 0);
 
     let obtained_error = sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
-    assert_insufficient_funding_fees(obtained_error);
+    assert_fees_exceed_funding(obtained_error);
     Ok(())
 }
 
