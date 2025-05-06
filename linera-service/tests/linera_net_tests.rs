@@ -2861,8 +2861,9 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     // Generate keys for client 2.
     let owner2 = client2.keygen().await?;
 
+    // We set the temporary chain limit to 1, so unused tokens remain on the main chain.
     let mut faucet_service = client1
-        .run_faucet(None, chain1, Amount::from_tokens(2))
+        .run_faucet(None, chain1, Amount::from_tokens(2), Some(1))
         .await?;
     let faucet = faucet_service.instance();
     let outcome = faucet.claim(&owner2).await?;
@@ -2928,7 +2929,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     Ok(())
 }
 
-/// Tests creating a new wallet using a Faucet that has already created a lot of microchains.
+/// Tests creating a new wallet using a faucet that has already created a lot of microchains.
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -2955,7 +2956,9 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     }
 
     let amount = Amount::ONE;
-    let mut faucet_service = faucet_client.run_faucet(None, faucet_chain, amount).await?;
+    let mut faucet_service = faucet_client
+        .run_faucet(None, faucet_chain, amount, None)
+        .await?;
     let faucet = faucet_service.instance();
 
     // Create a new wallet using the faucet
@@ -2988,6 +2991,94 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     Ok(())
 }
 
+/// Tests that the faucet can switch the chain it uses to serve users.
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_faucet_chain_limit(config: impl LineraNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let max_claims_per_chain = 3;
+
+    let (mut net, faucet_client) = config.instantiate().await?;
+
+    let faucet_chain = faucet_client.load_wallet()?.default_chain().unwrap();
+
+    let amount = Amount::ONE;
+    let mut faucet_service = faucet_client
+        .run_faucet(
+            None,
+            faucet_chain,
+            amount,
+            Some(max_claims_per_chain as u64),
+        )
+        .await?;
+    let faucet = faucet_service.instance();
+
+    // Create one less chain than the configured limit.
+    for _ in 1..max_claims_per_chain {
+        let client = net.make_client().await;
+        let _ = client
+            .wallet_init(&[], FaucetOption::NewChain(&faucet))
+            .await?
+            .unwrap();
+    }
+
+    // The next one should use the first faucet chain.
+    let client1 = net.make_client().await;
+    let (outcome1, _) = client1
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
+        .await?
+        .unwrap();
+
+    // But then the faucet should switch to a new chain.
+    let client2 = net.make_client().await;
+    let (outcome2, _) = client2
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
+        .await?
+        .unwrap();
+
+    // So the two new chain should have different parents.
+    assert_ne!(outcome1.message_id.chain_id, outcome2.message_id.chain_id);
+
+    // Create another chain:
+    let client3 = net.make_client().await;
+    let (outcome3, _) = client3
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
+        .await?
+        .unwrap();
+
+    // The second faucet chain should be good for a few more requests.
+    assert_eq!(outcome2.message_id.chain_id, outcome3.message_id.chain_id);
+
+    let chain = outcome3.chain_id;
+    assert_eq!(chain, client3.load_wallet()?.default_chain().unwrap());
+
+    client3.process_inbox(chain).await?;
+    let balance = client3.query_balance(Account::chain(chain)).await?;
+    assert!(balance > Amount::ZERO);
+
+    let max_fees = Amount::from_millis(100); // Estimate: fees should be lower.
+    client3
+        .transfer(balance - max_fees, chain, faucet_chain)
+        .await?;
+
+    let final_balance = client3.query_balance(Account::chain(chain)).await?;
+    assert!(final_balance <= max_fees);
+
+    faucet_service.ensure_is_running()?;
+    faucet_service.terminate().await?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
 #[cfg(feature = "benchmark")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -3007,7 +3098,7 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
 
-    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE).await?;
+    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE, None).await?;
     let faucet = faucet_service.instance();
 
     let path =

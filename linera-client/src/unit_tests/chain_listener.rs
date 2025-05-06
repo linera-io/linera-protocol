@@ -101,6 +101,11 @@ impl chain_listener::ClientContext for ClientContext {
         self.wallet.update_from_state(client).await;
         Ok(())
     }
+
+    async fn forget_chain(&mut self, chain_id: &ChainId) -> Result<(), Error> {
+        self.wallet.forget_chain(chain_id)?;
+        Ok(())
+    }
 }
 
 /// Tests that the chain listener, if there is a message in the inbox, will continue requesting

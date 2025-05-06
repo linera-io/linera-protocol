@@ -849,6 +849,7 @@ impl Runnable for Job {
                 port,
                 amount,
                 limit_rate_until,
+                max_claims_per_chain,
                 config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -866,6 +867,7 @@ impl Runnable for Job {
                     chain_id,
                     context,
                     amount,
+                    max_claims_per_chain,
                     end_timestamp,
                     genesis_config,
                     config,

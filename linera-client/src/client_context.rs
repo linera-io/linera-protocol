@@ -111,6 +111,14 @@ where
     async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
         self.update_wallet_from_client(client).await
     }
+
+    async fn forget_chain(&mut self, chain_id: &ChainId) -> Result<(), Error> {
+        self.wallet
+            .mutate(|w| w.forget_chain(chain_id))
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)))??;
+        Ok(())
+    }
 }
 
 impl<S, W> ClientContext<S, W>

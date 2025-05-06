@@ -201,6 +201,10 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
     ) -> Result<Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>>, Error> {
         Ok(vec![])
     }
+
+    async fn forget_chain(&mut self, _: &ChainId) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 #[tokio::main]
