@@ -21,10 +21,8 @@ use runloops::start_runloops;
 use tokio_util::sync::CancellationToken;
 
 mod common;
-#[allow(dead_code)]
 mod exporter_service;
 mod runloops;
-#[allow(dead_code)]
 mod state;
 mod storage;
 
