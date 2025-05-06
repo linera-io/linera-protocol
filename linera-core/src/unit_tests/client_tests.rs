@@ -115,7 +115,7 @@ where
         assert!(sender.pending_proposal().is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
-            Amount::from_millis(999)
+            Amount::from_millis(1000)
         );
         assert_eq!(
             builder
@@ -174,7 +174,7 @@ where
         .unwrap();
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(898)
+        Amount::from_millis(900)
     );
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -183,7 +183,7 @@ where
     // The friend paid to receive the message.
     assert_eq!(
         receiver.local_owner_balance(friend).await.unwrap(),
-        Amount::from_millis(99)
+        Amount::from_millis(100)
     );
     // The received amount is not in the unprotected balance.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
@@ -198,11 +198,11 @@ where
     assert_eq!(receiver.query_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         receiver.query_owner_balance(owner).await.unwrap(),
-        Amount::from_millis(2999)
+        Amount::from_millis(3000)
     );
     assert_eq!(
         receiver.query_balances_with_owner(owner).await.unwrap(),
-        (Amount::ZERO, Some(Amount::from_millis(2999)))
+        (Amount::ZERO, Some(Amount::from_millis(3000)))
     );
 
     // First attempt that should be rejected.
@@ -249,7 +249,7 @@ where
     sender.process_inbox().await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(2895)
+        Amount::from_millis(2900)
     );
 
     Ok(())
@@ -290,7 +290,7 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(3999)
+        Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
@@ -334,7 +334,7 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(3999)
+        Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
     // Cannot use the chain any more.
@@ -765,7 +765,7 @@ where
         client1.execute_operations(vec![], vec![]).await,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::ClosedChain)
+        )) if matches!(*error, ChainError::EmptyBlock)
     );
 
     // Trying to close the chain again returns None.
@@ -949,7 +949,7 @@ where
     // Transfer was executed locally.
     assert_eq!(
         client1.local_balance().await.unwrap(),
-        Amount::from_millis(999)
+        Amount::from_millis(1000)
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
     assert!(client1.pending_proposal().is_none());
@@ -963,7 +963,7 @@ where
         .unwrap();
     assert_eq!(
         client2.query_balance().await.unwrap(),
-        Amount::from_millis(1999)
+        Amount::from_millis(2000)
     );
     Ok(())
 }
