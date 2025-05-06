@@ -1584,9 +1584,6 @@ where
         .await
         .is_err());
 
-    // Once all validators are functional again, a new proposal should succeed.
-    builder.set_fault_type([0, 1], FaultType::Honest).await;
-
     for i in 0..4 {
         let info = builder
             .node(i)
@@ -1597,6 +1594,11 @@ where
             if i < 2 { owner1 } else { owner2 },
         );
     }
+
+    // Once all validators are functional again, a new proposal should succeed.
+    builder
+        .set_fault_type([0, 1, 2, 3], FaultType::Honest)
+        .await;
 
     client1.synchronize_from_validators().await.unwrap();
     client1.publish_data_blob(b"foo".to_vec()).await?;
