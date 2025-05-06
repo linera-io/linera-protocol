@@ -18,8 +18,7 @@ use crate::{
     },
     random::{generate_test_namespace, make_deterministic_rng, make_nondeterministic_rng},
     store::{
-        KeyIterable, KeyValueIterable, LocalKeyValueStore, LocalRestrictedKeyValueStore,
-        TestKeyValueStore,
+        KeyIterable, KeyValueIterable, KeyValueStore, RestrictedKeyValueStore, TestKeyValueStore,
     },
 };
 
@@ -151,10 +150,7 @@ pub fn span_random_reordering_put_delete<R: Rng>(
 /// * `read_multi_values_bytes`
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
-pub async fn run_reads<S: LocalRestrictedKeyValueStore>(
-    store: S,
-    key_values: Vec<(Vec<u8>, Vec<u8>)>,
-) {
+pub async fn run_reads<S: RestrictedKeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let mut batch = Batch::new();
     let mut keys = Vec::new();
@@ -364,7 +360,7 @@ fn realize_batch(batch: &Batch) -> BTreeMap<Vec<u8>, Vec<u8>> {
     kv_state
 }
 
-async fn read_keys_prefix<C: LocalRestrictedKeyValueStore>(
+async fn read_keys_prefix<C: RestrictedKeyValueStore>(
     key_value_store: &C,
     key_prefix: &[u8],
 ) -> BTreeSet<Vec<u8>> {
@@ -383,7 +379,7 @@ async fn read_keys_prefix<C: LocalRestrictedKeyValueStore>(
     keys
 }
 
-async fn read_key_values_prefix<C: LocalRestrictedKeyValueStore>(
+async fn read_key_values_prefix<C: RestrictedKeyValueStore>(
     key_value_store: &C,
     key_prefix: &[u8],
 ) -> BTreeMap<Vec<u8>, Vec<u8>> {
@@ -403,7 +399,7 @@ async fn read_key_values_prefix<C: LocalRestrictedKeyValueStore>(
 }
 
 /// Writes and then reads data under a prefix, and verifies the result.
-pub async fn run_test_batch_from_blank<C: LocalRestrictedKeyValueStore>(
+pub async fn run_test_batch_from_blank<C: RestrictedKeyValueStore>(
     key_value_store: &C,
     key_prefix: Vec<u8>,
     batch: Batch,
@@ -416,7 +412,7 @@ pub async fn run_test_batch_from_blank<C: LocalRestrictedKeyValueStore>(
 }
 
 /// Run many operations on batches always starting from a blank state.
-pub async fn run_writes_from_blank<C: LocalRestrictedKeyValueStore>(key_value_store: &C) {
+pub async fn run_writes_from_blank<C: RestrictedKeyValueStore>(key_value_store: &C) {
     let mut rng = make_deterministic_rng();
     let n_oper = 10;
     let batch_size = 500;
@@ -435,7 +431,7 @@ pub async fn run_writes_from_blank<C: LocalRestrictedKeyValueStore>(key_value_st
 }
 
 /// Reading many keys at a time could trigger an error. This needs to be tested.
-pub async fn big_read_multi_values<C: LocalKeyValueStore>(
+pub async fn big_read_multi_values<C: KeyValueStore>(
     config: C::Config,
     value_size: usize,
     n_entries: usize,
@@ -474,7 +470,7 @@ pub async fn big_read_multi_values<C: LocalKeyValueStore>(
 /// Then we select half of them at random and delete them. By the random
 /// selection, Scylla is forced to introduce around 100000 tombstones
 /// which triggers the crash with the default settings.
-pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_value_store: C) {
+pub async fn tombstone_triggering_test<C: RestrictedKeyValueStore>(key_value_store: C) {
     use std::time::Instant;
     let t1 = Instant::now();
     let mut rng = make_deterministic_rng();
@@ -538,7 +534,7 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
 /// must handle that.
 ///
 /// The size of the value vary as each size has its own issues.
-pub async fn run_big_write_read<C: LocalRestrictedKeyValueStore>(
+pub async fn run_big_write_read<C: RestrictedKeyValueStore>(
     key_value_store: C,
     target_size: usize,
     value_sizes: Vec<usize>,
@@ -560,7 +556,7 @@ pub async fn run_big_write_read<C: LocalRestrictedKeyValueStore>(
 
 type StateBatch = (Vec<(Vec<u8>, Vec<u8>)>, Batch);
 
-async fn run_test_batch_from_state<C: LocalRestrictedKeyValueStore>(
+async fn run_test_batch_from_state<C: RestrictedKeyValueStore>(
     key_value_store: &C,
     key_prefix: Vec<u8>,
     state_and_batch: StateBatch,
@@ -662,7 +658,7 @@ fn generate_specific_state_batch(key_prefix: &[u8], option: usize) -> StateBatch
 
 /// Run some deterministic and random batches operation and check their
 /// correctness
-pub async fn run_writes_from_state<C: LocalRestrictedKeyValueStore>(key_value_store: &C) {
+pub async fn run_writes_from_state<C: RestrictedKeyValueStore>(key_value_store: &C) {
     for option in 0..8 {
         let key_prefix = if option >= 6 {
             vec![255, 255, 255]
@@ -674,7 +670,7 @@ pub async fn run_writes_from_state<C: LocalRestrictedKeyValueStore>(key_value_st
     }
 }
 
-async fn namespaces_with_prefix<S: LocalKeyValueStore>(
+async fn namespaces_with_prefix<S: KeyValueStore>(
     config: &S::Config,
     prefix: &str,
 ) -> BTreeSet<String> {

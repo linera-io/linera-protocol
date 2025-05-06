@@ -32,12 +32,12 @@ scylladb = ["scylla"]
 anyhow.workspace = true
 async-graphql.workspace = true
 async-lock.workspace = true
-async-trait.workspace = true
 aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-smithy-types = { workspace = true, optional = true }
 bcs.workspace = true
 convert_case.workspace = true
+derive_more = { workspace = true, features = ["from"] }
 futures.workspace = true
 generic-array.workspace = true
 hex = { workspace = true, optional = true }

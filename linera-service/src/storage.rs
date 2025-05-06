@@ -22,7 +22,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use tracing::error;
 #[allow(unused_imports)]
-use {anyhow::bail, linera_views::store::LocalAdminKeyValueStore as _};
+use {anyhow::bail, linera_views::store::AdminKeyValueStore as _};
 #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
 use {
     linera_storage::ChainStatesFirstAssignment,

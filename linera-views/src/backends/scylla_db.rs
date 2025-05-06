@@ -14,7 +14,6 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use async_trait::async_trait;
 use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
@@ -598,7 +597,6 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     }
 }
 
-#[async_trait]
 impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_BATCH_SIZE: usize = MAX_BATCH_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_BATCH_TOTAL_SIZE;

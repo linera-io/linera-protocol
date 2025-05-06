@@ -45,7 +45,6 @@ use std::{
     mem,
 };
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -54,9 +53,9 @@ use crate::{
         from_bytes_option, get_interval, CustomSerialize, DeletionSet, HasherOutput,
         SuffixClosedSetIterator, Update,
     },
-    context::Context,
+    context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
-    store::{KeyIterable, KeyValueIterable},
+    store::{KeyIterable, KeyValueIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -102,7 +101,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, V> View<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
@@ -144,21 +142,21 @@ where
         let mut delete_view = false;
         if self.deletion_set.delete_storage_first {
             delete_view = true;
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(value) = update {
-                    let key = self.context.base_index(&index);
+                    let key = self.context.base_key().base_index(&index);
                     batch.put_key_value(key, &value)?;
                     delete_view = false;
                 }
             }
         } else {
             for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
-                let key = self.context.base_index(&index);
+                let key = self.context.base_key().base_index(&index);
                 batch.delete_key_prefix(key);
             }
             for (index, update) in mem::take(&mut self.updates) {
-                let key = self.context.base_index(&index);
+                let key = self.context.base_key().base_index(&index);
                 match update {
                     Update::Removed => batch.delete_key(key),
                     Update::Set(value) => batch.put_key_value(key, &value)?,
@@ -287,8 +285,8 @@ where
         if self.deletion_set.contains_prefix_of(short_key) {
             return Ok(false);
         }
-        let key = self.context.base_index(short_key);
-        Ok(self.context.contains_key(&key).await?)
+        let key = self.context.base_key().base_index(short_key);
+        Ok(self.context.store().contains_key(&key).await?)
     }
 }
 
@@ -321,8 +319,8 @@ where
         if self.deletion_set.contains_prefix_of(short_key) {
             return Ok(None);
         }
-        let key = self.context.base_index(short_key);
-        Ok(self.context.read_value(&key).await?)
+        let key = self.context.base_key().base_index(short_key);
+        Ok(self.context.store().read_value(&key).await?)
     }
 
     /// Reads the values at the given positions, if any.
@@ -350,11 +348,15 @@ where
                 }
             } else if !self.deletion_set.contains_prefix_of(&short_key) {
                 missed_indices.push(i);
-                let key = self.context.base_index(&short_key);
+                let key = self.context.base_key().base_index(&short_key);
                 vector_query.push(key);
             }
         }
-        let values = self.context.read_multi_values_bytes(vector_query).await?;
+        let values = self
+            .context
+            .store()
+            .read_multi_values_bytes(vector_query)
+            .await?;
         for (i, value) in missed_indices.into_iter().zip(values) {
             results[i] = from_bytes_option(&value)?;
         }
@@ -382,8 +384,8 @@ where
                 if self.deletion_set.contains_prefix_of(short_key) {
                     None
                 } else {
-                    let key = self.context.base_index(short_key);
-                    let value = self.context.read_value(&key).await?;
+                    let key = self.context.base_key().base_index(short_key);
+                    let value = self.context.store().read_value(&key).await?;
                     value.map(|value| e.insert(Update::Set(value)))
                 }
             }
@@ -442,8 +444,14 @@ where
                 .deleted_prefixes
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
-            let base = self.context.base_index(&prefix);
-            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
+            let base = self.context.base_key().base_index(&prefix);
+            for index in self
+                .context
+                .store()
+                .find_keys_by_prefix(&base)
+                .await?
+                .iterator()
+            {
                 let index = index?;
                 loop {
                     match update {
@@ -634,9 +642,10 @@ where
                 .deleted_prefixes
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
-            let base = self.context.base_index(&prefix);
+            let base = self.context.base_key().base_index(&prefix);
             for entry in self
                 .context
+                .store()
                 .find_key_values_by_prefix(&base)
                 .await?
                 .into_iterator_owned()
@@ -885,8 +894,13 @@ where
                 e.insert(Update::Set(V::default()))
             }
             Entry::Vacant(e) => {
-                let key = self.context.base_index(short_key);
-                let value = self.context.read_value(&key).await?.unwrap_or_default();
+                let key = self.context.base_key().base_index(short_key);
+                let value = self
+                    .context
+                    .store()
+                    .read_value(&key)
+                    .await?
+                    .unwrap_or_default();
                 e.insert(Update::Set(value))
             }
             Entry::Occupied(entry) => {
@@ -907,7 +921,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, V> HashableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
@@ -950,12 +963,11 @@ pub struct MapView<C, I, V> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Sync,
+    I: Send + Sync,
     V: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
@@ -1001,7 +1013,7 @@ impl<C, I, V> ClonableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Sync,
+    I: Send + Sync,
     V: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1038,7 +1050,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.map.insert(short_key, value);
         Ok(())
     }
@@ -1060,7 +1072,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.map.remove(short_key);
         Ok(())
     }
@@ -1088,7 +1100,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.map.contains_key(&short_key).await
     }
 }
@@ -1121,7 +1133,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.map.get(&short_key).await
     }
 
@@ -1148,7 +1160,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.map.get_mut(&short_key).await
     }
 }
@@ -1213,7 +1225,7 @@ where
         self.map
             .for_each_key_while(
                 |key| {
-                    let index = C::deserialize_value(key)?;
+                    let index = BaseKey::deserialize_value(key)?;
                     f(index)
                 },
                 prefix,
@@ -1250,7 +1262,7 @@ where
         self.map
             .for_each_key(
                 |key| {
-                    let index = C::deserialize_value(key)?;
+                    let index = BaseKey::deserialize_value(key)?;
                     f(index)
                 },
                 prefix,
@@ -1290,7 +1302,7 @@ where
         self.map
             .for_each_key_value_while(
                 |key, value| {
-                    let index = C::deserialize_value(key)?;
+                    let index = BaseKey::deserialize_value(key)?;
                     f(index, value)
                 },
                 prefix,
@@ -1327,7 +1339,7 @@ where
         self.map
             .for_each_key_value(
                 |key, value| {
-                    let index = C::deserialize_value(key)?;
+                    let index = BaseKey::deserialize_value(key)?;
                     f(index, value)
                 },
                 prefix,
@@ -1414,12 +1426,11 @@ where
         I: Borrow<Q>,
         Q: Sync + Send + Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.map.get_mut_or_default(&short_key).await
     }
 }
 
-#[async_trait]
 impl<C, I, V> HashableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -1445,7 +1456,6 @@ pub struct CustomMapView<C, I, V> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, V> View<C> for CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -1583,7 +1593,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.map.contains_key(&short_key).await
     }
 }
@@ -1919,7 +1929,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I, V> HashableView<C> for CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
@@ -1948,6 +1957,7 @@ pub type HashedMapView<C, I, V> = WrappedHashableContainerView<C, MapView<C, I, 
 pub type HashedCustomMapView<C, I, V> =
     WrappedHashableContainerView<C, CustomMapView<C, I, V>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

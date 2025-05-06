@@ -15,8 +15,8 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::DEFAULT_STORAGE_CACHE_CONFIG,
     store::{
-        CommonStoreConfig, KeyValueStoreError, LocalAdminKeyValueStore, LocalReadableKeyValueStore,
-        LocalWritableKeyValueStore, WithError,
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
 };
 
@@ -125,7 +125,7 @@ impl WithError for IndexedDbStore {
     type Error = IndexedDbStoreError;
 }
 
-impl LocalReadableKeyValueStore for IndexedDbStore {
+impl ReadableKeyValueStore for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -216,7 +216,7 @@ impl LocalReadableKeyValueStore for IndexedDbStore {
     }
 }
 
-impl LocalWritableKeyValueStore for IndexedDbStore {
+impl WritableKeyValueStore for IndexedDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), IndexedDbStoreError> {
@@ -266,7 +266,7 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
     }
 }
 
-impl LocalAdminKeyValueStore for IndexedDbStore {
+impl AdminKeyValueStore for IndexedDbStore {
     type Config = IndexedDbStoreConfig;
 
     fn get_name() -> String {

@@ -57,7 +57,7 @@ impl Default for CommonStoreConfig {
 }
 
 /// The error type for the key-value stores.
-pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> {
+pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'static {
     /// The name of the backend.
     const BACKEND: &'static str;
 }
@@ -78,8 +78,8 @@ pub trait WithError {
 }
 
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
-#[trait_variant::make(ReadableKeyValueStore: Send)]
-pub trait LocalReadableKeyValueStore: WithError {
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
@@ -150,8 +150,8 @@ pub trait LocalReadableKeyValueStore: WithError {
 }
 
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
-#[trait_variant::make(WritableKeyValueStore: Send)]
-pub trait LocalWritableKeyValueStore: WithError {
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait WritableKeyValueStore: WithError {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -164,8 +164,8 @@ pub trait LocalWritableKeyValueStore: WithError {
 }
 
 /// Low-level trait for the administration of stores and their namespaces.
-#[trait_variant::make(AdminKeyValueStore: Send)]
-pub trait LocalAdminKeyValueStore: WithError + Sized {
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait AdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
     /// The name of this class of stores
@@ -240,17 +240,6 @@ pub trait RestrictedKeyValueStore: ReadableKeyValueStore + WritableKeyValueStore
 
 impl<T> RestrictedKeyValueStore for T where T: ReadableKeyValueStore + WritableKeyValueStore {}
 
-/// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
-pub trait LocalRestrictedKeyValueStore:
-    LocalReadableKeyValueStore + LocalWritableKeyValueStore
-{
-}
-
-impl<T> LocalRestrictedKeyValueStore for T where
-    T: LocalReadableKeyValueStore + LocalWritableKeyValueStore
-{
-}
-
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
     ReadableKeyValueStore + WritableKeyValueStore + AdminKeyValueStore
@@ -262,31 +251,17 @@ impl<T> KeyValueStore for T where
 {
 }
 
-/// Low-level, asynchronous write and read key-value operations, without a `Send` bound. Useful for storage APIs not based on views.
-pub trait LocalKeyValueStore:
-    LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
-{
-}
-
-impl<T> LocalKeyValueStore for T where
-    T: LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
-{
-}
-
 /// The functions needed for testing purposes
 #[cfg(with_testing)]
 pub trait TestKeyValueStore: KeyValueStore {
     /// Obtains a test config
-    fn new_test_config(
-    ) -> impl std::future::Future<Output = Result<Self::Config, Self::Error>> + Send;
+    async fn new_test_config() -> Result<Self::Config, Self::Error>;
 
     /// Creates a store for testing purposes
-    fn new_test_store() -> impl std::future::Future<Output = Result<Self, Self::Error>> + Send {
-        async {
-            let config = Self::new_test_config().await?;
-            let namespace = generate_test_namespace();
-            Self::recreate_and_connect(&config, &namespace).await
-        }
+    async fn new_test_store() -> Result<Self, Self::Error> {
+        let config = Self::new_test_config().await?;
+        let namespace = generate_test_namespace();
+        Self::recreate_and_connect(&config, &namespace).await
     }
 }
 
