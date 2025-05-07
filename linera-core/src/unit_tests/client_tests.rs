@@ -29,8 +29,8 @@ use linera_execution::{
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
-    assert_insufficient_funding, assert_insufficient_balance_during_operation,
-    assert_fees_exceed_funding,
+    assert_fees_exceed_funding, assert_insufficient_balance_during_operation,
+    assert_insufficient_funding,
 };
 
 #[cfg(feature = "dynamodb")]
