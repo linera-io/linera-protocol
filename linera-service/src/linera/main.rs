@@ -1588,6 +1588,15 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     println!("{}", id);
                 }
             }
+            DatabaseToolCommand::ListEventsFromIndex { chain_id, stream_id, start_index } => {
+                let index_events = DbStorage::<S, _>::list_events_from_index(&config, &namespace, chain_id, stream_id, *start_index).await?;
+                info!(
+                    "Index events IDs listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                info!("The list of chain IDs is:");
+                println!("{index_events:?}");
+            }
         }
         Ok(0)
     }

@@ -1009,22 +1009,22 @@ where
     }
 
     /// Lists the events from the storage
-    pub async fn list_event_from_index(
+    pub async fn list_events_from_index(
         config: &Store::Config,
         namespace: &str,
-        chain_id: ChainId,
-        stream_id: StreamId,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
         start_index: u32,
     ) -> Result<Vec<(u32, Vec<u8>)>, ViewError> {
         let store = Store::maybe_create_and_connect(config, namespace).await?;
         let mut prefix = vec![INDEX_EVENT_ID];
-        prefix.extend(bcs::to_bytes(&chain_id).unwrap());
-        prefix.extend(bcs::to_bytes(&stream_id).unwrap());
+        prefix.extend(bcs::to_bytes(chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(stream_id).unwrap());
         let mut keys = Vec::new();
         let mut indices = Vec::new();
         for short_key in store.find_keys_by_prefix(&prefix).await?.iterator() {
             let short_key = short_key?;
-            let index = bcs::from_bytes::<u32>(&short_key)?;
+            let index = bcs::from_bytes::<u32>(short_key)?;
             if index >= start_index {
                 let mut key = prefix.clone();
                 key.extend(short_key);

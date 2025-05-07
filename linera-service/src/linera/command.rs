@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamId, ModuleId},
     time::Duration,
     vm::VmRuntime,
 };
@@ -879,6 +879,13 @@ pub enum DatabaseToolCommand {
 
     /// List the chain IDs in the database
     ListChainIds,
+
+    /// List the events in a chain in the database
+    ListEventsFromIndex {
+        chain_id: ChainId,
+        stream_id: StreamId,
+        start_index: u32
+    },
 }
 
 #[allow(clippy::large_enum_variant)]
