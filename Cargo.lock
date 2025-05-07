@@ -4621,7 +4621,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-graphql",
- "async-graphql-derive",
  "async-trait",
  "bcs",
  "cfg-if",
@@ -4673,7 +4672,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-graphql",
- "async-trait",
  "axum",
  "bcs",
  "cfg_aliases",
@@ -5315,7 +5313,6 @@ version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-graphql-derive",
  "base64 0.22.1",
  "cargo_metadata",
  "fs-err",

@@ -3565,7 +3565,6 @@ dependencies = [
  "alloy-primitives 1.0.0",
  "anyhow",
  "async-graphql",
- "async-graphql-derive",
  "async-trait",
  "bcs",
  "cfg-if",
@@ -3606,7 +3605,6 @@ version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-trait",
  "axum",
  "cfg_aliases",
  "custom_debug_derive",
@@ -3810,7 +3808,6 @@ version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-graphql-derive",
  "base64 0.22.1",
  "cargo_metadata",
  "fs-err",
