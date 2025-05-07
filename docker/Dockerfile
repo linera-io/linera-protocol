@@ -22,8 +22,8 @@ ARG build_date
 ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
-ARG build_flag=
-ARG build_folder=
+ARG build_flag=--release
+ARG build_folder=release
 
 FROM rust:1.74-slim-bookworm AS builder
 ARG git_commit
