@@ -29,6 +29,8 @@ use web_sys::{js_sys, wasm_bindgen};
 type WebStorage =
     linera_storage::DbStorage<linera_views::memory::MemoryStore, linera_storage::WallClock>;
 
+type WebEnvironment = linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider>;
+
 type JsResult<T> = Result<T, JsError>;
 
 async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore as WithError>::Error>
@@ -42,9 +44,8 @@ async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore 
 }
 
 type PersistentWallet = linera_client::persistent::Memory<Wallet>;
-type ClientContext = linera_client::client_context::ClientContext<WebStorage, PersistentWallet>;
-type ChainClient =
-    linera_core::client::ChainClient<linera_rpc::node_provider::NodeProvider, WebStorage>;
+type ClientContext = linera_client::client_context::ClientContext<WebEnvironment, PersistentWallet>;
+type ChainClient = linera_core::client::ChainClient<WebEnvironment>;
 
 // TODO(#13): get from user
 pub const OPTIONS: ClientContextOptions = ClientContextOptions {
@@ -89,7 +90,7 @@ impl JsFaucet {
     #[wasm_bindgen(js_name = createWallet)]
     pub async fn create_wallet(&self) -> JsResult<JsWallet> {
         Ok(JsWallet(PersistentWallet::new(
-            linera_client::wallet::Wallet::new(self.0.genesis_config().await?, None),
+            linera_client::wallet::Wallet::new(self.0.genesis_config().await?),
         )))
     }
 
