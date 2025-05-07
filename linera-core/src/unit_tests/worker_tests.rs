@@ -3571,6 +3571,7 @@ where
     let mut env = TestEnvironment::new(storage, false, false).await;
     let balance = Amount::from_tokens(5);
     let mut ownership = ChainOwnership::single(public_key.into());
+    // Configure a fallback duration. (The default is `MAX`, i.e. never.)
     ownership.timeout_config.fallback_duration = TimeDelta::from_secs(5);
     let chain_1_desc = env
         .add_root_chain_with_ownership(1, balance, ownership)
