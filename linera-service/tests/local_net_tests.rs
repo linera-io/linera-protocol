@@ -34,7 +34,7 @@ use linera_service::{
 };
 use test_case::test_case;
 #[cfg(feature = "ethereum")]
-use {alloy::primitives::U256, linera_service::cli_wrappers::ApplicationWrapper};
+use {alloy_primitives::U256, linera_service::cli_wrappers::ApplicationWrapper};
 #[cfg(feature = "storage-service")]
 use {
     linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet, std::process::Command,

@@ -4479,7 +4479,7 @@ dependencies = [
  "secrecy 0.8.0",
  "serde",
  "serde_json",
- "serde_yaml 0.9.34+deprecated",
+ "serde_yaml",
  "thiserror 1.0.69",
  "tokio",
  "tokio-util",
@@ -4699,7 +4699,6 @@ dependencies = [
 name = "linera-client"
 version = "0.15.0"
 dependencies = [
- "alloy",
  "amm",
  "anyhow",
  "async-trait",
@@ -5135,7 +5134,6 @@ dependencies = [
 name = "linera-service"
 version = "0.15.0"
 dependencies = [
- "alloy",
  "alloy-primitives 1.0.0",
  "alloy-sol-types 1.0.0",
  "amm",
@@ -5286,7 +5284,6 @@ dependencies = [
  "prost",
  "serde",
  "serde-reflection",
- "serde_yaml 0.8.26",
  "similar-asserts",
  "test-strategy",
  "thiserror 1.0.69",
@@ -7872,18 +7869,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
-]
-
-[[package]]
-name = "serde_yaml"
-version = "0.8.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "578a7433b776b56a35785ed5ce9a7e777ac0598aac5a6dd1b4b18a307c7fc71b"
-dependencies = [
- "indexmap 1.9.3",
- "ryu",
- "serde",
- "yaml-rust",
 ]
 
 [[package]]
@@ -10504,15 +10489,6 @@ name = "xxhash-rust"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
-
-[[package]]
-name = "yaml-rust"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
-dependencies = [
- "linked-hash-map",
-]
 
 [[package]]
 name = "yasna"
