@@ -123,15 +123,6 @@ impl ProposedBlock {
         );
         Ok(())
     }
-
-    /// Returns the message ID belonging to the `index`th outgoing message in this block.
-    pub fn message_id(&self, index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index,
-        }
-    }
 }
 
 /// A transaction in a block: incoming messages or an operation.
