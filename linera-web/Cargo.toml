@@ -34,39 +34,39 @@ wasmtimer = "0.4.1"
 web-time = "1.1.0"
 
 [dependencies.linera-base]
-path = "../linera-protocol/linera-base"
+workspace = true
 features = ["web"]
 
 [dependencies.linera-chain]
-path = "../linera-protocol/linera-chain"
+workspace = true
 features = ["web"]
 
 [dependencies.linera-client]
-path = "../linera-protocol/linera-client"
+workspace = true
 default-features = false
 features = ["web", "wasmer", "indexed-db"]
 
 [dependencies.linera-core]
-path = "../linera-protocol/linera-core"
+workspace = true
 features = ["web", "wasmer"]
 
 [dependencies.linera-execution]
-path = "../linera-protocol/linera-execution"
+workspace = true
 features = ["web", "wasmer"]
 
 [dependencies.linera-faucet-client]
-path = "../linera-protocol/linera-faucet/client"
+workspace = true
 
 [dependencies.linera-rpc]
-path = "../linera-protocol/linera-rpc"
+workspace = true
 features = ["web"]
 
 [dependencies.linera-storage]
-path = "../linera-protocol/linera-storage"
+workspace = true
 features = ["web", "wasmer"]
 
 [dependencies.linera-views]
-path = "../linera-protocol/linera-views"
+workspace = true
 features = ["web", "indexeddb"]
 
 [dependencies.web-sys]
@@ -83,7 +83,3 @@ features = ["js"]
 [dev-dependencies]
 wasm-bindgen-test = "0.3.43"
 schemars = "*"
-
-[patch.crates-io.wasm_thread]
-git = "https://github.com/Twey/wasm_thread"
-branch = "post-message"
