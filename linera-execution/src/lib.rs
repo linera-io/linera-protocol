@@ -36,7 +36,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, SendMessageRequest, StreamUpdate, Timestamp,
+        DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -287,8 +287,8 @@ pub enum ExecutionError {
     #[error("Invalid HTTP header value used for HTTP request")]
     InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
 
-    #[error("Invalid admin ID in new chain: {0}")]
-    InvalidNewChainAdminId(ChainId),
+    #[error("No NetworkDescription found in storage")]
+    NoNetworkDescriptionFound,
     #[error("Invalid committees")]
     InvalidCommittees,
     #[error("{epoch:?} is not recognized by chain {chain_id:}")]
@@ -403,6 +403,8 @@ pub trait ExecutionRuntimeContext {
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1080,6 +1082,10 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .get(&event_id)
             .ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))?
             .clone())
+    }
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        Ok(None)
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

@@ -117,11 +117,9 @@ impl OpenChainConfig {
     pub fn init_chain_config(
         &self,
         epoch: Epoch,
-        admin_id: Option<ChainId>,
         committees: BTreeMap<Epoch, Vec<u8>>,
     ) -> InitialChainConfig {
         InitialChainConfig {
-            admin_id,
             application_permissions: self.application_permissions.clone(),
             balance: self.balance,
             committees,
@@ -769,7 +767,6 @@ where
         let description: ChainDescription = bcs::from_bytes(description_blob.bytes())?;
         let InitialChainConfig {
             ownership,
-            admin_id,
             epoch,
             committees,
             balance,
@@ -788,7 +785,14 @@ where
             .collect();
         self.committees.set(committees);
         // If `admin_id` is `None`, this chain is its own admin chain.
-        self.admin_id.set(admin_id.or(Some(chain_id)));
+        let admin_id = self
+            .context()
+            .extra()
+            .get_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?
+            .admin_chain_id;
+        self.admin_id.set(Some(admin_id));
         self.ownership.set(ownership);
         self.balance.set(balance);
         self.application_permissions.set(application_permissions);
@@ -828,7 +832,7 @@ where
         };
         let committees = self.get_committees();
         let init_chain_config =
-            config.init_chain_config(*self.epoch.get(), *self.admin_id.get(), committees);
+            config.init_chain_config(*self.epoch.get(), committees);
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
         self.debit(&AccountOwner::CHAIN, config.balance).await?;
