@@ -70,6 +70,25 @@ jobs:
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net
 
+  remote-kubernetes-net-test:
+    runs-on: ubuntu-latest-8-cores
+    timeout-minutes: 40
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run the validators and faucet
+      run: |
+        mkdir /tmp/local-linera-net
+        cargo run --features kubernetes --release --bin linera -- net up --kubernetes --policy-config testnet --path /tmp/local-linera-net --validators 4 --shards 4 --with-faucet &
+    - name: Run the remote-net tests
+      run: |
+        cargo test -p linera-service remote_net_grpc --features remote-net
+
   execution-wasmtime-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
