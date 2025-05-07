@@ -77,6 +77,7 @@ macro_rules! bcs_scalar {
                         inaccessible: false,
                         tags: ::std::default::Default::default(),
                         specified_by_url: ::std::option::Option::None,
+                        directive_invocations: Vec::new(),
                     },
                 )
             }
@@ -118,6 +119,7 @@ macro_rules! bcs_scalar {
                         inaccessible: false,
                         tags: ::std::default::Default::default(),
                         specified_by_url: ::std::option::Option::None,
+                        directive_invocations: Vec::new(),
                     },
                 )
             }
