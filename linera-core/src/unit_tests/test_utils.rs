@@ -29,7 +29,7 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, NetworkDescription, Storage, TestClock};
+use linera_storage::{DbStorage, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
@@ -178,6 +178,17 @@ where
             name: "test network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: Timestamp::default(),
+            admin_chain_id: self
+                .client
+                .lock()
+                .await
+                .state
+                .storage_client()
+                .read_network_description()
+                .await
+                .unwrap()
+                .unwrap()
+                .admin_chain_id,
         })
     }
 
@@ -817,11 +828,6 @@ where
         let public_key = self.signer.generate_new();
         let open_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(public_key.into()),
-            admin_id: if index == 0 {
-                None
-            } else {
-                Some(self.admin_id())
-            },
             epoch: Epoch(0),
             committees,
             balance,

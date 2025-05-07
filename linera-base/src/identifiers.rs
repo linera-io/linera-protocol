@@ -994,7 +994,6 @@ mod tests {
     fn chain_id_computing() {
         let example_chain_origin = ChainOrigin::Root(0);
         let example_chain_config = InitialChainConfig {
-            admin_id: None,
             epoch: Epoch::ZERO,
             ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
             balance: Amount::ZERO,

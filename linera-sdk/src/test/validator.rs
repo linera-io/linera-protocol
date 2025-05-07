@@ -107,7 +107,6 @@ impl TestValidator {
             )]
             .into_iter()
             .collect(),
-            admin_id: None,
             epoch,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
@@ -314,7 +313,6 @@ impl TestValidator {
         };
         let new_chain_config = open_chain_config.init_chain_config(
             epoch,
-            Some(admin_id),
             [(
                 epoch,
                 bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),

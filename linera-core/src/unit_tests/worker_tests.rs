@@ -131,7 +131,6 @@ where
 
         let origin = ChainOrigin::Root(0);
         let config = InitialChainConfig {
-            admin_id: None,
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
@@ -197,7 +196,6 @@ where
     ) -> ChainDescription {
         let origin = ChainOrigin::Root(index);
         let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership,
             committees: self.admin_description.config().committees.clone(),
@@ -227,7 +225,6 @@ where
             chain_index: 0,
         };
         let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
             committees: self.admin_description.config().committees.clone(),
