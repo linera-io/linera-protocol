@@ -34,6 +34,7 @@ web = [
 alloy-primitives.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true
+async-graphql-derive.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
