@@ -9,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use alloy::primitives::{Address, B256, U256};
+use revm_primitives::{Address, B256, U256};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::AccountState,

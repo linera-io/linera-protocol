@@ -4829,7 +4829,6 @@ dependencies = [
 name = "linera-execution"
 version = "0.15.0"
 dependencies = [
- "alloy",
  "alloy-primitives 1.0.0",
  "alloy-sol-types 1.0.0",
  "anyhow",

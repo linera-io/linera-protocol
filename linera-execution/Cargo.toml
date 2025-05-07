@@ -18,7 +18,6 @@ revm = [
     "dep:revm-primitives",
     "dep:revm-precompile",
     "dep:revm-interpreter",
-    "dep:alloy",
     "dep:alloy-primitives",
     "dep:alloy-sol-types",
     "dep:hex",
@@ -31,9 +30,6 @@ wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
 web = ["linera-base/web", "linera-views/web", "js-sys"]
 
 [dependencies]
-alloy = { workspace = true, default-features = false, optional = true, features = [
-    "rpc-types-eth",
-] }
 alloy-primitives = { workspace = true, optional = true }
 alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true

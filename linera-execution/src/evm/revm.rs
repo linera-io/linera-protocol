@@ -6,7 +6,7 @@
 use core::ops::Range;
 use std::{convert::TryFrom, sync::Arc};
 
-use alloy::primitives::Address;
+use revm_primitives::Address;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
