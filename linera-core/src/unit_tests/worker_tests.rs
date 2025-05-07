@@ -185,11 +185,21 @@ where
         owner: AccountOwner,
         balance: Amount,
     ) -> ChainDescription {
+        self.add_root_chain_with_ownership(index, balance, ChainOwnership::single(owner))
+            .await
+    }
+
+    async fn add_root_chain_with_ownership(
+        &mut self,
+        index: u32,
+        balance: Amount,
+        ownership: ChainOwnership,
+    ) -> ChainDescription {
         let origin = ChainOrigin::Root(index);
         let config = InitialChainConfig {
             admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
-            ownership: ChainOwnership::single(owner),
+            ownership,
             committees: self.admin_description.config().committees.clone(),
             balance,
             application_permissions: Default::default(),
@@ -3560,7 +3570,11 @@ where
     let public_key = signer.generate_new();
     let mut env = TestEnvironment::new(storage, false, false).await;
     let balance = Amount::from_tokens(5);
-    let chain_1_desc = env.add_root_chain(1, public_key.into(), balance).await;
+    let mut ownership = ChainOwnership::single(public_key.into());
+    ownership.timeout_config.fallback_duration = TimeDelta::from_secs(5);
+    let chain_1_desc = env
+        .add_root_chain_with_ownership(1, balance, ownership)
+        .await;
     let chain_id = chain_1_desc.id();
 
     // At time 0 we don't vote for fallback mode.
