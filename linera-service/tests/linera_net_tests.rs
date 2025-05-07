@@ -3231,7 +3231,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     Ok(())
 }
 
-/// Tests creating a new wallet using a Faucet that has already created a lot of microchains.
+/// Tests creating a new wallet using a faucet that has already created a lot of microchains.
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
