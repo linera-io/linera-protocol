@@ -6,7 +6,6 @@
 use core::ops::Range;
 use std::{convert::TryFrom, sync::Arc};
 
-use revm_primitives::Address;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
@@ -22,7 +21,7 @@ use revm::{
 use revm_interpreter::{CallInputs, CallOutcome, Gas, InstructionResult, InterpreterResult};
 use revm_precompile::PrecompileResult;
 use revm_primitives::{
-    address, EvmState, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput,
+    address, Address, EvmState, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput,
     SuccessReason, TxKind,
 };
 #[cfg(with_metrics)]

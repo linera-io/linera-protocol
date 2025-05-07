@@ -9,14 +9,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use revm_primitives::{Address, B256, U256};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::AccountState,
     primitives::{keccak256, state::AccountInfo},
     Database, DatabaseCommit, DatabaseRef,
 };
-use revm_primitives::{address, BlobExcessGasAndPrice, BlockEnv, EvmState};
+use revm_primitives::{address, Address, BlobExcessGasAndPrice, BlockEnv, EvmState, B256, U256};
 
 use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ViewError};
 
