@@ -922,9 +922,7 @@ where
             .await?
             .info;
         let epoch = info.epoch;
-        let committees = info
-            .requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+        let committees = info.requested_committees.unwrap_or_else(BTreeMap::new);
         Ok((epoch, committees))
     }
 
@@ -951,7 +949,7 @@ where
     /// Obtains the committee for the latest epoch.
     #[instrument(level = "trace")]
     pub async fn latest_committee(&self) -> Result<Committee, LocalNodeError> {
-        let (mut committees, epoch) = self.known_committees().await?;
+        let (epoch, mut committees) = self.known_committees().await?;
         committees
             .remove(&epoch)
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))
@@ -962,12 +960,12 @@ where
     #[instrument(level = "trace")]
     async fn known_committees(
         &self,
-    ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
+    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
         let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
-        Ok((committees, epoch))
+        Ok((epoch, committees))
     }
 
     #[instrument(level = "trace")]
@@ -1048,7 +1046,9 @@ where
 
         let mut info = self.synchronize_until(self.next_block_height()).await?;
 
-        if self.state().has_other_owners(&info.manager.ownership) {
+        if self.state().has_other_owners(&info.manager.ownership)
+            || !info.manager.ownership.is_active()
+        {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -1297,7 +1297,7 @@ where
         let block = certificate.block();
 
         // Verify the certificate before doing any expensive networking.
-        let (committees, max_epoch) = self.known_committees().await?;
+        let (max_epoch, committees) = self.known_committees().await?;
         ensure!(
             block.header.epoch <= max_epoch,
             ChainClientError::CommitteeSynchronizationError
@@ -1361,7 +1361,7 @@ where
             .get(&remote_node.public_key)
             .copied()
             .unwrap_or(0);
-        let (committees, max_epoch) = self.known_committees().await?;
+        let (max_epoch, committees) = self.known_committees().await?;
 
         // Retrieve the list of newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
@@ -1750,9 +1750,12 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let (epoch, mut committees) = self.epoch_and_committees(chain_id).await?;
+        let (epoch, mut committees) = match self.epoch_and_committees(chain_id).await? {
+            (Some(epoch), committees) => (epoch, committees),
+            (None, _) => self.known_committees().await?, // Chain is not active yet.
+        };
         let committee = committees
-            .remove(&epoch.ok_or(LocalNodeError::InvalidChainInfoResponse)?)
+            .remove(&epoch)
             .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
         let validators = self.make_nodes(&committee)?;
         communicate_with_quorum(
