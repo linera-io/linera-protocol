@@ -5,7 +5,7 @@
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::{Epoch, Round},
-    identifiers::{ChainId, MessageId},
+    identifiers::ChainId,
 };
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 
@@ -19,11 +19,6 @@ impl GenericCertificate<ConfirmedBlock> {
     /// Returns reference to the `Block` contained in this certificate.
     pub fn block(&self) -> &Block {
         self.inner().block()
-    }
-
-    /// Returns whether this value contains the message with the specified ID.
-    pub fn has_message(&self, message_id: &MessageId) -> bool {
-        self.block().message_by_id(message_id).is_some()
     }
 
     /// Returns the bundles of messages sent to the specified recipient.
