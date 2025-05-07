@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /*!
 This module defines the client API for the Web extension.
  */
@@ -8,11 +11,15 @@ This module defines the client API for the Web extension.
 
 use std::{collections::HashMap, future::Future, sync::Arc};
 
-use futures::{lock::Mutex as AsyncMutex, stream::StreamExt};
-use linera_base::identifiers::{AccountOwner, ApplicationId};
+use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
+use linera_base::{
+    crypto::InMemorySigner,
+    identifiers::{AccountOwner, ApplicationId},
+};
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     client_options::ClientContextOptions,
+    persistent::LocalPersist as _,
     wallet::Wallet,
 };
 use linera_core::{
@@ -29,6 +36,9 @@ use web_sys::{js_sys, wasm_bindgen};
 type WebStorage =
     linera_storage::DbStorage<linera_views::memory::MemoryStore, linera_storage::WallClock>;
 
+type WebEnvironment =
+    linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider>;
+
 type JsResult<T> = Result<T, JsError>;
 
 async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore as WithError>::Error>
@@ -42,9 +52,9 @@ async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore 
 }
 
 type PersistentWallet = linera_client::persistent::Memory<Wallet>;
-type ClientContext = linera_client::client_context::ClientContext<WebStorage, PersistentWallet>;
-type ChainClient =
-    linera_core::client::ChainClient<linera_rpc::node_provider::NodeProvider, WebStorage>;
+type PersistentSigner = linera_client::persistent::Memory<InMemorySigner>;
+type ClientContext = linera_client::client_context::ClientContext<WebEnvironment, PersistentWallet>;
+type ChainClient = linera_core::client::ChainClient<WebEnvironment>;
 
 // TODO(#13): get from user
 pub const OPTIONS: ClientContextOptions = ClientContextOptions {
@@ -65,11 +75,15 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     // `ClientOptions` struct, since they apply only to the CLI/native
     // client
     wallet_state_path: None,
+    keystore_path: None,
     with_wallet: None,
 };
 
 #[wasm_bindgen(js_name = Wallet)]
-pub struct JsWallet(PersistentWallet);
+pub struct JsWallet {
+    wallet: PersistentWallet,
+    signer: PersistentSigner,
+}
 
 #[wasm_bindgen(js_name = Faucet)]
 pub struct JsFaucet(Faucet);
@@ -88,9 +102,12 @@ impl JsFaucet {
     /// If we couldn't retrieve the genesis config from the faucet.
     #[wasm_bindgen(js_name = createWallet)]
     pub async fn create_wallet(&self) -> JsResult<JsWallet> {
-        Ok(JsWallet(PersistentWallet::new(
-            linera_client::wallet::Wallet::new(self.0.genesis_config().await?, None),
-        )))
+        Ok(JsWallet {
+            wallet: PersistentWallet::new(linera_client::wallet::Wallet::new(
+                self.0.genesis_config().await?,
+            )),
+            signer: PersistentSigner::new(InMemorySigner::new(None)),
+        })
     }
 
     // TODO(#40): figure out a way to alias or specify this string for TypeScript
@@ -104,67 +121,27 @@ impl JsFaucet {
     /// # Panics
     /// If an error occurs in the chain listener task.
     #[wasm_bindgen(js_name = claimChain)]
-    pub async fn claim_chain(&self, client: &mut Client) -> JsResult<String> {
+    pub async fn claim_chain(&self, wallet: &mut JsWallet) -> JsResult<String> {
         use linera_client::persistent::LocalPersistExt as _;
-        let mut context = client.client_context.lock().await;
-        let key_pair = context.wallet.generate_key_pair();
-        let owner: AccountOwner = key_pair.public().into();
+        let owner = AccountOwner::from(wallet.signer.mutate(InMemorySigner::generate_new).await?);
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
             owner,
             self.0.url(),
         );
-        context
+        let description = self.0.claim(&owner).await?;
+        wallet
             .wallet
-            .mutate(|wallet| wallet.add_unassigned_key_pair(key_pair))
-            .await?;
-        let outcome = self.0.claim(&owner).await?;
-        let validators = self.0.current_validators().await?;
-        context
-            .assign_new_chain_to_key(
-                outcome.chain_id,
-                outcome.message_id,
-                owner,
-                Some(validators),
-            )
-            .await?;
-        context
-            .wallet
-            .mutate(|wallet| wallet.set_default_chain(outcome.chain_id))
+            .mutate(|wallet| {
+                wallet.assign_new_chain_to_owner(owner, description.id(), description.timestamp())
+            })
             .await??;
-        context.client.track_chain(outcome.chain_id);
-        let chain_client = context.make_chain_client(outcome.chain_id)?;
-        wasm_bindgen_futures::spawn_local(async move {
-            let (listener, listen_handle, mut notifications) = chain_client.listen().await.unwrap();
-            wasm_bindgen_futures::spawn_local(async move {
-                while let Some(notification) = notifications.next().await {
-                    if let linera_core::worker::Reason::NewIncomingBundle { .. } =
-                        notification.reason
-                    {
-                        chain_client.process_inbox().await.unwrap();
-                    }
-                }
-            });
-            listener.await;
-            drop(listen_handle);
-        });
-        Ok(outcome.chain_id.to_string())
+        Ok(description.id().to_string())
     }
 }
 
 #[wasm_bindgen(js_class = "Wallet")]
 impl JsWallet {
-    /// Creates and persists a new wallet from the given JSON string.
-    ///
-    /// # Errors
-    /// If the wallet deserialization fails.
-    #[wasm_bindgen(js_name = fromJson)]
-    pub async fn from_json(wallet: &str) -> Result<JsWallet, JsError> {
-        Ok(JsWallet(PersistentWallet::new(serde_json::from_str(
-            wallet,
-        )?)))
-    }
-
     /// Attempts to read the wallet from persistent storage.
     ///
     /// # Errors
@@ -213,7 +190,7 @@ impl Client {
     /// unavailable.
     #[wasm_bindgen(constructor)]
     pub async fn new(wallet: JsWallet) -> Result<Client, JsError> {
-        let JsWallet(wallet) = wallet;
+        let JsWallet { signer, wallet } = wallet;
         let mut storage = get_storage().await?;
         wallet
             .genesis_config()
@@ -223,14 +200,17 @@ impl Client {
             storage.clone(),
             OPTIONS,
             wallet,
+            Box::new(signer.into_value()) as _,
         )));
         ChainListener::new(
             ChainListenerConfig::default(),
             client_context.clone(),
             storage,
+            tokio_util::sync::CancellationToken::new(),
         )
         .run()
-        .await;
+        .boxed_local()
+        .await?;
         log::info!("Linera Web client successfully initialized");
         Ok(Self { client_context })
     }
@@ -270,7 +250,7 @@ impl Client {
             .wallet()
             .default_chain()
             .expect("A default chain should be configured");
-        Ok(client_context.make_chain_client(chain_id)?)
+        Ok(client_context.make_chain_client(chain_id).await?)
     }
 
     async fn apply_client_command<Fut, T, E>(
@@ -374,7 +354,7 @@ impl Frontend {
             .wallet()
             .default_chain()
             .expect("No default chain");
-        let chain_client = client_context.make_chain_client(chain_id)?;
+        let chain_client = client_context.make_chain_client(chain_id).await?;
         chain_client.synchronize_from_validators().await?;
         let result = chain_client.local_committee().await;
         client_context.update_wallet(&chain_client).await?;
