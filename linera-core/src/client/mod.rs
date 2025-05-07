@@ -1046,7 +1046,9 @@ where
 
         let mut info = self.synchronize_until(self.next_block_height()).await?;
 
-        if self.state().has_other_owners(&info.manager.ownership) {
+        if self.state().has_other_owners(&info.manager.ownership)
+            || !info.manager.ownership.is_active()
+        {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
