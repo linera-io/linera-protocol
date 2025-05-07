@@ -328,6 +328,7 @@ enum BaseKey {
 
 const INDEX_CHAIN_ID: u8 = 0;
 const INDEX_BLOB_ID: u8 = 3;
+const INDEX_EVENT_ID: u8 = 5;
 const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
 const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
@@ -335,15 +336,20 @@ const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 mod tests {
     use linera_base::{
         crypto::CryptoHash,
-        identifiers::{BlobId, BlobType, ChainId},
+        identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName},
     };
 
     use crate::db_storage::{
-        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID,
+        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID, INDEX_EVENT_ID,
     };
+    // Several functionalities of the storage rely on the way that the serialization
+    // is done. Thus we need to check that the serialization work in the way that
+    // we expect.
 
+    // The listing of the blobs in `list_blob_ids` depends on the serialization
+    // of `BaseKey::Blob`.
     #[test]
-    fn test_base_key_serialization() {
+    fn test_basekey_blob_serialization() {
         let hash = CryptoHash::default();
         let blob_type = BlobType::default();
         let blob_id = BlobId::new(hash, blob_type);
@@ -353,14 +359,39 @@ mod tests {
         assert_eq!(key.len(), 1 + BLOB_ID_LENGTH);
     }
 
+    // The listing of the chains in `list_chain_ids` depends on the serialization
+    // of `BaseKey::ChainState`.
     #[test]
-    fn test_chain_id_serialization() {
+    fn test_basekey_chainstate_serialization() {
         let hash = CryptoHash::default();
         let chain_id = ChainId(hash);
         let base_key = BaseKey::ChainState(chain_id);
         let key = bcs::to_bytes(&base_key).expect("a key");
         assert_eq!(key[0], INDEX_CHAIN_ID);
         assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
+    }
+
+
+    // The listing of the events in `list_event_from_index` depends on the
+    // serialization of `BaseKey::Event`.
+    #[test]
+    fn test_basekey_event_serialization() {
+        let hash = CryptoHash::test_hash("49");
+        let chain_id = ChainId(hash);
+        let application_description_hash = CryptoHash::test_hash("42");
+        let application_id = ApplicationId::new(application_description_hash);
+        let application_id = GenericApplicationId::User(application_id);
+        let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
+        let stream_id = StreamId { application_id, stream_name };
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(&chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(&stream_id).unwrap());
+
+        let index = 1567;
+        let event_id = EventId { chain_id, stream_id, index };
+        let base_key = BaseKey::Event(event_id);
+        let key = bcs::to_bytes(&base_key).unwrap();
+        assert!(key.starts_with(&prefix));
     }
 }
 
