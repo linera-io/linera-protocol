@@ -87,7 +87,7 @@ async fn benchmark_with_fungible(
         num_wallets,
         OnClientDrop::CloseChains,
     );
-    publisher.wallet_init(&[], Some(&faucet)).await?;
+    publisher.wallet_init(Some(&faucet)).await?;
     publisher.request_chain(&faucet, true).await?;
     let clients = (0..num_wallets)
         .map(|n| {
@@ -102,7 +102,7 @@ async fn benchmark_with_fungible(
         })
         .collect::<Result<Vec<_>, anyhow::Error>>()?;
     try_join_all(clients.iter().map(|client| async {
-        client.wallet_init(&[], Some(&faucet)).await?;
+        client.wallet_init(Some(&faucet)).await?;
         client.request_chain(&faucet, true).await
     }))
     .await?;

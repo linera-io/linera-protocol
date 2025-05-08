@@ -269,11 +269,7 @@ impl ClientWrapper {
 
     /// Runs `linera wallet init`. The genesis config is read from `genesis.json`, or from the
     /// faucet if provided.
-    pub async fn wallet_init(
-        &self,
-        chain_ids: &[ChainId],
-        faucet: Option<&'_ Faucet>,
-    ) -> Result<()> {
+    pub async fn wallet_init(&self, faucet: Option<&'_ Faucet>) -> Result<()> {
         let mut command = self.command().await?;
         command.args(["wallet", "init"]);
         match faucet {
@@ -282,10 +278,6 @@ impl ClientWrapper {
         };
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
-        }
-        if !chain_ids.is_empty() {
-            let ids = chain_ids.iter().map(ChainId::to_string);
-            command.arg("--with-other-chains").args(ids);
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
