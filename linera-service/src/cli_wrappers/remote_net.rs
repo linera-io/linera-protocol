@@ -10,8 +10,8 @@ use linera_client::persistent::{self, Persist};
 use tempfile::{tempdir, TempDir};
 
 use super::{
-    local_net::PathProvider, ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig,
-    Network, OnClientDrop,
+    local_net::PathProvider, ClientWrapper, Faucet, LineraNet, LineraNetConfig, Network,
+    OnClientDrop,
 };
 
 pub struct RemoteNetTestingConfig {
@@ -50,10 +50,8 @@ impl LineraNetConfig for RemoteNetTestingConfig {
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 2
         // chains with 10 tokens each. We create the first chain here
-        client
-            .wallet_init(&[], FaucetOption::NewChain(&self.faucet))
-            .await
-            .unwrap();
+        client.wallet_init(&[], Some(&self.faucet)).await?;
+        client.request_chain(&self.faucet, true).await?;
 
         // And the remaining 2 here
         for _ in 0..2 {

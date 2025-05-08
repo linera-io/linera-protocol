@@ -16,7 +16,7 @@ use linera_base::{
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
     local_net::{PathProvider, ProcessInbox},
-    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network, OnClientDrop,
+    ApplicationWrapper, ClientWrapper, Faucet, Network, OnClientDrop,
 };
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
@@ -87,9 +87,8 @@ async fn benchmark_with_fungible(
         num_wallets,
         OnClientDrop::CloseChains,
     );
-    publisher
-        .wallet_init(&[], FaucetOption::NewChain(&faucet))
-        .await?;
+    publisher.wallet_init(&[], Some(&faucet)).await?;
+    publisher.request_chain(&faucet, true).await?;
     let clients = (0..num_wallets)
         .map(|n| {
             let path_provider = PathProvider::create_temporary_directory().unwrap();
@@ -102,11 +101,10 @@ async fn benchmark_with_fungible(
             ))
         })
         .collect::<Result<Vec<_>, anyhow::Error>>()?;
-    try_join_all(
-        clients
-            .iter()
-            .map(|client| client.wallet_init(&[], FaucetOption::NewChain(&faucet))),
-    )
+    try_join_all(clients.iter().map(|client| async {
+        client.wallet_init(&[], Some(&faucet)).await?;
+        client.request_chain(&faucet, true).await
+    }))
     .await?;
 
     info!("Synchronizing balances (sanity check)");
