@@ -640,12 +640,24 @@ where
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, Error> {
         info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(&contract)
-            .await
-            .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
-        let service_bytecode = Bytecode::load_from_file(&service)
-            .await
-            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
+        let contract_bytecode = Bytecode::load_from_file(&contract).await.map_err(|e| {
+            error::Inner::Persistence(
+                format!(
+                    "failed to load contract bytecode from {:?}. error: {}",
+                    &contract, e
+                )
+                .into(),
+            )
+        })?;
+        let service_bytecode = Bytecode::load_from_file(&service).await.map_err(|e| {
+            error::Inner::Persistence(
+                format!(
+                    "failed to load service bytecode from {:?}. error: {}",
+                    &service, e
+                )
+                .into(),
+            )
+        })?;
 
         info!("Publishing module");
         let (blobs, module_id) =
