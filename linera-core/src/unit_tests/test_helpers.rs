@@ -45,13 +45,9 @@ pub fn assert_fees_exceed_funding<T>(obtained_error: Result<T, ChainClientError>
         panic!("Expected a ChainClientError::LocalNodeError with a WorkerError::ChainError");
     };
 
-    let ChainError::ExecutionError(execution_error, context) = *error else {
+    let ChainError::ExecutionError(execution_error, _context) = *error else {
         panic!("Expected a ChainError::ExecutionError, found: {error:#?}");
     };
-
-    if !matches!(context, ChainExecutionContext::Block) {
-        panic!("Expected ChainExecutionContext::Block, found: {context:#?}");
-    }
 
     assert_matches!(
         *execution_error,

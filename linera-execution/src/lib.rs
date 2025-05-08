@@ -300,8 +300,8 @@ pub enum ExecutionError {
         balance: Amount,
         account: AccountOwner,
     },
-    #[error("Required execution fees exceeded the total funding available: {balance}")]
-    FeesExceedFunding { balance: Amount },
+    #[error("Required execution fees exceeded the total funding available. Fees {fees}, available balance: {balance}")]
+    FeesExceedFunding { fees: Amount, balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]

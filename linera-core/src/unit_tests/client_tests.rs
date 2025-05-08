@@ -1203,9 +1203,11 @@ where
     B: StorageBuilder,
 {
     let mut signer = InMemorySigner::new(None);
+    let mut policy = ResourceControlPolicy::only_fuel();
+    policy.operation = Amount::from_micros(1); // Otherwise BURN passes b/c it will be free.
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::only_fuel());
+        .with_policy(policy);
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
     let obtained_error = sender
@@ -1216,6 +1218,8 @@ where
     let obtained_error = sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
+    // We have balance=3, we try to burn 3 tokens but the operation itself
+    // costs 1 microtoken so we don't have enough balance to pay for it.
     assert_fees_exceed_funding(obtained_error);
     Ok(())
 }
