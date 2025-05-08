@@ -3606,7 +3606,6 @@ version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-trait",
  "axum",
  "cfg_aliases",
  "custom_debug_derive",
