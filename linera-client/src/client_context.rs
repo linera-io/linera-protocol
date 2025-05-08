@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
+    crypto::{AccountSecretKey, CryptoHash},
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainId, MessageId},
     ownership::ChainOwnership,
@@ -17,7 +17,7 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
-    data_types::{ChainInfoQuery, ClientOutcome},
+    data_types::ClientOutcome,
     join_set_ext::JoinSet,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     remote_node::RemoteNode,
@@ -404,7 +404,6 @@ where
         chain_id: ChainId,
         message_id: MessageId,
         owner: AccountOwner,
-        validators: Option<Vec<(ValidatorPublicKey, String)>>,
     ) -> Result<(), Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -414,14 +413,15 @@ where
 
         // Take the latest committee we know of.
         let admin_chain_id = self.wallet.genesis_admin_chain();
-        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let info = self
-            .client
-            .local_node()
-            .handle_chain_info_query(query)
-            .await?;
+        let admin_client = self.make_chain_client(admin_chain_id)?;
+        let info = *admin_client.synchronize_from_validators().await?;
         let committee = info
-            .latest_committee()
+            .epoch
+            .and_then(|epoch| {
+                info.requested_committees
+                    .as_ref()
+                    .and_then(|committees| committees.get(&epoch))
+            })
             .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
         let nodes: Vec<_> = node_provider
             .make_nodes(committee)?
@@ -431,7 +431,12 @@ where
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
         self.client
-            .download_certificates(&nodes, message_id.chain_id, target_height, committee.clone())
+            .download_certificates(
+                &nodes,
+                message_id.chain_id,
+                target_height,
+                committee.clone(),
+            )
             .await
             .context("downloading parent chain")?;
 

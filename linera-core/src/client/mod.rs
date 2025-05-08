@@ -317,7 +317,6 @@ impl<P, S: Storage + Clone> Client<P, S> {
     }
 }
 
-
 impl<P, S> Client<P, S>
 where
     P: ValidatorNodeProvider + Sync + 'static,
@@ -330,26 +329,36 @@ where
         validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-        committee: Committee
+        committee: Committee,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        // Request certificates in parallel from 1/3 + 1 of total validators in terms of votes.
-        let mut validators_and_votes = validators.iter()
-            .map(|validator| (validator, committee.validators.get(&validator.public_key).expect("validator should always be in committee").votes))
+        let info = self.local_node.chain_info(chain_id).await?;
+        if target_next_block_height <= info.next_block_height {
+            return Ok(info);
+        }
+        // Request certificates in parallel from ⌈1/3 of total validators⌉ in terms of votes.
+        let mut validators_and_votes = validators
+            .iter()
+            .map(|validator| {
+                (
+                    validator,
+                    committee
+                        .validators
+                        .get(&validator.public_key)
+                        .expect("validator should always be in committee")
+                        .votes,
+                )
+            })
             .collect::<Vec<_>>();
         validators_and_votes.shuffle(&mut rand::thread_rng());
-        let sufficient_threshold = (committee.total_votes() / 3) + 1;
+        let sufficient_threshold = committee.validity_threshold();
         let sufficient_validator_subset: Vec<_> = validators_and_votes
             .into_iter()
             .scan(0u64, move |sum, (validator, votes)| {
                 let prev = *sum;
                 *sum += votes;
-                (prev < sufficient_threshold).then(|| validator)
+                (prev < sufficient_threshold).then_some(validator)
             })
             .collect();
-        let info = self.local_node.chain_info(chain_id).await?;
-        if target_next_block_height <= info.next_block_height {
-            return Ok(info);
-        }
         let mut stream = sufficient_validator_subset
             .iter()
             .map(|remote_node| {
@@ -360,8 +369,11 @@ where
                         chain_id,
                         info.next_block_height,
                         target_next_block_height,
-                    ).await
-                }}).collect::<FuturesUnordered<_>>();
+                    )
+                    .await
+                }
+            })
+            .collect::<FuturesUnordered<_>>();
         while let Some(downloaded) = stream.next().await {
             if downloaded.is_ok() {
                 let info = self.local_node.chain_info(chain_id).await?;
@@ -374,7 +386,6 @@ where
             chain_id,
             target_next_block_height,
         })
-
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height from the
@@ -1097,7 +1108,12 @@ where
         let nodes = self.validator_nodes().await?;
         let info = self
             .client
-            .download_certificates(&nodes, self.chain_id, next_block_height, self.local_committee().await?)
+            .download_certificates(
+                &nodes,
+                self.chain_id,
+                next_block_height,
+                self.local_committee().await?,
+            )
             .await?;
         if info.next_block_height == next_block_height {
             // Check that our local node has the expected block hash.
@@ -1336,7 +1352,12 @@ where
             self.make_nodes(remote_committee)?
         };
         self.client
-            .download_certificates(&nodes, block.header.chain_id, block.header.height, self.local_committee().await?)
+            .download_certificates(
+                &nodes,
+                block.header.chain_id,
+                block.header.height,
+                self.local_committee().await?,
+            )
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
