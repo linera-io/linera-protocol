@@ -1174,6 +1174,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(this.current_application().caller_id)
     }
 
+    fn maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError> {
+        let policy = &self.inner().resource_controller.policy;
+        Ok(match vm_runtime {
+            VmRuntime::Wasm => policy.maximum_wasm_fuel_per_block,
+            VmRuntime::Evm => policy.maximum_evm_fuel_per_block,
+        })
+    }
+
     fn remaining_fuel(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError> {
         Ok(self.inner().resource_controller.remaining_fuel(vm_runtime))
     }
