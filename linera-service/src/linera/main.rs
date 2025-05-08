@@ -1026,7 +1026,7 @@ impl Runnable for Job {
                     {owner}",
                 );
                 context
-                    .assign_new_chain_to_key(chain_id, message_id, owner, None)
+                    .assign_new_chain_to_key(chain_id, message_id, owner)
                     .await?;
                 println!("{}", chain_id);
                 context.save_wallet().await?;
@@ -1134,18 +1134,12 @@ impl Runnable for Job {
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&owner).await?;
-                let validators = faucet.current_validators().await?;
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
                 println!("{}", owner);
                 context
-                    .assign_new_chain_to_key(
-                        outcome.chain_id,
-                        outcome.message_id,
-                        owner,
-                        Some(validators),
-                    )
+                    .assign_new_chain_to_key(outcome.chain_id, outcome.message_id, owner)
                     .await?;
                 let admin_id = context.wallet().genesis_admin_chain();
                 let chains = with_other_chains
@@ -1179,18 +1173,12 @@ impl Runnable for Job {
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&owner).await?;
-                let validators = faucet.current_validators().await?;
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
                 println!("{}", owner);
                 context
-                    .assign_new_chain_to_key(
-                        outcome.chain_id,
-                        outcome.message_id,
-                        owner,
-                        Some(validators),
-                    )
+                    .assign_new_chain_to_key(outcome.chain_id, outcome.message_id, owner)
                     .await?;
                 if set_default {
                     context
