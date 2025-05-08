@@ -11,12 +11,12 @@ use std::{
 
 use linera_base::vm::VmRuntime;
 use linera_views::common::from_bytes_option;
-use revm::{
-    db::AccountState,
-    primitives::{keccak256, state::AccountInfo},
-    Database, DatabaseCommit, DatabaseRef,
-};
-use revm_primitives::{address, Address, BlobExcessGasAndPrice, BlockEnv, EvmState, B256, U256};
+use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
+use revm_context::BlockEnv;
+use revm_context_interface::block::BlobExcessGasAndPrice;
+use revm_database::{AccountState, DBErrorMarker};
+use revm_primitives::{address, Address, B256, U256};
+use revm_state::{AccountInfo, Bytecode, EvmState};
 
 use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
 
@@ -87,6 +87,8 @@ enum KeyTag {
     NullAddress,
     /// Key prefix for the storage of the contract address.
     ContractAddress,
+    /// Key prefix for the storage of the user nonces
+    UserNonce,
 }
 
 #[repr(u8)]
@@ -138,6 +140,8 @@ impl<Runtime> DatabaseRuntime<Runtime> {
     }
 }
 
+impl DBErrorMarker for ExecutionError {}
+
 impl<Runtime> Database for DatabaseRuntime<Runtime>
 where
     Runtime: BaseRuntime,
@@ -148,10 +152,7 @@ where
         self.basic_ref(address)
     }
 
-    fn code_by_hash(
-        &mut self,
-        _code_hash: B256,
-    ) -> Result<revm::primitives::Bytecode, ExecutionError> {
+    fn code_by_hash(&mut self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Functionality code_by_hash not implemented");
     }
 
@@ -196,10 +197,7 @@ where
         Ok(account_info)
     }
 
-    fn code_by_hash_ref(
-        &self,
-        _code_hash: B256,
-    ) -> Result<revm::primitives::Bytecode, ExecutionError> {
+    fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
         panic!("Functionality code_by_hash_ref not implemented");
     }
 
@@ -325,6 +323,19 @@ impl<Runtime> DatabaseRuntime<Runtime>
 where
     Runtime: BaseRuntime,
 {
+    /// Reads the nonce of the user
+    pub fn get_nonce(&self, address: Address) -> Result<u64, ExecutionError> {
+        let mut key_nonce = vec![KeyTag::UserNonce as u8];
+        bcs::serialize_into(&mut key_nonce, &address)?;
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let promise = runtime.read_value_bytes_new(key_nonce)?;
+        let result = runtime.read_value_bytes_wait(&promise)?;
+        let nonce = from_bytes_option::<u64, ViewError>(&result)?;
+        Ok(nonce.unwrap_or_default())
+    }
+
+    /// Checks if the contract is already initialized. It is possible
+    /// that the constructor has not yet been called.
     pub fn is_initialized(&self) -> Result<bool, ExecutionError> {
         let mut keys = Vec::new();
         for key_tag in [KeyTag::NullAddress, KeyTag::ContractAddress] {
@@ -341,21 +352,22 @@ where
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         // The block height being used
         let block_height_linera = runtime.block_height()?;
-        let block_height_evm = U256::from(block_height_linera.0);
+        let block_height_evm = block_height_linera.0;
         // This is the receiver address of all the gas spent in the block.
         let beneficiary = address!("00000000000000000000000000000000000000bb");
         // The difficulty which is no longer relevant after The Merge.
         let difficulty = U256::ZERO;
-        // Set up in the next section.
-        let gas_limit = U256::MAX;
+        // We do not have access to the Resources so we keep it to the maximum
+        // and the control is done elsewhere.
+        let gas_limit = u64::MAX;
         // The timestamp. Both the EVM and Linera use the same UNIX epoch.
         // But the Linera epoch is in microseconds since the start and the
         // Ethereum epoch is in seconds
         let timestamp_linera = runtime.read_system_timestamp()?;
-        let timestamp_evm = U256::from(timestamp_linera.micros() / 1_000_000);
+        let timestamp_evm = timestamp_linera.micros() / 1_000_000;
         // The basefee is the minimum feee for executing. We have no such
         // concept in Linera
-        let basefee = U256::ZERO;
+        let basefee = 0;
         let chain_id = runtime.chain_id()?;
         let entry = format!("{}{}", chain_id, block_height_linera);
         // The randomness beacon being used.
@@ -369,7 +381,7 @@ where
         let blob_excess_gas_and_price = Some(entry);
         Ok(BlockEnv {
             number: block_height_evm,
-            coinbase: beneficiary,
+            beneficiary,
             difficulty,
             gas_limit,
             timestamp: timestamp_evm,
@@ -408,5 +420,23 @@ where
         let mut block_env = self.get_block_env()?;
         block_env.gas_limit = U256::from(EVM_SERVICE_GAS_LIMIT);
         Ok(block_env)
+    }
+}
+
+impl<Runtime> DatabaseRuntime<Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    /// Writes the nonce of the user
+    pub fn increment_nonce(&self, address: Address, nonce: u64) -> Result<(), ExecutionError> {
+        let mut key_nonce = vec![KeyTag::UserNonce as u8];
+        bcs::serialize_into(&mut key_nonce, &address)?;
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        //
+        let new_nonce = nonce + 1;
+        let mut batch = Batch::new();
+        batch.put_key_value(key_nonce, &new_nonce)?;
+        runtime.write_batch(batch)?;
+        Ok(())
     }
 }

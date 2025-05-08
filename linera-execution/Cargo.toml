@@ -15,9 +15,16 @@ version.workspace = true
 test = ["tokio/macros", "linera-base/test", "linera-views/test", "proptest"]
 revm = [
     "dep:revm",
-    "dep:revm-primitives",
-    "dep:revm-precompile",
+    "dep:revm-context",
+    "dep:revm-context-interface",
+    "dep:revm-database",
+    "dep:revm-database-interface",
+    "dep:revm-handler",
     "dep:revm-interpreter",
+    "dep:revm-inspector",
+    "dep:revm-precompile",
+    "dep:revm-primitives",
+    "dep:revm-state",
     "dep:alloy-primitives",
     "dep:alloy-sol-types",
     "dep:hex",
@@ -54,10 +61,17 @@ oneshot.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json", "stream"] }
-revm = { workspace = true, optional = true, features = ["serde"] }
-revm-interpreter = { workspace = true, optional = true, features = ["serde"] }
-revm-precompile = { workspace = true, optional = true }
-revm-primitives = { workspace = true, optional = true }
+revm = { workspace = true, optional = true, default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst", "serde" ] }
+revm-context = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/context" }
+revm-context-interface = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/context/interface" }
+revm-database = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/database" }
+revm-database-interface = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/database/interface" }
+revm-handler = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/handler" }
+revm-interpreter = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/interpreter" }
+revm-inspector = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/interpreter" }
+revm-precompile = { workspace = true, optional = true, default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst" ], subdir = "crates/precompile" }
+revm-primitives = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/primitives" }
+revm-state = { workspace = true, optional = true, default-features = false, features = [ "serde" ], subdir = "crates/state" }
 serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true

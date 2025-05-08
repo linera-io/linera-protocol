@@ -69,7 +69,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
-alloy = { version = "0.9.2", default-features = false }
+alloy = { version = "0.15.10", default-features = false }
 alloy-primitives = { version = "1.0.0", default-features = false, features = [
     "serde",
     "k256",
@@ -172,10 +172,17 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
-revm = "19.7.0"
-revm-interpreter = { version = "15.2.0", features = ["serde"] }
-revm-precompile = "16.2.0"
-revm-primitives = "15.2.0"
+revm = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst", "serde" ] }
+revm-context = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/context" }
+revm-context-interface = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/context/interface" }
+revm-database = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/database" }
+revm-database-interface = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/database/interface" }
+revm-handler = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/handler" }
+revm-interpreter = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/interpreter" }
+revm-inspector = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/interpreter" }
+revm-precompile = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst" ], subdir = "crates/precompile" }
+revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/primitives" }
+revm-state = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ], subdir = "crates/state" }
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
 scylla = "1.1.0"

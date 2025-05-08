@@ -1,19 +1,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use alloy::providers::fillers::{
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+};
 use alloy::{
+    network::Ethereum,
     node_bindings::{Anvil, AnvilInstance},
     primitives::{Address, U256},
     providers::{ProviderBuilder, RootProvider},
     sol,
-    transports::http::reqwest::Client,
+    //    transports::http::reqwest::Client,
 };
 use linera_base::port::get_free_port;
 use url::Url;
 
 use crate::{
     client::EthereumQueries,
-    provider::{EthereumClient, EthereumClientSimplified, HttpProvider},
+    provider::{EthereumClient, EthereumClientSimplified},
 };
 
 sol!(
@@ -33,9 +37,15 @@ sol!(
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
-    pub ethereum_client: EthereumClient<HttpProvider>,
+    pub ethereum_client: EthereumClient,
     pub rpc_url: Url,
-    pub provider: RootProvider<alloy::transports::http::Http<Client>>,
+    pub provider: FillProvider<
+        JoinFill<
+            alloy::providers::Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        RootProvider<Ethereum>,
+    >,
 }
 
 pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
@@ -44,7 +54,8 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let endpoint = anvil_instance.endpoint();
     let ethereum_client = EthereumClient::new(endpoint.clone())?;
     let rpc_url = Url::parse(&endpoint)?;
-    let provider = ProviderBuilder::new().on_http(rpc_url.clone());
+    //    let provider = ProviderBuilder::new().connect_anvil_with_wallet();
+    let provider = ProviderBuilder::new().connect_http(rpc_url.clone());
     Ok(AnvilTest {
         anvil_instance,
         endpoint,
@@ -70,8 +81,10 @@ impl SimpleTokenContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // 2: initializing the contract
         let initial_supply = U256::from(1000);
+        println!("SimpleTokenContract, step 1");
         let simple_token =
             SimpleTokenContract::deploy(&anvil_test.provider, initial_supply).await?;
+        println!("SimpleTokenContract, step 2");
         let contract_address = simple_token.address();
         let contract_address = format!("{:?}", contract_address);
         Ok(Self {

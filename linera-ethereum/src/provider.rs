@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use alloy::{
+    network::Ethereum,
     primitives::{Address, Bytes, U256},
-    providers::{Provider, ProviderBuilder, RootProvider},
+    providers::{
+        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
+        Provider, ProviderBuilder, RootProvider,
+    },
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
         Filter,
@@ -16,7 +20,7 @@ use url::Url;
 
 use crate::client::{EthereumQueries, JsonRpcClient};
 
-pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
+pub type HttpProvider = RootProvider<Ethereum>;
 
 use crate::{
     client::get_block_id,
@@ -61,12 +65,18 @@ impl EthereumClientSimplified {
 }
 
 #[derive(Clone)]
-pub struct EthereumClient<M> {
-    pub provider: M,
+pub struct EthereumClient {
+    pub provider: FillProvider<
+        JoinFill<
+            alloy::providers::Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        RootProvider<Ethereum>,
+    >,
 }
 
 #[async_trait]
-impl EthereumQueries for EthereumClient<HttpProvider> {
+impl EthereumQueries for EthereumClient {
     type Error = EthereumServiceError;
 
     async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
@@ -130,17 +140,17 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
             .to(contract_address)
             .input(input);
         let block_id = get_block_id(block);
-        let eth_call = self.provider.call(&tx).block(block_id);
+        let eth_call = self.provider.call(tx).block(block_id);
         Ok(eth_call.await?)
     }
 }
 
-impl EthereumClient<HttpProvider> {
+impl EthereumClient {
     /// Connects to an existing Ethereum node and creates an `EthereumClient`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
         let rpc_url = Url::parse(&url)?;
-        let provider = ProviderBuilder::new().on_http(rpc_url);
+        let provider = ProviderBuilder::new().connect_http(rpc_url);
         let endpoint = Self { provider };
         Ok(endpoint)
     }
