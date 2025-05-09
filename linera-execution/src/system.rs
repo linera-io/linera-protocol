@@ -267,6 +267,18 @@ impl Recipient {
     }
 }
 
+impl From<ChainId> for Recipient {
+    fn from(chain_id: ChainId) -> Self {
+        Recipient::chain(chain_id)
+    }
+}
+
+impl From<Account> for Recipient {
+    fn from(account: Account) -> Self {
+        Recipient::Account(account)
+    }
+}
+
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
