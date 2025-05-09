@@ -255,9 +255,8 @@ impl<S: Deref<Target = InMemorySigner>> SignerState<S> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
-    pub admin_id: ChainId,
     pub timestamp: Timestamp,
-    pub chains: Vec<(AccountPublicKey, Amount)>,
+    pub chains: Vec<ChainDescription>,
     pub policy: ResourceControlPolicy,
     pub network_name: String,
 }
@@ -267,19 +266,47 @@ impl BcsSignable<'_> for GenesisConfig {}
 impl GenesisConfig {
     pub fn new(
         committee: CommitteeConfig,
-        admin_id: ChainId,
         timestamp: Timestamp,
         policy: ResourceControlPolicy,
         network_name: String,
     ) -> Self {
         Self {
             committee,
-            admin_id,
             timestamp,
             chains: Vec::new(),
             policy,
             network_name,
         }
+    }
+
+    pub fn add_chain(&mut self, public_key: AccountPublicKey, balance: Amount) -> ChainDescription {
+        let committee = self.create_committee();
+        let committees: BTreeMap<_, _> = [(
+            Epoch::ZERO,
+            bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
+        )]
+        .into_iter()
+        .collect();
+        let origin = ChainOrigin::Root(self.chains.len() as u32);
+        let config = InitialChainConfig {
+            admin_id: self.chains.first().map(|description| description.id()),
+            application_permissions: Default::default(),
+            balance,
+            committees: committees.clone(),
+            epoch: Epoch::ZERO,
+            ownership: ChainOwnership::single(public_key.into()),
+        };
+        let description = ChainDescription::new(origin, config, self.timestamp);
+        self.chains.push(description.clone());
+        description
+    }
+
+    pub fn admin_chain_description(&self) -> &ChainDescription {
+        &self.chains[0]
+    }
+
+    pub fn admin_id(&self) -> ChainId {
+        self.admin_chain_description().id()
     }
 
     pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
@@ -293,29 +320,8 @@ impl GenesisConfig {
         {
             return Err(Error::StorageIsAlreadyInitialized(description));
         }
-        let committee = self.create_committee();
-        let committees: BTreeMap<_, _> = [(
-            Epoch::ZERO,
-            bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-        )]
-        .into_iter()
-        .collect();
-        for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
-            let origin = ChainOrigin::Root(chain_number);
-            let config = InitialChainConfig {
-                admin_id: if chain_number == 0 {
-                    None
-                } else {
-                    Some(self.admin_id)
-                },
-                application_permissions: Default::default(),
-                balance: *balance,
-                committees: committees.clone(),
-                epoch: Epoch::ZERO,
-                ownership: ChainOwnership::single((*public_key).into()),
-            };
-            let description = ChainDescription::new(origin, config, self.timestamp);
-            storage.create_chain(description).await?;
+        for description in &self.chains {
+            storage.create_chain(description.clone()).await?;
         }
         let network_description = NetworkDescription {
             name: self.network_name.clone(),

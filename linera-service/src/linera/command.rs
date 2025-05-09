@@ -425,10 +425,6 @@ pub enum ClientCommand {
         #[arg(long = "genesis")]
         genesis_config_path: PathBuf,
 
-        /// Index of the admin chain in the genesis config
-        #[arg(long, default_value = "0")]
-        admin_root: u32,
-
         /// Known initial balance of the chain
         #[arg(long, default_value = "0")]
         initial_funding: Amount,
