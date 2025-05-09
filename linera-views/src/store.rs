@@ -23,6 +23,8 @@ pub struct CommonStoreInternalConfig {
     pub max_concurrent_queries: Option<usize>,
     /// The number of streams used for the async streams.
     pub max_stream_queries: usize,
+    /// The replication factor for the keyspace
+    pub replication_factor: u32,
 }
 
 /// The common initialization parameters for the `KeyValueStore`
@@ -34,6 +36,8 @@ pub struct CommonStoreConfig {
     pub max_stream_queries: usize,
     /// The cache size being used.
     pub storage_cache_config: StorageCacheConfig,
+    /// The replication factor for the keyspace
+    pub replication_factor: u32,
 }
 
 impl CommonStoreConfig {
@@ -42,6 +46,7 @@ impl CommonStoreConfig {
         CommonStoreInternalConfig {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
+            replication_factor: self.replication_factor,
         }
     }
 }
@@ -52,6 +57,7 @@ impl Default for CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries: 10,
             storage_cache_config: DEFAULT_STORAGE_CACHE_CONFIG,
+            replication_factor: 1,
         }
     }
 }
