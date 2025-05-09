@@ -71,6 +71,7 @@ pub struct LocalKubernetesNetConfig {
     pub docker_image_name: String,
     pub build_mode: BuildMode,
     pub policy_config: ResourceControlPolicyConfig,
+    pub dual_store: bool,
 }
 
 /// A wrapper of [`LocalKubernetesNetConfig`] to create a shared local Kubernetes network
@@ -93,6 +94,7 @@ pub struct LocalKubernetesNet {
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
     num_shards: usize,
+    dual_store: bool,
 }
 
 #[cfg(with_testing)]
@@ -127,6 +129,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             docker_image_name: String::from("linera:latest"),
             build_mode: BuildMode::Release,
             policy_config: ResourceControlPolicyConfig::Testnet,
+            dual_store: false,
         })
     }
 }
@@ -159,6 +162,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             clusters,
             self.num_initial_validators,
             self.num_shards,
+            self.dual_store,
         )?;
 
         let client = net.make_client().await;
@@ -338,6 +342,7 @@ impl LocalKubernetesNet {
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
         num_shards: usize,
+        dual_store: bool,
     ) -> Result<Self> {
         Ok(Self {
             network,
@@ -352,6 +357,7 @@ impl LocalKubernetesNet {
             kind_clusters,
             num_initial_validators,
             num_shards,
+            dual_store,
         })
     }
 
@@ -433,6 +439,7 @@ impl LocalKubernetesNet {
                 &self.binaries,
                 &github_root,
                 &self.build_mode,
+                self.dual_store,
             )
             .await?;
             self.docker_image_name.clone()
@@ -460,6 +467,7 @@ impl LocalKubernetesNet {
             let tmp_dir_path = tmp_dir_path_clone.clone();
 
             let docker_image_name = docker_image_name.clone();
+            let dual_store = self.dual_store;
             let future = async move {
                 let cluster_id = kind_cluster.id();
                 kind_cluster.load_docker_image(&docker_image_name).await?;
@@ -470,7 +478,15 @@ impl LocalKubernetesNet {
                     base_dir.join(&server_config_filename),
                 )?;
 
-                HelmFile::sync(i, &github_root, num_shards, cluster_id, docker_image_name).await?;
+                HelmFile::sync(
+                    i,
+                    &github_root,
+                    num_shards,
+                    cluster_id,
+                    docker_image_name,
+                    dual_store,
+                )
+                .await?;
 
                 let mut kubectl_instance = kubectl_instance.lock().await;
                 let output = kubectl_instance.get_pods(cluster_id).await?;

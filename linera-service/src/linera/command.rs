@@ -991,6 +991,12 @@ pub enum NetCommand {
         /// The number of block exporters per validator in the local test network. Default is 0.
         #[arg(long, default_value = "0")]
         block_exporters: u32,
+
+        /// Use dual store (rocksdb and scylladb) instead of just scylladb. This is exclusive for
+        /// kubernetes deployments.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "false")]
+        dual_store: bool,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

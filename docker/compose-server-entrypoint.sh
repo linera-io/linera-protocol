@@ -1,7 +1,9 @@
 #!/bin/sh
 
+storage=$1
+
 exec ./linera-server run \
-  --storage scylladb:tcp:scylla:9042 \
+  --storage $storage \
   --server /config/server.json \
   --shard 0 \
   --genesis /config/genesis.json
