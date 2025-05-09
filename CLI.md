@@ -521,9 +521,6 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
 * `--committee <COMMITTEE_CONFIG_PATH>` — Sets the file describing the public configurations of all validators
 * `--genesis <GENESIS_CONFIG_PATH>` — The output config path to be consumed by the server
-* `--admin-root <ADMIN_ROOT>` — Index of the admin chain in the genesis config
-
-  Default value: `0`
 * `--initial-funding <INITIAL_FUNDING>` — Known initial balance of the chain
 
   Default value: `0`
