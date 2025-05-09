@@ -64,14 +64,13 @@ use crate::persistent::{Persist, PersistExt as _};
 use crate::{
     chain_listener,
     client_options::{ChainOwnershipConfig, ClientContextOptions},
-    config::WalletState,
     error, util,
     wallet::{UserChain, Wallet},
     Error,
 };
 
 pub struct ClientContext<Env: Environment, W> {
-    pub wallet: WalletState<W>,
+    pub wallet: W,
     pub client: Arc<Client<Env>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -163,7 +162,7 @@ where
 
         ClientContext {
             client: Arc::new(client),
-            wallet: WalletState::new(wallet),
+            wallet,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
@@ -213,7 +212,7 @@ where
 
         ClientContext {
             client: Arc::new(client),
-            wallet: WalletState::new(wallet),
+            wallet,
             send_timeout: send_recv_timeout,
             recv_timeout: send_recv_timeout,
             retry_delay,
@@ -234,8 +233,8 @@ where
         &self.wallet
     }
 
-    /// Returns the [`WalletState`] as a mutable reference.
-    pub fn wallet_mut(&mut self) -> &mut WalletState<W> {
+    /// Returns the wallet as a mutable reference.
+    pub fn wallet_mut(&mut self) -> &mut W {
         &mut self.wallet
     }
 

@@ -15,7 +15,7 @@ use linera_core::{
 use super::util::make_genesis_config;
 use crate::{
     client_context::ClientContext,
-    config::WalletState,
+    persistent,
     wallet::{UserChain, Wallet},
 };
 
@@ -45,14 +45,14 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     if wallet_path.exists() {
         return Err(anyhow!("Wallet already exists!"));
     }
-    let mut wallet = WalletState::read_or_create(&wallet_path, Wallet::new(genesis_config))?;
-    wallet
-        .add_chains(Some(UserChain::make_initial(
-            new_pubkey.into(),
-            builder.admin_description().unwrap().clone(),
-            clock.current_time(),
-        )))
-        .await?;
+    let mut wallet = persistent::File::<Wallet>::read_or_create(&wallet_path, || {
+        Ok(Wallet::new(genesis_config))
+    })?;
+    wallet.insert(UserChain::make_initial(
+        new_pubkey.into(),
+        builder.admin_description().unwrap().clone(),
+        clock.current_time(),
+    ));
     wallet.chains_mut().next().unwrap().pending_proposal = Some(PendingProposal {
         block: ProposedBlock {
             chain_id,

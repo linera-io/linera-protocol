@@ -628,14 +628,15 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
 async fn test_storage_service_wallet_lock() -> Result<()> {
     use std::mem::drop;
 
-    use linera_client::config::WalletState;
+    use linera_client::{persistent, wallet::Wallet};
+
     let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
 
-    let wallet_state = WalletState::read_from_file(client.wallet_path().as_path())?;
+    let wallet_state = persistent::File::<Wallet>::read(client.wallet_path().as_path())?;
 
     let chain_id = wallet_state.default_chain().unwrap();
 
