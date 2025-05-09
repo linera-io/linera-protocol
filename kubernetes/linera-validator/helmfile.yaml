@@ -4,10 +4,13 @@ environments:
       - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
         validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
         usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
+        kubeContext: {{ env "LINERA_HELMFILE_SET_KUBE_CONTEXT" | default "" }}
+        kubeConfigPath: {{ env "KUBECONFIG" | default "" }}
 
 helmDefaults:
   wait: true
   recreatePods: false
+  kubeContext: {{ .Values.kubeContext | quote }}
 
 {{- if .Values.usingLocalSsd }}
 hooks:
@@ -17,15 +20,26 @@ hooks:
     args:
       - -c
       - |
+        set -euxo pipefail
+
+        kube_args=(
+          {{- if .Values.kubeContext }}
+          --context {{ .Values.kubeContext }}
+          {{- end }}
+          {{- if .Values.kubeConfigPath }}
+          --kubeconfig {{ .Values.kubeConfigPath }}
+          {{- end }}
+        )
+
         echo "Ensuring RAID0 and Local‑CSI driver are setup..."
 
-        kubectl create -f ./scylla-setup/gke-daemonset-raid-disks.yaml
-        kubectl -n default rollout status daemonset/gke-raid-disks
+        kubectl "${kube_args[@]}" apply -f ./scylla-setup/gke-daemonset-raid-disks.yaml
+        kubectl "${kube_args[@]}" -n default rollout status daemonset/gke-raid-disks
 
-        kubectl apply -f ./scylla-setup/local-csi-driver
-        kubectl -n local-csi-driver rollout status daemonset.apps/local-csi-driver
+        kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-csi-driver
+        kubectl "${kube_args[@]}" -n local-csi-driver rollout status daemonset.apps/local-csi-driver --timeout=5m
 
-        kubectl apply -f ./scylla-setup/local-ssd-sc.yaml
+        kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-ssd-sc.yaml
 {{- end }}
 
 ---
