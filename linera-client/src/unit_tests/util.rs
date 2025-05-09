@@ -28,11 +28,12 @@ pub fn make_genesis_config(builder: &TestBuilder<MemoryStorageBuilder>) -> Genes
         .collect();
     let mut genesis_config = GenesisConfig::new(
         CommitteeConfig { validators },
-        builder.admin_id(),
         Timestamp::from(0),
         builder.initial_committee.policy().clone(),
         "test network".to_string(),
     );
-    genesis_config.chains.extend(builder.genesis_chains());
+    for (public_key, amount) in builder.genesis_chains() {
+        genesis_config.add_chain(public_key, amount);
+    }
     genesis_config
 }
