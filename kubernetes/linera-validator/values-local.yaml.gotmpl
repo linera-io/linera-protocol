@@ -11,6 +11,7 @@ numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
 rocksdbStorageSize: {{ env "LINERA_HELMFILE_SET_ROCKSDB_STORAGE_SIZE" | default "2Gi" }}
 storage: {{ env "LINERA_HELMFILE_SET_STORAGE" | default "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042" }}
 dualStore: {{ env "LINERA_HELMFILE_SET_DUAL_STORE" | default "false" }}
+usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
 
 # Loki
 loki-stack:
