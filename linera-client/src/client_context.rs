@@ -262,6 +262,12 @@ where
             .expect("No chain specified in wallet with no default chain")
     }
 
+    pub fn non_admin_chain(&self) -> ChainId {
+        self.wallet
+            .non_admin_chain()
+            .expect("No non-admin chain specified in wallet with no non-admin chain")
+    }
+
     pub async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
         let chain: UserChain = match self.wallet.get(chain_id) {

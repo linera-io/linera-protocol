@@ -921,7 +921,7 @@ impl Runnable for Job {
                     Box::new(signer.into_value()),
                 );
 
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_id = chain_id.unwrap_or_else(|| context.non_admin_chain());
                 info!("Starting faucet service using chain {}", chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {

@@ -79,6 +79,12 @@ impl Wallet {
         self.default
     }
 
+    pub fn non_admin_chain(&self) -> Option<ChainId> {
+        self.chain_ids()
+            .into_iter()
+            .find(|chain_id| *chain_id != self.genesis_config.admin_id)
+    }
+
     pub fn chain_ids(&self) -> Vec<ChainId> {
         self.chains.keys().copied().collect()
     }
