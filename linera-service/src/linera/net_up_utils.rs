@@ -119,6 +119,7 @@ pub async fn handle_net_up_kubernetes(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    path: &Option<String>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -136,6 +137,7 @@ pub async fn handle_net_up_kubernetes(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
+    let path_provider = PathProvider::new(path)?;
     let config = LocalKubernetesNetConfig {
         network: Network::Grpc,
         testing_prng_seed,
@@ -148,6 +150,7 @@ pub async fn handle_net_up_kubernetes(
         docker_image_name,
         build_mode,
         policy_config,
+        path_provider,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
