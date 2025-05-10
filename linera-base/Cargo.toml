@@ -40,7 +40,7 @@ bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
 custom_debug_derive.workspace = true
-derive_more = { workspace = true, features = ["display"] }
+derive_more = { workspace = true, features = ["display", "from_str"] }
 ed25519-dalek.workspace = true
 futures.workspace = true
 getrandom = { workspace = true, optional = true }

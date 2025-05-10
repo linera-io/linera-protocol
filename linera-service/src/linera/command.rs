@@ -657,6 +657,20 @@ pub enum ClientCommand {
         publisher: Option<ChainId>,
     },
 
+    /// Reading the events from a starting index
+    ListEventsFromIndex {
+        /// The chain to query. If omitted, query the default chain of the wallet.
+        chain_id: Option<ChainId>,
+
+        /// The stream being considered.
+        #[arg(long)]
+        stream_id: StreamId,
+
+        /// Index of the message to start with
+        #[arg(long, default_value = "0")]
+        start_index: u32,
+    },
+
     /// Publish a data blob of binary data.
     PublishDataBlob {
         /// Path to data blob file to be published.
@@ -830,6 +844,7 @@ impl ClientCommand {
             | ClientCommand::FinalizeCommittee
             | ClientCommand::CreateGenesisConfig { .. }
             | ClientCommand::PublishModule { .. }
+            | ClientCommand::ListEventsFromIndex { .. }
             | ClientCommand::PublishDataBlob { .. }
             | ClientCommand::ReadDataBlob { .. }
             | ClientCommand::CreateApplication { .. }
@@ -879,12 +894,14 @@ pub enum DatabaseToolCommand {
     /// List the chain IDs in the database
     ListChainIds,
 
+    /*
     /// List the events in a chain in the database
     ListEventsFromIndex {
         chain_id: ChainId,
         stream_id: StreamId,
         start_index: u32
     },
+*/
 }
 
 #[allow(clippy::large_enum_variant)]

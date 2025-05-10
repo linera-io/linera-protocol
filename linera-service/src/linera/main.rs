@@ -106,7 +106,7 @@ impl Runnable for Job {
                 amount,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -141,7 +141,7 @@ impl Runnable for Job {
                 let new_owner = owner.unwrap_or_else(|| signer.generate_new().into());
                 signer.persist().await?;
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -184,7 +184,7 @@ impl Runnable for Job {
                 application_permissions_config,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -233,7 +233,7 @@ impl Runnable for Job {
                 ownership_config,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -243,7 +243,7 @@ impl Runnable for Job {
 
             SetPreferredOwner { chain_id, owner } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -256,7 +256,7 @@ impl Runnable for Job {
                 application_permissions_config,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -289,7 +289,7 @@ impl Runnable for Job {
 
             CloseChain { chain_id } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -321,7 +321,7 @@ impl Runnable for Job {
 
             LocalBalance { account } => {
                 let context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -338,7 +338,7 @@ impl Runnable for Job {
 
             QueryBalance { account } => {
                 let context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -358,7 +358,7 @@ impl Runnable for Job {
 
             SyncBalance { account } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -382,7 +382,7 @@ impl Runnable for Job {
 
             Sync { chain_id } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -402,7 +402,7 @@ impl Runnable for Job {
 
             ProcessInbox { chain_id } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -427,7 +427,7 @@ impl Runnable for Job {
             } => {
                 use linera_core::node::ValidatorNode as _;
                 let context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -500,7 +500,7 @@ impl Runnable for Job {
             QueryValidators { chain_id } => {
                 use linera_core::node::ValidatorNode as _;
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -577,7 +577,7 @@ impl Runnable for Job {
                 mut chains,
             } => {
                 let context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -604,7 +604,7 @@ impl Runnable for Job {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
                 let context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -820,7 +820,7 @@ impl Runnable for Job {
                 info!("Starting operations to remove old committees");
                 let time_start = Instant::now();
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -866,7 +866,7 @@ impl Runnable for Job {
                 signer.persist().await?;
 
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -930,7 +930,7 @@ impl Runnable for Job {
 
             Watch { chain_id, raw } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -955,7 +955,7 @@ impl Runnable for Job {
 
             Service { config, port } => {
                 let context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1019,7 +1019,7 @@ impl Runnable for Job {
                 publisher,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1039,12 +1039,33 @@ impl Runnable for Job {
                 );
             }
 
+            ListEventsFromIndex {
+                chain_id,
+                stream_id,
+                start_index,
+            } => {
+                let context = ClientContext::new(
+                    storage.clone(),
+                    options.inner.clone(),
+                    wallet,
+                    Box::new(signer.into_value()),
+                );
+                let start_time = Instant::now();
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let index_events = storage.list_events_from_index(&chain_id, &stream_id, start_index).await?;
+                println!("{:?}", index_events);
+                info!(
+                    "Events listed in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+
             PublishDataBlob {
                 blob_path,
                 publisher,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1065,7 +1086,7 @@ impl Runnable for Job {
             // TODO(#2490): Consider removing or renaming this.
             ReadDataBlob { hash, reader } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1089,7 +1110,7 @@ impl Runnable for Job {
                 required_application_ids,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1145,7 +1166,7 @@ impl Runnable for Job {
                 required_application_ids,
             } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1190,7 +1211,7 @@ impl Runnable for Job {
 
             Assign { owner, chain_id } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1221,7 +1242,7 @@ impl Runnable for Job {
                     required_application_ids,
                 } => {
                     let mut context = ClientContext::new(
-                        storage.clone(),
+                        storage,
                         options.inner.clone(),
                         wallet,
                         Box::new(signer.into_value()),
@@ -1273,7 +1294,7 @@ impl Runnable for Job {
 
             RetryPendingBlock { chain_id } => {
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1348,7 +1369,7 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
                 let mut context = ClientContext::new(
-                    storage.clone(),
+                    storage,
                     options.inner.clone(),
                     wallet,
                     Box::new(signer.into_value()),
@@ -1758,6 +1779,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     println!("{}", id);
                 }
             }
+            /*
             DatabaseToolCommand::ListEventsFromIndex { chain_id, stream_id, start_index } => {
                 let index_events = DbStorage::<S, _>::list_events_from_index(&config, &namespace, chain_id, stream_id, *start_index).await?;
                 info!(
@@ -1767,6 +1789,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 info!("The list of chain IDs is:");
                 println!("{index_events:?}");
             }
+            */
         }
         Ok(0)
     }
