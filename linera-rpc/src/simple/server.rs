@@ -91,7 +91,7 @@ where
             .await
             .expect("Initialization should not fail");
 
-        while let Some((message, shard_id)) = receiver.next().await {
+        'receive_loop: while let Some((message, shard_id)) = receiver.next().await {
             if cross_chain_sender_failure_rate > 0.0
                 && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
             {
@@ -128,16 +128,16 @@ where
                             to_shard = shard_id,
                             "Sent cross-chain query",
                         );
-                        break;
+                        continue 'receive_loop;
                     }
                 }
-                error!(
-                    nickname,
-                    from_shard = this_shard,
-                    to_shard = shard_id,
-                    "Dropping cross-chain query",
-                );
             }
+            error!(
+                nickname,
+                from_shard = this_shard,
+                to_shard = shard_id,
+                "Dropping cross-chain query",
+            );
         }
     }
 

@@ -455,16 +455,16 @@ where
                                     to_shard = shard_id,
                                     "Sent cross-chain query",
                                 );
-                                break;
+                                return;
                             }
                         }
-                        error!(
-                            nickname,
-                            from_shard = this_shard,
-                            to_shard = shard_id,
-                            "Dropping cross-chain query",
-                        );
                     }
+                    error!(
+                        nickname,
+                        from_shard = this_shard,
+                        to_shard = shard_id,
+                        "Dropping cross-chain query",
+                    );
                 }
             })
             .await;
