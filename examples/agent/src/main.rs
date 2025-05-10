@@ -1,17 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{io, io::Write};
+use std::io::{self, Write};
 
 use anyhow::Result;
 use clap::Parser;
 use reqwest::Client;
 use rig::{
-    agent::AgentBuilder,
-    completion::{Chat, Message, ToolDefinition},
+    agent::{Agent, AgentBuilder},
+    completion::{Chat, CompletionModel, Message, ToolDefinition},
     providers::openai,
     tool::Tool,
 };
+use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use url::Url;
@@ -148,16 +149,17 @@ async fn main() {
 
     let openai = openai::Client::from_env();
     let model = openai.completion_model(&opt.model);
-    let node_service = LineraNodeService::new(opt.node_service_url.parse().unwrap()).unwrap();
+    let node_service =
+        LineraNodeService::new(opt.node_service_url.parse().unwrap(), opt.model.clone()).unwrap();
 
-    let graphql_def = node_service.get_graphql_definition().await.unwrap();
+    let system_graphql_def = node_service.system_graphql_definition().await.unwrap();
     let graphql_context = format!(
         "This is the GraphQL schema for interfacing with the Linera service: {}",
-        graphql_def
+        system_graphql_def
     );
 
     // Configure the agent
-    let agent = AgentBuilder::new(model)
+    let agent = AgentBuilder::new(model.clone())
         .preamble(PREAMBLE)
         .context(LINERA_CONTEXT)
         .context(&graphql_context)
@@ -167,13 +169,25 @@ async fn main() {
     chat(agent).await;
 }
 
-#[derive(Deserialize)]
-struct NodeServiceArgs {
-    input: String,
+#[derive(Debug, Deserialize, JsonSchema)]
+struct LineraNodeServiceArgs {
+    input: QueryType,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+enum QueryType {
+    QuerySystem {
+        query: String,
+    },
+    QueryApplication {
+        chain_id: String,
+        application_id: String,
+        query: String,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
-struct NodeServiceOutput {
+struct LineraNodeServiceOutput {
     data: serde_json::Value,
     errors: Option<Vec<serde_json::Value>>,
 }
@@ -181,20 +195,30 @@ struct NodeServiceOutput {
 struct LineraNodeService {
     url: Url,
     client: Client,
+    model_name: String,
+    ensemble_tx: tokio::sync::mpsc::Sender<EnsembleQuery>,
 }
 
 impl LineraNodeService {
-    fn new(url: Url) -> Result<Self> {
+    fn new(url: Url, model_name: String) -> Result<Self> {
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        tokio::spawn(run_ensemble(rx));
         Ok(Self {
             url,
             client: Client::new(),
+            model_name,
+            ensemble_tx: tx,
         })
     }
 
-    async fn get_graphql_definition(&self) -> Result<String> {
+    async fn system_graphql_definition(&self) -> Result<String> {
+        self.get_graphql_definition(self.url.clone()).await
+    }
+
+    async fn get_graphql_definition(&self, url: Url) -> Result<String> {
         let response = self
             .client
-            .post(self.url.clone())
+            .post(url)
             .json(&json!({
                 "operationName": "IntrospectionQuery",
                 "query": INTROSPECTION_QUERY
@@ -208,31 +232,168 @@ impl LineraNodeService {
 impl Tool for LineraNodeService {
     const NAME: &'static str = "Linera";
     type Error = reqwest::Error;
-    type Args = NodeServiceArgs; // GraphQL
-    type Output = NodeServiceOutput; // More GraphQL
+    type Args = LineraNodeServiceArgs;
+    type Output = LineraNodeServiceOutput;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: "Linera".to_string(),
             description: "Interact with a Linera wallet via GraphQL".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "input": {
-                        "type": "string",
-                        "description": "The GraphQL query to use. This *must* be valid GraphQL and not JSON. Do not escape quotes."
-                    }
-                }
-            }),
+            parameters: serde_json::to_value(schema_for!(LineraNodeServiceArgs)).unwrap(),
         }
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        println!("Req: {}", args.input);
+        eprintln!("Args: {:?}", args);
+        match args.input {
+            QueryType::QuerySystem { query } => {
+                let response = self
+                    .client
+                    .post(self.url.clone())
+                    .json(&json!({ "query": query }))
+                    .send()
+                    .await?;
+                response.json().await
+            }
+            QueryType::QueryApplication {
+                chain_id,
+                application_id,
+                query,
+            } => {
+                let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+                let ensemble_query = EnsembleQuery {
+                    url: self.url.clone(),
+                    chain_id,
+                    application_id,
+                    query,
+                    model_name: self.model_name.clone(),
+                    graphql_def: self.get_graphql_definition(self.url.clone()).await.unwrap(),
+                    sender: tx,
+                };
+                self.ensemble_tx.send(ensemble_query).await.unwrap();
+                let response = rx.await.unwrap();
+                Ok(LineraNodeServiceOutput {
+                    data: json!(response),
+                    errors: None,
+                })
+            }
+        }
+    }
+}
+
+struct EnsembleQuery {
+    url: Url,
+    chain_id: String,
+    application_id: String,
+    query: String,
+    model_name: String,
+    graphql_def: String,
+    sender: tokio::sync::oneshot::Sender<String>,
+}
+
+async fn run_ensemble(mut rx: tokio::sync::mpsc::Receiver<EnsembleQuery>) {
+    while let Some(ensemble_query) = rx.recv().await {
+        let linera_app_service = LineraApplicationService::new(
+            ensemble_query.url,
+            ensemble_query.chain_id,
+            ensemble_query.application_id,
+            Client::new(),
+        );
+        let openai = openai::Client::from_env();
+        let model = openai.completion_model(&ensemble_query.model_name);
+        let agent = AgentBuilder::new(model)
+            .preamble(PREAMBLE)
+            .context(LINERA_CONTEXT)
+            .context(&ensemble_query.graphql_def)
+            .tool(linera_app_service)
+            .build();
+        let mut backoff = tokio::time::Duration::from_secs(2);
+        let mut attempts = 0;
+        let response = loop {
+            match agent.chat(ensemble_query.query.as_str(), vec![]).await {
+                Ok(response) => break response,
+                Err(e) => {
+                    attempts += 1;
+                    eprintln!(
+                        "Error occurred: {}. Retrying in {} seconds...",
+                        e,
+                        backoff.as_secs()
+                    );
+                    if attempts >= 5 {
+                        panic!("Failed after 5 attempts");
+                    }
+                    tokio::time::sleep(backoff).await;
+                    backoff *= 2;
+                }
+            }
+        };
+
+        if let Err(e) = ensemble_query.sender.send(response) {
+            eprintln!("Error sending response from ensemble: {}", e);
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct LineraApplicationServiceArgs {
+    query: String,
+}
+
+struct LineraApplicationService {
+    name: String,
+    url: Url,
+    client: Client,
+}
+
+impl LineraApplicationService {
+    fn new(node_url: Url, chain_id: String, application_id: String, client: Client) -> Self {
+        let name = format!("Application {} Tool", application_id);
+        let url = node_url
+            .join("chains")
+            .unwrap()
+            .join(&chain_id)
+            .unwrap()
+            .join("applications")
+            .unwrap()
+            .join(&application_id)
+            .unwrap();
+        Self { name, url, client }
+    }
+}
+
+impl Tool for LineraApplicationService {
+    const NAME: &'static str = "Linera Application Service";
+    type Error = reqwest::Error;
+    type Args = LineraApplicationServiceArgs; // GraphQL
+    type Output = LineraNodeServiceOutput;
+
+    fn definition(
+        &self,
+        _prompt: String,
+    ) -> impl std::future::Future<Output = ToolDefinition> + Send + Sync {
+        async move {
+            ToolDefinition {
+                name: Self::NAME.to_string(),
+                description: "Interact with Linera applications.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The query to send to the application. This *must* be valid GraphQL and not JSON. Do not escape quotes."
+                        }
+                    }
+                }),
+            }
+        }
+    }
+
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+        let query = args.query;
         let response = self
             .client
             .post(self.url.clone())
-            .json(&json!({ "query": args.input }))
+            .json(&json!({ "query": query }))
             .send()
             .await?;
         response.json().await
