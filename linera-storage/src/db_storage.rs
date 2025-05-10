@@ -871,6 +871,35 @@ where
         Ok(exists)
     }
 
+    async fn list_events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<(u32, Vec<u8>)>, ViewError> {
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(stream_id).unwrap());
+        let mut keys = Vec::new();
+        let mut indices = Vec::new();
+        for short_key in self.store.find_keys_by_prefix(&prefix).await?.iterator() {
+            let short_key = short_key?;
+            let index = bcs::from_bytes::<u32>(short_key)?;
+            if index >= start_index {
+                let mut key = prefix.clone();
+                key.extend(short_key);
+                keys.push(key);
+                indices.push(index);
+            }
+        }
+        let values = self.store.read_multi_values_bytes(keys).await?;
+        let mut returned_values = Vec::new();
+        for (index, value) in indices.into_iter().zip(values) {
+            returned_values.push((index, value.unwrap()));
+        }
+        Ok(returned_values)
+    }
+
     async fn write_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
@@ -1006,38 +1035,6 @@ where
             blob_ids.push(blob_id);
         }
         Ok(blob_ids)
-    }
-
-    /// Lists the events from the storage
-    pub async fn list_events_from_index(
-        config: &Store::Config,
-        namespace: &str,
-        chain_id: &ChainId,
-        stream_id: &StreamId,
-        start_index: u32,
-    ) -> Result<Vec<(u32, Vec<u8>)>, ViewError> {
-        let store = Store::maybe_create_and_connect(config, namespace).await?;
-        let mut prefix = vec![INDEX_EVENT_ID];
-        prefix.extend(bcs::to_bytes(chain_id).unwrap());
-        prefix.extend(bcs::to_bytes(stream_id).unwrap());
-        let mut keys = Vec::new();
-        let mut indices = Vec::new();
-        for short_key in store.find_keys_by_prefix(&prefix).await?.iterator() {
-            let short_key = short_key?;
-            let index = bcs::from_bytes::<u32>(short_key)?;
-            if index >= start_index {
-                let mut key = prefix.clone();
-                key.extend(short_key);
-                keys.push(key);
-                indices.push(index);
-            }
-        }
-        let values = store.read_multi_values_bytes(keys).await?;
-        let mut returned_values = Vec::new();
-        for (index, value) in indices.into_iter().zip(values) {
-            returned_values.push((index, value.unwrap()));
-        }
-        Ok(returned_values)
     }
 }
 
