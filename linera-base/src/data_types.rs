@@ -935,6 +935,19 @@ impl ApplicationPermissions {
         }
     }
 
+    /// Creates new `ApplicationPermissions` where the given applications are the only ones
+    /// whose operations are allowed and mandatory, and they can also close the chain.
+    pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
+        Self {
+            execute_operations: Some(app_ids.clone()),
+            mandatory_applications: app_ids.clone(),
+            close_chain: app_ids.clone(),
+            change_application_permissions: app_ids.clone(),
+            call_service_as_oracle: Some(app_ids.clone()),
+            make_http_requests: Some(app_ids),
+        }
+    }
+
     /// Returns whether operations with the given application ID are allowed on this chain.
     pub fn can_execute_operations(&self, app_id: &GenericApplicationId) -> bool {
         match (app_id, &self.execute_operations) {

@@ -963,10 +963,6 @@ A collection of prices and limits associated with block execution.
 """
 input ResourceControlPolicy {
 	"""
-	The base price for creating a new block.
-	"""
-	block: Amount!
-	"""
 	The price per unit of fuel (aka gas) for Wasm execution.
 	"""
 	wasmFuelUnit: Amount!

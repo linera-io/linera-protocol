@@ -152,6 +152,8 @@ pub enum ChainError {
     OwnerWeightError(#[from] WeightedError),
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
     ClosedChain,
+    #[error("Empty blocks are not allowed")]
+    EmptyBlock,
     #[error("All operations on this chain must be from one of the following applications: {0:?}")]
     AuthorizedApplications(Vec<ApplicationId>),
     #[error("Missing operations or messages from mandatory applications: {0:?}")]

@@ -287,8 +287,6 @@ pub enum ResourceControlPolicyConfig {
     #[cfg(with_testing)]
     OnlyFuel,
     #[cfg(with_testing)]
-    FuelAndBlock,
-    #[cfg(with_testing)]
     AllCategories,
 }
 
@@ -299,8 +297,6 @@ impl ResourceControlPolicyConfig {
             ResourceControlPolicyConfig::Testnet => ResourceControlPolicy::testnet(),
             #[cfg(with_testing)]
             ResourceControlPolicyConfig::OnlyFuel => ResourceControlPolicy::only_fuel(),
-            #[cfg(with_testing)]
-            ResourceControlPolicyConfig::FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
             #[cfg(with_testing)]
             ResourceControlPolicyConfig::AllCategories => ResourceControlPolicy::all_categories(),
         }

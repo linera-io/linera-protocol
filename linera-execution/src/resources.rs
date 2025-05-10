@@ -108,9 +108,11 @@ where
     /// and `other` to `self`.
     pub fn merge_balance(&mut self, initial: Amount, other: Amount) -> Result<(), ExecutionError> {
         if other <= initial {
+            let sub_amount = initial.try_sub(other).expect("other <= initial");
             self.account
                 .try_sub_assign(initial.try_sub(other).expect("other <= initial"))
-                .map_err(|_| ExecutionError::InsufficientFundingForFees {
+                .map_err(|_| ExecutionError::FeesExceedFunding {
+                    fees: sub_amount,
                     balance: self.balance().unwrap_or(Amount::MAX),
                 })?;
         } else {
@@ -122,11 +124,12 @@ where
 
     /// Subtracts an amount from a balance and reports an error if that is impossible.
     fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
-        self.account.try_sub_assign(fees).map_err(|_| {
-            ExecutionError::InsufficientFundingForFees {
+        self.account
+            .try_sub_assign(fees)
+            .map_err(|_| ExecutionError::FeesExceedFunding {
+                fees,
                 balance: self.balance().unwrap_or(Amount::MAX),
-            }
-        })?;
+            })?;
         Ok(())
     }
 
@@ -154,7 +157,7 @@ where
             .blocks
             .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
-        self.update_balance(self.policy.block)
+        Ok(())
     }
 
     /// Tracks the execution of an operation in block.
