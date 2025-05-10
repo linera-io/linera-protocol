@@ -1032,14 +1032,6 @@ pub enum WalletCommand {
         #[arg(long = "faucet")]
         faucet: Option<String>,
 
-        /// Request a new chain from the faucet, credited with tokens. This requires `--faucet`.
-        #[arg(long)]
-        with_new_chain: bool,
-
-        /// Other chains to follow.
-        #[arg(long, num_args(0..))]
-        with_other_chains: Vec<ChainId>,
-
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
         #[arg(long)]

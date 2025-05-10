@@ -267,52 +267,20 @@ impl ClientWrapper {
         Ok(())
     }
 
-    /// Runs `linera wallet init`.
-    pub async fn wallet_init(
-        &self,
-        chain_ids: &[ChainId],
-        faucet: FaucetOption<'_>,
-    ) -> Result<Option<(ClaimOutcome, AccountOwner)>> {
+    /// Runs `linera wallet init`. The genesis config is read from `genesis.json`, or from the
+    /// faucet if provided.
+    pub async fn wallet_init(&self, faucet: Option<&'_ Faucet>) -> Result<()> {
         let mut command = self.command().await?;
         command.args(["wallet", "init"]);
         match faucet {
-            FaucetOption::None => {
-                command.args(["--genesis", "genesis.json"]);
-            }
-            FaucetOption::GenesisOnly(faucet) => {
-                command.args(["--faucet", faucet.url()]);
-            }
-            FaucetOption::NewChain(faucet) => {
-                command.args(["--with-new-chain", "--faucet", faucet.url()]);
-            }
-        }
+            None => command.args(["--genesis", "genesis.json"]),
+            Some(faucet) => command.args(["--faucet", faucet.url()]),
+        };
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
         }
-        if !chain_ids.is_empty() {
-            let ids = chain_ids.iter().map(ChainId::to_string);
-            command.arg("--with-other-chains").args(ids);
-        }
-        let stdout = command.spawn_and_wait_for_stdout().await?;
-        if matches!(faucet, FaucetOption::NewChain(_)) {
-            let mut lines = stdout.split_whitespace();
-            let chain_id_str = lines.next().context("missing chain ID")?;
-            let certificate_hash_str = lines.next().context("missing certificate hash")?;
-            let outcome = ClaimOutcome {
-                chain_id: chain_id_str.parse().context("invalid chain ID")?,
-                certificate_hash: certificate_hash_str
-                    .parse()
-                    .context("invalid certificate hash")?,
-            };
-            let owner = lines
-                .next()
-                .context("missing chain owner")?
-                .parse()
-                .context("invalid chain owner")?;
-            Ok(Some((outcome, owner)))
-        } else {
-            Ok(None)
-        }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
     }
 
     /// Runs `linera wallet request-chain`.
@@ -1064,14 +1032,6 @@ impl Drop for ClientWrapper {
             }
         }
     }
-}
-
-/// Whether `wallet_init` should use a faucet.
-#[derive(Clone, Copy, Debug)]
-pub enum FaucetOption<'a> {
-    None,
-    GenesisOnly(&'a Faucet),
-    NewChain(&'a Faucet),
 }
 
 #[cfg(with_testing)]
