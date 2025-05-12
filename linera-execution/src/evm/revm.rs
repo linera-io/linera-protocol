@@ -6,7 +6,6 @@
 use core::ops::Range;
 use std::{convert::TryFrom, sync::Arc};
 
-use alloy::primitives::Address;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
@@ -22,7 +21,7 @@ use revm::{
 use revm_interpreter::{CallInputs, CallOutcome, Gas, InstructionResult, InterpreterResult};
 use revm_precompile::PrecompileResult;
 use revm_primitives::{
-    address, EvmState, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput,
+    address, Address, EvmState, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput,
     SuccessReason, TxKind,
 };
 #[cfg(with_metrics)]
@@ -35,7 +34,7 @@ use {
 };
 
 use crate::{
-    evm::database::{DatabaseRuntime, StorageStats},
+    evm::database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
     ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime, ExecutionError,
     ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
     UserContractModule, UserService, UserServiceInstance, UserServiceModule,
@@ -736,12 +735,8 @@ where
     /// Initializes the contract.
     fn initialize_contract(&mut self) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
-        let argument = {
-            let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-            runtime.application_parameters()?
-        };
-        let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
-        vec_init.extend_from_slice(&argument);
+        let constructor_argument = self.db.constructor_argument()?;
+        vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(Choice::Create, &vec_init)?;
         self.write_logs(result.logs, "deploy")
     }
@@ -761,11 +756,11 @@ where
         let mut inspector = CallInterceptorContract {
             db: self.db.clone(),
         };
-        let block_env = self.db.get_block_env()?;
+        let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-            runtime.remaining_fuel(VmRuntime::Evm)
-        }?;
+            runtime.remaining_fuel(VmRuntime::Evm)?
+        };
         let result = {
             let mut evm: Evm<'_, _, _> = Evm::builder()
                 .with_ref_db(&mut self.db)
@@ -882,11 +877,8 @@ where
         if !self.db.is_initialized()? {
             let changes = {
                 let mut vec_init = self.module.clone();
-                let argument = {
-                    let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
-                    runtime.application_parameters()?
-                };
-                vec_init.extend_from_slice(&argument);
+                let constructor_argument = self.db.constructor_argument()?;
+                vec_init.extend_from_slice(&constructor_argument);
                 let kind = TxKind::Create;
                 let (_, changes) = self.transact(kind, &vec_init)?;
                 changes
@@ -911,12 +903,7 @@ where
             db: self.db.clone(),
         };
 
-        let block_env = self.db.get_block_env()?;
-        // The runtime costs are not available in service operations.
-        // We need to set a limit to gas usage in order to avoid blocking
-        // the validator.
-        // We set up the limit similarly to Infura to 20 million.
-        let gas_limit = 20_000_000;
+        let block_env = self.db.get_service_block_env()?;
         let result_state = {
             let mut evm: Evm<'_, _, _> = Evm::builder()
                 .with_ref_db(&mut self.db)
@@ -925,7 +912,7 @@ where
                     tx.clear();
                     tx.transact_to = kind;
                     tx.data = tx_data;
-                    tx.gas_limit = gas_limit;
+                    tx.gas_limit = EVM_SERVICE_GAS_LIMIT;
                 })
                 .modify_block_env(|block| {
                     *block = block_env;

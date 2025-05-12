@@ -123,15 +123,6 @@ impl ProposedBlock {
         );
         Ok(())
     }
-
-    /// Returns the message ID belonging to the `index`th outgoing message in this block.
-    pub fn message_id(&self, index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index,
-        }
-    }
 }
 
 /// A transaction in a block: incoming messages or an operation.
@@ -213,6 +204,21 @@ pub struct MessageBundle {
     pub messages: Vec<PostedMessage>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+/// An earlier proposal that is being retried.
+pub enum OriginalProposal {
+    /// A proposal in the fast round.
+    Fast {
+        public_key: AccountPublicKey,
+        signature: AccountSignature,
+    },
+    /// A validated block certificate from an earlier round.
+    Regular {
+        certificate: LiteCertificate<'static>,
+    },
+}
+
 /// An authenticated proposal for a new block.
 // TODO(#456): the signature of the block owner is currently lost but it would be useful
 // to have it for auditing purposes.
@@ -223,7 +229,7 @@ pub struct BlockProposal {
     pub public_key: AccountPublicKey,
     pub signature: AccountSignature,
     #[debug(skip_if = Option::is_none)]
-    pub validated_block_certificate: Option<LiteCertificate<'static>>,
+    pub original_proposal: Option<OriginalProposal>,
 }
 
 /// A message together with kind, authentication and grant information.
@@ -511,17 +517,42 @@ impl BlockProposal {
             content,
             public_key,
             signature,
-            validated_block_certificate: None,
+            original_proposal: None,
         })
     }
 
-    pub async fn new_retry(
+    pub async fn new_retry_fast(
+        owner: AccountOwner,
+        round: Round,
+        old_proposal: BlockProposal,
+        signer: &(impl Signer + ?Sized),
+    ) -> Result<Self, Box<dyn Error>> {
+        let content = ProposalContent {
+            round,
+            block: old_proposal.content.block,
+            outcome: None,
+        };
+        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
+        let public_key = signer.get_public_key(&owner).await?;
+
+        Ok(Self {
+            content,
+            public_key,
+            signature,
+            original_proposal: Some(OriginalProposal::Fast {
+                public_key: old_proposal.public_key,
+                signature: old_proposal.signature,
+            }),
+        })
+    }
+
+    pub async fn new_retry_regular(
         owner: AccountOwner,
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
         signer: &(impl Signer + ?Sized),
     ) -> Result<Self, Box<dyn Error>> {
-        let lite_cert = validated_block_certificate.lite_certificate().cloned();
+        let certificate = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
         let (block, outcome) = block.into_proposal();
         let content = ProposalContent {
@@ -536,7 +567,7 @@ impl BlockProposal {
             content,
             public_key,
             signature,
-            validated_block_certificate: Some(lite_cert),
+            original_proposal: Some(OriginalProposal::Regular { certificate }),
         })
     }
 
@@ -567,17 +598,19 @@ impl BlockProposal {
     /// Checks that the public key matches the owner and that the optional certificate matches
     /// the outcome.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
-        match (&self.validated_block_certificate, &self.content.outcome) {
-            (None, None) => {}
-            (None, Some(_)) | (Some(_), None) => {
+        match (&self.original_proposal, &self.content.outcome) {
+            (None, None) | (Some(OriginalProposal::Fast { .. }), None) => {}
+            (None, Some(_))
+            | (Some(OriginalProposal::Fast { .. }), Some(_))
+            | (Some(OriginalProposal::Regular { .. }), None) => {
                 return Err("Must contain a validation certificate if and only if \
                      it contains the execution outcome from a previous round");
             }
-            (Some(lite_certificate), Some(outcome)) => {
+            (Some(OriginalProposal::Regular { certificate }), Some(outcome)) => {
                 let block = outcome.clone().with(self.content.block.clone());
                 let value = ValidatedBlock::new(block);
                 ensure!(
-                    lite_certificate.check_value(&value),
+                    certificate.check_value(&value),
                     "Lite certificate must match the given block and execution outcome"
                 );
             }

@@ -13,7 +13,9 @@ use linera_base::{
     identifiers::{AccountOwner, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposalContent},
+    data_types::{
+        BlockExecutionOutcome, BlockProposal, MessageBundle, OriginalProposal, ProposalContent,
+    },
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
@@ -130,7 +132,7 @@ where
                     outcome: _,
                 },
             public_key,
-            validated_block_certificate,
+            original_proposal,
             signature: _,
         } = proposal;
 
@@ -146,11 +148,12 @@ where
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
                 chain.pending_proposed_blobs.clear();
             }
+            let validated = matches!(original_proposal, Some(OriginalProposal::Regular { .. }));
             chain
                 .pending_proposed_blobs
                 .try_load_entry_mut(&owner)
                 .await?
-                .update(*round, validated_block_certificate.is_some(), maybe_blobs)
+                .update(*round, validated, maybe_blobs)
                 .await?;
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));

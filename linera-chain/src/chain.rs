@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
@@ -33,6 +32,7 @@ use linera_views::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, CryptoHashView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
@@ -154,7 +154,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        exponential_bucket_latencies(10.0),
+        exponential_bucket_latencies(500.0),
     )
 });
 
@@ -182,7 +182,8 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
-#[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimestampedBundleInInbox {
     /// The origin and cursor of the bundle.
     pub entry: BundleInInbox,
@@ -191,9 +192,8 @@ pub struct TimestampedBundleInInbox {
 }
 
 /// An origin and cursor of a unskippable bundle that is no longer in our inbox.
-#[derive(
-    Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, async_graphql::SimpleObject,
-)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BundleInInbox {
     /// The origin from which we received the bundle.
     pub origin: ChainId,
@@ -215,8 +215,12 @@ impl BundleInInbox {
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 
 /// A view accessing the state of a chain.
-#[derive(Debug, RootView, ClonableView, SimpleObject)]
-#[graphql(cache_control(no_cache))]
+#[cfg_attr(
+    with_graphql,
+    derive(async_graphql::SimpleObject),
+    graphql(cache_control(no_cache))
+)]
+#[derive(Debug, RootView, ClonableView)]
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -262,7 +266,8 @@ where
 }
 
 /// Block-chaining state.
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ChainTipState {
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<CryptoHash>,
@@ -468,7 +473,7 @@ where
     pub async fn validate_incoming_bundles(&self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let pairs = self.inboxes.try_load_all_entries().await?;
-        let max_stream_queries = self.context().max_stream_queries();
+        let max_stream_queries = self.context().store().max_stream_queries();
         let stream = stream::iter(pairs)
             .map(|(origin, inbox)| async move {
                 if let Some(bundle) = inbox.removed_bundles.front().await? {

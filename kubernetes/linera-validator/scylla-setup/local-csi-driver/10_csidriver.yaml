@@ -1,0 +1,7 @@
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: local.csi.scylladb.com
+spec:
+  attachRequired: false
+  storageCapacity: true

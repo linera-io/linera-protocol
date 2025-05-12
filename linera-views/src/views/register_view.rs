@@ -4,7 +4,6 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -19,6 +18,7 @@ use crate::{
     common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -42,7 +42,6 @@ pub struct RegisterView<C, T> {
     update: Option<Box<T>>,
 }
 
-#[async_trait]
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
@@ -56,7 +55,7 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_key()])
+        Ok(vec![context.base_key().bytes.clone()])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -73,7 +72,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -92,11 +91,11 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
-            batch.delete_key(self.context.base_key());
+            batch.delete_key(self.context.base_key().bytes.clone());
             self.stored_value = Box::default();
             delete_view = true;
         } else if let Some(value) = self.update.take() {
-            let key = self.context.base_key();
+            let key = self.context.base_key().bytes.clone();
             batch.put_key_value(key, &value)?;
             self.stored_value = value;
         }
@@ -211,7 +210,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T> HashableView<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,

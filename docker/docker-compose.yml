@@ -17,7 +17,7 @@ services:
     container_name: proxy
     ports:
       - "19100:19100"
-    command: [ "./compose-proxy-entrypoint.sh" ]
+    command: [ "./compose-proxy-entrypoint.sh", "1" ]
     volumes:
       - .:/config
     labels:
@@ -30,7 +30,7 @@ services:
     image: "${LINERA_IMAGE:-linera}"
     deploy:
       replicas: 4
-    command: [ "./compose-server-entrypoint.sh" ]
+    command: [ "./compose-server-entrypoint.sh", "scylladb:tcp:scylla:9042", "1" ]
     volumes:
       - .:/config
     labels:
@@ -42,7 +42,7 @@ services:
   shard-init:
     image: "${LINERA_IMAGE:-linera}"
     container_name: shard-init
-    command: [ "./compose-server-init.sh" ]
+    command: [ "./compose-server-init.sh", "scylladb:tcp:scylla:9042", "1" ]
     volumes:
       - .:/config
     depends_on:

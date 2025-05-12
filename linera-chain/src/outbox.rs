@@ -47,7 +47,8 @@ const BLOCK_HEIGHT_BUCKET_SIZE: usize = 1000;
 ///   we just send the certified blocks over and let the receivers figure out what were the
 ///   messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (i.e. dequeued).
-#[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, ClonableView, View)]
 pub struct OutboxStateView<C>
 where
     C: Context + Send + Sync + 'static,

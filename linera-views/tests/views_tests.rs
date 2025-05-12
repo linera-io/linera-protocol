@@ -4,7 +4,6 @@
 use std::collections::BTreeSet;
 
 use anyhow::Result;
-use async_trait::async_trait;
 #[cfg(with_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
@@ -30,7 +29,7 @@ use linera_views::{
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    store::TestKeyValueStore as _,
+    store::{TestKeyValueStore as _, WritableKeyValueStore as _},
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         span_random_reordering_put_delete,
@@ -58,9 +57,9 @@ pub struct StateView<C> {
     pub key_value_store: KeyValueStoreView<C>,
 }
 
-#[async_trait]
+#[allow(async_fn_in_trait)]
 pub trait StateStorage {
-    type Context: Context<Extra = usize> + Clone + Send + Sync + 'static;
+    type Context: Context<Extra = usize, Error: Send + Sync> + Clone + Send + Sync + 'static;
 
     async fn new() -> Self;
 
@@ -72,7 +71,6 @@ pub struct MemoryTestStorage {
     store: MemoryStore,
 }
 
-#[async_trait]
 impl StateStorage for MemoryTestStorage {
     type Context = MemoryContext<usize>;
 
@@ -98,7 +96,6 @@ pub struct KeyValueStoreTestStorage {
     store: ViewContainer<MemoryContext<()>>,
 }
 
-#[async_trait]
 impl StateStorage for KeyValueStoreTestStorage {
     type Context = ViewContext<usize, ViewContainer<MemoryContext<()>>>;
 
@@ -125,7 +122,6 @@ pub struct LruMemoryStorage {
     store: LruCachingStore<MemoryStore>,
 }
 
-#[async_trait]
 impl StateStorage for LruMemoryStorage {
     type Context = ViewContext<usize, LruCachingMemoryStore>;
 
@@ -154,7 +150,6 @@ pub struct RocksDbTestStorage {
 }
 
 #[cfg(with_rocksdb)]
-#[async_trait]
 impl StateStorage for RocksDbTestStorage {
     type Context = ViewContext<usize, RocksDbStore>;
 
@@ -183,7 +178,6 @@ pub struct ScyllaDbTestStorage {
 }
 
 #[cfg(with_scylladb)]
-#[async_trait]
 impl StateStorage for ScyllaDbTestStorage {
     type Context = ViewContext<usize, ScyllaDbStore>;
 
@@ -212,7 +206,6 @@ pub struct DynamoDbTestStorage {
 }
 
 #[cfg(with_dynamodb)]
-#[async_trait]
 impl StateStorage for DynamoDbTestStorage {
     type Context = ViewContext<usize, DynamoDbStore>;
 
@@ -831,14 +824,14 @@ async fn test_collection_removal() -> Result<()> {
     entry.set(1);
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
     collection.remove_entry(&1)?;
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     // Check that the entry was removed.
     let collection = CollectionViewType::load(context.clone()).await?;
@@ -862,7 +855,7 @@ async fn test_removal_api_first_second_condition(
     entry.set(100);
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     // Reload the collection view and remove the entry, but don't commit yet
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
@@ -883,7 +876,7 @@ async fn test_removal_api_first_second_condition(
     // We commit
     let mut batch = Batch::new();
     collection.flush(&mut batch)?;
-    collection.context().write_batch(batch).await?;
+    collection.context().store().write_batch(batch).await?;
 
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
     let expected_val = if second_condition {

@@ -45,7 +45,6 @@ alloy-primitives = { version = "1.0.0", default-features = false, features = [
     "serde",
     "k256",
 ] }
-alloy-signer = { version = "0.9.2", default-features = false }
 alloy-sol-types = "1.0.0"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
@@ -150,11 +149,6 @@ revm-primitives = "15.2.0"
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
 scylla = "0.15.1"
-secp256k1 = { version = "0.30.0", default-features = false, features = [
-    "alloc",
-    "rand",
-    "serde",
-] }
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
 serde-name = "0.2.1"
@@ -166,7 +160,6 @@ serde_with = { version = "3", default-features = false, features = [
     "alloc",
     "macros",
 ] }
-serde_yaml = "0.8.26"
 sha3 = "0.10.8"
 similar-asserts = "1.5.0"
 static_assertions = "1.1.0"
@@ -204,7 +197,6 @@ url = "2.4"
 wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.42"
-wasm-encoder = "0.24.1"
 wasm-instrument = { package = "linera-wasm-instrument", version = "0.4.0-linera.1" }
 wasm_thread = "0.3.0"
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.7", default-features = false }
@@ -213,7 +205,6 @@ wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", ve
     "unwind",
     "avx",
 ] }
-wasmparser = "0.101.1"
 wasmtime = { version = "25.0.0", default-features = false, features = [
     "cranelift",
     "runtime",
@@ -280,9 +271,6 @@ max_combination_size = 1
 [profile.dev.package.linera-wasmer]
 opt-level = 3
 
-[profile.dev.package.wasmparser]
-opt-level = 3
-
 [profile.dev.package.wasmtime]
 opt-level = 3
 
@@ -294,6 +282,11 @@ branch = "no-uuid-wasm-bindgen"
 [patch.crates-io.wasm_thread]
 git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
+
+[patch.crates-io]
+async-graphql = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
+async-graphql-axum = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
+async-graphql-value = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"

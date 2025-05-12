@@ -5,7 +5,6 @@ use std::collections::{vec_deque::IterMut, VecDeque};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -20,6 +19,7 @@ use crate::{
     common::{from_bytes_option, from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -141,7 +141,6 @@ pub struct BucketQueueView<C, T, const N: usize> {
     delete_storage_first: bool,
 }
 
-#[async_trait]
 impl<C, T, const N: usize> View<C> for BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
@@ -155,8 +154,8 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        let key1 = context.base_tag(KeyTag::Front as u8);
-        let key2 = context.base_tag(KeyTag::Store as u8);
+        let key1 = context.base_key().base_tag(KeyTag::Front as u8);
+        let key2 = context.base_key().base_tag(KeyTag::Store as u8);
         Ok(vec![key1, key2])
     }
 
@@ -191,7 +190,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -219,12 +218,12 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
-            let key_prefix = self.context.base_key();
+            let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
             delete_view = true;
         }
         if self.stored_count() == 0 {
-            let key_prefix = self.context.base_key();
+            let key_prefix = self.context.base_key().bytes.clone();
             batch.delete_key_prefix(key_prefix);
             self.stored_data.clear();
             self.stored_position = 0;
@@ -280,7 +279,7 @@ where
         }
         if !self.delete_storage_first || !self.stored_data.is_empty() {
             let stored_indices = stored_indices(&self.stored_data, self.stored_position);
-            let key = self.context.base_tag(KeyTag::Store as u8);
+            let key = self.context.base_key().base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &stored_indices)?;
         }
         self.delete_storage_first = false;
@@ -320,9 +319,11 @@ where
     /// Gets the key corresponding to the index
     fn get_index_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
         Ok(if index == 0 {
-            self.context.base_tag(KeyTag::Front as u8)
+            self.context.base_key().base_tag(KeyTag::Front as u8)
         } else {
-            self.context.derive_tag_key(KeyTag::Index as u8, &index)?
+            self.context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?
         })
     }
 
@@ -462,7 +463,7 @@ where
                     let index = *index;
                     if !bucket.is_loaded() {
                         let key = self.get_index_key(index)?;
-                        let value = self.context.read_value_bytes(&key).await?;
+                        let value = self.context.store().read_value_bytes(&key).await?;
                         let value = value.ok_or(ViewError::MissingEntries)?;
                         let data = bcs::from_bytes(&value)?;
                         self.stored_data[i_block].1 = Bucket::Loaded { data };
@@ -535,7 +536,7 @@ where
         };
         if !bucket.is_loaded() {
             let key = self.get_index_key(*index)?;
-            let value = self.context.read_value_bytes(&key).await?;
+            let value = self.context.store().read_value_bytes(&key).await?;
             let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
             let data = bcs::from_bytes::<Vec<T>>(value)?;
             self.stored_data.back_mut().unwrap().1 = Bucket::Loaded { data };
@@ -573,7 +574,7 @@ where
                 count_remain -= size;
                 position = 0;
             }
-            let values = self.context.read_multi_values_bytes(keys).await?;
+            let values = self.context.store().read_multi_values_bytes(keys).await?;
             position = pair.1;
             let mut value_pos = 0;
             count_remain = count;
@@ -698,7 +699,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T, const N: usize> HashableView<C> for BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
@@ -725,6 +725,7 @@ where
 pub type HashedBucketQueueView<C, T, const N: usize> =
     WrappedHashableContainerView<C, BucketQueueView<C, T, N>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

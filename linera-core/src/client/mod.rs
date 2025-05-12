@@ -2751,12 +2751,12 @@ impl<Env: Environment> ChainClient<Env> {
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
                 LockingBlock::Regular(cert) => {
-                    BlockProposal::new_retry(owner, round, cert, self.signer())
+                    BlockProposal::new_retry_regular(owner, round, cert, self.signer())
                         .await
                         .map_err(ChainClientError::signer_failure)?
                 }
                 LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_initial(owner, round, proposal.content.block, self.signer())
+                    BlockProposal::new_retry_fast(owner, round, proposal, self.signer())
                         .await
                         .map_err(ChainClientError::signer_failure)?
                 }

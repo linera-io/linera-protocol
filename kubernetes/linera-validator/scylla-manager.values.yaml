@@ -14,7 +14,7 @@ scylla:
     tag: 5.4.3
   agentImage:
     tag: 3.2.8
-  datacenter: manager-dc
+  datacenter: validator
   racks:
   - name: manager-rack
     members: 1

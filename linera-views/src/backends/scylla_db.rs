@@ -14,7 +14,6 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use async_trait::async_trait;
 use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
@@ -598,7 +597,6 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     }
 }
 
-#[async_trait]
 impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_BATCH_SIZE: usize = MAX_BATCH_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_BATCH_TOTAL_SIZE;
@@ -811,10 +809,13 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .boxed()
             .await?;
         // Create a keyspace if it doesn't exist
-        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
-            'class' : 'SimpleStrategy', \
-            'replication_factor' : 1 \
-        }";
+        let query = format!(
+            "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = {{ \
+                'class' : 'NetworkTopologyStrategy', \
+                'replication_factor' : {} \
+            }}",
+            config.common_config.replication_factor
+        );
 
         // Execute the query
         let prepared = session.prepare(query).await?;
@@ -889,6 +890,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+            replication_factor: 1,
         };
         Ok(ScyllaDbStoreInternalConfig { uri, common_config })
     }

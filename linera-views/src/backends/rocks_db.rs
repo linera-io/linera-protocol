@@ -579,6 +579,7 @@ impl TestKeyValueStore for RocksDbStoreInternal {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
+            replication_factor: 1,
         };
         let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
         Ok(RocksDbStoreInternalConfig {

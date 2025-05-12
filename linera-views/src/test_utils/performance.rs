@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     batch::Batch,
-    store::{LocalKeyValueStore, TestKeyValueStore},
+    store::{KeyValueStore, TestKeyValueStore},
     test_utils::{add_prefix, get_random_key_values2},
 };
 
@@ -30,7 +30,7 @@ const LEN_KEY: usize = 10;
 /// The length of the values
 const LEN_VALUE: usize = 10000;
 
-async fn clear_store<S: LocalKeyValueStore>(store: &S) {
+async fn clear_store<S: KeyValueStore>(store: &S) {
     let mut batch = Batch::new();
     batch.delete_key_prefix(PREFIX.to_vec());
     store.write_batch(batch).await.unwrap();

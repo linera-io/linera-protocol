@@ -6,6 +6,8 @@ mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
@@ -2250,6 +2252,117 @@ where
     assert_eq!(
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(3)
+    );
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_re_propose_fast_block<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // Configure a chain with one regular and one super owner.
+    let mut signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
+    let owner0 = client0.public_key().await.unwrap().into();
+    let owner1 = builder.signer.generate_new().into();
+
+    let timeout_config = TimeoutConfig {
+        fast_round_duration: Some(TimeDelta::from_secs(5)),
+        ..TimeoutConfig::default()
+    };
+    let ownership = ChainOwnership {
+        super_owners: BTreeSet::from_iter([owner0]),
+        owners: BTreeMap::from_iter([(owner1, 100)]),
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config,
+    };
+    client0.change_ownership(ownership).await.unwrap();
+    let mut client1 = builder
+        .make_client(chain_id, client0.block_hash(), BlockHeight::from(1))
+        .await?;
+    client1.set_preferred_owner(owner1);
+
+    // Client 0 transfers 5 tokens from the chain account to themselves.
+    client0
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(5),
+            Account::new(chain_id, owner0),
+        )
+        .await?;
+
+    // Client 0 tries to burn 3 of their own tokens, but three validators are faulty.
+    builder
+        .set_fault_type([1, 2, 3], FaultType::OfflineWithInfo)
+        .await;
+
+    let result = client0.burn(owner0, Amount::from_tokens(3)).await;
+    assert!(result.is_err());
+    let manager = client0
+        .chain_info_with_manager_values()
+        .await
+        .unwrap()
+        .manager;
+    // Validator 0 may or may not have processed the proposal before the update was
+    // canceled due to the errors from the faulty validators. Submit it again to make sure
+    // it's there, so that client 1 can download and re-propose it later.
+    let locking = *manager.requested_locking.unwrap();
+    let LockingBlock::Fast(proposal) = locking else {
+        panic!("Unexpected locking regular block.");
+    };
+    builder
+        .node(0)
+        .handle_block_proposal(proposal)
+        .await
+        .unwrap();
+
+    // Round 0 times out.
+    clock.add(TimeDelta::from_secs(5));
+    builder.set_fault_type([0], FaultType::Offline).await;
+    builder.set_fault_type([1, 2, 3], FaultType::Honest).await;
+    client1.synchronize_from_validators().await.unwrap();
+    client1.request_leader_timeout().await.unwrap();
+
+    // Client 1 wants to burn 2 tokens. But now validators 0 and 3 is offline, so they don't learn
+    // about the proposed fast block and make their own instead.
+    builder.set_fault_type([3], FaultType::Offline).await;
+    let result = client1
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .await;
+    assert!(result.is_err());
+
+    // Finally, three validators are online and honest again. Client 1 realizes there has been a
+    // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
+    builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
+    client1.synchronize_from_validators().await.unwrap();
+    assert!(client1.pending_proposal().is_some());
+    client1
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+        .await
+        .unwrap();
+    // Round 0 needs to time out again, so client 1 is actually allowed to propose.
+    clock.add(TimeDelta::from_secs(5));
+    client1.process_pending_block().await.unwrap();
+
+    // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
+    client0.synchronize_from_validators().await.unwrap();
+    assert_eq!(
+        client0.local_balance().await.unwrap(),
+        Amount::from_tokens(1)
+    );
+    assert_eq!(
+        client0.local_owner_balance(owner0).await.unwrap(),
+        Amount::from_tokens(2)
     );
     Ok(())
 }

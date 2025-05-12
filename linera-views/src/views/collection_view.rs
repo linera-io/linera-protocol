@@ -12,7 +12,6 @@ use std::{
 };
 
 use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -25,9 +24,9 @@ use {
 use crate::{
     batch::Batch,
     common::{CustomSerialize, HasherOutput, Update},
-    context::Context,
+    context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
-    store::KeyIterable,
+    store::{KeyIterable, ReadableKeyValueStore as _},
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -83,7 +82,6 @@ enum KeyTag {
     Subview,
 }
 
-#[async_trait]
 impl<C, W> View<C> for ByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
@@ -129,7 +127,7 @@ where
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             for (index, update) in mem::take(self.updates.get_mut()) {
                 if let Update::Set(mut view) = update {
                     view.flush(batch)?;
@@ -198,11 +196,15 @@ where
     W: View<C>,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context.base_tag_index(KeyTag::Index as u8, index)
+        self.context
+            .base_key()
+            .base_tag_index(KeyTag::Index as u8, index)
     }
 
     fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context.base_tag_index(KeyTag::Subview as u8, index)
+        self.context
+            .base_key()
+            .base_tag_index(KeyTag::Subview as u8, index)
     }
 
     fn add_index(&self, batch: &mut Batch, index: &[u8]) {
@@ -299,10 +301,16 @@ where
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                if !self.delete_storage_first && self.context.contains_key(&key_index).await? {
+                let key_index = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Index as u8, short_key);
+                if !self.delete_storage_first
+                    && self.context.store().contains_key(&key_index).await?
+                {
                     let key = self
                         .context
+                        .base_key()
                         .base_tag_index(KeyTag::Subview as u8, short_key);
                     let context = self.context.clone_with_base_key(key);
                     let view = W::load(context).await?;
@@ -341,6 +349,7 @@ where
     pub fn reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         let key = self
             .context
+            .base_key()
             .base_tag_index(KeyTag::Subview as u8, short_key);
         let context = self.context.clone_with_base_key(key);
         let view = W::new(context)?;
@@ -375,8 +384,11 @@ where
                 _entry @ Update::Removed => false,
             },
             None => {
-                let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                !self.delete_storage_first && self.context.contains_key(&key_index).await?
+                let key_index = self
+                    .context
+                    .base_key()
+                    .base_tag_index(KeyTag::Index as u8, short_key);
+                !self.delete_storage_first && self.context.store().contains_key(&key_index).await?
             }
         })
     }
@@ -422,6 +434,7 @@ where
                     Update::Removed => {
                         let key = self
                             .context
+                            .base_key()
                             .base_tag_index(KeyTag::Subview as u8, short_key);
                         let context = self.context.clone_with_base_key(key);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
@@ -437,6 +450,7 @@ where
             btree_map::Entry::Vacant(entry) => {
                 let key = self
                     .context
+                    .base_key()
                     .base_tag_index(KeyTag::Subview as u8, short_key);
                 let context = self.context.clone_with_base_key(key);
                 let view = if self.delete_storage_first {
@@ -492,7 +506,13 @@ where
         let mut update = updates.next();
         if !self.delete_storage_first {
             let base = self.get_index_key(&[]);
-            for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
+            for index in self
+                .context
+                .store()
+                .find_keys_by_prefix(&base)
+                .await?
+                .iterator()
+            {
                 let index = index?;
                 loop {
                     match update {
@@ -614,7 +634,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, W> HashableView<C> for ByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
@@ -641,7 +660,10 @@ where
                     view.hash_mut().await?
                 }
                 None => {
-                    let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
+                    let key = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Subview as u8, &key);
                     let context = self.context.clone_with_base_key(key);
                     let mut view = W::load(context).await?;
                     view.hash_mut().await?
@@ -670,7 +692,10 @@ where
                     view.hash().await?
                 }
                 None => {
-                    let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
+                    let key = self
+                        .context
+                        .base_key()
+                        .base_tag_index(KeyTag::Subview as u8, &key);
                     let context = self.context.clone_with_base_key(key);
                     let view = W::load(context).await?;
                     view.hash().await?
@@ -690,7 +715,6 @@ pub struct CollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -781,7 +805,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.load_entry_mut(&short_key).await
     }
 
@@ -808,7 +832,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.load_entry_or_insert(&short_key).await
     }
 
@@ -843,7 +867,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.try_load_entry(&short_key).await
     }
 
@@ -871,7 +895,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.reset_entry_to_default(&short_key)
     }
 
@@ -898,7 +922,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
-        let short_key = C::derive_short_key(index)?;
+        let short_key = BaseKey::derive_short_key(index)?;
         self.collection.remove_entry(short_key);
         Ok(())
     }
@@ -1000,7 +1024,7 @@ where
     {
         self.collection
             .for_each_key_while(|key| {
-                let index = C::deserialize_value(key)?;
+                let index = BaseKey::deserialize_value(key)?;
                 f(index)
             })
             .await?;
@@ -1036,7 +1060,7 @@ where
     {
         self.collection
             .for_each_key(|key| {
-                let index = C::deserialize_value(key)?;
+                let index = BaseKey::deserialize_value(key)?;
                 f(index)
             })
             .await?;
@@ -1044,7 +1068,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -1070,7 +1093,6 @@ pub struct CustomCollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-#[async_trait]
 impl<C, I, W> View<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -1425,7 +1447,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, I, W> HashableView<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
@@ -1456,6 +1477,7 @@ pub type HashedCollectionView<C, I, W> =
 pub type HashedCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CustomCollectionView<C, I, W>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

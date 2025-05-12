@@ -9,16 +9,22 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use alloy::primitives::{Address, B256, U256};
+use linera_base::vm::VmRuntime;
 use linera_views::common::from_bytes_option;
 use revm::{
     db::AccountState,
     primitives::{keccak256, state::AccountInfo},
     Database, DatabaseCommit, DatabaseRef,
 };
-use revm_primitives::{address, BlobExcessGasAndPrice, BlockEnv, EvmState};
+use revm_primitives::{address, Address, BlobExcessGasAndPrice, BlockEnv, EvmState, B256, U256};
 
-use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ViewError};
+use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
+
+// The runtime costs are not available in service operations.
+// We need to set a limit to gas usage in order to avoid blocking
+// the validator.
+// We set up the limit similarly to Infura to 20 million.
+pub const EVM_SERVICE_GAS_LIMIT: u64 = 20_000_000;
 
 /// The cost of loading from storage.
 const SLOAD_COST: u64 = 2100;
@@ -330,12 +336,7 @@ where
         let result = runtime.contains_keys_wait(&promise)?;
         Ok(result[0] && result[1])
     }
-}
 
-impl<Runtime> DatabaseRuntime<Runtime>
-where
-    Runtime: BaseRuntime,
-{
     pub fn get_block_env(&self) -> Result<BlockEnv, ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         // The block height being used
@@ -345,8 +346,7 @@ where
         let beneficiary = address!("00000000000000000000000000000000000000bb");
         // The difficulty which is no longer relevant after The Merge.
         let difficulty = U256::ZERO;
-        // We do not have access to the Resources so we keep it to the maximum
-        // and the control is done elsewhere.
+        // Set up in the next section.
         let gas_limit = U256::MAX;
         // The timestamp. Both the EVM and Linera use the same UNIX epoch.
         // But the Linera epoch is in microseconds since the start and the
@@ -377,5 +377,36 @@ where
             prevrandao: Some(prevrandao),
             blob_excess_gas_and_price,
         })
+    }
+
+    pub fn constructor_argument(&self) -> Result<Vec<u8>, ExecutionError> {
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let constructor_argument = runtime.application_parameters()?;
+        Ok(serde_json::from_slice::<Vec<u8>>(&constructor_argument)?)
+    }
+}
+
+impl<Runtime> DatabaseRuntime<Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    pub fn get_contract_block_env(&self) -> Result<BlockEnv, ExecutionError> {
+        let mut block_env = self.get_block_env()?;
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        // We use the gas_limit from the runtime
+        let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
+        block_env.gas_limit = U256::from(gas_limit);
+        Ok(block_env)
+    }
+}
+
+impl<Runtime> DatabaseRuntime<Runtime>
+where
+    Runtime: ServiceRuntime,
+{
+    pub fn get_service_block_env(&self) -> Result<BlockEnv, ExecutionError> {
+        let mut block_env = self.get_block_env()?;
+        block_env.gas_limit = U256::from(EVM_SERVICE_GAS_LIMIT);
+        Ok(block_env)
     }
 }

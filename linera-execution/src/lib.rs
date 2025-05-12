@@ -10,6 +10,7 @@ pub mod committee;
 pub mod evm;
 mod execution;
 mod execution_state_actor;
+#[cfg(with_graphql)]
 mod graphql;
 mod policy;
 mod resources;
@@ -718,6 +719,9 @@ pub trait ContractRuntime: BaseRuntime {
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError>;
+
+    /// Returns the maximum gas fuel per block.
+    fn maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;
 
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;

@@ -7,7 +7,7 @@ use linera_views::{
     key_value_store_view::ViewContainer,
     memory::MemoryStore,
     random::make_deterministic_rng,
-    store::TestKeyValueStore as _,
+    store::{ReadableKeyValueStore as _, TestKeyValueStore as _, WritableKeyValueStore as _},
     test_utils::{
         big_read_multi_values, get_random_test_scenarios, run_big_write_read, run_reads,
         run_writes_from_blank, run_writes_from_state,
@@ -211,8 +211,13 @@ async fn test_big_value_read_write() {
         let mut batch = Batch::new();
         let key = vec![43, 23, 56];
         batch.put_key_value(key.clone(), &test_string).unwrap();
-        context.write_batch(batch).await.unwrap();
-        let read_string = context.read_value::<String>(&key).await.unwrap().unwrap();
+        context.store().write_batch(batch).await.unwrap();
+        let read_string = context
+            .store()
+            .read_value::<String>(&key)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(read_string, test_string);
     }
 }

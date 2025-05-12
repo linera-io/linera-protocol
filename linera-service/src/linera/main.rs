@@ -6,7 +6,7 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     env,
     ops::Deref,
     path::PathBuf,
@@ -23,11 +23,11 @@ use command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, Wa
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     bcs,
-    crypto::{CryptoHash, InMemorySigner, Signer},
+    crypto::{InMemorySigner, Signer},
     data_types::{
         ApplicationPermissions, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
-    identifiers::{AccountOwner, ChainId},
+    identifiers::AccountOwner,
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
 };
@@ -1233,48 +1233,6 @@ impl Runnable for Job {
                 );
             }
 
-            Wallet(WalletCommand::Init {
-                faucet: Some(faucet_url),
-                with_new_chain: true,
-                with_other_chains,
-                ..
-            }) => {
-                let start_time = Instant::now();
-                let public_key = signer.mutate(|s| s.generate_new()).await?;
-                let mut context = ClientContext::new(
-                    storage.clone(),
-                    options.inner.clone(),
-                    wallet,
-                    Box::new(signer.into_value()),
-                );
-                let owner: AccountOwner = public_key.into();
-                info!(
-                    "Requesting a new chain for owner {owner} using the faucet at address \
-                    {faucet_url}",
-                );
-                let faucet = cli_wrappers::Faucet::new(faucet_url);
-                let outcome = faucet.claim(&owner).await?;
-                println!("{}", outcome.chain_id);
-                println!("{}", outcome.certificate_hash);
-                println!("{}", owner);
-                context
-                    .assign_new_chain_to_key(outcome.chain_id, owner)
-                    .await?;
-                let admin_id = context.wallet().genesis_admin_chain();
-                let chains = with_other_chains
-                    .into_iter()
-                    .chain([admin_id, outcome.chain_id]);
-                Self::print_peg_certificate_hash(storage, chains, &context).await?;
-                context
-                    .wallet_mut()
-                    .mutate(|w| w.set_default_chain(outcome.chain_id))
-                    .await??;
-                info!(
-                    "Wallet initialized in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-            }
-
             Wallet(WalletCommand::RequestChain {
                 faucet: faucet_url,
                 set_default,
@@ -1322,67 +1280,6 @@ impl Runnable for Job {
                 unreachable!()
             }
         }
-        Ok(())
-    }
-}
-
-impl Job {
-    /// Prints a warning message to explain that the wallet has been initialized using data from
-    /// untrusted nodes, and gives instructions to verify that we are connected to the right
-    /// network.
-    async fn print_peg_certificate_hash<S>(
-        storage: S,
-        chain_ids: impl IntoIterator<Item = ChainId>,
-        context: &ClientContext<impl linera_core::Environment, impl Persist<Target = Wallet>>,
-    ) -> anyhow::Result<()>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-    {
-        let mut chains = HashMap::new();
-        for chain_id in chain_ids {
-            if chains.contains_key(&chain_id) {
-                continue;
-            }
-            chains.insert(chain_id, storage.load_chain(chain_id).await?);
-        }
-        // Find a chain with the latest known epoch, preferably the admin chain.
-        let (peg_chain_id, _) = chains
-            .iter()
-            .filter_map(|(chain_id, chain)| {
-                let epoch = (*chain.execution_state.system.epoch.get())?;
-                let is_admin = Some(*chain_id) == *chain.execution_state.system.admin_id.get();
-                Some((*chain_id, (epoch, is_admin)))
-            })
-            .max_by_key(|(_, epoch)| *epoch)
-            .context("no active chain found")?;
-        let peg_chain = chains.remove(&peg_chain_id).unwrap();
-        // These are the still-trusted committees. Every chain tip should be signed by one of them.
-        let committees = peg_chain.execution_state.system.committees.get();
-        for (chain_id, chain) in &chains {
-            let Some(hash) = chain.tip_state.get().block_hash else {
-                continue; // This chain was created based on the genesis config.
-            };
-            let certificate = storage.read_certificate(hash).await?;
-            let committee = committees
-                .get(&certificate.block().header.epoch)
-                .ok_or_else(|| anyhow!("tip of chain {chain_id} is outdated."))?;
-            certificate.check(committee)?;
-        }
-        // This proves that once we have verified that the peg chain's tip is a block in the real
-        // network, we can be confident that all downloaded chains are.
-        let config_hash = CryptoHash::new(context.wallet.genesis_config());
-        let maybe_epoch = peg_chain.execution_state.system.epoch.get();
-        let epoch = maybe_epoch.context("missing epoch in peg chain")?.0;
-        info!(
-            "Initialized wallet based on data provided by the faucet.\n\
-            The current epoch is {epoch}.\n\
-            The genesis config hash is {config_hash}{}",
-            if let Some(peg_hash) = peg_chain.tip_state.get().block_hash {
-                format!("\nThe latest certificate on chain {peg_chain_id} is {peg_hash}.")
-            } else {
-                "".to_string()
-            }
-        );
         Ok(())
     }
 }
@@ -1437,6 +1334,10 @@ struct ClientOptions {
     /// Subcommand.
     #[command(subcommand)]
     command: ClientCommand,
+
+    /// The replication factor for the keyspace
+    #[arg(long, default_value = "1")]
+    storage_replication_factor: u32,
 }
 
 impl ClientOptions {
@@ -1454,6 +1355,7 @@ impl ClientOptions {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
             storage_cache_config,
+            replication_factor: self.storage_replication_factor,
         }
     }
 
@@ -1519,7 +1421,7 @@ impl ClientOptions {
         config_dir.push("linera");
         if !config_dir.exists() {
             debug!("Creating default wallet directory {}", config_dir.display());
-            fs_err::create_dir(&config_dir)?;
+            fs_err::create_dir_all(&config_dir)?;
         }
         info!("Using default wallet directory {}", config_dir.display());
         Ok(config_dir)
@@ -1996,6 +1898,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                dual_store,
                 ..
             } => {
                 net_up_utils::handle_net_up_kubernetes(
@@ -2013,6 +1916,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    *dual_store,
                 )
                 .boxed()
                 .await?;
@@ -2177,8 +2081,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             WalletCommand::Init {
                 genesis_config_path,
                 faucet,
-                with_new_chain,
-                with_other_chains,
                 testing_prng_seed,
             } => {
                 let start_time = Instant::now();
@@ -2211,27 +2113,10 @@ Make sure to use a Linera client compatible with this network.
                     }
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
-                let timestamp = genesis_config.timestamp;
                 let mut keystore = options.create_keystore(*testing_prng_seed)?;
                 keystore.persist().await?;
-                options
-                    .create_wallet(genesis_config)?
-                    .mutate(|wallet| {
-                        wallet.extend(
-                            with_other_chains
-                                .iter()
-                                .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
-                        )
-                    })
-                    .await?;
+                options.create_wallet(genesis_config)?.persist().await?;
                 options.initialize_storage().boxed().await?;
-                if *with_new_chain {
-                    ensure!(
-                        faucet.is_some(),
-                        "Using --with-new-chain requires --faucet to be set"
-                    );
-                    options.run_with_storage(Job(options.clone())).await??;
-                }
                 info!(
                     "Wallet initialized in {} ms",
                     start_time.elapsed().as_millis()

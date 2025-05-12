@@ -2,7 +2,6 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_hash_view_code(input))
 ---
-#[linera_views::async_trait]
 impl linera_views::views::HashableView<CustomContext> for TestView
 where
     RegisterView<CustomContext, usize>: linera_views::views::HashableView<CustomContext>,

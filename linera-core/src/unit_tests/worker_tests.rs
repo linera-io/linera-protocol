@@ -185,11 +185,21 @@ where
         owner: AccountOwner,
         balance: Amount,
     ) -> ChainDescription {
+        self.add_root_chain_with_ownership(index, balance, ChainOwnership::single(owner))
+            .await
+    }
+
+    async fn add_root_chain_with_ownership(
+        &mut self,
+        index: u32,
+        balance: Amount,
+        ownership: ChainOwnership,
+    ) -> ChainDescription {
         let origin = ChainOrigin::Root(index);
         let config = InitialChainConfig {
             admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
-            ownership: ChainOwnership::single(owner),
+            ownership,
             committees: self.admin_description.config().committees.clone(),
             balance,
             application_permissions: Default::default(),
@@ -3200,7 +3210,7 @@ where
     // But with the validated block certificate for block2, it is allowed.
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(4));
 
-    let proposal = BlockProposal::new_retry(
+    let proposal = BlockProposal::new_retry_regular(
         owner1,
         Round::SingleLeader(5),
         certificate2.clone(),
@@ -3512,7 +3522,10 @@ where
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let value1 = ConfirmedBlock::new(block1);
-    let (response, _) = env.worker().handle_block_proposal(proposal1).await?;
+    let (response, _) = env
+        .worker()
+        .handle_block_proposal(proposal1.clone())
+        .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3531,11 +3544,10 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
-    let proposal1b = proposed_block1
-        .clone()
-        .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
-        .await
-        .unwrap();
+    let proposal1b =
+        BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
+            .await
+            .unwrap();
     let (response, _) = env.worker().handle_block_proposal(proposal1b).await?;
 
     let vote = response.info.manager.pending.as_ref().unwrap();
@@ -3555,11 +3567,10 @@ where
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
-    let proposal3 = proposed_block1
-        .clone()
-        .into_proposal_with_round(owner0, &signer, Round::MultiLeader(2))
-        .await
-        .unwrap();
+    let proposal3 =
+        BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
+            .await
+            .unwrap();
     env.worker().handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
@@ -3569,10 +3580,14 @@ where
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(0));
-    let proposal =
-        BlockProposal::new_retry(owner1, Round::MultiLeader(3), certificate2.clone(), &signer)
-            .await
-            .unwrap();
+    let proposal = BlockProposal::new_retry_regular(
+        owner1,
+        Round::MultiLeader(3),
+        certificate2.clone(),
+        &signer,
+    )
+    .await
+    .unwrap();
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
@@ -3602,7 +3617,12 @@ where
     let public_key = signer.generate_new();
     let mut env = TestEnvironment::new(storage, false, false).await;
     let balance = Amount::from_tokens(5);
-    let chain_1_desc = env.add_root_chain(1, public_key.into(), balance).await;
+    let mut ownership = ChainOwnership::single(public_key.into());
+    // Configure a fallback duration. (The default is `MAX`, i.e. never.)
+    ownership.timeout_config.fallback_duration = TimeDelta::from_secs(5);
+    let chain_1_desc = env
+        .add_root_chain_with_ownership(1, balance, ownership)
+        .await;
     let chain_id = chain_1_desc.id();
 
     // At time 0 we don't vote for fallback mode.

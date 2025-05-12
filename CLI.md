@@ -165,6 +165,9 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 * `--tokio-blocking-threads <TOKIO_BLOCKING_THREADS>` — The number of Tokio blocking threads to use
+* `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
+
+  Default value: `1`
 
 
 
@@ -815,8 +818,6 @@ Initialize a wallet from the genesis configuration
 
 * `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration for a Linera deployment. Either this or `--faucet` must be specified
 * `--faucet <FAUCET>` — The address of a faucet
-* `--with-new-chain` — Request a new chain from the faucet, credited with tokens. This requires `--faucet`
-* `--with-other-chains <WITH_OTHER_CHAINS>` — Other chains to follow
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 
 

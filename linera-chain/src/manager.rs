@@ -70,7 +70,6 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::{ComplexObject, SimpleObject};
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
@@ -93,7 +92,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{Block, ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{BlockProposal, LiteVote, ProposedBlock, Vote},
+    data_types::{BlockProposal, LiteVote, OriginalProposal, ProposedBlock, Vote},
     types::{TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
@@ -138,8 +137,8 @@ impl LockingBlock {
 }
 
 /// The state of the certification process for a chain's next block.
-#[derive(Debug, View, ClonableView, SimpleObject)]
-#[graphql(complex)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject), graphql(complex))]
+#[derive(Debug, View, ClonableView)]
 pub struct ChainManager<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -149,37 +148,37 @@ where
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: RegisterView<C, u64>,
     /// The probability distribution for choosing a round leader.
-    #[graphql(skip)] // Derived from ownership.
+    #[cfg_attr(with_graphql, graphql(skip))] // Derived from ownership.
     pub distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// The probability distribution for choosing a fallback round leader.
-    #[graphql(skip)] // Derived from validator weights.
+    #[cfg_attr(with_graphql, graphql(skip))] // Derived from validator weights.
     pub fallback_distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub proposed: RegisterView<C, Option<BlockProposal>>,
     /// These are blobs published or read by the proposed block.
     pub proposed_blobs: MapView<C, BlobId, Blob>,
     /// Latest validated proposal that a validator may have voted to confirm. This is either the
     /// latest `ValidatedBlock` we have seen, or the proposal from the `Fast` round.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub locking_block: RegisterView<C, Option<LockingBlock>>,
     /// These are blobs published or read by the locking block.
     pub locking_blobs: MapView<C, BlobId, Blob>,
     /// Latest leader timeout certificate we have received.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub timeout: RegisterView<C, Option<TimeoutCertificate>>,
     /// Latest vote we cast to confirm a block.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub confirmed_vote: RegisterView<C, Option<Vote<ConfirmedBlock>>>,
     /// Latest vote we cast to validate a block.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub validated_vote: RegisterView<C, Option<Vote<ValidatedBlock>>>,
     /// Latest timeout vote we cast.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub timeout_vote: RegisterView<C, Option<Vote<Timeout>>>,
     /// Fallback vote we cast.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub fallback_vote: RegisterView<C, Option<Vote<Timeout>>>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
     pub round_timeout: RegisterView<C, Option<Timestamp>>,
@@ -189,13 +188,14 @@ where
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
-    #[graphql(skip)]
+    #[cfg_attr(with_graphql, graphql(skip))]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
     pub fallback_owners: RegisterView<C, BTreeMap<AccountOwner, u64>>,
 }
 
-#[ComplexObject]
+#[cfg(with_graphql)]
+#[async_graphql::ComplexObject]
 impl<C> ChainManager<C>
 where
     C: Context + Clone + Send + Sync + 'static,
@@ -343,10 +343,13 @@ where
         // if there is a validated block certificate from a later round.
         if let Some(vote) = self.confirmed_vote() {
             ensure!(
-                if let Some(validated_cert) = proposal.validated_block_certificate.as_ref() {
-                    vote.round <= validated_cert.round
-                } else {
-                    vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
+                match proposal.original_proposal.as_ref() {
+                    None => false,
+                    Some(OriginalProposal::Regular { certificate }) =>
+                        vote.round <= certificate.round,
+                    Some(OriginalProposal::Fast { .. }) => {
+                        vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
+                    }
                 },
                 ChainError::HasIncompatibleConfirmedVote(new_block.height, vote.round)
             );
@@ -451,22 +454,44 @@ where
     ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
         let round = proposal.content.round;
 
-        // If the validated block certificate is more recent, update our locking block.
-        if let Some(lite_cert) = &proposal.validated_block_certificate {
-            if self
-                .locking_block
-                .get()
-                .as_ref()
-                .is_none_or(|locking| locking.round() < lite_cert.round)
-            {
-                let value = ValidatedBlock::new(block.clone());
-                if let Some(certificate) = lite_cert.clone().with_value(value) {
-                    self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
+        match &proposal.original_proposal {
+            // If the validated block certificate is more recent, update our locking block.
+            Some(OriginalProposal::Regular { certificate }) => {
+                if self
+                    .locking_block
+                    .get()
+                    .as_ref()
+                    .is_none_or(|locking| locking.round() < certificate.round)
+                {
+                    let value = ValidatedBlock::new(block.clone());
+                    if let Some(certificate) = certificate.clone().with_value(value) {
+                        self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
+                    }
                 }
             }
-        } else if round.is_fast() && self.locking_block.get().is_none() {
-            // The fast block also counts as locking.
-            self.update_locking(LockingBlock::Fast(proposal.clone()), blobs.clone())?;
+            // If this contains a proposal from the fast round, we consider that a locking block.
+            // It is useful for clients synchronizing with us, so they can re-propose it.
+            Some(OriginalProposal::Fast {
+                public_key,
+                signature,
+            }) => {
+                if self.locking_block.get().is_none() {
+                    let original_proposal = BlockProposal {
+                        public_key: *public_key,
+                        signature: *signature,
+                        ..proposal.clone()
+                    };
+                    self.update_locking(LockingBlock::Fast(original_proposal), blobs.clone())?;
+                }
+            }
+            // If this proposal itself is from the fast round, it is also a locking block: We
+            // will vote to confirm it, so it is locked.
+            None => {
+                if round.is_fast() && self.locking_block.get().is_none() {
+                    // The fast block also counts as locking.
+                    self.update_locking(LockingBlock::Fast(proposal.clone()), blobs.clone())?;
+                }
+            }
         }
 
         // We record the proposed block, in case it affects the current round number.
