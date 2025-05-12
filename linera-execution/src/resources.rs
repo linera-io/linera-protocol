@@ -109,12 +109,12 @@ where
     pub fn merge_balance(&mut self, initial: Amount, other: Amount) -> Result<(), ExecutionError> {
         if other <= initial {
             let sub_amount = initial.try_sub(other).expect("other <= initial");
-            self.account
-                .try_sub_assign(initial.try_sub(other).expect("other <= initial"))
-                .map_err(|_| ExecutionError::FeesExceedFunding {
+            self.account.try_sub_assign(sub_amount).map_err(|_| {
+                ExecutionError::FeesExceedFunding {
                     fees: sub_amount,
                     balance: self.balance().unwrap_or(Amount::MAX),
-                })?;
+                }
+            })?;
         } else {
             self.account
                 .try_add_assign(other.try_sub(initial).expect("other > initial"))?;
