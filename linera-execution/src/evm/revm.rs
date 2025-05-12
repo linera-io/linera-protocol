@@ -430,13 +430,9 @@ impl GeneralContractCall {
             }
             ContractPrecompileTag::ValidationRound => {
                 ensure!(vec.is_empty(), format!("vec should be empty"));
-                let validation_round = runtime
+                let value = runtime
                     .validation_round()
                     .map_err(|error| format!("ValidationRound error: {error}"))?;
-                let value = match validation_round {
-                    None => 0,
-                    Some(value) => value + 1,
-                };
                 bcs::to_bytes(&value).map_err(|error| format!("u32 serialization error {error}"))
             }
             ContractPrecompileTag::SendMessage => {

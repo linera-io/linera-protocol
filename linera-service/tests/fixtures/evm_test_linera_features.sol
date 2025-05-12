@@ -6,9 +6,9 @@ import "./linera.sol";
 
 contract ExampleLineraFeatures {
     function test_chain_id() external {
-        bytes32 chain_id = Linera.chain_id();
-        bytes32 creator_chain_id = Linera.application_creator_chain_id();
-        require(chain_id == creator_chain_id);
+        Linera.ChainId memory chain_id = Linera.chain_id();
+        Linera.ChainId memory creator_chain_id = Linera.application_creator_chain_id();
+        require(chain_id.value.value == creator_chain_id.value.value);
     }
 
     function test_read_data_blob(bytes32 hash, uint32 len) external {
