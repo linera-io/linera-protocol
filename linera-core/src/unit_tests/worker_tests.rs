@@ -3481,7 +3481,10 @@ where
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let value1 = ConfirmedBlock::new(block1);
-    let (response, _) = env.worker().handle_block_proposal(proposal1).await?;
+    let (response, _) = env
+        .worker()
+        .handle_block_proposal(proposal1.clone())
+        .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3500,11 +3503,10 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
-    let proposal1b = proposed_block1
-        .clone()
-        .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
-        .await
-        .unwrap();
+    let proposal1b =
+        BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
+            .await
+            .unwrap();
     let (response, _) = env.worker().handle_block_proposal(proposal1b).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
@@ -3523,11 +3525,10 @@ where
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
-    let proposal3 = proposed_block1
-        .clone()
-        .into_proposal_with_round(owner0, &signer, Round::MultiLeader(2))
-        .await
-        .unwrap();
+    let proposal3 =
+        BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
+            .await
+            .unwrap();
     env.worker().handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
