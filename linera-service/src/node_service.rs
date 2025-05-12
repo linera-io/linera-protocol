@@ -15,7 +15,7 @@ use linera_base::{
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Bytecode, Epoch, TimeDelta,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -663,6 +663,21 @@ where
         } else {
             Ok(None)
         }
+    }
+
+    async fn events_from_index(
+        &self,
+        chain_id: ChainId,
+        stream_id: StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>, Error> {
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
+        Ok(client.events_from_index(stream_id, start_index).await?)
     }
 
     async fn blocks(
