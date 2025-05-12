@@ -228,9 +228,9 @@ BlockProposal:
         TYPENAME: AccountPublicKey
     - signature:
         TYPENAME: AccountSignature
-    - validated_block_certificate:
+    - original_proposal:
         OPTION:
-          TYPENAME: LiteCertificate
+          TYPENAME: OriginalProposal
 Certificate:
   ENUM:
     0:
@@ -784,6 +784,20 @@ OracleResponse:
         TUPLE:
           - TYPENAME: EventId
           - SEQ: U8
+OriginalProposal:
+  ENUM:
+    0:
+      Fast:
+        STRUCT:
+          - public_key:
+              TYPENAME: AccountPublicKey
+          - signature:
+              TYPENAME: AccountSignature
+    1:
+      Regular:
+        STRUCT:
+          - certificate:
+              TYPENAME: LiteCertificate
 OutgoingMessage:
   STRUCT:
     - destination:

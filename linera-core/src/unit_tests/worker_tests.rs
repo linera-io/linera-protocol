@@ -3186,7 +3186,7 @@ where
     // But with the validated block certificate for block2, it is allowed.
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(4));
 
-    let proposal = BlockProposal::new_retry(
+    let proposal = BlockProposal::new_retry_regular(
         owner1,
         Round::SingleLeader(5),
         certificate2.clone(),
@@ -3481,7 +3481,10 @@ where
         .stage_block_execution(proposed_block1.clone(), None, vec![])
         .await?;
     let value1 = ConfirmedBlock::new(block1);
-    let (response, _) = env.worker().handle_block_proposal(proposal1).await?;
+    let (response, _) = env
+        .worker()
+        .handle_block_proposal(proposal1.clone())
+        .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3500,11 +3503,10 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
-    let proposal1b = proposed_block1
-        .clone()
-        .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
-        .await
-        .unwrap();
+    let proposal1b =
+        BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
+            .await
+            .unwrap();
     let (response, _) = env.worker().handle_block_proposal(proposal1b).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
@@ -3523,11 +3525,10 @@ where
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
-    let proposal3 = proposed_block1
-        .clone()
-        .into_proposal_with_round(owner0, &signer, Round::MultiLeader(2))
-        .await
-        .unwrap();
+    let proposal3 =
+        BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
+            .await
+            .unwrap();
     env.worker().handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
@@ -3537,10 +3538,14 @@ where
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(0));
-    let proposal =
-        BlockProposal::new_retry(owner1, Round::MultiLeader(3), certificate2.clone(), &signer)
-            .await
-            .unwrap();
+    let proposal = BlockProposal::new_retry_regular(
+        owner1,
+        Round::MultiLeader(3),
+        certificate2.clone(),
+        &signer,
+    )
+    .await
+    .unwrap();
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
