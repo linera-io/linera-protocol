@@ -516,7 +516,7 @@ impl<Runtime: ServiceRuntime>
     ) -> PrecompileResult {
         match Self::call_or_fail(input, context) {
             Err(msg) => Err(PrecompileErrors::Fatal { msg }),
-            Ok(vec) => Ok(get_precompile_output(vec))
+            Ok(vec) => Ok(get_precompile_output(vec)),
         }
     }
 }
