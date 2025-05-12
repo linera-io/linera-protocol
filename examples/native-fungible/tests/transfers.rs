@@ -43,7 +43,10 @@ async fn chain_balance_transfers() {
         })
         .await;
 
-    assert_eq!(recipient_chain.chain_balance().await, transfer_amount);
+    // At the start, chain has balance of 10 tokens.
+    // After the transfer, it should have 11 tokens.
+    let expected_balance = Amount::from_tokens(10) + transfer_amount;
+    assert_eq!(recipient_chain.chain_balance().await, expected_balance);
     assert_balances(&recipient_chain, []).await;
 }
 
