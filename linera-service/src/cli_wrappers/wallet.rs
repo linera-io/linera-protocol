@@ -23,7 +23,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
     data_types::{Amount, Bytecode, Epoch},
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId},
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
@@ -1143,6 +1143,15 @@ impl NodeService {
         let mut response = self.query_node(query).await?;
         let committees = response["chain"]["executionState"]["system"]["committees"].take();
         Ok(serde_json::from_value(committees)?)
+    }
+
+    pub async fn events_from_index(&self, chain_id: &ChainId, stream_id: &StreamId, start_index: u32) -> Result<Vec<IndexAndEvent>> {
+        let query = format!("query {{ eventFromIndex(chainId: \"{chain_id}\" stream_id: \"{stream_id}\" start_index: {start_index} }}");
+        let mut response = self.query_node(query).await?;
+
+
+
+        Ok(Vec::new())
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
