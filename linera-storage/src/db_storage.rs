@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, Epoch, NetworkDescription, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, EventId, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
@@ -876,7 +876,7 @@ where
         chain_id: &ChainId,
         stream_id: &StreamId,
         start_index: u32,
-    ) -> Result<Vec<(u32, Vec<u8>)>, ViewError> {
+    ) -> Result<Vec<IndexAndEvent>, ViewError> {
         let mut prefix = vec![INDEX_EVENT_ID];
         prefix.extend(bcs::to_bytes(chain_id).unwrap());
         prefix.extend(bcs::to_bytes(stream_id).unwrap());
@@ -895,7 +895,8 @@ where
         let values = self.store.read_multi_values_bytes(keys).await?;
         let mut returned_values = Vec::new();
         for (index, value) in indices.into_iter().zip(values) {
-            returned_values.push((index, value.unwrap()));
+            let event = value.unwrap();
+            returned_values.push(IndexAndEvent { index, event });
         }
         Ok(returned_values)
     }

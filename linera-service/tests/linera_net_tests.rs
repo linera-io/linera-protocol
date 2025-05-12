@@ -428,7 +428,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[test_log::test(tokio::test)]
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_base::vm::EvmQuery;
+    use linera_base::{identifiers::{GenericApplicationId, StreamId, StreamName}, vm::EvmQuery};
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -473,6 +473,13 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
         .make_application(&chain, &application_id)
         .await?;
 
+    let application_id = GenericApplicationId::User(application_id.forget_abi());
+    let stream_name = bcs::to_bytes("ethereum_event")?;
+    let stream_name = StreamName(stream_name);
+
+    let stream_id = StreamId { application_id, stream_name };
+
+    
     let mutation = incrementCall { input: increment };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);

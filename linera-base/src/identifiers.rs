@@ -12,7 +12,7 @@ use std::{
 #[cfg(with_revm)]
 use alloy_primitives::{Address, B256};
 use anyhow::{anyhow, Context};
-use async_graphql::SimpleObject;
+use async_graphql::{scalar, SimpleObject};
 use custom_debug_derive::Debug;
 use derive_more::{Display, FromStr};
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -476,7 +476,6 @@ impl std::str::FromStr for StreamName {
     WitLoad,
     WitStore,
     WitType,
-    SimpleObject,
 )]
 pub struct StreamId {
     /// The application that can add events to this stream.
@@ -484,6 +483,8 @@ pub struct StreamId {
     /// The name of this stream: an application can have multiple streams with different names.
     pub stream_name: StreamName,
 }
+
+scalar!(StreamId);
 
 impl StreamId {
     /// Creates a system stream ID with the given name.
@@ -494,6 +495,31 @@ impl StreamId {
         }
     }
 }
+
+/// The result of an events from index.
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Clone,
+    Hash,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+)]
+pub struct IndexAndEvent {
+    /// The index of the found index.
+    pub index: u32,
+    /// The event being returned.
+    pub event: Vec<u8>,
+}
+
+scalar!(IndexAndEvent);
+
 
 impl fmt::Display for StreamId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -517,8 +543,6 @@ impl std::str::FromStr for StreamId {
         }
     }
 }
-
-
 
 /// An event identifier.
 #[derive(
