@@ -1877,19 +1877,25 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             });
             let mut genesis_config = persistent::File::new(
                 genesis_config_path,
-                GenesisConfig::new(committee_config, timestamp, policy, network_name),
+                GenesisConfig::new(
+                    committee_config,
+                    timestamp,
+                    policy,
+                    network_name,
+                    admin_public_key,
+                    *initial_funding,
+                ),
             )?;
-            let admin_chain_description =
-                genesis_config.add_chain(admin_public_key, *initial_funding);
+            let admin_chain_description = genesis_config.admin_chain_description();
             let mut chains = vec![UserChain::make_initial(
                 admin_public_key.into(),
-                admin_chain_description,
+                admin_chain_description.clone(),
                 timestamp,
             )];
             for _ in 0..*num_other_initial_chains {
                 // Create keys.
                 let public_key = signer.mutate(|s| s.generate_new()).await?;
-                let description = genesis_config.add_chain(public_key, *initial_funding);
+                let description = genesis_config.add_root_chain(public_key, *initial_funding);
                 let chain = UserChain::make_initial(public_key.into(), description, timestamp);
                 // Private keys.
                 chains.push(chain);

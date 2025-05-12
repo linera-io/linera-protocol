@@ -26,14 +26,20 @@ pub fn make_genesis_config(builder: &TestBuilder<MemoryStorageBuilder>) -> Genes
             account_key: state.account_public_key,
         })
         .collect();
+    let mut genesis_chains = builder.genesis_chains().into_iter();
+    let (admin_public_key, admin_balance) = genesis_chains
+        .next()
+        .expect("should have at least one chain");
     let mut genesis_config = GenesisConfig::new(
         CommitteeConfig { validators },
         Timestamp::from(0),
         builder.initial_committee.policy().clone(),
         "test network".to_string(),
+        admin_public_key,
+        admin_balance,
     );
-    for (public_key, amount) in builder.genesis_chains() {
-        genesis_config.add_chain(public_key, amount);
+    for (public_key, amount) in genesis_chains {
+        genesis_config.add_root_chain(public_key, amount);
     }
     genesis_config
 }

@@ -254,49 +254,80 @@ impl<S: Deref<Target = InMemorySigner>> SignerState<S> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
-    pub committee: CommitteeConfig,
+    pub committee: Committee,
     pub timestamp: Timestamp,
     pub chains: Vec<ChainDescription>,
-    pub policy: ResourceControlPolicy,
     pub network_name: String,
 }
 
 impl BcsSignable<'_> for GenesisConfig {}
 
+fn make_chain(
+    committee: &Committee,
+    index: u32,
+    admin_id: Option<ChainId>,
+    public_key: AccountPublicKey,
+    balance: Amount,
+    timestamp: Timestamp,
+) -> ChainDescription {
+    let committees: BTreeMap<_, _> = [(
+        Epoch::ZERO,
+        bcs::to_bytes(committee).expect("serializing a committee should not fail"),
+    )]
+    .into_iter()
+    .collect();
+    let origin = ChainOrigin::Root(index);
+    let config = InitialChainConfig {
+        admin_id,
+        application_permissions: Default::default(),
+        balance,
+        committees: committees.clone(),
+        epoch: Epoch::ZERO,
+        ownership: ChainOwnership::single(public_key.into()),
+    };
+    ChainDescription::new(origin, config, timestamp)
+}
+
 impl GenesisConfig {
+    /// Creates a `GenesisConfig` with the first chain being the admin chain.
     pub fn new(
         committee: CommitteeConfig,
         timestamp: Timestamp,
         policy: ResourceControlPolicy,
         network_name: String,
+        admin_public_key: AccountPublicKey,
+        admin_balance: Amount,
     ) -> Self {
+        let committee = committee.into_committee(policy);
+        let admin_chain = make_chain(
+            &committee,
+            0,
+            None,
+            admin_public_key,
+            admin_balance,
+            timestamp,
+        );
         Self {
             committee,
             timestamp,
-            chains: Vec::new(),
-            policy,
+            chains: vec![admin_chain],
             network_name,
         }
     }
 
-    pub fn add_chain(&mut self, public_key: AccountPublicKey, balance: Amount) -> ChainDescription {
-        let committee = self.create_committee();
-        let committees: BTreeMap<_, _> = [(
-            Epoch::ZERO,
-            bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-        )]
-        .into_iter()
-        .collect();
-        let origin = ChainOrigin::Root(self.chains.len() as u32);
-        let config = InitialChainConfig {
-            admin_id: self.chains.first().map(|description| description.id()),
-            application_permissions: Default::default(),
+    pub fn add_root_chain(
+        &mut self,
+        public_key: AccountPublicKey,
+        balance: Amount,
+    ) -> ChainDescription {
+        let description = make_chain(
+            &self.committee,
+            self.chains.len() as u32,
+            Some(self.admin_id()),
+            public_key,
             balance,
-            committees: committees.clone(),
-            epoch: Epoch::ZERO,
-            ownership: ChainOwnership::single(public_key.into()),
-        };
-        let description = ChainDescription::new(origin, config, self.timestamp);
+            self.timestamp,
+        );
         self.chains.push(description.clone());
         description
     }
@@ -333,10 +364,6 @@ impl GenesisConfig {
             .await
             .map_err(linera_chain::ChainError::from)?;
         Ok(())
-    }
-
-    pub fn create_committee(&self) -> Committee {
-        self.committee.clone().into_committee(self.policy.clone())
     }
 
     pub fn hash(&self) -> CryptoHash {
