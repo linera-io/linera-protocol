@@ -454,8 +454,8 @@ where
     ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
         let round = proposal.content.round;
 
-        // If the validated block certificate is more recent, update our locking block.
         match &proposal.original_proposal {
+            // If the validated block certificate is more recent, update our locking block.
             Some(OriginalProposal::Regular { certificate }) => {
                 if self
                     .locking_block
@@ -469,6 +469,8 @@ where
                     }
                 }
             }
+            // If this contains a proposal from the fast round, we consider that a locking block.
+            // It is useful for clients synchronizing with us, so they can re-propose it.
             Some(OriginalProposal::Fast {
                 public_key,
                 signature,
@@ -482,6 +484,8 @@ where
                     self.update_locking(LockingBlock::Fast(original_proposal), blobs.clone())?;
                 }
             }
+            // If this proposal itself is from the fast round, it is also a locking block: We
+            // will vote to confirm it, so it is locked.
             None => {
                 if round.is_fast() && self.locking_block.get().is_none() {
                     // The fast block also counts as locking.
