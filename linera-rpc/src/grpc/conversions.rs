@@ -234,8 +234,8 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             public_key: Some(block_proposal.public_key.into()),
             owner: Some(AccountOwner::from(block_proposal.public_key).try_into()?),
             signature: Some(block_proposal.signature.into()),
-            validated_block_certificate: block_proposal
-                .validated_block_certificate
+            original_proposal: block_proposal
+                .original_proposal
                 .map(|cert| bincode::serialize(&cert))
                 .transpose()?,
         })
@@ -255,8 +255,8 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             content,
             public_key: try_proto_convert(block_proposal.public_key)?,
             signature: try_proto_convert(block_proposal.signature)?,
-            validated_block_certificate: block_proposal
-                .validated_block_certificate
+            original_proposal: block_proposal
+                .original_proposal
                 .map(|bytes| bincode::deserialize(&bytes))
                 .transpose()?,
         })
@@ -1004,7 +1004,7 @@ pub mod tests {
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{BlockExecutionOutcome, ProposedBlock},
+        data_types::{BlockExecutionOutcome, OriginalProposal, ProposedBlock},
         test::make_first_block,
         types::CertificateKind,
     };
@@ -1236,7 +1236,7 @@ pub mod tests {
             state_hash: CryptoHash::new(&Foo("validated".into())),
             ..BlockExecutionOutcome::default()
         };
-        let cert = ValidatedBlockCertificate::new(
+        let certificate = ValidatedBlockCertificate::new(
             ValidatedBlock::new(outcome.clone().with(get_block())),
             Round::SingleLeader(2),
             vec![(
@@ -1255,7 +1255,7 @@ pub mod tests {
             },
             public_key: key_pair.public(),
             signature: key_pair.sign(&Foo("test".into())),
-            validated_block_certificate: Some(cert),
+            original_proposal: Some(OriginalProposal::Regular { certificate }),
         };
 
         round_trip_check::<_, api::BlockProposal>(block_proposal);

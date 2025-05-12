@@ -3186,7 +3186,7 @@ where
     // But with the validated block certificate for block2, it is allowed.
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(4));
 
-    let proposal = BlockProposal::new_retry(
+    let proposal = BlockProposal::new_retry_regular(
         owner1,
         Round::SingleLeader(5),
         certificate2.clone(),
@@ -3537,10 +3537,14 @@ where
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
     let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(0));
-    let proposal =
-        BlockProposal::new_retry(owner1, Round::MultiLeader(3), certificate2.clone(), &signer)
-            .await
-            .unwrap();
+    let proposal = BlockProposal::new_retry_regular(
+        owner1,
+        Round::MultiLeader(3),
+        certificate2.clone(),
+        &signer,
+    )
+    .await
+    .unwrap();
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = env.worker().handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
