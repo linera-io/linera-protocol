@@ -28,7 +28,7 @@ use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     test_name,
 };
@@ -62,7 +62,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
-    faucet_client.wallet_init(&[], FaucetOption::None).await?;
+    faucet_client.wallet_init(None).await?;
 
     let faucet_chain = client
         .open_and_assign(&faucet_client, Amount::from_tokens(1_000u128))
@@ -79,7 +79,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     assert_eq!(faucet.current_validators().await?.len(), 4);
 
     let client_2 = net.make_client().await;
-    client_2.wallet_init(&[], FaucetOption::None).await?;
+    client_2.wallet_init(None).await?;
     let chain_1 = client
         .load_wallet()?
         .default_chain()
@@ -247,7 +247,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
-    faucet_client.wallet_init(&[], FaucetOption::None).await?;
+    faucet_client.wallet_init(None).await?;
 
     let faucet_chain = client
         .open_and_assign(&faucet_client, Amount::from_tokens(1_000u128))
@@ -335,7 +335,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
-    faucet_client.wallet_init(&[], FaucetOption::None).await?;
+    faucet_client.wallet_init(None).await?;
 
     let faucet_chain = client
         .open_and_assign(&faucet_client, Amount::from_tokens(1_000u128))
@@ -458,7 +458,8 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 
     let client2 = net.make_client().await;
     let mut height = 0;
-    client2.wallet_init(&[chain], FaucetOption::None).await?;
+    client2.wallet_init(None).await?;
+    client2.follow_chain(chain).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let port = get_node_port().await;
