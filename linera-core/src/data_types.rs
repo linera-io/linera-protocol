@@ -208,12 +208,6 @@ impl ChainInfo {
             next_block_height: self.next_block_height,
         })
     }
-
-    /// Returns the committee in the latest epoch.
-    pub fn latest_committee(&self) -> Option<&Committee> {
-        let committees = self.requested_committees.as_ref()?;
-        committees.get(&self.epoch)
-    }
 }
 
 /// The response to an `ChainInfoQuery`
