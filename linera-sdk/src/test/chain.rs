@@ -96,7 +96,8 @@ impl ActiveChain {
 
     /// Returns the current [`Epoch`] the chain is in.
     pub async fn epoch(&self) -> Epoch {
-        self.validator
+        *self
+            .validator
             .worker()
             .chain_state_view(self.id())
             .await
@@ -105,7 +106,6 @@ impl ActiveChain {
             .system
             .epoch
             .get()
-            .expect("Active chains should be in an epoch")
     }
 
     /// Reads the current shared balance available to all of the owners of this microchain.

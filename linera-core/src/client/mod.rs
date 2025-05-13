@@ -431,7 +431,7 @@ impl<Env: Environment> Client<Env> {
     async fn epoch_and_committees(
         &self,
         chain_id: ChainId,
-    ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
+    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
         let query = ChainInfoQuery::new(chain_id).with_committees();
         let info = self.local_node.handle_chain_info_query(query).await?.info;
         let epoch = info.epoch;
@@ -472,7 +472,6 @@ impl<Env: Environment> Client<Env> {
         // We can't get the committee from the chain we're assigned to because we don't
         // have the description - use the admin chain.
         let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
-        let admin_epoch = admin_epoch.ok_or(ChainClientError::CommitteeSynchronizationError)?;
         let remote_committee = admin_committees
             .get(&admin_epoch)
             .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
@@ -1028,7 +1027,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     async fn epoch_and_committees(
         &self,
-    ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
+    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
         self.client.epoch_and_committees(self.chain_id).await
     }
 
@@ -1037,11 +1036,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn local_committee(&self) -> Result<Committee, LocalNodeError> {
         let (epoch, mut committees) = self.epoch_and_committees().await?;
         committees
-            .remove(
-                epoch
-                    .as_ref()
-                    .ok_or(LocalNodeError::InactiveChain(self.chain_id))?,
-            )
+            .remove(&epoch)
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 
@@ -1065,13 +1060,13 @@ impl<Env: Environment> ChainClient<Env> {
             Ok(result) => result,
             // We might not be initialized due to a missing blob - just treat this case as
             // no committees.
-            Err(LocalNodeError::BlobsNotFound(_)) => (None, BTreeMap::new()),
+            Err(LocalNodeError::BlobsNotFound(_)) => (Epoch::ZERO, BTreeMap::new()),
             err => err?,
         };
         let (admin_epoch, admin_committees) =
             self.client.epoch_and_committees(self.admin_id).await?;
         committees.extend(admin_committees);
-        let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
+        let epoch = std::cmp::max(epoch, admin_epoch);
         Ok((committees, epoch))
     }
 
@@ -1087,10 +1082,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the current epoch of the local chain.
     #[instrument(level = "trace")]
     async fn epoch(&self) -> Result<Epoch, LocalNodeError> {
-        self.chain_info()
-            .await?
-            .epoch
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+        Ok(self.chain_info().await?.epoch)
     }
 
     /// Obtains the identity of the current owner of the chain.
@@ -1864,11 +1856,10 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(query)
             .await?
             .info;
-        let epoch = info.epoch.ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let committee = info
             .requested_committees
             .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .remove(&epoch)
+            .remove(&info.epoch)
             .ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
@@ -1877,7 +1868,7 @@ impl<Env: Environment> ChainClient<Env> {
             round,
             chain_id,
         };
-        let value = Timeout::new(chain_id, height, epoch);
+        let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -1904,7 +1895,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let (epoch, mut committees) = self.client.epoch_and_committees(chain_id).await?;
         let committee = committees
-            .remove(&epoch.ok_or(LocalNodeError::InvalidChainInfoResponse)?)
+            .remove(&epoch)
             .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
         let validators = self.client.make_nodes(&committee)?;
         communicate_with_quorum(
@@ -3304,8 +3295,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .requested_committees
                 .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
             let min_epoch = *committees.keys().next().unwrap_or(&Epoch::ZERO);
-            let epoch = info.epoch.ok_or(LocalNodeError::InvalidChainInfoResponse)?;
-            (min_epoch, epoch.try_add_one()?)
+            (min_epoch, info.epoch.try_add_one()?)
         };
         let mut epoch_change_ops = Vec::new();
         while self
@@ -3358,7 +3348,6 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees().await?;
-        let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         let operations = committees
             .keys()
             .filter_map(|epoch| {

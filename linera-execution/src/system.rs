@@ -64,7 +64,7 @@ pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: HashedRegisterView<C, Option<ChainDescription>>,
     /// The number identifying the current configuration.
-    pub epoch: HashedRegisterView<C, Option<Epoch>>,
+    pub epoch: HashedRegisterView<C, Epoch>,
     /// The admin of the chain.
     pub admin_id: HashedRegisterView<C, Option<ChainId>>,
     /// The committees that we trust, indexed by epoch number.
@@ -332,7 +332,7 @@ where
 
     /// Returns the current committee, if any.
     pub fn current_committee(&self) -> Option<(Epoch, &Committee)> {
-        let epoch = self.epoch.get().as_ref()?;
+        let epoch = self.epoch.get();
         let committee = self.committees.get().get(epoch)?;
         Some((*epoch, committee))
     }
@@ -438,7 +438,7 @@ where
                             bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                         self.blob_used(Some(txn_tracker), blob_id).await?;
                         self.committees.get_mut().insert(epoch, committee);
-                        self.epoch.set(Some(epoch));
+                        self.epoch.set(epoch);
                         txn_tracker.add_event(
                             StreamId::system(EPOCH_STREAM_NAME),
                             epoch.0,
@@ -524,7 +524,7 @@ where
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                 self.blob_used(Some(txn_tracker), blob_id).await?;
                 self.committees.get_mut().insert(epoch, committee);
-                self.epoch.set(Some(epoch));
+                self.epoch.set(epoch);
             }
             ProcessRemovedEpoch(epoch) => {
                 ensure!(
@@ -596,7 +596,7 @@ where
     /// Returns an error if the `provided` epoch is not exactly one higher than the chain's current
     /// epoch.
     fn check_next_epoch(&self, provided: Epoch) -> Result<(), ExecutionError> {
-        let expected = self.epoch.get().expect("chain is active").try_add_one()?;
+        let expected = self.epoch.get().try_add_one()?;
         ensure!(
             provided == expected,
             ExecutionError::InvalidCommitteeEpoch { provided, expected }
@@ -777,7 +777,7 @@ where
         } = description.config().clone();
         self.timestamp.set(description.timestamp());
         self.description.set(Some(description));
-        self.epoch.set(Some(epoch));
+        self.epoch.set(epoch);
         let committees = committees
             .into_iter()
             .map(|(epoch, serialized_committee)| {
@@ -827,11 +827,8 @@ where
             chain_index,
         };
         let committees = self.get_committees();
-        let init_chain_config = config.init_chain_config(
-            (*self.epoch.get()).ok_or(ExecutionError::InactiveChain)?,
-            *self.admin_id.get(),
-            committees,
-        );
+        let init_chain_config =
+            config.init_chain_config(*self.epoch.get(), *self.admin_id.get(), committees);
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
         self.debit(&AccountOwner::CHAIN, config.balance).await?;
