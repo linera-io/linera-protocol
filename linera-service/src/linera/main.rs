@@ -34,7 +34,7 @@ use linera_base::{
 use linera_client::{
     client_context::ClientContext,
     client_options::ClientContextOptions,
-    config::{CommitteeConfig, GenesisConfig, SignerState, WalletState},
+    config::{CommitteeConfig, GenesisConfig},
     persistent::{self, Persist},
     wallet::{UserChain, Wallet},
 };
@@ -1395,14 +1395,12 @@ impl ClientOptions {
         Ok(())
     }
 
-    async fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
-        let wallet = persistent::File::read(&self.wallet_path()?)?;
-        Ok(WalletState::new(wallet))
+    async fn wallet(&self) -> Result<persistent::File<Wallet>, Error> {
+        Ok(persistent::File::read(&self.wallet_path()?)?)
     }
 
-    async fn signer(&self) -> Result<SignerState<persistent::File<InMemorySigner>>, Error> {
-        let signer = persistent::File::read(&self.keystore_path()?)?;
-        Ok(SignerState::new(signer))
+    async fn signer(&self) -> Result<persistent::File<InMemorySigner>, Error> {
+        Ok(persistent::File::read(&self.keystore_path()?)?)
     }
 
     fn suffix(&self) -> String {
@@ -1483,26 +1481,27 @@ impl ClientOptions {
     pub fn create_wallet(
         &self,
         genesis_config: GenesisConfig,
-    ) -> Result<WalletState<persistent::File<Wallet>>, Error> {
+    ) -> Result<persistent::File<Wallet>, Error> {
         let wallet_path = self.wallet_path()?;
         if wallet_path.exists() {
             bail!("Wallet already exists: {}", wallet_path.display());
         }
-        let wallet_state = WalletState::read_or_create(&wallet_path, Wallet::new(genesis_config))?;
-        Ok(wallet_state)
+        Ok(persistent::File::read_or_create(&wallet_path, || {
+            Ok(Wallet::new(genesis_config))
+        })?)
     }
 
     pub fn create_keystore(
         &self,
         testing_prng_seed: Option<u64>,
-    ) -> Result<SignerState<persistent::File<InMemorySigner>>, Error> {
+    ) -> Result<persistent::File<InMemorySigner>, Error> {
         let keystore_path = self.keystore_path()?;
         if keystore_path.exists() {
             bail!("Keystore already exists: {}", keystore_path.display());
         }
-        let signer_state =
-            SignerState::read_or_create(&keystore_path, InMemorySigner::new(testing_prng_seed))?;
-        Ok(signer_state)
+        Ok(persistent::File::read_or_create(&keystore_path, || {
+            Ok(InMemorySigner::new(testing_prng_seed))
+        })?)
     }
 }
 
