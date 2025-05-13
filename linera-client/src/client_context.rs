@@ -404,6 +404,7 @@ where
         }
     }
 
+    // TODO(#2351): this calls `ensure_has_chain_description`.
     pub async fn chain_description(
         &mut self,
         chain_id: ChainId,
