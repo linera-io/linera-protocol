@@ -14,6 +14,8 @@ use crate::{persistent, util};
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub(crate) enum Inner {
+    #[error("BCS error: {0}")]
+    Bcs(#[from] bcs::Error),
     #[error("chain error: {0}")]
     Chain(#[from] linera_chain::ChainError),
     #[error("chain client error: {0}")]

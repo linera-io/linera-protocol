@@ -404,21 +404,15 @@ where
         }
     }
 
-    pub async fn assign_new_chain_to_key(
+    pub async fn chain_description(
         &mut self,
         chain_id: ChainId,
-        owner: AccountOwner,
-    ) -> Result<(), Error> {
-        self.client.track_chain(chain_id);
-        let chain_description_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-        let chain_description_blob = match self
-            .client
-            .storage_client()
-            .read_blob(chain_description_blob_id)
-            .await
-        {
+    ) -> Result<ChainDescription, Error> {
+        let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+
+        let blob = match self.client.storage_client().read_blob(blob_id).await {
             Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [chain_description_blob_id] => {
+            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
                 // we're missing the blob describing the chain we're assigning - try to
                 // get it
                 self.client
@@ -429,10 +423,17 @@ where
                 return Err(err.into());
             }
         };
-        let chain_description: ChainDescription =
-            bcs::from_bytes(&chain_description_blob.into_bytes())
-                .map_err(|e| error::Inner::Persistence(Box::new(e)))?;
 
+        Ok(bcs::from_bytes(blob.bytes())?)
+    }
+
+    pub async fn assign_new_chain_to_key(
+        &mut self,
+        chain_id: ChainId,
+        owner: AccountOwner,
+    ) -> Result<(), Error> {
+        self.client.track_chain(chain_id);
+        let chain_description = self.chain_description(chain_id).await?;
         let config = chain_description.config();
 
         if !config.ownership.verify_owner(&owner) {

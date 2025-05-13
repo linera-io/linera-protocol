@@ -1251,17 +1251,16 @@ impl Runnable for Job {
                     {faucet_url}",
                 );
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
-                let outcome = faucet.claim(&owner).await?;
-                println!("{}", outcome.chain_id);
-                println!("{}", outcome.certificate_hash);
+                let description = faucet.claim(&owner).await?;
                 println!("{}", owner);
+                serde_json::to_writer(std::io::stdout(), &description)?;
                 context
-                    .assign_new_chain_to_key(outcome.chain_id, owner)
+                    .assign_new_chain_to_key(description.id(), owner)
                     .await?;
                 if set_default {
                     context
                         .wallet_mut()
-                        .mutate(|w| w.set_default_chain(outcome.chain_id))
+                        .mutate(|w| w.set_default_chain(description.id()))
                         .await??;
                 }
                 info!(

@@ -22,14 +22,13 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, Bytecode, Epoch},
+    data_types::{Amount, Bytecode, ChainDescription, Epoch},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
 use linera_core::worker::Notification;
 use linera_execution::committee::Committee;
-use linera_faucet::ClaimOutcome;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
@@ -288,7 +287,7 @@ impl ClientWrapper {
         &self,
         faucet: &Faucet,
         set_default: bool,
-    ) -> Result<(ClaimOutcome, AccountOwner)> {
+    ) -> Result<(ChainDescription, AccountOwner)> {
         let mut command = self.command().await?;
         command.args(["wallet", "request-chain", "--faucet", faucet.url()]);
         if set_default {
@@ -296,20 +295,14 @@ impl ClientWrapper {
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut lines = stdout.split_whitespace();
-        let chain_id_str = lines.next().context("missing chain ID")?;
-        let certificate_hash_str = lines.next().context("missing certificate hash")?;
-        let outcome = ClaimOutcome {
-            chain_id: chain_id_str.parse().context("invalid chain ID")?,
-            certificate_hash: certificate_hash_str
-                .parse()
-                .context("invalid certificate hash")?,
-        };
         let owner = lines
             .next()
             .context("missing chain owner")?
             .parse()
             .context("invalid chain owner")?;
-        Ok((outcome, owner))
+        let description = serde_json::from_str(lines.next().context("missing chain description")?)
+            .context("invalid chain description")?;
+        Ok((description, owner))
     }
 
     /// Runs `linera wallet publish-and-create`.
