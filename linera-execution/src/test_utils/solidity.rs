@@ -14,7 +14,7 @@ use anyhow::Context;
 use serde_json::Value;
 use tempfile::{tempdir, TempDir};
 
-use crate::LINERA_SOL;
+use crate::{LINERA_SOL, LINERA_TYPES_SOL};
 
 fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
     let mut source = File::create(path).unwrap();
@@ -80,12 +80,13 @@ fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyho
 pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
     let dir = tempdir().unwrap();
     let path = dir.path();
-    if source_code.contains("linera.sol") {
-        // The source code seems to import linera.sol, so let us write it in the code
-        let file_name = "linera.sol";
-        let test_code_path = path.join(file_name);
-        let mut test_code_file = File::create(&test_code_path)?;
-        writeln!(test_code_file, "{}", LINERA_SOL)?;
+    if source_code.contains("Linera.sol") {
+        // The source code seems to import Linera.sol, so we import the relevant files.
+        for (file_name, literal_path) in [("Linera.sol", LINERA_SOL), ("LineraTypes.sol", LINERA_TYPES_SOL)] {
+            let test_code_path = path.join(file_name);
+            let mut test_code_file = File::create(&test_code_path)?;
+            writeln!(test_code_file, "{}", literal_path)?;
+        }
     }
     let file_name = "test_code.sol";
     let test_code_path = path.join(file_name);

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "./linera.sol";
+import "./Linera.sol";
 
 contract ExampleLineraFeatures {
     function test_chain_id() external {
-        Linera.ChainId memory chain_id = Linera.chain_id();
-        Linera.ChainId memory creator_chain_id = Linera.application_creator_chain_id();
+        LineraTypes.ChainId memory chain_id = Linera.chain_id();
+        LineraTypes.ChainId memory creator_chain_id = Linera.application_creator_chain_id();
         require(chain_id.value.value == creator_chain_id.value.value);
     }
 
@@ -21,7 +21,7 @@ contract ExampleLineraFeatures {
     }
 
     function test_chain_ownership() external {
-        Linera.ChainOwnership memory chain_ownership = Linera.chain_ownership();
+        LineraTypes.ChainOwnership memory chain_ownership = Linera.chain_ownership();
         require(chain_ownership.super_owners.length == 0);
         require(chain_ownership.owners.length == 1);
     }
