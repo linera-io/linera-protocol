@@ -688,34 +688,20 @@ where
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
-
-        ensure!(
-            *chain.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
-        );
-
         chain.system.timestamp.set(block.timestamp);
-        ensure!(
-            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
-            ChainError::EmptyBlock
-        );
-        let (_, committee) = chain
+
+        let policy = chain
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
+            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
+            .1
+            .policy()
+            .clone();
         let mut resource_controller = ResourceController {
-            policy: Arc::new(committee.policy().clone()),
+            policy: Arc::new(policy),
             tracker: ResourceTracker::default(),
             account: block.authenticated_signer,
         };
-        ensure!(
-            block.published_blob_ids()
-                == published_blobs
-                    .iter()
-                    .map(|blob| blob.id())
-                    .collect::<BTreeSet<_>>(),
-            ChainError::InternalError("published_blobs mismatch".to_string())
-        );
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
             .with_execution_context(ChainExecutionContext::Block)?;
@@ -734,14 +720,6 @@ where
             }
             chain.system.used_blobs.insert(&blob.id())?;
         }
-
-        if *chain.system.closed.get() {
-            ensure!(
-                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
-                ChainError::ClosedChain
-            );
-        }
-        Self::check_app_permissions(chain.system.application_permissions.get(), block)?;
 
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
@@ -935,6 +913,36 @@ where
         );
 
         self.ensure_is_active(local_time).await?;
+
+        ensure!(
+            *self.execution_state.system.timestamp.get() <= block.timestamp,
+            ChainError::InvalidBlockTimestamp
+        );
+        ensure!(
+            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
+            ChainError::EmptyBlock
+        );
+
+        ensure!(
+            block.published_blob_ids()
+                == published_blobs
+                    .iter()
+                    .map(|blob| blob.id())
+                    .collect::<BTreeSet<_>>(),
+            ChainError::InternalError("published_blobs mismatch".to_string())
+        );
+
+        if *self.execution_state.system.closed.get() {
+            ensure!(
+                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
+                ChainError::ClosedChain
+            );
+        }
+
+        Self::check_app_permissions(
+            self.execution_state.system.application_permissions.get(),
+            block,
+        )?;
 
         Self::execute_block_inner(
             &mut self.execution_state,
