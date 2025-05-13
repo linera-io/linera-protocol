@@ -295,13 +295,10 @@ impl ClientWrapper {
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut lines = stdout.split_whitespace();
-        let owner = lines
-            .next()
-            .context("missing chain owner")?
-            .parse()
-            .context("invalid chain owner")?;
-        let description = serde_json::from_str(lines.next().context("missing chain description")?)
-            .context("invalid chain description")?;
+        let _chain_id: ChainId = lines.next().context("missing chain ID")?.parse()?;
+        let description: ChainDescription =
+            serde_json::from_str(lines.next().context("missing chain description")?)?;
+        let owner = lines.next().context("missing chain owner")?.parse()?;
         Ok((description, owner))
     }
 
