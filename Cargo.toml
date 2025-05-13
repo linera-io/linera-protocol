@@ -287,6 +287,7 @@ branch = "post-message"
 async-graphql = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
 async-graphql-axum = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
 async-graphql-value = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
+async-graphql-derive = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"
