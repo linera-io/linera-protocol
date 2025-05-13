@@ -82,7 +82,10 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
     let path = dir.path();
     if source_code.contains("Linera.sol") {
         // The source code seems to import Linera.sol, so we import the relevant files.
-        for (file_name, literal_path) in [("Linera.sol", LINERA_SOL), ("LineraTypes.sol", LINERA_TYPES_SOL)] {
+        for (file_name, literal_path) in [
+            ("Linera.sol", LINERA_SOL),
+            ("LineraTypes.sol", LINERA_TYPES_SOL),
+        ] {
             let test_code_path = path.join(file_name);
             let mut test_code_file = File::create(&test_code_path)?;
             writeln!(test_code_file, "{}", literal_path)?;
