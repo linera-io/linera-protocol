@@ -17,7 +17,7 @@ use linera_base::{
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
-    data_types::ClientOutcome,
+    data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     remote_node::RemoteNode,
@@ -414,14 +414,15 @@ where
         // Take the latest committee we know of.
         let admin_chain_id = self.wallet.genesis_admin_chain();
         let admin_client = self.make_chain_client(admin_chain_id)?;
-        let info = *admin_client.synchronize_from_validators().await?;
+        let _ = *admin_client.synchronize_from_validators().await?;
+        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
+        let info = self
+            .client
+            .local_node()
+            .handle_chain_info_query(query)
+            .await?;
         let committee = info
-            .epoch
-            .and_then(|epoch| {
-                info.requested_committees
-                    .as_ref()
-                    .and_then(|committees| committees.get(&epoch))
-            })
+            .latest_committee()
             .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
         let nodes: Vec<_> = node_provider
             .make_nodes(committee)?
