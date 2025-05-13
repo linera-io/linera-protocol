@@ -31,8 +31,8 @@ use linera_execution::{
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
-    assert_insufficient_funding, assert_insufficient_funding_during_operation,
-    assert_insufficient_funding_fees,
+    assert_fees_exceed_funding, assert_insufficient_balance_during_operation,
+    assert_insufficient_funding,
 };
 
 #[cfg(feature = "dynamodb")]
@@ -96,7 +96,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let chain_2 = builder.add_root_chain(2, Amount::ZERO).await?;
     // Listen to the notifications on the sender chain.
@@ -117,7 +117,7 @@ where
         assert!(sender.pending_proposal().is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
-            Amount::from_millis(999)
+            Amount::from_millis(1000)
         );
         assert_eq!(
             builder
@@ -150,7 +150,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner = sender.identity().await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -176,7 +176,7 @@ where
         .unwrap();
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(898)
+        Amount::from_millis(900)
     );
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -185,7 +185,7 @@ where
     // The friend paid to receive the message.
     assert_eq!(
         receiver.local_owner_balance(friend).await.unwrap(),
-        Amount::from_millis(99)
+        Amount::from_millis(100)
     );
     // The received amount is not in the unprotected balance.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
@@ -200,11 +200,11 @@ where
     assert_eq!(receiver.query_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         receiver.query_owner_balance(owner).await.unwrap(),
-        Amount::from_millis(2999)
+        Amount::from_millis(3000)
     );
     assert_eq!(
         receiver.query_balances_with_owner(owner).await.unwrap(),
-        (Amount::ZERO, Some(Amount::from_millis(2999)))
+        (Amount::ZERO, Some(Amount::from_millis(3000)))
     );
 
     // First attempt that should be rejected.
@@ -251,7 +251,7 @@ where
     sender.process_inbox().await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(2895)
+        Amount::from_millis(2900)
     );
 
     Ok(())
@@ -272,7 +272,7 @@ where
     let new_owner = AccountOwner::from(new_public_key);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let certificate = sender
         .rotate_key_pair(new_public_key)
@@ -292,7 +292,7 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(3999)
+        Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
@@ -316,7 +316,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
     let new_owner: AccountOwner = builder.signer.generate_new().into();
@@ -336,7 +336,7 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(3999)
+        Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
     // Cannot use the chain any more.
@@ -767,7 +767,7 @@ where
         client1.execute_operations(vec![], vec![]).await,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::ClosedChain)
+        )) if matches!(*error, ChainError::EmptyBlock)
     );
 
     // Trying to close the chain again returns None.
@@ -936,7 +936,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let certificate = client1
@@ -951,7 +951,7 @@ where
     // Transfer was executed locally.
     assert_eq!(
         client1.local_balance().await.unwrap(),
-        Amount::from_millis(999)
+        Amount::from_millis(1000)
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
     assert!(client1.pending_proposal().is_none());
@@ -965,7 +965,7 @@ where
         .unwrap();
     assert_eq!(
         client2.query_balance().await.unwrap(),
-        Amount::from_millis(1999)
+        Amount::from_millis(2000)
     );
     Ok(())
 }
@@ -1205,20 +1205,24 @@ where
     B: StorageBuilder,
 {
     let mut signer = InMemorySigner::new(None);
+    let mut policy = ResourceControlPolicy::only_fuel();
+    policy.operation = Amount::from_micros(1); // Otherwise BURN passes b/c it will be free.
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(policy);
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
     let obtained_error = sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
         .await;
-    assert_insufficient_funding_during_operation(obtained_error, 0);
+    assert_insufficient_balance_during_operation(obtained_error, 0);
 
     let obtained_error = sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
-    assert_insufficient_funding_fees(obtained_error);
+    // We have balance=3, we try to burn 3 tokens but the operation itself
+    // costs 1 microtoken so we don't have enough balance to pay for it.
+    assert_fees_exceed_funding(obtained_error);
     Ok(())
 }
 

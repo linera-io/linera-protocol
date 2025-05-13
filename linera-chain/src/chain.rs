@@ -708,7 +708,10 @@ where
         );
 
         chain.system.timestamp.set(block.timestamp);
-
+        ensure!(
+            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
+            ChainError::EmptyBlock
+        );
         let (_, committee) = chain
             .system
             .current_committee()

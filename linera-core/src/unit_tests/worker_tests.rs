@@ -587,7 +587,9 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_handle_block_proposal_ticks<B>(mut storage_builder: B) -> anyhow::Result<()>
+async fn test_handle_block_proposal_valid_timestamps<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -597,6 +599,7 @@ where
     let public_key = signer.generate_new();
     let owner = public_key.into();
     let balance = Amount::from_tokens(5);
+    let small_transfer = Amount::from_micros(1);
     let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let epoch = Epoch::ZERO;
@@ -604,6 +607,8 @@ where
 
     {
         let block_proposal = make_first_block(chain_id)
+            .with_burn(small_transfer)
+            .with_authenticated_signer(Some(owner))
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
             .into_first_proposal(owner, &signer)
             .await
@@ -617,7 +622,10 @@ where
 
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
     let certificate = {
-        let block = make_first_block(chain_id).with_timestamp(block_0_time);
+        let block = make_first_block(chain_id)
+            .with_timestamp(block_0_time)
+            .with_burn(small_transfer)
+            .with_authenticated_signer(Some(owner));
         let block_proposal = block
             .clone()
             .into_first_proposal(owner, &signer)
@@ -630,7 +638,7 @@ where
         let system_state = SystemExecutionState {
             committees: [(epoch, env.committee().clone())].into_iter().collect(),
             ownership: ChainOwnership::single(owner),
-            balance,
+            balance: balance - small_transfer,
             timestamp: block_0_time,
             ..SystemExecutionState::new(chain_1_desc.clone())
         };
@@ -638,6 +646,11 @@ where
         let value = ConfirmedBlock::new(
             BlockExecutionOutcome {
                 state_hash,
+                messages: vec![vec![]],
+                oracle_responses: vec![vec![]],
+                events: vec![vec![]],
+                blobs: vec![vec![]],
+                operation_results: vec![OperationResult::default()],
                 ..BlockExecutionOutcome::default()
             }
             .with(block),
@@ -949,7 +962,7 @@ where
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
                     execution_error, ChainExecutionContext::Operation(_)
-                ) if matches!(**execution_error, ExecutionError::InsufficientFunding { .. }))
+                ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
         );
     }
     {
@@ -1196,7 +1209,7 @@ where
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
                 execution_error, ChainExecutionContext::Operation(_)
-        ) if matches!(**execution_error, ExecutionError::InsufficientFunding { .. }))
+        ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
@@ -1354,22 +1367,29 @@ where
         .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
         .await;
     let balance = Amount::from_tokens(42);
+    let small_transfer = Amount::from_tokens(1);
     let description = env
         .add_child_chain(chain_2_desc.id(), sender_key_pair.public().into(), balance)
         .await;
     let chain_id = description.id();
-    let state = SystemExecutionState::new(description);
+    let mut state = SystemExecutionState::new(description);
+    // Account for burnt tokens.
+    state.balance = balance - small_transfer;
+    let block = make_first_block(chain_id)
+        .with_burn(small_transfer)
+        .with_authenticated_signer(Some(sender_key_pair.public().into()));
+
     let value = ConfirmedBlock::new(
         BlockExecutionOutcome {
-            messages: vec![],
+            messages: vec![vec![]],
             previous_message_blocks: BTreeMap::new(),
-            events: vec![],
-            blobs: vec![],
+            events: vec![vec![]],
+            blobs: vec![vec![]],
             state_hash: state.into_hash().await,
-            oracle_responses: vec![],
-            operation_results: vec![],
+            oracle_responses: vec![vec![]],
+            operation_results: vec![OperationResult::default()],
         }
-        .with(make_first_block(chain_id)),
+        .with(block),
     );
     let certificate = env.make_certificate(value);
     let info = env
@@ -3031,6 +3051,7 @@ where
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
+    let small_transfer = Amount::from_micros(1);
     let chain_1 = chain_1_desc.id();
 
     // Add another owner and use the leader-based protocol in all rounds.
@@ -3059,12 +3080,14 @@ where
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0.clone())
+        .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
     let result = env.worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0.clone())
+        .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
@@ -3101,7 +3124,8 @@ where
     assert_eq!(response.info.manager.leader, Some(owner0));
 
     // Now owner 0 can propose a block, but owner 1 can't.
-    let proposed_block1 = make_child_block(&value0.clone());
+    let proposed_block1 =
+        make_child_block(&value0.clone()).with_simple_transfer(chain_1, small_transfer);
     let (block1, _) = env
         .worker()
         .stage_block_execution(proposed_block1.clone(), None, vec![])
@@ -3268,6 +3292,7 @@ where
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
+    let small_transfer = Amount::from_micros(1);
     let chain_id = chain_1_desc.id();
 
     // Add another owner and configure two multi-leader rounds.
@@ -3299,6 +3324,7 @@ where
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0)
+        .with_simple_transfer(chain_id, small_transfer)
         .into_proposal_with_round(owner1, &signer, Round::Fast)
         .await
         .unwrap();
@@ -3340,7 +3366,7 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. And multi-leader rounds can be skipped without timeout.
-    let block1 = make_child_block(&value0);
+    let block1 = make_child_block(&value0).with_simple_transfer(chain_id, small_transfer);
     let proposal1 = block1
         .clone()
         .with_authenticated_signer(Some(owner1))
@@ -3369,6 +3395,7 @@ where
     let owner = public_key.into();
     let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner, Amount::from_tokens(2)).await;
+    let small_transfer = Amount::from_micros(1);
     let chain_id = chain_1_desc.id();
 
     // Configure open multi-leader rounds.
@@ -3408,6 +3435,8 @@ where
 
     // Without the transfer, a random key pair can propose a block.
     let proposal = make_child_block(&change_ownership_value)
+        .with_simple_transfer(chain_id, small_transfer)
+        .with_authenticated_signer(Some(owner))
         .into_proposal_with_round(owner, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
@@ -3443,8 +3472,14 @@ where
     let chain_id = chain_1_desc.id();
 
     // Add another owner and configure two multi-leader rounds.
-    let proposed_block0 =
-        make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+    let proposed_block0 = make_first_block(chain_id)
+        .with_transfer(
+            AccountOwner::CHAIN,
+            Account::new(chain_id, owner0).into(),
+            Amount::from_tokens(1),
+        )
+        .with_authenticated_signer(Some(owner0))
+        .with_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![owner0],
             owners: vec![(owner0, 100), (owner1, 100)],
             multi_leader_rounds: 3,
@@ -3470,7 +3505,13 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Owner 0 proposes another block. The validator votes to confirm.
-    let proposed_block1 = make_child_block(&value0.clone());
+    let proposed_block1 = make_child_block(&value0.clone())
+        .with_transfer(
+            AccountOwner::CHAIN,
+            Account::new(chain_id, owner0).into(),
+            Amount::from_micros(1),
+        )
+        .with_authenticated_signer(Some(owner0));
     let proposal1 = proposed_block1
         .clone()
         .into_proposal_with_round(owner0, &signer, Round::Fast)
@@ -3508,6 +3549,7 @@ where
             .await
             .unwrap();
     let (response, _) = env.worker().handle_block_proposal(proposal1b).await?;
+
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3744,7 +3786,8 @@ where
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
     let owner = public_key.into();
-    let balance = Amount::ZERO;
+    let balance = Amount::from_tokens(1);
+    let small_transfer = Amount::from_micros(1);
 
     let mut env = TestEnvironment::new(storage.clone(), false, true).await;
     let chain_description = env.add_root_chain(1, owner, balance).await;
@@ -3812,7 +3855,10 @@ where
     }
 
     clock.set(Timestamp::from(BLOCK_TIMESTAMP));
-    let block = make_first_block(chain_id).with_timestamp(Timestamp::from(BLOCK_TIMESTAMP));
+    let block = make_first_block(chain_id)
+        .with_timestamp(Timestamp::from(BLOCK_TIMESTAMP))
+        .with_burn(small_transfer)
+        .with_authenticated_signer(Some(owner));
 
     let block_proposal = block
         .clone()
@@ -3837,6 +3883,7 @@ where
 
     let mut state = SystemExecutionState {
         timestamp: Timestamp::from(BLOCK_TIMESTAMP),
+        balance: balance - small_transfer,
         ..SystemExecutionState::new(chain_description)
     }
     .into_view()
@@ -3845,12 +3892,12 @@ where
 
     let value = ConfirmedBlock::new(
         BlockExecutionOutcome {
-            messages: vec![],
+            messages: vec![vec![]],
             previous_message_blocks: BTreeMap::new(),
-            events: vec![],
-            blobs: vec![],
+            events: vec![vec![]],
+            blobs: vec![vec![]],
             state_hash: state.crypto_hash_mut().await?,
-            oracle_responses: vec![],
+            oracle_responses: vec![vec![]],
             operation_results: vec![],
         }
         .with(block),

@@ -19,8 +19,6 @@ use crate::ExecutionError;
 /// A collection of prices and limits associated with block execution.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
 pub struct ResourceControlPolicy {
-    /// The base price for creating a new block.
-    pub block: Amount,
     /// The price per unit of fuel (aka gas) for Wasm execution.
     pub wasm_fuel_unit: Amount,
     /// The price per unit of fuel (aka gas) for EVM execution.
@@ -93,7 +91,6 @@ pub struct ResourceControlPolicy {
 impl fmt::Display for ResourceControlPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ResourceControlPolicy {
-            block,
             wasm_fuel_unit,
             evm_fuel_unit,
             read_operation,
@@ -129,7 +126,6 @@ impl fmt::Display for ResourceControlPolicy {
         write!(
             f,
             "Resource control policy:\n\
-            {block:.2} base cost per block\n\
             {wasm_fuel_unit:.2} cost per Wasm fuel unit\n\
             {evm_fuel_unit:.2} cost per EVM fuel unit\n\
             {read_operation:.2} cost per read operation\n\
@@ -179,7 +175,6 @@ impl ResourceControlPolicy {
     /// This can be used in tests or benchmarks.
     pub fn no_fees() -> Self {
         Self {
-            block: Amount::ZERO,
             wasm_fuel_unit: Amount::ZERO,
             evm_fuel_unit: Amount::ZERO,
             read_operation: Amount::ZERO,
@@ -234,24 +229,10 @@ impl ResourceControlPolicy {
         }
     }
 
-    /// Creates a policy with no cost for anything except fuel, and 0.001 per block.
-    ///
-    /// This can be used in tests, and that keep track of how many blocks were created.
-    #[cfg(with_testing)]
-    pub fn fuel_and_block() -> Self {
-        Self {
-            block: Amount::from_millis(1),
-            wasm_fuel_unit: Amount::from_micros(1),
-            evm_fuel_unit: Amount::from_micros(1),
-            ..Self::no_fees()
-        }
-    }
-
     /// Creates a policy where all categories have a small non-zero cost.
     #[cfg(with_testing)]
     pub fn all_categories() -> Self {
         Self {
-            block: Amount::from_millis(1),
             wasm_fuel_unit: Amount::from_nanos(1),
             evm_fuel_unit: Amount::from_nanos(1),
             byte_read: Amount::from_attos(100),
@@ -272,7 +253,6 @@ impl ResourceControlPolicy {
     /// Creates a policy that matches the Testnet.
     pub fn testnet() -> Self {
         Self {
-            block: Amount::from_millis(1),
             wasm_fuel_unit: Amount::from_nanos(10),
             evm_fuel_unit: Amount::from_nanos(10),
             byte_read: Amount::from_nanos(10),
@@ -305,10 +285,6 @@ impl ResourceControlPolicy {
             http_request_timeout_ms: 20_000,
             http_request_allow_list: BTreeSet::new(),
         }
-    }
-
-    pub fn block_price(&self) -> Amount {
-        self.block
     }
 
     pub fn total_price(&self, resources: &Resources) -> Result<Amount, ArithmeticError> {

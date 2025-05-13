@@ -870,8 +870,6 @@ Recipient:
           TYPENAME: Account
 ResourceControlPolicy:
   STRUCT:
-    - block:
-        TYPENAME: Amount
     - wasm_fuel_unit:
         TYPENAME: Amount
     - evm_fuel_unit:

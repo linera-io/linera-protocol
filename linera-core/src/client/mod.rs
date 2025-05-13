@@ -2515,6 +2515,13 @@ impl<Env: Environment> ChainClient<Env> {
         owner: AccountOwner,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
+        // Since we disallow empty blocks, and there is no incoming messages,
+        // that could change it, we query for the balance immediately.
+        if incoming_bundles.is_empty() {
+            let chain_balance = self.local_balance().await?;
+            let owner_balance = self.local_owner_balance(owner).await?;
+            return Ok((chain_balance, Some(owner_balance)));
+        }
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
             (
@@ -2554,7 +2561,7 @@ impl<Env: Environment> ChainClient<Env> {
                     ChainExecutionContext::Block
                 ) if matches!(
                     **execution_error,
-                    ExecutionError::InsufficientFundingForFees { .. }
+                    ExecutionError::FeesExceedFunding { .. }
                 )
             ) =>
             {

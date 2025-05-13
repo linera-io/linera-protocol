@@ -267,6 +267,18 @@ impl Recipient {
     }
 }
 
+impl From<ChainId> for Recipient {
+    fn from(chain_id: ChainId) -> Self {
+        Recipient::chain(chain_id)
+    }
+}
+
+impl From<Account> for Recipient {
+    fn from(account: Account) -> Self {
+        Recipient::Account(account)
+    }
+}
+
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
@@ -673,7 +685,7 @@ where
             self.balance.get_mut()
         } else {
             self.balances.get_mut(account).await?.ok_or_else(|| {
-                ExecutionError::InsufficientFunding {
+                ExecutionError::InsufficientBalance {
                     balance: Amount::ZERO,
                     account: *account,
                 }
@@ -682,7 +694,7 @@ where
 
         balance
             .try_sub_assign(amount)
-            .map_err(|_| ExecutionError::InsufficientFunding {
+            .map_err(|_| ExecutionError::InsufficientBalance {
                 balance: *balance,
                 account: *account,
             })?;

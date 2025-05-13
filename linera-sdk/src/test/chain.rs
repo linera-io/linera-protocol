@@ -303,7 +303,11 @@ impl ActiveChain {
             .await
             .expect("Failed to query chain's pending messages");
         let messages = information.info.requested_pending_message_bundles;
-
+        // Empty blocks are not allowed.
+        // Return early if there are no messages to process and we'd end up with an empty proposal.
+        if messages.is_empty() {
+            return;
+        }
         self.add_block(|block| {
             block.with_incoming_bundles(messages);
         })
