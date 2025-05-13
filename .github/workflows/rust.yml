@@ -377,7 +377,17 @@ jobs:
         cargo install cargo-rdme --locked
     - name: Check for outdated README.md
       run: |
-        (set -e; for I in linera-*; do if [ -d "$I" ]; then echo $I; cargo rdme --check --no-fail-on-warnings -w $I; fi; done)
+        set -e
+        linera_packages=($(
+          cargo metadata --format-version 1 \
+          | jq -r '.workspace_members[] | match("/(linera-.*)#").captures[0].string' \
+        ))
+        for package in "${linera_packages[*]}"
+        do
+          [ -d "$package" ] || continue
+          echo $package
+          cargo rdme --check --no-fail-on-warnings -w $package
+        done
 
   lint-wasm-applications:
     runs-on: ubuntu-latest
