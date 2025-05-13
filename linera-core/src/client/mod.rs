@@ -3326,7 +3326,10 @@ impl<Env: Environment> ChainClient<Env> {
         stream_id: StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, ChainClientError> {
-        Ok(self.client.storage_client().list_events_from_index(&self.chain_id, &stream_id, start_index).await?)
+        tracing::info!("client::mod.rs, events_from_index, step 1");
+        let result = self.client.storage_client().list_events_from_index(&self.chain_id, &stream_id, start_index).await;
+        tracing::info!("client::mod.rs, events_from_index, step 2");
+        Ok(result?)
     }
 
     /// Deprecates all the configurations of voting rights but the last one (admin chains

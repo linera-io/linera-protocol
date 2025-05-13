@@ -1035,7 +1035,7 @@ impl ClientWrapper {
 }
 
 fn truncate_query_output(input: &str) -> String {
-    let max_len = 200;
+    let max_len = 1000;
     if input.len() < max_len {
         input.to_string()
     } else {
@@ -1146,7 +1146,7 @@ impl NodeService {
     }
 
     pub async fn events_from_index(&self, chain_id: &ChainId, stream_id: &StreamId, start_index: u32) -> Result<Vec<IndexAndEvent>> {
-        let query = format!("query {{ eventFromIndex(chainId: \"{chain_id}\" stream_id: \"{stream_id}\" start_index: {start_index} }}");
+        let query = format!("query {{ eventsFromIndex(chainId: \"{chain_id}\", streamId: {}, startIndex: {start_index}) }}", serde_json::to_string(stream_id)?);
         let mut response = self.query_node(query).await?;
 
 
