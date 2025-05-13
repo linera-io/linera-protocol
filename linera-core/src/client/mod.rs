@@ -441,6 +441,18 @@ impl<Env: Environment> Client<Env> {
         Ok((epoch, committees))
     }
 
+    /// Obtains the current epoch of the given chain and its committee.
+    async fn epoch_and_committee(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<(Epoch, Committee), LocalNodeError> {
+        let (epoch, committees) = self.epoch_and_committees(chain_id).await?;
+        let committee = committees
+            .get(&epoch)
+            .ok_or_else(|| LocalNodeError::InactiveChain(chain_id))?;
+        Ok((epoch, committee.clone()))
+    }
+
     fn make_nodes(
         &self,
         committee: &Committee,
@@ -928,7 +940,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
-    pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
+    async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self
             .client
@@ -1893,10 +1905,7 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let (epoch, mut committees) = self.client.epoch_and_committees(chain_id).await?;
-        let committee = committees
-            .remove(&epoch)
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+        let (_, committee) = self.client.epoch_and_committee(chain_id).await?;
         let validators = self.client.make_nodes(&committee)?;
         communicate_with_quorum(
             &validators,
@@ -3284,18 +3293,9 @@ impl<Env: Environment> ChainClient<Env> {
     /// then the removed epochs, in order.
     async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, ChainClientError> {
         let (mut min_epoch, mut next_epoch) = {
-            let query = ChainInfoQuery::new(self.chain_id).with_committees();
-            let info = *self
-                .client
-                .local_node
-                .handle_chain_info_query(query)
-                .await?
-                .info;
-            let committees = info
-                .requested_committees
-                .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+            let (epoch, committees) = self.epoch_and_committees().await?;
             let min_epoch = *committees.keys().next().unwrap_or(&Epoch::ZERO);
-            (min_epoch, info.epoch.try_add_one()?)
+            (min_epoch, epoch.try_add_one()?)
         };
         let mut epoch_change_ops = Vec::new();
         while self
@@ -3743,7 +3743,7 @@ impl<Env: Environment> ChainClient<Env> {
         let validator_chain_state = remote_node
             .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
             .await?;
-        let local_chain_state = self.client.local_node.chain_info(self.chain_id).await?;
+        let local_chain_state = self.chain_info().await?;
 
         let Some(missing_certificate_count) = local_chain_state
             .next_block_height
