@@ -166,7 +166,7 @@ where
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
                     "This faucet is using a multi-owner chain and is not the leader right now. \
-                      Try again at {}",
+                    Try again at {}",
                     timeout.timestamp,
                 )));
             }
