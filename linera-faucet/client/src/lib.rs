@@ -5,9 +5,8 @@
 
 // TODO(#3362): generate this code
 
-use linera_base::crypto::ValidatorPublicKey;
+use linera_base::{crypto::ValidatorPublicKey, data_types::ChainDescription};
 use linera_client::config::GenesisConfig;
-use linera_faucet::ClaimOutcome;
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 
@@ -41,8 +40,10 @@ impl Faucet {
 
     async fn query<Response: serde::de::DeserializeOwned>(
         &self,
-        query: &str,
+        query: impl AsRef<str>,
     ) -> Result<Response, Error> {
+        let query = query.as_ref();
+
         #[derive(serde::Deserialize)]
         struct GraphQlResponse<T> {
             data: Option<T>,
@@ -102,19 +103,16 @@ impl Faucet {
     pub async fn claim(
         &self,
         owner: &linera_base::identifiers::AccountOwner,
-    ) -> Result<ClaimOutcome, Error> {
-        let query = format!(
-            "mutation {{ claim(owner: \"{owner}\") {{ \
-                chainId certificateHash \
-            }} }}"
-        );
-
+    ) -> Result<ChainDescription, Error> {
         #[derive(serde::Deserialize)]
         struct Response {
-            claim: ClaimOutcome,
+            claim: ChainDescription,
         }
 
-        Ok(self.query::<Response>(&query).await?.claim)
+        Ok(self
+            .query::<Response>(format!("mutation {{ claim(owner: \"{owner}\") }}"))
+            .await?
+            .claim)
     }
 
     pub async fn current_validators(&self) -> Result<Vec<(ValidatorPublicKey, String)>, Error> {

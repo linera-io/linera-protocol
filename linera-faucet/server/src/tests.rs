@@ -137,7 +137,11 @@ async fn test_faucet_rate_limiting() {
 
 #[test]
 fn test_multiply() {
-    let mul = MutationRoot::<()>::multiply;
-    assert_eq!(mul((1 << 127) + (1 << 63), 1 << 63), [1 << 62, 1 << 62, 0]);
-    assert_eq!(mul(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
+    use super::multiply;
+
+    assert_eq!(
+        multiply((1 << 127) + (1 << 63), 1 << 63),
+        [1 << 62, 1 << 62, 0]
+    );
+    assert_eq!(multiply(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
 }

@@ -2749,7 +2749,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
 dependencies = [
  "powerfmt",
- "serde",
 ]
 
 [[package]]
@@ -4902,22 +4901,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-faucet"
-version = "0.15.0"
-dependencies = [
- "async-graphql",
- "linera-base",
- "serde",
- "serde_with",
-]
-
-[[package]]
 name = "linera-faucet-client"
 version = "0.15.0"
 dependencies = [
  "linera-base",
  "linera-client",
- "linera-faucet",
  "linera-version",
  "reqwest 0.11.27",
  "serde",
@@ -4935,6 +4923,7 @@ dependencies = [
  "async-graphql-axum",
  "async-trait",
  "axum",
+ "derive_more 1.0.0",
  "futures",
  "linera-base",
  "linera-client",
@@ -5174,7 +5163,6 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
- "linera-faucet",
  "linera-faucet-client",
  "linera-faucet-server",
  "linera-rpc",
@@ -7844,8 +7832,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "hex",
- "indexmap 1.9.3",
- "indexmap 2.7.0",
  "serde",
  "serde_derive",
  "serde_json",

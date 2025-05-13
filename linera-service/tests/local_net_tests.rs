@@ -23,7 +23,6 @@ use linera_base::{
     identifiers::{Account, AccountOwner},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
-use linera_faucet::ClaimOutcome;
 use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
@@ -302,7 +301,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 
     // Create a new chain starting on the new epoch
     let new_owner = client.keygen().await?;
-    let ClaimOutcome { chain_id, .. } = faucet.claim(&new_owner).await?;
+    let chain_id = faucet.claim(&new_owner).await?.id();
     client.assign(new_owner, chain_id).await?;
 
     // Attempt to receive the existing epoch change message
@@ -428,7 +427,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Create a new chain starting on the new epoch
     let new_owner = client.keygen().await?;
-    let ClaimOutcome { chain_id, .. } = faucet.claim(&new_owner).await?;
+    let chain_id = faucet.claim(&new_owner).await?.id();
     client.assign(new_owner, chain_id).await?;
 
     // Attempt to receive the existing epoch change messages
