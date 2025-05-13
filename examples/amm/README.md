@@ -65,9 +65,9 @@ INFO_2=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_AMM="${INFO_AMM[0]}"
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
-OWNER_AMM="${INFO_AMM[2]}"
-OWNER_1="${INFO_1[2]}"
-OWNER_2="${INFO_2[2]}"
+OWNER_AMM="${INFO_AMM[1]}"
+OWNER_1="${INFO_1[1]}"
+OWNER_2="${INFO_2[1]}"
 ```
 
 Now we have to publish and create the fungible applications. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.

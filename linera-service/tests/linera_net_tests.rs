@@ -3182,15 +3182,15 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     // Use the faucet directly to initialize client 3.
     let client3 = net.make_client().await;
     client3.wallet_init(None).await?;
-    let chain_id = client3.request_chain(&faucet, false).await?.0.id();
+    let chain_id = client3.request_chain(&faucet, false).await?.0;
     assert_eq!(chain_id, client3.load_wallet()?.default_chain().unwrap());
 
-    let chain_id = client3.request_chain(&faucet, false).await?.0.id();
+    let chain_id = client3.request_chain(&faucet, false).await?.0;
     assert!(chain_id != client3.load_wallet()?.default_chain().unwrap());
     client3.forget_chain(chain_id).await?;
     client3.follow_chain(chain_id).await?;
 
-    let chain3 = client3.request_chain(&faucet, true).await?.0.id();
+    let chain3 = client3.request_chain(&faucet, true).await?.0;
     assert_eq!(chain3, client3.load_wallet()?.default_chain().unwrap());
 
     faucet_service.ensure_is_running()?;
@@ -3260,7 +3260,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     // Create a new wallet using the faucet
     let client = net.make_client().await;
     client.wallet_init(Some(&faucet)).await?;
-    let chain = client.request_chain(&faucet, true).await?.0.id();
+    let chain = client.request_chain(&faucet, true).await?.0;
     assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());
 
     let initial_balance = client.query_balance(Account::chain(chain)).await?;

@@ -22,7 +22,7 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, Bytecode, ChainDescription, Epoch},
+    data_types::{Amount, Bytecode, Epoch},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
     vm::VmRuntime,
 };
@@ -287,7 +287,7 @@ impl ClientWrapper {
         &self,
         faucet: &Faucet,
         set_default: bool,
-    ) -> Result<(ChainDescription, AccountOwner)> {
+    ) -> Result<(ChainId, AccountOwner)> {
         let mut command = self.command().await?;
         command.args(["wallet", "request-chain", "--faucet", faucet.url()]);
         if set_default {
@@ -295,11 +295,9 @@ impl ClientWrapper {
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut lines = stdout.split_whitespace();
-        let _chain_id: ChainId = lines.next().context("missing chain ID")?.parse()?;
-        let description: ChainDescription =
-            serde_json::from_str(lines.next().context("missing chain description")?)?;
+        let chain_id: ChainId = lines.next().context("missing chain ID")?.parse()?;
         let owner = lines.next().context("missing chain owner")?.parse()?;
-        Ok((description, owner))
+        Ok((chain_id, owner))
     }
 
     /// Runs `linera wallet publish-and-create`.
