@@ -181,7 +181,7 @@ where
     /// Runs the [`ChainWorkerActor`], first by loading the chain state from `storage` then
     /// handling all `incoming_requests` as they arrive.
     ///
-    /// If loading the chain state fails the next request will receive the error reported by the
+    /// If loading the chain state fails, the next request will receive the error reported by the
     /// `storage`, and the actor will then try again to load the state.
     #[expect(clippy::too_many_arguments)]
     pub async fn run(
