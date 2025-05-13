@@ -428,7 +428,7 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
-    pub async fn epoch_and_committees(
+    async fn epoch_and_committees(
         &self,
         chain_id: ChainId,
     ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
@@ -1024,26 +1024,18 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(Some(SystemOperation::UpdateStreams(updates).into()))
     }
 
-    /// Obtains the current epoch of the given chain as well as its set of trusted committees.
+    /// Obtains the current epoch of the local chain as well as its set of trusted committees.
     #[instrument(level = "trace")]
-    pub async fn epoch_and_committees(
+    async fn epoch_and_committees(
         &self,
-        chain_id: ChainId,
     ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        self.client.epoch_and_committees(chain_id).await
-    }
-
-    /// Obtains the epochs of the committees trusted by the local chain.
-    #[instrument(level = "trace")]
-    pub async fn epochs(&self) -> Result<Vec<Epoch>, LocalNodeError> {
-        let (_epoch, committees) = self.client.epoch_and_committees(self.chain_id).await?;
-        Ok(committees.into_keys().collect())
+        self.client.epoch_and_committees(self.chain_id).await
     }
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Committee, LocalNodeError> {
-        let (epoch, mut committees) = self.client.epoch_and_committees(self.chain_id).await?;
+        let (epoch, mut committees) = self.epoch_and_committees().await?;
         committees
             .remove(
                 epoch
@@ -1053,13 +1045,14 @@ impl<Env: Environment> ChainClient<Env> {
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 
-    /// Obtains the committee for the latest epoch.
+    /// Obtains the committee for the latest epoch on the admin or local chain.
     #[instrument(level = "trace")]
-    pub async fn latest_committee(&self) -> Result<Committee, LocalNodeError> {
+    pub async fn latest_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
         let (mut committees, epoch) = self.known_committees().await?;
-        committees
+        let committee = committees
             .remove(&epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+        Ok((epoch, committee))
     }
 
     /// Obtains all the committees trusted by either the local chain or its admin chain. Also
@@ -1068,7 +1061,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn known_committees(
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
-        let (epoch, mut committees) = match self.client.epoch_and_committees(self.chain_id).await {
+        let (epoch, mut committees) = match self.epoch_and_committees().await {
             Ok(result) => result,
             // We might not be initialized due to a missing blob - just treat this case as
             // no committees.
@@ -1087,7 +1080,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn validator_nodes(
         &self,
     ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, ChainClientError> {
-        let committee = self.latest_committee().await?;
+        let (_, committee) = self.latest_committee().await?;
         Ok(self.client.make_nodes(&committee)?)
     }
 
@@ -3364,7 +3357,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.prepare_chain().await?;
-        let (current_epoch, committees) = self.client.epoch_and_committees(self.chain_id).await?;
+        let (current_epoch, committees) = self.epoch_and_committees().await?;
         let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         let operations = committees
             .keys()
