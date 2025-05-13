@@ -1001,7 +1001,7 @@ pub mod tests {
 
     use linera_base::{
         crypto::{AccountSecretKey, BcsSignable, CryptoHash, Secp256k1SecretKey, ValidatorKeypair},
-        data_types::{Amount, Blob, Round, Timestamp},
+        data_types::{Amount, Blob, Epoch, Round, Timestamp},
     };
     use linera_chain::{
         data_types::{BlockExecutionOutcome, OriginalProposal, ProposedBlock},
@@ -1083,7 +1083,7 @@ pub mod tests {
     pub fn test_chain_info_response() {
         let chain_info = Box::new(ChainInfo {
             chain_id: dummy_chain_id(0),
-            epoch: None,
+            epoch: Epoch::ZERO,
             description: None,
             manager: Box::default(),
             chain_balance: Amount::ZERO,

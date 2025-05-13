@@ -2423,7 +2423,7 @@ where
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Some(Epoch::from(1)),
+                epoch: Epoch::from(1),
                 admin_id: Some(admin_id),
                 balance: Amount::ZERO,
                 ..SystemExecutionState::new(env.admin_description.clone())
@@ -2486,7 +2486,7 @@ where
                 committees: committees2.clone(),
                 balance: Amount::from_tokens(2),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Some(Epoch::from(1)),
+                epoch: Epoch::from(1),
                 ..SystemExecutionState::new(user_description)
             }
             .into_hash()
@@ -2609,7 +2609,7 @@ where
                 committees: committees2.clone(),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
                 admin_id: Some(admin_id),
-                epoch: Some(Epoch::from(1)),
+                epoch: Epoch::from(1),
                 ..SystemExecutionState::new(env.admin_description.clone())
             }
             .into_hash()
@@ -2646,10 +2646,7 @@ where
         *user_chain.execution_state.system.balance.get(),
         Amount::from_tokens(2)
     );
-    assert_eq!(
-        *user_chain.execution_state.system.epoch.get(),
-        Some(Epoch::ZERO)
-    );
+    assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
     // .. and the message has gone through.
     let admin_chain = env.worker().chain_state_view(admin_id).await?;
@@ -2740,7 +2737,7 @@ where
             state_hash: SystemExecutionState {
                 committees: committees3.clone(),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
-                epoch: Some(Epoch::from(1)),
+                epoch: Epoch::from(1),
                 admin_id: Some(admin_id),
                 ..SystemExecutionState::new(env.admin_description.clone())
             }
@@ -2782,10 +2779,7 @@ where
             *user_chain.execution_state.system.balance.get(),
             Amount::from_tokens(2)
         );
-        assert_eq!(
-            *user_chain.execution_state.system.epoch.get(),
-            Some(Epoch::ZERO)
-        );
+        assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
         // .. but the message hasn't gone through.
         let admin_chain = env.worker().chain_state_view(admin_id).await?;
@@ -2805,7 +2799,7 @@ where
                 balance: Amount::ONE,
                 used_blobs: BTreeSet::from([committee_blob.id()]),
                 admin_id: Some(admin_id),
-                epoch: Some(Epoch::from(1)),
+                epoch: Epoch::from(1),
                 ..SystemExecutionState::new(env.admin_description.clone())
             }
             .into_hash()
@@ -2961,7 +2955,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
-        current_epoch: Some(Epoch::from(1)),
+        current_epoch: Epoch::from(1),
         committees: &committees,
     };
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
@@ -2992,7 +2986,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: false,
-        current_epoch: Some(Epoch::from(1)),
+        current_epoch: Epoch::from(1),
         committees: &committees,
     };
     // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
@@ -3677,7 +3671,7 @@ where
         .info
         .requested_committees
         .unwrap()
-        .get(&response.info.epoch.unwrap())
+        .get(&response.info.epoch)
         .unwrap()
         .validators
         .get(&vote.public_key)

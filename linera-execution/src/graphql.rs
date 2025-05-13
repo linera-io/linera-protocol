@@ -60,7 +60,7 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     }
 
     #[graphql(derived(name = "epoch"))]
-    async fn _epoch(&self) -> &Option<Epoch> {
+    async fn _epoch(&self) -> &Epoch {
         self.epoch.get()
     }
 
