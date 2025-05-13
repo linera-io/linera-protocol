@@ -4849,7 +4849,6 @@ dependencies = [
  "linera-wasmer-compiler-singlepass",
  "linera-witty",
  "lru",
- "num_enum",
  "oneshot",
  "prometheus",
  "proptest",
@@ -6026,7 +6025,6 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
  "syn 2.0.100",
