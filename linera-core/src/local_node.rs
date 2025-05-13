@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
-    types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{Block, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{Query, QueryOutcome};
@@ -26,7 +26,7 @@ use tokio::sync::OwnedRwLockReadGuard;
 use tracing::{instrument, warn};
 
 use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     notifier::Notifier,
     worker::{ProcessableCertificate, WorkerError, WorkerState},
 };
@@ -212,24 +212,6 @@ where
         Ok(Some(blobs))
     }
 
-    /// Looks for the specified blobs in the local chain manager's pending blobs.
-    /// Returns `Ok(None)` if any of the blobs is not found.
-    pub async fn get_pending_blobs(
-        &self,
-        blob_ids: &[BlobId],
-        chain_id: ChainId,
-    ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
-        let chain = self.chain_state_view(chain_id).await?;
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            match chain.manager.pending_blob(blob_id).await? {
-                None => return Ok(None),
-                Some(blob) => blobs.push(blob),
-            }
-        }
-        Ok(Some(blobs))
-    }
-
     /// Writes the given blobs to storage if there is an appropriate blob state.
     pub async fn store_blobs(&self, blobs: &[Blob]) -> Result<(), LocalNodeError> {
         let storage = self.storage_client();
@@ -292,35 +274,6 @@ where
             .describe_application(chain_id, application_id)
             .await?;
         Ok(response)
-    }
-
-    /// Obtains the certificate containing the specified message.
-    #[instrument(level = "trace", skip(self))]
-    pub async fn certificate_for_block(
-        &self,
-        chain_id: ChainId,
-        block_height: BlockHeight,
-    ) -> Result<ConfirmedBlockCertificate, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id)
-            .with_sent_certificate_hashes_in_range(BlockHeightRange::single(block_height));
-        let info = self.handle_chain_info_query(query).await?.info;
-        let certificates = self
-            .storage_client()
-            .read_certificates(info.requested_sent_certificate_hashes)
-            .await?;
-        let certificate = certificates
-            .into_iter()
-            .find(|certificate| {
-                certificate.block().header.chain_id == chain_id
-                    && certificate.block().header.height == block_height
-            })
-            .ok_or_else(|| {
-                ViewError::not_found(
-                    "could not find certificate with block chain ID and height {}",
-                    (chain_id, block_height),
-                )
-            })?;
-        Ok(certificate)
     }
 
     /// Handles any pending local cross-chain requests.

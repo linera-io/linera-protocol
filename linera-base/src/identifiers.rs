@@ -686,16 +686,6 @@ impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, Instantia
             _phantom: PhantomData,
         }
     }
-
-    /// Leaves just the ABI of a module ID (if any).
-    pub fn just_abi(self) -> ModuleId<Abi> {
-        ModuleId {
-            contract_blob_hash: self.contract_blob_hash,
-            service_blob_hash: self.service_blob_hash,
-            vm_runtime: self.vm_runtime,
-            _phantom: PhantomData,
-        }
-    }
 }
 
 // Cannot use #[derive(Clone)] because it requires `A: Clone`.

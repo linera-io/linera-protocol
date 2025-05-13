@@ -751,7 +751,7 @@ mod signing {
     use crate::data_types::{ProposalContent, ProposedBlock};
 
     #[test]
-    fn proposal_content_singing() {
+    fn proposal_content_signing() {
         use std::str::FromStr;
 
         // Generated in MetaMask.

@@ -2106,15 +2106,6 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(())
     }
 
-    /// Downloads and processes a confirmed block certificate that uses the given blob.
-    /// If this succeeds, the blob will be in our storage.
-    pub async fn receive_certificate_for_blob(
-        &self,
-        blob_id: BlobId,
-    ) -> Result<(), ChainClientError> {
-        self.receive_certificates_for_blobs(vec![blob_id]).await
-    }
-
     /// Downloads and processes confirmed block certificates that use the given blobs.
     /// If this succeeds, the blobs will be in our storage.
     pub async fn receive_certificates_for_blobs(

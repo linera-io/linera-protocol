@@ -95,10 +95,6 @@ impl Wallet {
         self.chains.len()
     }
 
-    pub fn last_chain(&self) -> Option<&UserChain> {
-        self.chains.values().last()
-    }
-
     pub fn chains_mut(&mut self) -> impl Iterator<Item = &mut UserChain> {
         self.chains.values_mut()
     }
