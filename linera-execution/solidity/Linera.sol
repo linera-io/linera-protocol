@@ -7,7 +7,8 @@ import "./LineraTypes.sol";
 // This library provides Linera functionalities to EVM contracts
 // It should not be modified.
 
-// Precompile keys:
+// The Precompile keys below correspond to the BCS serialization of
+// the `PrecompileTag` in `linera-execution/src/evm/revm.rs`.
 // (0,0): chain_id
 // (0,1): application_creator_chain_id
 // (0,2): chain_ownership
