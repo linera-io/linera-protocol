@@ -311,11 +311,6 @@ impl ChainTipState {
         Ok(self.next_block_height > height)
     }
 
-    /// Returns `true` if the next block will be the first, i.e. the chain doesn't have any blocks.
-    pub fn is_first_block(&self) -> bool {
-        self.next_block_height == BlockHeight::ZERO
-    }
-
     /// Checks if the measurement counters would be valid.
     pub fn update_counters(
         &mut self,

@@ -232,12 +232,6 @@ impl Timestamp {
         Timestamp(self.0.saturating_sub(duration.0))
     }
 
-    /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
-    /// if it would overflow.
-    pub const fn saturating_add_micros(&self, micros: u64) -> Timestamp {
-        Timestamp(self.0.saturating_add(micros))
-    }
-
     /// Returns a timestamp `micros` microseconds earlier than `self`, or the lowest possible value
     /// if it would underflow.
     pub const fn saturating_sub_micros(&self, micros: u64) -> Timestamp {

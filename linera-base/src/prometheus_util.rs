@@ -69,11 +69,6 @@ pub fn linear_bucket_interval(start_value: f64, width: f64, end_value: f64) -> O
     Some(buckets)
 }
 
-/// Construct the latencies linearly starting from 1 and ending at the maximum latency
-pub fn linear_bucket_latencies(max_latency: f64) -> Option<Vec<f64>> {
-    linear_bucket_interval(1.0, 50.0, max_latency)
-}
-
 /// A guard for an active latency measurement.
 ///
 /// Finishes the measurement when dropped, and then updates the `Metric`.
