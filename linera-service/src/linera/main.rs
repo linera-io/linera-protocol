@@ -1254,7 +1254,7 @@ impl Runnable for Job {
                 let description = faucet.claim(&owner).await?;
                 println!("{}", description.id());
                 serde_json::to_writer(std::io::stdout(), &description)?;
-                println!("{owner}");
+                println!("\n{owner}");
                 context
                     .assign_new_chain_to_key(description.id(), owner)
                     .await?;
