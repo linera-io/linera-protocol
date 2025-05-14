@@ -404,6 +404,10 @@ where
     ) {
         let pool = GrpcConnectionPool::default();
         let mut join_set = JoinSet::new();
+        // An entry means that a task is running for the given sender, recipient and request kind.
+        // If it is Some, that means the task is still working on another request, and will pick
+        // up the new one when it is done. Since later requests always supersede earlier ones,
+        // we can always overwrite the entry if a new one comes in.
         let cross_chain_tasks = Arc::new(Mutex::new(HashMap::new()));
         let semaphore = Arc::new(tokio::sync::Semaphore::new(
             cross_chain_max_concurrent_tasks,
@@ -414,6 +418,7 @@ where
                 let mut guard = cross_chain_tasks.lock().unwrap();
                 match guard.entry(cross_chain_request.sender_recipient_update()) {
                     Entry::Occupied(mut entry) => {
+                        // A task is already running; it will pick up the new request when done.
                         entry.insert(Some(cross_chain_request));
                         continue;
                     }
@@ -422,6 +427,7 @@ where
                     }
                 }
             }
+            // Spawn a task to send the cross-chain query.
             let permit = semaphore.clone().acquire_owned().await.unwrap();
             let shard = network.shard(shard_id);
             let remote_address = shard.http_address();
@@ -473,6 +479,7 @@ where
                             match guard.entry(cross_chain_request.sender_recipient_update()) {
                                 Entry::Occupied(mut entry) => {
                                     if let Some(new_cross_chain_request) = entry.get_mut().take() {
+                                        // A new request has come in, replacing the old one.
                                         cross_chain_request = new_cross_chain_request;
                                         i = 0;
                                     }
@@ -496,6 +503,7 @@ where
                                         cross_chain_request = new_cross_chain_request;
                                         i = 0;
                                     } else {
+                                        // No more requests are pending, so we can return.
                                         entry.remove();
                                         return;
                                     }
