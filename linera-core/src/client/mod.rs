@@ -496,6 +496,25 @@ impl<Env: Environment> Client<Env> {
         self.local_node.storage_client().write_blob(&blob).await?;
         Ok(blob)
     }
+
+    /// Updates the latest block and next block height and round information from the chain info.
+    #[instrument(level = "trace", skip_all, fields(chain_id = format!("{:.8}", info.chain_id)))]
+    fn update_from_info(&self, info: &ChainInfo) {
+        if let Some(mut state) = self.chains.get_mut(&info.chain_id) {
+            state.value_mut().update_from_info(info);
+        }
+    }
+
+    /// Handles the certificate in the local node and the resulting notifications.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn process_certificate<T: ProcessableCertificate>(
+        &self,
+        certificate: GenericCertificate<T>,
+    ) -> Result<(), LocalNodeError> {
+        let info = self.handle_certificate(certificate).await?.info;
+        self.update_from_info(&info);
+        Ok(())
+    }
 }
 
 /// Policies for automatically handling incoming messages.
@@ -934,7 +953,7 @@ impl<Env: Environment> ChainClient<Env> {
             .local_node
             .handle_chain_info_query(query)
             .await?;
-        self.update_from_info(&response.info);
+        self.client.update_from_info(&response.info);
         Ok(response.info)
     }
 
@@ -947,7 +966,7 @@ impl<Env: Environment> ChainClient<Env> {
             .local_node
             .handle_chain_info_query(query)
             .await?;
-        self.update_from_info(&response.info);
+        self.client.update_from_info(&response.info);
         Ok(response.info)
     }
 
@@ -1183,7 +1202,7 @@ impl<Env: Environment> ChainClient<Env> {
         if matches!(result, Err(ChainError::MissingCrossChainUpdate { .. })) {
             self.find_received_certificates().await?;
         }
-        self.update_from_info(&info);
+        self.client.update_from_info(&info);
         Ok(info)
     }
 
@@ -1252,7 +1271,7 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
             .await?;
-        self.process_certificate(certificate.clone()).await?;
+        self.client.process_certificate(certificate.clone()).await?;
         Ok(certificate)
     }
 
@@ -1445,7 +1464,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self.process_certificate(certificate.clone()).await {
+        if let Err(err) = self.client.process_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     let blobs = RemoteNode::download_blobs(
@@ -1456,7 +1475,7 @@ impl<Env: Environment> ChainClient<Env> {
                     .await
                     .ok_or(err)?;
                     self.client.local_node.store_blobs(&blobs).await?;
-                    self.process_certificate(certificate).await?;
+                    self.client.process_certificate(certificate).await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -1837,25 +1856,6 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
-    /// Handles the certificate in the local node and the resulting notifications.
-    #[instrument(level = "trace", skip(certificate))]
-    pub async fn process_certificate<T: ProcessableCertificate>(
-        &self,
-        certificate: GenericCertificate<T>,
-    ) -> Result<(), LocalNodeError> {
-        let info = self.client.handle_certificate(certificate).await?.info;
-        self.update_from_info(&info);
-        Ok(())
-    }
-
-    /// Updates the latest block and next block height and round information from the chain info.
-    #[instrument(level = "trace", skip(info))]
-    fn update_from_info(&self, info: &ChainInfo) {
-        if info.chain_id == self.chain_id {
-            self.state_mut().update_from_info(info);
-        }
-    }
-
     /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
     /// certificate and sends it to all validators, to make them enter the next round.
     #[instrument(level = "trace")]
@@ -1884,7 +1884,7 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
-        self.process_certificate(certificate.clone()).await?;
+        self.client.process_certificate(certificate.clone()).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.communicate_chain_updates(
             &committee,
@@ -2060,7 +2060,7 @@ impl<Env: Environment> ChainClient<Env> {
         certificate: GenericCertificate<ValidatedBlock>,
     ) -> Result<(), ChainClientError> {
         let chain_id = certificate.inner().chain_id();
-        match self.process_certificate(certificate.clone()).await {
+        match self.client.process_certificate(certificate.clone()).await {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 let mut blobs = Vec::new();
                 for blob_id in blob_ids {
@@ -2074,7 +2074,7 @@ impl<Env: Environment> ChainClient<Env> {
                     .local_node
                     .handle_pending_blobs(chain_id, blobs)
                     .await?;
-                self.process_certificate(certificate).await?;
+                self.client.process_certificate(certificate).await?;
                 Ok(())
             }
             Err(err) => Err(err.into()),
@@ -3416,7 +3416,7 @@ impl<Env: Environment> ChainClient<Env> {
             return None;
         };
         // Useful in case `chain_id` is the same as the local chain.
-        self.update_from_info(&info);
+        self.client.update_from_info(&info);
         Some(info)
     }
 
