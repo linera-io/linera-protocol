@@ -285,11 +285,5 @@ branch = "no-uuid-wasm-bindgen"
 git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
 
-[patch.crates-io]
-async-graphql = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
-async-graphql-axum = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
-async-graphql-value = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
-async-graphql-derive = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
-
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"

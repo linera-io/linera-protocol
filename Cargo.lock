@@ -1019,7 +1019,8 @@ checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 [[package]]
 name = "async-graphql"
 version = "7.0.2"
-source = "git+https://github.com/deuszx/async-graphql?branch=v7.0.2-react18#02e3f66810ac10b9454a23a154a4be5f56a2fac8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ba89a35adbed833e0d21db467093a087c3a07b497626009eae02cb36f060567"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -1051,7 +1052,8 @@ dependencies = [
 [[package]]
 name = "async-graphql-axum"
 version = "7.0.2"
-source = "git+https://github.com/deuszx/async-graphql?branch=v7.0.2-react18#02e3f66810ac10b9454a23a154a4be5f56a2fac8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74cb0d91622015797c94dbb862580ba5e89bfd4b9066ad7d8d9ac8e1ca5ab6f8"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -1068,7 +1070,8 @@ dependencies = [
 [[package]]
 name = "async-graphql-derive"
 version = "7.0.2"
-source = "git+https://github.com/deuszx/async-graphql?branch=v7.0.2-react18#02e3f66810ac10b9454a23a154a4be5f56a2fac8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9547f7f22688f022ea8001bdd57a1fce8996045dcb959b1730a79bafd366a9d9"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -1083,8 +1086,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "7.0.2"
-source = "git+https://github.com/deuszx/async-graphql?branch=v7.0.2-react18#02e3f66810ac10b9454a23a154a4be5f56a2fac8"
+version = "7.0.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4904895044116aab098ca82c6cec831ec43ed99efd04db9b70a390419bc88c5b"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -1094,8 +1098,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "7.0.2"
-source = "git+https://github.com/deuszx/async-graphql?branch=v7.0.2-react18#02e3f66810ac10b9454a23a154a4be5f56a2fac8"
+version = "7.0.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0cde74de18e3a00c5dd5cfa002ab6f532e1a06c2a79ee6671e2fc353b400b92"
 dependencies = [
  "bytes",
  "indexmap 2.7.0",
