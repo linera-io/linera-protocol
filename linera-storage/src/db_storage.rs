@@ -877,13 +877,11 @@ where
         stream_id: &StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, ViewError> {
-        tracing::info!("db_storage, list_events_from_index, step 1");
         let mut prefix = vec![INDEX_EVENT_ID];
         prefix.extend(bcs::to_bytes(chain_id).unwrap());
         prefix.extend(bcs::to_bytes(stream_id).unwrap());
         let mut keys = Vec::new();
         let mut indices = Vec::new();
-        tracing::info!("db_storage, list_events_from_index, step 2");
         for short_key in self.store.find_keys_by_prefix(&prefix).await?.iterator() {
             let short_key = short_key?;
             let index = bcs::from_bytes::<u32>(short_key)?;
@@ -894,15 +892,12 @@ where
                 indices.push(index);
             }
         }
-        tracing::info!("db_storage, list_events_from_index, step 3");
         let values = self.store.read_multi_values_bytes(keys).await?;
-        tracing::info!("db_storage, list_events_from_index, step 4");
         let mut returned_values = Vec::new();
         for (index, value) in indices.into_iter().zip(values) {
             let event = value.unwrap();
             returned_values.push(IndexAndEvent { index, event });
         }
-        tracing::info!("db_storage, list_events_from_index, step 5");
         Ok(returned_values)
     }
 
