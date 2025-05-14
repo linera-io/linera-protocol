@@ -168,7 +168,12 @@ pub trait Storage: Sized {
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
 
     /// Lists all the events from a starting index
-    async fn list_events_from_index(&self, chain_id: &ChainId, stream_id: &StreamId, start_index: u32) -> Result<Vec<IndexAndEvent>, ViewError>;
+    async fn list_events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>, ViewError>;
 
     /// Writes a vector of events.
     async fn write_events(

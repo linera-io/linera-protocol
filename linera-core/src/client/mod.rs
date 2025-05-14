@@ -33,8 +33,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, ModuleId,
-        StreamId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent,
+        ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -3326,7 +3326,11 @@ impl<Env: Environment> ChainClient<Env> {
         stream_id: StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, ChainClientError> {
-        Ok(self.client.storage_client().list_events_from_index(&self.chain_id, &stream_id, start_index).await?)
+        Ok(self
+            .client
+            .storage_client()
+            .list_events_from_index(&self.chain_id, &stream_id, start_index)
+            .await?)
     }
 
     /// Deprecates all the configurations of voting rights but the last one (admin chains

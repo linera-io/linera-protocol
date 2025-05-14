@@ -427,9 +427,12 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
-    use alloy_sol_types::{sol, SolCall, SolValue};
     use alloy_primitives::{Bytes, Log, U256};
-    use linera_base::{identifiers::{GenericApplicationId, StreamId, StreamName}, vm::EvmQuery};
+    use alloy_sol_types::{sol, SolCall, SolValue};
+    use linera_base::{
+        identifiers::{GenericApplicationId, StreamId, StreamName},
+        vm::EvmQuery,
+    };
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -478,7 +481,10 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     let stream_name = bcs::to_bytes("ethereum_event")?;
     let stream_name = StreamName(stream_name);
 
-    let stream_id = StreamId { application_id, stream_name };
+    let stream_id = StreamId {
+        application_id,
+        stream_name,
+    };
 
     let mut start_index = 0;
     let indices_and_events = node_service
@@ -487,7 +493,8 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     let index_and_event = indices_and_events[0].clone();
     tracing::info!("1: index_and_event={index_and_event:?}");
     assert_eq!(index_and_event.index, 0);
-    let (origin, block_height, log) = bcs::from_bytes::<(String,u64,Log)>(&index_and_event.event)?;
+    let (origin, block_height, log) =
+        bcs::from_bytes::<(String, u64, Log)>(&index_and_event.event)?;
     assert_eq!(&origin, "deploy");
     assert_eq!(block_height, 1);
     let value = U256::from(start_value);
@@ -496,7 +503,6 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     tracing::info!("1: log={log:?}");
     start_index += indices_and_events.len() as u32;
     assert_eq!(start_index, 1);
-
 
     let mutation = incrementCall { input: increment };
     let mutation = mutation.abi_encode();
@@ -508,7 +514,8 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
         .await?;
     let index_and_event = indices_and_events[0].clone();
     assert_eq!(index_and_event.index, 1);
-    let (origin, block_height, log) = bcs::from_bytes::<(String,u64,Log)>(&index_and_event.event)?;
+    let (origin, block_height, log) =
+        bcs::from_bytes::<(String, u64, Log)>(&index_and_event.event)?;
     assert_eq!(&origin, "operation");
     assert_eq!(block_height, 2);
     let value1 = U256::from(increment);

@@ -4,7 +4,7 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::self,
+    fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
 };
@@ -331,7 +331,7 @@ impl fmt::Display for GenericApplicationId {
             GenericApplicationId::User(application_id) => {
                 Display::fmt("User", f)?;
                 Display::fmt(&application_id, f)
-            },
+            }
         }
     }
 }
@@ -520,7 +520,6 @@ pub struct IndexAndEvent {
 
 scalar!(IndexAndEvent);
 
-
 impl fmt::Display for StreamId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.application_id, f)?;
@@ -535,9 +534,13 @@ impl std::str::FromStr for StreamId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts = s.split(':').collect::<Vec<_>>();
         if parts.len() == 2 {
-            let application_id = GenericApplicationId::from_str(parts[0]).context("Invalid GenericApplicationId!")?;
+            let application_id = GenericApplicationId::from_str(parts[0])
+                .context("Invalid GenericApplicationId!")?;
             let stream_name = StreamName::from_str(parts[1]).context("Invalid StreamName!")?;
-            Ok(StreamId { application_id, stream_name })
+            Ok(StreamId {
+                application_id,
+                stream_name,
+            })
         } else {
             Err(anyhow!("Invalid blob ID: {}", s))
         }
@@ -1174,9 +1177,11 @@ mod tests {
         let vec = vec![32, 54, 120, 234];
         let stream_name = StreamName(vec);
 
-        let stream_id1 = StreamId { application_id, stream_name };
+        let stream_id1 = StreamId {
+            application_id,
+            stream_name,
+        };
         let stream_id2 = StreamId::from_str(&format!("{stream_id1}")).unwrap();
         assert_eq!(stream_id1, stream_id2);
     }
-
 }

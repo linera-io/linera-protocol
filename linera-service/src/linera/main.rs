@@ -982,12 +982,11 @@ impl Runnable for Job {
                 );
                 let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
-                let index_events = storage.list_events_from_index(&chain_id, &stream_id, start_index).await?;
+                let index_events = storage
+                    .list_events_from_index(&chain_id, &stream_id, start_index)
+                    .await?;
                 println!("{:?}", index_events);
-                info!(
-                    "Events listed in {} ms",
-                    start_time.elapsed().as_millis()
-                );
+                info!("Events listed in {} ms", start_time.elapsed().as_millis());
             }
 
             PublishDataBlob {
@@ -1609,17 +1608,6 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                     println!("{}", id);
                 }
             }
-            /*
-            DatabaseToolCommand::ListEventsFromIndex { chain_id, stream_id, start_index } => {
-                let index_events = DbStorage::<S, _>::list_events_from_index(&config, &namespace, chain_id, stream_id, *start_index).await?;
-                info!(
-                    "Index events IDs listed in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-                info!("The list of chain IDs is:");
-                println!("{index_events:?}");
-            }
-            */
         }
         Ok(0)
     }
