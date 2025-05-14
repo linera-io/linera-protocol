@@ -398,122 +398,123 @@ where
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
-        _cross_chain_max_concurrent_tasks: usize,
+        cross_chain_max_concurrent_tasks: usize,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = GrpcConnectionPool::default();
         let mut join_set = JoinSet::new();
         let cross_chain_tasks = Arc::new(Mutex::new(HashMap::new()));
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(
+            cross_chain_max_concurrent_tasks,
+        ));
 
         while let Some((mut cross_chain_request, shard_id)) = receiver.next().await {
-            let mut guard = cross_chain_tasks.lock().unwrap();
-            match guard.entry(cross_chain_request.sender_recipient_update()) {
-                Entry::Occupied(mut entry) => {
-                    entry.insert(Some(cross_chain_request));
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(None);
-                    let shard = network.shard(shard_id);
-                    let remote_address = shard.http_address();
-
-                    let pool = pool.clone();
-                    let nickname = nickname.clone();
-                    let cross_chain_tasks = cross_chain_tasks.clone();
-                    join_set.spawn(async move {
-                        // Send the cross-chain query and retry if needed.
-                        if cross_chain_sender_failure_rate > 0.0
-                            && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
-                        {
-                            warn!("Dropped 1 cross-chain message intentionally.");
-                            return;
-                        }
-
-                        let mut i = 0;
-                        while i < cross_chain_max_retries {
-                            // Delay increases linearly with the attempt number.
-                            linera_base::time::timer::sleep(
-                                cross_chain_sender_delay + cross_chain_retry_delay * i,
-                            )
-                            .await;
-
-                            let result = || async {
-                                let cross_chain_request = cross_chain_request.clone().try_into()?;
-                                let request = Request::new(cross_chain_request);
-                                let mut client = ValidatorWorkerClient::new(
-                                    pool.channel(remote_address.clone())?,
-                                )
-                                .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-                                .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-                                let response = client.handle_cross_chain_request(request).await?;
-                                Ok::<_, anyhow::Error>(response)
-                            };
-                            match result().await {
-                                Err(error) => {
-                                    warn!(
-                                        nickname,
-                                        %error,
-                                        i,
-                                        from_shard = this_shard,
-                                        to_shard = shard_id,
-                                        "Failed to send cross-chain query",
-                                    );
-                                    i += 1;
-
-                                    let mut guard = cross_chain_tasks.lock().unwrap();
-                                    match guard.entry(cross_chain_request.sender_recipient_update())
-                                    {
-                                        Entry::Occupied(mut entry) => {
-                                            if let Some(new_cross_chain_request) =
-                                                entry.get_mut().take()
-                                            {
-                                                cross_chain_request = new_cross_chain_request;
-                                                i = 0;
-                                            }
-                                        }
-                                        Entry::Vacant(_) => tracing::error!(
-                                            "cross_chain_tasks entry is vacant even though \
-                                            a task is running"
-                                        ),
-                                    }
-                                }
-                                _ => {
-                                    trace!(
-                                        from_shard = this_shard,
-                                        to_shard = shard_id,
-                                        "Sent cross-chain query",
-                                    );
-                                    let mut guard = cross_chain_tasks.lock().unwrap();
-                                    match guard.entry(cross_chain_request.sender_recipient_update())
-                                    {
-                                        Entry::Occupied(mut entry) => {
-                                            if let Some(new_cross_chain_request) =
-                                                entry.get_mut().take()
-                                            {
-                                                cross_chain_request = new_cross_chain_request;
-                                                i = 0;
-                                            } else {
-                                                entry.remove();
-                                                return;
-                                            }
-                                        }
-                                        Entry::Vacant(_) => tracing::error!(
-                                            "cross_chain_tasks entry is vacant even though \
-                                            a task is running"
-                                        ),
-                                    }
-                                }
-                            }
-                        }
-                        error!(
-                            nickname,
-                            from_shard = this_shard,
-                            to_shard = shard_id,
-                            "Dropping cross-chain query",
-                        );
-                    });
+            {
+                let mut guard = cross_chain_tasks.lock().unwrap();
+                match guard.entry(cross_chain_request.sender_recipient_update()) {
+                    Entry::Occupied(mut entry) => {
+                        entry.insert(Some(cross_chain_request));
+                        continue;
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(None);
+                    }
                 }
             }
+            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let shard = network.shard(shard_id);
+            let remote_address = shard.http_address();
+
+            let pool = pool.clone();
+            let nickname = nickname.clone();
+            let cross_chain_tasks = cross_chain_tasks.clone();
+            join_set.spawn(async move {
+                let _permit = permit;
+                // Send the cross-chain query and retry if needed.
+                if cross_chain_sender_failure_rate > 0.0
+                    && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
+                {
+                    warn!("Dropped 1 cross-chain message intentionally.");
+                    return;
+                }
+
+                let mut i = 0;
+                while i < cross_chain_max_retries {
+                    // Delay increases linearly with the attempt number.
+                    linera_base::time::timer::sleep(
+                        cross_chain_sender_delay + cross_chain_retry_delay * i,
+                    )
+                    .await;
+
+                    let result = || async {
+                        let cross_chain_request = cross_chain_request.clone().try_into()?;
+                        let request = Request::new(cross_chain_request);
+                        let mut client =
+                            ValidatorWorkerClient::new(pool.channel(remote_address.clone())?)
+                                .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                                .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+                        let response = client.handle_cross_chain_request(request).await?;
+                        Ok::<_, anyhow::Error>(response)
+                    };
+                    match result().await {
+                        Err(error) => {
+                            warn!(
+                                nickname,
+                                %error,
+                                i,
+                                from_shard = this_shard,
+                                to_shard = shard_id,
+                                "Failed to send cross-chain query",
+                            );
+                            i += 1;
+
+                            let mut guard = cross_chain_tasks.lock().unwrap();
+                            match guard.entry(cross_chain_request.sender_recipient_update()) {
+                                Entry::Occupied(mut entry) => {
+                                    if let Some(new_cross_chain_request) = entry.get_mut().take() {
+                                        cross_chain_request = new_cross_chain_request;
+                                        i = 0;
+                                    }
+                                }
+                                Entry::Vacant(_) => tracing::error!(
+                                    "cross_chain_tasks entry is vacant even though \
+                                    a task is running"
+                                ),
+                            }
+                        }
+                        _ => {
+                            trace!(
+                                from_shard = this_shard,
+                                to_shard = shard_id,
+                                "Sent cross-chain query",
+                            );
+                            let mut guard = cross_chain_tasks.lock().unwrap();
+                            match guard.entry(cross_chain_request.sender_recipient_update()) {
+                                Entry::Occupied(mut entry) => {
+                                    if let Some(new_cross_chain_request) = entry.get_mut().take() {
+                                        cross_chain_request = new_cross_chain_request;
+                                        i = 0;
+                                    } else {
+                                        entry.remove();
+                                        return;
+                                    }
+                                }
+                                Entry::Vacant(_) => tracing::error!(
+                                    "cross_chain_tasks entry is vacant even though \
+                                            a task is running"
+                                ),
+                            }
+                        }
+                    }
+                }
+                error!(
+                    nickname,
+                    from_shard = this_shard,
+                    to_shard = shard_id,
+                    "Dropping cross-chain query",
+                );
+            });
         }
     }
 
