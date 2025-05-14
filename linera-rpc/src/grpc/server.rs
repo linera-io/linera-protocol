@@ -435,8 +435,9 @@ where
             let pool = pool.clone();
             let nickname = nickname.clone();
             let cross_chain_tasks = cross_chain_tasks.clone();
+            let semaphore_clone = semaphore.clone();
             join_set.spawn(async move {
-                let _permit = permit;
+                let mut _permit = Some(permit);
                 // Send the cross-chain query and retry if needed.
                 if cross_chain_sender_failure_rate > 0.0
                     && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
@@ -447,11 +448,13 @@ where
 
                 let mut i = 0;
                 while i < cross_chain_max_retries {
+                    linera_base::time::timer::sleep(cross_chain_sender_delay).await;
                     // Delay increases linearly with the attempt number.
-                    linera_base::time::timer::sleep(
-                        cross_chain_sender_delay + cross_chain_retry_delay * i,
-                    )
-                    .await;
+                    if i > 0 {
+                        _permit = None;
+                        linera_base::time::timer::sleep(cross_chain_retry_delay * i).await;
+                        _permit = Some(semaphore_clone.clone().acquire_owned().await.unwrap());
+                    }
 
                     let result = || async {
                         let cross_chain_request = cross_chain_request.clone().try_into()?;
