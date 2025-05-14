@@ -73,7 +73,7 @@ use crate::{
         BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
     },
     environment::Environment,
-    local_node::{LocalNodeClient, LocalNodeError},
+    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider as _,
@@ -290,7 +290,8 @@ impl<Env: Environment> Client<Env> {
         })
     }
 
-    pub async fn chain_info(
+    /// Fetches the chain description blob if needed, and returns the chain info.
+    pub async fn fetch_chain_info(
         &self,
         chain_id: ChainId,
         validators: &[RemoteNode<impl ValidatorNode>],
@@ -322,7 +323,7 @@ impl<Env: Environment> Client<Env> {
         let mut validators_vec = validators.iter().collect::<Vec<_>>();
         validators_vec.shuffle(&mut rand::thread_rng());
         for remote_node in validators_vec {
-            let info = self.chain_info(chain_id, validators).await?;
+            let info = self.fetch_chain_info(chain_id, validators).await?;
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
@@ -334,7 +335,7 @@ impl<Env: Environment> Client<Env> {
             )
             .await?;
         }
-        let info = self.chain_info(chain_id, validators).await?;
+        let info = self.fetch_chain_info(chain_id, validators).await?;
         if target_next_block_height <= info.next_block_height {
             Ok(info)
         } else {
@@ -427,30 +428,13 @@ impl<Env: Environment> Client<Env> {
             .await
     }
 
-    /// Obtains the current epoch of the given chain as well as its set of trusted committees.
-    async fn epoch_and_committees(
+    async fn chain_info_with_committees(
         &self,
         chain_id: ChainId,
-    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
+    ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(chain_id).with_committees();
         let info = self.local_node.handle_chain_info_query(query).await?.info;
-        let epoch = info.epoch;
-        let committees = info
-            .requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
-        Ok((epoch, committees))
-    }
-
-    /// Obtains the current epoch of the given chain and its committee.
-    async fn epoch_and_committee(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<(Epoch, Committee), LocalNodeError> {
-        let (epoch, committees) = self.epoch_and_committees(chain_id).await?;
-        let committee = committees
-            .get(&epoch)
-            .ok_or_else(|| LocalNodeError::InactiveChain(chain_id))?;
-        Ok((epoch, committee.clone()))
+        Ok(info)
     }
 
     fn make_nodes(
@@ -483,13 +467,10 @@ impl<Env: Environment> Client<Env> {
         }
         // We can't get the committee from the chain we're assigned to because we don't
         // have the description - use the admin chain.
-        let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
-        let remote_committee = admin_committees
-            .get(&admin_epoch)
-            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
+        let info = self.chain_info_with_committees(admin_id).await?;
         // Recover history from the network.
         // TODO(#2351): make sure that the blob is legitimately created!
-        let nodes = self.make_nodes(remote_committee)?;
+        let nodes = self.make_nodes(info.current_committee()?)?;
         let blob = RemoteNode::download_blob(&nodes, chain_desc_id, self.blob_download_timeout)
             .await
             .ok_or(LocalNodeError::BlobsNotFound(vec![chain_desc_id]))?;
@@ -1054,21 +1035,31 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(Some(SystemOperation::UpdateStreams(updates).into()))
     }
 
+    #[instrument(level = "trace")]
+    pub async fn chain_info_with_committees(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
+        self.client.chain_info_with_committees(self.chain_id).await
+    }
+
     /// Obtains the current epoch of the local chain as well as its set of trusted committees.
     #[instrument(level = "trace")]
     async fn epoch_and_committees(
         &self,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        self.client.epoch_and_committees(self.chain_id).await
+        let info = self
+            .client
+            .chain_info_with_committees(self.chain_id)
+            .await?;
+        let epoch = info.epoch;
+        let committees = info.into_committees()?;
+        Ok((epoch, committees))
     }
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Committee, LocalNodeError> {
-        let (epoch, mut committees) = self.epoch_and_committees().await?;
-        committees
-            .remove(&epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+        self.chain_info_with_committees()
+            .await?
+            .into_current_committee()
     }
 
     /// Obtains the committee for the latest epoch on the admin or local chain.
@@ -1094,10 +1085,12 @@ impl<Env: Environment> ChainClient<Env> {
             Err(LocalNodeError::BlobsNotFound(_)) => (Epoch::ZERO, BTreeMap::new()),
             err => err?,
         };
-        let (admin_epoch, admin_committees) =
-            self.client.epoch_and_committees(self.admin_id).await?;
-        committees.extend(admin_committees);
-        let epoch = std::cmp::max(epoch, admin_epoch);
+        let admin_info = self
+            .client
+            .chain_info_with_committees(self.admin_id)
+            .await?;
+        let epoch = std::cmp::max(epoch, admin_info.epoch);
+        committees.extend(admin_info.into_committees()?);
         Ok((committees, epoch))
     }
 
@@ -1861,18 +1854,8 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn request_leader_timeout(&self) -> Result<TimeoutCertificate, ChainClientError> {
         let chain_id = self.chain_id;
-        let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self
-            .client
-            .local_node
-            .handle_chain_info_query(query)
-            .await?
-            .info;
-        let committee = info
-            .requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .remove(&info.epoch)
-            .ok_or(LocalNodeError::InactiveChain(chain_id))?;
+        let info = self.chain_info_with_committees().await?;
+        let committee = info.current_committee()?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
         let action = CommunicateAction::RequestTimeout {
@@ -1882,12 +1865,12 @@ impl<Env: Environment> ChainClient<Env> {
         };
         let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = self
-            .communicate_chain_action(&committee, action, value)
+            .communicate_chain_action(committee, action, value)
             .await?;
         self.client.process_certificate(certificate.clone()).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.communicate_chain_updates(
-            &committee,
+            committee,
             chain_id,
             height,
             CrossChainMessageDelivery::NonBlocking,
@@ -1905,7 +1888,11 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let (_, committee) = self.client.epoch_and_committee(chain_id).await?;
+        let committee = self
+            .client
+            .chain_info_with_committees(chain_id)
+            .await?
+            .into_current_committee()?;
         let validators = self.client.make_nodes(&committee)?;
         communicate_with_quorum(
             &validators,
