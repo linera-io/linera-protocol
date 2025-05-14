@@ -19,13 +19,14 @@ use futures::{
 };
 use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
+    join_set_ext::JoinSet,
     node::NodeError,
     worker::{NetworkActions, Notification, Reason, WorkerError, WorkerState},
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
 use rand::Rng;
-use tokio::{sync::oneshot, task::JoinSet};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -203,7 +204,7 @@ where
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
         shutdown_signal: CancellationToken,
-        join_set: &mut JoinSet<()>,
+        join_set: &mut JoinSet,
     ) -> GrpcServerHandle {
         info!(
             "spawning gRPC server on {}:{} for shard {}",
