@@ -428,6 +428,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[test_log::test(tokio::test)]
 async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolCall, SolValue};
+    use alloy_primitives::{Bytes, Log, U256};
     use linera_base::{identifiers::{GenericApplicationId, StreamId, StreamName}, vm::EvmQuery};
     use linera_execution::test_utils::solidity::get_evm_contract_path;
     use linera_sdk::abis::evm::EvmAbi;
@@ -483,8 +484,17 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     let indices_and_events = node_service
         .events_from_index(&chain, &stream_id, start_index)
         .await?;
+    let index_and_event = indices_and_events[0].clone();
+    tracing::info!("1: index_and_event={index_and_event:?}");
+    assert_eq!(index_and_event.index, 0);
+    let (origin, block_height, log) = bcs::from_bytes::<(String,u64,Log)>(&index_and_event.event)?;
+    assert_eq!(&origin, "deploy");
+    assert_eq!(block_height, 1);
+    let value = U256::from(start_value);
+    let bytes = Bytes::from(value.to_be_bytes::<32>().to_vec());
+    assert_eq!(log.data.data, bytes);
+    tracing::info!("1: log={log:?}");
     start_index += indices_and_events.len() as u32;
-    tracing::info!("1: indices_and_events={indices_and_events:?}");
     assert_eq!(start_index, 1);
 
 
@@ -496,7 +506,18 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     let indices_and_events = node_service
         .events_from_index(&chain, &stream_id, start_index)
         .await?;
-    tracing::info!("2: indices_and_events={indices_and_events:?}");
+    let index_and_event = indices_and_events[0].clone();
+    assert_eq!(index_and_event.index, 1);
+    let (origin, block_height, log) = bcs::from_bytes::<(String,u64,Log)>(&index_and_event.event)?;
+    assert_eq!(&origin, "operation");
+    assert_eq!(block_height, 2);
+    let value1 = U256::from(increment);
+    let value2 = U256::from(start_value + increment);
+    let mut bytes = Vec::new();
+    bytes.extend(value1.to_be_bytes::<32>());
+    bytes.extend(value2.to_be_bytes::<32>());
+    let bytes = Bytes::from(bytes);
+    assert_eq!(log.data.data, bytes);
     start_index += indices_and_events.len() as u32;
     assert_eq!(start_index, 2);
 
