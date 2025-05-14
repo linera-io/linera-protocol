@@ -7,7 +7,6 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     net::{IpAddr, SocketAddr},
     str::FromStr,
-    sync::{Arc, Mutex},
     task::{Context, Poll},
     time::{Duration, Instant},
 };
@@ -399,118 +398,141 @@ where
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
-        cross_chain_max_concurrent_tasks: usize,
+        _cross_chain_max_concurrent_tasks: usize,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
-        let pool = GrpcConnectionPool::default();
-        let mut join_set = JoinSet::new();
-        // An entry means that a task is running for the given sender, recipient and request kind.
-        // If it is Some, that means the task is still working on another request, and will pick
-        // up the new one when it is done. Since later requests always supersede earlier ones,
-        // we can always overwrite the entry if a new one comes in.
-        let cross_chain_tasks = Arc::new(Mutex::new(HashMap::new()));
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(
-            cross_chain_max_concurrent_tasks,
-        ));
+        type QueueId = linera_core::data_types::CrossChainQueueId;
 
-        while let Some((mut cross_chain_request, shard_id)) = receiver.next().await {
-            {
-                let mut guard = cross_chain_tasks.lock().unwrap();
-                match guard.entry(cross_chain_request.sender_recipient_update()) {
-                    Entry::Occupied(mut entry) => {
-                        // A task is already running; it will pick up the new request when done.
-                        entry.insert(Some(cross_chain_request));
+        enum Action {
+            Proceed { id: usize },
+            Retry,
+        }
+
+        #[derive(Clone)]
+        struct Task {
+            shard_id: ShardId,
+            request: linera_core::data_types::CrossChainRequest,
+        }
+
+        let pool = GrpcConnectionPool::default();
+        let mut futures = futures::stream::FuturesUnordered::new();
+        let mut job_states: HashMap<QueueId, Job> = HashMap::new();
+
+        let run_task = |task: Task| async {
+            let task = task;
+            let request = Request::new(task.request.try_into()?);
+            let mut client =
+                ValidatorWorkerClient::new(pool.channel(network.shard(task.shard_id).http_address())?)
+                    .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                    .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+            let response = client.handle_cross_chain_request(request).await?;
+            anyhow::Result::<_>::Ok(response)
+        };
+
+        #[derive(Clone)]
+        struct Job {
+            id: usize,
+            retries: u32,
+            nickname: String,
+            task: Task,
+        }
+
+        let run_action = |action, queue, state: Job| async move {
+            linera_base::time::timer::sleep(cross_chain_sender_delay).await;
+
+            let to_shard = state.task.shard_id.clone();
+
+            (queue, match action {
+                Action::Proceed { .. } => if let Err(error) = run_task(state.task).await {
+                    warn!(
+                        nickname = state.nickname,
+                        %error,
+                        retry = state.retries,
+                        from_shard = this_shard,
+                        to_shard,
+                        "Failed to send cross-chain query",
+                    );
+
+                    Action::Retry
+                } else {
+                    trace!(
+                        from_shard = this_shard,
+                        to_shard,
+                        "Sent cross-chain query",
+                    );
+
+                    Action::Proceed { id: state.id.wrapping_add(1) }
+                }
+
+                Action::Retry => {
+                    linera_base::time::timer::sleep(cross_chain_retry_delay * state.retries).await;
+                    Action::Proceed { id: state.id }
+                }
+            })
+        };
+
+        loop {
+            tokio::select! {
+                Some((queue, action)) = futures.next() => {
+                    let Entry::Occupied(mut state) = job_states.entry(queue) else {
+                        panic!("running job without state");
+                    };
+
+                    let remove = matches!(action, Action::Proceed { id } if state.get().id < id)
+                        || matches!(action, Action::Retry if state.get().retries >= cross_chain_max_retries);
+                    if remove {
+                        state.remove();
                         continue;
                     }
-                    Entry::Vacant(entry) => {
-                        entry.insert(None);
-                    }
-                }
-            }
-            // Spawn a task to send the cross-chain query.
-            let permit = semaphore.clone().acquire_owned().await.unwrap();
-            let shard = network.shard(shard_id);
-            let remote_address = shard.http_address();
 
-            let pool = pool.clone();
-            let nickname = nickname.clone();
-            let cross_chain_tasks = cross_chain_tasks.clone();
-            let semaphore_clone = semaphore.clone();
-            join_set.spawn(async move {
-                let mut _permit = Some(permit);
-                // Send the cross-chain query and retry if needed.
-                if cross_chain_sender_failure_rate > 0.0
-                    && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
-                {
-                    warn!("Dropped 1 cross-chain message intentionally.");
-                    return;
+                    if let Action::Retry = action {
+                        state.get_mut().retries += 1
+                    }
+
+                    futures.push(run_action(action, queue, state.get().clone()));
                 }
 
-                let mut i = 0;
-                while i < cross_chain_max_retries {
-                    linera_base::time::timer::sleep(cross_chain_sender_delay).await;
-                    // Delay increases linearly with the attempt number.
-                    if i > 0 {
-                        _permit = None;
-                        linera_base::time::timer::sleep(cross_chain_retry_delay * i).await;
-                        _permit = Some(semaphore_clone.clone().acquire_owned().await.unwrap());
+                request = receiver.next() => {
+                    let Some((request, shard_id)) = request else { break };
+
+                    if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
+                        warn!("Dropped 1 cross-chain message intentionally.");
+                        continue;
                     }
 
-                    let result = (|| async {
-                        let cross_chain_request = cross_chain_request.clone().try_into()?;
-                        let request = Request::new(cross_chain_request);
-                        let mut client =
-                            ValidatorWorkerClient::new(pool.channel(remote_address.clone())?)
-                                .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-                                .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-                        let response = client.handle_cross_chain_request(request).await?;
-                        anyhow::Result::<_>::Ok(response)
-                    })().await;
+                    let queue = request.queue();
 
-                    if let Err(error) = &result {
-                        warn!(
-                            nickname,
-                            %error,
-                            i,
-                            from_shard = this_shard,
-                            to_shard = shard_id,
-                            "Failed to send cross-chain query",
-                        );
-                        i += 1;
-                    } else {
-                        trace!(
-                            from_shard = this_shard,
-                            to_shard = shard_id,
-                            "Sent cross-chain query",
-                        );
-                    }
+                    let task = Task {
+                        shard_id,
+                        request,
+                    };
 
-                    let mut guard = cross_chain_tasks.lock().unwrap();
-                    if let Entry::Occupied(mut entry) = guard.entry(cross_chain_request.sender_recipient_update()) {
-                        if let Some(new_cross_chain_request) = entry.get_mut().take() {
-                            cross_chain_request = new_cross_chain_request;
-                            i = 0;
-                        } else if !result.is_err() {
-                            // No more requests are pending, so we can return.
-                            entry.remove();
-                            return;
+                    match job_states.entry(queue) {
+                        Entry::Vacant(entry) => futures.push(run_action(
+                            Action::Proceed { id: 0 },
+                            queue,
+                            entry.insert(Job {
+                                id: 0,
+                                retries: 0,
+                                nickname: nickname.clone(),
+                                task,
+                            }).clone(),
+                        )),
+
+                        Entry::Occupied(mut entry) => {
+                            entry.insert(Job {
+                                id: entry.get().id + 1,
+                                retries: 0,
+                                nickname: nickname.clone(),
+                                task,
+                            });
                         }
-                    } else {
-                        tracing::error!(
-                            "cross_chain_tasks entry is vacant even though \
-                             a task is running"
-                        )
                     }
                 }
 
-                error!(
-                    nickname,
-                    from_shard = this_shard,
-                    to_shard = shard_id,
-                    "Dropping cross-chain query",
-                );
-            });
+                else => (),
+            }
         }
     }
 
