@@ -257,6 +257,18 @@ impl CrossChainRequest {
             _ => false,
         }
     }
+
+    /// Returns the pair of sender and recipient, and whether this is an update.
+    pub fn sender_recipient_update(&self) -> (ChainId, ChainId, bool) {
+        match self {
+            CrossChainRequest::UpdateRecipient {
+                sender, recipient, ..
+            } => (*sender, *recipient, true),
+            CrossChainRequest::ConfirmUpdatedRecipient {
+                sender, recipient, ..
+            } => (*sender, *recipient, false),
+        }
+    }
 }
 
 impl<C, S> From<&ChainStateView<C>> for ChainInfo
