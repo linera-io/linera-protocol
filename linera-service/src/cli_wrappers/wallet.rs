@@ -1096,7 +1096,7 @@ impl ClientWrapper {
 }
 
 fn truncate_query_output(input: &str) -> String {
-    let max_len = 1000;
+    let max_len = 500;
     if input.len() < max_len {
         input.to_string()
     } else {
