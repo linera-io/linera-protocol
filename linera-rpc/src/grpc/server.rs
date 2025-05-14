@@ -465,7 +465,7 @@ where
                                 .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
                                 .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
                         let response = client.handle_cross_chain_request(request).await?;
-                        Ok::<_, anyhow::Error>(response)
+                        anyhow::Result::<_>::Ok(response)
                     };
                     match result().await {
                         Err(error) => {
@@ -480,18 +480,19 @@ where
                             i += 1;
 
                             let mut guard = cross_chain_tasks.lock().unwrap();
-                            match guard.entry(cross_chain_request.sender_recipient_update()) {
-                                Entry::Occupied(mut entry) => {
-                                    if let Some(new_cross_chain_request) = entry.get_mut().take() {
-                                        // A new request has come in, replacing the old one.
-                                        cross_chain_request = new_cross_chain_request;
-                                        i = 0;
-                                    }
+                            if let Some(entry) =
+                                guard.get_mut(&cross_chain_request.sender_recipient_update())
+                            {
+                                if let Some(new_cross_chain_request) = entry.take() {
+                                    // A new request has come in, replacing the old one.
+                                    cross_chain_request = new_cross_chain_request;
+                                    i = 0;
+                                } else {
+                                    tracing::error!(
+                                        "cross_chain_tasks entry is vacant even though \
+                                        a task is running"
+                                    );
                                 }
-                                Entry::Vacant(_) => tracing::error!(
-                                    "cross_chain_tasks entry is vacant even though \
-                                    a task is running"
-                                ),
                             }
                         }
                         _ => {
@@ -514,7 +515,7 @@ where
                                 }
                                 Entry::Vacant(_) => tracing::error!(
                                     "cross_chain_tasks entry is vacant even though \
-                                            a task is running"
+                                    a task is running"
                                 ),
                             }
                         }
