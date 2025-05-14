@@ -996,9 +996,6 @@ Start a Local Linera Network
 * `--cross-chain-sender-failure-rate <SENDER_FAILURE_RATE>` — Drop cross-chain messages randomly at the given rate (0 <= rate < 1) (meant for testing)
 
   Default value: `0.0`
-* `--cross-chain-max-tasks <MAX_CONCURRENT_TASKS>` — How many concurrent tasks to spawn for cross-chain message handling RPCs
-
-  Default value: `10`
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`
