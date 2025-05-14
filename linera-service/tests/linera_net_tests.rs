@@ -3335,8 +3335,10 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
         faucet_client.forget_chain(new_chain_id).await?;
     }
 
-    let amount = Amount::ONE;
-    let mut faucet_service = faucet_client.run_faucet(None, faucet_chain, amount).await?;
+    let new_chain_init_balance = Amount::ONE;
+    let mut faucet_service = faucet_client
+        .run_faucet(None, faucet_chain, new_chain_init_balance)
+        .await?;
     let faucet = faucet_service.instance();
 
     // Create a new wallet using the faucet
@@ -3345,16 +3347,39 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     let chain = client.request_chain(&faucet, true).await?.0;
     assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());
 
-    let initial_balance = client.query_balance(Account::chain(chain)).await?;
-    let fees_paid = amount - initial_balance;
-    assert!(initial_balance > Amount::ZERO);
+    let init_source_balance = client.query_balance(Account::chain(chain)).await?;
+    assert_eq!(
+        init_source_balance, new_chain_init_balance,
+        "Chain balance should be equal to the faucet amount"
+    );
 
+    let transfer_amount = Amount::from_millis(1);
     client
-        .transfer(initial_balance - fees_paid, chain, faucet_chain)
+        .transfer(transfer_amount, chain, faucet_chain)
         .await?;
-
     let final_balance = client.query_balance(Account::chain(chain)).await?;
-    assert_eq!(final_balance, Amount::ZERO);
+
+    let transfer_fee = init_source_balance - final_balance - transfer_amount;
+    assert!(
+        transfer_fee > Amount::ZERO,
+        "Transfer fee should be greater than zero"
+    );
+
+    assert!(
+        final_balance < init_source_balance - transfer_amount,
+        "Chain balance should decrease by transfer amount plus fees"
+    );
+
+    // This is how much we can transfer to zeroize the account and still pay for fees.
+    let amount = final_balance - transfer_fee;
+    client.transfer(amount, chain, faucet_chain).await?;
+
+    let chain_balance = client.query_balance(Account::chain(chain)).await?;
+    assert_eq!(
+        chain_balance,
+        Amount::ZERO,
+        "Chain balance should be zero after transfer"
+    );
 
     faucet_service.ensure_is_running()?;
     faucet_service.terminate().await?;
