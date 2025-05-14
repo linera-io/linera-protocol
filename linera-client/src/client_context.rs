@@ -432,12 +432,7 @@ where
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
         self.client
-            .download_certificates(
-                &nodes,
-                message_id.chain_id,
-                target_height,
-                committee.clone(),
-            )
+            .download_certificates(&nodes, message_id.chain_id, target_height, committee)
             .await
             .context("downloading parent chain")?;
 

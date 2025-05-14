@@ -329,7 +329,7 @@ where
         validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-        committee: Committee,
+        committee: &Committee,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let info = self.local_node.chain_info(chain_id).await?;
         if target_next_block_height <= info.next_block_height {
@@ -1112,7 +1112,7 @@ where
                 &nodes,
                 self.chain_id,
                 next_block_height,
-                self.local_committee().await?,
+                &self.local_committee().await?,
             )
             .await?;
         if info.next_block_height == next_block_height {
@@ -1356,7 +1356,7 @@ where
                 &nodes,
                 block.header.chain_id,
                 block.header.height,
-                self.local_committee().await?,
+                remote_committee,
             )
             .await?;
         // Process the received operations. Download required hashed certificate values if
