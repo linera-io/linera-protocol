@@ -479,16 +479,26 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
 
     let stream_id = StreamId { application_id, stream_name };
 
-    let start_index = 0;
+    let mut start_index = 0;
     let indices_and_events = node_service
         .events_from_index(&chain, &stream_id, start_index)
         .await?;
+    start_index += indices_and_events.len() as u32;
+    tracing::info!("1: indices_and_events={indices_and_events:?}");
+    assert_eq!(start_index, 1);
+
 
     let mutation = incrementCall { input: increment };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application.run_json_query(mutation).await?;
 
+    let indices_and_events = node_service
+        .events_from_index(&chain, &stream_id, start_index)
+        .await?;
+    tracing::info!("2: indices_and_events={indices_and_events:?}");
+    start_index += indices_and_events.len() as u32;
+    assert_eq!(start_index, 2);
 
     node_service.ensure_is_running()?;
 

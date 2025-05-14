@@ -671,17 +671,13 @@ where
         stream_id: StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, Error> {
-        tracing::info!("node_service: events_from_index, step 1");
         let client = self
             .context
             .lock()
             .await
             .make_chain_client(chain_id)
             .await?;
-        tracing::info!("node_service: events_from_index, step 2");
-        let result = client.events_from_index(stream_id, start_index).await;
-        tracing::info!("node_service: events_from_index, step 3");
-        Ok(result?)
+        Ok(client.events_from_index(stream_id, start_index).await?)
     }
 
     async fn blocks(

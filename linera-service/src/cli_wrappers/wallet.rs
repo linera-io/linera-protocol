@@ -1146,12 +1146,11 @@ impl NodeService {
     }
 
     pub async fn events_from_index(&self, chain_id: &ChainId, stream_id: &StreamId, start_index: u32) -> Result<Vec<IndexAndEvent>> {
-        let query = format!("query {{ eventsFromIndex(chainId: \"{chain_id}\", streamId: {}, startIndex: {start_index}) }}", serde_json::to_string(stream_id)?);
+        let query = format!("query {{ eventsFromIndex(chainId: \"{chain_id}\", streamId: {}, startIndex: {start_index}) }}", stream_id.to_value());
         let mut response = self.query_node(query).await?;
+        let response = response["eventsFromIndex"].take();
 
-
-
-        Ok(Vec::new())
+        Ok(serde_json::from_value(response)?)
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
