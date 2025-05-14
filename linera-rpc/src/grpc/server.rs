@@ -457,7 +457,7 @@ where
                         _permit = Some(semaphore_clone.clone().acquire_owned().await.unwrap());
                     }
 
-                    let result = || async {
+                    let result = (|| async {
                         let cross_chain_request = cross_chain_request.clone().try_into()?;
                         let request = Request::new(cross_chain_request);
                         let mut client =
@@ -466,61 +466,44 @@ where
                                 .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
                         let response = client.handle_cross_chain_request(request).await?;
                         anyhow::Result::<_>::Ok(response)
-                    };
-                    match result().await {
-                        Err(error) => {
-                            warn!(
-                                nickname,
-                                %error,
-                                i,
-                                from_shard = this_shard,
-                                to_shard = shard_id,
-                                "Failed to send cross-chain query",
-                            );
-                            i += 1;
+                    })().await;
 
-                            let mut guard = cross_chain_tasks.lock().unwrap();
-                            if let Some(entry) =
-                                guard.get_mut(&cross_chain_request.sender_recipient_update())
-                            {
-                                if let Some(new_cross_chain_request) = entry.take() {
-                                    // A new request has come in, replacing the old one.
-                                    cross_chain_request = new_cross_chain_request;
-                                    i = 0;
-                                } else {
-                                    tracing::error!(
-                                        "cross_chain_tasks entry is vacant even though \
-                                        a task is running"
-                                    );
-                                }
-                            }
+                    if let Err(error) = &result {
+                        warn!(
+                            nickname,
+                            %error,
+                            i,
+                            from_shard = this_shard,
+                            to_shard = shard_id,
+                            "Failed to send cross-chain query",
+                        );
+                        i += 1;
+                    } else {
+                        trace!(
+                            from_shard = this_shard,
+                            to_shard = shard_id,
+                            "Sent cross-chain query",
+                        );
+                    }
+
+                    let mut guard = cross_chain_tasks.lock().unwrap();
+                    if let Entry::Occupied(mut entry) = guard.entry(cross_chain_request.sender_recipient_update()) {
+                        if let Some(new_cross_chain_request) = entry.get_mut().take() {
+                            cross_chain_request = new_cross_chain_request;
+                            i = 0;
+                        } else if !result.is_err() {
+                            // No more requests are pending, so we can return.
+                            entry.remove();
+                            return;
                         }
-                        _ => {
-                            trace!(
-                                from_shard = this_shard,
-                                to_shard = shard_id,
-                                "Sent cross-chain query",
-                            );
-                            let mut guard = cross_chain_tasks.lock().unwrap();
-                            match guard.entry(cross_chain_request.sender_recipient_update()) {
-                                Entry::Occupied(mut entry) => {
-                                    if let Some(new_cross_chain_request) = entry.get_mut().take() {
-                                        cross_chain_request = new_cross_chain_request;
-                                        i = 0;
-                                    } else {
-                                        // No more requests are pending, so we can return.
-                                        entry.remove();
-                                        return;
-                                    }
-                                }
-                                Entry::Vacant(_) => tracing::error!(
-                                    "cross_chain_tasks entry is vacant even though \
-                                    a task is running"
-                                ),
-                            }
-                        }
+                    } else {
+                        tracing::error!(
+                            "cross_chain_tasks entry is vacant even though \
+                             a task is running"
+                        )
                     }
                 }
+
                 error!(
                     nickname,
                     from_shard = this_shard,
