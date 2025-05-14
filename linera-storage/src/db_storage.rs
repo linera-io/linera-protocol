@@ -336,7 +336,10 @@ const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 mod tests {
     use linera_base::{
         crypto::CryptoHash,
-        identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId, StreamName},
+        identifiers::{
+            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
+            StreamName,
+        },
     };
 
     use crate::db_storage::{
@@ -371,7 +374,6 @@ mod tests {
         assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
     }
 
-
     // The listing of the events in `list_events_from_index` depends on the
     // serialization of `BaseKey::Event`.
     #[test]
@@ -382,13 +384,20 @@ mod tests {
         let application_id = ApplicationId::new(application_description_hash);
         let application_id = GenericApplicationId::User(application_id);
         let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
-        let stream_id = StreamId { application_id, stream_name };
+        let stream_id = StreamId {
+            application_id,
+            stream_name,
+        };
         let mut prefix = vec![INDEX_EVENT_ID];
         prefix.extend(bcs::to_bytes(&chain_id).unwrap());
         prefix.extend(bcs::to_bytes(&stream_id).unwrap());
 
         let index = 1567;
-        let event_id = EventId { chain_id, stream_id, index };
+        let event_id = EventId {
+            chain_id,
+            stream_id,
+            index,
+        };
         let base_key = BaseKey::Event(event_id);
         let key = bcs::to_bytes(&base_key).unwrap();
         assert!(key.starts_with(&prefix));
