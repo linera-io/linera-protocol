@@ -1888,12 +1888,15 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let info = self.client.chain_info_with_committees(chain_id).await?;
-        let committee = info.current_committee()?;
-        let validators = self.client.make_nodes(committee)?;
+        let committee = self
+            .client
+            .chain_info_with_committees(chain_id)
+            .await?
+            .into_current_committee()?;
+        let validators = self.client.make_nodes(&committee)?;
         communicate_with_quorum(
             &validators,
-            committee,
+            &committee,
             |_: &()| (),
             |remote_node| {
                 let client = self.clone();
