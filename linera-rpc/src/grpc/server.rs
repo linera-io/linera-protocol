@@ -422,10 +422,11 @@ where
         let run_task = |task: Task| async {
             let task = task;
             let request = Request::new(task.request.try_into()?);
-            let mut client =
-                ValidatorWorkerClient::new(pool.channel(network.shard(task.shard_id).http_address())?)
-                    .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-                    .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+            let mut client = ValidatorWorkerClient::new(
+                pool.channel(network.shard(task.shard_id).http_address())?,
+            )
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
             let response = client.handle_cross_chain_request(request).await?;
             anyhow::Result::<_>::Ok(response)
         };
@@ -443,33 +444,37 @@ where
 
             let to_shard = state.task.shard_id.clone();
 
-            (queue, match action {
-                Action::Proceed { .. } => if let Err(error) = run_task(state.task).await {
-                    warn!(
-                        nickname = state.nickname,
-                        %error,
-                        retry = state.retries,
-                        from_shard = this_shard,
-                        to_shard,
-                        "Failed to send cross-chain query",
-                    );
+            (
+                queue,
+                match action {
+                    Action::Proceed { .. } => {
+                        if let Err(error) = run_task(state.task).await {
+                            warn!(
+                                nickname = state.nickname,
+                                %error,
+                                retry = state.retries,
+                                from_shard = this_shard,
+                                to_shard,
+                                "Failed to send cross-chain query",
+                            );
 
-                    Action::Retry
-                } else {
-                    trace!(
-                        from_shard = this_shard,
-                        to_shard,
-                        "Sent cross-chain query",
-                    );
+                            Action::Retry
+                        } else {
+                            trace!(from_shard = this_shard, to_shard, "Sent cross-chain query",);
 
-                    Action::Proceed { id: state.id.wrapping_add(1) }
-                }
+                            Action::Proceed {
+                                id: state.id.wrapping_add(1),
+                            }
+                        }
+                    }
 
-                Action::Retry => {
-                    linera_base::time::timer::sleep(cross_chain_retry_delay * state.retries).await;
-                    Action::Proceed { id: state.id }
-                }
-            })
+                    Action::Retry => {
+                        linera_base::time::timer::sleep(cross_chain_retry_delay * state.retries)
+                            .await;
+                        Action::Proceed { id: state.id }
+                    }
+                },
+            )
         };
 
         loop {
