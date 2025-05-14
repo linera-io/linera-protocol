@@ -294,9 +294,5 @@ branch = "no-uuid-wasm-bindgen"
 git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
 
-# Needed until a fix for https://github.com/async-graphql/async-graphql/issues/1703 is published
-[patch.crates-io]
-async-graphql = { git = "https://github.com/yasamoka/async-graphql.git", rev = "15fed95142019722e7da2c214ff9d8e2e755c9e5" }
-
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"
