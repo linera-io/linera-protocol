@@ -4,7 +4,6 @@
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
 
 use core::ops::Range;
-use std::sync::Arc;
 use std::convert::TryFrom;
 
 use linera_base::{
@@ -14,11 +13,6 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, StreamName},
     vm::{EvmQuery, VmRuntime},
 };
-use revm::{
-    primitives::Bytes, ContextPrecompile,
-    Evm, Inspector,
-};
-use num_enum::TryFromPrimitive;
 use revm::{primitives::Bytes, ExecuteCommitEvm, ExecuteEvm, Inspector};
 use revm_context::{
     result::{ExecutionResult, Output, SuccessReason},
@@ -345,13 +339,13 @@ fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, S
 }
 
 
-fn base_runtime_call<Runtime: BaseRuntime>(
+fn base_runtime_call<'a, Runtime: BaseRuntime>(
     tag: BasePrecompileTag,
     vec: &[u8],
-    context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+    context: &mut CTX<'a, Runtime>,
 ) -> Result<Vec<u8>, String> {
     let mut runtime = context
-        .db
+        .db()
         .0
         .runtime
         .lock()
@@ -422,7 +416,7 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<CTX<'a, Runtime>> for Cont
     ) -> Result<Option<InterpreterResult>, String> {
         if address == &PRECOMPILE_ADDRESS {
             let input = get_precompile_argument(context, &inputs.input);
-            let output = self.call_or_fail(&input, gas_limit, context)?;
+            let output = Self::call_or_fail(&input, gas_limit, context)?;
             return get_precompile_output(output);
         }
         self.inner
@@ -520,15 +514,15 @@ impl<'a> ContractPrecompile {
     }
 
     fn call_or_fail<Runtime: ContractRuntime>(
-        input: &Bytes,
+        vec: &[u8],
+        gas_limit: u64,
         context: &mut CTX<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
-        let vec = input.to_vec();
         ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
         match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
             PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
             PrecompileTag::Contract(contract_tag) => {
-                Self::contract_runtime_call(contract_tag, &vec[2..], context)
+                Self::contract_runtime_call(contract_tag, &vec[2..], gas_limit, context)
             }
             PrecompileTag::Service(_) => {
                 Err("Service tags are not available in ContractPrecompile".to_string())
@@ -542,7 +536,7 @@ struct ServicePrecompile {
     inner: EthPrecompiles,
 }
 
-impl ServicePrecompile {
+impl<'a> ServicePrecompile {
     fn service_runtime_call<Runtime: ServiceRuntime>(
         tag: ServicePrecompileTag,
         vec: &[u8],
@@ -566,10 +560,10 @@ impl ServicePrecompile {
     }
 
     fn call_or_fail<Runtime: ServiceRuntime>(
-        input: &Bytes,
-        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        vec: &[u8],
+        _gas_limit: u64,
+        context: &mut CTX<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
-        let vec = input.to_vec();
         ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
         match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
             PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
@@ -600,7 +594,7 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<CTX<'a, Runtime>> for Servi
     ) -> Result<Option<InterpreterResult>, String> {
         if address == &PRECOMPILE_ADDRESS {
             let input = get_precompile_argument(context, &inputs.input);
-            let output = self.call_or_fail(&input, gas_limit, context)?;
+            let output = Self::call_or_fail(&input, gas_limit, context)?;
             return get_precompile_output(output);
         }
         self.inner

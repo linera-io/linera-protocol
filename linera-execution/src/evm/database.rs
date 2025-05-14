@@ -407,7 +407,7 @@ where
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         // We use the gas_limit from the runtime
         let gas_limit = runtime.maximum_fuel_per_block(VmRuntime::Evm)?;
-        block_env.gas_limit = U256::from(gas_limit);
+        block_env.gas_limit = gas_limit;
         Ok(block_env)
     }
 }
@@ -418,7 +418,7 @@ where
 {
     pub fn get_service_block_env(&self) -> Result<BlockEnv, ExecutionError> {
         let mut block_env = self.get_block_env()?;
-        block_env.gas_limit = U256::from(EVM_SERVICE_GAS_LIMIT);
+        block_env.gas_limit = EVM_SERVICE_GAS_LIMIT;
         Ok(block_env)
     }
 }
