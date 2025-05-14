@@ -94,9 +94,10 @@ mod tests {
 }
 
 fn has_instantiation_function(module: &[u8]) -> bool {
-    module
-        .windows(4)
-        .any(|window| window == INSTANTIATE_SELECTOR)
+    let push4 = 99; // An EVM instruction
+    let mut vec = vec![push4];
+    vec.extend(INSTANTIATE_SELECTOR);
+    module.windows(5).any(|window| window == vec)
 }
 
 #[cfg(with_metrics)]
