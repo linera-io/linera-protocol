@@ -11,7 +11,7 @@ USAGES_FILE="$(mktemp)"
 # Make sure we're at the source of the repo.
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-grep -R '\<\(create_chain\|load_chain\)\>' linera-* > "$USAGES_FILE"
+grep -R '\<\(create_chain\|load_chain\)\>' linera-* >"$USAGES_FILE"
 
 # linera-storage contains the implementation of the methods
 sed -i -e '/linera-storage\/src\/lib\.rs/d' "$USAGES_FILE"
@@ -30,9 +30,9 @@ if [ "$(grep 'linera-sdk/src/test/validator.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]
     sed -i -e '/linera-sdk\/src\/test\/validator\.rs/d' "$USAGES_FILE"
 fi
 
-# The `linera wallet init` command uses `load_chain` in an isolated setting without any workers 
-if [ "$(grep 'linera-service/src/linera/main.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then
-    sed -i -e '/linera-service\/src\/linera\/main\.rs/d' "$USAGES_FILE"
+# The `linera wallet init` command uses `load_chain` in an isolated setting without any workers
+if [ "$(grep 'linera-service/src/cli/main.rs' "$USAGES_FILE" | wc -l)" -eq 1 ]; then
+    sed -i -e '/linera-service\/src\/cli\/main\.rs/d' "$USAGES_FILE"
 fi
 
 # The linera-client uses `create_chain` to initialize the storage from the genesis configuration,
