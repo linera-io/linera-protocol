@@ -82,7 +82,7 @@ impl Wallet {
     pub fn first_non_admin_chain(&self) -> Option<ChainId> {
         self.chain_ids()
             .into_iter()
-            .find(|chain_id| *chain_id != self.genesis_config.admin_id)
+            .find(|chain_id| *chain_id != self.genesis_config.admin_id())
     }
 
     pub fn chain_ids(&self) -> Vec<ChainId> {
@@ -146,7 +146,7 @@ impl Wallet {
     }
 
     pub fn genesis_admin_chain(&self) -> ChainId {
-        self.genesis_config.admin_id
+        self.genesis_config.admin_id()
     }
 
     pub fn genesis_config(&self) -> &GenesisConfig {

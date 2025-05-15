@@ -87,32 +87,90 @@ impl CommitteeConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
-    pub committee: CommitteeConfig,
-    pub admin_id: ChainId,
+    pub committee: Committee,
     pub timestamp: Timestamp,
-    pub chains: Vec<(AccountPublicKey, Amount)>,
-    pub policy: ResourceControlPolicy,
+    pub chains: Vec<ChainDescription>,
     pub network_name: String,
 }
 
 impl BcsSignable<'_> for GenesisConfig {}
 
+fn make_chain(
+    committee: &Committee,
+    index: u32,
+    admin_id: Option<ChainId>,
+    public_key: AccountPublicKey,
+    balance: Amount,
+    timestamp: Timestamp,
+) -> ChainDescription {
+    let committees: BTreeMap<_, _> = [(
+        Epoch::ZERO,
+        bcs::to_bytes(committee).expect("serializing a committee should not fail"),
+    )]
+    .into_iter()
+    .collect();
+    let origin = ChainOrigin::Root(index);
+    let config = InitialChainConfig {
+        admin_id,
+        application_permissions: Default::default(),
+        balance,
+        committees: committees.clone(),
+        epoch: Epoch::ZERO,
+        ownership: ChainOwnership::single(public_key.into()),
+    };
+    ChainDescription::new(origin, config, timestamp)
+}
+
 impl GenesisConfig {
+    /// Creates a `GenesisConfig` with the first chain being the admin chain.
     pub fn new(
         committee: CommitteeConfig,
-        admin_id: ChainId,
         timestamp: Timestamp,
         policy: ResourceControlPolicy,
         network_name: String,
+        admin_public_key: AccountPublicKey,
+        admin_balance: Amount,
     ) -> Self {
+        let committee = committee.into_committee(policy);
+        let admin_chain = make_chain(
+            &committee,
+            0,
+            None,
+            admin_public_key,
+            admin_balance,
+            timestamp,
+        );
         Self {
             committee,
-            admin_id,
             timestamp,
-            chains: Vec::new(),
-            policy,
+            chains: vec![admin_chain],
             network_name,
         }
+    }
+
+    pub fn add_root_chain(
+        &mut self,
+        public_key: AccountPublicKey,
+        balance: Amount,
+    ) -> ChainDescription {
+        let description = make_chain(
+            &self.committee,
+            self.chains.len() as u32,
+            Some(self.admin_id()),
+            public_key,
+            balance,
+            self.timestamp,
+        );
+        self.chains.push(description.clone());
+        description
+    }
+
+    pub fn admin_chain_description(&self) -> &ChainDescription {
+        &self.chains[0]
+    }
+
+    pub fn admin_id(&self) -> ChainId {
+        self.admin_chain_description().id()
     }
 
     pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
@@ -126,29 +184,8 @@ impl GenesisConfig {
         {
             return Err(Error::StorageIsAlreadyInitialized(description));
         }
-        let committee = self.create_committee();
-        let committees: BTreeMap<_, _> = [(
-            Epoch::ZERO,
-            bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-        )]
-        .into_iter()
-        .collect();
-        for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
-            let origin = ChainOrigin::Root(chain_number);
-            let config = InitialChainConfig {
-                admin_id: if chain_number == 0 {
-                    None
-                } else {
-                    Some(self.admin_id)
-                },
-                application_permissions: Default::default(),
-                balance: *balance,
-                committees: committees.clone(),
-                epoch: Epoch::ZERO,
-                ownership: ChainOwnership::single((*public_key).into()),
-            };
-            let description = ChainDescription::new(origin, config, self.timestamp);
-            storage.create_chain(description).await?;
+        for description in &self.chains {
+            storage.create_chain(description.clone()).await?;
         }
         let network_description = NetworkDescription {
             name: self.network_name.clone(),
@@ -160,10 +197,6 @@ impl GenesisConfig {
             .await
             .map_err(linera_chain::ChainError::from)?;
         Ok(())
-    }
-
-    pub fn create_committee(&self) -> Committee {
-        self.committee.clone().into_committee(self.policy.clone())
     }
 
     pub fn hash(&self) -> CryptoHash {
