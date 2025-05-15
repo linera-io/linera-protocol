@@ -378,10 +378,6 @@ where
             trace!("Scheduling notification query");
             if let Err(error) = notification_sender.send(notification) {
                 error!(%error, "dropping notification");
-                // #[cfg(with_metrics)]
-                // if error() {
-                //     NOTIFICATION_CHANNEL_FULL.with_label_values(&[]).inc();
-                // }
                 break;
             }
         }
