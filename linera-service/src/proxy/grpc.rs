@@ -22,7 +22,8 @@ use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
     config::{
-        ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
     },
     grpc::{
         api::{
@@ -153,12 +154,14 @@ struct GrpcProxyInner<S> {
     notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
     storage: S,
+    id: usize,
 }
 
 impl<S> GrpcProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
@@ -166,6 +169,7 @@ where
         timeout: Duration,
         tls: TlsConfig,
         storage: S,
+        id: usize,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
             public_config,
@@ -176,6 +180,7 @@ where
             notifier: ChannelNotifier::default(),
             tls,
             storage,
+            id,
         }))
     }
 
@@ -183,6 +188,14 @@ where
         ValidatorNodeServer::new(self.clone())
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+    }
+
+    fn config(&self) -> &ProxyConfig {
+        self.0
+            .internal_config
+            .proxies
+            .get(self.0.id)
+            .expect("No proxy config provided.")
     }
 
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
@@ -194,11 +207,11 @@ where
     }
 
     fn metrics_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.metrics_port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().metrics_port))
     }
 
     fn internal_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().port))
     }
 
     fn shard_for(&self, proxyable: &impl GrpcProxyable) -> Option<ShardConfig> {
