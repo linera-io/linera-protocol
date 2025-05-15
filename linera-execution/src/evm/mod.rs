@@ -33,6 +33,8 @@ pub enum EvmExecutionError {
     TransactError(String),
     #[error("Transact commit error {0}")]
     TransactCommitError(String),
+    #[error("Precompile error: {0}")]
+    PrecompileError(String),
     #[error("The operation was reverted with {gas_used} gas used and output {output:?}")]
     Revert {
         gas_used: u64,
