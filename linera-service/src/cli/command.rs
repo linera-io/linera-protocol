@@ -444,6 +444,31 @@ pub enum ClientCommand {
     #[cfg(feature = "benchmark")]
     Benchmark(BenchmarkCommand),
 
+    /// Runs multiple `linera benchmark` processes in parallel.
+    #[cfg(feature = "benchmark")]
+    MultiBenchmark {
+        /// The number of `linera benchmark` processes to run in parallel.
+        #[arg(long = "processes", default_value = "1")]
+        processes: usize,
+
+        /// The faucet (which implicitly defines the network)
+        #[arg(long = "faucet")]
+        faucet: String,
+
+        /// If running on local SSD, specify the directory to store the storage and wallet.
+        /// If not specified, a temporary directory will be used for each client.
+        #[arg(long = "ssd-dir")]
+        ssd_dir: Option<String>,
+
+        /// The benchmark command to run.
+        #[clap(flatten)]
+        command: BenchmarkCommand,
+
+        /// The delay between starting the benchmark processes, in seconds.
+        #[arg(long, default_value = "10")]
+        delay_between_processes: u64,
+    },
+
     /// Create genesis configuration for a Linera deployment.
     /// Create initial user chains and print information to be used for initialization of validator setup.
     /// This will also create an initial wallet for the owner of the initial "root" chains.
@@ -891,6 +916,8 @@ impl ClientCommand {
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
             #[cfg(feature = "benchmark")]
             ClientCommand::Benchmark { .. } => "benchmark".into(),
+            #[cfg(feature = "benchmark")]
+            ClientCommand::MultiBenchmark { .. } => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),
             ClientCommand::Project { .. } => "project".into(),
             ClientCommand::Watch { .. } => "watch".into(),

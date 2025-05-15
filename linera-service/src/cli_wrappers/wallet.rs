@@ -38,7 +38,16 @@ use tempfile::TempDir;
 use tokio::process::{Child, Command};
 use tracing::{error, info, warn};
 #[cfg(feature = "benchmark")]
-use {crate::cli::command::BenchmarkCommand, serde_command_opts::to_args};
+use {
+    crate::cli::command::BenchmarkCommand,
+    serde_command_opts::to_args,
+    std::process::Stdio,
+    tokio::{
+        io::{AsyncBufReadExt, BufReader},
+        sync::oneshot,
+        task::JoinHandle,
+    },
+};
 
 use crate::{
     cli_wrappers::{
@@ -70,6 +79,7 @@ pub struct ClientWrapper {
     network: Network,
     pub path_provider: PathProvider,
     on_drop: OnClientDrop,
+    extra_args: Vec<String>,
 }
 
 /// Action to perform when the [`ClientWrapper`] is dropped.
@@ -89,6 +99,24 @@ impl ClientWrapper {
         id: usize,
         on_drop: OnClientDrop,
     ) -> Self {
+        Self::new_with_extra_args(
+            path_provider,
+            network,
+            testing_prng_seed,
+            id,
+            on_drop,
+            vec!["--wait-for-outgoing-messages".to_string()],
+        )
+    }
+
+    pub fn new_with_extra_args(
+        path_provider: PathProvider,
+        network: Network,
+        testing_prng_seed: Option<u64>,
+        id: usize,
+        on_drop: OnClientDrop,
+        extra_args: Vec<String>,
+    ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
             path_provider.path().display(),
@@ -106,6 +134,7 @@ impl ClientWrapper {
             network,
             path_provider,
             on_drop,
+            extra_args,
         }
     }
 
@@ -164,16 +193,24 @@ impl ClientWrapper {
         Ok(())
     }
 
-    async fn command(&self) -> Result<Command> {
+    async fn command_with_envs(&self, envs: &[(&str, &str)]) -> Result<Command> {
         let mut command = self.command_binary().await?;
-        command.current_dir(self.path_provider.path()).env(
-            "RUST_LOG",
-            std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
-        );
+        command.current_dir(self.path_provider.path());
+        for (key, value) in envs {
+            command.env(key, value);
+        }
         for argument in self.command_arguments() {
             command.arg(&*argument);
         }
         Ok(command)
+    }
+
+    async fn command(&self) -> Result<Command> {
+        self.command_with_envs(&[(
+            "RUST_LOG",
+            &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+        )])
+        .await
     }
 
     /// Returns an iterator over the arguments that should be added to all command invocations.
@@ -191,9 +228,9 @@ impl ClientWrapper {
             "500000".into(),
             "--recv-timeout-ms".into(),
             "500000".into(),
-            "--wait-for-outgoing-messages".into(),
         ]
         .into_iter()
+        .chain(self.extra_args.iter().map(|s| s.as_str().into()))
     }
 
     /// Returns the [`Command`] instance configured to run the appropriate binary.
@@ -611,8 +648,7 @@ impl ClientWrapper {
     }
 
     #[cfg(feature = "benchmark")]
-    async fn benchmark_command(&self, args: BenchmarkCommand) -> Result<Command> {
-        let mut command = self.command().await?;
+    fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
         let args = to_args(&args)?
             .chunks_exact(2)
             .flat_map(|pair| {
@@ -625,6 +661,24 @@ impl ClientWrapper {
             })
             .collect::<Vec<_>>();
         command.arg("benchmark").args(args);
+        Ok(())
+    }
+
+    #[cfg(feature = "benchmark")]
+    async fn benchmark_command_with_envs(
+        &self,
+        args: BenchmarkCommand,
+        envs: &[(&str, &str)],
+    ) -> Result<Command> {
+        let mut command = self.command_with_envs(envs).await?;
+        Self::benchmark_command_internal(&mut command, args)?;
+        Ok(command)
+    }
+
+    #[cfg(feature = "benchmark")]
+    async fn benchmark_command(&self, args: BenchmarkCommand) -> Result<Command> {
+        let mut command = self.command().await?;
+        Self::benchmark_command_internal(&mut command, args)?;
         Ok(command)
     }
 
@@ -634,6 +688,50 @@ impl ClientWrapper {
         let mut command = self.benchmark_command(args).await?;
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
+    }
+
+    /// Runs `linera benchmark`, but detached: don't wait for the command to finish, just spawn it
+    /// and return the child process, and the handles to the stdout and stderr.
+    #[cfg(feature = "benchmark")]
+    pub async fn benchmark_detached(
+        &self,
+        args: BenchmarkCommand,
+        tx: oneshot::Sender<()>,
+    ) -> Result<(Child, JoinHandle<()>, JoinHandle<()>)> {
+        let mut child = self
+            .benchmark_command_with_envs(args, &[("RUST_LOG", "linera=info")])
+            .await?
+            .kill_on_drop(true)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let pid = child.id().expect("failed to get pid");
+        let stdout = child.stdout.take().expect("stdout not open");
+        let stdout_handle = tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                println!("benchmark{{pid={pid}}} {line}");
+            }
+        });
+
+        let stderr = child.stderr.take().expect("stderr not open");
+        let stderr_handle = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            let mut tx = Some(tx);
+            while let Ok(Some(line)) = lines.next_line().await {
+                if line.contains("Ready to start benchmark") {
+                    tx.take()
+                        .expect("Should only send signal once")
+                        .send(())
+                        .expect("failed to send ready signal to main thread");
+                } else {
+                    println!("benchmark{{pid={pid}}} {line}");
+                }
+            }
+        });
+        Ok((child, stdout_handle, stderr_handle))
     }
 
     /// Runs `linera open-chain`.
