@@ -23,12 +23,11 @@ use linera_base::{
     identifiers::{Account, AccountOwner},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
-use linera_faucet::ClaimOutcome;
 use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     test_name,
 };
@@ -62,7 +61,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
-    faucet_client.wallet_init(&[], FaucetOption::None).await?;
+    faucet_client.wallet_init(None).await?;
 
     let faucet_chain = client
         .open_and_assign(&faucet_client, Amount::from_tokens(1_000u128))
@@ -79,7 +78,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     assert_eq!(faucet.current_validators().await?.len(), 4);
 
     let client_2 = net.make_client().await;
-    client_2.wallet_init(&[], FaucetOption::None).await?;
+    client_2.wallet_init(None).await?;
     let chain_1 = client
         .load_wallet()?
         .default_chain()
@@ -247,7 +246,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
-    faucet_client.wallet_init(&[], FaucetOption::None).await?;
+    faucet_client.wallet_init(None).await?;
 
     let faucet_chain = client
         .open_and_assign(&faucet_client, Amount::from_tokens(1_000u128))
@@ -302,7 +301,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 
     // Create a new chain starting on the new epoch
     let new_owner = client.keygen().await?;
-    let ClaimOutcome { chain_id, .. } = faucet.claim(&new_owner).await?;
+    let chain_id = faucet.claim(&new_owner).await?.id();
     client.assign(new_owner, chain_id).await?;
 
     // Attempt to receive the existing epoch change message
@@ -335,7 +334,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
-    faucet_client.wallet_init(&[], FaucetOption::None).await?;
+    faucet_client.wallet_init(None).await?;
 
     let faucet_chain = client
         .open_and_assign(&faucet_client, Amount::from_tokens(1_000u128))
@@ -428,7 +427,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Create a new chain starting on the new epoch
     let new_owner = client.keygen().await?;
-    let ClaimOutcome { chain_id, .. } = faucet.claim(&new_owner).await?;
+    let chain_id = faucet.claim(&new_owner).await?.id();
     client.assign(new_owner, chain_id).await?;
 
     // Attempt to receive the existing epoch change messages
@@ -458,7 +457,8 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 
     let client2 = net.make_client().await;
     let mut height = 0;
-    client2.wallet_init(&[chain], FaucetOption::None).await?;
+    client2.wallet_init(None).await?;
+    client2.follow_chain(chain).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let port = get_node_port().await;
@@ -627,14 +627,15 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
 async fn test_storage_service_wallet_lock() -> Result<()> {
     use std::mem::drop;
 
-    use linera_client::config::WalletState;
+    use linera_client::{persistent, wallet::Wallet};
+
     let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let (mut net, client) = config.instantiate().await?;
 
-    let wallet_state = WalletState::read_from_file(client.wallet_path().as_path())?;
+    let wallet_state = persistent::File::<Wallet>::read(client.wallet_path().as_path())?;
 
     let chain_id = wallet_state.default_chain().unwrap();
 

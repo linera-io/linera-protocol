@@ -154,7 +154,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        exponential_bucket_latencies(10.0),
+        exponential_bucket_latencies(500.0),
     )
 });
 
@@ -309,11 +309,6 @@ impl ChainTipState {
             }
         );
         Ok(self.next_block_height > height)
-    }
-
-    /// Returns `true` if the next block will be the first, i.e. the chain doesn't have any blocks.
-    pub fn is_first_block(&self) -> bool {
-        self.next_block_height == BlockHeight::ZERO
     }
 
     /// Checks if the measurement counters would be valid.
@@ -708,7 +703,10 @@ where
         );
 
         chain.system.timestamp.set(block.timestamp);
-
+        ensure!(
+            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
+            ChainError::EmptyBlock
+        );
         let (_, committee) = chain
             .system
             .current_committee()

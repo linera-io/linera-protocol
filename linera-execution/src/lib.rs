@@ -77,9 +77,10 @@ pub use crate::{
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
 
-/// The `linera.sol` library code to be included in solidity smart
+/// The `Linera.sol` library code to be included in solidity smart
 /// contracts using Linera features.
-pub const LINERA_SOL: &str = include_str!("../solidity/linera.sol");
+pub const LINERA_SOL: &str = include_str!("../solidity/Linera.sol");
+pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
@@ -297,12 +298,12 @@ pub enum ExecutionError {
     #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
     #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
-    InsufficientFunding {
+    InsufficientBalance {
         balance: Amount,
         account: AccountOwner,
     },
-    #[error("Required execution fees exceeded the total funding available: {balance}")]
-    InsufficientFundingForFees { balance: Amount },
+    #[error("Required execution fees exceeded the total funding available. Fees {fees}, available balance: {balance}")]
+    FeesExceedFunding { fees: Amount, balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]

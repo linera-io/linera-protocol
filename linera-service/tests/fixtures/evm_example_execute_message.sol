@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "./linera.sol";
+import "./Linera.sol";
 
 contract ExampleExecuteMessage {
     uint64 value;
-    Linera.MessageId last_message_id;
+    LineraTypes.MessageId last_message_id;
 
     constructor(uint64 test_value) {
        require(test_value == 42);
@@ -20,7 +20,7 @@ contract ExampleExecuteMessage {
     function execute_message(bytes memory input) external {
         uint64 increment = abi.decode(input, (uint64));
         value = value + increment;
-        Linera.OptionMessageId memory opt_message_id = Linera.message_id();
+        LineraTypes.opt_MessageId memory opt_message_id = Linera.message_id();
         require(opt_message_id.has_value);
         last_message_id = opt_message_id.value;
     }

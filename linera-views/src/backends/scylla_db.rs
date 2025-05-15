@@ -17,11 +17,16 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
-    batch::BatchStatement,
-    prepared_statement::PreparedStatement,
-    statement::batch::BatchType,
-    transport::errors::{DbError, QueryError},
-    Session, SessionBuilder,
+    client::{session::Session, session_builder::SessionBuilder},
+    deserialize::{DeserializationError, TypeCheckError},
+    errors::{
+        DbError, ExecutionError, IntoRowsResultError, NewSessionError, NextPageError, NextRowError,
+        PagerExecutionError, PrepareError, RequestAttemptError, RequestError, RowsError,
+    },
+    statement::{
+        batch::{BatchStatement, BatchType},
+        prepared::PreparedStatement,
+    },
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -465,27 +470,27 @@ pub enum ScyllaDbStoreInternalError {
 
     /// A deserialization error in ScyllaDB
     #[error(transparent)]
-    DeserializationError(#[from] scylla::deserialize::DeserializationError),
+    DeserializationError(#[from] DeserializationError),
 
     /// A row error in ScyllaDB
     #[error(transparent)]
-    RowsError(#[from] scylla::transport::query_result::RowsError),
+    RowsError(#[from] RowsError),
 
     /// A type error in the accessed data in ScyllaDB
     #[error(transparent)]
-    IntoRowsResultError(#[from] scylla::transport::query_result::IntoRowsResultError),
+    IntoRowsResultError(#[from] IntoRowsResultError),
 
     /// A type check error in ScyllaDB
     #[error(transparent)]
-    TypeCheckError(#[from] scylla::deserialize::TypeCheckError),
+    TypeCheckError(#[from] TypeCheckError),
 
     /// A query error in ScyllaDB
     #[error(transparent)]
-    ScyllaDbQueryError(#[from] scylla::transport::errors::QueryError),
+    PagerExecutionError(#[from] PagerExecutionError),
 
     /// A query error in ScyllaDB
     #[error(transparent)]
-    ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
+    ScyllaDbNewSessionError(#[from] NewSessionError),
 
     /// Namespace contains forbidden characters
     #[error("Namespace contains forbidden characters")]
@@ -498,6 +503,18 @@ pub enum ScyllaDbStoreInternalError {
     /// The batch is too long to be written
     #[error("The batch is too long to be written")]
     BatchTooLong,
+
+    /// A prepare error in ScyllaDB
+    #[error(transparent)]
+    PrepareError(#[from] PrepareError),
+
+    /// An execution error in ScyllaDB
+    #[error(transparent)]
+    ExecutionError(#[from] ExecutionError),
+
+    /// A next row error in ScyllaDB
+    #[error(transparent)]
+    NextRowError(#[from] NextRowError),
 }
 
 impl KeyValueStoreError for ScyllaDbStoreInternalError {
@@ -689,16 +706,16 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let result = match result {
             Ok(result) => result,
             Err(error) => {
-                let invalid_or_not_found = match &error {
-                    QueryError::DbError(db_error, msg) => {
-                        *db_error == DbError::Invalid && msg.as_str() == miss_msg
-                    }
+                let invalid_or_keyspace_not_found = match &error {
+                    PagerExecutionError::NextPageError(NextPageError::RequestFailure(
+                        RequestError::LastAttemptError(RequestAttemptError::DbError(db_error, msg)),
+                    )) => *db_error == DbError::Invalid && msg.as_str() == miss_msg,
                     _ => false,
                 };
-                if invalid_or_not_found {
+                if invalid_or_keyspace_not_found {
                     return Ok(Vec::new());
                 } else {
-                    return Err(ScyllaDbStoreInternalError::ScyllaDbQueryError(error));
+                    return Err(ScyllaDbStoreInternalError::PagerExecutionError(error));
                 }
             }
         };
@@ -780,7 +797,9 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             return Ok(true);
         };
         let missing_table = match &error {
-            QueryError::DbError(db_error, msg) => {
+            PrepareError::AllAttemptsFailed {
+                first_attempt: RequestAttemptError::DbError(db_error, msg),
+            } => {
                 if *db_error != DbError::Invalid {
                     false
                 } else {
@@ -794,7 +813,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         if missing_table {
             Ok(false)
         } else {
-            Err(ScyllaDbStoreInternalError::ScyllaDbQueryError(error))
+            Err(ScyllaDbStoreInternalError::PrepareError(error))
         }
     }
 
@@ -809,10 +828,13 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .boxed()
             .await?;
         // Create a keyspace if it doesn't exist
-        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
-            'class' : 'SimpleStrategy', \
-            'replication_factor' : 1 \
-        }";
+        let query = format!(
+            "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = {{ \
+                'class' : 'NetworkTopologyStrategy', \
+                'replication_factor' : {} \
+            }}",
+            config.common_config.replication_factor
+        );
 
         // Execute the query
         let prepared = session.prepare(query).await?;
@@ -887,6 +909,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+            replication_factor: 1,
         };
         Ok(ScyllaDbStoreInternalConfig { uri, common_config })
     }

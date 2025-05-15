@@ -541,26 +541,6 @@ impl Block {
             && *previous_block_hash == self.header.previous_block_hash
     }
 
-    /// Returns whether this block matches the execution outcome.
-    pub fn matches_outcome(&self, outcome: &BlockExecutionOutcome) -> bool {
-        let BlockExecutionOutcome {
-            state_hash,
-            messages,
-            previous_message_blocks,
-            oracle_responses,
-            events,
-            blobs,
-            operation_results,
-        } = outcome;
-        *state_hash == self.header.state_hash
-            && *messages == self.body.messages
-            && *previous_message_blocks == self.body.previous_message_blocks
-            && *oracle_responses == self.body.oracle_responses
-            && *events == self.body.events
-            && *blobs == self.body.blobs
-            && *operation_results == self.body.operation_results
-    }
-
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {
         let proposed_block = ProposedBlock {
             chain_id: self.header.chain_id,

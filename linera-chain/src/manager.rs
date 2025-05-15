@@ -92,7 +92,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{Block, ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{BlockProposal, LiteVote, ProposedBlock, Vote},
+    data_types::{BlockProposal, LiteVote, OriginalProposal, ProposedBlock, Vote},
     types::{TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
@@ -343,10 +343,13 @@ where
         // if there is a validated block certificate from a later round.
         if let Some(vote) = self.confirmed_vote() {
             ensure!(
-                if let Some(validated_cert) = proposal.validated_block_certificate.as_ref() {
-                    vote.round <= validated_cert.round
-                } else {
-                    vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
+                match proposal.original_proposal.as_ref() {
+                    None => false,
+                    Some(OriginalProposal::Regular { certificate }) =>
+                        vote.round <= certificate.round,
+                    Some(OriginalProposal::Fast { .. }) => {
+                        vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
+                    }
                 },
                 ChainError::HasIncompatibleConfirmedVote(new_block.height, vote.round)
             );
@@ -451,22 +454,44 @@ where
     ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
         let round = proposal.content.round;
 
-        // If the validated block certificate is more recent, update our locking block.
-        if let Some(lite_cert) = &proposal.validated_block_certificate {
-            if self
-                .locking_block
-                .get()
-                .as_ref()
-                .is_none_or(|locking| locking.round() < lite_cert.round)
-            {
-                let value = ValidatedBlock::new(block.clone());
-                if let Some(certificate) = lite_cert.clone().with_value(value) {
-                    self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
+        match &proposal.original_proposal {
+            // If the validated block certificate is more recent, update our locking block.
+            Some(OriginalProposal::Regular { certificate }) => {
+                if self
+                    .locking_block
+                    .get()
+                    .as_ref()
+                    .is_none_or(|locking| locking.round() < certificate.round)
+                {
+                    let value = ValidatedBlock::new(block.clone());
+                    if let Some(certificate) = certificate.clone().with_value(value) {
+                        self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
+                    }
                 }
             }
-        } else if round.is_fast() && self.locking_block.get().is_none() {
-            // The fast block also counts as locking.
-            self.update_locking(LockingBlock::Fast(proposal.clone()), blobs.clone())?;
+            // If this contains a proposal from the fast round, we consider that a locking block.
+            // It is useful for clients synchronizing with us, so they can re-propose it.
+            Some(OriginalProposal::Fast {
+                public_key,
+                signature,
+            }) => {
+                if self.locking_block.get().is_none() {
+                    let original_proposal = BlockProposal {
+                        public_key: *public_key,
+                        signature: *signature,
+                        ..proposal.clone()
+                    };
+                    self.update_locking(LockingBlock::Fast(original_proposal), blobs.clone())?;
+                }
+            }
+            // If this proposal itself is from the fast round, it is also a locking block: We
+            // will vote to confirm it, so it is locked.
+            None => {
+                if round.is_fast() && self.locking_block.get().is_none() {
+                    // The fast block also counts as locking.
+                    self.update_locking(LockingBlock::Fast(proposal.clone()), blobs.clone())?;
+                }
+            }
         }
 
         // We record the proposed block, in case it affects the current round number.

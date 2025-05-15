@@ -50,7 +50,7 @@ linera wallet init --faucet $FAUCET_URL
 
 INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
-OWNER_1="${INFO_1[2]}"
+OWNER_1="${INFO_1[1]}"
 ```
 
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.

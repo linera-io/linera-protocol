@@ -13,7 +13,9 @@ use linera_base::{
     identifiers::{AccountOwner, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, ProposalContent},
+    data_types::{
+        BlockExecutionOutcome, BlockProposal, MessageBundle, OriginalProposal, ProposalContent,
+    },
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
@@ -130,7 +132,7 @@ where
                     outcome: _,
                 },
             public_key,
-            validated_block_certificate,
+            original_proposal,
             signature: _,
         } = proposal;
 
@@ -146,11 +148,12 @@ where
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
                 chain.pending_proposed_blobs.clear();
             }
+            let validated = matches!(original_proposal, Some(OriginalProposal::Regular { .. }));
             chain
                 .pending_proposed_blobs
                 .try_load_entry_mut(&owner)
                 .await?
-                .update(*round, validated_block_certificate.is_some(), maybe_blobs)
+                .update(*round, validated, maybe_blobs)
                 .await?;
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
@@ -533,17 +536,16 @@ where
     /// Attempts to vote for a leader timeout, if possible.
     pub(super) async fn vote_for_leader_timeout(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.state.chain;
-        if let Some(epoch) = chain.execution_state.system.epoch.get() {
-            let chain_id = chain.chain_id();
-            let height = chain.tip_state.get().next_block_height;
-            let key_pair = self.state.config.key_pair();
-            let local_time = self.state.storage.clock().current_time();
-            if chain
-                .manager
-                .vote_timeout(chain_id, height, *epoch, key_pair, local_time)
-            {
-                self.save().await?;
-            }
+        let epoch = chain.execution_state.system.epoch.get();
+        let chain_id = chain.chain_id();
+        let height = chain.tip_state.get().next_block_height;
+        let key_pair = self.state.config.key_pair();
+        let local_time = self.state.storage.clock().current_time();
+        if chain
+            .manager
+            .vote_timeout(chain_id, height, *epoch, key_pair, local_time)
+        {
+            self.save().await?;
         }
         Ok(())
     }
@@ -551,7 +553,7 @@ where
     /// Votes for falling back to a public chain.
     pub(super) async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.state.chain;
-        if let (Some(epoch), Some(entry)) = (
+        if let (epoch, Some(entry)) = (
             chain.execution_state.system.epoch.get(),
             chain.unskippable_bundles.front(),
         ) {
@@ -650,7 +652,7 @@ where
 /// Helper type for handling cross-chain updates.
 pub(crate) struct CrossChainUpdateHelper<'a> {
     pub allow_messages_from_deprecated_epochs: bool,
-    pub current_epoch: Option<Epoch>,
+    pub current_epoch: Epoch,
     pub committees: &'a BTreeMap<Epoch, Committee>,
 }
 
@@ -701,7 +703,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
             // Check if the height is trusted or the epoch is trusted.
             if self.allow_messages_from_deprecated_epochs
                 || Some(bundle.height) <= last_anticipated_block_height
-                || Some(*epoch) >= self.current_epoch
+                || *epoch >= self.current_epoch
                 || self.committees.contains_key(epoch)
             {
                 trusted_len = i + 1;

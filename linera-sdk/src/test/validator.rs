@@ -39,12 +39,12 @@ use crate::ContractAbi;
 ///
 /// ```rust
 /// # use linera_sdk::test::*;
-/// # use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+/// # use linera_base::{data_types::Amount, identifiers::ChainId};
 /// # tokio_test::block_on(async {
 /// let validator = TestValidator::new().await;
 /// assert_eq!(
-///     validator.new_chain().await.get_tip_height().await,
-///     BlockHeight(0)
+///     validator.new_chain().await.chain_balance().await,
+///     Amount::from_tokens(10)
 /// );
 /// # });
 /// ```
@@ -309,7 +309,7 @@ impl TestValidator {
 
         let open_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
-            balance: Amount::ZERO,
+            balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };
         let new_chain_config = open_chain_config.init_chain_config(

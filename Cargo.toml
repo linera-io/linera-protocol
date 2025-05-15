@@ -7,7 +7,6 @@ members = [
     "linera-ethereum",
     "linera-execution",
     "linera-explorer",
-    "linera-faucet",
     "linera-faucet/client",
     "linera-faucet/server",
     "linera-indexer/example",
@@ -122,7 +121,6 @@ lru = "0.12.3"
 num-bigint = "0.4.3"
 num-format = "0.4.4"
 num-traits = "0.2.18"
-num_enum = "0.7.3"
 octocrab = "0.42.1"
 oneshot = "0.1.6"
 pathdiff = "0.2.1"
@@ -148,7 +146,12 @@ revm-precompile = "16.2.0"
 revm-primitives = "15.2.0"
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
-scylla = "0.15.1"
+scylla = "1.1.0"
+secp256k1 = { version = "0.30.0", default-features = false, features = [
+    "alloc",
+    "rand",
+    "serde",
+] }
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
 serde-name = "0.2.1"
@@ -222,7 +225,6 @@ linera-client = { version = "0.15.0", path = "./linera-client" }
 linera-core = { version = "0.15.0", path = "./linera-core", default-features = false }
 linera-ethereum = { version = "0.15.0", path = "./linera-ethereum", default-features = false }
 linera-execution = { version = "0.15.0", path = "./linera-execution", default-features = false }
-linera-faucet = { version = "0.15.0", path = "linera-faucet" }
 linera-faucet-client = { version = "0.15.0", path = "linera-faucet/client" }
 linera-faucet-server = { version = "0.15.0", path = "linera-faucet/server" }
 linera-indexer = { version = "0.15.0", path = "./linera-indexer/lib" }
@@ -282,11 +284,6 @@ branch = "no-uuid-wasm-bindgen"
 [patch.crates-io.wasm_thread]
 git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
-
-[patch.crates-io]
-async-graphql = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
-async-graphql-axum = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
-async-graphql-value = { git = "https://github.com/deuszx/async-graphql", branch = "v7.0.2-react18" }
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"

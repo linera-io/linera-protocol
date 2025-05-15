@@ -232,12 +232,6 @@ impl Timestamp {
         Timestamp(self.0.saturating_sub(duration.0))
     }
 
-    /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
-    /// if it would overflow.
-    pub const fn saturating_add_micros(&self, micros: u64) -> Timestamp {
-        Timestamp(self.0.saturating_add(micros))
-    }
-
     /// Returns a timestamp `micros` microseconds earlier than `self`, or the lowest possible value
     /// if it would underflow.
     pub const fn saturating_sub_micros(&self, micros: u64) -> Timestamp {
@@ -932,6 +926,19 @@ impl ApplicationPermissions {
             change_application_permissions: vec![app_id],
             call_service_as_oracle: Some(vec![app_id]),
             make_http_requests: Some(vec![app_id]),
+        }
+    }
+
+    /// Creates new `ApplicationPermissions` where the given applications are the only ones
+    /// whose operations are allowed and mandatory, and they can also close the chain.
+    pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
+        Self {
+            execute_operations: Some(app_ids.clone()),
+            mandatory_applications: app_ids.clone(),
+            close_chain: app_ids.clone(),
+            change_application_permissions: app_ids.clone(),
+            call_service_as_oracle: Some(app_ids.clone()),
+            make_http_requests: Some(app_ids),
         }
     }
 
