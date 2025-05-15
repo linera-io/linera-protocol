@@ -37,6 +37,8 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
 use tracing::{error, info, warn};
+#[cfg(feature = "benchmark")]
+use {crate::cli::command::BenchmarkCommand, serde_command_opts::to_args};
 
 use crate::{
     cli_wrappers::{
@@ -608,28 +610,28 @@ impl ClientWrapper {
         Ok(())
     }
 
+    #[cfg(feature = "benchmark")]
+    async fn benchmark_command(&self, args: BenchmarkCommand) -> Result<Command> {
+        let mut command = self.command().await?;
+        let args = to_args(&args)?
+            .chunks_exact(2)
+            .flat_map(|pair| {
+                let option = format!("--{}", pair[0]);
+                match pair[1].as_str() {
+                    "true" => vec![option],
+                    "false" => vec![],
+                    _ => vec![option, pair[1].clone()],
+                }
+            })
+            .collect::<Vec<_>>();
+        command.arg("benchmark").args(args);
+        Ok(command)
+    }
+
     /// Runs `linera benchmark`.
     #[cfg(feature = "benchmark")]
-    pub async fn benchmark(
-        &self,
-        num_chains: usize,
-        transactions_per_block: usize,
-        fungible_application_id: Option<
-            ApplicationId<linera_sdk::abis::fungible::FungibleTokenAbi>,
-        >,
-    ) -> Result<()> {
-        let mut command = self.command().await?;
-        command
-            .arg("benchmark")
-            .args(["--num-chains", &num_chains.to_string()])
-            .args([
-                "--transactions-per-block",
-                &transactions_per_block.to_string(),
-            ]);
-        if let Some(application_id) = fungible_application_id {
-            let application_id = application_id.forget_abi().to_string();
-            command.args(["--fungible-application-id", &application_id]);
-        }
+    pub async fn benchmark(&self, args: BenchmarkCommand) -> Result<()> {
+        let mut command = self.benchmark_command(args).await?;
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }

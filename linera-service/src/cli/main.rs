@@ -42,6 +42,8 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault as _,
 };
 use linera_faucet_server::FaucetService;
+#[cfg(feature = "benchmark")]
+use linera_service::cli::command::BenchmarkCommand;
 use linera_service::{
     cli::{
         command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand},
@@ -782,17 +784,18 @@ impl Runnable for Job {
             }
 
             #[cfg(feature = "benchmark")]
-            Benchmark {
-                num_chains,
-                tokens_per_chain,
-                transactions_per_block,
-                fungible_application_id,
-                bps,
-                close_chains,
-                health_check_endpoints,
-                wrap_up_max_in_flight,
-                confirm_before_start,
-            } => {
+            Benchmark(benchmark_config) => {
+                let BenchmarkCommand {
+                    num_chains,
+                    tokens_per_chain,
+                    transactions_per_block,
+                    fungible_application_id,
+                    bps,
+                    close_chains,
+                    health_check_endpoints,
+                    wrap_up_max_in_flight,
+                    confirm_before_start,
+                } = benchmark_config;
                 let pub_keys: Vec<_> = std::iter::repeat_with(|| signer.generate_new())
                     .take(num_chains)
                     .collect();
