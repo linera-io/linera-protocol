@@ -35,7 +35,7 @@ use {
     linera_base::prometheus_util::{
         linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     },
-    prometheus::{HistogramVec, IntCounterVec},
+    prometheus::{register_int_gauge, HistogramVec, IntCounterVec, IntGauge},
 };
 
 use super::{
@@ -117,6 +117,15 @@ static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Notification channel full",
         &[],
     )
+});
+
+#[cfg(with_metrics)]
+static CROSS_CHAIN_MESSAGE_TASKS: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge!(
+        "cross_chain_message_tasks",
+        "Number of concurrent cross-chain message tasks",
+    )
+    .expect("IntGauge can be created")
 });
 
 #[derive(Clone)]
@@ -498,6 +507,8 @@ where
 
                 request = receiver.next() => {
                     let Some((request, shard_id)) = request else { break };
+                    #[cfg(with_metrics)]
+                    CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
 
                     if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
                         warn!("Dropped 1 cross-chain message intentionally.");
