@@ -26,8 +26,9 @@ use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
-        CrossChainConfig, ExporterServiceConfig, NetworkProtocol, NotificationConfig, ShardConfig,
-        ShardId, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        CrossChainConfig, ExporterServiceConfig, NetworkProtocol, NotificationConfig, ProxyConfig,
+        ShardConfig, ShardId, TlsConfig, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
     },
     grpc, simple,
 };
@@ -44,7 +45,6 @@ use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use linera_rpc::config::ProxyConfig;
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -592,8 +592,9 @@ async fn run(options: ServerOptions) {
                     .await
                     .expect("Unable to read validator options file");
                 let options: ValidatorOptions =
-                    toml::from_str(&options_string)
-                        .unwrap_or_else(|_| panic!("Invalid options file format: \n {}", options_string));
+                    toml::from_str(&options_string).unwrap_or_else(|_| {
+                        panic!("Invalid options file format: \n {}", options_string)
+                    });
                 let path = options.server_config_path.clone();
                 let mut server = make_server_config(&path, &mut rng, options)
                     .expect("Unable to open server config file");

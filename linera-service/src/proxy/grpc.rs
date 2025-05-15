@@ -20,7 +20,8 @@ use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
     config::{
-        ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
     },
     grpc::{
         api::{
@@ -50,7 +51,7 @@ use tonic::{
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
-use linera_rpc::config::ProxyConfig;
+
 #[cfg(with_metrics)]
 use crate::prometheus_server;
 
@@ -150,7 +151,7 @@ struct GrpcProxyInner<S> {
     notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
     storage: S,
-    id: usize
+    id: usize,
 }
 
 impl<S> GrpcProxy<S>
@@ -165,7 +166,7 @@ where
         timeout: Duration,
         tls: TlsConfig,
         storage: S,
-        id: usize
+        id: usize,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
             public_config,
@@ -176,7 +177,7 @@ where
             notifier: ChannelNotifier::default(),
             tls,
             storage,
-            id
+            id,
         }))
     }
 
@@ -187,7 +188,11 @@ where
     }
 
     fn config(&self) -> &ProxyConfig {
-        self.0.internal_config.proxies.get(self.0.id).expect("No proxy config provided.")
+        self.0
+            .internal_config
+            .proxies
+            .get(self.0.id)
+            .expect("No proxy config provided.")
     }
 
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {

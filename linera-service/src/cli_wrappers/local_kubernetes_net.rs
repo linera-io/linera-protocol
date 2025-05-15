@@ -385,7 +385,6 @@ impl LocalKubernetesNet {
 
         // TODO config
         for k in 0..3 {
-
             content.push_str(&format!(
                 r#"
 
@@ -393,8 +392,6 @@ impl LocalKubernetesNet {
                 host = "proxy-{k}.default.svc.cluster.local"
                 port = {internal_port}
                 metrics_port = {metrics_port}
-                pyroscope_host = "linera-core-pyroscope.default.svc.cluster.local"
-                pyroscope_port = {pyroscope_port}
                 "#
             ));
         }
