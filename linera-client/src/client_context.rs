@@ -151,6 +151,7 @@ where
             },
             signer,
             options.max_pending_message_bundles,
+            wallet.genesis_admin_chain(),
             delivery,
             options.long_lived_services,
             chain_ids,
@@ -201,6 +202,7 @@ where
             },
             signer,
             10,
+            wallet.genesis_admin_chain(),
             delivery,
             false,
             chain_ids,
@@ -298,7 +300,6 @@ where
             .client
             .create_chain_client(
                 chain_id,
-                self.wallet.genesis_admin_chain(),
                 block_hash,
                 timestamp,
                 next_block_height,
@@ -421,9 +422,7 @@ where
             Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
                 // we're missing the blob describing the chain we're assigning - try to
                 // get it
-                self.client
-                    .ensure_has_chain_description(chain_id, self.wallet.genesis_admin_chain())
-                    .await?
+                self.client.ensure_has_chain_description(chain_id).await?
             }
             Err(err) => {
                 return Err(err.into());

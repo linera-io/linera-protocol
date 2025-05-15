@@ -153,6 +153,8 @@ pub struct Client<Env: Environment> {
     max_pending_message_bundles: usize,
     /// The policy for automatically handling incoming messages.
     message_policy: MessagePolicy,
+    /// The admin chain ID.
+    admin_id: ChainId,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
@@ -181,6 +183,7 @@ impl<Env: Environment> Client<Env> {
         environment: Env,
         signer: Box<dyn Signer>,
         max_pending_message_bundles: usize,
+        admin_id: ChainId,
         cross_chain_message_delivery: CrossChainMessageDelivery,
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
@@ -206,6 +209,7 @@ impl<Env: Environment> Client<Env> {
             local_node,
             chains: DashMap::new(),
             max_pending_message_bundles,
+            admin_id,
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
             grace_period,
@@ -249,11 +253,9 @@ impl<Env: Environment> Client<Env> {
 
     /// Creates a new `ChainClient`.
     #[instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
-    #[expect(clippy::too_many_arguments)]
     pub async fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
-        admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
@@ -271,14 +273,11 @@ impl<Env: Environment> Client<Env> {
             ));
         }
 
-        let _ = self
-            .ensure_has_chain_description(chain_id, admin_id)
-            .await?;
+        let _ = self.ensure_has_chain_description(chain_id).await?;
 
         Ok(ChainClient {
             client: self.clone(),
             chain_id,
-            admin_id,
             options: ChainClientOptions {
                 max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
@@ -474,7 +473,6 @@ impl<Env: Environment> Client<Env> {
     pub async fn ensure_has_chain_description(
         &self,
         chain_id: ChainId,
-        admin_id: ChainId,
     ) -> Result<Blob, ChainClientError> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         if let Ok(blob) = self
@@ -488,7 +486,7 @@ impl<Env: Environment> Client<Env> {
         }
         // We can't get the committee from the chain we're assigned to because we don't
         // have the description - use the admin chain.
-        let info = self.chain_info_with_committees(admin_id).await?;
+        let info = self.chain_info_with_committees(self.admin_id).await?;
         // Recover history from the network.
         // TODO(#2351): make sure that the blob is legitimately created!
         let nodes = self.make_nodes(info.current_committee()?)?;
@@ -607,9 +605,6 @@ pub struct ChainClient<Env: Environment> {
     client: Arc<Client<Env>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
-    /// The ID of the admin chain.
-    #[debug(skip)]
-    admin_id: ChainId,
     /// The client options.
     #[debug(skip)]
     options: ChainClientOptions,
@@ -623,7 +618,6 @@ impl<Env: Environment> Clone for ChainClient<Env> {
         Self {
             client: self.client.clone(),
             chain_id: self.chain_id,
-            admin_id: self.admin_id,
             options: self.options.clone(),
             preferred_owner: self.preferred_owner,
         }
@@ -805,7 +799,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Gets the ID of the admin chain.
     #[instrument(level = "trace", skip(self))]
     pub fn admin_id(&self) -> ChainId {
-        self.admin_id
+        self.client.admin_id
     }
 
     /// Gets the hash of the latest known block.
@@ -872,8 +866,8 @@ impl<Env: Environment> ChainClient<Env> {
             .into_iter()
             .map(|(chain_id, _)| chain_id)
             .collect::<BTreeSet<_>>();
-        if self.chain_id != self.admin_id {
-            publishers.insert(self.admin_id);
+        if self.chain_id != self.client.admin_id {
+            publishers.insert(self.client.admin_id);
         }
         Ok(publishers)
     }
@@ -1043,7 +1037,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn latest_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
         let (epoch, mut committees) = self
             .client
-            .known_committees([self.chain_id, self.admin_id])
+            .known_committees([self.chain_id, self.client.admin_id])
             .await?;
         let committee = committees
             .remove(&epoch)
@@ -1394,7 +1388,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Verify the certificate before doing any expensive networking.
         let (max_epoch, committees) = self
             .client
-            .known_committees([chain_id, self.admin_id])
+            .known_committees([chain_id, self.client.admin_id])
             .await?;
         ensure!(
             block.header.epoch <= max_epoch,
@@ -1461,7 +1455,7 @@ impl<Env: Environment> ChainClient<Env> {
             .unwrap_or(0);
         let (max_epoch, committees) = self
             .client
-            .known_committees([chain_id, self.admin_id])
+            .known_committees([chain_id, self.client.admin_id])
             .await?;
 
         // Retrieve the list of newly received certificates from this validator.
@@ -1473,9 +1467,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Obtain the next block height we need in the local node, for each chain.
         // But first, ensure we have the chain descriptions!
         for chain in remote_max_heights.keys() {
-            self.client
-                .ensure_has_chain_description(*chain, self.admin_id)
-                .await?;
+            self.client.ensure_has_chain_description(*chain).await?;
         }
         let local_next_heights = self
             .client
@@ -1694,7 +1686,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
             .iter()
             .map(|(chain_id, _)| *chain_id)
-            .chain(iter::once(self.admin_id))
+            .chain(iter::once(self.client.admin_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
         try_join_all(
@@ -3269,7 +3261,7 @@ impl<Env: Environment> ChainClient<Env> {
         index: u32,
     ) -> Result<bool, ChainClientError> {
         let event_id = EventId {
-            chain_id: self.admin_id,
+            chain_id: self.client.admin_id,
             stream_id: StreamId::system(stream_name),
             index,
         };
@@ -3390,11 +3382,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) {
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
-                if let Err(error) = self
-                    .client
-                    .ensure_has_chain_description(origin, self.admin_id)
-                    .await
-                {
+                if let Err(error) = self.client.ensure_has_chain_description(origin).await {
                     error!(
                         chain_id = %self.chain_id,
                         "NewIncomingBundle: could not find blob for sender's chain: {error}"

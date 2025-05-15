@@ -100,9 +100,7 @@ pub trait ClientContext: 'static {
             Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
                 // we're missing the blob describing the chain we're assigning - try to
                 // get it
-                self.client()
-                    .ensure_has_chain_description(chain_id, self.wallet().genesis_admin_chain())
-                    .await?
+                self.client().ensure_has_chain_description(chain_id).await?
             }
             Err(err) => {
                 return Err(err.into());

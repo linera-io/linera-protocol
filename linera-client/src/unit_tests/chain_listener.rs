@@ -64,7 +64,6 @@ impl chain_listener::ClientContext for ClientContext {
             .client
             .create_chain_client(
                 chain_id,
-                self.wallet.genesis_admin_chain(),
                 chain.block_hash,
                 chain.timestamp,
                 chain.next_block_height,
@@ -120,6 +119,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
     let genesis_config = make_genesis_config(&builder);
+    let admin_id = genesis_config.admin_id;
     let storage = builder.make_storage().await?;
     let delivery = CrossChainMessageDelivery::NonBlocking;
 
@@ -132,6 +132,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             },
             Box::new(signer),
             10,
+            admin_id,
             delivery,
             false,
             [chain_id0],
