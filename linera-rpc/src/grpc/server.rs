@@ -10,11 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{
-    channel::mpsc::self,
-    future::BoxFuture,
-    FutureExt as _, StreamExt,
-};
+use futures::{channel::mpsc, future::BoxFuture, FutureExt as _, StreamExt};
 use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
     node::NodeError,
@@ -236,9 +232,9 @@ where
             let receiver = notification_sender.subscribe();
             join_set.spawn_task({
                 info!(
-                nickname = state.nickname(),
-                "spawning notifications thread on {} for shard {}", host, shard_id
-            );
+                    nickname = state.nickname(),
+                    "spawning notifications thread on {} for shard {}", host, shard_id
+                );
                 Self::forward_notifications(
                     state.nickname().to_string(),
                     proxy.address(&internal_network.protocol),

@@ -96,7 +96,6 @@ pub struct ProxyOptions {
     #[arg(long = "genesis")]
     genesis_config_path: PathBuf,
 
-
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     storage_replication_factor: u32,
@@ -121,7 +120,7 @@ struct ProxyContext {
     config: ValidatorServerConfig,
     send_timeout: Duration,
     recv_timeout: Duration,
-    id: usize
+    id: usize,
 }
 
 impl ProxyContext {
@@ -171,7 +170,7 @@ where
                     context.recv_timeout,
                     tls,
                     storage,
-                    context.id
+                    context.id,
                 ))
             }
             (
@@ -190,7 +189,7 @@ where
                 send_timeout: context.send_timeout,
                 recv_timeout: context.recv_timeout,
                 storage,
-                id: context.id
+                id: context.id,
             })),
             _ => {
                 bail!(
@@ -215,7 +214,7 @@ where
     send_timeout: Duration,
     recv_timeout: Duration,
     storage: S,
-    id: usize
+    id: usize,
 }
 
 #[async_trait]
@@ -267,7 +266,6 @@ impl<S> SimpleProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-
     #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.metrics_port()), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting proxy");
@@ -275,10 +273,7 @@ where
         let address = self.get_listen_address();
 
         #[cfg(with_metrics)]
-        Self::start_metrics(
-            address,
-            shutdown_signal.clone(),
-        );
+        Self::start_metrics(address, shutdown_signal.clone());
 
         self.public_config
             .protocol
@@ -292,16 +287,18 @@ where
     }
 
     fn port(&self) -> u16 {
-        self.internal_config.proxies
+        self.internal_config
+            .proxies
             .get(self.id)
-            .expect(format!("proxy with id {} must be present", self.id).as_str())
+            .unwrap_or_else(|| panic!("proxy with id {} must be present", self.id))
             .port
     }
 
     fn metrics_port(&self) -> u16 {
-        self.internal_config.proxies
+        self.internal_config
+            .proxies
             .get(self.id)
-            .expect(format!("proxy with id {} must be present", self.id).as_str())
+            .unwrap_or_else(|| panic!("proxy with id {} must be present", self.id))
             .metrics_port
     }
 
