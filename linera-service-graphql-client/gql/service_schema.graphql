@@ -520,11 +520,6 @@ type ExecutionStateView {
 }
 
 
-"""
-A unique identifier for a user application or for the system application
-"""
-scalar GenericApplicationId
-
 
 """
 The state of an inbox.
@@ -577,6 +572,8 @@ type IncomingBundle {
 	"""
 	action: MessageAction!
 }
+
+scalar IndexAndEvent
 
 
 """
@@ -924,6 +921,7 @@ type QueryRoot {
 	applications(chainId: ChainId!): [ApplicationOverview!]!
 	chains: Chains!
 	block(hash: CryptoHash, chainId: ChainId!): ConfirmedBlock
+	eventsFromIndex(chainId: ChainId!, streamId: StreamId!, startIndex: Int!): [IndexAndEvent!]!
 	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [ConfirmedBlock!]!
 	"""
 	Returns the version information on this node service.
@@ -1094,24 +1092,7 @@ A number to identify successive attempts to decide a value in a consensus protoc
 """
 scalar Round
 
-"""
-An event stream ID.
-"""
-type StreamId {
-	"""
-	The application that can add events to this stream.
-	"""
-	applicationId: GenericApplicationId!
-	"""
-	The name of this stream: an application can have multiple streams with different names.
-	"""
-	streamName: StreamName!
-}
-
-"""
-The name of an event stream
-"""
-scalar StreamName
+scalar StreamId
 
 
 type SubscriptionRoot {

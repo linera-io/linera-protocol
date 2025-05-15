@@ -921,10 +921,11 @@ where
         // TODO(#3758): Extracting Ethereum events from the Linera events.
         if !logs.is_empty() {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            let block_height = runtime.block_height()?;
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
             for log in &logs {
-                let value = bcs::to_bytes(&(origin, log))?;
+                let value = bcs::to_bytes(&(origin, block_height.0, log))?;
                 runtime.emit(stream_name.clone(), value)?;
             }
         }
