@@ -55,6 +55,8 @@ use thiserror::Error;
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
+#[cfg(with_testing)]
+use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
@@ -1085,7 +1087,12 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
-        Ok(None)
+        Ok(Some(NetworkDescription {
+            admin_chain_id: dummy_chain_description(0).id(),
+            genesis_config_hash: CryptoHash::test_hash("genesis config"),
+            genesis_timestamp: Timestamp::from(0),
+            name: "dummy network description".to_string(),
+        }))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
