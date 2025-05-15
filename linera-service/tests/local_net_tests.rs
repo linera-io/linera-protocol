@@ -30,6 +30,7 @@ use linera_service::{
         ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     test_name,
+    util::eventually,
 };
 use test_case::test_case;
 #[cfg(feature = "ethereum")]
@@ -141,15 +142,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
     if matches!(network, Network::Grpc) {
-        for i in 0.. {
-            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            if faucet.current_validators().await?.len() == 6 {
-                break;
-            }
-            if i >= 5 {
-                panic!("Faucet failed to migrate to new epoch");
-            }
-        }
+        assert!(
+            eventually(|| async { faucet.current_validators().await.unwrap().len() == 6 }).await
+        );
     }
 
     // Remove 5th validator
@@ -158,15 +153,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
     net.remove_validator(4)?;
     if matches!(network, Network::Grpc) {
-        for i in 0.. {
-            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            if faucet.current_validators().await?.len() == 5 {
-                break;
-            }
-            if i >= 5 {
-                panic!("Faucet failed to migrate to new epoch");
-            }
-        }
+        assert!(
+            eventually(|| async { faucet.current_validators().await.unwrap().len() == 5 }).await
+        )
     }
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
