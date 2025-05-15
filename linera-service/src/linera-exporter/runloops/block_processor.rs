@@ -3,7 +3,7 @@
 
 use std::{collections::HashSet, future::IntoFuture, sync::Arc, time::Duration};
 
-use linera_base::crypto::CryptoHash;
+use linera_base::{crypto::CryptoHash, identifiers::BlobId};
 use linera_chain::types::{Block, ConfirmedBlockCertificate};
 use linera_storage::Storage;
 use tokio::{
@@ -12,7 +12,7 @@ use tokio::{
 };
 
 use crate::{
-    common::{BlockId, ExporterError, LiteBlockId},
+    common::{BlockId, CanonicalBlock, ExporterError, LiteBlockId},
     storage::BlockProcessorStorage,
 };
 
@@ -37,7 +37,9 @@ where
 #[derive(Debug)]
 struct ProcessedBlock {
     block: BlockId,
+    blobs: Vec<BlobId>,
     siblings: Vec<BlockId>,
+    native_blobs: Vec<BlobId>,
     parent: Option<LiteBlockId>,
 }
 
@@ -70,8 +72,8 @@ where
     where
         F: IntoFuture<Output = ()>,
     {
-        let furure = signal.into_future();
-        let mut pinned = Box::pin(furure);
+        let future = signal.into_future();
+        let mut pinned = Box::pin(future);
 
         let mut interval = interval(Duration::from_secs(persistence_period.into()));
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -147,9 +149,29 @@ where
                 }
             }
 
+            // all the block dependecies have been resolved for this block
+            // now just resolve the blobs
+            let mut blobs_to_send = Vec::new();
+            let mut blobs_to_index_block_with = Vec::new();
+            for id in node_visitor.node.blobs {
+                if !self.is_blob_indexed(id).await? {
+                    blobs_to_index_block_with.push(id);
+                    if !node_visitor.node.native_blobs.contains(&id) {
+                        blobs_to_send.push(id);
+                    }
+                }
+            }
+
             let block_id = node_visitor.node.block.clone();
+            if self.index_block(&block_id).await? {
+                let block_to_push = CanonicalBlock::new(block_id.hash, &blobs_to_send);
+                self.push_block(block_to_push);
+                for blob in blobs_to_index_block_with {
+                    let _ = self.index_blob(blob);
+                }
+            }
+
             self.visited.insert(block_id.clone());
-            self.index_block(&block_id).await?;
         }
 
         Ok(())
@@ -180,9 +202,20 @@ where
         }
     }
 
-    async fn index_block(&mut self, block_id: &BlockId) -> Result<(), ExporterError> {
-        self.storage.index_block(block_id).await.unwrap();
-        Ok(())
+    fn push_block(&mut self, block: CanonicalBlock) {
+        self.storage.push_block(block)
+    }
+
+    fn index_blob(&mut self, blob_id: BlobId) -> Result<(), ExporterError> {
+        self.storage.index_blob(blob_id)
+    }
+
+    async fn index_block(&mut self, block_id: &BlockId) -> Result<bool, ExporterError> {
+        self.storage.index_block(block_id).await
+    }
+
+    async fn is_blob_indexed(&mut self, blob_id: BlobId) -> Result<bool, ExporterError> {
+        self.storage.is_blob_indexed(blob_id).await
     }
 }
 
@@ -215,6 +248,8 @@ impl ProcessedBlock {
                 )
             }),
             block: block_id,
+            blobs: block.required_blob_ids().into_iter().collect(),
+            native_blobs: block.created_blob_ids().into_iter().collect(),
             siblings: block
                 .body
                 .incoming_bundles
@@ -248,10 +283,10 @@ mod test {
 
     use crate::{
         common::BlockId, runloops::BlockProcessor, storage::BlockProcessorStorage,
-        ExporterCancellationSignal,
+        test_utils::make_simple_state_with_blobs, ExporterCancellationSignal,
     };
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_topological_sort() -> anyhow::Result<()> {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
@@ -283,7 +318,7 @@ mod test {
         ];
 
         for (i, (x, y)) in expected_state.into_iter().enumerate() {
-            let hash = exporter_storage.get_block(i).await?.hash();
+            let hash = exporter_storage.get_block_with_blob_ids(i).await?.0.hash();
             assert_eq!(hash, state[x][y]);
         }
 
@@ -338,7 +373,7 @@ mod test {
                 let block_b = ConfirmedBlock::new(BlockExecutionOutcome::default().with(
                     make_child_block(chain_b.last().unwrap()).with_incoming_bundle(incoming_bundle),
                 ));
-                let block_id = get_block_id(&block_b);
+                let block_id = BlockId::from_confirmed_block(&block_b);
                 notifications.push(block_id);
                 block_b
             };
@@ -363,11 +398,7 @@ mod test {
         )
     }
 
-    fn get_block_id(block: &ConfirmedBlock) -> BlockId {
-        BlockId::new(block.chain_id(), block.inner().hash(), block.height())
-    }
-
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_topological_sort_2() -> anyhow::Result<()> {
         let (tx, rx) = unbounded_channel();
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
@@ -387,7 +418,7 @@ mod test {
         let expected_state = [(2, 0), (1, 0), (0, 0), (0, 1), (1, 1), (2, 1)];
 
         for (i, (x, y)) in expected_state.into_iter().enumerate() {
-            let hash = exporter_storage.get_block(i).await?.hash();
+            let hash = exporter_storage.get_block_with_blob_ids(i).await?.0.hash();
             assert_eq!(hash, state[x][y]);
         }
 
@@ -436,7 +467,7 @@ mod test {
                 .with(make_child_block(&block_1_c).with_incoming_bundle(get_bundle(&block_2_b))),
         );
 
-        let notification = get_block_id(&block_2_c);
+        let notification = BlockId::from_confirmed_block(&block_2_c);
 
         state.push(vec![block_1_a, block_2_a]);
         state.push(vec![block_1_b, block_2_b]);
@@ -457,5 +488,36 @@ mod test {
                 .map(|chain| chain.iter().map(|block| block.inner().hash()).collect())
                 .collect(),
         )
+    }
+
+    #[tokio::test]
+    async fn test_topological_sort_3() -> anyhow::Result<()> {
+        let (tx, rx) = unbounded_channel();
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+        let (block_processor_storage, exporter_storage) =
+            BlockProcessorStorage::load(storage.clone(), 0, 0, LimitsConfig::default()).await?;
+        let mut block_processor = BlockProcessor::new(block_processor_storage, tx.clone(), rx);
+        let token = CancellationToken::new();
+        let signal = ExporterCancellationSignal::new(token.clone());
+        let (block_id, expected_state) = make_simple_state_with_blobs(&storage).await;
+        let _ = tx.send(block_id);
+
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(10)) => {},
+            _ = block_processor.run_with_shutdown(signal, 5) => {},
+        }
+
+        for (i, block_with_blobs) in expected_state.iter().enumerate() {
+            let (actual_block, actual_blobs) = exporter_storage.get_block_with_blobs(i).await?;
+            assert_eq!(actual_block.hash(), block_with_blobs.block_hash);
+            assert!(!actual_blobs.is_empty());
+            assert_eq!(actual_blobs.len(), block_with_blobs.blobs.len());
+            assert!(actual_blobs
+                .iter()
+                .map(|blob| blob.id())
+                .eq(block_with_blobs.blobs.iter().copied()));
+        }
+
+        Ok(())
     }
 }
