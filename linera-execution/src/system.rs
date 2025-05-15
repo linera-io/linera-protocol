@@ -831,8 +831,7 @@ where
             chain_index,
         };
         let committees = self.get_committees();
-        let init_chain_config =
-            config.init_chain_config(*self.epoch.get(), committees);
+        let init_chain_config = config.init_chain_config(*self.epoch.get(), committees);
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
         self.debit(&AccountOwner::CHAIN, config.balance).await?;
