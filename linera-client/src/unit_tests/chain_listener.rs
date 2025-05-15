@@ -119,7 +119,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
     let genesis_config = make_genesis_config(&builder);
-    let admin_id = genesis_config.admin_id;
+    let admin_id = genesis_config.admin_id();
     let storage = builder.make_storage().await?;
     let delivery = CrossChainMessageDelivery::NonBlocking;
 
