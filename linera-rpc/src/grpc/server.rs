@@ -449,7 +449,7 @@ where
         let run_action = |action, queue, state: Job| async move {
             linera_base::time::timer::sleep(cross_chain_sender_delay).await;
 
-            let to_shard = state.task.shard_id.clone();
+            let to_shard = state.task.shard_id;
 
             (
                 queue,
