@@ -437,6 +437,27 @@ impl<Env: Environment> Client<Env> {
         Ok(info)
     }
 
+    /// Obtains all the committees trusted by any of the given chains. Also returns the highest
+    /// of their epochs.
+    // TODO(#285): This should probably return _all_ currently trusted committees, independent of
+    // specific chains.
+    #[instrument(level = "trace", skip_all)]
+    async fn known_committees(
+        &self,
+        chain_ids: impl IntoIterator<Item = ChainId>,
+    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
+        let mut committees = BTreeMap::new();
+        for chain_id in BTreeSet::from_iter(chain_ids) {
+            match self.chain_info_with_committees(chain_id).await {
+                Ok(info) => committees.extend(info.into_committees()?),
+                Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => {}
+                Err(err) => return Err(err),
+            };
+        }
+        let epoch = committees.keys().max().copied().unwrap_or_default();
+        Ok((epoch, committees))
+    }
+
     fn make_nodes(
         &self,
         committee: &Committee,
@@ -1020,33 +1041,14 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the committee for the latest epoch on the admin or local chain.
     #[instrument(level = "trace")]
     pub async fn latest_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
-        let (mut committees, epoch) = self.known_committees().await?;
+        let (epoch, mut committees) = self
+            .client
+            .known_committees([self.chain_id, self.admin_id])
+            .await?;
         let committee = committees
             .remove(&epoch)
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         Ok((epoch, committee))
-    }
-
-    /// Obtains all the committees trusted by either the local chain or its admin chain. Also
-    /// return the latest trusted epoch.
-    #[instrument(level = "trace")]
-    async fn known_committees(
-        &self,
-    ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
-        let (epoch, mut committees) = match self.epoch_and_committees().await {
-            Ok(result) => result,
-            // We might not be initialized due to a missing blob - just treat this case as
-            // no committees.
-            Err(LocalNodeError::BlobsNotFound(_)) => (Epoch::ZERO, BTreeMap::new()),
-            err => err?,
-        };
-        let admin_info = self
-            .client
-            .chain_info_with_committees(self.admin_id)
-            .await?;
-        let epoch = std::cmp::max(epoch, admin_info.epoch);
-        committees.extend(admin_info.into_committees()?);
-        Ok((committees, epoch))
     }
 
     /// Obtains the validators for the latest epoch.
@@ -1387,9 +1389,13 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), ChainClientError> {
         let block = certificate.block();
+        let chain_id = block.header.chain_id;
 
         // Verify the certificate before doing any expensive networking.
-        let (committees, max_epoch) = self.known_committees().await?;
+        let (max_epoch, committees) = self
+            .client
+            .known_committees([chain_id, self.admin_id])
+            .await?;
         ensure!(
             block.header.epoch <= max_epoch,
             ChainClientError::CommitteeSynchronizationError
@@ -1453,7 +1459,10 @@ impl<Env: Environment> ChainClient<Env> {
             .get(&remote_node.public_key)
             .copied()
             .unwrap_or(0);
-        let (committees, max_epoch) = self.known_committees().await?;
+        let (max_epoch, committees) = self
+            .client
+            .known_committees([chain_id, self.admin_id])
+            .await?;
 
         // Retrieve the list of newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
