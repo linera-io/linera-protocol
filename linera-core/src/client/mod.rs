@@ -1383,12 +1383,11 @@ impl<Env: Environment> ChainClient<Env> {
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), ChainClientError> {
         let block = certificate.block();
-        let chain_id = block.header.chain_id;
 
         // Verify the certificate before doing any expensive networking.
         let (max_epoch, committees) = self
             .client
-            .known_committees([chain_id, self.client.admin_id])
+            .known_committees([self.chain_id, self.client.admin_id])
             .await?;
         ensure!(
             block.header.epoch <= max_epoch,
