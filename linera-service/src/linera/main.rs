@@ -6,7 +6,7 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     env,
     ops::Deref,
     path::PathBuf,
@@ -22,19 +22,16 @@ use colored::Colorize;
 use command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand};
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    bcs,
-    crypto::{CryptoHash, InMemorySigner, Signer},
-    data_types::{
-        ApplicationPermissions, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
-    },
-    identifiers::{AccountOwner, ChainId},
+    crypto::{InMemorySigner, Signer},
+    data_types::{ApplicationPermissions, Timestamp},
+    identifiers::AccountOwner,
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
 };
 use linera_client::{
     client_context::ClientContext,
     client_options::ClientContextOptions,
-    config::{CommitteeConfig, GenesisConfig, SignerState, WalletState},
+    config::{CommitteeConfig, GenesisConfig},
     persistent::{self, Persist},
     wallet::{UserChain, Wallet},
 };
@@ -625,8 +622,8 @@ impl Runnable for Job {
                                     }
                                 }
                                 ResourceControlPolicy {
-                                    block,
-                                    fuel_unit,
+                                    wasm_fuel_unit,
+                                    evm_fuel_unit,
                                     read_operation,
                                     write_operation,
                                     byte_read,
@@ -642,7 +639,8 @@ impl Runnable for Job {
                                     message_byte,
                                     service_as_oracle_query,
                                     http_request,
-                                    maximum_fuel_per_block,
+                                    maximum_wasm_fuel_per_block,
+                                    maximum_evm_fuel_per_block,
                                     maximum_service_oracle_execution_ms,
                                     maximum_block_size,
                                     maximum_blob_size,
@@ -658,8 +656,10 @@ impl Runnable for Job {
                                 } => {
                                     let existing_policy = policy.clone();
                                     policy = linera_execution::ResourceControlPolicy {
-                                        block: block.unwrap_or(existing_policy.block),
-                                        fuel_unit: fuel_unit.unwrap_or(existing_policy.fuel_unit),
+                                        wasm_fuel_unit: wasm_fuel_unit
+                                            .unwrap_or(existing_policy.wasm_fuel_unit),
+                                        evm_fuel_unit: evm_fuel_unit
+                                            .unwrap_or(existing_policy.evm_fuel_unit),
                                         read_operation: read_operation
                                             .unwrap_or(existing_policy.read_operation),
                                         write_operation: write_operation
@@ -686,8 +686,10 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.service_as_oracle_query),
                                         http_request: http_request
                                             .unwrap_or(existing_policy.http_request),
-                                        maximum_fuel_per_block: maximum_fuel_per_block
-                                            .unwrap_or(existing_policy.maximum_fuel_per_block),
+                                        maximum_wasm_fuel_per_block: maximum_wasm_fuel_per_block
+                                            .unwrap_or(existing_policy.maximum_wasm_fuel_per_block),
+                                        maximum_evm_fuel_per_block: maximum_evm_fuel_per_block
+                                            .unwrap_or(existing_policy.maximum_evm_fuel_per_block),
                                         maximum_service_oracle_execution_ms:
                                             maximum_service_oracle_execution_ms.unwrap_or(
                                                 existing_policy.maximum_service_oracle_execution_ms,
@@ -914,7 +916,7 @@ impl Runnable for Job {
                     Box::new(signer.into_value()),
                 );
 
-                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_id = chain_id.unwrap_or_else(|| context.first_non_admin_chain());
                 info!("Starting faucet service using chain {}", chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {
@@ -1228,48 +1230,6 @@ impl Runnable for Job {
                 );
             }
 
-            Wallet(WalletCommand::Init {
-                faucet: Some(faucet_url),
-                with_new_chain: true,
-                with_other_chains,
-                ..
-            }) => {
-                let start_time = Instant::now();
-                let public_key = signer.mutate(|s| s.generate_new()).await?;
-                let mut context = ClientContext::new(
-                    storage.clone(),
-                    options.inner.clone(),
-                    wallet,
-                    Box::new(signer.into_value()),
-                );
-                let owner: AccountOwner = public_key.into();
-                info!(
-                    "Requesting a new chain for owner {owner} using the faucet at address \
-                    {faucet_url}",
-                );
-                let faucet = cli_wrappers::Faucet::new(faucet_url);
-                let outcome = faucet.claim(&owner).await?;
-                println!("{}", outcome.chain_id);
-                println!("{}", outcome.certificate_hash);
-                println!("{}", owner);
-                context
-                    .assign_new_chain_to_key(outcome.chain_id, owner)
-                    .await?;
-                let admin_id = context.wallet().genesis_admin_chain();
-                let chains = with_other_chains
-                    .into_iter()
-                    .chain([admin_id, outcome.chain_id]);
-                Self::print_peg_certificate_hash(storage, chains, &context).await?;
-                context
-                    .wallet_mut()
-                    .mutate(|w| w.set_default_chain(outcome.chain_id))
-                    .await??;
-                info!(
-                    "Wallet initialized in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-            }
-
             Wallet(WalletCommand::RequestChain {
                 faucet: faucet_url,
                 set_default,
@@ -1288,17 +1248,16 @@ impl Runnable for Job {
                     {faucet_url}",
                 );
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
-                let outcome = faucet.claim(&owner).await?;
-                println!("{}", outcome.chain_id);
-                println!("{}", outcome.certificate_hash);
-                println!("{}", owner);
+                let description = faucet.claim(&owner).await?;
+                println!("{}", description.id());
+                println!("{owner}");
                 context
-                    .assign_new_chain_to_key(outcome.chain_id, owner)
+                    .assign_new_chain_to_key(description.id(), owner)
                     .await?;
                 if set_default {
                     context
                         .wallet_mut()
-                        .mutate(|w| w.set_default_chain(outcome.chain_id))
+                        .mutate(|w| w.set_default_chain(description.id()))
                         .await??;
                 }
                 info!(
@@ -1317,67 +1276,6 @@ impl Runnable for Job {
                 unreachable!()
             }
         }
-        Ok(())
-    }
-}
-
-impl Job {
-    /// Prints a warning message to explain that the wallet has been initialized using data from
-    /// untrusted nodes, and gives instructions to verify that we are connected to the right
-    /// network.
-    async fn print_peg_certificate_hash<S>(
-        storage: S,
-        chain_ids: impl IntoIterator<Item = ChainId>,
-        context: &ClientContext<impl linera_core::Environment, impl Persist<Target = Wallet>>,
-    ) -> anyhow::Result<()>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-    {
-        let mut chains = HashMap::new();
-        for chain_id in chain_ids {
-            if chains.contains_key(&chain_id) {
-                continue;
-            }
-            chains.insert(chain_id, storage.load_chain(chain_id).await?);
-        }
-        // Find a chain with the latest known epoch, preferably the admin chain.
-        let (peg_chain_id, _) = chains
-            .iter()
-            .filter_map(|(chain_id, chain)| {
-                let epoch = (*chain.execution_state.system.epoch.get())?;
-                let is_admin = Some(*chain_id) == *chain.execution_state.system.admin_id.get();
-                Some((*chain_id, (epoch, is_admin)))
-            })
-            .max_by_key(|(_, epoch)| *epoch)
-            .context("no active chain found")?;
-        let peg_chain = chains.remove(&peg_chain_id).unwrap();
-        // These are the still-trusted committees. Every chain tip should be signed by one of them.
-        let committees = peg_chain.execution_state.system.committees.get();
-        for (chain_id, chain) in &chains {
-            let Some(hash) = chain.tip_state.get().block_hash else {
-                continue; // This chain was created based on the genesis config.
-            };
-            let certificate = storage.read_certificate(hash).await?;
-            let committee = committees
-                .get(&certificate.block().header.epoch)
-                .ok_or_else(|| anyhow!("tip of chain {chain_id} is outdated."))?;
-            certificate.check(committee)?;
-        }
-        // This proves that once we have verified that the peg chain's tip is a block in the real
-        // network, we can be confident that all downloaded chains are.
-        let config_hash = CryptoHash::new(context.wallet.genesis_config());
-        let maybe_epoch = peg_chain.execution_state.system.epoch.get();
-        let epoch = maybe_epoch.context("missing epoch in peg chain")?.0;
-        info!(
-            "Initialized wallet based on data provided by the faucet.\n\
-            The current epoch is {epoch}.\n\
-            The genesis config hash is {config_hash}{}",
-            if let Some(peg_hash) = peg_chain.tip_state.get().block_hash {
-                format!("\nThe latest certificate on chain {peg_chain_id} is {peg_hash}.")
-            } else {
-                "".to_string()
-            }
-        );
         Ok(())
     }
 }
@@ -1432,6 +1330,10 @@ struct ClientOptions {
     /// Subcommand.
     #[command(subcommand)]
     command: ClientCommand,
+
+    /// The replication factor for the keyspace
+    #[arg(long, default_value = "1")]
+    storage_replication_factor: u32,
 }
 
 impl ClientOptions {
@@ -1449,6 +1351,7 @@ impl ClientOptions {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
             storage_cache_config,
+            replication_factor: self.storage_replication_factor,
         }
     }
 
@@ -1489,14 +1392,12 @@ impl ClientOptions {
         Ok(())
     }
 
-    async fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
-        let wallet = persistent::File::read(&self.wallet_path()?)?;
-        Ok(WalletState::new(wallet))
+    async fn wallet(&self) -> Result<persistent::File<Wallet>, Error> {
+        Ok(persistent::File::read(&self.wallet_path()?)?)
     }
 
-    async fn signer(&self) -> Result<SignerState<persistent::File<InMemorySigner>>, Error> {
-        let signer = persistent::File::read(&self.keystore_path()?)?;
-        Ok(SignerState::new(signer))
+    async fn signer(&self) -> Result<persistent::File<InMemorySigner>, Error> {
+        Ok(persistent::File::read(&self.keystore_path()?)?)
     }
 
     fn suffix(&self) -> String {
@@ -1514,7 +1415,7 @@ impl ClientOptions {
         config_dir.push("linera");
         if !config_dir.exists() {
             debug!("Creating default wallet directory {}", config_dir.display());
-            fs_err::create_dir(&config_dir)?;
+            fs_err::create_dir_all(&config_dir)?;
         }
         info!("Using default wallet directory {}", config_dir.display());
         Ok(config_dir)
@@ -1577,26 +1478,27 @@ impl ClientOptions {
     pub fn create_wallet(
         &self,
         genesis_config: GenesisConfig,
-    ) -> Result<WalletState<persistent::File<Wallet>>, Error> {
+    ) -> Result<persistent::File<Wallet>, Error> {
         let wallet_path = self.wallet_path()?;
         if wallet_path.exists() {
             bail!("Wallet already exists: {}", wallet_path.display());
         }
-        let wallet_state = WalletState::read_or_create(&wallet_path, Wallet::new(genesis_config))?;
-        Ok(wallet_state)
+        Ok(persistent::File::read_or_create(&wallet_path, || {
+            Ok(Wallet::new(genesis_config))
+        })?)
     }
 
     pub fn create_keystore(
         &self,
         testing_prng_seed: Option<u64>,
-    ) -> Result<SignerState<persistent::File<InMemorySigner>>, Error> {
+    ) -> Result<persistent::File<InMemorySigner>, Error> {
         let keystore_path = self.keystore_path()?;
         if keystore_path.exists() {
             bail!("Keystore already exists: {}", keystore_path.display());
         }
-        let signer_state =
-            SignerState::read_or_create(&keystore_path, InMemorySigner::new(testing_prng_seed))?;
-        Ok(signer_state)
+        Ok(persistent::File::read_or_create(&keystore_path, || {
+            Ok(InMemorySigner::new(testing_prng_seed))
+        })?)
     }
 }
 
@@ -1762,13 +1664,12 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         ClientCommand::CreateGenesisConfig {
             committee_config_path,
             genesis_config_path,
-            admin_root,
             initial_funding,
             start_timestamp,
             num_other_initial_chains,
             policy_config,
-            block_price,
-            fuel_unit_price,
+            wasm_fuel_unit_price,
+            evm_fuel_unit_price,
             read_operation_price,
             write_operation_price,
             byte_read_price,
@@ -1784,7 +1685,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             message_byte_price,
             service_as_oracle_query_price,
             http_request_price,
-            maximum_fuel_per_block,
+            maximum_wasm_fuel_per_block,
+            maximum_evm_fuel_per_block,
             maximum_service_oracle_execution_ms,
             maximum_block_size,
             maximum_blob_size,
@@ -1805,8 +1707,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 .expect("Unable to read committee config file");
             let existing_policy = policy_config.into_policy();
             let policy = linera_execution::ResourceControlPolicy {
-                block: block_price.unwrap_or(existing_policy.block),
-                fuel_unit: fuel_unit_price.unwrap_or(existing_policy.fuel_unit),
+                wasm_fuel_unit: wasm_fuel_unit_price.unwrap_or(existing_policy.wasm_fuel_unit),
+                evm_fuel_unit: evm_fuel_unit_price.unwrap_or(existing_policy.evm_fuel_unit),
                 read_operation: read_operation_price.unwrap_or(existing_policy.read_operation),
                 write_operation: write_operation_price.unwrap_or(existing_policy.write_operation),
                 byte_read: byte_read_price.unwrap_or(existing_policy.byte_read),
@@ -1824,8 +1726,10 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 service_as_oracle_query: service_as_oracle_query_price
                     .unwrap_or(existing_policy.service_as_oracle_query),
                 http_request: http_request_price.unwrap_or(existing_policy.http_request),
-                maximum_fuel_per_block: maximum_fuel_per_block
-                    .unwrap_or(existing_policy.maximum_fuel_per_block),
+                maximum_wasm_fuel_per_block: maximum_wasm_fuel_per_block
+                    .unwrap_or(existing_policy.maximum_wasm_fuel_per_block),
+                maximum_evm_fuel_per_block: maximum_evm_fuel_per_block
+                    .unwrap_or(existing_policy.maximum_evm_fuel_per_block),
                 maximum_service_oracle_execution_ms: maximum_service_oracle_execution_ms
                     .unwrap_or(existing_policy.maximum_service_oracle_execution_ms),
                 maximum_block_size: maximum_block_size
@@ -1860,27 +1764,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 })
                 .unwrap_or_else(Timestamp::now);
 
-            let origin: ChainOrigin = ChainOrigin::Root(*admin_root);
             let mut signer = options.create_keystore(*testing_prng_seed)?;
             let admin_public_key = signer.mutate(|s| s.generate_new()).await?;
-            let committee = committee_config.clone().into_committee(policy.clone());
-            let committees = [(
-                Epoch::ZERO,
-                bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-            )]
-            .into_iter()
-            .collect();
-            let admin_config = InitialChainConfig {
-                admin_id: None,
-                balance: *initial_funding,
-                committees,
-                epoch: Epoch::ZERO,
-                application_permissions: Default::default(),
-                ownership: ChainOwnership::single(admin_public_key.into()),
-            };
-            let admin_chain_description =
-                ChainDescription::new(origin, admin_config.clone(), timestamp);
-            let admin_id = admin_chain_description.id();
 
             let network_name = network_name.clone().unwrap_or_else(|| {
                 // Default: e.g. "linera-2023-11-14T23:13:20"
@@ -1888,30 +1773,26 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             });
             let mut genesis_config = persistent::File::new(
                 genesis_config_path,
-                GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name),
+                GenesisConfig::new(
+                    committee_config,
+                    timestamp,
+                    policy,
+                    network_name,
+                    admin_public_key,
+                    *initial_funding,
+                ),
             )?;
-            let mut chains = vec![];
-            for i in 0..=*num_other_initial_chains {
+            let admin_chain_description = genesis_config.admin_chain_description();
+            let mut chains = vec![UserChain::make_initial(
+                admin_public_key.into(),
+                admin_chain_description.clone(),
+                timestamp,
+            )];
+            for _ in 0..*num_other_initial_chains {
                 // Create keys.
-                let public_key = if i == 0 {
-                    admin_public_key
-                } else {
-                    signer.mutate(|s| s.generate_new()).await?
-                };
-                let origin = ChainOrigin::Root(i);
-                let config = if i == 0 {
-                    admin_config.clone()
-                } else {
-                    InitialChainConfig {
-                        admin_id: Some(admin_id),
-                        ownership: ChainOwnership::single(public_key.into()),
-                        ..admin_config.clone()
-                    }
-                };
-                let description = ChainDescription::new(origin, config, timestamp);
+                let public_key = signer.mutate(|s| s.generate_new()).await?;
+                let description = genesis_config.add_root_chain(public_key, *initial_funding);
                 let chain = UserChain::make_initial(public_key.into(), description, timestamp);
-                // Public "genesis" state.
-                genesis_config.chains.push((public_key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }
@@ -1988,6 +1869,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 faucet_chain,
                 faucet_port,
                 faucet_amount,
+                dual_store,
                 ..
             } => {
                 net_up_utils::handle_net_up_kubernetes(
@@ -2005,6 +1887,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    *dual_store,
                 )
                 .boxed()
                 .await?;
@@ -2169,8 +2052,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             WalletCommand::Init {
                 genesis_config_path,
                 faucet,
-                with_new_chain,
-                with_other_chains,
                 testing_prng_seed,
             } => {
                 let start_time = Instant::now();
@@ -2203,27 +2084,10 @@ Make sure to use a Linera client compatible with this network.
                     }
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
-                let timestamp = genesis_config.timestamp;
                 let mut keystore = options.create_keystore(*testing_prng_seed)?;
                 keystore.persist().await?;
-                options
-                    .create_wallet(genesis_config)?
-                    .mutate(|wallet| {
-                        wallet.extend(
-                            with_other_chains
-                                .iter()
-                                .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
-                        )
-                    })
-                    .await?;
+                options.create_wallet(genesis_config)?.persist().await?;
                 options.initialize_storage().boxed().await?;
-                if *with_new_chain {
-                    ensure!(
-                        faucet.is_some(),
-                        "Using --with-new-chain requires --faucet to be set"
-                    );
-                    options.run_with_storage(Job(options.clone())).await??;
-                }
                 info!(
                     "Wallet initialized in {} ms",
                     start_time.elapsed().as_millis()

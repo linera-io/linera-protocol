@@ -8,7 +8,6 @@ use std::{
     ops::Range,
 };
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -23,6 +22,7 @@ use crate::{
     common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -56,7 +56,6 @@ pub struct QueueView<C, T> {
     new_back_values: VecDeque<T>,
 }
 
-#[async_trait]
 impl<C, T> View<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
@@ -70,7 +69,7 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_tag(KeyTag::Store as u8)])
+        Ok(vec![context.base_key().base_tag(KeyTag::Store as u8)])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -87,7 +86,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -110,18 +109,21 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             delete_view = true;
         }
         if self.stored_count() == 0 {
-            let key_prefix = self.context.base_tag(KeyTag::Index as u8);
+            let key_prefix = self.context.base_key().base_tag(KeyTag::Index as u8);
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
             self.stored_indices.start += self.front_delete_count;
             for index in deletion_range {
-                let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+                let key = self
+                    .context
+                    .base_key()
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.delete_key(key);
             }
         }
@@ -130,6 +132,7 @@ where
             for value in &self.new_back_values {
                 let key = self
                     .context
+                    .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &self.stored_indices.end)?;
                 batch.put_key_value(key, value)?;
                 self.stored_indices.end += 1;
@@ -137,7 +140,7 @@ where
             self.new_back_values.clear();
         }
         if !self.delete_storage_first || !self.stored_indices.is_empty() {
-            let key = self.context.base_tag(KeyTag::Store as u8);
+            let key = self.context.base_key().base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
         }
         self.front_delete_count = 0;
@@ -185,8 +188,11 @@ where
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
-        let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
-        Ok(self.context.read_value(&key).await?)
+        let key = self
+            .context
+            .base_key()
+            .derive_tag_key(KeyTag::Index as u8, &index)?;
+        Ok(self.context.store().read_value(&key).await?)
     }
 
     /// Reads the front value, if any.
@@ -296,11 +302,14 @@ where
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
-            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
             keys.push(key)
         }
         let mut values = Vec::with_capacity(count);
-        for entry in self.context.read_multi_values(keys).await? {
+        for entry in self.context.store().read_multi_values(keys).await? {
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries);
@@ -445,7 +454,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T> HashableView<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
@@ -471,6 +479,7 @@ where
 /// Type wrapping `QueueView` while memoizing the hash.
 pub type HashedQueueView<C, T> = WrappedHashableContainerView<C, QueueView<C, T>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

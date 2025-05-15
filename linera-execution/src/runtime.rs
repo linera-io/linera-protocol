@@ -22,6 +22,7 @@ use linera_base::{
         StreamId, StreamName,
     },
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_views::batch::Batch;
 use oneshot::Receiver;
@@ -1173,13 +1174,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(this.current_application().caller_id)
     }
 
-    fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
-        Ok(self.inner().resource_controller.remaining_fuel())
+    fn maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError> {
+        let policy = &self.inner().resource_controller.policy;
+        Ok(match vm_runtime {
+            VmRuntime::Wasm => policy.maximum_wasm_fuel_per_block,
+            VmRuntime::Evm => policy.maximum_evm_fuel_per_block,
+        })
     }
 
-    fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
+    fn remaining_fuel(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError> {
+        Ok(self.inner().resource_controller.remaining_fuel(vm_runtime))
+    }
+
+    fn consume_fuel(&mut self, fuel: u64, vm_runtime: VmRuntime) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        this.resource_controller.track_fuel(fuel)
+        this.resource_controller.track_fuel(fuel, vm_runtime)
     }
 
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError> {

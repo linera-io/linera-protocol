@@ -114,13 +114,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
         pre_load_keys_quotes.push(quote! {
             let index = #idx_lit;
-            let base_key = context.derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
             keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
         });
         post_load_keys_quotes.push(quote! {
             let index = #idx_lit;
             let pos_next = pos + #g :: NUM_INIT_KEYS;
-            let base_key = context.derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
+            let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
             let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
             pos = pos_next;
         });
@@ -136,7 +136,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             linera_views::metrics::increment_counter(
                 &linera_views::metrics::LOAD_VIEW_COUNTER,
                 stringify!(#struct_name),
-                &context.base_key(),
+                &context.base_key().bytes,
             );
             #[cfg(not(target_arch = "wasm32"))]
             use linera_views::metrics::prometheus_util::MeasureLatency as _;
@@ -147,7 +147,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     };
 
     quote! {
-        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::View<#context> for #struct_name #type_generics
         where
             #(#input_constraints,)*
@@ -177,13 +176,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
 
             async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
-                use linera_views::context::Context as _;
+                use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
                 #load_metrics
                 if Self::NUM_INIT_KEYS == 0 {
                     Self::post_load(context, &[])
                 } else {
                     let keys = Self::pre_load(&context)?;
-                    let values = context.read_multi_values_bytes(keys).await?;
+                    let values = context.store().read_multi_values_bytes(keys).await?;
                     Self::post_load(context, &values)
                 }
             }
@@ -234,7 +233,7 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
             linera_views::metrics::increment_counter(
                 &linera_views::metrics::SAVE_VIEW_COUNTER,
                 stringify!(#struct_name),
-                &self.context().base_key(),
+                &self.context().base_key().bytes,
             );
         }
     } else {
@@ -242,7 +241,6 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     };
 
     quote! {
-        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::RootView<#context> for #struct_name #type_generics
         where
             #(#input_constraints,)*
@@ -250,12 +248,12 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
             Self: Send + Sync,
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{context::Context, batch::Batch, views::View};
+                use linera_views::{context::Context, batch::Batch, store::WritableKeyValueStore as _, views::View};
                 #increment_counter
                 let mut batch = Batch::new();
                 #(#flushes)*
                 if !batch.is_empty() {
-                    self.context().write_batch(batch).await?;
+                    self.context().store().write_batch(batch).await?;
                 }
                 Ok(())
             }
@@ -294,7 +292,6 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     }
 
     quote! {
-        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::HashableView<#context> for #struct_name #type_generics
         where
             #(#input_constraints,)*
@@ -335,7 +332,6 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let struct_name = &input.ident;
     let hash_type = syn::Ident::new(&format!("{struct_name}Hash"), Span::call_site());
     quote! {
-        #[linera_views::async_trait]
         impl #impl_generics linera_views::views::CryptoHashView<#context>
         for #struct_name #type_generics
         where

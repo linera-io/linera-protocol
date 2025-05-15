@@ -64,14 +64,13 @@ use crate::persistent::{Persist, PersistExt as _};
 use crate::{
     chain_listener,
     client_options::{ChainOwnershipConfig, ClientContextOptions},
-    config::WalletState,
     error, util,
     wallet::{UserChain, Wallet},
     Error,
 };
 
 pub struct ClientContext<Env: Environment, W> {
-    pub wallet: WalletState<W>,
+    pub wallet: W,
     pub client: Arc<Client<Env>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -152,6 +151,7 @@ where
             },
             signer,
             options.max_pending_message_bundles,
+            wallet.genesis_admin_chain(),
             delivery,
             options.long_lived_services,
             chain_ids,
@@ -163,7 +163,7 @@ where
 
         ClientContext {
             client: Arc::new(client),
-            wallet: WalletState::new(wallet),
+            wallet,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
@@ -202,6 +202,7 @@ where
             },
             signer,
             10,
+            wallet.genesis_admin_chain(),
             delivery,
             false,
             chain_ids,
@@ -213,7 +214,7 @@ where
 
         ClientContext {
             client: Arc::new(client),
-            wallet: WalletState::new(wallet),
+            wallet,
             send_timeout: send_recv_timeout,
             recv_timeout: send_recv_timeout,
             retry_delay,
@@ -234,8 +235,8 @@ where
         &self.wallet
     }
 
-    /// Returns the [`WalletState`] as a mutable reference.
-    pub fn wallet_mut(&mut self) -> &mut WalletState<W> {
+    /// Returns the wallet as a mutable reference.
+    pub fn wallet_mut(&mut self) -> &mut W {
         &mut self.wallet
     }
 
@@ -260,6 +261,12 @@ where
         self.wallet
             .default_chain()
             .expect("No chain specified in wallet with no default chain")
+    }
+
+    pub fn first_non_admin_chain(&self) -> ChainId {
+        self.wallet
+            .first_non_admin_chain()
+            .expect("No non-admin chain specified in wallet with no non-admin chain")
     }
 
     pub async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
@@ -293,7 +300,6 @@ where
             .client
             .create_chain_client(
                 chain_id,
-                self.wallet.genesis_admin_chain(),
                 block_hash,
                 timestamp,
                 next_block_height,
@@ -404,35 +410,35 @@ where
         }
     }
 
+    // TODO(#2351): this calls `ensure_has_chain_description`.
+    pub async fn chain_description(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<ChainDescription, Error> {
+        let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+
+        let blob = match self.client.storage_client().read_blob(blob_id).await {
+            Ok(blob) => blob,
+            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
+                // we're missing the blob describing the chain we're assigning - try to
+                // get it
+                self.client.ensure_has_chain_description(chain_id).await?
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
+        };
+
+        Ok(bcs::from_bytes(blob.bytes())?)
+    }
+
     pub async fn assign_new_chain_to_key(
         &mut self,
         chain_id: ChainId,
         owner: AccountOwner,
     ) -> Result<(), Error> {
         self.client.track_chain(chain_id);
-        let chain_description_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-        let chain_description_blob = match self
-            .client
-            .storage_client()
-            .read_blob(chain_description_blob_id)
-            .await
-        {
-            Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [chain_description_blob_id] => {
-                // we're missing the blob describing the chain we're assigning - try to
-                // get it
-                self.client
-                    .ensure_has_chain_description(chain_id, self.wallet.genesis_admin_chain())
-                    .await?
-            }
-            Err(err) => {
-                return Err(err.into());
-            }
-        };
-        let chain_description: ChainDescription =
-            bcs::from_bytes(&chain_description_blob.into_bytes())
-                .map_err(|e| error::Inner::Persistence(Box::new(e)))?;
-
+        let chain_description = self.chain_description(chain_id).await?;
         let config = chain_description.config();
 
         if !config.ownership.verify_owner(&owner) {
@@ -776,13 +782,7 @@ where
             .default_chain()
             .expect("should have default chain");
         let default_chain_client = self.make_chain_client(default_chain_id).await?;
-        let (epoch, mut committees) = default_chain_client
-            .epoch_and_committees(default_chain_id)
-            .await?;
-        let epoch = epoch.expect("default chain should have an epoch");
-        let committee = committees
-            .remove(&epoch)
-            .expect("current epoch should have a committee");
+        let (epoch, committee) = default_chain_client.latest_committee().await?;
         let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             key_pairs,
             transactions_per_block,

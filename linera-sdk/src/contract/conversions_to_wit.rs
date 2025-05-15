@@ -132,7 +132,8 @@ impl From<ApplicationId> for wit_contract_api::ApplicationId {
 impl From<Resources> for wit_contract_api::Resources {
     fn from(resources: Resources) -> Self {
         wit_contract_api::Resources {
-            fuel: resources.fuel,
+            wasm_fuel: resources.wasm_fuel,
+            evm_fuel: resources.evm_fuel,
             read_operations: resources.read_operations,
             write_operations: resources.write_operations,
             bytes_to_read: resources.bytes_to_read,

@@ -7,7 +7,7 @@ pub type Error = std::convert::Infallible;
 
 /// A dummy [`Persist`] implementation that doesn't persist anything, but holds the value
 /// in memory.
-#[derive(derive_more::Deref)]
+#[derive(Default, derive_more::Deref)]
 pub struct Memory<T> {
     #[deref]
     value: T,

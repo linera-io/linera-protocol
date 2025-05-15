@@ -149,7 +149,12 @@ pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
     let source = GraphiQLSource::build()
         .endpoint(uri.path())
         .subscription_endpoint("/ws")
-        .finish();
+        .finish()
+        .replace("@17", "@18")
+        .replace(
+            "ReactDOM.render(",
+            "ReactDOM.createRoot(document.getElementById(\"graphiql\")).render(",
+        );
     response::Html(source)
 }
 

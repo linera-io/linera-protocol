@@ -13,7 +13,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlockHeight, Epoch, Event, OracleResponse, Timestamp},
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, MessageId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
 };
 use linera_execution::{BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
@@ -437,60 +437,6 @@ impl Block {
             })
     }
 
-    /// Returns the `message_index`th outgoing message created by the `operation_index`th operation,
-    /// or `None` if there is no such operation or message.
-    pub fn message_id_for_operation(
-        &self,
-        operation_index: usize,
-        message_index: u32,
-    ) -> Option<MessageId> {
-        let block = &self.body;
-        let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
-        if message_index >= u32::try_from(self.body.messages.get(transaction_index)?.len()).ok()? {
-            return None;
-        }
-        let first_message_index = u32::try_from(
-            self.body
-                .messages
-                .iter()
-                .take(transaction_index)
-                .map(Vec::len)
-                .sum::<usize>(),
-        )
-        .ok()?;
-        let index = first_message_index.checked_add(message_index)?;
-        Some(self.message_id(index))
-    }
-
-    /// Returns the message ID belonging to the `index`th outgoing message in this block.
-    pub fn message_id(&self, index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.header.chain_id,
-            height: self.header.height,
-            index,
-        }
-    }
-
-    /// Returns the outgoing message with the specified id, or `None` if there is no such message.
-    pub fn message_by_id(&self, message_id: &MessageId) -> Option<&OutgoingMessage> {
-        let MessageId {
-            chain_id,
-            height,
-            index,
-        } = message_id;
-        if self.header.chain_id != *chain_id || self.header.height != *height {
-            return None;
-        }
-        let mut index = usize::try_from(*index).ok()?;
-        for messages in self.messages() {
-            if let Some(message) = messages.get(index) {
-                return Some(message);
-            }
-            index -= messages.len();
-        }
-        None
-    }
-
     /// Returns all the blob IDs required by this block.
     /// Either as oracle responses or as published blobs.
     pub fn required_blob_ids(&self) -> BTreeSet<BlobId> {
@@ -593,26 +539,6 @@ impl Block {
             && *timestamp == self.header.timestamp
             && *authenticated_signer == self.header.authenticated_signer
             && *previous_block_hash == self.header.previous_block_hash
-    }
-
-    /// Returns whether this block matches the execution outcome.
-    pub fn matches_outcome(&self, outcome: &BlockExecutionOutcome) -> bool {
-        let BlockExecutionOutcome {
-            state_hash,
-            messages,
-            previous_message_blocks,
-            oracle_responses,
-            events,
-            blobs,
-            operation_results,
-        } = outcome;
-        *state_hash == self.header.state_hash
-            && *messages == self.body.messages
-            && *previous_message_blocks == self.body.previous_message_blocks
-            && *oracle_responses == self.body.oracle_responses
-            && *events == self.body.events
-            && *blobs == self.body.blobs
-            && *operation_results == self.body.operation_results
     }
 
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {

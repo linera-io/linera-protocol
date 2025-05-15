@@ -100,7 +100,8 @@ interface contract-runtime-api {
     }
 
     record resources {
-        fuel: u64,
+        wasm-fuel: u64,
+        evm-fuel: u64,
         read-operations: u32,
         write-operations: u32,
         bytes-to-read: u32,

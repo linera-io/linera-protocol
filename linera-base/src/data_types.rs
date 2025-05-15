@@ -142,17 +142,17 @@ pub struct TimeDelta(u64);
 
 impl TimeDelta {
     /// Returns the given number of microseconds as a [`TimeDelta`].
-    pub fn from_micros(micros: u64) -> Self {
+    pub const fn from_micros(micros: u64) -> Self {
         TimeDelta(micros)
     }
 
     /// Returns the given number of milliseconds as a [`TimeDelta`].
-    pub fn from_millis(millis: u64) -> Self {
+    pub const fn from_millis(millis: u64) -> Self {
         TimeDelta(millis.saturating_mul(1_000))
     }
 
     /// Returns the given number of seconds as a [`TimeDelta`].
-    pub fn from_secs(secs: u64) -> Self {
+    pub const fn from_secs(secs: u64) -> Self {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
@@ -163,12 +163,12 @@ impl TimeDelta {
     }
 
     /// Returns this [`TimeDelta`] as a number of microseconds.
-    pub fn as_micros(&self) -> u64 {
+    pub const fn as_micros(&self) -> u64 {
         self.0
     }
 
     /// Returns this [`TimeDelta`] as a [`Duration`].
-    pub fn as_duration(&self) -> Duration {
+    pub const fn as_duration(&self) -> Duration {
         Duration::from_micros(self.as_micros())
     }
 }
@@ -206,41 +206,35 @@ impl Timestamp {
     }
 
     /// Returns the number of microseconds since the Unix epoch.
-    pub fn micros(&self) -> u64 {
+    pub const fn micros(&self) -> u64 {
         self.0
     }
 
     /// Returns the [`TimeDelta`] between `other` and `self`, or zero if `other` is not earlier
     /// than `self`.
-    pub fn delta_since(&self, other: Timestamp) -> TimeDelta {
+    pub const fn delta_since(&self, other: Timestamp) -> TimeDelta {
         TimeDelta::from_micros(self.0.saturating_sub(other.0))
     }
 
     /// Returns the [`Duration`] between `other` and `self`, or zero if `other` is not
     /// earlier than `self`.
-    pub fn duration_since(&self, other: Timestamp) -> Duration {
+    pub const fn duration_since(&self, other: Timestamp) -> Duration {
         Duration::from_micros(self.0.saturating_sub(other.0))
     }
 
     /// Returns the timestamp that is `duration` later than `self`.
-    pub fn saturating_add(&self, duration: TimeDelta) -> Timestamp {
+    pub const fn saturating_add(&self, duration: TimeDelta) -> Timestamp {
         Timestamp(self.0.saturating_add(duration.0))
     }
 
     /// Returns the timestamp that is `duration` earlier than `self`.
-    pub fn saturating_sub(&self, duration: TimeDelta) -> Timestamp {
+    pub const fn saturating_sub(&self, duration: TimeDelta) -> Timestamp {
         Timestamp(self.0.saturating_sub(duration.0))
-    }
-
-    /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
-    /// if it would overflow.
-    pub fn saturating_add_micros(&self, micros: u64) -> Timestamp {
-        Timestamp(self.0.saturating_add(micros))
     }
 
     /// Returns a timestamp `micros` microseconds earlier than `self`, or the lowest possible value
     /// if it would underflow.
-    pub fn saturating_sub_micros(&self, micros: u64) -> Timestamp {
+    pub const fn saturating_sub_micros(&self, micros: u64) -> Timestamp {
         Timestamp(self.0.saturating_sub(micros))
     }
 }
@@ -269,8 +263,10 @@ impl Display for Timestamp {
     Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, WitLoad, WitStore, WitType,
 )]
 pub struct Resources {
-    /// An amount of execution fuel.
-    pub fuel: u64,
+    /// An amount of Wasm execution fuel.
+    pub wasm_fuel: u64,
+    /// An amount of EVM execution fuel.
+    pub evm_fuel: u64,
     /// A number of read operations to be executed.
     pub read_operations: u32,
     /// A number of write operations to be executed.
@@ -372,7 +368,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating addition.
-            pub fn saturating_add(self, other: Self) -> Self {
+            pub const fn saturating_add(self, other: Self) -> Self {
                 let val = self.0.saturating_add(other.0);
                 Self(val)
             }
@@ -393,7 +389,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating subtraction.
-            pub fn saturating_sub(self, other: Self) -> Self {
+            pub const fn saturating_sub(self, other: Self) -> Self {
                 let val = self.0.saturating_sub(other.0);
                 Self(val)
             }
@@ -414,7 +410,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating in-place addition.
-            pub fn saturating_add_assign(&mut self, other: Self) {
+            pub const fn saturating_add_assign(&mut self, other: Self) {
                 self.0 = self.0.saturating_add(other.0);
             }
 
@@ -428,7 +424,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating multiplication.
-            pub fn saturating_mul(&self, other: $wrapped) -> Self {
+            pub const fn saturating_mul(&self, other: $wrapped) -> Self {
                 Self(self.0.saturating_mul(other))
             }
 
@@ -663,37 +659,37 @@ impl Amount {
     pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
 
     /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
-    pub fn from_tokens(tokens: u128) -> Amount {
+    pub const fn from_tokens(tokens: u128) -> Amount {
         Self::ONE.saturating_mul(tokens)
     }
 
     /// Returns an `Amount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
-    pub fn from_millis(millitokens: u128) -> Amount {
+    pub const fn from_millis(millitokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 3)).saturating_mul(millitokens)
     }
 
     /// Returns an `Amount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
-    pub fn from_micros(microtokens: u128) -> Amount {
+    pub const fn from_micros(microtokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 6)).saturating_mul(microtokens)
     }
 
     /// Returns an `Amount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
-    pub fn from_nanos(nanotokens: u128) -> Amount {
+    pub const fn from_nanos(nanotokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 9)).saturating_mul(nanotokens)
     }
 
     /// Returns an `Amount` corresponding to that many attotokens.
-    pub fn from_attos(attotokens: u128) -> Amount {
+    pub const fn from_attos(attotokens: u128) -> Amount {
         Amount(attotokens)
     }
 
     /// Helper function to obtain the 64 most significant bits of the balance.
-    pub fn upper_half(self) -> u64 {
+    pub const fn upper_half(self) -> u64 {
         (self.0 >> 64) as u64
     }
 
     /// Helper function to obtain the 64 least significant bits of the balance.
-    pub fn lower_half(self) -> u64 {
+    pub const fn lower_half(self) -> u64 {
         self.0 as u64
     }
 
@@ -930,6 +926,19 @@ impl ApplicationPermissions {
             change_application_permissions: vec![app_id],
             call_service_as_oracle: Some(vec![app_id]),
             make_http_requests: Some(vec![app_id]),
+        }
+    }
+
+    /// Creates new `ApplicationPermissions` where the given applications are the only ones
+    /// whose operations are allowed and mandatory, and they can also close the chain.
+    pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
+        Self {
+            execute_operations: Some(app_ids.clone()),
+            mandatory_applications: app_ids.clone(),
+            close_chain: app_ids.clone(),
+            change_application_permissions: app_ids.clone(),
+            call_service_as_oracle: Some(app_ids.clone()),
+            make_http_requests: Some(app_ids),
         }
     }
 

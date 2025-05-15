@@ -79,6 +79,12 @@ impl Wallet {
         self.default
     }
 
+    pub fn first_non_admin_chain(&self) -> Option<ChainId> {
+        self.chain_ids()
+            .into_iter()
+            .find(|chain_id| *chain_id != self.genesis_config.admin_id())
+    }
+
     pub fn chain_ids(&self) -> Vec<ChainId> {
         self.chains.keys().copied().collect()
     }
@@ -93,10 +99,6 @@ impl Wallet {
 
     pub fn num_chains(&self) -> usize {
         self.chains.len()
-    }
-
-    pub fn last_chain(&self) -> Option<&UserChain> {
-        self.chains.values().last()
     }
 
     pub fn chains_mut(&mut self) -> impl Iterator<Item = &mut UserChain> {
@@ -144,7 +146,7 @@ impl Wallet {
     }
 
     pub fn genesis_admin_chain(&self) -> ChainId {
-        self.genesis_config.admin_id
+        self.genesis_config.admin_id()
     }
 
     pub fn genesis_config(&self) -> &GenesisConfig {

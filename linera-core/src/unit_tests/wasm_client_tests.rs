@@ -882,7 +882,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     // Set a fuel limit that is enough to instantiate the application and do one increment
     // operation, but not ten. We also verify blob fees for the bytecode.
     let policy = ResourceControlPolicy {
-        maximum_fuel_per_block: 30_000,
+        maximum_wasm_fuel_per_block: 30_000,
         blob_read: Amount::from_tokens(10), // Should not be charged.
         blob_published: Amount::from_attos(100),
         blob_byte_read: Amount::from_tokens(10), // Should not be charged.

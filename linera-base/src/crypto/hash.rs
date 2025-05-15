@@ -135,6 +135,12 @@ impl TryFrom<&[u8]> for CryptoHash {
     }
 }
 
+impl From<CryptoHash> for [u8; 32] {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        crypto_hash.0 .0
+    }
+}
+
 impl From<[u64; 4]> for CryptoHash {
     fn from(integers: [u64; 4]) -> Self {
         CryptoHash(crate::crypto::u64_array_to_be_bytes(integers).into())

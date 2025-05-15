@@ -65,7 +65,8 @@ static REMOVED_BUNDLES: LazyLock<HistogramVec> = LazyLock::new(|| {
 /// * The cursors of added bundles (resp. removed bundles) must be increasing over time.
 /// * Reconciliation of added and removed bundles is allowed to skip some added bundles.
 ///   However, the opposite is not true: every removed bundle must be eventually added.
-#[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, ClonableView, View)]
 pub struct InboxStateView<C>
 where
     C: Clone + Context + Send + Sync,

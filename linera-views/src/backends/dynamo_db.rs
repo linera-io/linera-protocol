@@ -13,7 +13,6 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
@@ -945,7 +944,6 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     }
 }
 
-#[async_trait]
 impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     const MAX_BATCH_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
@@ -1159,6 +1157,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+            replication_factor: 1,
         };
         Ok(DynamoDbStoreInternalConfig {
             use_dynamodb_local: true,

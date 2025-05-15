@@ -919,6 +919,7 @@ where
             },
             Box::new(self.signer.clone()),
             10,
+            self.admin_id(),
             CrossChainMessageDelivery::NonBlocking,
             false,
             [chain_id],
@@ -930,7 +931,6 @@ where
         Ok(builder
             .create_chain_client(
                 chain_id,
-                self.admin_id(),
                 block_hash,
                 Timestamp::from(0),
                 block_height,

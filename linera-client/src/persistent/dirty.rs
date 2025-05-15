@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[derive(Clone, Debug, PartialEq, Eq, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, derive_more::Deref, derive_more::DerefMut)]
 pub struct Dirty(
     #[deref]
     #[deref_mut]

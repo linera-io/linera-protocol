@@ -1086,9 +1086,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "7.0.13"
+version = "7.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42d271ddda2f55b13970928abbcbc3423cfc18187c60e8769b48f21a93b7adaa"
+checksum = "4904895044116aab098ca82c6cec831ec43ed99efd04db9b70a390419bc88c5b"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -1098,9 +1098,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "7.0.13"
+version = "7.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aefe909173a037eaf3281b046dc22580b59a38b765d7b8d5116f2ffef098048d"
+checksum = "d0cde74de18e3a00c5dd5cfa002ab6f532e1a06c2a79ee6671e2fc353b400b92"
 dependencies = [
  "bytes",
  "indexmap 2.7.0",
@@ -2773,7 +2773,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
 dependencies = [
  "powerfmt",
- "serde",
 ]
 
 [[package]]
@@ -3832,12 +3831,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "histogram"
-version = "0.6.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12cb882ccb290b8646e554b157ab0b71e64e8d5bef775cd66b6531e52d302669"
-
-[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4371,6 +4364,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4507,7 +4509,7 @@ dependencies = [
  "secrecy 0.8.0",
  "serde",
  "serde_json",
- "serde_yaml 0.9.34+deprecated",
+ "serde_yaml",
  "thiserror 1.0.69",
  "tokio",
  "tokio-util",
@@ -4701,7 +4703,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-graphql",
- "async-trait",
  "axum",
  "bcs",
  "cfg_aliases",
@@ -4727,7 +4728,6 @@ dependencies = [
 name = "linera-client"
 version = "0.15.0"
 dependencies = [
- "alloy",
  "amm",
  "anyhow",
  "async-trait",
@@ -4858,7 +4858,6 @@ dependencies = [
 name = "linera-execution"
 version = "0.15.0"
 dependencies = [
- "alloy",
  "alloy-primitives 1.0.0",
  "alloy-sol-types 1.0.0",
  "anyhow",
@@ -4885,7 +4884,6 @@ dependencies = [
  "linera-wasmer-compiler-singlepass",
  "linera-witty",
  "lru",
- "num_enum",
  "oneshot",
  "prometheus",
  "proptest",
@@ -4936,22 +4934,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "linera-faucet"
-version = "0.15.0"
-dependencies = [
- "async-graphql",
- "linera-base",
- "serde",
- "serde_with",
-]
-
-[[package]]
 name = "linera-faucet-client"
 version = "0.15.0"
 dependencies = [
  "linera-base",
  "linera-client",
- "linera-faucet",
  "linera-version",
  "reqwest 0.11.27",
  "serde",
@@ -4969,6 +4956,7 @@ dependencies = [
  "async-graphql-axum",
  "async-trait",
  "axum",
+ "derive_more 1.0.0",
  "futures",
  "linera-base",
  "linera-client",
@@ -5163,7 +5151,6 @@ dependencies = [
 name = "linera-service"
 version = "0.15.0"
 dependencies = [
- "alloy",
  "alloy-primitives 1.0.0",
  "alloy-sol-types 1.0.0",
  "amm",
@@ -5211,7 +5198,6 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
- "linera-faucet",
  "linera-faucet-client",
  "linera-faucet-server",
  "linera-rpc",
@@ -5318,7 +5304,6 @@ dependencies = [
  "prost",
  "serde",
  "serde-reflection",
- "serde_yaml 0.8.26",
  "similar-asserts",
  "test-strategy",
  "thiserror 1.0.69",
@@ -5372,7 +5357,6 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-lock",
- "async-trait",
  "aws-config",
  "aws-sdk-dynamodb",
  "aws-smithy-types",
@@ -5380,6 +5364,7 @@ dependencies = [
  "cfg_aliases",
  "convert_case",
  "criterion",
+ "derive_more 1.0.0",
  "futures",
  "generic-array",
  "hex",
@@ -6083,7 +6068,6 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
  "syn 2.0.100",
@@ -6931,11 +6915,11 @@ dependencies = [
 
 [[package]]
 name = "rand_pcg"
-version = "0.3.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
+checksum = "b48ac3f7ffaab7fac4d2376632268aa5f89abdb55f7ebf8f4d11fffccb2320f7"
 dependencies = [
- "rand_core 0.6.4",
+ "rand_core 0.9.3",
 ]
 
 [[package]]
@@ -7594,9 +7578,9 @@ dependencies = [
 
 [[package]]
 name = "scylla"
-version = "0.15.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0408e59e11f589071d1cefc3928270aa8fe4d03f654cb118e0c24d16013ea82"
+checksum = "bd81aa1c6de67ed43f78a64aa233c547c569979922ab2e6c6d58730f0d53b651"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -7606,14 +7590,12 @@ dependencies = [
  "dashmap 5.5.3",
  "futures",
  "hashbrown 0.14.5",
- "histogram",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "lazy_static",
  "lz4_flex",
- "rand 0.8.5",
+ "rand 0.9.0",
  "rand_pcg",
  "scylla-cql",
- "scylla-macros",
  "smallvec",
  "snap",
  "socket2",
@@ -7625,13 +7607,15 @@ dependencies = [
 
 [[package]]
 name = "scylla-cql"
-version = "0.4.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0cefd8b924bb8f67525937a811038d5662f9febc30c74c778a8205f63c4b365"
+checksum = "ae84054fed47b0a7e757d66aeb4574a4ca9696bf68c25ed6325b0f198c15795b"
 dependencies = [
  "async-trait",
  "byteorder",
  "bytes",
+ "chrono",
+ "itertools 0.14.0",
  "lz4_flex",
  "scylla-macros",
  "snap",
@@ -7644,9 +7628,9 @@ dependencies = [
 
 [[package]]
 name = "scylla-macros"
-version = "0.7.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e878bfb8a235207864ac3fb0b51d7954c77fd38486e0e4fb4e037935ff7eb46c"
+checksum = "e67d343ebea5cc079bfa89ca4b231b432207c3748baaa3b00e5c238e7644e838"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -7923,8 +7907,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "hex",
- "indexmap 1.9.3",
- "indexmap 2.7.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -7942,18 +7924,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
-]
-
-[[package]]
-name = "serde_yaml"
-version = "0.8.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "578a7433b776b56a35785ed5ce9a7e777ac0598aac5a6dd1b4b18a307c7fc71b"
-dependencies = [
- "indexmap 1.9.3",
- "ryu",
- "serde",
- "yaml-rust",
 ]
 
 [[package]]
@@ -10601,15 +10571,6 @@ name = "xxhash-rust"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
-
-[[package]]
-name = "yaml-rust"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
-dependencies = [
- "linked-hash-map",
-]
 
 [[package]]
 name = "yasna"

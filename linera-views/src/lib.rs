@@ -58,6 +58,8 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 
 #![deny(missing_docs)]
 #![deny(clippy::large_futures)]
+// These traits have `Send` variants where possible.
+#![allow(async_fn_in_trait)]
 
 /// The definition of the batches for writing in the database.
 pub mod batch;
@@ -82,6 +84,7 @@ pub mod backends;
 pub mod metrics;
 
 /// GraphQL implementations.
+#[cfg(with_graphql)]
 mod graphql;
 
 /// Functions for random generation
@@ -109,6 +112,4 @@ pub use views::{
 };
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
-pub use {
-    async_lock, async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3,
-};
+pub use {generic_array, sha3};

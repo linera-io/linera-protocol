@@ -32,7 +32,7 @@ use crate::{
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct SystemExecutionState {
     pub description: Option<ChainDescription>,
-    pub epoch: Option<Epoch>,
+    pub epoch: Epoch,
     pub admin_id: Option<ChainId>,
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
@@ -69,7 +69,7 @@ impl SystemExecutionState {
             })
             .collect();
         SystemExecutionState {
-            epoch: Some(epoch),
+            epoch,
             description: Some(description),
             admin_id,
             ownership,

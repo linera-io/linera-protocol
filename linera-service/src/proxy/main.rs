@@ -95,6 +95,10 @@ pub struct ProxyOptions {
     /// Path to the file describing the initial user chains (aka genesis state)
     #[arg(long = "genesis")]
     genesis_config_path: PathBuf,
+
+    /// The replication factor for the keyspace
+    #[arg(long, default_value = "1")]
+    storage_replication_factor: u32,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -409,6 +413,7 @@ impl ProxyOptions {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
             storage_cache_config,
+            replication_factor: self.storage_replication_factor,
         };
         let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;
         let store_config = self.storage_config.add_common_config(common_config).await?;

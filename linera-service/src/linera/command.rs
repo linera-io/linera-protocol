@@ -235,13 +235,13 @@ pub enum ClientCommand {
 
     /// View or update the resource control policy
     ResourceControlPolicy {
-        /// Set the base price for creating a block.
+        /// Set the price per unit of Wasm fuel.
         #[arg(long)]
-        block: Option<Amount>,
+        wasm_fuel_unit: Option<Amount>,
 
-        /// Set the price per unit of fuel.
+        /// Set the price per unit of EVM fuel.
         #[arg(long)]
-        fuel_unit: Option<Amount>,
+        evm_fuel_unit: Option<Amount>,
 
         /// Set the price per read operation.
         #[arg(long)]
@@ -303,9 +303,13 @@ pub enum ClientCommand {
         #[arg(long)]
         http_request: Option<Amount>,
 
-        /// Set the maximum amount of fuel per block.
+        /// Set the maximum amount of Wasm fuel per block.
         #[arg(long)]
-        maximum_fuel_per_block: Option<u64>,
+        maximum_wasm_fuel_per_block: Option<u64>,
+
+        /// Set the maximum amount of EVM fuel per block.
+        #[arg(long)]
+        maximum_evm_fuel_per_block: Option<u64>,
 
         /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
         #[arg(long)]
@@ -417,10 +421,6 @@ pub enum ClientCommand {
         #[arg(long = "genesis")]
         genesis_config_path: PathBuf,
 
-        /// Index of the admin chain in the genesis config
-        #[arg(long, default_value = "0")]
-        admin_root: u32,
-
         /// Known initial balance of the chain
         #[arg(long, default_value = "0")]
         initial_funding: Amount,
@@ -437,15 +437,15 @@ pub enum ClientCommand {
         #[arg(long, default_value = "no-fees")]
         policy_config: ResourceControlPolicyConfig,
 
-        /// Set the base price for creating a block.
+        /// Set the price per unit of Wasm fuel.
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
-        block_price: Option<Amount>,
+        wasm_fuel_unit_price: Option<Amount>,
 
-        /// Set the price per unit of fuel.
+        /// Set the price per unit of EVM fuel.
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
-        fuel_unit_price: Option<Amount>,
+        evm_fuel_unit_price: Option<Amount>,
 
         /// Set the price per read operation.
         /// (This will overwrite value from `--policy-config`)
@@ -520,10 +520,15 @@ pub enum ClientCommand {
         #[arg(long)]
         http_request_price: Option<Amount>,
 
-        /// Set the maximum amount of fuel per block.
+        /// Set the maximum amount of Wasm fuel per block.
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
-        maximum_fuel_per_block: Option<u64>,
+        maximum_wasm_fuel_per_block: Option<u64>,
+
+        /// Set the maximum amount of EVM fuel per block.
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        maximum_evm_fuel_per_block: Option<u64>,
 
         /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
         #[arg(long)]
@@ -973,6 +978,12 @@ pub enum NetCommand {
         /// The number of block exporters per validator in the local test network. Default is 0.
         #[arg(long, default_value = "0")]
         block_exporters: u32,
+
+        /// Use dual store (rocksdb and scylladb) instead of just scylladb. This is exclusive for
+        /// kubernetes deployments.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "false")]
+        dual_store: bool,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
@@ -1007,14 +1018,6 @@ pub enum WalletCommand {
         /// The address of a faucet.
         #[arg(long = "faucet")]
         faucet: Option<String>,
-
-        /// Request a new chain from the faucet, credited with tokens. This requires `--faucet`.
-        #[arg(long)]
-        with_new_chain: bool,
-
-        /// Other chains to follow.
-        #[arg(long, num_args(0..))]
-        with_other_chains: Vec<ChainId>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.

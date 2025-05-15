@@ -41,7 +41,9 @@ impl Default for TimeoutConfig {
             fast_round_duration: None,
             base_timeout: TimeDelta::from_secs(10),
             timeout_increment: TimeDelta::from_secs(1),
-            fallback_duration: TimeDelta::from_secs(60 * 60 * 24),
+            // This is `MAX` because the validators are not currently expected to start clients for
+            // every chain with an old tracked message in the inbox.
+            fallback_duration: TimeDelta::MAX,
         }
     }
 }

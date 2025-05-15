@@ -23,7 +23,6 @@ use std::{
     vec::IntoIter,
 };
 
-use async_trait::async_trait;
 use bcs::serialized_size;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
@@ -368,8 +367,8 @@ impl Batch {
 /// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
 /// Thus we need to access the databases in order to replace a `DeletePrefix`
 /// by a vector of the keys to be removed.
-#[trait_variant::make(DeletePrefixExpander: Send)]
-pub trait LocalDeletePrefixExpander {
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key prefix.
     type Error: Debug;
 
@@ -377,8 +376,8 @@ pub trait LocalDeletePrefixExpander {
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 
+#[cfg_attr(not(web), trait_variant::make(Send))]
 /// A notion of batch useful for certain computations (notably journaling).
-#[async_trait]
 pub trait SimplifiedBatch: Sized + Send + Sync {
     /// The iterator type used to process values from the batch.
     type Iter: BatchValueWriter<Self>;
@@ -443,7 +442,6 @@ pub struct SimpleUnorderedBatchIter {
     insert_iter: Peekable<IntoIter<(Vec<u8>, Vec<u8>)>>,
 }
 
-#[async_trait]
 impl SimplifiedBatch for SimpleUnorderedBatch {
     type Iter = SimpleUnorderedBatchIter;
 
@@ -548,7 +546,6 @@ pub struct UnorderedBatchIter {
     insert_deletion_iter: SimpleUnorderedBatchIter,
 }
 
-#[async_trait]
 impl SimplifiedBatch for UnorderedBatch {
     type Iter = UnorderedBatchIter;
 
@@ -644,6 +641,7 @@ mod tests {
     use linera_views::{
         batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
         context::{Context, MemoryContext},
+        store::WritableKeyValueStore as _,
     };
 
     #[test]
@@ -706,7 +704,7 @@ mod tests {
         batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
         batch.put_key_value_bytes(vec![1, 2, 5], vec![]);
         batch.put_key_value_bytes(vec![1, 3, 3], vec![]);
-        context.write_batch(batch).await.unwrap();
+        context.store().write_batch(batch).await.unwrap();
         let mut batch = Batch::new();
         batch.delete_key_prefix(vec![1, 2]);
         let unordered_batch = batch.simplify();

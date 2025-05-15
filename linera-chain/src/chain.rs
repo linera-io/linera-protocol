@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
@@ -33,6 +32,7 @@ use linera_views::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, CryptoHashView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
@@ -109,30 +109,40 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 #[cfg(with_metrics)]
-static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "wasm_num_reads_per_block",
-        "Wasm number of reads per block",
+        "evm_fuel_used_per_block",
+        "EVM fuel used per block",
+        &[],
+        exponential_bucket_interval(10.0, 1_000_000.0),
+    )
+});
+
+#[cfg(with_metrics)]
+static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "vm_num_reads_per_block",
+        "VM number of reads per block",
         &[],
         exponential_bucket_interval(0.1, 100.0),
     )
 });
 
 #[cfg(with_metrics)]
-static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "wasm_bytes_read_per_block",
-        "Wasm number of bytes read per block",
+        "vm_bytes_read_per_block",
+        "VM number of bytes read per block",
         &[],
         exponential_bucket_interval(0.1, 10_000_000.0),
     )
 });
 
 #[cfg(with_metrics)]
-static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "wasm_bytes_written_per_block",
-        "Wasm number of bytes written per block",
+        "vm_bytes_written_per_block",
+        "VM number of bytes written per block",
         &[],
         exponential_bucket_interval(0.1, 10_000_000.0),
     )
@@ -144,7 +154,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        exponential_bucket_latencies(10.0),
+        exponential_bucket_latencies(500.0),
     )
 });
 
@@ -172,7 +182,8 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
 const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
-#[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimestampedBundleInInbox {
     /// The origin and cursor of the bundle.
     pub entry: BundleInInbox,
@@ -181,9 +192,8 @@ pub struct TimestampedBundleInInbox {
 }
 
 /// An origin and cursor of a unskippable bundle that is no longer in our inbox.
-#[derive(
-    Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize, async_graphql::SimpleObject,
-)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BundleInInbox {
     /// The origin from which we received the bundle.
     pub origin: ChainId,
@@ -205,8 +215,12 @@ impl BundleInInbox {
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 
 /// A view accessing the state of a chain.
-#[derive(Debug, RootView, ClonableView, SimpleObject)]
-#[graphql(cache_control(no_cache))]
+#[cfg_attr(
+    with_graphql,
+    derive(async_graphql::SimpleObject),
+    graphql(cache_control(no_cache))
+)]
+#[derive(Debug, RootView, ClonableView)]
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -252,7 +266,8 @@ where
 }
 
 /// Block-chaining state.
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ChainTipState {
     /// Hash of the latest certified block in this chain, if any.
     pub block_hash: Option<CryptoHash>,
@@ -294,11 +309,6 @@ impl ChainTipState {
             }
         );
         Ok(self.next_block_height > height)
-    }
-
-    /// Returns `true` if the next block will be the first, i.e. the chain doesn't have any blocks.
-    pub fn is_first_block(&self) -> bool {
-        self.next_block_height == BlockHeight::ZERO
     }
 
     /// Checks if the measurement counters would be valid.
@@ -458,7 +468,7 @@ where
     pub async fn validate_incoming_bundles(&self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let pairs = self.inboxes.try_load_all_entries().await?;
-        let max_stream_queries = self.context().max_stream_queries();
+        let max_stream_queries = self.context().store().max_stream_queries();
         let stream = stream::iter(pairs)
             .map(|(origin, inbox)| async move {
                 if let Some(bundle) = inbox.removed_bundles.front().await? {
@@ -693,7 +703,10 @@ where
         );
 
         chain.system.timestamp.set(block.timestamp);
-
+        ensure!(
+            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
+            ChainError::EmptyBlock
+        );
         let (_, committee) = chain
             .system
             .current_committee()
@@ -1140,14 +1153,17 @@ where
         NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.fuel as f64);
-        WASM_NUM_READS_PER_BLOCK
+            .observe(tracker.wasm_fuel as f64);
+        EVM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.evm_fuel as f64);
+        VM_NUM_READS_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.read_operations as f64);
-        WASM_BYTES_READ_PER_BLOCK
+        VM_BYTES_READ_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_read as f64);
-        WASM_BYTES_WRITTEN_PER_BLOCK
+        VM_BYTES_WRITTEN_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_written as f64);
     }

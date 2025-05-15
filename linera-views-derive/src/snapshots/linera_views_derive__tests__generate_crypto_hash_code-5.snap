@@ -2,7 +2,6 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_crypto_hash_code(input))
 ---
-#[linera_views::async_trait]
 impl linera_views::views::CryptoHashView<custom::path::to::ContextType> for TestView
 where
     RegisterView<

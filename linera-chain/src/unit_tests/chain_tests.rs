@@ -109,6 +109,14 @@ impl TestEnvironment {
     fn make_app_description(&self) -> (ApplicationDescription, Blob, Blob) {
         let contract = Bytecode::new(b"contract".into());
         let service = Bytecode::new(b"service".into());
+        self.make_app_from_bytecodes(contract, service)
+    }
+
+    fn make_app_from_bytecodes(
+        &self,
+        contract: Bytecode,
+        service: Bytecode,
+    ) -> (ApplicationDescription, Blob, Blob) {
         let contract_blob = Blob::new_contract_bytecode(contract.compress());
         let service_blob = Blob::new_service_bytecode(service.compress());
         let vm_runtime = VmRuntime::Wasm;
@@ -254,8 +262,17 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
 
+    let (another_app, another_contract, another_service) = env.make_app_from_bytecodes(
+        Bytecode::new(b"contractB".into()),
+        Bytecode::new(b"serviceB".into()),
+    );
+    let another_app_id = ApplicationId::from(&another_app);
+
     let config = InitialChainConfig {
-        application_permissions: ApplicationPermissions::new_single(application_id),
+        application_permissions: ApplicationPermissions::new_multiple(vec![
+            application_id,
+            another_app_id,
+        ]),
         ..env.make_open_chain_config()
     };
     let chain_desc = env.make_child_chain_description_with_config(3, config);
@@ -267,12 +284,23 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
+    extra
+        .user_contracts()
+        .insert(another_app_id, application.clone().into());
+
     extra.add_blobs(env.description_blobs()).await?;
     extra
         .add_blobs([
             contract_blob,
             service_blob,
             Blob::new_application_description(&app_description),
+        ])
+        .await?;
+    extra
+        .add_blobs([
+            another_contract,
+            another_service,
+            Blob::new_application_description(&another_app),
         ])
         .await?;
 
@@ -285,20 +313,31 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .execute_block(&invalid_block, time, None, &[], None)
         .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
-        if app_ids == vec![application_id]
+        if app_ids == vec![application_id, another_app_id]
     );
 
     // After registering, an app operation can already be used in the first block.
+    application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
+    application.expect_call(ExpectedCall::default_finalize());
     application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let app_operation = Operation::User {
         application_id,
         bytes: b"foo".to_vec(),
     };
-    let valid_block = make_first_block(chain_id).with_operation(app_operation.clone());
+    let another_app_operation = Operation::User {
+        application_id: another_app_id,
+        bytes: b"bar".to_vec(),
+    };
+
+    let valid_block = make_first_block(chain_id)
+        .with_operation(app_operation.clone())
+        .with_operation(another_app_operation.clone());
+
     let outcome = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;
+
     let value = ConfirmedBlock::new(outcome.with(valid_block));
     chain.apply_confirmed_block(&value, time).await?;
 
@@ -310,22 +349,24 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .execute_block(&invalid_block, time, None, &[], None)
         .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
-        if app_ids == vec![application_id]
+        if app_ids == vec![application_id, another_app_id]
     );
-
-    // Also, blocks without an application operation or incoming message are forbidden.
-    let invalid_block = make_child_block(&value.clone());
+    // Also, blocks without all authorized applications operation, or incoming message, are forbidden.
+    let invalid_block = make_child_block(&value).with_operation(another_app_operation.clone());
     let result = chain
         .execute_block(&invalid_block, time, None, &[], None)
         .await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
         if app_ids == vec![application_id]
     );
-
     // But app operations continue to work.
     application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
-    let valid_block = make_child_block(&value).with_operation(app_operation);
+    application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
+    application.expect_call(ExpectedCall::default_finalize());
+    let valid_block = make_child_block(&value)
+        .with_operation(app_operation.clone())
+        .with_operation(another_app_operation.clone());
     let outcome = chain
         .execute_block(&valid_block, time, None, &[], None)
         .await?;

@@ -963,13 +963,13 @@ A collection of prices and limits associated with block execution.
 """
 input ResourceControlPolicy {
 	"""
-	The base price for creating a new block.
+	The price per unit of fuel (aka gas) for Wasm execution.
 	"""
-	block: Amount!
+	wasmFuelUnit: Amount!
 	"""
-	The price per unit of fuel (aka gas) for VM execution.
+	The price per unit of fuel (aka gas) for EVM execution.
 	"""
-	fuelUnit: Amount!
+	evmFuelUnit: Amount!
 	"""
 	The price of one read operation.
 	"""
@@ -1031,9 +1031,13 @@ input ResourceControlPolicy {
 	"""
 	httpRequest: Amount!
 	"""
-	The maximum amount of fuel a block can consume.
+	The maximum amount of Wasm fuel a block can consume.
 	"""
-	maximumFuelPerBlock: Int!
+	maximumWasmFuelPerBlock: Int!
+	"""
+	The maximum amount of EVM fuel a block can consume.
+	"""
+	maximumEvmFuelPerBlock: Int!
 	"""
 	The maximum time in milliseconds that a block can spend executing services as oracles.
 	"""
@@ -1119,7 +1123,7 @@ type SubscriptionRoot {
 
 type SystemExecutionStateView {
 	description: ChainDescription
-	epoch: Epoch
+	epoch: Epoch!
 	adminId: ChainId
 	committees: JSONObject!
 	ownership: ChainOwnership!

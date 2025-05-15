@@ -24,6 +24,7 @@ impl DockerImage {
         binaries: &BuildArg,
         github_root: &PathBuf,
         build_mode: &BuildMode,
+        dual_store: bool,
     ) -> Result<Self> {
         let build_arg = match binaries {
             BuildArg::Directory(bin_path) => {
@@ -65,13 +66,16 @@ impl DockerImage {
             .args(["--build-arg", &build_arg]);
 
         match build_mode {
-            BuildMode::Release => {
-                command.args(["--build-arg", "build_flag=--release"]);
-                command.args(["--build-arg", "build_folder=release"]);
-            }
+            // Release is the default, so no need to add any arguments
+            BuildMode::Release => {}
             BuildMode::Debug => {
                 command.args(["--build-arg", "build_folder=debug"]);
+                command.args(["--build-arg", "build_flag="]);
             }
+        }
+
+        if dual_store {
+            command.args(["--build-arg", "build_features=rocksdb,scylladb,metrics"]);
         }
 
         #[cfg(not(with_testing))]

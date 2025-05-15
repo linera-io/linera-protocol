@@ -10,6 +10,7 @@ pub mod committee;
 pub mod evm;
 mod execution;
 mod execution_state_actor;
+#[cfg(with_graphql)]
 mod graphql;
 mod policy;
 mod resources;
@@ -44,6 +45,7 @@ use linera_base::{
     },
     ownership::ChainOwnership,
     task,
+    vm::VmRuntime,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -75,9 +77,10 @@ pub use crate::{
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
 
-/// The `linera.sol` library code to be included in solidity smart
+/// The `Linera.sol` library code to be included in solidity smart
 /// contracts using Linera features.
-pub const LINERA_SOL: &str = include_str!("../solidity/linera.sol");
+pub const LINERA_SOL: &str = include_str!("../solidity/Linera.sol");
+pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
@@ -226,8 +229,8 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
-    #[error("Block execution required too much fuel")]
-    MaximumFuelExceeded,
+    #[error("Block execution required too much fuel for VM {0}")]
+    MaximumFuelExceeded(VmRuntime),
     #[error("Services running as oracles in block took longer than allowed")]
     MaximumServiceOracleExecutionTimeExceeded,
     #[error("Service running as an oracle produced a response that's too large")]
@@ -295,12 +298,12 @@ pub enum ExecutionError {
     #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
     #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
-    InsufficientFunding {
+    InsufficientBalance {
         balance: Amount,
         account: AccountOwner,
     },
-    #[error("Required execution fees exceeded the total funding available: {balance}")]
-    InsufficientFundingForFees { balance: Amount },
+    #[error("Required execution fees exceeded the total funding available. Fees {fees}, available balance: {balance}")]
+    FeesExceedFunding { fees: Amount, balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
@@ -718,11 +721,14 @@ pub trait ContractRuntime: BaseRuntime {
     /// based on the execution context.
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError>;
 
+    /// Returns the maximum gas fuel per block.
+    fn maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;
+
     /// Returns the amount of execution fuel remaining before execution is aborted.
-    fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
+    fn remaining_fuel(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;
 
     /// Consumes some of the execution fuel.
-    fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
+    fn consume_fuel(&mut self, fuel: u64, vm_runtime: VmRuntime) -> Result<(), ExecutionError>;
 
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;

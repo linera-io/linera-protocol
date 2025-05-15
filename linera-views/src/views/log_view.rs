@@ -5,7 +5,6 @@ use std::ops::{Bound, Range, RangeBounds};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
@@ -20,6 +19,7 @@ use crate::{
     common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -52,7 +52,6 @@ pub struct LogView<C, T> {
     new_values: Vec<T>,
 }
 
-#[async_trait]
 impl<C, T> View<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
@@ -66,7 +65,7 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_tag(KeyTag::Count as u8)])
+        Ok(vec![context.base_key().base_tag(KeyTag::Count as u8)])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -82,7 +81,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -101,7 +100,7 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key_prefix(self.context.base_key().bytes.clone());
             self.stored_count = 0;
             delete_view = true;
         }
@@ -110,11 +109,12 @@ where
             for value in &self.new_values {
                 let key = self
                     .context
+                    .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &self.stored_count)?;
                 batch.put_key_value(key, value)?;
                 self.stored_count += 1;
             }
-            let key = self.context.base_tag(KeyTag::Count as u8);
+            let key = self.context.base_key().base_tag(KeyTag::Count as u8);
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
@@ -212,8 +212,11 @@ where
         let value = if self.delete_storage_first {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
-            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
-            self.context.read_value(&key).await?
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
+            self.context.store().read_value(&key).await?
         } else {
             self.new_values.get(index - self.stored_count).cloned()
         };
@@ -247,7 +250,10 @@ where
             let mut positions = Vec::new();
             for (pos, index) in indices.into_iter().enumerate() {
                 if index < self.stored_count {
-                    let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+                    let key = self
+                        .context
+                        .base_key()
+                        .derive_tag_key(KeyTag::Index as u8, &index)?;
                     keys.push(key);
                     positions.push(pos);
                     result.push(None);
@@ -255,7 +261,7 @@ where
                     result.push(self.new_values.get(index - self.stored_count).cloned());
                 }
             }
-            let values = self.context.read_multi_values(keys).await?;
+            let values = self.context.store().read_multi_values(keys).await?;
             for (pos, value) in positions.into_iter().zip(values) {
                 *result.get_mut(pos).unwrap() = value;
             }
@@ -267,11 +273,14 @@ where
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
-            let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+            let key = self
+                .context
+                .base_key()
+                .derive_tag_key(KeyTag::Index as u8, &index)?;
             keys.push(key);
         }
         let mut values = Vec::with_capacity(count);
-        for entry in self.context.read_multi_values(keys).await? {
+        for entry in self.context.store().read_multi_values(keys).await? {
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries);
@@ -340,7 +349,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, T> HashableView<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
@@ -366,6 +374,7 @@ where
 /// Type wrapping `LogView` while memoizing the hash.
 pub type HashedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;
 
+#[cfg(not(web))]
 mod graphql {
     use std::borrow::Cow;
 

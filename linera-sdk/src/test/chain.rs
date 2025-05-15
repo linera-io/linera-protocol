@@ -96,7 +96,8 @@ impl ActiveChain {
 
     /// Returns the current [`Epoch`] the chain is in.
     pub async fn epoch(&self) -> Epoch {
-        self.validator
+        *self
+            .validator
             .worker()
             .chain_state_view(self.id())
             .await
@@ -105,7 +106,6 @@ impl ActiveChain {
             .system
             .epoch
             .get()
-            .expect("Active chains should be in an epoch")
     }
 
     /// Reads the current shared balance available to all of the owners of this microchain.
@@ -303,7 +303,11 @@ impl ActiveChain {
             .await
             .expect("Failed to query chain's pending messages");
         let messages = information.info.requested_pending_message_bundles;
-
+        // Empty blocks are not allowed.
+        // Return early if there are no messages to process and we'd end up with an empty proposal.
+        if messages.is_empty() {
+            return;
+        }
         self.add_block(|block| {
             block.with_incoming_bundles(messages);
         })

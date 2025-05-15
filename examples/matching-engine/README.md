@@ -76,9 +76,9 @@ INFO_3=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
 CHAIN_3="${INFO_3[0]}"
-OWNER_1="${INFO_1[2]}"
-OWNER_2="${INFO_2[2]}"
-OWNER_3="${INFO_3[2]}"
+OWNER_1="${INFO_1[1]}"
+OWNER_2="${INFO_2[1]}"
+OWNER_3="${INFO_3[1]}"
 ```
 
 Publish and create two `fungible` applications whose IDs will be used as a

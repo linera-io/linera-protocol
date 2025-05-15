@@ -100,9 +100,9 @@ linera wallet init --faucet $FAUCET_URL
 INFO1=($(linera wallet request-chain --faucet $FAUCET_URL))
 INFO2=($(linera wallet request-chain --faucet $FAUCET_URL))
 CHAIN1="${INFO1[0]}"
-ACCOUNT1="${INFO1[2]}"
+ACCOUNT1="${INFO1[1]}"
 CHAIN2="${INFO2[0]}"
-ACCOUNT2="${INFO2[2]}"
+ACCOUNT2="${INFO2[1]}"
 
 # Show the different chains tracked by the wallet.
 linera wallet show

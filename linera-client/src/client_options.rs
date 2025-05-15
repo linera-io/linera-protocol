@@ -13,7 +13,7 @@ use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::ResourceControlPolicy;
 
 #[cfg(any(with_indexed_db, not(with_persist)))]
-use crate::{config::WalletState, wallet::Wallet};
+use crate::wallet::Wallet;
 use crate::{persistent, util};
 
 #[derive(Debug, thiserror::Error)]
@@ -118,21 +118,19 @@ pub struct ClientContextOptions {
 
 #[cfg(with_indexed_db)]
 impl ClientContextOptions {
-    pub async fn wallet(&self) -> Result<WalletState<persistent::IndexedDb<Wallet>>, Error> {
-        Ok(WalletState::new(
-            persistent::IndexedDb::read("linera-wallet")
-                .await?
-                .ok_or(Error::NonexistentWallet)?,
-        ))
+    pub async fn wallet(&self) -> Result<persistent::IndexedDb<Wallet>, Error> {
+        persistent::IndexedDb::read("linera-wallet")
+            .await?
+            .ok_or(Error::NonexistentWallet)
     }
 }
 
 #[cfg(not(with_persist))]
 impl ClientContextOptions {
-    pub async fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
+    pub async fn wallet(&self) -> Result<persistent::Memory<Wallet>, Error> {
         #![allow(unreachable_code)]
         let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `indexed-db` features");
-        Ok(WalletState::new(persistent::Memory::new(_wallet)))
+        Ok(persistent::Memory::new(_wallet))
     }
 }
 
@@ -287,8 +285,6 @@ pub enum ResourceControlPolicyConfig {
     #[cfg(with_testing)]
     OnlyFuel,
     #[cfg(with_testing)]
-    FuelAndBlock,
-    #[cfg(with_testing)]
     AllCategories,
 }
 
@@ -299,8 +295,6 @@ impl ResourceControlPolicyConfig {
             ResourceControlPolicyConfig::Testnet => ResourceControlPolicy::testnet(),
             #[cfg(with_testing)]
             ResourceControlPolicyConfig::OnlyFuel => ResourceControlPolicy::only_fuel(),
-            #[cfg(with_testing)]
-            ResourceControlPolicyConfig::FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
             #[cfg(with_testing)]
             ResourceControlPolicyConfig::AllCategories => ResourceControlPolicy::all_categories(),
         }
