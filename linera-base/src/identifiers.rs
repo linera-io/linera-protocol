@@ -1007,7 +1007,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "0e94923a8f72ef1d0e69e6958e655002f2b1883bac9a67a4704d2f4125825217"
+            "4423610c1010c31be88bc6cc041a9c1063d58062e9d748c1552a1e75e7ea13a9"
         );
     }
 
