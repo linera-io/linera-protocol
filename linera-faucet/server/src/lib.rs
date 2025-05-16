@@ -178,6 +178,7 @@ where
 
         // Only keep using this chain if there will still be enough balance to close it.
         if faucet_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)? {
+            self.faucet_chain_id.lock().await.take();
             // TODO(#1795): Move the remaining tokens back to the main chain.
             match faucet_client.close_chain().await {
                 Ok(outcome) => {
@@ -185,12 +186,17 @@ where
                 }
                 Err(err) => tracing::warn!("Failed to close the temporary faucet chain: {err:?}"),
             }
-            self.context
+            if let Err(err) = self
+                .context
                 .lock()
                 .await
                 .forget_chain(&faucet_chain_id)
-                .await?;
-            self.faucet_chain_id.lock().await.take();
+                .await
+            {
+                tracing::error!(
+                    "Failed to remove the temporary faucet chain from the wallet: {err:?}"
+                );
+            }
         }
 
         let chain_id = ChainId::child(message_id);
