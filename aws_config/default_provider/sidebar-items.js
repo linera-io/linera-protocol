@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["app_name","credentials","disable_request_compression","endpoint_url","ignore_configured_endpoint_urls","region","request_min_compression_size_bytes","retry_config","timeout_config","token","use_dual_stack","use_fips"]};

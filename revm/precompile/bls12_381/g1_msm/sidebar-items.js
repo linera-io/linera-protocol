@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ADDRESS","PRECOMPILE"],"static":["DISCOUNT_TABLE"]};

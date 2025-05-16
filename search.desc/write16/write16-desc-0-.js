@@ -1,0 +1,1 @@
+searchState.loadedDescShard("write16", 0, "<code>write16</code> provides the trait <code>Write16</code>, which a UTF-16 analog …\nA UTF-16 sink analogous to <code>core::fmt::Write</code>.\nA hint that the caller expects to write <code>upcoming</code> UTF-16 …\nWrite a Unicode scalar value to the sink.\nWrite a slice containing UTF-16 to the sink.")

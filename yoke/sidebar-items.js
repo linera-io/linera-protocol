@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["Yokeable"],"mod":["cartable_ptr","either","erased","trait_hack"],"struct":["Yoke"],"trait":["CloneableCart","Yokeable"]};

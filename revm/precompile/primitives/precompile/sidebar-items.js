@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Precompile","PrecompileError","PrecompileErrors"],"struct":["PrecompileOutput"],"trait":["StatefulPrecompile","StatefulPrecompileMut"],"type":["EnvPrecompileFn","PrecompileResult","StandardPrecompileFn","StatefulPrecompileArc","StatefulPrecompileBox"]};

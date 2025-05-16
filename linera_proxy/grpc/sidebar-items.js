@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"static":["PROXY_REQUEST_COUNT","PROXY_REQUEST_ERROR","PROXY_REQUEST_LATENCY","PROXY_REQUEST_SUCCESS"],"struct":["GrpcMessageLimiter","GrpcProxy","GrpcProxyInner","PrometheusMetricsMiddlewareLayer","PrometheusMetricsMiddlewareService"]};

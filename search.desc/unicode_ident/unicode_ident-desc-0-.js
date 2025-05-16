@@ -1,0 +1,1 @@
+searchState.loadedDescShard("unicode_ident", 0, "github crates-io docs-rs")

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FlexZeroVec"],"struct":["FlexZeroSlice","FlexZeroVecOwned","Index16","Index32","VarZeroVecOwned"],"trait":["VarZeroVecFormat"]};

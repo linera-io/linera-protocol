@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates new `Interval` that yields with interval of `period`. The first tick completes immediately. The default `MissedTickBehavior` is `Burst`, but this can be configured by calling `set_missed_tick_behavior`."><title>interval in tokio::time - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.43.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">interval</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#panics" title="Panics">Panics</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In tokio::<wbr>time</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../index.html">tokio</a>::<wbr><a href="index.html">time</a></span><h1>Function <span class="fn">interval</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/tokio/time/interval.rs.html#73-76">Source</a> </span></div><pre class="rust item-decl"><code>pub fn interval(period: <a class="struct" href="https://doc.rust-lang.org/1.85.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>) -&gt; <a class="struct" href="struct.Interval.html" title="struct tokio::time::Interval">Interval</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates new <a href="struct.Interval.html" title="struct tokio::time::Interval"><code>Interval</code></a> that yields with interval of <code>period</code>. The first
+tick completes immediately. The default <a href="enum.MissedTickBehavior.html" title="enum tokio::time::MissedTickBehavior"><code>MissedTickBehavior</code></a> is
+<a href="enum.MissedTickBehavior.html#variant.Burst" title="variant tokio::time::MissedTickBehavior::Burst"><code>Burst</code></a>, but this can be configured
+by calling <a href="struct.Interval.html#method.set_missed_tick_behavior" title="method tokio::time::Interval::set_missed_tick_behavior"><code>set_missed_tick_behavior</code></a>.</p>
+<p>An interval will tick indefinitely. At any time, the <a href="struct.Interval.html" title="struct tokio::time::Interval"><code>Interval</code></a> value can
+be dropped. This cancels the interval.</p>
+<p>This function is equivalent to
+<a href="fn.interval_at.html" title="fn tokio::time::interval_at"><code>interval_at(Instant::now(), period)</code></a>.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This function panics if <code>period</code> is zero.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time::{<span class="self">self</span>, Duration};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>interval = time::interval(Duration::from_millis(<span class="number">10</span>));
+
+    interval.tick().<span class="kw">await</span>; <span class="comment">// ticks immediately
+    </span>interval.tick().<span class="kw">await</span>; <span class="comment">// ticks after 10ms
+    </span>interval.tick().<span class="kw">await</span>; <span class="comment">// ticks after 10ms
+
+    // approximately 20ms have elapsed.
+</span>}</code></pre></div>
+<p>A simple example using <code>interval</code> to execute a task every two seconds.</p>
+<p>The difference between <code>interval</code> and <a href="fn.sleep.html" title="fn tokio::time::sleep"><code>sleep</code></a> is that an <a href="struct.Interval.html" title="struct tokio::time::Interval"><code>Interval</code></a>
+measures the time since the last tick, which means that <a href="struct.Interval.html#method.tick" title="method tokio::time::Interval::tick"><code>.tick().await</code></a>
+may wait for a shorter time than the duration specified for the interval
+if some time has passed between calls to <a href="struct.Interval.html#method.tick" title="method tokio::time::Interval::tick"><code>.tick().await</code></a>.</p>
+<p>If the tick in the example below was replaced with <a href="fn.sleep.html" title="fn tokio::time::sleep"><code>sleep</code></a>, the task
+would only be executed once every three seconds, and not every two
+seconds.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time;
+
+<span class="kw">async fn </span>task_that_takes_a_second() {
+    <span class="macro">println!</span>(<span class="string">"hello"</span>);
+    time::sleep(time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>interval = time::interval(time::Duration::from_secs(<span class="number">2</span>));
+    <span class="kw">for </span>_i <span class="kw">in </span><span class="number">0</span>..<span class="number">5 </span>{
+        interval.tick().<span class="kw">await</span>;
+        task_that_takes_a_second().<span class="kw">await</span>;
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

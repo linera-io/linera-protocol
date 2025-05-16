@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Testing macros for types implementing `Writeable`."><title>assert_writeable_eq in writeable - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="writeable" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../writeable/index.html">writeable</a><span class="version">0.5.5</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">assert_<wbr>writeable_<wbr>eq</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate writeable</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">writeable</a></span><h1>Macro <span class="macro">assert_writeable_eq</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/writeable/lib.rs.html#410-448">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! assert_writeable_eq {
+    ($actual_writeable:expr, $expected_str:expr $(,)?) =&gt; { ... };
+    ($actual_writeable:expr, $expected_str:expr, $($arg:tt)+) =&gt; { ... };
+    (@internal, $actual_writeable:expr, $expected_str:expr, $($arg:tt)+) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Testing macros for types implementing <a href="trait.Writeable.html" title="trait writeable::Writeable"><code>Writeable</code></a>.</p>
+<p>Arguments, in order:</p>
+<ol>
+<li>The <a href="trait.Writeable.html" title="trait writeable::Writeable"><code>Writeable</code></a> under test</li>
+<li>The expected string value</li>
+<li><a href="macro.assert_writeable_parts_eq.html" title="macro writeable::assert_writeable_parts_eq"><code>*_parts_eq</code></a> only: a list of parts (<code>[(start, end, Part)]</code>)</li>
+</ol>
+<p>Any remaining arguments get passed to <code>format!</code></p>
+<p>The macros tests the following:</p>
+<ul>
+<li>Equality of string content</li>
+<li>Equality of parts (<a href="macro.assert_writeable_parts_eq.html" title="macro writeable::assert_writeable_parts_eq"><code>*_parts_eq</code></a> only)</li>
+<li>Validity of size hint</li>
+<li>Reflexivity of <code>cmp_bytes</code> and order against largest and smallest strings</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">const </span>WORD: Part = Part {
+    category: <span class="string">"foo"</span>,
+    value: <span class="string">"word"</span>,
+};
+
+<span class="kw">struct </span>Demo;
+<span class="kw">impl </span>Writeable <span class="kw">for </span>Demo {
+    <span class="kw">fn </span>write_to_parts&lt;S: writeable::PartsWrite + <span class="question-mark">?</span>Sized&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        sink: <span class="kw-2">&amp;mut </span>S,
+    ) -&gt; fmt::Result {
+        sink.with_part(WORD, |w| w.write_str(<span class="string">"foo"</span>))
+    }
+    <span class="kw">fn </span>writeable_length_hint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LengthHint {
+        LengthHint::exact(<span class="number">3</span>)
+    }
+}
+
+<span class="macro">writeable::impl_display_with_writeable!</span>(Demo);
+
+<span class="macro">assert_writeable_eq!</span>(<span class="kw-2">&amp;</span>Demo, <span class="string">"foo"</span>);
+<span class="macro">assert_writeable_eq!</span>(<span class="kw-2">&amp;</span>Demo, <span class="string">"foo"</span>, <span class="string">"Message: {}"</span>, <span class="string">"Hello World"</span>);
+
+<span class="macro">assert_writeable_parts_eq!</span>(<span class="kw-2">&amp;</span>Demo, <span class="string">"foo"</span>, [(<span class="number">0</span>, <span class="number">3</span>, WORD)]);
+<span class="macro">assert_writeable_parts_eq!</span>(
+    <span class="kw-2">&amp;</span>Demo,
+    <span class="string">"foo"</span>,
+    [(<span class="number">0</span>, <span class="number">3</span>, WORD)],
+    <span class="string">"Message: {}"</span>,
+    <span class="string">"Hello World"
+</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

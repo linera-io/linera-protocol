@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BYTES_PER_BLOB","BYTES_PER_COMMITMENT","BYTES_PER_FIELD_ELEMENT","BYTES_PER_G1_POINT","BYTES_PER_G2_POINT","BYTES_PER_PROOF","FIELD_ELEMENTS_PER_BLOB"],"enum":["CkzgError","Error"],"fn":["ethereum_kzg_settings","ethereum_kzg_settings_arc"],"struct":["Blob","Bytes32","Bytes48","KzgCommitment","KzgProof","KzgSettings"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Authenticator"],"struct":["PlainTextAuthenticator"],"trait":["AuthenticatorProvider","AuthenticatorSession"],"type":["AuthError"]};

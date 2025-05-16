@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="SipHash implementation for Rust"><title>siphasher - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="siphasher" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../siphasher/index.html">siphasher</a><span class="version">1.0.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#siphash-implementation-for-rust" title="SipHash implementation for Rust">SipHash implementation for Rust</a><ul><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#api-documentation" title="API documentation">API documentation</a></li><li><a href="#note" title="Note">Note</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>siphasher</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/siphasher/lib.rs.html#1-30">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="siphash-implementation-for-rust"><a class="doc-anchor" href="#siphash-implementation-for-rust">§</a>SipHash implementation for Rust</h2>
+<p>This crates implements SipHash-2-4 and SipHash-1-3 in Rust.</p>
+<p>It is based on the original implementation from rust-core and exposes the
+same API.</p>
+<p>It also implements SipHash variants returning 128-bit tags.</p>
+<p>The <code>sip</code> module implements the standard 64-bit mode, whereas the <code>sip128</code>
+module implements the 128-bit mode.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>In <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+siphasher = &quot;1&quot;</code></pre></div>
+<p>If you want <a href="https://github.com/serde-rs/serde">serde</a> support, include the feature like this:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+siphasher = { version = &quot;1&quot;, features = [&quot;serde&quot;] }</code></pre></div>
+<p>64-bit mode:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>siphasher::sip::{SipHasher, SipHasher13, SipHasher24};
+
+<span class="comment">// one-shot:
+
+</span><span class="kw">let </span>array: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="kw">let </span>key: <span class="kw-2">&amp;</span>[u8; <span class="number">16</span>] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>, <span class="number">13</span>, <span class="number">14</span>, <span class="number">15</span>, <span class="number">16</span>];
+<span class="kw">let </span>hasher = SipHasher13::new_with_key(key);
+<span class="kw">let </span>h = hasher.hash(array);
+
+<span class="comment">// incremental:
+
+</span><span class="kw">use </span>core::hash::Hasher;
+
+<span class="kw">let </span>array1: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="kw">let </span>array2: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>];
+<span class="kw">let </span>key: <span class="kw-2">&amp;</span>[u8; <span class="number">16</span>] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>, <span class="number">13</span>, <span class="number">14</span>, <span class="number">15</span>, <span class="number">16</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>hasher = SipHasher13::new_with_key(key);
+hasher.write(array1);
+hasher.write(array2);
+<span class="kw">let </span>h = hasher.finish();</code></pre></div>
+<p>128-bit mode:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>siphasher::sip128::{Hasher128, SipHasher, SipHasher13, SipHasher24};
+
+<span class="comment">// one-shot:
+
+</span><span class="kw">let </span>array: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="kw">let </span>key: <span class="kw-2">&amp;</span>[u8; <span class="number">16</span>] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>, <span class="number">13</span>, <span class="number">14</span>, <span class="number">15</span>, <span class="number">16</span>];
+<span class="kw">let </span>hasher = SipHasher13::new_with_key(key);
+<span class="kw">let </span>h = hasher.hash(array).as_bytes();
+
+<span class="comment">// incremental:
+
+</span><span class="kw">use </span>core::hash::Hasher;
+
+<span class="kw">let </span>array1: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="kw">let </span>array2: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>];
+<span class="kw">let </span>key: <span class="kw-2">&amp;</span>[u8; <span class="number">16</span>] = <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>, <span class="number">13</span>, <span class="number">14</span>, <span class="number">15</span>, <span class="number">16</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>hasher = SipHasher13::new_with_key(key);
+hasher.write(array1);
+hasher.write(array2);
+<span class="kw">let </span>h = hasher.finish128().as_bytes();</code></pre></div>
+<h3 id="api-documentation"><a class="doc-anchor" href="#api-documentation">§</a><a href="https://docs.rs/siphasher/">API documentation</a></h3><h3 id="note"><a class="doc-anchor" href="#note">§</a>Note</h3>
+<p>Due to a confusing and not well documented API, methods from the <code>Hasher</code> trait of the standard library (<code>std::hash::Hasher</code>, <code>core::hash::Hasher</code>) produce non-portable results.</p>
+<p>This is not specific to SipHash, and affects all hash functions.</p>
+<p>The only safe methods in that trait are <code>write()</code> and <code>finish()</code>.</p>
+<p>It is thus recommended to use SipHash (and all other hash functions, actually) as documented above.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod siphasher::prelude">prelude</a></div></li><li><div class="item-name"><a class="mod" href="sip/index.html" title="mod siphasher::sip">sip</a></div><div class="desc docblock-short">An implementation of SipHash.</div></li><li><div class="item-name"><a class="mod" href="sip128/index.html" title="mod siphasher::sip128">sip128</a></div><div class="desc docblock-short">An implementation of SipHash with a 128-bit output.</div></li></ul></section></div></main></body></html>

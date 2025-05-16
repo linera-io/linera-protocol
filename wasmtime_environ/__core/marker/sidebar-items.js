@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["CoercePointee","ConstParamTy","Copy","UnsizedConstParamTy"],"struct":["PhantomData","PhantomPinned"],"trait":["ConstParamTy_","Copy","Destruct","DiscriminantKind","FnPtr","Freeze","PointerLike","Send","Sized","StructuralPartialEq","Sync","Tuple","Unpin","Unsize","UnsizedConstParamTy"]};

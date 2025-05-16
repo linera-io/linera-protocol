@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Entries","Keys","Map","Values"]};

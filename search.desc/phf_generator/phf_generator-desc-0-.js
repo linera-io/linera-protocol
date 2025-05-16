@@ -1,0 +1,1 @@
+searchState.loadedDescShard("phf_generator", 0, "See the <code>phf</code> crate’s documentation for details.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

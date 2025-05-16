@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Trait for constructing a `PrimeField` element from a fixed-length uniform byte array."><title>FromUniformBytes in ff - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ff" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ff/index.html">ff</a><span class="version">0.13.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">From<wbr>Uniform<wbr>Bytes</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li><li><a href="#implementing-fromuniformbytes" title="Implementing `FromUniformBytes`">Implementing <code>FromUniformBytes</code></a><ul><li><a href="#trait-design" title="Trait design">Trait design</a></li></ul></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.from_uniform_bytes" title="from_uniform_bytes">from_uniform_bytes</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate ff</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">ff</a></span><h1>Trait <span class="trait">FromUniformBytes</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ff/lib.rs.html#444-448">Source</a> </span></div><pre class="rust item-decl"><code>pub trait FromUniformBytes&lt;const N: <a class="primitive" href="https://doc.rust-lang.org/1.85.0/std/primitive.usize.html">usize</a>&gt;: <a class="trait" href="trait.PrimeField.html" title="trait ff::PrimeField">PrimeField</a> {
+    // Required method
+    fn <a href="#tymethod.from_uniform_bytes" class="fn">from_uniform_bytes</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.85.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.85.0/std/primitive.array.html">N</a>]) -&gt; Self;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Trait for constructing a <a href="trait.PrimeField.html" title="trait ff::PrimeField"><code>PrimeField</code></a> element from a fixed-length uniform byte
+array.</p>
+<p>“Uniform” means that the byte array’s contents must be indistinguishable from the
+<a href="https://en.wikipedia.org/wiki/Discrete_uniform_distribution">discrete uniform distribution</a>. Suitable byte arrays can be obtained:</p>
+<ul>
+<li>from a cryptographically-secure randomness source (which makes this constructor
+equivalent to <a href="trait.Field.html#tymethod.random" title="associated function ff::Field::random"><code>Field::random</code></a>).</li>
+<li>from a cryptographic hash function output, which enables a “random” field element to
+be selected deterministically. This is the primary use case for <code>FromUniformBytes</code>.</li>
+</ul>
+<p>The length <code>N</code> of the byte array is chosen by the trait implementer such that the loss
+of uniformity in the mapping from byte arrays to field elements is cryptographically
+negligible.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>blake2b_simd::blake2b;
+<span class="kw">use </span>bls12_381::Scalar;
+<span class="kw">use </span>ff::FromUniformBytes;
+
+<span class="comment">// `bls12_381::Scalar` implements `FromUniformBytes&lt;64&gt;`, and BLAKE2b (by default)
+// produces a 64-byte hash.
+</span><span class="kw">let </span>hash = blake2b(<span class="string">b"Some message"</span>);
+<span class="kw">let </span>val = Scalar::from_uniform_bytes(hash.as_array());</code></pre></div>
+<h2 id="implementing-fromuniformbytes"><a class="doc-anchor" href="#implementing-fromuniformbytes">§</a>Implementing <code>FromUniformBytes</code></h2>
+<p><a href="trait.FromUniformBytes.html#tymethod.from_uniform_bytes"><code>Self::from_uniform_bytes</code></a> should always be implemented by interpreting the provided
+byte array as the little endian unsigned encoding of an integer, and then reducing that
+integer modulo the field modulus.</p>
+<p>For security, <code>N</code> must be chosen so that <code>N * 8 &gt;= Self::NUM_BITS + 128</code>. A larger
+value of <code>N</code> may be chosen for convenience; for example, for a field with a 255-bit
+modulus, <code>N = 64</code> is convenient as it matches the output length of several common
+cryptographic hash functions (such as SHA-512 and BLAKE2b).</p>
+<h3 id="trait-design"><a class="doc-anchor" href="#trait-design">§</a>Trait design</h3>
+<p>This trait exists because <code>PrimeField::from_uniform_bytes([u8; N])</code> cannot currently
+exist (trait methods cannot use associated constants in the const positions of their
+type signature, and we do not want <code>PrimeField</code> to require a generic const parameter).
+However, this has the side-effect that <code>FromUniformBytes</code> can be implemented multiple
+times for different values of <code>N</code>. Most implementations of <a href="trait.PrimeField.html" title="trait ff::PrimeField"><code>PrimeField</code></a> should only
+need to implement <code>FromUniformBytes</code> trait for one value of <code>N</code> (chosen following the
+above considerations); if you find yourself needing to implement it multiple times,
+please <a href="https://github.com/zkcrypto/ff/issues/new">let us know about your use case</a> so
+we can take it into consideration for future evolutions of the <code>ff</code> traits.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.from_uniform_bytes" class="method"><a class="src rightside" href="../src/ff/lib.rs.html#447">Source</a><h4 class="code-header">fn <a href="#tymethod.from_uniform_bytes" class="fn">from_uniform_bytes</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.85.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.85.0/std/primitive.array.html">N</a>]) -&gt; Self</h4></section></summary><div class="docblock"><p>Returns a field element that is congruent to the provided little endian unsigned
+byte representation of an integer.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.85.0/reference/items/traits.html#object-safety">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/ff/trait.FromUniformBytes.js" async></script></section></div></main></body></html>

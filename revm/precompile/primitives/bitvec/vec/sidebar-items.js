@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BitVec","Drain","IntoIter","Splice"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CheckedBidiPairedBracketType"],"struct":["BidiAuxiliaryPropertiesV1","BidiAuxiliaryPropertiesV1Marker","CheckedBidiPairedBracketTypeULE","MirroredPairedBracketDataTryFromError"]};

@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `decl_attribute!` macro declares a custom attribute wrapper. It will parse the incoming `TokenStream` into a `synstructure::Structure` object, and pass it into the inner function."><title>decl_attribute in synstructure - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="synstructure" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../synstructure/index.html">synstructure</a><span class="version">0.13.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">decl_<wbr>attribute</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate synstructure</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">synstructure</a></span><h1>Macro <span class="macro">decl_attribute</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/synstructure/macros.rs.html#152-177">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! decl_attribute {
+    ([$attribute:ident] =&gt; $(#[$($attrs:tt)*])* $inner:path) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <code>decl_attribute!</code> macro declares a custom attribute wrapper. It will
+parse the incoming <code>TokenStream</code> into a <code>synstructure::Structure</code> object,
+and pass it into the inner function.</p>
+<p>Your inner function should have the following type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>attribute(
+    attr: proc_macro2::TokenStream,
+    structure: synstructure::Structure,
+) -&gt; proc_macro2::TokenStream {
+    <span class="macro">unimplemented!</span>()
+}</code></pre></div>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>attribute_interesting(
+    _attr: proc_macro2::TokenStream,
+    _structure: synstructure::Structure,
+) -&gt; proc_macro2::TokenStream {
+    <span class="macro">quote::quote!</span> { ... }
+}
+
+<span class="macro">decl_attribute!</span>([interesting] =&gt; attribute_interesting);</code></pre></div>
+<p><em>This macro is available if <code>synstructure</code> is built with the <code>"proc-macro"</code>
+feature.</em></p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["dup2_stderr","dup2_stdin","dup2_stdout","raw_stderr","raw_stdin","raw_stdout","stderr","stdin","stdout","take_stderr","take_stdin","take_stdout"]};

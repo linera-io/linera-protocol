@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A wrapper around an `EventListenerFuture` that can be easily exported for use."><title>easy_wrapper in event_listener_strategy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="event_listener_strategy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../event_listener_strategy/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../event_listener_strategy/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt="logo"></a><h2><a href="../event_listener_strategy/index.html">event_<wbr>listener_<wbr>strategy</a><span class="version">0.5.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">easy_<wbr>wrapper</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate event_<wbr>listener_<wbr>strategy</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">event_listener_strategy</a></span><h1>Macro <span class="macro">easy_wrapper</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/event_listener_strategy/lib.rs.html#141-268">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! easy_wrapper {
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $name:ident
+
+        $(&lt;
+            $( $lifetime:lifetime $(: $lifetime_bound:lifetime)? ),* $(,)?
+            $( $generics:ident
+                $(: $generics_bound:path)?
+                $(: ?$generics_unsized_bound:path)?
+                $(: $generics_lifetime_bound:lifetime)?
+                $(= $generics_default:ty)?
+            ),* $(,)?
+        &gt;)?
+
+        ($inner:ty =&gt; $output:ty)
+
+        $(where
+            $( $where_clause_ty:ty
+                $(: $where_clause_bound:path)?
+                $(: ?$where_clause_unsized_bound:path)?
+                $(: $where_clause_lifetime_bound:lifetime)?
+            ),* $(,)?
+        )?
+
+        ;
+
+        $(#[$wait_meta:meta])*
+        $wait_vis: vis wait();
+    ) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A wrapper around an <a href="trait.EventListenerFuture.html" title="trait event_listener_strategy::EventListenerFuture"><code>EventListenerFuture</code></a> that can be easily exported for use.</p>
+<p>This type implements <a href="https://doc.rust-lang.org/1.85.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a>, has a <code>_new()</code> constructor, and a <code>wait()</code> method
+that uses the <a href="struct.Blocking.html" title="struct event_listener_strategy::Blocking"><code>Blocking</code></a> strategy to poll the future until it is ready.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">mod </span>my_future {
+    <span class="kw">use </span>event_listener_strategy::{easy_wrapper, EventListenerFuture, Strategy};
+    <span class="kw">use </span>std::pin::Pin;
+    <span class="kw">use </span>std::task::Poll;
+
+    <span class="kw">struct </span>MyFuture;
+
+    <span class="kw">impl </span>EventListenerFuture <span class="kw">for </span>MyFuture {
+        <span class="kw">type </span>Output = ();
+
+        <span class="kw">fn </span>poll_with_strategy&lt;<span class="lifetime">'a</span>, S: Strategy&lt;<span class="lifetime">'a</span>&gt;&gt;(
+            <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+            strategy: <span class="kw-2">&amp;mut </span>S,
+            context: <span class="kw-2">&amp;mut </span>S::Context,
+        ) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
+            <span class="comment">/* ... */
+        </span>}
+    }
+
+    <span class="macro">easy_wrapper!</span> {
+        <span class="doccomment">/// A future that does something.
+        </span><span class="kw">pub struct </span>MyFutureWrapper(MyFuture =&gt; ());
+        <span class="doccomment">/// Wait for it.
+        </span><span class="kw">pub </span>wait();
+    }
+
+    <span class="kw">impl </span>MyFutureWrapper {
+        <span class="doccomment">/// Create a new instance of the future.
+        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+            <span class="self">Self</span>::_new(MyFuture)
+        }
+    }
+}
+
+<span class="kw">use </span>my_future::MyFutureWrapper;
+
+<span class="comment">// Use the future in a blocking context.
+</span><span class="kw">let </span>future = MyFutureWrapper::new();
+future.wait();
+
+<span class="comment">// Use the future in a non-blocking context.
+</span>futures_lite::future::block_on(<span class="kw">async </span>{
+    <span class="kw">let </span>future = MyFutureWrapper::new();
+    future.<span class="kw">await</span>;
+});</code></pre></div>
+</div></details></section></div></main></body></html>

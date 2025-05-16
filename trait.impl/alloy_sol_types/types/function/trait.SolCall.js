@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["linera_ethereum",[["impl <a class=\"trait\" href=\"alloy_sol_types/types/function/trait.SolCall.html\" title=\"trait alloy_sol_types::types::function::SolCall\">SolCall</a> for <a class=\"struct\" href=\"linera_ethereum/test_utils/SimpleTokenContract/struct.balanceOfCall.html\" title=\"struct linera_ethereum::test_utils::SimpleTokenContract::balanceOfCall\">balanceOfCall</a>"],["impl <a class=\"trait\" href=\"alloy_sol_types/types/function/trait.SolCall.html\" title=\"trait alloy_sol_types::types::function::SolCall\">SolCall</a> for <a class=\"struct\" href=\"linera_ethereum/test_utils/SimpleTokenContract/struct.balancesCall.html\" title=\"struct linera_ethereum::test_utils::SimpleTokenContract::balancesCall\">balancesCall</a>"],["impl <a class=\"trait\" href=\"alloy_sol_types/types/function/trait.SolCall.html\" title=\"trait alloy_sol_types::types::function::SolCall\">SolCall</a> for <a class=\"struct\" href=\"linera_ethereum/test_utils/SimpleTokenContract/struct.totalSupplyCall.html\" title=\"struct linera_ethereum::test_utils::SimpleTokenContract::totalSupplyCall\">totalSupplyCall</a>"],["impl <a class=\"trait\" href=\"alloy_sol_types/types/function/trait.SolCall.html\" title=\"trait alloy_sol_types::types::function::SolCall\">SolCall</a> for <a class=\"struct\" href=\"linera_ethereum/test_utils/SimpleTokenContract/struct.transferCall.html\" title=\"struct linera_ethereum::test_utils::SimpleTokenContract::transferCall\">transferCall</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1469]}
