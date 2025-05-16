@@ -1,0 +1,14 @@
+[target.wasm32-unknown-unknown]
+rustflags = [
+    # support threading
+    "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals",
+    # allow linking C code (for `rust_secp256k1`)
+    "--cfg=web_sys_unstable_apis",
+    "-Z", "wasm_c_abi=spec",
+]
+
+[unstable]
+build-std = ["panic_abort", "std"]
+
+[build]
+target = "wasm32-unknown-unknown"
