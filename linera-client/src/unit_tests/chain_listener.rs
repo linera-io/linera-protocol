@@ -57,16 +57,14 @@ impl chain_listener::ClientContext for ClientContext {
             .wallet
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        Ok(self
-            .client
-            .create_chain_client(
-                chain_id,
-                chain.block_hash,
-                chain.timestamp,
-                chain.next_block_height,
-                chain.pending_proposal.clone(),
-                chain.owner,
-            )?)
+        Ok(self.client.create_chain_client(
+            chain_id,
+            chain.block_hash,
+            chain.timestamp,
+            chain.next_block_height,
+            chain.pending_proposal.clone(),
+            chain.owner,
+        )?)
     }
 
     async fn update_wallet_for_new_chain(

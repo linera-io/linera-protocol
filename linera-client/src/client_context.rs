@@ -263,7 +263,10 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
 
     pub fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain = self.wallet.get(chain_id).cloned()
+        let chain = self
+            .wallet
+            .get(chain_id)
+            .cloned()
             .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
 
         self.make_chain_client_internal(
@@ -285,16 +288,14 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
     ) -> Result<ChainClient<Env>, Error> {
-        let mut chain_client = self
-            .client
-            .create_chain_client(
-                chain_id,
-                block_hash,
-                timestamp,
-                next_block_height,
-                pending_proposal,
-                preferred_owner,
-            )?;
+        let mut chain_client = self.client.create_chain_client(
+            chain_id,
+            block_hash,
+            timestamp,
+            next_block_height,
+            pending_proposal,
+            preferred_owner,
+        )?;
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
