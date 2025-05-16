@@ -219,9 +219,18 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 bail!(
                     "For RocksDB, the formatting has to be rocksdb:directory or rocksdb:directory:spawn_mode:namespace");
             }
-            let parts = s.split(':').collect::<Vec<_>>();
+
+            // windows has directory naming scheme like "C://xyz", "//??D:xyz/" etc.
+            let owned = if cfg!(windows) {
+                s.replacen(':', ";", 1)
+            } else {
+                s.to_string()
+            };
+
+            let parts = owned.split(':').collect::<Vec<_>>();
+
             if parts.len() == 1 {
-                let path = parts[0].to_string().into();
+                let path = parts[0].to_string().replace(';', ":").into();
                 let namespace = DEFAULT_NAMESPACE.to_string();
                 let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
                 let storage_config = StorageConfig::RocksDb { path, spawn_mode };
@@ -231,7 +240,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 });
             }
             if parts.len() == 2 || parts.len() == 3 {
-                let path = parts[0].to_string().into();
+                let path = parts[0].to_string().replace(';', ":").into();
                 let spawn_mode = match parts[1] {
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
