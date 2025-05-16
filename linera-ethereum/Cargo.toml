@@ -18,6 +18,7 @@ features = ["ethereum"]
 ethereum = []
 
 [dependencies]
+alloy-primitives.workspace = true
 anyhow.workspace = true
 async-lock.workspace = true
 async-trait.workspace = true

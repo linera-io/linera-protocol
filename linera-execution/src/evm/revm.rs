@@ -339,10 +339,10 @@ fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, S
 }
 
 
-fn base_runtime_call<'a, Runtime: BaseRuntime>(
+fn base_runtime_call<Runtime: BaseRuntime>(
     tag: BasePrecompileTag,
     vec: &[u8],
-    context: &mut CTX<'a, Runtime>,
+    context: &mut Ctx<'_, Runtime>,
 ) -> Result<Vec<u8>, String> {
     let mut runtime = context
         .db()
@@ -392,23 +392,23 @@ fn base_runtime_call<'a, Runtime: BaseRuntime>(
     }
 }
 
-type CTX<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<Runtime>>>;
+type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<Runtime>>>;
 
 #[derive(Debug, Default)]
 struct ContractPrecompile {
     inner: EthPrecompiles,
 }
 
-impl<'a, Runtime: ContractRuntime> PrecompileProvider<CTX<'a, Runtime>> for ContractPrecompile {
+impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for ContractPrecompile {
     type Output = InterpreterResult;
 
-    fn set_spec(&mut self, spec: <<CTX<'a, Runtime> as ContextTr>::Cfg as Cfg>::Spec) -> bool {
-        <EthPrecompiles as PrecompileProvider<CTX<'a, Runtime>>>::set_spec(&mut self.inner, spec)
+    fn set_spec(&mut self, spec: <<Ctx<'a, Runtime> as ContextTr>::Cfg as Cfg>::Spec) -> bool {
+        <EthPrecompiles as PrecompileProvider<Ctx<'a, Runtime>>>::set_spec(&mut self.inner, spec)
     }
 
     fn run(
         &mut self,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         address: &Address,
         inputs: &InputsImpl,
         is_static: bool,
@@ -443,7 +443,7 @@ impl<'a> ContractPrecompile {
         tag: ContractPrecompileTag,
         vec: &[u8],
         _gas_limit: u64,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
         let mut runtime = context
             .db()
@@ -516,7 +516,7 @@ impl<'a> ContractPrecompile {
     fn call_or_fail<Runtime: ContractRuntime>(
         vec: &[u8],
         gas_limit: u64,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
         ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
         match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
@@ -540,7 +540,7 @@ impl<'a> ServicePrecompile {
     fn service_runtime_call<Runtime: ServiceRuntime>(
         tag: ServicePrecompileTag,
         vec: &[u8],
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
         let mut runtime = context
             .db()
@@ -562,7 +562,7 @@ impl<'a> ServicePrecompile {
     fn call_or_fail<Runtime: ServiceRuntime>(
         vec: &[u8],
         _gas_limit: u64,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
         ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
         match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
@@ -577,16 +577,16 @@ impl<'a> ServicePrecompile {
     }
 }
 
-impl<'a, Runtime: ServiceRuntime> PrecompileProvider<CTX<'a, Runtime>> for ServicePrecompile {
+impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for ServicePrecompile {
     type Output = InterpreterResult;
 
-    fn set_spec(&mut self, spec: <<CTX<'a, Runtime> as ContextTr>::Cfg as Cfg>::Spec) -> bool {
-        <EthPrecompiles as PrecompileProvider<CTX<'a, Runtime>>>::set_spec(&mut self.inner, spec)
+    fn set_spec(&mut self, spec: <<Ctx<'a, Runtime> as ContextTr>::Cfg as Cfg>::Spec) -> bool {
+        <EthPrecompiles as PrecompileProvider<Ctx<'a, Runtime>>>::set_spec(&mut self.inner, spec)
     }
 
     fn run(
         &mut self,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         address: &Address,
         inputs: &InputsImpl,
         is_static: bool,
@@ -643,7 +643,7 @@ struct CallInterceptorContract<Runtime> {
     db: DatabaseRuntime<Runtime>,
 }
 
-fn get_argument<CTX: ContextTr>(context: &mut CTX, argument: &mut Vec<u8>, input: &CallInput) {
+fn get_argument<Ctx: ContextTr>(context: &mut Ctx, argument: &mut Vec<u8>, input: &CallInput) {
     match input {
         CallInput::Bytes(bytes) => {
             argument.extend(bytes.to_vec());
@@ -656,24 +656,24 @@ fn get_argument<CTX: ContextTr>(context: &mut CTX, argument: &mut Vec<u8>, input
     };
 }
 
-fn get_call_argument<CTX: ContextTr>(context: &mut CTX, input: &CallInput) -> Vec<u8> {
+fn get_call_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
     let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
     get_argument(context, &mut argument, input);
     argument
 }
 
-fn get_precompile_argument<CTX: ContextTr>(context: &mut CTX, input: &CallInput) -> Vec<u8> {
+fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
     let mut argument = Vec::new();
     get_argument(context, &mut argument, input);
     argument
 }
 
-impl<'a, Runtime: ContractRuntime> Inspector<CTX<'a, Runtime>>
+impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
     fn call(
         &mut self,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
@@ -692,7 +692,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<CTX<'a, Runtime>>
 impl<'a, Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     fn call_or_fail(
         &mut self,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
@@ -719,10 +719,10 @@ struct CallInterceptorService<Runtime> {
     db: DatabaseRuntime<Runtime>,
 }
 
-impl<'a, Runtime: ServiceRuntime> Inspector<CTX<'a, Runtime>> for CallInterceptorService<Runtime> {
+impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
     fn call(
         &mut self,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
@@ -741,7 +741,7 @@ impl<'a, Runtime: ServiceRuntime> Inspector<CTX<'a, Runtime>> for CallIntercepto
 impl<'a, Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     fn call_or_fail(
         &mut self,
-        context: &mut CTX<'a, Runtime>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
@@ -973,7 +973,7 @@ where
                 kind,
                 data,
                 nonce,
-                gas_limit: gas_limit,
+                gas_limit,
                 ..TxEnv::default()
             })
             .map_err(|error| {
