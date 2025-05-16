@@ -1002,8 +1002,6 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    std::env::set_var("LINERA_STORAGE_SERVICE", "127.0.0.1:1235");
-
     let destination = Destination {
         tls: TlsConfig::ClearText,
         kind: DestinationKind::Validator,

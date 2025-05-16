@@ -232,10 +232,7 @@ fn spawn_exporter_task_on_set<F, S>(
 
 #[cfg(test)]
 mod test {
-    use std::{
-        sync::{atomic::Ordering, Once},
-        time::Duration,
-    };
+    use std::{sync::atomic::Ordering, time::Duration};
 
     use linera_base::port::get_free_port;
     use linera_client::config::{Destination, DestinationConfig, LimitsConfig};
@@ -255,19 +252,13 @@ mod test {
         ExporterCancellationSignal,
     };
 
-    static INIT: Once = Once::new();
-
     #[test_case(DummyIndexer::default())]
     #[test_case(DummyValidator::default())]
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_destinations<T>(destination: T) -> Result<(), anyhow::Error>
     where
         T: TestDestination + Clone + Send + 'static,
     {
-        INIT.call_once(|| {
-            linera_base::tracing::init("linera-exporter");
-        });
-
         let port = get_free_port().await?;
         let cancellation_token = CancellationToken::new();
         tokio::spawn(destination.clone().start(port, cancellation_token.clone()));
@@ -321,13 +312,9 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_restart_persistence_and_faulty_destination_restart() -> Result<(), anyhow::Error>
     {
-        INIT.call_once(|| {
-            linera_base::tracing::init("linera-exporter");
-        });
-
         let mut destinations = Vec::new();
         let cancellation_token = CancellationToken::new();
         let _dummy_indexer = spawn_dummy_indexer(&mut destinations, &cancellation_token).await?;

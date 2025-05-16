@@ -111,9 +111,8 @@ mod test {
 
     use super::*;
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_notification_server() -> anyhow::Result<()> {
-        linera_base::tracing::init("linera-exporter");
         let port = get_free_port().await?;
         let endpoint = format!("127.0.0.1:{port}");
         let cancellation_token = CancellationToken::new();
