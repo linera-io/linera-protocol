@@ -142,6 +142,15 @@ where
             .write_blob(&Blob::new_chain_description(&admin_description))
             .await
             .expect("writing a blob should not fail");
+        storage
+            .write_network_description(&NetworkDescription {
+                admin_chain_id: admin_description.id(),
+                genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                genesis_timestamp: Timestamp::from(0),
+                name: "test network".to_string(),
+            })
+            .await
+            .expect("writing a network description should not fail");
 
         let worker = WorkerState::new(
             "Single validator node".to_string(),
