@@ -184,7 +184,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<Self::Environment>, Error> {
+    fn make_chain_client(&self, _: ChainId) -> ChainClient<Self::Environment> {
         unimplemented!()
     }
 
