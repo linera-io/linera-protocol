@@ -186,11 +186,17 @@ where
                 }
                 Err(err) => tracing::warn!("Failed to close the temporary faucet chain: {err:?}"),
             }
-            self.context
+            if let Err(err) = self
+                .context
                 .lock()
                 .await
                 .forget_chain(&faucet_chain_id)
-                .await?;
+                .await
+            {
+                tracing::error!(
+                    "Failed to remove the temporary faucet chain from the wallet: {err:?}"
+                );
+            }
         }
 
         let chain_id = ChainId::child(message_id);
