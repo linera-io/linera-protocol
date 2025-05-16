@@ -49,22 +49,19 @@ impl chain_listener::ClientContext for ClientContext {
         &self.client
     }
 
-    fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainClient<environment::Test>, Error> {
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
         let chain = self
             .wallet
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        Ok(self.client.create_chain_client(
+        self.client.create_chain_client(
             chain_id,
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
             chain.pending_proposal.clone(),
             chain.owner,
-        )?)
+        )
     }
 
     async fn update_wallet_for_new_chain(

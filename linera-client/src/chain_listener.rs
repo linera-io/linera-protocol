@@ -69,7 +69,7 @@ pub trait ClientContext {
 
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
+    fn make_chain_client(&self, chain_id: ChainId) -> ContextChainClient<Self>;
 
     fn client(&self) -> &linera_core::client::Client<Self::Environment>;
 
@@ -85,13 +85,13 @@ pub trait ClientContext {
 
 #[allow(async_fn_in_trait)]
 pub trait ClientContextExt: ClientContext {
-    fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+    fn clients(&self) -> Vec<ContextChainClient<Self>> {
         let chain_ids = self.wallet().chain_ids();
         let mut clients = vec![];
         for chain_id in chain_ids {
-            clients.push(self.make_chain_client(chain_id)?);
+            clients.push(self.make_chain_client(chain_id));
         }
-        Ok(clients)
+        clients
     }
 
     async fn chain_description(&mut self, chain_id: ChainId) -> Result<ChainDescription, Error> {
@@ -310,7 +310,7 @@ impl<C: ClientContext> ChainListener<C> {
         if self.listening.contains_key(&chain_id) {
             return Ok(BTreeSet::new());
         }
-        let client = self.context.lock().await.make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         if client.is_tracked() {
             client.synchronize_from_validators().await?;

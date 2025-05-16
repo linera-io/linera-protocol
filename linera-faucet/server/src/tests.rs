@@ -40,12 +40,9 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
-    fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainClient<environment::Test>, linera_client::Error> {
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
         assert_eq!(chain_id, self.client.chain_id());
-        Ok(self.client.clone())
+        self.client.clone()
     }
 
     async fn update_wallet_for_new_chain(

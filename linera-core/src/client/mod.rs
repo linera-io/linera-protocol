@@ -261,7 +261,7 @@ impl<Env: Environment> Client<Env> {
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
-    ) -> Result<ChainClient<Env>, ChainClientError> {
+    ) -> ChainClient<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
@@ -273,7 +273,7 @@ impl<Env: Environment> Client<Env> {
             ));
         }
 
-        Ok(ChainClient {
+        ChainClient {
             client: self.clone(),
             chain_id,
             options: ChainClientOptions {
@@ -284,7 +284,7 @@ impl<Env: Environment> Client<Env> {
                 blob_download_timeout: self.blob_download_timeout,
             },
             preferred_owner,
-        })
+        }
     }
 
     /// Fetches the chain description blob if needed, and returns the chain info.

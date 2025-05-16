@@ -59,7 +59,7 @@ use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
 #[cfg(not(web))]
 use crate::persistent::{Persist, PersistExt as _};
 use crate::{
-    chain_listener::{self, ClientContextExt as _},
+    chain_listener::{self, ClientContext as _, ClientContextExt as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
     error, util,
     wallet::{UserChain, Wallet},
@@ -92,8 +92,22 @@ where
         self.client.storage_client()
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
-        self.make_chain_client(chain_id)
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Env> {
+        // We only create clients for chains we have in the wallet, or for the admin chain.
+        let chain = self
+            .wallet
+            .get(chain_id)
+            .cloned()
+            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
+
+        self.make_chain_client_internal(
+            chain_id,
+            chain.block_hash,
+            chain.timestamp,
+            chain.next_block_height,
+            chain.pending_proposal,
+            chain.owner,
+        )
     }
 
     fn client(&self) -> &Client<Env> {
@@ -261,24 +275,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
             .expect("No non-admin chain specified in wallet with no non-admin chain")
     }
 
-    pub fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
-        // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
-
-        self.make_chain_client_internal(
-            chain_id,
-            chain.block_hash,
-            chain.timestamp,
-            chain.next_block_height,
-            chain.pending_proposal,
-            chain.owner,
-        )
-    }
-
     fn make_chain_client_internal(
         &self,
         chain_id: ChainId,
@@ -287,7 +283,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
-    ) -> Result<ChainClient<Env>, Error> {
+    ) -> ChainClient<Env> {
         let mut chain_client = self.client.create_chain_client(
             chain_id,
             block_hash,
@@ -295,12 +291,12 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
             next_block_height,
             pending_proposal,
             preferred_owner,
-        )?;
+        );
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
         );
-        Ok(chain_client)
+        chain_client
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -470,7 +466,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id)?;
+        let chain_client = self.make_chain_client(chain_id);
         info!(
             ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
             "Changing ownership of a chain"
@@ -503,7 +499,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         preferred_owner: AccountOwner,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let mut chain_client = self.make_chain_client(chain_id)?;
+        let mut chain_client = self.make_chain_client(chain_id);
         let old_owner = chain_client.preferred_owner();
         info!(%chain_id, ?old_owner, %preferred_owner, "Changing preferred owner for chain");
         chain_client.set_preferred_owner(preferred_owner);
@@ -748,7 +744,7 @@ where
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let default_chain_client = self.make_chain_client(default_chain_id).await?;
+        let default_chain_client = self.make_chain_client(default_chain_id);
         let (epoch, committee) = default_chain_client.latest_committee().await?;
         let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             key_pairs,
@@ -864,7 +860,7 @@ where
                 .get(chain_id)
                 .and_then(|chain| chain.owner)
                 .unwrap();
-            let chain_client = self.make_chain_client(chain_id).await?;
+            let chain_client = self.make_chain_client(chain_id);
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
@@ -889,7 +885,7 @@ where
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
         let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
-        let default_chain_client = self.make_chain_client(default_chain_id).await?;
+        let default_chain_client = self.make_chain_client(default_chain_id);
 
         for i in (0..num_chains_to_create).step_by(operations_per_block) {
             let num_new_chains = operations_per_block.min(num_chains_to_create - i);
@@ -914,16 +910,14 @@ where
                 benchmark_chains.insert(chain_id, pub_key.into());
                 self.client.track_chain(chain_id);
 
-                let mut chain_client = self
-                    .make_chain_client_internal(
-                        chain_id,
-                        None,
-                        certificate.block().header.timestamp,
-                        BlockHeight::ZERO,
-                        None,
-                        Some(pub_key.into()),
-                    )
-                    .await?;
+                let mut chain_client = self.make_chain_client_internal(
+                    chain_id,
+                    None,
+                    certificate.block().header.timestamp,
+                    BlockHeight::ZERO,
+                    None,
+                    Some(pub_key.into()),
+                );
                 chain_client.set_preferred_owner(pub_key.into());
                 chain_client.process_inbox().await?;
                 chain_clients.insert(chain_id, chain_client);
@@ -999,7 +993,7 @@ where
                 )
             })
             .collect();
-        let chain_client = self.make_chain_client(default_chain_id).await?;
+        let chain_client = self.make_chain_client(default_chain_id);
         // Put at most 1000 fungible token operations in each block.
         for operation_chunk in operations.chunks(1000) {
             chain_client

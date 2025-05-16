@@ -933,7 +933,7 @@ where
         // the rest by asking validators.
         let storage = self.make_storage().await?;
         self.chain_client_storages.push(storage.clone());
-        let builder = Arc::new(Client::new(
+        let client = Arc::new(Client::new(
             crate::environment::Impl {
                 network: self.make_node_provider(),
                 storage,
@@ -949,14 +949,14 @@ where
             DEFAULT_GRACE_PERIOD,
             Duration::from_secs(1),
         ));
-        Ok(builder.create_chain_client(
+        Ok(client.create_chain_client(
             chain_id,
             block_hash,
             Timestamp::from(0),
             block_height,
             None,
             self.chain_owners.get(&chain_id).copied(),
-        )?)
+        ))
     }
 
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.
