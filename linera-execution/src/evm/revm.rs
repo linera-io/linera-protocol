@@ -948,6 +948,7 @@ where
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
         let nonce = self.db.get_nonce(ZERO_ADDRESS)?;
+        tracing::info!("transact_commit, nonce={nonce}");
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1094,6 +1095,7 @@ where
             db: self.db.clone(),
         };
         let nonce = self.db.get_nonce(ZERO_ADDRESS)?;
+        tracing::info!("transact, nonce={nonce}");
         let result_state = {
             let ctx: revm_context::Context<
                 BlockEnv,

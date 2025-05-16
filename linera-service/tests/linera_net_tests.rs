@@ -637,11 +637,13 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 1");
 
     let (mut net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
     let original_counter_value = 35;
     let increment = 5;
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 2");
 
     // Creating the EVM contract
 
@@ -672,6 +674,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
             None,
         )
         .await?;
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 3");
 
     // Creating the nesting contract
 
@@ -701,6 +704,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
             None,
         )
         .await?;
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 4");
 
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
@@ -708,6 +712,7 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     let nest_application = node_service
         .make_application(&chain, &nest_application_id)
         .await?;
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 5");
 
     let query = nest_get_valueCall {};
     let query = query.abi_encode();
@@ -715,15 +720,18 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     let result = nest_application.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_counter_value);
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 6");
 
     let mutation = nest_incrementCall { input: increment };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     nest_application.run_json_query(mutation).await?;
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 7");
 
     let result = nest_application.run_json_query(query).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_counter_value + increment);
+    tracing::info!("test_evm_call_evm_end_to_end_counter, step 8");
 
     node_service.ensure_is_running()?;
 
@@ -845,6 +853,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 1");
 
     let (mut net, client1) = config.instantiate().await?;
 
@@ -853,6 +862,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 2");
 
     let original_value = 35;
     let moved_value = 5;
@@ -889,11 +899,13 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
             None,
         )
         .await?;
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 3");
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 4");
 
     // Creating the applications.
 
@@ -904,6 +916,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let application2 = node_service2
         .make_application(&chain2, &application_id)
         .await?;
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 5");
 
     // Now checking the APIs.
     // First: checking the initial value of the contracts.
@@ -911,9 +924,11 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let result = application1.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_value);
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 6");
     let result = application2.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, 0);
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 7");
 
     // Second: executing the movement of assets
 
@@ -927,17 +942,21 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
     application1.run_json_query(mutation).await?;
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 8");
 
     node_service2.process_inbox(&chain2).await?;
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 9");
 
     // Third: Checking the values after the move
 
     let result = application1.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_value - moved_value);
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 10");
     let result = application2.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, moved_value);
+    tracing::info!("test_evm_execute_message_end_to_end_counter, step 11");
 
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;

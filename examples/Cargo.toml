@@ -49,9 +49,8 @@ sha3 = "0.10.8"
 test-log = { version = "0.2.15", default-features = false, features = [
     "trace",
 ] }
-tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = [
-    "unstable_wasm",
-] }
+tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = [ "unstable_wasm" ] }
+#tokenizers = { version = "0.21.1", default-features = false, features = [ "unstable_wasm" ] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
 amm = { path = "./amm" }
