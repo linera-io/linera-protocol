@@ -72,6 +72,8 @@ colored.workspace = true
 comfy-table.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
+custom_debug_derive.workspace = true
+dashmap.workspace = true
 dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
@@ -93,10 +95,12 @@ linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+mini-moka = { workspace = true }
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 prost = { workspace = true }
+quick_cache = { workspace = true }
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
@@ -118,6 +122,7 @@ tracing.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+tonic-build = { workspace = true, features = ["prost", "transport"] }
 
 [dev-dependencies]
 amm.workspace = true
@@ -151,6 +156,7 @@ test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [[bin]]
 name = "linera"

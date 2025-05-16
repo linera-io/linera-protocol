@@ -19,9 +19,12 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_client::client_options::ResourceControlPolicyConfig;
+use linera_client::{
+    client_options::ResourceControlPolicyConfig,
+    config::{BlockExporterConfig, DestinationKind},
+};
 use linera_core::node::ValidatorNodeProvider;
-use linera_rpc::config::CrossChainConfig;
+use linera_rpc::config::{CrossChainConfig, TlsConfig};
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
@@ -183,7 +186,7 @@ pub struct LocalNetConfig {
     pub cross_chain_config: CrossChainConfig,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
-    pub num_block_exporters: u32,
+    pub block_exporters: Vec<BlockExporterConfig>,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -200,7 +203,7 @@ pub struct LocalNet {
     common_storage_config: StorageConfig,
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
-    num_block_exporters: u32,
+    block_exporters: Vec<BlockExporterConfig>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -301,7 +304,7 @@ impl LocalNetConfig {
             num_shards,
             storage_config_builder,
             path_provider,
-            num_block_exporters: 0,
+            block_exporters: vec![],
         }
     }
 }
@@ -321,7 +324,7 @@ impl LineraNetConfig for LocalNetConfig {
             storage_config,
             self.cross_chain_config,
             self.path_provider,
-            self.num_block_exporters,
+            self.block_exporters,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -385,7 +388,7 @@ impl LocalNet {
         common_storage_config: StorageConfig,
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
-        num_block_exporters: u32,
+        block_exporters: Vec<BlockExporterConfig>,
     ) -> Result<Self> {
         Ok(Self {
             network,
@@ -400,7 +403,7 @@ impl LocalNet {
             common_storage_config,
             cross_chain_config,
             path_provider,
-            num_block_exporters,
+            block_exporters,
         })
     }
 
@@ -481,9 +484,9 @@ impl LocalNet {
             ));
         }
 
-        for j in 0..self.num_block_exporters {
+        for j in 0..self.block_exporters.len() {
             let host = Network::Grpc.localhost();
-            let port = Self::block_exporter_port(n, j as usize);
+            let port = Self::block_exporter_port(n, j);
             let config_content = format!(
                 r#"
 
@@ -494,7 +497,7 @@ impl LocalNet {
             );
 
             content.push_str(&config_content);
-            let exporter_config = self.generate_block_exporter_config(n, j);
+            let exporter_config = self.generate_block_exporter_config(n, j as u32);
             let config_path = self
                 .path_provider
                 .path()
@@ -516,7 +519,7 @@ impl LocalNet {
         let n = validator;
         let host = Network::Grpc.localhost();
         let port = Self::block_exporter_port(n, exporter_id as usize);
-        let config = format!(
+        let mut config = format!(
             r#"
             id = {exporter_id}
 
@@ -525,6 +528,36 @@ impl LocalNet {
             port = {port}
             "#
         );
+
+        for destination in &self.block_exporters[exporter_id as usize]
+            .destination_config
+            .destinations
+        {
+            let tls = match destination.tls {
+                TlsConfig::ClearText => "ClearText",
+                TlsConfig::Tls => "Tls",
+            };
+
+            let endpoint = &destination.endpoint;
+            let port = destination.port;
+            let kind = match destination.kind {
+                DestinationKind::Indexer => "Indexer",
+                DestinationKind::Validator => "Validator",
+            };
+
+            let destination_string_to_push = format!(
+                r#"
+
+                [[destination_config.destinations]]
+                tls = "{tls}"
+                endpoint = "{endpoint}"
+                port = {port}
+                kind = "{kind}"
+                "#
+            );
+
+            config.push_str(&destination_string_to_push);
+        }
 
         config
     }
@@ -779,8 +812,8 @@ impl LocalNet {
             let server = self.run_server(index, shard).await?;
             validator.add_server(server);
         }
-        for block_exporter in 0..self.num_block_exporters {
-            let exporter = self.run_exporter(index, block_exporter).await?;
+        for block_exporter in 0..self.block_exporters.len() {
+            let exporter = self.run_exporter(index, block_exporter as u32).await?;
             validator.add_block_exporter(exporter);
         }
         self.running_validators.insert(index, validator);
