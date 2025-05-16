@@ -16,7 +16,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_client::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext, ClientContextExt as _},
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
@@ -79,7 +79,7 @@ pub struct Validator {
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> QueryRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Returns the version information on this faucet service.
     async fn version(&self) -> linera_version::VersionInfo {
@@ -97,8 +97,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(self.chain_id)
-            .await?;
+            .make_chain_client(self.chain_id)?;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -114,7 +113,7 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> MutationRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
@@ -131,8 +130,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(self.chain_id)
-            .await?;
+            .make_chain_client(self.chain_id)?;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -213,7 +211,7 @@ where
 
 impl<C> Clone for FaucetService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -233,7 +231,7 @@ where
 
 impl<C> FaucetService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Creates a new instance of the faucet service.
     #[expect(clippy::too_many_arguments)]
@@ -247,7 +245,7 @@ where
         config: ChainListenerConfig,
         storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
-        let client = context.make_chain_client(chain_id).await?;
+        let client = context.make_chain_client(chain_id)?;
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;

@@ -29,8 +29,8 @@ pub use memory::Memory;
 /// the value in memory.
 ///
 /// `LocalPersist` is a non-`Send` version.
-#[trait_variant::make(Persist: Send)]
-pub trait LocalPersist: Deref {
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait Persist: Deref {
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Gets a mutable reference to the value. This is not expressed as a
@@ -47,34 +47,13 @@ pub trait LocalPersist: Deref {
         Self::Target: Sized;
 }
 
-#[allow(async_fn_in_trait)]
-pub trait LocalPersistExt: LocalPersist {
-    /// Applies a mutation to the value, persisting when done.
-    async fn mutate<R>(
-        &mut self,
-        mutation: impl FnOnce(&mut Self::Target) -> R,
-    ) -> Result<R, Self::Error>;
-}
-
-#[trait_variant::make(Send)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait PersistExt: Persist {
     /// Applies a mutation to the value, persisting when done.
     async fn mutate<R: Send>(
         &mut self,
         mutation: impl FnOnce(&mut Self::Target) -> R + Send,
     ) -> Result<R, Self::Error>;
-}
-
-#[allow(async_fn_in_trait)]
-impl<T: LocalPersist> LocalPersistExt for T {
-    async fn mutate<R>(
-        &mut self,
-        mutation: impl FnOnce(&mut Self::Target) -> R,
-    ) -> Result<R, Self::Error> {
-        let output = mutation(self.as_mut());
-        self.persist().await?;
-        Ok(output)
-    }
 }
 
 impl<T: Persist> PersistExt for T {

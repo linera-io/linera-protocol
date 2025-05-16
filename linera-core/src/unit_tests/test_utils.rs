@@ -957,8 +957,7 @@ where
                 block_height,
                 None,
                 self.chain_owners.get(&chain_id).copied(),
-            )
-            .await?)
+            )?)
     }
 
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.

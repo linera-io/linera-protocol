@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use async_trait::async_trait;
 use futures::{
     future::{join_all, select_all},
     lock::Mutex,
@@ -61,16 +60,16 @@ pub struct ChainListenerConfig {
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
-#[cfg_attr(not(web), async_trait, trait_variant::make(Send))]
-#[cfg_attr(web, async_trait(?Send))]
-pub trait ClientContext: 'static {
+#[cfg_attr(not(web), trait_variant::make(Send))]
+#[allow(async_fn_in_trait)]
+pub trait ClientContext {
     type Environment: linera_core::Environment;
 
     fn wallet(&self) -> &Wallet;
 
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
-    async fn make_chain_client(&self, chain_id: ChainId)
+    fn make_chain_client(&self, chain_id: ChainId)
         -> Result<ContextChainClient<Self>, Error>;
 
     fn client(&self) -> &linera_core::client::Client<Self::Environment>;
@@ -83,11 +82,15 @@ pub trait ClientContext: 'static {
     ) -> Result<(), Error>;
 
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
+}
 
-    async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+#[allow(async_fn_in_trait)]
+pub trait ClientContextExt: ClientContext {
+    fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+        let chain_ids = self.wallet().chain_ids();
         let mut clients = vec![];
-        for chain_id in &self.wallet().chain_ids() {
-            clients.push(self.make_chain_client(*chain_id).await?);
+        for chain_id in chain_ids {
+            clients.push(self.make_chain_client(chain_id)?);
         }
         Ok(clients)
     }
@@ -110,6 +113,8 @@ pub trait ClientContext: 'static {
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 }
+
+impl<T: ClientContext> ClientContextExt for T {}
 
 /// A chain client together with the stream of notifications from the local node.
 ///
@@ -310,8 +315,7 @@ impl<C: ClientContext> ChainListener<C> {
             .context
             .lock()
             .await
-            .make_chain_client(chain_id)
-            .await?;
+            .make_chain_client(chain_id)?;
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         if client.is_tracked() {
             client.synchronize_from_validators().await?;

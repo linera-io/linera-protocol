@@ -110,7 +110,7 @@ impl IntoResponse for NodeServiceError {
 #[Subscription]
 impl<C> SubscriptionRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
@@ -121,8 +121,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(chain_id)
-            .await?;
+            .make_chain_client(chain_id)?;
         Ok(client.subscribe().await?)
     }
 }
@@ -168,8 +167,7 @@ where
                 .context
                 .lock()
                 .await
-                .make_chain_client(*chain_id)
-                .await?;
+                .make_chain_client(*chain_id)?;
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -186,7 +184,7 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> MutationRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
@@ -196,8 +194,7 @@ where
                 .context
                 .lock()
                 .await
-                .make_chain_client(chain_id)
-                .await?;
+                .make_chain_client(chain_id)?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox_without_prepare().await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -220,8 +217,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(chain_id)
-            .await?;
+            .make_chain_client(chain_id)?;
         let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await?;
         match outcome {
@@ -591,7 +587,7 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> QueryRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     async fn chain(
         &self,
@@ -604,8 +600,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(chain_id)
-            .await?;
+            .make_chain_client(chain_id)?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
@@ -615,8 +610,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(chain_id)
-            .await?;
+            .make_chain_client(chain_id)?;
         let applications = client
             .chain_state_view()
             .await?
@@ -648,8 +642,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(chain_id)
-            .await?;
+            .make_chain_client(chain_id)?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
@@ -690,8 +683,7 @@ where
             .context
             .lock()
             .await
-            .make_chain_client(chain_id)
-            .await?;
+            .make_chain_client(chain_id)?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
@@ -815,7 +807,7 @@ impl ApplicationOverview {
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     config: ChainListenerConfig,
     port: NonZeroU16,
@@ -825,7 +817,7 @@ where
 
 impl<C> Clone for NodeService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -934,7 +926,6 @@ where
             .lock()
             .await
             .make_chain_client(chain_id)
-            .await
             .map_err(|_| NodeServiceError::UnknownChainId {
                 chain_id: chain_id.to_string(),
             })?;
@@ -971,7 +962,6 @@ where
             .lock()
             .await
             .make_chain_client(chain_id)
-            .await
             .map_err(|_| NodeServiceError::UnknownChainId {
                 chain_id: chain_id.to_string(),
             })?;

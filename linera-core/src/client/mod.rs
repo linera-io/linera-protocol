@@ -253,7 +253,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Creates a new `ChainClient`.
     #[instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
-    pub async fn create_chain_client(
+    pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
@@ -272,8 +272,6 @@ impl<Env: Environment> Client<Env> {
                 pending_proposal,
             ));
         }
-
-        let _ = self.ensure_has_chain_description(chain_id).await?;
 
         Ok(ChainClient {
             client: self.clone(),
