@@ -69,8 +69,7 @@ pub trait ClientContext {
 
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
-    fn make_chain_client(&self, chain_id: ChainId)
-        -> Result<ContextChainClient<Self>, Error>;
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
 
     fn client(&self) -> &linera_core::client::Client<Self::Environment>;
 
@@ -311,11 +310,7 @@ impl<C: ClientContext> ChainListener<C> {
         if self.listening.contains_key(&chain_id) {
             return Ok(BTreeSet::new());
         }
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         if client.is_tracked() {
             client.synchronize_from_validators().await?;

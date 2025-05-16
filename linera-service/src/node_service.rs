@@ -117,11 +117,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         Ok(client.subscribe().await?)
     }
 }
@@ -163,11 +159,7 @@ where
         Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<C::Environment>)>,
     {
         loop {
-            let client = self
-                .context
-                .lock()
-                .await
-                .make_chain_client(*chain_id)?;
+            let client = self.context.lock().await.make_chain_client(*chain_id)?;
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -190,11 +182,7 @@ where
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let client = self
-                .context
-                .lock()
-                .await
-                .make_chain_client(chain_id)?;
+            let client = self.context.lock().await.make_chain_client(chain_id)?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox_without_prepare().await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -213,11 +201,7 @@ where
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await?;
         match outcome {
@@ -596,21 +580,13 @@ where
         ChainStateExtendedView<<C::Environment as linera_core::Environment>::StorageContext>,
         Error,
     > {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let applications = client
             .chain_state_view()
             .await?
@@ -638,11 +614,7 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<ConfirmedBlock>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
@@ -679,11 +651,7 @@ where
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<ConfirmedBlock>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),

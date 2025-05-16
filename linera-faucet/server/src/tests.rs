@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
@@ -26,7 +25,6 @@ struct ClientContext {
     update_calls: usize,
 }
 
-#[async_trait]
 impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
@@ -42,7 +40,7 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
-    async fn make_chain_client(
+    fn make_chain_client(
         &self,
         chain_id: ChainId,
     ) -> Result<ChainClient<environment::Test>, linera_client::Error> {

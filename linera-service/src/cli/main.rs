@@ -587,8 +587,8 @@ impl Runnable for Job {
                         .check_matching_network_description(address, &node)
                         .await?;
                 }
-                let chain_client = context
-                    .make_chain_client(context.wallet.genesis_admin_chain())?;
+                let chain_client =
+                    context.make_chain_client(context.wallet.genesis_admin_chain())?;
                 let n = context
                     .process_inbox(&chain_client)
                     .await
@@ -767,8 +767,8 @@ impl Runnable for Job {
                     Box::new(signer.into_value()),
                 );
 
-                let chain_client = context
-                    .make_chain_client(context.wallet.genesis_admin_chain())?;
+                let chain_client =
+                    context.make_chain_client(context.wallet.genesis_admin_chain())?;
 
                 // Remove the old committee.
                 info!("Finalizing current committee");

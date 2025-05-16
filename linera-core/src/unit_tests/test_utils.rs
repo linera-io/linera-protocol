@@ -949,15 +949,14 @@ where
             DEFAULT_GRACE_PERIOD,
             Duration::from_secs(1),
         ));
-        Ok(builder
-            .create_chain_client(
-                chain_id,
-                block_hash,
-                Timestamp::from(0),
-                block_height,
-                None,
-                self.chain_owners.get(&chain_id).copied(),
-            )?)
+        Ok(builder.create_chain_client(
+            chain_id,
+            block_hash,
+            Timestamp::from(0),
+            block_height,
+            None,
+            self.chain_owners.get(&chain_id).copied(),
+        )?)
     }
 
     /// Tries to find a (confirmation) certificate for the given chain_id and block height.

@@ -93,11 +93,7 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(self.chain_id)?;
+        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -126,11 +122,7 @@ where
     C: ClientContext,
 {
     async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(self.chain_id)?;
+        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
