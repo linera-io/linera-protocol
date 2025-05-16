@@ -994,7 +994,6 @@ mod tests {
     fn chain_id_computing() {
         let example_chain_origin = ChainOrigin::Root(0);
         let example_chain_config = InitialChainConfig {
-            admin_id: None,
             epoch: Epoch::ZERO,
             ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
             balance: Amount::ZERO,
@@ -1008,7 +1007,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "0e94923a8f72ef1d0e69e6958e655002f2b1883bac9a67a4704d2f4125825217"
+            "4423610c1010c31be88bc6cc041a9c1063d58062e9d748c1552a1e75e7ea13a9"
         );
     }
 

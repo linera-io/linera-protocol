@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, Timestamp},
+    data_types::{BlobContent, NetworkDescription, Timestamp},
     identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
@@ -30,7 +30,7 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
-use linera_storage::{DbStorage, NetworkDescription, Storage};
+use linera_storage::{DbStorage, Storage};
 use linera_version::VersionInfo;
 use linera_views::memory::MemoryStore;
 

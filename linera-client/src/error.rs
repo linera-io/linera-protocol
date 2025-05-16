@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
+use linera_base::{
+    crypto::ValidatorPublicKey, data_types::NetworkDescription, identifiers::ChainId,
+};
 use linera_core::node::NodeError;
-use linera_storage::NetworkDescription;
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 

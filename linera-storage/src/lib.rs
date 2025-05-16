@@ -14,8 +14,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch, TimeDelta,
-        Timestamp,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
+        NetworkDescription, TimeDelta, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, ChainId, EventId},
     vm::VmRuntime,
@@ -39,7 +39,6 @@ use linera_views::{
     context::Context,
     views::{RootView, ViewError},
 };
-use serde::{Deserialize, Serialize};
 
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
@@ -328,14 +327,6 @@ pub trait Storage: Sized {
     ) -> Result<Self::BlockExporterContext, ViewError>;
 }
 
-/// A description of the current Linera network to be stored in every node's database.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct NetworkDescription {
-    pub name: String,
-    pub genesis_config_hash: CryptoHash,
-    pub genesis_timestamp: Timestamp,
-}
-
 /// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
@@ -402,6 +393,10 @@ where
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
         self.storage.read_event(event_id).await
+    }
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        self.storage.read_network_description().await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

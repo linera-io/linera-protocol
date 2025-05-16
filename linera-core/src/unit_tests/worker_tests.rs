@@ -131,7 +131,6 @@ where
 
         let origin = ChainOrigin::Root(0);
         let config = InitialChainConfig {
-            admin_id: None,
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
@@ -143,6 +142,15 @@ where
             .write_blob(&Blob::new_chain_description(&admin_description))
             .await
             .expect("writing a blob should not fail");
+        storage
+            .write_network_description(&NetworkDescription {
+                admin_chain_id: admin_description.id(),
+                genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                genesis_timestamp: Timestamp::from(0),
+                name: "test network".to_string(),
+            })
+            .await
+            .expect("writing a network description should not fail");
 
         let worker = WorkerState::new(
             "Single validator node".to_string(),
@@ -197,7 +205,6 @@ where
     ) -> ChainDescription {
         let origin = ChainOrigin::Root(index);
         let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership,
             committees: self.admin_description.config().committees.clone(),
@@ -227,7 +234,6 @@ where
             chain_index: 0,
         };
         let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
             committees: self.admin_description.config().committees.clone(),

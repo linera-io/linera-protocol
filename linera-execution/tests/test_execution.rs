@@ -1191,7 +1191,6 @@ async fn test_open_chain() -> anyhow::Result<()> {
         balance: Amount::ONE,
         ownership: child_ownership.clone(),
         application_permissions: child_application_permissions.clone(),
-        admin_id: Some(root_description.id()),
         ..root_description.config().clone()
     };
     let child_description = ChainDescription::new(child_origin, child_config, Timestamp::default());

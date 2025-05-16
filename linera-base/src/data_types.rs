@@ -811,8 +811,6 @@ impl Epoch {
 pub struct InitialChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
-    /// The ID of the admin chain.
-    pub admin_id: Option<ChainId>,
     /// The epoch in which the chain is created.
     pub epoch: Epoch,
     /// Serialized committees corresponding to epochs.
@@ -868,6 +866,19 @@ impl ChainDescription {
 }
 
 impl BcsHashable<'_> for ChainDescription {}
+
+/// A description of the current Linera network to be stored in every node's database.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct NetworkDescription {
+    /// The name of the network.
+    pub name: String,
+    /// Hash of the network's genesis config.
+    pub genesis_config_hash: CryptoHash,
+    /// Genesis timestamp.
+    pub genesis_timestamp: Timestamp,
+    /// The chain ID of the admin chain.
+    pub admin_chain_id: ChainId,
+}
 
 /// Permissions for applications on a chain.
 #[derive(

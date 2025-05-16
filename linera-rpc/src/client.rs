@@ -3,7 +3,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlobContent,
+    data_types::{BlobContent, NetworkDescription},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -160,9 +160,7 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn get_network_description(
-        &self,
-    ) -> Result<linera_storage::NetworkDescription, NodeError> {
+    async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.get_network_description().await?,
 

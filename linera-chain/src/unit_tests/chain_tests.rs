@@ -73,7 +73,6 @@ impl TestEnvironment {
         )]);
         let config = InitialChainConfig {
             ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
-            admin_id: None,
             epoch: Epoch::ZERO,
             committees: iter::once((
                 Epoch::ZERO,
@@ -145,10 +144,6 @@ impl TestEnvironment {
             parent: self.admin_id(),
             block_height: BlockHeight(height),
             chain_index: 0,
-        };
-        let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
-            ..config
         };
         let description = ChainDescription::new(origin, config, Timestamp::from(0));
         self.created_descriptions

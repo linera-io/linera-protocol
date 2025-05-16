@@ -6,7 +6,7 @@ use linera_base::{
         AccountPublicKey, AccountSignature, CryptoError, CryptoHash, ValidatorPublicKey,
         ValidatorSignature,
     },
-    data_types::{BlobContent, BlockHeight},
+    data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
 };
@@ -142,23 +142,25 @@ impl From<api::VersionInfo> for linera_version::VersionInfo {
     }
 }
 
-impl From<linera_storage::NetworkDescription> for api::NetworkDescription {
+impl From<NetworkDescription> for api::NetworkDescription {
     fn from(
-        linera_storage::NetworkDescription {
+        NetworkDescription {
             name,
             genesis_config_hash,
             genesis_timestamp,
-        }: linera_storage::NetworkDescription,
+            admin_chain_id,
+        }: NetworkDescription,
     ) -> Self {
         Self {
             name,
             genesis_config_hash: Some(genesis_config_hash.into()),
             genesis_timestamp: genesis_timestamp.micros(),
+            admin_chain_id: Some(admin_chain_id.into()),
         }
     }
 }
 
-impl TryFrom<api::NetworkDescription> for linera_storage::NetworkDescription {
+impl TryFrom<api::NetworkDescription> for NetworkDescription {
     type Error = GrpcProtoConversionError;
 
     fn try_from(
@@ -166,12 +168,14 @@ impl TryFrom<api::NetworkDescription> for linera_storage::NetworkDescription {
             name,
             genesis_config_hash,
             genesis_timestamp,
+            admin_chain_id,
         }: api::NetworkDescription,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             name,
             genesis_config_hash: try_proto_convert(genesis_config_hash)?,
             genesis_timestamp: genesis_timestamp.into(),
+            admin_chain_id: try_proto_convert(admin_chain_id)?,
         })
     }
 }

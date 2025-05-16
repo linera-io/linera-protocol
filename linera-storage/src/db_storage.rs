@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, Epoch, TimeDelta, Timestamp},
+    data_types::{Blob, Epoch, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -42,7 +42,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::{ChainRuntimeContext, Clock, NetworkDescription, Storage};
+use crate::{ChainRuntimeContext, Clock, Storage};
 
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
