@@ -8,7 +8,7 @@ use linera_views::{
     bucket_queue_view::HashedBucketQueueView,
     collection_view::HashedCollectionView,
     context::{Context, MemoryContext},
-    key_value_store_view::{KeyValueStoreView, SizeData},
+    key_value_store_view::{BigKeyValueStoreView, SizeData},
     map_view::HashedByteMapView,
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
@@ -134,7 +134,7 @@ async fn classic_collection_view_check() -> Result<()> {
 
 #[derive(CryptoHashRootView)]
 pub struct KeyValueStateView<C> {
-    pub store: KeyValueStoreView<C>,
+    pub store: BigKeyValueStoreView<C>,
 }
 
 fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
