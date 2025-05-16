@@ -4,6 +4,7 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
+    collections::{hash_map::Entry, HashMap},
     net::{IpAddr, SocketAddr},
     str::FromStr,
     task::{Context, Poll},
@@ -17,13 +18,14 @@ use futures::{
 };
 use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
+    join_set_ext::JoinSet,
     node::NodeError,
     worker::{NetworkActions, Notification, Reason, WorkerError, WorkerState},
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
 use rand::Rng;
-use tokio::{sync::oneshot, task::JoinSet};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -33,7 +35,7 @@ use {
     linera_base::prometheus_util::{
         linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     },
-    prometheus::{HistogramVec, IntCounterVec},
+    prometheus::{register_int_gauge, HistogramVec, IntCounterVec, IntGauge},
 };
 
 use super::{
@@ -115,6 +117,15 @@ static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Notification channel full",
         &[],
     )
+});
+
+#[cfg(with_metrics)]
+static CROSS_CHAIN_MESSAGE_TASKS: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge!(
+        "cross_chain_message_tasks",
+        "Number of concurrent cross-chain message tasks",
+    )
+    .expect("IntGauge can be created")
 });
 
 #[derive(Clone)]
@@ -201,7 +212,7 @@ where
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
         shutdown_signal: CancellationToken,
-        join_set: &mut JoinSet<()>,
+        join_set: &mut JoinSet,
     ) -> GrpcServerHandle {
         info!(
             "spawning gRPC server on {}:{} for shard {}",
@@ -226,7 +237,6 @@ where
                 Duration::from_millis(cross_chain_config.retry_delay_ms),
                 Duration::from_millis(cross_chain_config.sender_delay_ms),
                 cross_chain_config.sender_failure_rate,
-                cross_chain_config.max_concurrent_tasks,
                 shard_id,
                 cross_chain_receiver,
             )
@@ -371,7 +381,6 @@ where
                         .with_label_values(&[])
                         .inc();
                 }
-                break;
             }
         }
 
@@ -397,77 +406,148 @@ where
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
-        cross_chain_max_concurrent_tasks: usize,
         this_shard: ShardId,
-        receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
+        mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
+        type QueueId = linera_core::data_types::CrossChainQueueId;
+
+        enum Action {
+            Proceed { id: usize },
+            Retry,
+        }
+
+        #[derive(Clone)]
+        struct Task {
+            shard_id: ShardId,
+            request: linera_core::data_types::CrossChainRequest,
+        }
+
         let pool = GrpcConnectionPool::default();
-        let max_concurrent_tasks = Some(cross_chain_max_concurrent_tasks);
+        let mut futures = futures::stream::FuturesUnordered::new();
+        let mut job_states: HashMap<QueueId, Job> = HashMap::new();
 
-        receiver
-            .for_each_concurrent(max_concurrent_tasks, |(cross_chain_request, shard_id)| {
-                let shard = network.shard(shard_id);
-                let remote_address = shard.http_address();
+        let run_task = |task: Task| async {
+            let task = task;
+            let request = Request::new(task.request.try_into()?);
+            let mut client = ValidatorWorkerClient::new(
+                pool.channel(network.shard(task.shard_id).http_address())?,
+            )
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+            let response = client.handle_cross_chain_request(request).await?;
+            anyhow::Result::<_>::Ok(response)
+        };
 
-                let pool = pool.clone();
-                let nickname = nickname.clone();
+        #[derive(Clone)]
+        struct Job {
+            id: usize,
+            retries: u32,
+            nickname: String,
+            task: Task,
+        }
 
-                // Send the cross-chain query and retry if needed.
-                async move {
-                    if cross_chain_sender_failure_rate > 0.0
-                        && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
-                    {
-                        warn!("Dropped 1 cross-chain message intentionally.");
-                        return;
-                    }
+        let run_action = |action, queue, state: Job| async move {
+            linera_base::time::timer::sleep(cross_chain_sender_delay).await;
 
-                    for i in 0..cross_chain_max_retries {
-                        // Delay increases linearly with the attempt number.
-                        linera_base::time::timer::sleep(
-                            cross_chain_sender_delay + cross_chain_retry_delay * i,
-                        )
-                        .await;
+            let to_shard = state.task.shard_id;
 
-                        let result = || async {
-                            let cross_chain_request = cross_chain_request.clone().try_into()?;
-                            let request = Request::new(cross_chain_request);
-                            let mut client =
-                                ValidatorWorkerClient::new(pool.channel(remote_address.clone())?)
-                                    .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-                                    .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-                            let response = client.handle_cross_chain_request(request).await?;
-                            Ok::<_, anyhow::Error>(response)
-                        };
-                        match result().await {
-                            Err(error) => {
-                                warn!(
-                                    nickname,
-                                    %error,
-                                    i,
-                                    from_shard = this_shard,
-                                    to_shard = shard_id,
-                                    "Failed to send cross-chain query",
-                                );
-                            }
-                            _ => {
-                                trace!(
-                                    from_shard = this_shard,
-                                    to_shard = shard_id,
-                                    "Sent cross-chain query",
-                                );
-                                return;
+            (
+                queue,
+                match action {
+                    Action::Proceed { .. } => {
+                        if let Err(error) = run_task(state.task).await {
+                            warn!(
+                                nickname = state.nickname,
+                                %error,
+                                retry = state.retries,
+                                from_shard = this_shard,
+                                to_shard,
+                                "Failed to send cross-chain query",
+                            );
+
+                            Action::Retry
+                        } else {
+                            trace!(from_shard = this_shard, to_shard, "Sent cross-chain query",);
+
+                            Action::Proceed {
+                                id: state.id.wrapping_add(1),
                             }
                         }
                     }
-                    error!(
-                        nickname,
-                        from_shard = this_shard,
-                        to_shard = shard_id,
-                        "Dropping cross-chain query",
-                    );
+
+                    Action::Retry => {
+                        linera_base::time::timer::sleep(cross_chain_retry_delay * state.retries)
+                            .await;
+                        Action::Proceed { id: state.id }
+                    }
+                },
+            )
+        };
+
+        loop {
+            tokio::select! {
+                Some((queue, action)) = futures.next() => {
+                    let Entry::Occupied(mut state) = job_states.entry(queue) else {
+                        panic!("running job without state");
+                    };
+
+                    let remove = matches!(action, Action::Proceed { id } if state.get().id < id)
+                        || matches!(action, Action::Retry if state.get().retries >= cross_chain_max_retries);
+                    if remove {
+                        state.remove();
+                        continue;
+                    }
+
+                    if let Action::Retry = action {
+                        state.get_mut().retries += 1
+                    }
+
+                    futures.push(run_action(action, queue, state.get().clone()));
                 }
-            })
-            .await;
+
+                request = receiver.next() => {
+                    let Some((request, shard_id)) = request else { break };
+                    #[cfg(with_metrics)]
+                    CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
+
+                    if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
+                        warn!("Dropped 1 cross-chain message intentionally.");
+                        continue;
+                    }
+
+                    let queue = request.queue();
+
+                    let task = Task {
+                        shard_id,
+                        request,
+                    };
+
+                    match job_states.entry(queue) {
+                        Entry::Vacant(entry) => futures.push(run_action(
+                            Action::Proceed { id: 0 },
+                            queue,
+                            entry.insert(Job {
+                                id: 0,
+                                retries: 0,
+                                nickname: nickname.clone(),
+                                task,
+                            }).clone(),
+                        )),
+
+                        Entry::Occupied(mut entry) => {
+                            entry.insert(Job {
+                                id: entry.get().id + 1,
+                                retries: 0,
+                                nickname: nickname.clone(),
+                                task,
+                            });
+                        }
+                    }
+                }
+
+                else => (),
+            }
+        }
     }
 
     fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
