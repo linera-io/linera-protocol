@@ -220,45 +220,54 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     "For RocksDB, the formatting has to be rocksdb:directory or rocksdb:directory:spawn_mode:namespace");
             }
 
-            // windows has directory naming scheme like "C://xyz", "//??D:xyz/" etc.
-            let owned = if cfg!(windows) {
-                s.replacen(':', ";", 1)
-            } else {
-                s.to_string()
+            const SPAWN_MODES: &[&str] = &["spawn_blocking", "block_in_place", "runtime"];
+
+            let mut tokens = s.split(':').peekable();
+
+            let mut path_parts = Vec::new();
+            let mut spawn_mode = None;
+            let mut namespace = None;
+
+            while let Some(&tok) = tokens.peek() {
+                if SPAWN_MODES.contains(&tok) {
+                    spawn_mode = Some(tok);
+                    tokens.next();
+                    break;
+                } else {
+                    path_parts.push(tok);
+                    tokens.next();
+                }
+            }
+
+            if spawn_mode.is_some() {
+                if let Some(ns) = tokens.next() {
+                    namespace = Some(ns);
+                }
+            }
+
+            if tokens.next().is_some() {
+                bail!("We should have one, two or three parts");
+            }
+
+            let path = PathBuf::from(path_parts.join(":"));
+
+            let spawn_mode = match spawn_mode.unwrap_or("spawn_blocking") {
+                "spawn_blocking" => RocksDbSpawnMode::SpawnBlocking,
+                "block_in_place" => RocksDbSpawnMode::BlockInPlace,
+                "runtime" => RocksDbSpawnMode::get_spawn_mode_from_runtime(),
+                other => Err(anyhow!("Failed to parse {} as a spawn_mode", other))?,
             };
 
-            let parts = owned.split(':').collect::<Vec<_>>();
+            let namespace = namespace
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string());
 
-            if parts.len() == 1 {
-                let path = parts[0].to_string().replace(';', ":").into();
-                let namespace = DEFAULT_NAMESPACE.to_string();
-                let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
-                let storage_config = StorageConfig::RocksDb { path, spawn_mode };
-                return Ok(StorageConfigNamespace {
-                    storage_config,
-                    namespace,
-                });
-            }
-            if parts.len() == 2 || parts.len() == 3 {
-                let path = parts[0].to_string().replace(';', ":").into();
-                let spawn_mode = match parts[1] {
-                    "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
-                    "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
-                    "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                    _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
-                }?;
-                let namespace = if parts.len() == 2 {
-                    DEFAULT_NAMESPACE.to_string()
-                } else {
-                    parts[2].to_string()
-                };
-                let storage_config = StorageConfig::RocksDb { path, spawn_mode };
-                return Ok(StorageConfigNamespace {
-                    storage_config,
-                    namespace,
-                });
-            }
-            bail!("We should have one, two or three parts");
+            let storage_config = StorageConfig::RocksDb { path, spawn_mode };
+
+            return Ok(StorageConfigNamespace {
+                storage_config,
+                namespace,
+            });
         }
         #[cfg(feature = "dynamodb")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
@@ -332,27 +341,54 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         }
         #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
         if let Some(s) = input.strip_prefix(DUAL_ROCKS_DB_SCYLLA_DB) {
-            let parts = s.split(':').collect::<Vec<_>>();
-            if parts.len() != 5 && parts.len() != 6 {
+            let parts = s.rsplitn(5, ":").collect::<Vec<_>>();
+            if parts.len() != 5 {
                 bail!(
                     "For DualRocksDbScyllaDb, the formatting has to be dualrocksdbscylladb:directory:mode:tcp:hostname:port:namespace"
                 );
             }
-            let path = Path::new(parts[0]);
+
+            let mut tokens = parts.iter().rev();
+            let Some(tcp_index) = parts.iter().position(|part| *part == "tcp") else {
+                bail!("The only allowed protocol is tcp");
+            };
+
+            let (path, spawn_mode) = 'it: {
+                match tcp_index {
+                    3 => {
+                        if let Some((path, spawn_mode)) =
+                            tokens.next().and_then(|token| token.rsplit_once(":"))
+                        {
+                            break 'it (path, spawn_mode);
+                        }
+                    }
+                    2 => {
+                        break 'it (
+                            tokens.next().expect("there are at least five tokens"),
+                            tokens.next().expect("there are at least five tokens"),
+                        )
+                    }
+                    _ => {}
+                };
+
+                bail!("For DualRocksDbScyllaDb, the formatting has to be dualrocksdbscylladb:directory:mode:tcp:hostname:port:namespace")
+            };
+
+            let path = Path::new(path);
             let path = path.to_path_buf();
             let path_with_guard = PathWithGuard::new(path);
-            let spawn_mode = match parts[1] {
+            let spawn_mode = match spawn_mode {
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                 "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                _ => Err(anyhow!("Failed to parse {} as a spawn_mode", parts[1])),
+                _ => Err(anyhow!("Failed to parse {} as a spawn_mode", spawn_mode)),
             }?;
-            let protocol = parts[2];
+            let protocol = *tokens.next().expect("there are at least five tokens");
             if protocol != "tcp" {
                 bail!("The only allowed protocol is tcp");
             }
-            let address = parts[3];
-            let port_str = parts[4];
+            let address = *tokens.next().expect("there are at least five tokens");
+            let port_str = *tokens.next().expect("there are at least five tokens");
             let port = NonZeroU16::from_str(port_str)
                 .map_err(|_| anyhow!("Failed to find parse port {port_str} for {s}"))?;
             let uri = format!("{}:{}", &address, port);
@@ -361,10 +397,10 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 spawn_mode,
                 uri,
             };
-            let namespace = if parts.len() == 5 {
-                DEFAULT_NAMESPACE.to_string()
+            let namespace = if let Some(namespace) = tokens.next() {
+                namespace.to_string()
             } else {
-                parts[5].to_string()
+                DEFAULT_NAMESPACE.to_string()
             };
             return Ok(StorageConfigNamespace {
                 storage_config,
@@ -721,6 +757,43 @@ fn test_rocks_db_storage_config_from_str() {
     );
 }
 
+#[cfg(feature = "rocksdb")]
+#[test]
+fn test_rocks_db_storage_config_from_str_for_windows() {
+    assert!(StorageConfigNamespace::from_str("rocksdb_foo.db").is_err());
+    assert_eq!(
+        StorageConfigNamespace::from_str("rocksdb://??D://foo.db").unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::RocksDb {
+                path: "//??D://foo.db".into(),
+                spawn_mode: RocksDbSpawnMode::SpawnBlocking,
+            },
+            namespace: DEFAULT_NAMESPACE.to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str("rocksdb:C:foo.db:block_in_place").unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::RocksDb {
+                path: "C:foo.db".into(),
+                spawn_mode: RocksDbSpawnMode::BlockInPlace,
+            },
+            namespace: DEFAULT_NAMESPACE.to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str("rocksdb:/E:/x/foo.db:block_in_place:chosen_namespace")
+            .unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::RocksDb {
+                path: "/E:/x/foo.db".into(),
+                spawn_mode: RocksDbSpawnMode::BlockInPlace,
+            },
+            namespace: "chosen_namespace".into()
+        }
+    );
+}
+
 #[cfg(feature = "dynamodb")]
 #[test]
 fn test_aws_storage_config_from_str() {
@@ -794,4 +867,89 @@ fn test_scylla_db_storage_config_from_str() {
     assert!(StorageConfigNamespace::from_str("scylladb:tcp:address1").is_err());
     assert!(StorageConfigNamespace::from_str("scylladb:tcp:address1:tcp:/address2").is_err());
     assert!(StorageConfigNamespace::from_str("scylladb:wrong").is_err());
+}
+
+#[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+#[test]
+fn test_dual_rocks_db_scylla_db_storage_config_from_str_for_windows() {
+    assert_eq!(
+        StorageConfigNamespace::from_str(
+            "dualrocksdbscylladb:foo.db:spawn_blocking:tcp:db_hostname:230"
+        )
+        .unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::DualRocksDbScyllaDb {
+                uri: "db_hostname:230".to_string(),
+                spawn_mode: RocksDbSpawnMode::SpawnBlocking,
+                path_with_guard: PathWithGuard::new("foo.db".into()),
+            },
+            namespace: DEFAULT_NAMESPACE.to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str(
+            "dualrocksdbscylladb:foo.db:spawn_blocking:tcp:db_hostname:230:chosen_one"
+        )
+        .unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::DualRocksDbScyllaDb {
+                uri: "db_hostname:230".to_string(),
+                spawn_mode: RocksDbSpawnMode::SpawnBlocking,
+                path_with_guard: PathWithGuard::new("foo.db".into()),
+            },
+            namespace: "chosen_one".to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str(
+            "dualrocksdbscylladb://??D://foo.db:spawn_blocking:tcp:db_hostname:230"
+        )
+        .unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::DualRocksDbScyllaDb {
+                uri: "db_hostname:230".to_string(),
+                spawn_mode: RocksDbSpawnMode::SpawnBlocking,
+                path_with_guard: PathWithGuard::new("//??D://foo.db".into()),
+            },
+            namespace: DEFAULT_NAMESPACE.to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str(
+            "dualrocksdbscylladb:C:foo.db:block_in_place:tcp:db_hostname:230"
+        )
+        .unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::DualRocksDbScyllaDb {
+                uri: "db_hostname:230".to_string(),
+                spawn_mode: RocksDbSpawnMode::BlockInPlace,
+                path_with_guard: PathWithGuard::new("C:foo.db".into()),
+            },
+            namespace: DEFAULT_NAMESPACE.to_string()
+        }
+    );
+    assert_eq!(
+        StorageConfigNamespace::from_str(
+            "dualrocksdbscylladb:/E:/x/foo.db:block_in_place:tcp:db_hostname:230:chosen_namespace"
+        )
+        .unwrap(),
+        StorageConfigNamespace {
+            storage_config: StorageConfig::DualRocksDbScyllaDb {
+                uri: "db_hostname:230".to_string(),
+                spawn_mode: RocksDbSpawnMode::BlockInPlace,
+                path_with_guard: PathWithGuard::new("/E:/x/foo.db".into()),
+            },
+            namespace: "chosen_namespace".into()
+        }
+    );
+
+    assert!(StorageConfigNamespace::from_str("dualrocksdbscylladb:-10").is_err());
+    assert!(StorageConfigNamespace::from_str("dualrocksdbscylladb:70000").is_err());
+    assert!(StorageConfigNamespace::from_str("dualrocksdbscylladb:wrong").is_err());
+    assert!(StorageConfigNamespace::from_str("dualrocksdbscylladb:230:234").is_err());
+    assert!(StorageConfigNamespace::from_str("scylladualrocksdbscylladbdb:tcp:address1").is_err());
+    assert!(
+        StorageConfigNamespace::from_str("dualrocksdbscylladb:tcp:address1:tcp:/address2").is_err()
+    );
+    assert!(StorageConfigNamespace::from_str("dualrocksdbscylladb::/E:/x/foo.db:block_in_place:tcp:db_hostname:230:chosen_namespace:should_not_be_here").is_err());
 }
