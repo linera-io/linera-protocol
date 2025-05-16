@@ -178,6 +178,7 @@ where
 
         // Only keep using this chain if there will still be enough balance to close it.
         if faucet_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)? {
+            self.faucet_chain_id.lock().await.take();
             // TODO(#1795): Move the remaining tokens back to the main chain.
             match faucet_client.close_chain().await {
                 Ok(outcome) => {
@@ -190,7 +191,6 @@ where
                 .await
                 .forget_chain(&faucet_chain_id)
                 .await?;
-            self.faucet_chain_id.lock().await.take();
         }
 
         let chain_id = ChainId::child(message_id);
