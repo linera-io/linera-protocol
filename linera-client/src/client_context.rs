@@ -5,12 +5,11 @@
 use std::num::NonZeroUsize;
 use std::{collections::HashSet, sync::Arc};
 
-use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::{CryptoHash, Signer, ValidatorPublicKey},
-    data_types::{BlockHeight, ChainDescription, Timestamp},
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId},
+    data_types::{BlockHeight, Timestamp},
+    identifiers::{Account, AccountOwner, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -23,9 +22,7 @@ use linera_core::{
     Environment, JoinSetExt as _,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
-use linera_storage::Storage;
 use linera_version::VersionInfo;
-use linera_views::views::ViewError;
 use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
@@ -62,7 +59,7 @@ use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
 #[cfg(not(web))]
 use crate::persistent::{Persist, PersistExt as _};
 use crate::{
-    chain_listener,
+    chain_listener::{self, ClientContextExt as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
     error, util,
     wallet::{UserChain, Wallet},
@@ -81,11 +78,9 @@ pub struct ClientContext<Env: Environment, W> {
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
-#[cfg_attr(not(web), async_trait)]
-#[cfg_attr(web, async_trait(?Send))]
 impl<Env: Environment, W> chain_listener::ClientContext for ClientContext<Env, W>
 where
-    W: Persist<Target = Wallet> + Sync + 'static,
+    W: Persist<Target = Wallet>,
 {
     type Environment = Env;
 
@@ -97,8 +92,8 @@ where
         self.client.storage_client()
     }
 
-    async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
-        self.make_chain_client(chain_id).await
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
+        self.make_chain_client(chain_id)
     }
 
     fn client(&self) -> &Client<Env> {
@@ -226,10 +221,7 @@ where
     }
 }
 
-impl<Env: Environment, W> ClientContext<Env, W>
-where
-    W: Persist<Target = Wallet>,
-{
+impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
     /// Returns a reference to the wallet.
     pub fn wallet(&self) -> &Wallet {
         &self.wallet
@@ -269,12 +261,10 @@ where
             .expect("No non-admin chain specified in wallet with no non-admin chain")
     }
 
-    pub async fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
+    pub fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<Env>, Error> {
         // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain: UserChain = match self.wallet.get(chain_id) {
-            Some(chain) => chain.clone(),
-            None => UserChain::make_other(chain_id, Timestamp::from(0)),
-        };
+        let chain = self.wallet.get(chain_id).cloned()
+            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
 
         self.make_chain_client_internal(
             chain_id,
@@ -284,10 +274,9 @@ where
             chain.pending_proposal,
             chain.owner,
         )
-        .await
     }
 
-    async fn make_chain_client_internal(
+    fn make_chain_client_internal(
         &self,
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
@@ -305,8 +294,7 @@ where
                 next_block_height,
                 pending_proposal,
                 preferred_owner,
-            )
-            .await?;
+            )?;
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
@@ -410,28 +398,6 @@ where
         }
     }
 
-    // TODO(#2351): this calls `ensure_has_chain_description`.
-    pub async fn chain_description(
-        &mut self,
-        chain_id: ChainId,
-    ) -> Result<ChainDescription, Error> {
-        let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-
-        let blob = match self.client.storage_client().read_blob(blob_id).await {
-            Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
-                // we're missing the blob describing the chain we're assigning - try to
-                // get it
-                self.client.ensure_has_chain_description(chain_id).await?
-            }
-            Err(err) => {
-                return Err(err.into());
-            }
-        };
-
-        Ok(bcs::from_bytes(blob.bytes())?)
-    }
-
     pub async fn assign_new_chain_to_key(
         &mut self,
         chain_id: ChainId,
@@ -503,7 +469,7 @@ where
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id).await?;
+        let chain_client = self.make_chain_client(chain_id)?;
         info!(
             ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
             "Changing ownership of a chain"
@@ -536,7 +502,7 @@ where
         preferred_owner: AccountOwner,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let mut chain_client = self.make_chain_client(chain_id).await?;
+        let mut chain_client = self.make_chain_client(chain_id)?;
         let old_owner = chain_client.preferred_owner();
         info!(%chain_id, ?old_owner, %preferred_owner, "Changing preferred owner for chain");
         chain_client.set_preferred_owner(preferred_owner);
