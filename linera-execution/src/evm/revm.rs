@@ -817,6 +817,7 @@ where
         let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         if !instantiation_argument.is_empty() {
             let argument = get_revm_instantiation_bytes(instantiation_argument);
+            tracing::info!("instantiate: transact_commit");
             let result = self.transact_commit(Choice::Call, &argument)?;
             self.write_logs(result.logs, "instantiate")?;
         }
@@ -828,11 +829,13 @@ where
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
+            tracing::info!("execute_operation: init_transact_commit, case 1");
             let result = self.init_transact_commit(Choice::Call, &operation[4..])?;
             result.interpreter_result_and_logs()?
         } else {
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
+            tracing::info!("execute_operation: init_transact_commit, case 2");
             let result = self.init_transact_commit(Choice::Call, &operation)?;
             result.output_and_logs()
         };
@@ -843,6 +846,7 @@ where
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         let operation = get_revm_execute_message_bytes(message);
+        tracing::info!("execute_message: init_transact_commit");
         let result = self.init_transact_commit(Choice::Call, &operation)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
@@ -912,9 +916,11 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
+        tracing::info!("init_transact_commit, step 1");
         if !self.db.is_initialized()? {
             self.initialize_contract()?;
         }
+        tracing::info!("init_transact_commit, step 2");
         self.transact_commit(ch, vec)
     }
 
@@ -923,6 +929,7 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
+        tracing::info!("initialize_contract: transact_commit");
         let result = self.transact_commit(Choice::Create, &vec_init)?;
         self.write_logs(result.logs, "deploy")
     }
@@ -947,8 +954,8 @@ where
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
-        let nonce = self.db.get_nonce(ZERO_ADDRESS)?;
-        tracing::info!("transact_commit, nonce={nonce}");
+        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
+        tracing::info!("   transact_commit, read: nonce={nonce}");
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -984,7 +991,7 @@ where
         }?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        self.db.increment_nonce(ZERO_ADDRESS, nonce)?;
+        tracing::info!("   transact_commit, increment: nonce={nonce}");
         process_execution_result(storage_stats, result)
     }
 
@@ -1094,8 +1101,8 @@ where
         let inspector = CallInterceptorService {
             db: self.db.clone(),
         };
-        let nonce = self.db.get_nonce(ZERO_ADDRESS)?;
-        tracing::info!("transact, nonce={nonce}");
+        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
+        tracing::info!("   transact, read: nonce={nonce}");
         let result_state = {
             let ctx: revm_context::Context<
                 BlockEnv,

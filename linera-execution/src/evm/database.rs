@@ -87,8 +87,6 @@ enum KeyTag {
     NullAddress,
     /// Key prefix for the storage of the contract address.
     ContractAddress,
-    /// Key prefix for the storage of the user nonces
-    UserNonce,
 }
 
 #[repr(u8)]
@@ -194,6 +192,7 @@ where
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
+        tracing::info!("database: basic_ref, address={} account_info={:?}", address, account_info);
         Ok(account_info)
     }
 
@@ -262,6 +261,7 @@ where
                     batch.put_key_value(key_state, &AccountState::NotExisting)?;
                 } else {
                     let is_newly_created = account.is_created();
+                    tracing::info!("database: commit_changes, address={} account_info={:?}", address, account.info);
                     batch.put_key_value(key_info, &account.info)?;
 
                     let account_state = if is_newly_created {
@@ -324,14 +324,17 @@ where
     Runtime: BaseRuntime,
 {
     /// Reads the nonce of the user
-    pub fn get_nonce(&self, address: Address) -> Result<u64, ExecutionError> {
-        let mut key_nonce = vec![KeyTag::UserNonce as u8];
-        bcs::serialize_into(&mut key_nonce, &address)?;
+    pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
+        let val = self.get_contract_address_key(address);
+        let Some(val) = val else {
+            return Ok(0);
+        };
+        let key_info = vec![val, KeyCategory::AccountInfo as u8];
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let promise = runtime.read_value_bytes_new(key_nonce)?;
+        let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
-        let nonce = from_bytes_option::<u64, ViewError>(&result)?;
-        Ok(nonce.unwrap_or_default())
+        let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
+        Ok(account_info.unwrap_or_default().nonce)
     }
 
     /// Checks if the contract is already initialized. It is possible
@@ -420,23 +423,5 @@ where
         let mut block_env = self.get_block_env()?;
         block_env.gas_limit = EVM_SERVICE_GAS_LIMIT;
         Ok(block_env)
-    }
-}
-
-impl<Runtime> DatabaseRuntime<Runtime>
-where
-    Runtime: ContractRuntime,
-{
-    /// Writes the nonce of the user
-    pub fn increment_nonce(&self, address: Address, nonce: u64) -> Result<(), ExecutionError> {
-        let mut key_nonce = vec![KeyTag::UserNonce as u8];
-        bcs::serialize_into(&mut key_nonce, &address)?;
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        //
-        let new_nonce = nonce + 1;
-        let mut batch = Batch::new();
-        batch.put_key_value(key_nonce, &new_nonce)?;
-        runtime.write_batch(batch)?;
-        Ok(())
     }
 }
