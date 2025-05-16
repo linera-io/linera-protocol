@@ -5,10 +5,10 @@ use std::num::ParseIntError;
 
 #[cfg(not(target_arch = "wasm32"))]
 use alloy::rpc::json_rpc;
-use alloy::{
-    primitives::{Address, B256, U256},
-    rpc::types::eth::Log,
-};
+use alloy_primitives::{Address, B256, U256};
+use alloy::rpc::types::eth::Log;
+
+
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -58,7 +58,7 @@ pub enum EthereumServiceError {
 
     /// Hex parsing error
     #[error(transparent)]
-    FromHexError(#[from] alloy::primitives::hex::FromHexError),
+    FromHexError(#[from] alloy_primitives::hex::FromHexError),
 
     /// `serde_json` error
     #[error(transparent)]

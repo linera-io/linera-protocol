@@ -3,8 +3,8 @@
 
 use std::fmt::Debug;
 
+use alloy_primitives::{Address, Bytes, U256, U64};
 use alloy::{
-    primitives::{Address, Bytes, U256, U64},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
         BlockId, BlockNumberOrTag, Filter, Log,

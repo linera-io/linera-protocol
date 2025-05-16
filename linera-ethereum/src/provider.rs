@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use alloy_primitives::{Address, Bytes, U256};
 use alloy::{
     network::Ethereum,
-    primitives::{Address, Bytes, U256},
     providers::{
         fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
         Provider, ProviderBuilder, RootProvider,

@@ -4,10 +4,10 @@
 use alloy::providers::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
 };
+use alloy_primitives::{Address, U256};
 use alloy::{
     network::Ethereum,
     node_bindings::{Anvil, AnvilInstance},
-    primitives::{Address, U256},
     providers::{ProviderBuilder, RootProvider},
     sol,
     //    transports::http::reqwest::Client,
