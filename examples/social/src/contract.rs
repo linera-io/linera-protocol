@@ -182,7 +182,6 @@ impl SocialContract {
     }
 
     async fn execute_comment_event(&mut self, key: Key, chain_id: ChainId, comment: String) {
-        log::info!("executing comment event");
         let mut post = self
             .state
             .received_posts
