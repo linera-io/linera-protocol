@@ -1,10 +1,10 @@
 [package]
 name = "linera-web"
 description = "The Linera Web client"
-version = "0.1.0"
+version = "0.14.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
-repository = "https://github.com/linera-io/linera-web/"
+repository = "https://github.com/linera-io/linera-protocol/"
 license = "Apache-2.0"
 
 [lints.clippy]
@@ -14,17 +14,17 @@ pedantic = "warn"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-console_error_panic_hook = "0.1.6"
-futures = "0.3.30"
-js-sys = "0.3"
-log = "0.4.21"
-nonzero_lit = "0.1.2"
-serde = "=1.0.205"
-serde-wasm-bindgen = "0.6.5"
+console_error_panic_hook.workspace = true
+futures.workspace = true
+js-sys.workspace = true
+log.workspace = true
+nonzero_lit.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
 tokio-util.workspace = true
-tracing = "0.1.40"
-wasm-bindgen = "0.2.95"
-wasm-bindgen-futures = "0.4"
+tracing.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
 
 [dependencies.linera-base]
 features = ["web"]
@@ -60,8 +60,4 @@ workspace = true
 
 [dependencies.web-sys]
 features = ["console", "Window"]
-version = "0.3"
-
-[dev-dependencies]
-schemars = "*"
-wasm-bindgen-test = "0.3.43"
+workspace = true
