@@ -1,6 +1,6 @@
 # A Social Media Example Application
 
-This example illustrates how to use channels for cross-chain messages.
+This example illustrates how to use event streams.
 
 For simplicity, each microchain represents one user—its owner. They can subscribe to other
 users and make text posts that get sent to their subscribers.
@@ -14,13 +14,13 @@ received posts are indexed by timestamp, sender and index.
 There are `Subscribe` and `Unsubscribe` operations: If a chain owner includes these in a
 new block, they can subscribe to or unsubscribe from another chain.
 
-There is also a `Post` operation: It creates a new post and sends it to a channel, so that
-it reaches all subscribers.
+There is also a `Post` operation, which creates a new post and sends it to a stream so that all subscribers receive it.
+Additionally, there are two operations: `Like` and `Comment`. When a subscriber likes or comments on a post, the action is sent to the post's author(ChainId), who processes it accordingly.
 
 There are corresponding `Subscribe`, `Unsubscribe` and `Posts` cross-chain
 message variants that are created when these operations are handled. The first two are
 sent directly to the chain we want to subscribe to or unsubscribe from. The latter goes
-to the channel.
+to the stream.
 
 <!--
 TODO the following documentation involves `sleep`ing to avoid some race conditions. See:
