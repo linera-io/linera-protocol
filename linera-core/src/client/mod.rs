@@ -438,23 +438,12 @@ impl<Env: Environment> Client<Env> {
 
     /// Obtains all the committees trusted by any of the given chains. Also returns the highest
     /// of their epochs.
-    // TODO(#285): This should probably return _all_ currently trusted committees, independent of
-    // specific chains.
     #[instrument(level = "trace", skip_all)]
-    async fn known_committees(
+    async fn admin_committees(
         &self,
-        chain_ids: impl IntoIterator<Item = ChainId>,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        let mut committees = BTreeMap::new();
-        for chain_id in BTreeSet::from_iter(chain_ids) {
-            match self.chain_info_with_committees(chain_id).await {
-                Ok(info) => committees.extend(info.into_committees()?),
-                Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => {}
-                Err(err) => return Err(err),
-            };
-        }
-        let epoch = committees.keys().max().copied().unwrap_or_default();
-        Ok((epoch, committees))
+        let info = self.chain_info_with_committees(self.admin_id).await?;
+        Ok((info.epoch, info.into_committees()?))
     }
 
     fn make_nodes(
@@ -1035,10 +1024,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the committee for the latest epoch on the admin or local chain.
     #[instrument(level = "trace")]
     pub async fn latest_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
-        let (epoch, mut committees) = self
-            .client
-            .known_committees([self.chain_id, self.client.admin_id])
-            .await?;
+        let (epoch, mut committees) = self.client.admin_committees().await?;
         let committee = committees
             .remove(&epoch)
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -1136,6 +1122,17 @@ impl<Env: Environment> ChainClient<Env> {
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
             info = self.synchronize_chain_state(self.chain_id).await?;
+        }
+
+        if info.epoch
+            > self
+                .client
+                .local_node
+                .chain_info(self.client.admin_id)
+                .await?
+                .epoch
+        {
+            self.synchronize_chain_state(self.client.admin_id).await?;
         }
 
         let result = self
@@ -1385,10 +1382,7 @@ impl<Env: Environment> ChainClient<Env> {
         let block = certificate.block();
 
         // Verify the certificate before doing any expensive networking.
-        let (max_epoch, committees) = self
-            .client
-            .known_committees([self.chain_id, self.client.admin_id])
-            .await?;
+        let (max_epoch, committees) = self.client.admin_committees().await?;
         ensure!(
             block.header.epoch <= max_epoch,
             ChainClientError::CommitteeSynchronizationError
@@ -1452,10 +1446,7 @@ impl<Env: Environment> ChainClient<Env> {
             .get(&remote_node.public_key)
             .copied()
             .unwrap_or(0);
-        let (max_epoch, committees) = self
-            .client
-            .known_committees([chain_id, self.client.admin_id])
-            .await?;
+        let (max_epoch, committees) = self.client.admin_committees().await?;
 
         // Retrieve the list of newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);

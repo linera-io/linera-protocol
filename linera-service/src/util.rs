@@ -166,6 +166,21 @@ pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
 }
 
+/// Checks the condition five times with increasing delays. Returns true if it is met.
+#[cfg(with_testing)]
+pub async fn eventually<F>(condition: impl Fn() -> F) -> bool
+where
+    F: std::future::Future<Output = bool>,
+{
+    for i in 0..5 {
+        linera_base::time::timer::sleep(std::time::Duration::from_secs(i)).await;
+        if condition().await {
+            return true;
+        }
+    }
+    false
+}
+
 #[test]
 fn test_parse_version_message() {
     let s = "something\n . . . version12\nother things";

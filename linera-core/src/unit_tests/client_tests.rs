@@ -1095,12 +1095,13 @@ where
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    admin.finalize_committee().await.unwrap();
 
     // Root chain 1 receives the notification about the new epoch.
+    // This must happen before the old committee is removed.
     user.synchronize_from_validators().await.unwrap();
     user.process_inbox().await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
+    admin.finalize_committee().await.unwrap();
 
     // Create a new committee.
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());

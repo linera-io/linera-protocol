@@ -61,6 +61,7 @@ use linera_service::{
         ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig,
     },
     test_name,
+    util::eventually,
 };
 use serde_json::{json, Value};
 use test_case::test_case;
@@ -2974,17 +2975,18 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     .await;
 
     // Verify that the default chain now has 6 and the new one has 4 tokens.
-    for i in 0..10 {
-        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-        let balance1 = app1.get_amount(&owner).await;
-        let balance2 = app2.get_amount(&owner).await;
-        if balance1 == Amount::from_tokens(6) && balance2 == Amount::from_tokens(4) {
-            net.ensure_is_running().await?;
-            net.terminate().await?;
-            return Ok(());
-        }
-    }
-    panic!("Failed to receive new block");
+    assert!(
+        eventually(|| async {
+            let balance1 = app1.get_amount(&owner).await;
+            let balance2 = app2.get_amount(&owner).await;
+            balance1 == Amount::from_tokens(6) && balance2 == Amount::from_tokens(4)
+        })
+        .await,
+        "Failed to receive new block"
+    );
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+    Ok(())
 }
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
