@@ -1037,6 +1037,7 @@ pub struct RevmContractInstance<Runtime> {
     db: DatabaseRuntime<Runtime>,
 }
 
+#[derive(Debug)]
 enum EvmTxKind {
     Create,
     Call,
