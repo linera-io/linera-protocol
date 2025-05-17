@@ -16,6 +16,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
+        cloud.google.com/gke-local-nvme-ssd: "true"
       serviceAccountName: local-csi-driver
       tolerations:
       - operator: Exists

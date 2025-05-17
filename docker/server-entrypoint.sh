@@ -11,4 +11,6 @@ exec ./linera-server run \
   --server /config/server.json \
   --shard $ORDINAL \
   --genesis /config/genesis.json \
-  --storage-replication-factor $storage_replication_factor
+  --storage-replication-factor $storage_replication_factor \
+  --cross-chain-max-retries 3 \
+  --cross-chain-queue-size 10000
