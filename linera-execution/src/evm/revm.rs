@@ -725,6 +725,7 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
+        tracing::info!("Inspector, CallInterceptorService, inputs={inputs:?}");
         let result = self.call_or_fail(context, inputs);
         match result {
             Err(_error) => {
@@ -745,6 +746,7 @@ impl<'a, Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
+        tracing::info!("Inspector, CallInterceptorService, call_or_fail");
         if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
             return Ok(None);
@@ -826,6 +828,7 @@ where
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         ensure_message_length(operation.len(), 4)?;
+        tracing::info!("execute_operation: beginning");
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
@@ -991,7 +994,7 @@ where
         }?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        tracing::info!("   transact_commit, increment: nonce={nonce}");
+        tracing::info!("   transact_commit, commit_change operation");
         process_execution_result(storage_stats, result)
     }
 
@@ -1036,6 +1039,7 @@ where
     Runtime: ServiceRuntime,
 {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        tracing::info!("handle_query, beginning");
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
@@ -1045,6 +1049,7 @@ where
                 return Ok(Vec::new());
             }
         };
+        tracing::info!("handle_query, has a query to process");
 
         ensure_message_length(query.len(), 4)?;
         // We drop the logs since the "eth_call" execution does not return any log.
@@ -1104,6 +1109,7 @@ where
         let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
         tracing::info!("   transact, read: nonce={nonce}");
         let result_state = {
+            tracing::info!("   transact, step 1");
             let ctx: revm_context::Context<
                 BlockEnv,
                 _,
@@ -1116,9 +1122,12 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
+            tracing::info!("   transact, step 2");
             let instructions = EthInstructions::new_mainnet();
+            tracing::info!("   transact, step 3");
             let mut evm =
                 Evm::new_with_inspector(ctx, inspector, instructions, ServicePrecompile::default());
+            tracing::info!("   transact, step 4");
             evm.transact(TxEnv {
                 kind,
                 data,
@@ -1132,6 +1141,7 @@ where
                 ExecutionError::EvmError(error)
             })
         }?;
+        tracing::info!("   transact, We have result_state={result_state:?}");
         let storage_stats = self.db.take_storage_stats();
         Ok((
             process_execution_result(storage_stats, result_state.result)?,

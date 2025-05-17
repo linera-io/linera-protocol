@@ -192,7 +192,10 @@ where
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
-        tracing::info!("database: basic_ref, address={} account_info={:?}", address, account_info);
+        match account_info.clone() {
+            None => tracing::info!("database: basic_ref, address={} account_info = None", address),
+            Some(account_info_ref) => tracing::info!("database: basic_ref, address={} account_info.nonce={:?}", address, account_info_ref.nonce),
+        }
         Ok(account_info)
     }
 
@@ -261,7 +264,7 @@ where
                     batch.put_key_value(key_state, &AccountState::NotExisting)?;
                 } else {
                     let is_newly_created = account.is_created();
-                    tracing::info!("database: commit_changes, address={} account_info={:?}", address, account.info);
+                    tracing::info!("database: commit_changes, address={} account_info.nonce={:?}", address, account.info.nonce);
                     batch.put_key_value(key_info, &account.info)?;
 
                     let account_state = if is_newly_created {
