@@ -5548,6 +5548,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-web"
+version = "0.14.0"
+dependencies = [
+ "console_error_panic_hook",
+ "futures",
+ "js-sys",
+ "linera-base",
+ "linera-client",
+ "linera-core",
+ "linera-execution",
+ "linera-faucet-client",
+ "linera-rpc",
+ "linera-storage",
+ "linera-views",
+ "log",
+ "nonzero_lit",
+ "serde",
+ "serde-wasm-bindgen 0.6.5",
+ "tokio-util",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "linera-witty"
 version = "0.15.0"
 dependencies = [
@@ -5935,6 +5961,12 @@ dependencies = [
  "serde",
  "sha3",
 ]
+
+[[package]]
+name = "nonzero_lit"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30a9e0365849b8ce3d067218268d6c523c1c14f539f7e9157d635d8adfb308fa"
 
 [[package]]
 name = "ntapi"
