@@ -11,8 +11,15 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  * 3. It does not support dead code elimination, so it will add unused operations.
  *
  * Therefore it is highly recommended to use the babel or swc plugin for production.
+ * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
-const documents = {
+type Documents = {
+    "\n  query ReceivedPosts {\n    receivedPosts {\n      entries {\n        value {\n          key {\n            timestamp\n            author\n            index\n          }\n          text\n          imageUrl\n          comments {\n            text\n            chainId\n          }\n          likes\n        }\n      }\n    }\n  }\n": typeof types.ReceivedPostsDocument,
+    "\n    mutation createPost($message: String!, $image: String) {\n      post(text: $message, imageUrl: $image)\n    }\n  ": typeof types.CreatePostDocument,
+    "\n    mutation likePost($key: KeyInput!) {\n      like(key: $key)\n    }\n  ": typeof types.LikePostDocument,
+    "\n    mutation CommentOnPost($key: KeyInput!, $text: String!) {\n      comment(key: $key, comment: $text)\n    }\n  ": typeof types.CommentOnPostDocument,
+};
+const documents: Documents = {
     "\n  query ReceivedPosts {\n    receivedPosts {\n      entries {\n        value {\n          key {\n            timestamp\n            author\n            index\n          }\n          text\n          imageUrl\n          comments {\n            text\n            chainId\n          }\n          likes\n        }\n      }\n    }\n  }\n": types.ReceivedPostsDocument,
     "\n    mutation createPost($message: String!, $image: String) {\n      post(text: $message, imageUrl: $image)\n    }\n  ": types.CreatePostDocument,
     "\n    mutation likePost($key: KeyInput!) {\n      like(key: $key)\n    }\n  ": types.LikePostDocument,

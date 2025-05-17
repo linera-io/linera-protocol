@@ -1,6 +1,6 @@
 # A Social Media Example Application
 
-This example illustrates how to use channels for cross-chain messages.
+This example illustrates how to use event streams.
 
 For simplicity, each microchain represents one user—its owner. They can subscribe to other
 users and make text posts that get sent to their subscribers.
@@ -14,13 +14,13 @@ received posts are indexed by timestamp, sender and index.
 There are `Subscribe` and `Unsubscribe` operations: If a chain owner includes these in a
 new block, they can subscribe to or unsubscribe from another chain.
 
-There is also a `Post` operation: It creates a new post and sends it to a channel, so that
-it reaches all subscribers.
+There is also a `Post` operation, which creates a new post and sends it to a stream so that all subscribers receive it.
+Additionally, there are two operations: `Like` and `Comment`. When a subscriber likes or comments on a post, the action is sent to the post's author(ChainId), who processes it accordingly.
 
 There are corresponding `Subscribe`, `Unsubscribe` and `Posts` cross-chain
 message variants that are created when these operations are handled. The first two are
 sent directly to the chain we want to subscribe to or unsubscribe from. The latter goes
-to the channel.
+to the stream.
 
 <!--
 TODO the following documentation involves `sleep`ing to avoid some race conditions. See:
@@ -59,16 +59,23 @@ export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
 export LINERA_WALLET_2="$LINERA_TMP_DIR/wallet_2.json"
 export LINERA_KEYSTORE_2="$LINERA_TMP_DIR/keystore_2.json"
 export LINERA_STORAGE_2="rocksdb:$LINERA_TMP_DIR/client_2.db"
+export LINERA_WALLET_3="$LINERA_TMP_DIR/wallet_3.json"
+export LINERA_KEYSTORE_3="$LINERA_TMP_DIR/keystore_3.json"
+export LINERA_STORAGE_3="rocksdb:$LINERA_TMP_DIR/client_3.db"
 
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
 linera --with-wallet 2 wallet init --faucet $FAUCET_URL
+linera --with-wallet 3 wallet init --faucet $FAUCET_URL
 
 INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
 INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
-CHAIN_1="${INFO_1[0]}"
-CHAIN_2="${INFO_2[0]}"
+INFO_3=($(linera --with-wallet 3 wallet request-chain --faucet $FAUCET_URL))
+CHAIN_1="${INFO_1[1]}"
+CHAIN_2="${INFO_2[1]}"
+CHAIN_3="${INFO_3[1]}"
 OWNER_1="${INFO_1[3]}"
 OWNER_2="${INFO_2[3]}"
+OWNER_3="${INFO_3[3]}"
 ```
 
 Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1" --keystore "$LINERA_KEYSTORE_1"
