@@ -41,6 +41,14 @@ pub enum Operation {
     Comment { key: Key, comment: String },
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Message {
+    /// Like a post, author of a post receives the message.
+    Like { key: Key },
+    /// Comment on a post, author of a post receives the message.
+    Comment { key: Key, comment: String },
+}
+
 /// A post's text and timestamp, to use in contexts where author and index are known.
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OwnPost {

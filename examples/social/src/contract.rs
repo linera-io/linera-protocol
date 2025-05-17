@@ -11,7 +11,7 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 use serde::{Deserialize, Serialize};
-use social::{Comment, Key, Operation, OwnPost, Post, SocialAbi};
+use social::{Comment, Key, Message, Operation, OwnPost, Post, SocialAbi};
 use state::SocialState;
 
 /// The stream name the application uses for events about posts, likes and comments.
@@ -29,7 +29,7 @@ impl WithContractAbi for SocialContract {
 }
 
 impl Contract for SocialContract {
-    type Message = ();
+    type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
     type EventValue = Event;
@@ -68,8 +68,14 @@ impl Contract for SocialContract {
         }
     }
 
-    async fn execute_message(&mut self, (): ()) {
-        panic!("Unexpected message");
+    async fn execute_message(&mut self, message: Message) {
+        match message {
+            Message::Like { key } => self.runtime.emit(STREAM_NAME.into(), &Event::Like { key }),
+
+            Message::Comment { key, comment } => self
+                .runtime
+                .emit(STREAM_NAME.into(), &Event::Comment { key, comment }),
+        };
     }
 
     async fn process_streams(&mut self, updates: Vec<StreamUpdate>) {
@@ -117,12 +123,24 @@ impl SocialContract {
     }
 
     async fn execute_like_operation(&mut self, key: Key) {
-        self.runtime.emit(STREAM_NAME.into(), &Event::Like { key });
+        let chain_id = key.author;
+
+        if chain_id != self.runtime.chain_id() {
+            self.runtime.send_message(chain_id, Message::Like { key });
+        } else {
+            self.runtime.emit(STREAM_NAME.into(), &Event::Like { key });
+        }
     }
 
     async fn execute_comment_operation(&mut self, key: Key, comment: String) {
-        self.runtime
-            .emit(STREAM_NAME.into(), &Event::Comment { key, comment });
+        let chain_id = key.author;
+        if chain_id != self.runtime.chain_id() {
+            self.runtime
+                .send_message(chain_id, Message::Comment { key, comment });
+        } else {
+            self.runtime
+                .emit(STREAM_NAME.into(), &Event::Comment { key, comment });
+        }
     }
 
     fn execute_post_event(&mut self, chain_id: ChainId, index: u32, post: OwnPost) {
@@ -131,6 +149,7 @@ impl SocialContract {
             author: chain_id,
             index,
         };
+
         let new_post = Post {
             key: key.clone(),
             text: post.text,
