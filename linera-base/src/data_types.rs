@@ -1418,7 +1418,7 @@ impl<'a> Deserialize<'a> for Blob {
 impl BcsHashable<'_> for Blob {}
 
 /// An event recorded in a block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
 pub struct Event {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,

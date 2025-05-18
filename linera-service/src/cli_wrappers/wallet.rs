@@ -1153,7 +1153,7 @@ impl NodeService {
         stream_id: &StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>> {
-        let query = format!("query {{ eventsFromIndex(chainId: \"{chain_id}\", streamId: {}, startIndex: {start_index}) }}", stream_id.to_value());
+        let query = format!("query {{ eventsFromIndex(chainId: \"{chain_id}\", streamId: {}, startIndex: {start_index}) {{ index event }} }}", stream_id.to_value());
         let mut response = self.query_node(query).await?;
         let response = response["eventsFromIndex"].take();
 
