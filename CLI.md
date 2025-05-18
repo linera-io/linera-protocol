@@ -29,6 +29,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera service`↴](#linera-service)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-module`↴](#linera-publish-module)
+* [`linera list-events-from-index`↴](#linera-list-events-from-index)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
 * [`linera create-application`↴](#linera-create-application)
@@ -92,6 +93,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
+* `list-events-from-index` — Reading the events from a starting index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
@@ -648,6 +650,25 @@ Publish module
 * `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
 
   Default value: `wasm`
+
+
+
+## `linera list-events-from-index`
+
+Reading the events from a starting index
+
+**Usage:** `linera list-events-from-index [OPTIONS] --stream-id <STREAM_ID> [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+
+###### **Options:**
+
+* `--stream-id <STREAM_ID>` — The stream being considered
+* `--start-index <START_INDEX>` — Index of the message to start with
+
+  Default value: `0`
 
 
 

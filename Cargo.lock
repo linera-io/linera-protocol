@@ -5251,7 +5251,6 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
- "tracing",
 ]
 
 [[package]]

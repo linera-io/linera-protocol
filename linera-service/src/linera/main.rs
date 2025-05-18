@@ -985,7 +985,7 @@ impl Runnable for Job {
                 let index_events = storage
                     .list_events_from_index(&chain_id, &stream_id, start_index)
                     .await?;
-                println!("{:?}", index_events);
+                println!("{:#?}", index_events);
                 info!("Events listed in {} ms", start_time.elapsed().as_millis());
             }
 

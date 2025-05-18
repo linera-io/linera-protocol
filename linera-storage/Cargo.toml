@@ -41,7 +41,6 @@ linera-execution.workspace = true
 linera-views.workspace = true
 prometheus.workspace = true
 serde.workspace = true
-tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
