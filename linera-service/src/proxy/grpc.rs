@@ -21,7 +21,6 @@ use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
     config::{
         ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig,
-        ValidatorPublicNetworkConfig,
     },
     grpc::{
         api::{
@@ -145,7 +144,6 @@ where
 pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 
 struct GrpcProxyInner<S> {
-    public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: GrpcConnectionPool,
     notifier: ChannelNotifier<Result<Notification, Status>>,
@@ -160,7 +158,6 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
         connect_timeout: Duration,
         timeout: Duration,
@@ -169,7 +166,6 @@ where
         id: usize,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
-            public_config,
             internal_config,
             worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)

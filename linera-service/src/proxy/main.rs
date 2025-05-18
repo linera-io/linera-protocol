@@ -164,7 +164,6 @@ where
         let proxy = match (internal_protocol, external_protocol) {
             (NetworkProtocol::Grpc { .. }, NetworkProtocol::Grpc(tls)) => {
                 Self::Grpc(GrpcProxy::new(
-                    context.config.validator.network,
                     context.config.internal_network,
                     context.send_timeout,
                     context.recv_timeout,
