@@ -291,7 +291,7 @@ where
             .proxies
             .get(self.id)
             .unwrap_or_else(|| panic!("proxy with id {} must be present", self.id))
-            .port
+            .public_port
     }
 
     fn metrics_port(&self) -> u16 {

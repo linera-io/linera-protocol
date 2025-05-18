@@ -200,7 +200,7 @@ where
     }
 
     fn public_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().public_port))
     }
 
     fn metrics_address(&self) -> SocketAddr {
@@ -208,7 +208,7 @@ where
     }
 
     fn internal_address(&self) -> SocketAddr {
-        SocketAddr::from(([0, 0, 0, 0], self.config().port))
+        SocketAddr::from(([0, 0, 0, 0], self.config().private_port))
     }
 
     fn shard_for(&self, proxyable: &impl GrpcProxyable) -> Option<ShardConfig> {

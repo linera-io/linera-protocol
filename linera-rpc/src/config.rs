@@ -92,15 +92,17 @@ impl ShardConfig {
 pub struct ProxyConfig {
     /// The host name (e.g., an IP address).
     pub host: String,
-    /// The port.
-    pub port: u16,
+    /// The public facing port. Received incoming connections from clients.
+    pub public_port: u16,
+    /// The private port. Used for communicating with shards.
+    pub private_port: u16,
     /// The port on which metrics are served.
     pub metrics_port: u16,
 }
 
 impl ProxyConfig {
-    pub fn address(&self, protocol: &NetworkProtocol) -> String {
-        format!("{}://{}:{}", protocol.scheme(), self.host, self.port)
+    pub fn internal_address(&self, protocol: &NetworkProtocol) -> String {
+        format!("{}://{}:{}", protocol.scheme(), self.host, self.private_port)
     }
 }
 

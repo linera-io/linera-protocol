@@ -229,7 +229,7 @@ where
                 );
                 Self::forward_notifications(
                     state.nickname().to_string(),
-                    proxy.address(&internal_network.protocol),
+                    proxy.internal_address(&internal_network.protocol),
                     internal_network.exporter_addresses(),
                     receiver,
                 )

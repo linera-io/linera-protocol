@@ -468,11 +468,15 @@ impl LocalNet {
         for k in 0..self.num_proxies {
             let internal_port = Self::proxy_port(n, k);
             let metrics_port = Self::proxy_metrics_port(n, k);
+            // In the local network, the validator ingress is
+            // the proxy - so the `public_port` is the validator
+            // port.
             content.push_str(&format!(
                 r#"
                 [[proxies]]
                 host = "{internal_host}"
-                port = {internal_port}
+                public_port = {port}
+                private_port = {internal_port}
                 metrics_host = "{external_host}"
                 metrics_port = {metrics_port}
                 "#

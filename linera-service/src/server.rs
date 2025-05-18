@@ -732,7 +732,8 @@ mod test {
 
             [[proxies]]
             host = "proxy"
-            port = 20100
+            public_port = 20100
+            private_port = 20200
             metrics_host = "proxy"
             metrics_port = 21100
 
@@ -761,7 +762,8 @@ mod test {
                 port: 9000,
                 proxies: vec![ProxyConfig {
                     host: "proxy".into(),
-                    port: 20100,
+                    public_port: 20100,
+                    private_port: 20200,
                     metrics_port: 21100,
                 }],
                 block_exporters: vec![ExporterServiceConfig {
