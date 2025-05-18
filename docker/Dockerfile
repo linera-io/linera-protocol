@@ -27,7 +27,7 @@ ARG build_flag=--release
 ARG build_folder=release
 ARG build_features=scylladb,metrics
 
-FROM rust:1.74-slim-bookworm AS builder
+FROM rust:1.81-slim-bookworm AS builder
 ARG git_commit
 ARG target
 ARG build_flag
