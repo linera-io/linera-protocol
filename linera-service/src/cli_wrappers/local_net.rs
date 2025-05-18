@@ -465,7 +465,7 @@ impl LocalNet {
             "#
         );
 
-        for k in 1..=self.num_proxies {
+        for k in 0..self.num_proxies {
             let internal_port = Self::proxy_port(n, k);
             let metrics_port = Self::proxy_metrics_port(n, k);
             content.push_str(&format!(
