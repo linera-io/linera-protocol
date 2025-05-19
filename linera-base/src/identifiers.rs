@@ -534,8 +534,8 @@ impl std::str::FromStr for StreamId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts = s.rsplit_once(":");
         if let Some((part0, part1)) = parts {
-            let application_id = GenericApplicationId::from_str(part0)
-                .context("Invalid GenericApplicationId!")?;
+            let application_id =
+                GenericApplicationId::from_str(part0).context("Invalid GenericApplicationId!")?;
             let stream_name = StreamName::from_str(part1).context("Invalid StreamName!")?;
             Ok(StreamId {
                 application_id,
