@@ -329,7 +329,7 @@ impl fmt::Display for GenericApplicationId {
         match self {
             GenericApplicationId::System => Display::fmt("System", f),
             GenericApplicationId::User(application_id) => {
-                Display::fmt("User", f)?;
+                Display::fmt("User:", f)?;
                 Display::fmt(&application_id, f)
             }
         }
@@ -343,7 +343,7 @@ impl std::str::FromStr for GenericApplicationId {
         if s == "System" {
             return Ok(GenericApplicationId::System);
         }
-        if let Some(result) = s.strip_prefix("User") {
+        if let Some(result) = s.strip_prefix("User:") {
             let application_id = ApplicationId::from_str(result)?;
             return Ok(GenericApplicationId::User(application_id));
         }
@@ -532,11 +532,11 @@ impl std::str::FromStr for StreamId {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts = s.split(':').collect::<Vec<_>>();
-        if parts.len() == 2 {
-            let application_id = GenericApplicationId::from_str(parts[0])
+        let parts = s.rsplit_once(":");
+        if let Some((part0, part1)) = parts {
+            let application_id = GenericApplicationId::from_str(part0)
                 .context("Invalid GenericApplicationId!")?;
-            let stream_name = StreamName::from_str(parts[1]).context("Invalid StreamName!")?;
+            let stream_name = StreamName::from_str(part1).context("Invalid StreamName!")?;
             Ok(StreamId {
                 application_id,
                 stream_name,
