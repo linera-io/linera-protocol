@@ -100,6 +100,7 @@ prost = { workspace = true }
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
+serde-command-opts.workspace = true
 serde_json.workspace = true
 stdext = { workspace = true, optional = true }
 tempfile.workspace = true

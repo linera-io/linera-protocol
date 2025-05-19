@@ -19,6 +19,84 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
+#[cfg(feature = "benchmark")]
+use serde::Serialize;
+
+#[cfg(feature = "benchmark")]
+const DEFAULT_NUM_CHAINS: usize = 10;
+#[cfg(feature = "benchmark")]
+const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
+#[cfg(feature = "benchmark")]
+const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
+#[cfg(feature = "benchmark")]
+const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
+
+// Make sure that the default values are consts, and that they are used in the Default impl.
+#[cfg(feature = "benchmark")]
+#[derive(Clone, Serialize, clap::Args)]
+#[serde(rename_all = "kebab-case")]
+pub struct BenchmarkCommand {
+    /// How many chains to use for the benchmark
+    #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
+    pub num_chains: usize,
+
+    /// How many tokens to assign to each newly created chain.
+    /// These need to cover the transaction fees per chain for the benchmark.
+    #[arg(long, default_value_t = DEFAULT_TOKENS_PER_CHAIN)]
+    pub tokens_per_chain: Amount,
+
+    /// How many transactions to put in each block.
+    #[arg(long, default_value_t = DEFAULT_TRANSACTIONS_PER_BLOCK)]
+    pub transactions_per_block: usize,
+
+    /// The application ID of a fungible token on the wallet's default chain.
+    /// If none is specified, the benchmark uses the native token.
+    #[arg(long)]
+    pub fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
+
+    /// If provided, will be long running, and block proposals will be sent at the
+    /// provided fixed BPS rate.
+    #[arg(long)]
+    pub bps: Option<usize>,
+
+    /// If provided, will close the chains after the benchmark is finished. Keep in mind that
+    /// closing the chains might take a while, and will increase the validator latency while
+    /// they're being closed.
+    #[arg(long)]
+    pub close_chains: bool,
+    /// A comma-separated list of host:port pairs to query for health metrics.
+    /// If provided, the benchmark will check these endpoints for validator health
+    /// and terminate if any validator is unhealthy.
+    /// Example: "127.0.0.1:21100,validator-1.some-network.linera.net:21100"
+    #[arg(long)]
+    pub health_check_endpoints: Option<String>,
+    /// The maximum number of in-flight requests to validators when wrapping up the benchmark.
+    /// While wrapping up, this controls the concurrency level when processing inboxes and
+    /// closing chains.
+    #[arg(long, default_value_t = DEFAULT_WRAP_UP_MAX_IN_FLIGHT)]
+    pub wrap_up_max_in_flight: usize,
+
+    /// Confirm before starting the benchmark.
+    #[arg(long)]
+    pub confirm_before_start: bool,
+}
+
+#[cfg(feature = "benchmark")]
+impl Default for BenchmarkCommand {
+    fn default() -> Self {
+        Self {
+            num_chains: DEFAULT_NUM_CHAINS,
+            tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
+            transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
+            wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,
+            fungible_application_id: None,
+            bps: None,
+            close_chains: false,
+            health_check_endpoints: None,
+            confirm_before_start: false,
+        }
+    }
+}
 
 #[cfg(feature = "kubernetes")]
 use crate::cli_wrappers::local_kubernetes_net::BuildMode;
@@ -362,53 +440,9 @@ pub enum ClientCommand {
         http_request_allow_list: Option<Vec<String>>,
     },
 
-    /// Send one transfer per chain in bulk mode
+    /// Start a benchmark, maintaining a given TPS or just sending one transfer per chain in bulk mode.
     #[cfg(feature = "benchmark")]
-    Benchmark {
-        /// How many chains to use for the benchmark
-        #[arg(long, default_value = "10")]
-        num_chains: usize,
-
-        /// How many tokens to assign to each newly created chain.
-        /// These need to cover the transaction fees per chain for the benchmark.
-        #[arg(long, default_value = "0.1")]
-        tokens_per_chain: Amount,
-
-        /// How many transactions to put in each block.
-        #[arg(long, default_value = "1")]
-        transactions_per_block: usize,
-
-        /// The application ID of a fungible token on the wallet's default chain.
-        /// If none is specified, the benchmark uses the native token.
-        #[arg(long)]
-        fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
-
-        /// If provided, will be long running, and block proposals will be sent at the
-        /// provided fixed BPS rate.
-        #[arg(long)]
-        bps: Option<usize>,
-
-        /// If provided, will close the chains after the benchmark is finished. Keep in mind that
-        /// closing the chains might take a while, and will increase the validator latency while
-        /// they're being closed.
-        #[arg(long)]
-        close_chains: bool,
-        /// A comma-separated list of host:port pairs to query for health metrics.
-        /// If provided, the benchmark will check these endpoints for validator health
-        /// and terminate if any validator is unhealthy.
-        /// Example: "127.0.0.1:21100,validator-1.some-network.linera.net:21100"
-        #[arg(long)]
-        health_check_endpoints: Option<String>,
-        /// The maximum number of in-flight requests to validators when wrapping up the benchmark.
-        /// While wrapping up, this controls the concurrency level when processing inboxes and
-        /// closing chains.
-        #[arg(long, default_value = "5")]
-        wrap_up_max_in_flight: usize,
-
-        /// Confirm before starting the benchmark.
-        #[arg(long)]
-        confirm_before_start: bool,
-    },
+    Benchmark(BenchmarkCommand),
 
     /// Create genesis configuration for a Linera deployment.
     /// Create initial user chains and print information to be used for initialization of validator setup.
