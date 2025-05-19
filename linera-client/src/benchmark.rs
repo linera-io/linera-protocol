@@ -4,16 +4,12 @@
 use std::{collections::HashMap, iter, sync::Arc};
 
 use linera_base::{
-    data_types::{Amount, Epoch, Timestamp},
+    data_types::{Amount, Epoch},
     identifiers::{AccountOwner, ApplicationId, ChainId},
     listen_for_shutdown_signals,
     time::Instant,
 };
-use linera_chain::{
-    data_types::{BlockProposal, ProposedBlock},
-    types::ConfirmedBlock,
-};
-use linera_core::{client::ChainClient, local_node::LocalNodeClient, Environment};
+use linera_core::{client::ChainClient, Environment};
 use linera_execution::{
     committee::Committee,
     system::{Recipient, SystemOperation},
@@ -98,7 +94,6 @@ impl<Env: Environment> Benchmark<Env> {
         epoch: Epoch,
         blocks_infos: Vec<(ChainId, Vec<Operation>, AccountOwner)>,
         committee: Committee,
-        local_node: LocalNodeClient<Env::Storage>,
         health_check_endpoints: Option<String>,
     ) -> Result<(), BenchmarkError> {
         let shutdown_notifier = CancellationToken::new();
@@ -193,7 +188,6 @@ impl<Env: Environment> Benchmark<Env> {
             let sender = sender.clone();
             let handle = Handle::current();
             let committee = committee.clone();
-            let local_node = local_node.clone();
             let chain_client = chain_clients[&chain_id].clone();
             let bps_tasks_logger_sender = bps_tasks_logger_sender.clone();
             let inner_barrier = barrier.clone();
@@ -210,7 +204,6 @@ impl<Env: Environment> Benchmark<Env> {
                             shutdown_notifier,
                             sender,
                             committee,
-                            local_node,
                             bps_tasks_logger_sender,
                             inner_barrier,
                         ))
@@ -499,7 +492,6 @@ impl<Env: Environment> Benchmark<Env> {
         shutdown_notifier: CancellationToken,
         sender: crossbeam_channel::Sender<()>,
         committee: Committee,
-        local_node: LocalNodeClient<Env::Storage>,
         bps_tasks_logger_sender: mpsc::Sender<()>,
         barrier: Arc<Barrier>,
     ) -> Result<(), BenchmarkError> {
@@ -511,40 +503,14 @@ impl<Env: Environment> Benchmark<Env> {
             bps, chain_id
         );
         let mut num_sent_proposals = 0;
-        let authenticated_signer = Some(signer);
         loop {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");
                 break;
             }
-            let proposed_block = ProposedBlock {
-                epoch,
-                chain_id,
-                incoming_bundles: Vec::new(),
-                operations: operations.clone(),
-                previous_block_hash: chain_client.block_hash(),
-                height: chain_client.next_block_height(),
-                authenticated_signer,
-                timestamp: chain_client.timestamp().max(Timestamp::now()),
-            };
-            let block = local_node
-                .stage_block_execution(proposed_block.clone(), None, Vec::new())
-                .await
-                .map_err(BenchmarkError::LocalNode)?
-                .0;
-
-            let value = ConfirmedBlock::new(block);
-            let proposal = BlockProposal::new_initial(
-                signer,
-                linera_base::data_types::Round::Fast,
-                proposed_block,
-                chain_client.signer(),
-            )
-            .await
-            .expect("Signer failure");
 
             chain_client
-                .submit_block_proposal(&committee, Box::new(proposal), value)
+                .submit_fast_block_proposal(&committee, epoch, &operations, signer)
                 .await
                 .map_err(BenchmarkError::ChainClient)?;
             // We assume the committee will not change during the benchmark.

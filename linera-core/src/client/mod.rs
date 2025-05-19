@@ -1608,7 +1608,7 @@ impl<Env: Environment> ChainClient<Env> {
             .into_current_committee()
     }
 
-    /// Obtains the committee for the latest epoch on the admin or local chain.
+    /// Obtains the committee for the latest epoch on the admin chain.
     #[instrument(level = "trace")]
     pub async fn latest_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
         let (epoch, mut committees) = self.client.admin_committees().await?;
@@ -1699,7 +1699,7 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
-        let mut info = self.synchronize_until(self.next_block_height()).await?;
+        let mut info = self.synchronize_until().await?;
 
         if self
             .state()
@@ -1711,14 +1711,7 @@ impl<Env: Environment> ChainClient<Env> {
             info = self.client.synchronize_chain_state(self.chain_id).await?;
         }
 
-        if info.epoch
-            > self
-                .client
-                .local_node
-                .chain_info(self.client.admin_id)
-                .await?
-                .epoch
-        {
+        if info.epoch > self.client.admin_committees().await?.0 {
             self.client
                 .synchronize_chain_state(self.client.admin_id)
                 .await?;
@@ -1739,16 +1732,14 @@ impl<Env: Environment> ChainClient<Env> {
     // Verifies that our local storage contains enough history compared to the
     // expected block height. Otherwise, downloads the missing history from the
     // network.
-    pub async fn synchronize_until(
-        &self,
-        next_block_height: BlockHeight,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    async fn synchronize_until(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         let nodes = self.validator_nodes().await?;
+        let height = self.next_block_height();
         let info = self
             .client
-            .download_certificates(&nodes, self.chain_id, next_block_height)
+            .download_certificates(&nodes, self.chain_id, height)
             .await?;
-        if info.next_block_height == next_block_height {
+        if info.next_block_height == height {
             // Check that our local node has the expected block hash.
             ensure!(
                 self.block_hash() == info.block_hash,
@@ -1758,14 +1749,39 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info)
     }
 
-    /// Submits a block proposal to the validators.
-    #[instrument(level = "trace", skip(committee, proposal, value))]
-    pub async fn submit_block_proposal<T: ProcessableCertificate>(
+    /// Submits a fast block proposal to the validators.
+    ///
+    /// This must only be used with valid epoch and super owner.
+    #[instrument(level = "trace", skip(committee, operations))]
+    pub async fn submit_fast_block_proposal(
         &self,
         committee: &Committee,
-        proposal: Box<BlockProposal>,
-        value: T,
-    ) -> Result<GenericCertificate<T>, ChainClientError> {
+        epoch: Epoch,
+        operations: &[Operation],
+        super_owner: AccountOwner,
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
+        let proposed_block = ProposedBlock {
+            epoch,
+            chain_id: self.chain_id,
+            incoming_bundles: Vec::new(),
+            operations: operations.to_vec(),
+            previous_block_hash: self.block_hash(),
+            height: self.next_block_height(),
+            authenticated_signer: Some(super_owner),
+            timestamp: self.timestamp().max(Timestamp::now()),
+        };
+        let proposal = Box::new(
+            BlockProposal::new_initial(super_owner, Round::Fast, proposed_block, self.signer())
+                .await
+                .map_err(ChainClientError::signer_failure)?,
+        );
+        let block = self
+            .client
+            .local_node
+            .stage_block_execution(proposal.content.block.clone(), None, Vec::new())
+            .await?
+            .0;
+        let value = ConfirmedBlock::new(block);
         self.client
             .submit_block_proposal(committee, proposal, value)
             .await
