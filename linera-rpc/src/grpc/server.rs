@@ -51,8 +51,8 @@ use super::{
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
-    common::CrossChainQueueId,
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
+    cross_chain_message_queue::{Action, Job, QueueId, Task},
     HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
     HandleValidatedCertificateRequest,
 };
@@ -410,20 +410,9 @@ where
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
-        enum Action {
-            Proceed { id: usize },
-            Retry,
-        }
-
-        #[derive(Clone)]
-        struct Task {
-            shard_id: ShardId,
-            request: linera_core::data_types::CrossChainRequest,
-        }
-
         let pool = GrpcConnectionPool::default();
         let mut futures = futures::stream::FuturesUnordered::new();
-        let mut job_states: HashMap<CrossChainQueueId, Job> = HashMap::new();
+        let mut job_states: HashMap<QueueId, Job> = HashMap::new();
 
         let run_task = |task: Task| async {
             let task = task;
@@ -436,14 +425,6 @@ where
             let response = client.handle_cross_chain_request(request).await?;
             anyhow::Result::<_>::Ok(response)
         };
-
-        #[derive(Clone)]
-        struct Job {
-            id: usize,
-            retries: u32,
-            nickname: String,
-            task: Task,
-        }
 
         let run_action = |action, queue, state: Job| async move {
             linera_base::time::timer::sleep(cross_chain_sender_delay).await;
@@ -514,7 +495,7 @@ where
                         continue;
                     }
 
-                    let queue = CrossChainQueueId::new(&request);
+                    let queue = QueueId::new(&request);
 
                     let task = Task {
                         shard_id,

@@ -8,16 +8,18 @@
 use linera_base::identifiers::ChainId;
 use linera_core::data_types::CrossChainRequest;
 
+use crate::config::ShardId;
+
 /// An discriminant for message queues: messages with the same queue ID will be delivered
 /// in order.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct CrossChainQueueId {
+pub(crate) struct QueueId {
     sender: ChainId,
     recipient: ChainId,
     is_update: bool,
 }
 
-impl CrossChainQueueId {
+impl QueueId {
     /// Returns a discriminant for the message's queue.
     pub(crate) fn new(request: &CrossChainRequest) -> Self {
         let (sender, recipient, is_update) = match request {
@@ -28,10 +30,29 @@ impl CrossChainQueueId {
                 sender, recipient, ..
             } => (*sender, *recipient, false),
         };
-        CrossChainQueueId {
+        QueueId {
             sender,
             recipient,
             is_update,
         }
     }
+}
+
+pub(crate) enum Action {
+    Proceed { id: usize },
+    Retry,
+}
+
+#[derive(Clone)]
+pub(crate) struct Task {
+    pub shard_id: ShardId,
+    pub request: linera_core::data_types::CrossChainRequest,
+}
+
+#[derive(Clone)]
+pub(crate) struct Job {
+    pub id: usize,
+    pub retries: u32,
+    pub nickname: String,
+    pub task: Task,
 }
