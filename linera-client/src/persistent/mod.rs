@@ -27,8 +27,6 @@ pub use memory::Memory;
 /// persistent way. A minimal implementation provides an `Error` type, a `persist`
 /// function to persist the value, and an `as_mut` function to get a mutable reference to
 /// the value in memory.
-///
-/// `LocalPersist` is a non-`Send` version.
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait Persist: Deref {
     type Error: std::error::Error + Send + Sync + 'static;
