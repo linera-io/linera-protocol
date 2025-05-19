@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamId},
     time::Duration,
     vm::VmRuntime,
 };
@@ -658,6 +658,20 @@ pub enum ClientCommand {
         publisher: Option<ChainId>,
     },
 
+    /// Print events from a specific chain and stream from a specified index.
+    ListEventsFromIndex {
+        /// The chain to query. If omitted, query the default chain of the wallet.
+        chain_id: Option<ChainId>,
+
+        /// The stream being considered.
+        #[arg(long)]
+        stream_id: StreamId,
+
+        /// Index of the message to start with
+        #[arg(long, default_value = "0")]
+        start_index: u32,
+    },
+
     /// Publish a data blob of binary data.
     PublishDataBlob {
         /// Path to data blob file to be published.
@@ -831,6 +845,7 @@ impl ClientCommand {
             | ClientCommand::FinalizeCommittee
             | ClientCommand::CreateGenesisConfig { .. }
             | ClientCommand::PublishModule { .. }
+            | ClientCommand::ListEventsFromIndex { .. }
             | ClientCommand::PublishDataBlob { .. }
             | ClientCommand::ReadDataBlob { .. }
             | ClientCommand::CreateApplication { .. }

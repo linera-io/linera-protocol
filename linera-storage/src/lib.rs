@@ -17,7 +17,7 @@ use linera_base::{
         ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
         NetworkDescription, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, ChainId, EventId},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
 use linera_chain::{
@@ -166,6 +166,14 @@ pub trait Storage: Sized {
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
+
+    /// Lists all the events from a starting index
+    async fn read_events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>, ViewError>;
 
     /// Writes a vector of events.
     async fn write_events(

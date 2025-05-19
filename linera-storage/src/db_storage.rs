@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, Epoch, NetworkDescription, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, EventId},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
@@ -328,6 +328,7 @@ enum BaseKey {
 
 const INDEX_CHAIN_ID: u8 = 0;
 const INDEX_BLOB_ID: u8 = 3;
+const INDEX_EVENT_ID: u8 = 5;
 const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
 const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
@@ -335,15 +336,24 @@ const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 mod tests {
     use linera_base::{
         crypto::CryptoHash,
-        identifiers::{BlobId, BlobType, ChainId},
+        identifiers::{
+            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
+            StreamName,
+        },
     };
 
     use crate::db_storage::{
-        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID,
+        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID, INDEX_EVENT_ID,
     };
 
+    // Several functionalities of the storage rely on the way that the serialization
+    // is done. Thus we need to check that the serialization works in the way that
+    // we expect.
+
+    // The listing of the blobs in `list_blob_ids` depends on the serialization
+    // of `BaseKey::Blob`.
     #[test]
-    fn test_base_key_serialization() {
+    fn test_basekey_blob_serialization() {
         let hash = CryptoHash::default();
         let blob_type = BlobType::default();
         let blob_id = BlobId::new(hash, blob_type);
@@ -353,14 +363,45 @@ mod tests {
         assert_eq!(key.len(), 1 + BLOB_ID_LENGTH);
     }
 
+    // The listing of the chains in `list_chain_ids` depends on the serialization
+    // of `BaseKey::ChainState`.
     #[test]
-    fn test_chain_id_serialization() {
+    fn test_basekey_chainstate_serialization() {
         let hash = CryptoHash::default();
         let chain_id = ChainId(hash);
         let base_key = BaseKey::ChainState(chain_id);
         let key = bcs::to_bytes(&base_key).expect("a key");
         assert_eq!(key[0], INDEX_CHAIN_ID);
         assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
+    }
+
+    // The listing of the events in `read_events_from_index` depends on the
+    // serialization of `BaseKey::Event`.
+    #[test]
+    fn test_basekey_event_serialization() {
+        let hash = CryptoHash::test_hash("49");
+        let chain_id = ChainId(hash);
+        let application_description_hash = CryptoHash::test_hash("42");
+        let application_id = ApplicationId::new(application_description_hash);
+        let application_id = GenericApplicationId::User(application_id);
+        let stream_name = StreamName(bcs::to_bytes("linera_stream").unwrap());
+        let stream_id = StreamId {
+            application_id,
+            stream_name,
+        };
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(&chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(&stream_id).unwrap());
+
+        let index = 1567;
+        let event_id = EventId {
+            chain_id,
+            stream_id,
+            index,
+        };
+        let base_key = BaseKey::Event(event_id);
+        let key = bcs::to_bytes(&base_key).unwrap();
+        assert!(key.starts_with(&prefix));
     }
 }
 
@@ -838,6 +879,36 @@ where
         #[cfg(with_metrics)]
         CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(exists)
+    }
+
+    async fn read_events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>, ViewError> {
+        let mut prefix = vec![INDEX_EVENT_ID];
+        prefix.extend(bcs::to_bytes(chain_id).unwrap());
+        prefix.extend(bcs::to_bytes(stream_id).unwrap());
+        let mut keys = Vec::new();
+        let mut indices = Vec::new();
+        for short_key in self.store.find_keys_by_prefix(&prefix).await?.iterator() {
+            let short_key = short_key?;
+            let index = bcs::from_bytes::<u32>(short_key)?;
+            if index >= start_index {
+                let mut key = prefix.clone();
+                key.extend(short_key);
+                keys.push(key);
+                indices.push(index);
+            }
+        }
+        let values = self.store.read_multi_values_bytes(keys).await?;
+        let mut returned_values = Vec::new();
+        for (index, value) in indices.into_iter().zip(values) {
+            let event = value.unwrap();
+            returned_values.push(IndexAndEvent { index, event });
+        }
+        Ok(returned_values)
     }
 
     async fn write_events(

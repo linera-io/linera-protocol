@@ -23,7 +23,9 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
     data_types::{Amount, Bytecode, Epoch},
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
+    },
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
@@ -1035,7 +1037,7 @@ impl ClientWrapper {
 }
 
 fn truncate_query_output(input: &str) -> String {
-    let max_len = 200;
+    let max_len = 1000;
     if input.len() < max_len {
         input.to_string()
     } else {
@@ -1143,6 +1145,24 @@ impl NodeService {
         let mut response = self.query_node(query).await?;
         let committees = response["chain"]["executionState"]["system"]["committees"].take();
         Ok(serde_json::from_value(committees)?)
+    }
+
+    pub async fn events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>> {
+        let query = format!(
+            "query {{
+               eventsFromIndex(chainId: \"{chain_id}\", streamId: {}, startIndex: {start_index})
+               {{ index event }}
+             }}",
+            stream_id.to_value()
+        );
+        let mut response = self.query_node(query).await?;
+        let response = response["eventsFromIndex"].take();
+        Ok(serde_json::from_value(response)?)
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
