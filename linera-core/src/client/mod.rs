@@ -1613,46 +1613,29 @@ impl<Env: Environment> ChainClient<Env> {
         old_committee: Option<&Committee>,
     ) -> Result<(), ChainClientError> {
         // Communicate the new certificate now.
-        let next_block_height = self.next_block_height();
         if let Some(old_committee) = old_committee {
-            self.client
-                .communicate_chain_updates(
-                    old_committee,
-                    self.chain_id,
-                    next_block_height,
-                    self.options.cross_chain_message_delivery,
-                )
-                .await?
+            self.communicate_chain_updates(old_committee).await?
         };
         if let Ok(new_committee) = self.local_committee().await {
             if Some(&new_committee) != old_committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
-                let next_block_height = self.next_block_height();
-                self.client
-                    .communicate_chain_updates(
-                        &new_committee,
-                        self.chain_id,
-                        next_block_height,
-                        self.options.cross_chain_message_delivery,
-                    )
-                    .await?;
+                self.communicate_chain_updates(&new_committee).await?;
             }
         }
         Ok(())
     }
 
     /// Broadcasts certified blocks to validators.
-    #[instrument(level = "trace", skip(committee, delivery))]
+    #[instrument(level = "trace", skip(committee))]
     pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
-        chain_id: ChainId,
-        height: BlockHeight,
-        delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
+        let delivery = self.options.cross_chain_message_delivery;
+        let height = self.next_block_height();
         self.client
-            .communicate_chain_updates(committee, chain_id, height, delivery)
+            .communicate_chain_updates(committee, self.chain_id, height, delivery)
             .await
     }
 

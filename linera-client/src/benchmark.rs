@@ -510,7 +510,6 @@ impl<Env: Environment> Benchmark<Env> {
             "Starting benchmark at target BPS of {:?}, for chain {:?}",
             bps, chain_id
         );
-        let cross_chain_message_delivery = chain_client.options().cross_chain_message_delivery;
         let mut num_sent_proposals = 0;
         let authenticated_signer = Some(signer);
         loop {
@@ -548,15 +547,9 @@ impl<Env: Environment> Benchmark<Env> {
                 .submit_block_proposal(&committee, Box::new(proposal), value)
                 .await
                 .map_err(BenchmarkError::ChainClient)?;
-            let next_block_height = chain_client.next_block_height();
             // We assume the committee will not change during the benchmark.
             chain_client
-                .communicate_chain_updates(
-                    &committee,
-                    chain_id,
-                    next_block_height,
-                    cross_chain_message_delivery,
-                )
+                .communicate_chain_updates(&committee)
                 .await
                 .map_err(BenchmarkError::ChainClient)?;
 
