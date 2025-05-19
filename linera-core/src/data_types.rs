@@ -239,7 +239,12 @@ pub enum CrossChainRequest {
 
 /// An discriminant for message queues: messages with the same queue ID will be delivered
 /// in order.
-pub type CrossChainQueueId = (ChainId, ChainId, bool);
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct CrossChainQueueId {
+    sender: ChainId,
+    recipient: ChainId,
+    is_update: bool,
+}
 
 impl CrossChainRequest {
     /// Where to send the cross-chain request.
@@ -264,13 +269,18 @@ impl CrossChainRequest {
 
     /// Returns a discriminant for the message's queue.
     pub fn queue(&self) -> CrossChainQueueId {
-        match self {
+        let (sender, recipient, is_update) = match self {
             CrossChainRequest::UpdateRecipient {
                 sender, recipient, ..
             } => (*sender, *recipient, true),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender, recipient, ..
             } => (*sender, *recipient, false),
+        };
+        CrossChainQueueId {
+            sender,
+            recipient,
+            is_update,
         }
     }
 }
