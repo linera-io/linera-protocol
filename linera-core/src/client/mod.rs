@@ -1820,7 +1820,7 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
-        let mut info = self.synchronize_until().await?;
+        let mut info = self.synchronize_to_known_height().await?;
 
         if self
             .state()
@@ -1851,9 +1851,10 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     // Verifies that our local storage contains enough history compared to the
-    // expected block height. Otherwise, downloads the missing history from the
+    // known block height. Otherwise, downloads the missing history from the
     // network.
-    async fn synchronize_until(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+    // The known height only differs if the wallet is ahead of storage.
+    async fn synchronize_to_known_height(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         let nodes = self.validator_nodes().await?;
         let height = self.next_block_height();
         let info = self
