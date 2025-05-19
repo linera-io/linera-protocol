@@ -16,11 +16,9 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::{
-        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, Epoch, OracleResponse,
-        Timestamp,
+        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp,
     },
     identifiers::ModuleId,
-    ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_chain::{
@@ -130,13 +128,9 @@ where
         .with_timestamp(1)
         .with_operation(publish_operation);
     let publisher_system_state = SystemExecutionState {
-        committees: [(Epoch::ZERO, env.committee().clone())]
-            .into_iter()
-            .collect(),
-        ownership: ChainOwnership::single(publisher_owner),
         timestamp: Timestamp::from(1),
         used_blobs: BTreeSet::from([contract_blob_id, service_blob_id]),
-        ..SystemExecutionState::new(publisher_chain.clone())
+        ..env.system_execution_state(&publisher_chain.id())
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
     let publish_block_proposal = ConfirmedBlock::new(
@@ -176,12 +170,8 @@ where
     assert!(info.manager.pending.is_none());
 
     let mut creator_system_state = SystemExecutionState {
-        committees: [(Epoch::ZERO, env.committee().clone())]
-            .into_iter()
-            .collect(),
-        ownership: ChainOwnership::single(creator_owner),
         timestamp: Timestamp::from(1),
-        ..SystemExecutionState::new(creator_chain.clone())
+        ..env.system_execution_state(&creator_chain.id())
     };
 
     // Create an application.
