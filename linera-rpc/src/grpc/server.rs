@@ -4,7 +4,6 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
-    collections::{hash_map::Entry, HashMap},
     net::{IpAddr, SocketAddr},
     str::FromStr,
     task::{Context, Poll},
@@ -24,7 +23,6 @@ use linera_core::{
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
-use rand::Rng;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
@@ -35,7 +33,7 @@ use {
     linera_base::prometheus_util::{
         linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     },
-    prometheus::{register_int_gauge, HistogramVec, IntCounterVec, IntGauge},
+    prometheus::{HistogramVec, IntCounterVec},
 };
 
 use super::{
@@ -52,9 +50,8 @@ use super::{
 };
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
-    cross_chain_message_queue::{Action, Job, QueueId, Task},
-    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
-    HandleValidatedCertificateRequest,
+    cross_chain_message_queue, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
+    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
@@ -118,15 +115,6 @@ static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Notification channel full",
         &[],
     )
-});
-
-#[cfg(with_metrics)]
-static CROSS_CHAIN_MESSAGE_TASKS: LazyLock<IntGauge> = LazyLock::new(|| {
-    register_int_gauge!(
-        "cross_chain_message_tasks",
-        "Number of concurrent cross-chain message tasks",
-    )
-    .expect("IntGauge can be created")
 });
 
 #[derive(Clone)]
@@ -408,126 +396,35 @@ where
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
+        receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = GrpcConnectionPool::default();
-        let mut futures = futures::stream::FuturesUnordered::new();
-        let mut job_states: HashMap<QueueId, Job> = HashMap::new();
-
-        let run_task = |task: Task| async {
-            let task = task;
-            let request = Request::new(task.request.try_into()?);
-            let mut client = ValidatorWorkerClient::new(
-                pool.channel(network.shard(task.shard_id).http_address())?,
-            )
-            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-            let response = client.handle_cross_chain_request(request).await?;
-            anyhow::Result::<_>::Ok(response)
-        };
-
-        let run_action = |action, queue, state: Job| async move {
-            linera_base::time::timer::sleep(cross_chain_sender_delay).await;
-
-            let to_shard = state.task.shard_id;
-
-            (
-                queue,
-                match action {
-                    Action::Proceed { .. } => {
-                        if let Err(error) = run_task(state.task).await {
-                            warn!(
-                                nickname = state.nickname,
-                                %error,
-                                retry = state.retries,
-                                from_shard = this_shard,
-                                to_shard,
-                                "Failed to send cross-chain query",
-                            );
-
-                            Action::Retry
-                        } else {
-                            trace!(from_shard = this_shard, to_shard, "Sent cross-chain query",);
-
-                            Action::Proceed {
-                                id: state.id.wrapping_add(1),
-                            }
-                        }
-                    }
-
-                    Action::Retry => {
-                        linera_base::time::timer::sleep(cross_chain_retry_delay * state.retries)
-                            .await;
-                        Action::Proceed { id: state.id }
-                    }
-                },
-            )
-        };
-
-        loop {
-            tokio::select! {
-                Some((queue, action)) = futures.next() => {
-                    let Entry::Occupied(mut state) = job_states.entry(queue) else {
-                        panic!("running job without state");
-                    };
-
-                    let remove = matches!(action, Action::Proceed { id } if state.get().id < id)
-                        || matches!(action, Action::Retry if state.get().retries >= cross_chain_max_retries);
-                    if remove {
-                        state.remove();
-                        continue;
-                    }
-
-                    if let Action::Retry = action {
-                        state.get_mut().retries += 1
-                    }
-
-                    futures.push(run_action(action, queue, state.get().clone()));
+        let network = network.clone();
+        let send_request =
+            move |shard_id: ShardId, request: linera_core::data_types::CrossChainRequest| {
+                let pool = pool.clone();
+                let address = network.shard(shard_id).http_address();
+                async move {
+                    let mut client = ValidatorWorkerClient::new(pool.channel(address)?)
+                        .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                        .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+                    client
+                        .handle_cross_chain_request(Request::new(request.try_into()?))
+                        .await?;
+                    anyhow::Result::<_, anyhow::Error>::Ok(())
                 }
-
-                request = receiver.next() => {
-                    let Some((request, shard_id)) = request else { break };
-                    #[cfg(with_metrics)]
-                    CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
-
-                    if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
-                        warn!("Dropped 1 cross-chain message intentionally.");
-                        continue;
-                    }
-
-                    let queue = QueueId::new(&request);
-
-                    let task = Task {
-                        shard_id,
-                        request,
-                    };
-
-                    match job_states.entry(queue) {
-                        Entry::Vacant(entry) => futures.push(run_action(
-                            Action::Proceed { id: 0 },
-                            queue,
-                            entry.insert(Job {
-                                id: 0,
-                                retries: 0,
-                                nickname: nickname.clone(),
-                                task,
-                            }).clone(),
-                        )),
-
-                        Entry::Occupied(mut entry) => {
-                            entry.insert(Job {
-                                id: entry.get().id + 1,
-                                retries: 0,
-                                nickname: nickname.clone(),
-                                task,
-                            });
-                        }
-                    }
-                }
-
-                else => (),
-            }
-        }
+            };
+        cross_chain_message_queue::forward_cross_chain_queries(
+            nickname,
+            cross_chain_max_retries,
+            cross_chain_retry_delay,
+            cross_chain_sender_delay,
+            cross_chain_sender_failure_rate,
+            this_shard,
+            receiver,
+            send_request,
+        )
+        .await;
     }
 
     fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {

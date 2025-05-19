@@ -1,16 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use futures::{channel::mpsc, stream::StreamExt};
+use futures::{channel::mpsc, lock::Mutex};
 use linera_base::{data_types::Blob, time::Duration};
 use linera_core::{
+    data_types::CrossChainRequest,
     node::NodeError,
     worker::{NetworkActions, WorkerError, WorkerState},
     JoinSetExt as _,
 };
 use linera_storage::Storage;
-use rand::Rng;
 use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
@@ -18,7 +20,7 @@ use tracing::{debug, error, info, instrument, warn};
 use super::transport::{MessageHandler, ServerHandle, TransportProtocol};
 use crate::{
     config::{CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig},
-    RpcMessage,
+    cross_chain_message_queue, RpcMessage,
 };
 
 #[derive(Clone)]
@@ -83,62 +85,38 @@ where
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(RpcMessage, ShardId)>,
+        receiver: mpsc::Receiver<(CrossChainRequest, ShardId)>,
     ) {
-        let mut pool = network
-            .protocol
-            .make_outgoing_connection_pool()
-            .await
-            .expect("Initialization should not fail");
-
-        'receive_loop: while let Some((message, shard_id)) = receiver.next().await {
-            if cross_chain_sender_failure_rate > 0.0
-                && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
-            {
-                warn!("Dropped 1 cross-message intentionally.");
-                continue;
-            }
-
-            let shard = network.shard(shard_id);
-            let remote_address = format!("{}:{}", shard.host, shard.port);
-
-            // Send the cross-chain query and retry if needed.
-            for i in 0..cross_chain_max_retries {
-                // Delay increases linearly with the attempt number.
-                linera_base::time::timer::sleep(
-                    cross_chain_sender_delay + cross_chain_retry_delay * i,
-                )
-                .await;
-
-                let status = pool.send_message_to(message.clone(), &remote_address).await;
-                match status {
-                    Err(error) => {
-                        warn!(
-                            nickname,
-                            %error,
-                            i,
-                            from_shard = this_shard,
-                            to_shard = shard_id,
-                            "Failed to send cross-chain query",
-                        );
-                    }
-                    _ => {
-                        debug!(
-                            from_shard = this_shard,
-                            to_shard = shard_id,
-                            "Sent cross-chain query",
-                        );
-                        continue 'receive_loop;
-                    }
+        let pool = Arc::new(Mutex::new(
+            network
+                .protocol
+                .make_outgoing_connection_pool()
+                .await
+                .expect("Initialization should not fail"),
+        ));
+        cross_chain_message_queue::forward_cross_chain_queries(
+            nickname,
+            cross_chain_max_retries,
+            cross_chain_retry_delay,
+            cross_chain_sender_delay,
+            cross_chain_sender_failure_rate,
+            this_shard,
+            receiver,
+            move |shard_id, request| {
+                let pool = pool.clone();
+                let shard = network.shard(shard_id);
+                let remote_address = format!("{}:{}", shard.host, shard.port);
+                let message = RpcMessage::CrossChainRequest(Box::new(request));
+                async move {
+                    pool.lock()
+                        .await
+                        .send_message_to(message.clone(), &remote_address)
+                        .await?;
+                    anyhow::Result::<_, anyhow::Error>::Ok(())
                 }
-            }
-            error!(
-                nickname,
-                from_shard = this_shard,
-                to_shard = shard_id,
-                "Dropping cross-chain query",
-            );
-        }
+            },
+        )
+        .await;
     }
 
     pub fn spawn(
@@ -182,7 +160,7 @@ where
     S: Storage,
 {
     server: Server<S>,
-    cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
+    cross_chain_sender: mpsc::Sender<(CrossChainRequest, ShardId)>,
 }
 
 #[async_trait]
@@ -449,7 +427,6 @@ where
                 self.server.shard_id,
                 shard_id
             );
-            let request = RpcMessage::CrossChainRequest(Box::new(request));
             if let Err(error) = self.cross_chain_sender.try_send((request, shard_id)) {
                 error!(%error, "dropping cross-chain request");
                 break;
