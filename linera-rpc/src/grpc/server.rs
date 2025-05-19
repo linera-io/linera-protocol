@@ -51,6 +51,7 @@ use super::{
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
+    common::CrossChainQueueId,
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
     HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
     HandleValidatedCertificateRequest,
@@ -409,8 +410,6 @@ where
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
-        type QueueId = linera_core::data_types::CrossChainQueueId;
-
         enum Action {
             Proceed { id: usize },
             Retry,
@@ -424,7 +423,7 @@ where
 
         let pool = GrpcConnectionPool::default();
         let mut futures = futures::stream::FuturesUnordered::new();
-        let mut job_states: HashMap<QueueId, Job> = HashMap::new();
+        let mut job_states: HashMap<CrossChainQueueId, Job> = HashMap::new();
 
         let run_task = |task: Task| async {
             let task = task;
@@ -515,7 +514,7 @@ where
                         continue;
                     }
 
-                    let queue = request.queue();
+                    let queue = CrossChainQueueId::new(&request);
 
                     let task = Task {
                         shard_id,

@@ -13,6 +13,7 @@ pub mod node_provider;
 
 pub mod client;
 
+mod common;
 mod message;
 #[cfg(with_simple_network)]
 pub mod simple;
