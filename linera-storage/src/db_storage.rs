@@ -232,7 +232,7 @@ pub static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| 
 #[doc(hidden)]
 pub static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "write_event",
+        "write_network_description",
         "The metric counting how often the network description is written to storage",
         &[],
     )
