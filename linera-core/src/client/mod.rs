@@ -504,6 +504,424 @@ impl<Env: Environment> Client<Env> {
         self.update_from_info(&info);
         Ok(())
     }
+
+    /// Submits a validated block for finalization and returns the confirmed block certificate.
+    #[instrument(level = "trace", skip_all)]
+    async fn finalize_block(
+        &self,
+        committee: &Committee,
+        certificate: ValidatedBlockCertificate,
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
+        debug!(round = %certificate.round, "Submitting block for confirmation");
+        let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
+        let finalize_action = CommunicateAction::FinalizeBlock {
+            certificate: Box::new(certificate),
+            delivery: self.cross_chain_message_delivery,
+        };
+        let certificate = self
+            .communicate_chain_action(committee, finalize_action, hashed_value)
+            .await?;
+        self.receive_certificate_and_update_validators(
+            certificate.clone(),
+            ReceiveCertificateMode::AlreadyChecked,
+        )
+        .await?;
+        Ok(certificate)
+    }
+
+    /// Submits a block proposal to the validators.
+    #[instrument(level = "trace", skip_all)]
+    async fn submit_block_proposal<T: ProcessableCertificate>(
+        &self,
+        committee: &Committee,
+        proposal: Box<BlockProposal>,
+        value: T,
+    ) -> Result<GenericCertificate<T>, ChainClientError> {
+        debug!(
+            round = %proposal.content.round,
+            "Submitting block proposal to validators"
+        );
+        let submit_action = CommunicateAction::SubmitBlock {
+            proposal,
+            blob_ids: value.required_blob_ids().into_iter().collect(),
+        };
+        let certificate = self
+            .communicate_chain_action(committee, submit_action, value)
+            .await?;
+        self.process_certificate(certificate.clone()).await?;
+        Ok(certificate)
+    }
+
+    /// Broadcasts certified blocks to validators.
+    #[instrument(level = "trace", skip_all, fields(chain_id, block_height, delivery))]
+    async fn communicate_chain_updates(
+        &self,
+        committee: &Committee,
+        chain_id: ChainId,
+        height: BlockHeight,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<(), ChainClientError> {
+        let local_node = self.local_node.clone();
+        let nodes = self.make_nodes(committee)?;
+        let n_validators = nodes.len();
+        let chain_worker_count = std::cmp::max(1, self.max_loaded_chains.get() / n_validators);
+        communicate_with_quorum(
+            &nodes,
+            committee,
+            |_: &()| (),
+            |remote_node| {
+                let mut updater = ValidatorUpdater {
+                    chain_worker_count,
+                    remote_node,
+                    local_node: local_node.clone(),
+                };
+                Box::pin(async move {
+                    updater
+                        .send_chain_information(chain_id, height, delivery)
+                        .await
+                })
+            },
+            self.grace_period,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Broadcasts certified blocks and optionally a block proposal, certificate or
+    /// leader timeout request.
+    ///
+    /// In that case, it verifies that the validator votes are for the provided value,
+    /// and returns a certificate.
+    #[instrument(level = "trace", skip_all)]
+    async fn communicate_chain_action<T: CertificateValue>(
+        &self,
+        committee: &Committee,
+        action: CommunicateAction,
+        value: T,
+    ) -> Result<GenericCertificate<T>, ChainClientError> {
+        let local_node = self.local_node.clone();
+        let nodes = self.make_nodes(committee)?;
+        let n_validators = nodes.len();
+        let chain_worker_count = std::cmp::max(1, self.max_loaded_chains.get() / n_validators);
+        let ((votes_hash, votes_round), votes) = communicate_with_quorum(
+            &nodes,
+            committee,
+            |vote: &LiteVote| (vote.value.value_hash, vote.round),
+            |remote_node| {
+                let mut updater = ValidatorUpdater {
+                    chain_worker_count,
+                    remote_node,
+                    local_node: local_node.clone(),
+                };
+                let action = action.clone();
+                Box::pin(async move { updater.send_chain_update(action).await })
+            },
+            self.grace_period,
+        )
+        .await?;
+        ensure!(
+            (votes_hash, votes_round) == (value.hash(), action.round()),
+            ChainClientError::UnexpectedQuorum {
+                hash: votes_hash,
+                round: votes_round,
+                expected_hash: value.hash(),
+                expected_round: action.round(),
+            }
+        );
+        // Certificate is valid because
+        // * `communicate_with_quorum` ensured a sufficient "weight" of
+        // (non-error) answers were returned by validators.
+        // * each answer is a vote signed by the expected validator.
+        let certificate = LiteCertificate::try_from_votes(votes)
+            .ok_or_else(|| {
+                ChainClientError::InternalError("Vote values or rounds don't match; this is a bug")
+            })?
+            .with_value(value)
+            .ok_or_else(|| {
+                ChainClientError::ProtocolError("A quorum voted for an unexpected value")
+            })?;
+        Ok(certificate)
+    }
+
+    /// Processes the confirmed block certificate and its ancestors in the local node, then
+    /// updates the validators up to that certificate.
+    #[instrument(level = "trace", skip_all)]
+    async fn receive_certificate_and_update_validators(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        mode: ReceiveCertificateMode,
+    ) -> Result<(), ChainClientError> {
+        let block_chain_id = certificate.block().header.chain_id;
+        let block_height = certificate.block().header.height;
+
+        self.receive_certificate(certificate, mode, None).await?;
+
+        // Make sure a quorum of validators (according to the chain's new committee) are up-to-date
+        // for data availability.
+        let local_committee = self
+            .chain_info_with_committees(block_chain_id)
+            .await?
+            .into_current_committee()?;
+        self.communicate_chain_updates(
+            &local_committee,
+            block_chain_id,
+            block_height.try_add_one()?,
+            CrossChainMessageDelivery::Blocking,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Processes the confirmed block certificate in the local node. Also downloads and processes
+    /// all ancestors that are still missing.
+    #[instrument(level = "trace", skip_all)]
+    async fn receive_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        mode: ReceiveCertificateMode,
+        nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
+    ) -> Result<(), ChainClientError> {
+        let block = certificate.block();
+
+        // Verify the certificate before doing any expensive networking.
+        let (max_epoch, committees) = self.admin_committees().await?;
+        ensure!(
+            block.header.epoch <= max_epoch,
+            ChainClientError::CommitteeSynchronizationError
+        );
+        let remote_committee = committees
+            .get(&block.header.epoch)
+            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
+        if let ReceiveCertificateMode::NeedsCheck = mode {
+            certificate.check(remote_committee)?;
+        }
+        // Recover history from the network.
+        let nodes = if let Some(nodes) = nodes {
+            nodes
+        } else {
+            // We assume that the committee that signed the certificate is still active.
+            self.make_nodes(remote_committee)?
+        };
+        self.download_certificates(&nodes, block.header.chain_id, block.header.height)
+            .await?;
+        // Process the received operations. Download required hashed certificate values if
+        // necessary.
+        if let Err(err) = self.process_certificate(certificate.clone()).await {
+            match &err {
+                LocalNodeError::BlobsNotFound(blob_ids) => {
+                    let blobs =
+                        RemoteNode::download_blobs(blob_ids, &nodes, self.blob_download_timeout)
+                            .await
+                            .ok_or(err)?;
+                    self.local_node.store_blobs(&blobs).await?;
+                    self.process_certificate(certificate).await?;
+                }
+                _ => {
+                    // The certificate is not as expected. Give up.
+                    warn!("Failed to process network hashed certificate value");
+                    return Err(err.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Downloads and processes any certificates we are missing for the given chain.
+    #[instrument(level = "trace", skip_all)]
+    async fn synchronize_chain_state(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
+
+        let committee = self
+            .chain_info_with_committees(chain_id)
+            .await?
+            .into_current_committee()?;
+        let validators = self.make_nodes(&committee)?;
+        communicate_with_quorum(
+            &validators,
+            &committee,
+            |_: &()| (),
+            |remote_node| async move {
+                self.try_synchronize_chain_state_from(&remote_node, chain_id)
+                    .await
+            },
+            self.grace_period,
+        )
+        .await?;
+
+        self.local_node
+            .chain_info(chain_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Downloads any certificates from the specified validator that we are missing for the given
+    /// chain, and processes them.
+    #[instrument(level = "trace", skip(self, remote_node, chain_id))]
+    async fn try_synchronize_chain_state_from(
+        &self,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+        chain_id: ChainId,
+    ) -> Result<(), ChainClientError> {
+        let local_info = self.local_node.chain_info(chain_id).await?;
+        let range = BlockHeightRange {
+            start: local_info.next_block_height,
+            limit: None,
+        };
+        let query = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_in_range(range)
+            .with_manager_values();
+        let info = remote_node.handle_chain_info_query(query).await?;
+        if info.next_block_height < local_info.next_block_height {
+            return Ok(());
+        }
+
+        let certificates: Vec<ConfirmedBlockCertificate> = remote_node
+            .download_certificates(info.requested_sent_certificate_hashes)
+            .await?;
+
+        if !certificates.is_empty()
+            && self
+                .try_process_certificates(remote_node, chain_id, certificates)
+                .await
+                .is_none()
+        {
+            return Ok(());
+        };
+        if let Some(timeout) = info.manager.timeout {
+            self.handle_certificate(*timeout).await?;
+        }
+        let mut proposals = Vec::new();
+        if let Some(proposal) = info.manager.requested_proposed {
+            proposals.push(*proposal);
+        }
+        if let Some(locking) = info.manager.requested_locking {
+            match *locking {
+                LockingBlock::Fast(proposal) => {
+                    proposals.push(proposal);
+                }
+                LockingBlock::Regular(cert) => {
+                    let hash = cert.hash();
+                    if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
+                        warn!(
+                            "Skipping certificate {hash} from validator {}: {err}",
+                            remote_node.public_key
+                        );
+                    }
+                }
+            }
+        }
+        for proposal in proposals {
+            let owner: AccountOwner = proposal.public_key.into();
+            if let Err(mut err) = self
+                .local_node
+                .handle_block_proposal(proposal.clone())
+                .await
+            {
+                if let LocalNodeError::BlobsNotFound(_) = &err {
+                    let required_blob_ids = proposal.required_blob_ids().collect::<Vec<_>>();
+                    if !required_blob_ids.is_empty() {
+                        let mut blobs = Vec::new();
+                        for blob_id in required_blob_ids {
+                            let blob_content = match remote_node
+                                .node
+                                .download_pending_blob(chain_id, blob_id)
+                                .await
+                            {
+                                Ok(content) => content,
+                                Err(err) => {
+                                    let public_key = &remote_node.public_key;
+                                    warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
+                                    continue;
+                                }
+                            };
+                            blobs.push(Blob::new(blob_content));
+                        }
+                        self.local_node
+                            .handle_pending_blobs(chain_id, blobs)
+                            .await?;
+                        // We found the missing blobs: retry.
+                        if let Err(new_err) = self
+                            .local_node
+                            .handle_block_proposal(proposal.clone())
+                            .await
+                        {
+                            err = new_err;
+                        } else {
+                            continue;
+                        }
+                    }
+                    if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
+                        self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
+                            .await?;
+                        // We found the missing blobs: retry.
+                        if let Err(new_err) = self
+                            .local_node
+                            .handle_block_proposal(proposal.clone())
+                            .await
+                        {
+                            err = new_err;
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+
+                let public_key = &remote_node.public_key;
+                warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
+            }
+        }
+        Ok(())
+    }
+
+    async fn try_process_locking_block_from(
+        &self,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+        certificate: GenericCertificate<ValidatedBlock>,
+    ) -> Result<(), ChainClientError> {
+        let chain_id = certificate.inner().chain_id();
+        match self.process_certificate(certificate.clone()).await {
+            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                let mut blobs = Vec::new();
+                for blob_id in blob_ids {
+                    let blob_content = remote_node
+                        .node
+                        .download_pending_blob(chain_id, blob_id)
+                        .await?;
+                    blobs.push(Blob::new(blob_content));
+                }
+                self.local_node
+                    .handle_pending_blobs(chain_id, blobs)
+                    .await?;
+                self.process_certificate(certificate).await?;
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+            Ok(()) => Ok(()),
+        }
+    }
+
+    /// Downloads and processes from the specified validator a confirmed block certificates that
+    /// use the given blobs. If this succeeds, the blob will be in our storage.
+    async fn update_local_node_with_blobs_from(
+        &self,
+        blob_ids: Vec<BlobId>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), ChainClientError> {
+        try_join_all(blob_ids.into_iter().map(|blob_id| async move {
+            let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
+            // This will download all ancestors of the certificate and process all of them locally.
+            self.receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
+                .await
+        }))
+        .await?;
+
+        Ok(())
+    }
 }
 
 /// Policies for automatically handling incoming messages.
@@ -1121,7 +1539,7 @@ impl<Env: Environment> ChainClient<Env> {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
-            info = self.synchronize_chain_state(self.chain_id).await?;
+            info = self.client.synchronize_chain_state(self.chain_id).await?;
         }
 
         if info.epoch
@@ -1132,7 +1550,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?
                 .epoch
         {
-            self.synchronize_chain_state(self.client.admin_id).await?;
+            self.client
+                .synchronize_chain_state(self.client.admin_id)
+                .await?;
         }
 
         let result = self
@@ -1169,30 +1589,6 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(info)
     }
 
-    /// Submits a validated block for finalization and returns the confirmed block certificate.
-    #[instrument(level = "trace", skip(committee, certificate))]
-    async fn finalize_block(
-        &self,
-        committee: &Committee,
-        certificate: ValidatedBlockCertificate,
-    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
-        debug!(round = %certificate.round, "Submitting block for confirmation");
-        let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
-        let finalize_action = CommunicateAction::FinalizeBlock {
-            certificate: Box::new(certificate),
-            delivery: self.options.cross_chain_message_delivery,
-        };
-        let certificate = self
-            .communicate_chain_action(committee, finalize_action, hashed_value)
-            .await?;
-        self.receive_certificate_and_update_validators_internal(
-            certificate.clone(),
-            ReceiveCertificateMode::AlreadyChecked,
-        )
-        .await?;
-        Ok(certificate)
-    }
-
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip(committee, proposal, value))]
     pub async fn submit_block_proposal<T: ProcessableCertificate>(
@@ -1201,19 +1597,11 @@ impl<Env: Environment> ChainClient<Env> {
         proposal: Box<BlockProposal>,
         value: T,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
-        debug!(
-            round = %proposal.content.round,
-            "Submitting block proposal to validators"
-        );
-        let submit_action = CommunicateAction::SubmitBlock {
-            proposal,
-            blob_ids: value.required_blob_ids().into_iter().collect(),
-        };
-        let certificate = self
-            .communicate_chain_action(committee, submit_action, value)
-            .await?;
-        self.client.process_certificate(certificate.clone()).await?;
-        Ok(certificate)
+        Box::pin(
+            self.client
+                .submit_block_proposal(committee, proposal, value),
+        )
+        .await
     }
 
     /// Attempts to update all validators about the local chain.
@@ -1225,26 +1613,28 @@ impl<Env: Environment> ChainClient<Env> {
         // Communicate the new certificate now.
         let next_block_height = self.next_block_height();
         if let Some(old_committee) = old_committee {
-            self.communicate_chain_updates(
-                old_committee,
-                self.chain_id,
-                next_block_height,
-                self.options.cross_chain_message_delivery,
-            )
-            .await?
+            self.client
+                .communicate_chain_updates(
+                    old_committee,
+                    self.chain_id,
+                    next_block_height,
+                    self.options.cross_chain_message_delivery,
+                )
+                .await?
         };
         if let Ok(new_committee) = self.local_committee().await {
             if Some(&new_committee) != old_committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
                 let next_block_height = self.next_block_height();
-                self.communicate_chain_updates(
-                    &new_committee,
-                    self.chain_id,
-                    next_block_height,
-                    self.options.cross_chain_message_delivery,
-                )
-                .await?;
+                self.client
+                    .communicate_chain_updates(
+                        &new_committee,
+                        self.chain_id,
+                        next_block_height,
+                        self.options.cross_chain_message_delivery,
+                    )
+                    .await?;
             }
         }
         Ok(())
@@ -1259,174 +1649,9 @@ impl<Env: Environment> ChainClient<Env> {
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
-        let local_node = self.client.local_node.clone();
-        let nodes = self.client.make_nodes(committee)?;
-        let n_validators = nodes.len();
-        let chain_worker_count =
-            std::cmp::max(1, self.client.max_loaded_chains.get() / n_validators);
-        communicate_with_quorum(
-            &nodes,
-            committee,
-            |_: &()| (),
-            |remote_node| {
-                let mut updater = ValidatorUpdater {
-                    chain_worker_count,
-                    remote_node,
-                    local_node: local_node.clone(),
-                };
-                Box::pin(async move {
-                    updater
-                        .send_chain_information(chain_id, height, delivery)
-                        .await
-                })
-            },
-            self.options.grace_period,
-        )
-        .await?;
-        Ok(())
-    }
-
-    /// Broadcasts certified blocks and optionally a block proposal, certificate or
-    /// leader timeout request.
-    ///
-    /// In that case, it verifies that the validator votes are for the provided value,
-    /// and returns a certificate.
-    #[instrument(level = "trace", skip(committee, action, value))]
-    async fn communicate_chain_action<T: CertificateValue>(
-        &self,
-        committee: &Committee,
-        action: CommunicateAction,
-        value: T,
-    ) -> Result<GenericCertificate<T>, ChainClientError> {
-        let local_node = self.client.local_node.clone();
-        let nodes = self.client.make_nodes(committee)?;
-        let n_validators = nodes.len();
-        let chain_worker_count =
-            std::cmp::max(1, self.client.max_loaded_chains.get() / n_validators);
-        let ((votes_hash, votes_round), votes) = communicate_with_quorum(
-            &nodes,
-            committee,
-            |vote: &LiteVote| (vote.value.value_hash, vote.round),
-            |remote_node| {
-                let mut updater = ValidatorUpdater {
-                    chain_worker_count,
-                    remote_node,
-                    local_node: local_node.clone(),
-                };
-                let action = action.clone();
-                Box::pin(async move { updater.send_chain_update(action).await })
-            },
-            self.options.grace_period,
-        )
-        .await?;
-        ensure!(
-            (votes_hash, votes_round) == (value.hash(), action.round()),
-            ChainClientError::UnexpectedQuorum {
-                hash: votes_hash,
-                round: votes_round,
-                expected_hash: value.hash(),
-                expected_round: action.round(),
-            }
-        );
-        // Certificate is valid because
-        // * `communicate_with_quorum` ensured a sufficient "weight" of
-        // (non-error) answers were returned by validators.
-        // * each answer is a vote signed by the expected validator.
-        let certificate = LiteCertificate::try_from_votes(votes)
-            .ok_or_else(|| {
-                ChainClientError::InternalError("Vote values or rounds don't match; this is a bug")
-            })?
-            .with_value(value)
-            .ok_or_else(|| {
-                ChainClientError::ProtocolError("A quorum voted for an unexpected value")
-            })?;
-        Ok(certificate)
-    }
-
-    /// Processes the confirmed block certificate and its ancestors in the local node, then
-    /// updates the validators up to that certificate.
-    #[instrument(level = "trace", skip(certificate, mode))]
-    async fn receive_certificate_and_update_validators_internal(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-        mode: ReceiveCertificateMode,
-    ) -> Result<(), ChainClientError> {
-        let block_chain_id = certificate.block().header.chain_id;
-        let block_height = certificate.block().header.height;
-
-        self.receive_certificate_internal(certificate, mode, None)
-            .await?;
-
-        // Make sure a quorum of validators (according to our new local committee) are up-to-date
-        // for data availability.
-        let local_committee = self.local_committee().await?;
-        self.communicate_chain_updates(
-            &local_committee,
-            block_chain_id,
-            block_height.try_add_one()?,
-            CrossChainMessageDelivery::Blocking,
-        )
-        .await?;
-        Ok(())
-    }
-
-    /// Processes the confirmed block certificate in the local node. Also downloads and processes
-    /// all ancestors that are still missing.
-    #[instrument(level = "trace", skip(certificate, mode))]
-    async fn receive_certificate_internal(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-        mode: ReceiveCertificateMode,
-        nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
-    ) -> Result<(), ChainClientError> {
-        let block = certificate.block();
-
-        // Verify the certificate before doing any expensive networking.
-        let (max_epoch, committees) = self.client.admin_committees().await?;
-        ensure!(
-            block.header.epoch <= max_epoch,
-            ChainClientError::CommitteeSynchronizationError
-        );
-        let remote_committee = committees
-            .get(&block.header.epoch)
-            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
-        if let ReceiveCertificateMode::NeedsCheck = mode {
-            certificate.check(remote_committee)?;
-        }
-        // Recover history from the network.
-        let nodes = if let Some(nodes) = nodes {
-            nodes
-        } else {
-            // We assume that the committee that signed the certificate is still active.
-            self.client.make_nodes(remote_committee)?
-        };
         self.client
-            .download_certificates(&nodes, block.header.chain_id, block.header.height)
-            .await?;
-        // Process the received operations. Download required hashed certificate values if
-        // necessary.
-        if let Err(err) = self.client.process_certificate(certificate.clone()).await {
-            match &err {
-                LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs = RemoteNode::download_blobs(
-                        blob_ids,
-                        &nodes,
-                        self.client.blob_download_timeout,
-                    )
-                    .await
-                    .ok_or(err)?;
-                    self.client.local_node.store_blobs(&blobs).await?;
-                    self.client.process_certificate(certificate).await?;
-                }
-                _ => {
-                    // The certificate is not as expected. Give up.
-                    warn!("Failed to process network hashed certificate value");
-                    return Err(err.into());
-                }
-            }
-        }
-
-        Ok(())
+            .communicate_chain_updates(committee, chain_id, height, delivery)
+            .await
     }
 
     /// Downloads and processes all confirmed block certificates that sent any message to this
@@ -1615,15 +1840,12 @@ impl<Env: Environment> ChainClient<Env> {
 
         // Process the certificates sorted by chain and in ascending order of block height.
         let stream = stream::iter(certificates.into_values().map(|certificates| {
-            let client = self.clone();
+            let client = self.client.clone();
             async move {
                 for certificate in certificates.into_values() {
                     let hash = certificate.hash();
                     let mode = ReceiveCertificateMode::AlreadyChecked;
-                    if let Err(e) = client
-                        .receive_certificate_internal(certificate, mode, None)
-                        .await
-                    {
+                    if let Err(e) = client.receive_certificate(certificate, mode, None).await {
                         warn!("Received invalid certificate {hash}: {e}");
                     }
                 }
@@ -1682,7 +1904,7 @@ impl<Env: Environment> ChainClient<Env> {
         try_join_all(
             chain_ids
                 .into_iter()
-                .map(|chain_id| self.synchronize_chain_state(chain_id)),
+                .map(|chain_id| self.client.synchronize_chain_state(chain_id)),
         )
         .await?;
         Ok(())
@@ -1811,17 +2033,19 @@ impl<Env: Environment> ChainClient<Env> {
         };
         let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = self
+            .client
             .communicate_chain_action(committee, action, value)
             .await?;
         self.client.process_certificate(certificate.clone()).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
-        self.communicate_chain_updates(
-            committee,
-            chain_id,
-            height,
-            CrossChainMessageDelivery::NonBlocking,
-        )
-        .await?;
+        self.client
+            .communicate_chain_updates(
+                committee,
+                chain_id,
+                height,
+                CrossChainMessageDelivery::NonBlocking,
+            )
+            .await?;
         Ok(certificate)
     }
 
@@ -1831,205 +2055,7 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        #[cfg(with_metrics)]
-        let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
-
-        let committee = self
-            .client
-            .chain_info_with_committees(chain_id)
-            .await?
-            .into_current_committee()?;
-        let validators = self.client.make_nodes(&committee)?;
-        communicate_with_quorum(
-            &validators,
-            &committee,
-            |_: &()| (),
-            |remote_node| {
-                let client = self.clone();
-                async move {
-                    client
-                        .try_synchronize_chain_state_from(&remote_node, chain_id)
-                        .await
-                }
-            },
-            self.options.grace_period,
-        )
-        .await?;
-
-        self.client
-            .local_node
-            .chain_info(chain_id)
-            .await
-            .map_err(Into::into)
-    }
-
-    /// Downloads any certificates from the specified validator that we are missing for the given
-    /// chain, and processes them.
-    #[instrument(level = "trace", skip(self, remote_node, chain_id))]
-    async fn try_synchronize_chain_state_from(
-        &self,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
-        chain_id: ChainId,
-    ) -> Result<(), ChainClientError> {
-        let local_info = self.client.local_node.chain_info(chain_id).await?;
-        let range = BlockHeightRange {
-            start: local_info.next_block_height,
-            limit: None,
-        };
-        let query = ChainInfoQuery::new(chain_id)
-            .with_sent_certificate_hashes_in_range(range)
-            .with_manager_values();
-        let info = remote_node.handle_chain_info_query(query).await?;
-        if info.next_block_height < local_info.next_block_height {
-            return Ok(());
-        }
-
-        let certificates: Vec<ConfirmedBlockCertificate> = remote_node
-            .download_certificates(info.requested_sent_certificate_hashes)
-            .await?;
-
-        if !certificates.is_empty()
-            && self
-                .client
-                .try_process_certificates(remote_node, chain_id, certificates)
-                .await
-                .is_none()
-        {
-            return Ok(());
-        };
-        if let Some(timeout) = info.manager.timeout {
-            self.client.handle_certificate(*timeout).await?;
-        }
-        let mut proposals = Vec::new();
-        if let Some(proposal) = info.manager.requested_proposed {
-            proposals.push(*proposal);
-        }
-        if let Some(locking) = info.manager.requested_locking {
-            match *locking {
-                LockingBlock::Fast(proposal) => {
-                    proposals.push(proposal);
-                }
-                LockingBlock::Regular(cert) => {
-                    let hash = cert.hash();
-                    if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
-                        warn!(
-                            "Skipping certificate {hash} from validator {}: {err}",
-                            remote_node.public_key
-                        );
-                    }
-                }
-            }
-        }
-        for proposal in proposals {
-            let owner: AccountOwner = proposal.public_key.into();
-            if let Err(mut err) = self
-                .client
-                .local_node
-                .handle_block_proposal(proposal.clone())
-                .await
-            {
-                if let LocalNodeError::BlobsNotFound(_) = &err {
-                    let required_blob_ids = proposal.required_blob_ids().collect::<Vec<_>>();
-                    if !required_blob_ids.is_empty() {
-                        let mut blobs = Vec::new();
-                        for blob_id in required_blob_ids {
-                            let blob_content = match remote_node
-                                .node
-                                .download_pending_blob(chain_id, blob_id)
-                                .await
-                            {
-                                Ok(content) => content,
-                                Err(err) => {
-                                    let public_key = &remote_node.public_key;
-                                    warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
-                                    continue;
-                                }
-                            };
-                            blobs.push(Blob::new(blob_content));
-                        }
-                        self.client
-                            .local_node
-                            .handle_pending_blobs(chain_id, blobs)
-                            .await?;
-                        // We found the missing blobs: retry.
-                        if let Err(new_err) = self
-                            .client
-                            .local_node
-                            .handle_block_proposal(proposal.clone())
-                            .await
-                        {
-                            err = new_err;
-                        } else {
-                            continue;
-                        }
-                    }
-                    if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
-                        self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
-                            .await?;
-                        // We found the missing blobs: retry.
-                        if let Err(new_err) = self
-                            .client
-                            .local_node
-                            .handle_block_proposal(proposal.clone())
-                            .await
-                        {
-                            err = new_err;
-                        } else {
-                            continue;
-                        }
-                    }
-                }
-
-                let public_key = &remote_node.public_key;
-                warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
-            }
-        }
-        Ok(())
-    }
-
-    async fn try_process_locking_block_from(
-        &self,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
-        certificate: GenericCertificate<ValidatedBlock>,
-    ) -> Result<(), ChainClientError> {
-        let chain_id = certificate.inner().chain_id();
-        match self.client.process_certificate(certificate.clone()).await {
-            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                let mut blobs = Vec::new();
-                for blob_id in blob_ids {
-                    let blob_content = remote_node
-                        .node
-                        .download_pending_blob(chain_id, blob_id)
-                        .await?;
-                    blobs.push(Blob::new(blob_content));
-                }
-                self.client
-                    .local_node
-                    .handle_pending_blobs(chain_id, blobs)
-                    .await?;
-                self.client.process_certificate(certificate).await?;
-                Ok(())
-            }
-            Err(err) => Err(err.into()),
-            Ok(()) => Ok(()),
-        }
-    }
-
-    /// Downloads and processes from the specified validator a confirmed block certificates that
-    /// use the given blobs. If this succeeds, the blob will be in our storage.
-    async fn update_local_node_with_blobs_from(
-        &self,
-        blob_ids: Vec<BlobId>,
-        remote_node: &RemoteNode<Env::ValidatorNode>,
-    ) -> Result<(), ChainClientError> {
-        try_join_all(blob_ids.into_iter().map(|blob_id| async move {
-            let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
-            // This will download all ancestors of the certificate and process all of them locally.
-            self.receive_certificate(certificate).await
-        }))
-        .await?;
-
-        Ok(())
+        self.client.synchronize_chain_state(chain_id).await
     }
 
     /// Downloads and processes confirmed block certificates that use the given blobs.
@@ -2058,7 +2084,8 @@ impl<Env: Environment> ChainClient<Env> {
                 };
                 if let Ok((remote_node, cert)) = result {
                     if self
-                        .receive_certificate_internal(
+                        .client
+                        .receive_certificate(
                             cert,
                             ReceiveCertificateMode::NeedsCheck,
                             Some(vec![remote_node]),
@@ -2704,14 +2731,16 @@ impl<Env: Environment> ChainClient<Env> {
         // Send the query to validators.
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
-            self.submit_block_proposal(&committee, proposal, hashed_value)
+            self.client
+                .submit_block_proposal(&committee, proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
+                .client
                 .submit_block_proposal(&committee, proposal, hashed_value.clone())
                 .await?;
-            self.finalize_block(&committee, certificate).await?
+            self.client.finalize_block(&committee, certificate).await?
         };
         debug!(round = %certificate.round, "Sending confirmed block to validators");
         self.update_validators(Some(&committee)).await?;
@@ -2754,7 +2783,11 @@ impl<Env: Environment> ChainClient<Env> {
             "Finalizing locking block"
         );
         let committee = self.local_committee().await?;
-        match self.finalize_block(&committee, certificate.clone()).await {
+        match self
+            .client
+            .finalize_block(&committee, certificate.clone())
+            .await
+        {
             Ok(certificate) => Ok(ClientOutcome::Committed(Some(certificate))),
             Err(ChainClientError::CommunicationError(error)) => {
                 // Communication errors in this case often mean that someone else already
@@ -2827,11 +2860,12 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
-        self.receive_certificate_and_update_validators_internal(
-            certificate,
-            ReceiveCertificateMode::NeedsCheck,
-        )
-        .await
+        self.client
+            .receive_certificate_and_update_validators(
+                certificate,
+                ReceiveCertificateMode::NeedsCheck,
+            )
+            .await
     }
 
     /// Processes confirmed operation for which this chain is a recipient.
@@ -2844,7 +2878,8 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
-        self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck, None)
+        self.client
+            .receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
             .await
     }
 
@@ -3417,6 +3452,7 @@ impl<Env: Environment> ChainClient<Env> {
                     return;
                 }
                 if let Err(error) = self
+                    .client
                     .try_synchronize_chain_state_from(&remote_node, chain_id)
                     .await
                 {
@@ -3445,6 +3481,7 @@ impl<Env: Environment> ChainClient<Env> {
                     }
                 }
                 if let Err(error) = self
+                    .client
                     .try_synchronize_chain_state_from(&remote_node, chain_id)
                     .await
                 {
