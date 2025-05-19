@@ -793,11 +793,7 @@ where
     async fn process_inboxes_and_force_validator_updates(&mut self) {
         let mut chain_clients = vec![];
         for chain_id in &self.wallet.owned_chain_ids() {
-            chain_clients.push(
-                self.make_chain_client(*chain_id)
-                    .await
-                    .expect("chains in the wallet must exist"),
-            );
+            chain_clients.push(self.make_chain_client(*chain_id));
         }
 
         let mut join_set = task::JoinSet::new();
