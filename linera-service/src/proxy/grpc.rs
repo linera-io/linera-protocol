@@ -19,9 +19,7 @@ use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
-    config::{
-        ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig,
-    },
+    config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
         api::{
             self,

@@ -102,7 +102,12 @@ pub struct ProxyConfig {
 
 impl ProxyConfig {
     pub fn internal_address(&self, protocol: &NetworkProtocol) -> String {
-        format!("{}://{}:{}", protocol.scheme(), self.host, self.private_port)
+        format!(
+            "{}://{}:{}",
+            protocol.scheme(),
+            self.host,
+            self.private_port
+        )
     }
 }
 

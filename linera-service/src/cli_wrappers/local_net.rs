@@ -836,7 +836,7 @@ impl LocalNet {
     /// Returns the address to connect to a validator's proxy.
     /// In local networks, the zeroth proxy _is_ the validator ingress.
     pub fn validator_address(&self, validator: usize) -> String {
-        let port = Self::proxy_internal_port(validator, 0);
+        let port = Self::proxy_public_port(validator, 0);
         let schema = self.network.external.schema();
 
         format!("{schema}:localhost:{port}")
