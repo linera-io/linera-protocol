@@ -345,8 +345,9 @@ mod tests {
     use crate::db_storage::{
         BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID, INDEX_EVENT_ID,
     };
+
     // Several functionalities of the storage rely on the way that the serialization
-    // is done. Thus we need to check that the serialization work in the way that
+    // is done. Thus we need to check that the serialization works in the way that
     // we expect.
 
     // The listing of the blobs in `list_blob_ids` depends on the serialization
@@ -374,7 +375,7 @@ mod tests {
         assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
     }
 
-    // The listing of the events in `list_events_from_index` depends on the
+    // The listing of the events in `read_events_from_index` depends on the
     // serialization of `BaseKey::Event`.
     #[test]
     fn test_basekey_event_serialization() {
@@ -880,7 +881,7 @@ where
         Ok(exists)
     }
 
-    async fn list_events_from_index(
+    async fn read_events_from_index(
         &self,
         chain_id: &ChainId,
         stream_id: &StreamId,

@@ -3329,7 +3329,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(self
             .client
             .storage_client()
-            .list_events_from_index(&self.chain_id, &stream_id, start_index)
+            .read_events_from_index(&self.chain_id, &stream_id, start_index)
             .await?)
     }
 

@@ -658,7 +658,7 @@ pub enum ClientCommand {
         publisher: Option<ChainId>,
     },
 
-    /// Reading the events from a starting index
+    /// Print events from a specific chain and stream from a specified index.
     ListEventsFromIndex {
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,

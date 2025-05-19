@@ -497,7 +497,7 @@ impl StreamId {
     }
 }
 
-/// The result of an events from index.
+/// The result of an `events_from_index`.
 #[derive(
     Debug,
     Eq,
@@ -514,7 +514,7 @@ impl StreamId {
     SimpleObject,
 )]
 pub struct IndexAndEvent {
-    /// The index of the found index.
+    /// The index of the found event.
     pub index: u32,
     /// The event being returned.
     pub event: Vec<u8>,

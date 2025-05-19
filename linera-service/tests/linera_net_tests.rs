@@ -491,7 +491,6 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
         .events_from_index(&chain, &stream_id, start_index)
         .await?;
     let index_and_event = indices_and_events[0].clone();
-    tracing::info!("1: index_and_event={index_and_event:?}");
     assert_eq!(index_and_event.index, 0);
     let (origin, block_height, log) =
         bcs::from_bytes::<(String, u64, Log)>(&index_and_event.event)?;
@@ -500,7 +499,6 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     let value = U256::from(start_value);
     let bytes = Bytes::from(value.to_be_bytes::<32>().to_vec());
     assert_eq!(log.data.data, bytes);
-    tracing::info!("1: log={log:?}");
     start_index += indices_and_events.len() as u32;
     assert_eq!(start_index, 1);
 

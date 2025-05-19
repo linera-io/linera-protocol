@@ -983,7 +983,7 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let index_events = storage
-                    .list_events_from_index(&chain_id, &stream_id, start_index)
+                    .read_events_from_index(&chain_id, &stream_id, start_index)
                     .await?;
                 println!("{:#?}", index_events);
                 info!("Events listed in {} ms", start_time.elapsed().as_millis());

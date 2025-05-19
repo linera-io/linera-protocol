@@ -93,7 +93,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
-* `list-events-from-index` — Reading the events from a starting index
+* `list-events-from-index` — Print events from a specific chain and stream from a specified index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
@@ -655,7 +655,7 @@ Publish module
 
 ## `linera list-events-from-index`
 
-Reading the events from a starting index
+Print events from a specific chain and stream from a specified index
 
 **Usage:** `linera list-events-from-index [OPTIONS] --stream-id <STREAM_ID> [CHAIN_ID]`
 

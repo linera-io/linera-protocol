@@ -168,7 +168,7 @@ pub trait Storage: Sized {
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
 
     /// Lists all the events from a starting index
-    async fn list_events_from_index(
+    async fn read_events_from_index(
         &self,
         chain_id: &ChainId,
         stream_id: &StreamId,
