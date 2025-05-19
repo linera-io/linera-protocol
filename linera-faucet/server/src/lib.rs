@@ -32,7 +32,12 @@ pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoR
         async_graphql::http::GraphiQLSource::build()
             .endpoint(uri.path())
             .subscription_endpoint("/ws")
-            .finish(),
+            .finish()
+            .replace("@17", "@18")
+            .replace(
+                "ReactDOM.render(",
+                "ReactDOM.createRoot(document.getElementById(\"graphiql\")).render(",
+            ),
     )
 }
 

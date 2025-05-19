@@ -22,11 +22,8 @@ use colored::Colorize;
 use command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand};
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    bcs,
     crypto::{InMemorySigner, Signer},
-    data_types::{
-        ApplicationPermissions, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
-    },
+    data_types::{ApplicationPermissions, Timestamp},
     identifiers::AccountOwner,
     listen_for_shutdown_signals,
     ownership::ChainOwnership,
@@ -1667,7 +1664,6 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
         ClientCommand::CreateGenesisConfig {
             committee_config_path,
             genesis_config_path,
-            admin_root,
             initial_funding,
             start_timestamp,
             num_other_initial_chains,
@@ -1768,27 +1764,8 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 })
                 .unwrap_or_else(Timestamp::now);
 
-            let origin: ChainOrigin = ChainOrigin::Root(*admin_root);
             let mut signer = options.create_keystore(*testing_prng_seed)?;
             let admin_public_key = signer.mutate(|s| s.generate_new()).await?;
-            let committee = committee_config.clone().into_committee(policy.clone());
-            let committees = [(
-                Epoch::ZERO,
-                bcs::to_bytes(&committee).expect("serializing a committee should not fail"),
-            )]
-            .into_iter()
-            .collect();
-            let admin_config = InitialChainConfig {
-                admin_id: None,
-                balance: *initial_funding,
-                committees,
-                epoch: Epoch::ZERO,
-                application_permissions: Default::default(),
-                ownership: ChainOwnership::single(admin_public_key.into()),
-            };
-            let admin_chain_description =
-                ChainDescription::new(origin, admin_config.clone(), timestamp);
-            let admin_id = admin_chain_description.id();
 
             let network_name = network_name.clone().unwrap_or_else(|| {
                 // Default: e.g. "linera-2023-11-14T23:13:20"
@@ -1796,30 +1773,26 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
             });
             let mut genesis_config = persistent::File::new(
                 genesis_config_path,
-                GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name),
+                GenesisConfig::new(
+                    committee_config,
+                    timestamp,
+                    policy,
+                    network_name,
+                    admin_public_key,
+                    *initial_funding,
+                ),
             )?;
-            let mut chains = vec![];
-            for i in 0..=*num_other_initial_chains {
+            let admin_chain_description = genesis_config.admin_chain_description();
+            let mut chains = vec![UserChain::make_initial(
+                admin_public_key.into(),
+                admin_chain_description.clone(),
+                timestamp,
+            )];
+            for _ in 0..*num_other_initial_chains {
                 // Create keys.
-                let public_key = if i == 0 {
-                    admin_public_key
-                } else {
-                    signer.mutate(|s| s.generate_new()).await?
-                };
-                let origin = ChainOrigin::Root(i);
-                let config = if i == 0 {
-                    admin_config.clone()
-                } else {
-                    InitialChainConfig {
-                        admin_id: Some(admin_id),
-                        ownership: ChainOwnership::single(public_key.into()),
-                        ..admin_config.clone()
-                    }
-                };
-                let description = ChainDescription::new(origin, config, timestamp);
+                let public_key = signer.mutate(|s| s.generate_new()).await?;
+                let description = genesis_config.add_root_chain(public_key, *initial_funding);
                 let chain = UserChain::make_initial(public_key.into(), description, timestamp);
-                // Public "genesis" state.
-                genesis_config.chains.push((public_key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }

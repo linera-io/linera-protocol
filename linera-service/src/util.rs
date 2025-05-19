@@ -149,7 +149,12 @@ pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
     let source = GraphiQLSource::build()
         .endpoint(uri.path())
         .subscription_endpoint("/ws")
-        .finish();
+        .finish()
+        .replace("@17", "@18")
+        .replace(
+            "ReactDOM.render(",
+            "ReactDOM.createRoot(document.getElementById(\"graphiql\")).render(",
+        );
     response::Html(source)
 }
 
@@ -159,6 +164,21 @@ pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
 
 pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
+}
+
+/// Checks the condition five times with increasing delays. Returns true if it is met.
+#[cfg(with_testing)]
+pub async fn eventually<F>(condition: impl Fn() -> F) -> bool
+where
+    F: std::future::Future<Output = bool>,
+{
+    for i in 0..5 {
+        linera_base::time::timer::sleep(std::time::Duration::from_secs(i)).await;
+        if condition().await {
+            return true;
+        }
+    }
+    false
 }
 
 #[test]

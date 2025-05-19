@@ -36,7 +36,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, SendMessageRequest, StreamUpdate, Timestamp,
+        DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -55,6 +55,8 @@ use thiserror::Error;
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
+#[cfg(with_testing)]
+use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
@@ -287,8 +289,8 @@ pub enum ExecutionError {
     #[error("Invalid HTTP header value used for HTTP request")]
     InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
 
-    #[error("Invalid admin ID in new chain: {0}")]
-    InvalidNewChainAdminId(ChainId),
+    #[error("No NetworkDescription found in storage")]
+    NoNetworkDescriptionFound,
     #[error("Invalid committees")]
     InvalidCommittees,
     #[error("{epoch:?} is not recognized by chain {chain_id:}")]
@@ -403,6 +405,8 @@ pub trait ExecutionRuntimeContext {
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1080,6 +1084,15 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .get(&event_id)
             .ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))?
             .clone())
+    }
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        Ok(Some(NetworkDescription {
+            admin_chain_id: dummy_chain_description(0).id(),
+            genesis_config_hash: CryptoHash::test_hash("genesis config"),
+            genesis_timestamp: Timestamp::from(0),
+            name: "dummy network description".to_string(),
+        }))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

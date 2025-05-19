@@ -243,8 +243,8 @@ impl Committee {
                 (
                     validator_key,
                     ValidatorState {
-                        network_address: validator_key.to_string(),
-                        votes: 1,
+                        network_address: "Tcp:localhost:8080".to_string(),
+                        votes: 100,
                         account_public_key: account_key,
                     },
                 )

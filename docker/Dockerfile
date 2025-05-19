@@ -60,6 +60,7 @@ COPY linera-summary linera-summary
 COPY linera-version linera-version
 COPY linera-views linera-views
 COPY linera-views-derive linera-views-derive
+COPY linera-web linera-web
 COPY linera-witty linera-witty
 COPY linera-witty-macros linera-witty-macros
 COPY scripts scripts

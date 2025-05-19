@@ -131,7 +131,6 @@ where
 
         let origin = ChainOrigin::Root(0);
         let config = InitialChainConfig {
-            admin_id: None,
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
@@ -143,6 +142,15 @@ where
             .write_blob(&Blob::new_chain_description(&admin_description))
             .await
             .expect("writing a blob should not fail");
+        storage
+            .write_network_description(&NetworkDescription {
+                admin_chain_id: admin_description.id(),
+                genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                genesis_timestamp: Timestamp::from(0),
+                name: "test network".to_string(),
+            })
+            .await
+            .expect("writing a network description should not fail");
 
         let worker = WorkerState::new(
             "Single validator node".to_string(),
@@ -197,7 +205,6 @@ where
     ) -> ChainDescription {
         let origin = ChainOrigin::Root(index);
         let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership,
             committees: self.admin_description.config().committees.clone(),
@@ -227,7 +234,6 @@ where
             chain_index: 0,
         };
         let config = InitialChainConfig {
-            admin_id: Some(self.admin_id()),
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
             committees: self.admin_description.config().committees.clone(),
@@ -349,6 +355,7 @@ where
             ownership: ChainOwnership::single(chain_owner_pubkey.into()),
             balance,
             balances,
+            admin_id: Some(self.admin_id()),
             ..SystemExecutionState::new(chain_description)
         };
         let block_template = match &previous_confirmed_block {
@@ -437,6 +444,22 @@ where
             .with(block),
         );
         self.make_certificate(value)
+    }
+
+    pub fn system_execution_state(&self, chain_id: &ChainId) -> SystemExecutionState {
+        let description = if *chain_id == self.admin_id() {
+            self.admin_description.clone()
+        } else {
+            self.other_chains
+                .get(chain_id)
+                .expect("Unknown chain")
+                .clone()
+        };
+        SystemExecutionState {
+            admin_id: Some(self.admin_id()),
+            timestamp: description.timestamp(),
+            ..SystemExecutionState::new(description.clone())
+        }
     }
 }
 
@@ -602,7 +625,6 @@ where
     let small_transfer = Amount::from_micros(1);
     let mut env = TestEnvironment::new(storage, false, false).await;
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
-    let epoch = Epoch::ZERO;
     let chain_id = chain_1_desc.id();
 
     {
@@ -636,11 +658,9 @@ where
         future.await?;
 
         let system_state = SystemExecutionState {
-            committees: [(epoch, env.committee().clone())].into_iter().collect(),
-            ownership: ChainOwnership::single(owner),
             balance: balance - small_transfer,
             timestamp: block_0_time,
-            ..SystemExecutionState::new(chain_1_desc.clone())
+            ..env.system_execution_state(&chain_1_desc.id())
         };
         let state_hash = system_state.into_hash().await;
         let value = ConfirmedBlock::new(
@@ -863,7 +883,7 @@ where
             blobs: vec![Vec::new(); 2],
             state_hash: SystemExecutionState {
                 balance: Amount::from_tokens(3),
-                ..SystemExecutionState::new(chain_1_desc.clone())
+                ..env.system_execution_state(&chain_1_desc.id())
             }
             .into_hash()
             .await,
@@ -886,7 +906,7 @@ where
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
                 balance: Amount::ZERO,
-                ..SystemExecutionState::new(chain_1_desc.clone())
+                ..env.system_execution_state(&chain_1_desc.id())
             }
             .into_hash()
             .await,
@@ -1128,7 +1148,8 @@ where
                 previous_message_blocks: BTreeMap::new(),
                 events: vec![Vec::new(); 2],
                 blobs: vec![Vec::new(); 2],
-                state_hash: SystemExecutionState::new(chain_2_desc.clone())
+                state_hash: env
+                    .system_execution_state(&chain_2_desc.id())
                     .into_hash()
                     .await,
                 oracle_responses: vec![Vec::new(); 2],
@@ -1372,7 +1393,7 @@ where
         .add_child_chain(chain_2_desc.id(), sender_key_pair.public().into(), balance)
         .await;
     let chain_id = description.id();
-    let mut state = SystemExecutionState::new(description);
+    let mut state = env.system_execution_state(&description.id());
     // Account for burnt tokens.
     state.balance = balance - small_transfer;
     let block = make_first_block(chain_id)
@@ -2351,12 +2372,7 @@ where
             previous_message_blocks: BTreeMap::new(),
             events: vec![Vec::new()],
             blobs: vec![vec![Blob::new_chain_description(&user_description)]],
-            state_hash: SystemExecutionState {
-                admin_id: Some(admin_id),
-                ..SystemExecutionState::new(env.admin_description.clone())
-            }
-            .into_hash()
-            .await,
+            state_hash: env.system_execution_state(&admin_id).into_hash().await,
             oracle_responses: vec![Vec::new()],
             operation_results: vec![OperationResult::default()],
         }
@@ -2424,9 +2440,8 @@ where
                 committees: committees2.clone(),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
                 epoch: Epoch::from(1),
-                admin_id: Some(admin_id),
                 balance: Amount::ZERO,
-                ..SystemExecutionState::new(env.admin_description.clone())
+                ..env.system_execution_state(&admin_id)
             }
             .into_hash()
             .await,
@@ -2487,7 +2502,7 @@ where
                 balance: Amount::from_tokens(2),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
                 epoch: Epoch::from(1),
-                ..SystemExecutionState::new(user_description)
+                ..env.system_execution_state(&user_description.id())
             }
             .into_hash()
             .await,
@@ -2571,10 +2586,8 @@ where
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
-                committees: committees.clone(),
-                ownership: ChainOwnership::single(owner1),
                 balance: Amount::from_tokens(2),
-                ..SystemExecutionState::new(chain_1_desc.clone())
+                ..env.system_execution_state(&chain_1_desc.id())
             }
             .into_hash()
             .await,
@@ -2608,9 +2621,8 @@ where
             state_hash: SystemExecutionState {
                 committees: committees2.clone(),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
-                admin_id: Some(admin_id),
                 epoch: Epoch::from(1),
-                ..SystemExecutionState::new(env.admin_description.clone())
+                ..env.system_execution_state(&admin_id)
             }
             .into_hash()
             .await,
@@ -2698,7 +2710,7 @@ where
             blobs: vec![Vec::new()],
             state_hash: SystemExecutionState {
                 balance: Amount::from_tokens(2),
-                ..SystemExecutionState::new(chain_1_desc.clone())
+                ..env.system_execution_state(&chain_1_desc.id())
             }
             .into_hash()
             .await,
@@ -2738,8 +2750,7 @@ where
                 committees: committees3.clone(),
                 used_blobs: BTreeSet::from([committee_blob.id()]),
                 epoch: Epoch::from(1),
-                admin_id: Some(admin_id),
-                ..SystemExecutionState::new(env.admin_description.clone())
+                ..env.system_execution_state(&admin_id)
             }
             .into_hash()
             .await,
@@ -2798,9 +2809,8 @@ where
                 committees: committees3.clone(),
                 balance: Amount::ONE,
                 used_blobs: BTreeSet::from([committee_blob.id()]),
-                admin_id: Some(admin_id),
                 epoch: Epoch::from(1),
-                ..SystemExecutionState::new(env.admin_description.clone())
+                ..env.system_execution_state(&admin_id)
             }
             .into_hash()
             .await,
@@ -3878,7 +3888,7 @@ where
     let mut state = SystemExecutionState {
         timestamp: Timestamp::from(BLOCK_TIMESTAMP),
         balance: balance - small_transfer,
-        ..SystemExecutionState::new(chain_description)
+        ..env.system_execution_state(&chain_description.id())
     }
     .into_view()
     .await;

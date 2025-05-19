@@ -7,7 +7,7 @@ use std::future::Future;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlobContent,
+    data_types::{BlobContent, NetworkDescription},
     identifiers::{BlobId, ChainId},
     time::{timer, Duration},
 };
@@ -21,7 +21,6 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
-use linera_storage::NetworkDescription;
 use linera_version::VersionInfo;
 
 use super::{codec, transport::TransportProtocol};
