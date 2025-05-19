@@ -851,7 +851,6 @@ impl Runnable for Job {
                     epoch,
                     blocks_infos,
                     committee,
-                    context.client.local_node().clone(),
                     health_check_endpoints,
                 )
                 .await?;

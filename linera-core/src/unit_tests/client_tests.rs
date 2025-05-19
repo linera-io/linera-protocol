@@ -50,7 +50,6 @@ use crate::{
     },
     local_node::LocalNodeError,
     node::{
-        CrossChainMessageDelivery,
         NodeError::{self, ClientIoError},
         ValidatorNode,
     },
@@ -1006,12 +1005,7 @@ where
         .await
         .unwrap();
     client1
-        .communicate_chain_updates(
-            &builder.initial_committee,
-            client1.chain_id,
-            client1.next_block_height(),
-            CrossChainMessageDelivery::NonBlocking,
-        )
+        .communicate_chain_updates(&builder.initial_committee)
         .await
         .unwrap();
     // Client2 does not know about the money yet.
