@@ -54,14 +54,12 @@ use {
     std::{fs, path::PathBuf},
 };
 
-#[cfg(web)]
-use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
-#[cfg(not(web))]
-use crate::persistent::{Persist, PersistExt as _};
 use crate::{
     chain_listener::{self, ClientContext as _, ClientContextExt as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
-    error, util,
+    error,
+    persistent::{Persist, PersistExt as _},
+    util,
     wallet::{UserChain, Wallet},
     Error,
 };
@@ -846,6 +844,7 @@ where
         ),
         Error,
     > {
+        use linera_base::identifiers::BlobType;
         let mut benchmark_chains = HashMap::new();
         let mut chain_clients = HashMap::new();
         let start = Instant::now();
