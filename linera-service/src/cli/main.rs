@@ -42,8 +42,6 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault as _,
 };
 use linera_faucet_server::FaucetService;
-#[cfg(feature = "benchmark")]
-use linera_service::cli::command::BenchmarkCommand;
 use linera_service::{
     cli::{
         command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand},
@@ -64,6 +62,15 @@ use serde_json::Value;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
+#[cfg(feature = "benchmark")]
+use {
+    linera_service::{
+        cli::command::BenchmarkCommand,
+        cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
+    },
+    std::time::Duration,
+    tokio::{io::AsyncWriteExt, process::ChildStdin, sync::oneshot},
+};
 
 use crate::persistent::PersistExt as _;
 
@@ -1288,6 +1295,10 @@ impl Runnable for Job {
                 );
             }
 
+            #[cfg(feature = "benchmark")]
+            MultiBenchmark { .. } => {
+                unreachable!()
+            }
             CreateGenesisConfig { .. }
             | Keygen
             | Net(_)
@@ -2117,6 +2128,176 @@ Make sure to use a Linera client compatible with this network.
                 Ok(0)
             }
         },
+
+        #[cfg(feature = "benchmark")]
+        ClientCommand::MultiBenchmark {
+            processes,
+            faucet,
+            ssd_dir,
+            command,
+            delay_between_processes,
+        } => {
+            let faucet = linera_faucet_client::Faucet::new(faucet.clone());
+            let on_drop = if command.close_chains {
+                OnClientDrop::CloseChains
+            } else {
+                OnClientDrop::LeakChains
+            };
+
+            let clients = (0..*processes)
+                .map(|n| {
+                    let path_provider = PathProvider::new(ssd_dir)?;
+                    Ok(Arc::new(ClientWrapper::new_with_extra_args(
+                        path_provider,
+                        Network::Grpc,
+                        None,
+                        n,
+                        on_drop,
+                        vec![
+                            "--max-loaded-chains".to_string(),
+                            "1000".to_string(),
+                            "--max-stream-queries".to_string(),
+                            "50".to_string(),
+                            "--tokio-blocking-threads".to_string(),
+                            "10000".to_string(),
+                        ],
+                    )))
+                })
+                .collect::<Result<Vec<_>, anyhow::Error>>()?;
+
+            info!("Initializing wallets...");
+            let mut join_set = JoinSet::new();
+            for client in clients.clone() {
+                let faucet = faucet.clone();
+                join_set.spawn(async move {
+                    client.wallet_init(Some(&faucet)).await?;
+                    client.request_chain(&faucet, true).await?;
+                    Ok::<_, anyhow::Error>(())
+                });
+            }
+
+            join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+
+            info!("Starting benchmark processes...");
+            let confirm_before_start = command.confirm_before_start;
+            let mut join_set = JoinSet::new();
+            for client in clients.clone() {
+                let command = command.clone();
+                let (tx, rx) = oneshot::channel();
+                join_set.spawn(async move {
+                    let result = client.benchmark_detached(command, tx).await?;
+                    Ok::<_, anyhow::Error>((result, rx))
+                });
+            }
+
+            let results = join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let mut children = Vec::new();
+            let mut stdout_handles = Vec::new();
+            let mut stderr_handles = Vec::new();
+            let mut rx_handles = Vec::new();
+            for ((child, stdout_handle, stderr_handle), rx) in results {
+                children.push(child);
+                stdout_handles.push(stdout_handle);
+                stderr_handles.push(stderr_handle);
+                rx_handles.push(rx);
+            }
+
+            if confirm_before_start {
+                info!("Waiting until all child processes are ready...");
+                let mut ready_count = 0;
+                for rx in rx_handles {
+                    rx.await?;
+                    ready_count += 1;
+                    info!("{}/{} child processes are ready", ready_count, processes);
+                }
+
+                info!("Ready to start benchmark. Say 'yes' when you want to proceed. Only 'yes' will be accepted");
+                if !std::io::stdin()
+                    .lines()
+                    .next()
+                    .unwrap()?
+                    .eq_ignore_ascii_case("yes")
+                {
+                    info!("Benchmark cancelled by user");
+                    let mut join_set = JoinSet::new();
+                    for mut child in children {
+                        let mut stdin: ChildStdin = child.stdin.take().unwrap();
+                        stdin.write_all(b"no\n").await?;
+                        stdin.flush().await?;
+                        join_set.spawn(async move {
+                            child.wait().await?;
+                            Ok::<_, anyhow::Error>(())
+                        });
+                    }
+                    join_set
+                        .join_all()
+                        .await
+                        .into_iter()
+                        .collect::<Result<Vec<_>, _>>()?;
+                    return Ok(1);
+                }
+
+                let mut previous = tokio::time::Instant::now();
+                let mut first = true;
+                let mut started_count = 0;
+                for child in &mut children {
+                    if first {
+                        first = false;
+                    } else {
+                        let time_elapsed = previous.elapsed();
+                        if time_elapsed < Duration::from_secs(*delay_between_processes) {
+                            tokio::time::sleep(
+                                Duration::from_secs(*delay_between_processes) - time_elapsed,
+                            )
+                            .await;
+                        }
+                    }
+
+                    let mut stdin: ChildStdin = child.stdin.take().unwrap();
+                    stdin.write_all(b"yes\n").await?;
+                    stdin.flush().await?;
+                    started_count += 1;
+                    info!("{}/{} benchmarks started", started_count, processes);
+
+                    previous = tokio::time::Instant::now();
+                }
+            }
+
+            let shutdown_notifier = CancellationToken::new();
+            tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+            let mut join_set = JoinSet::new();
+            for ((mut child, stdout_handle), stderr_handle) in
+                children.into_iter().zip(stdout_handles).zip(stderr_handles)
+            {
+                join_set.spawn(async move {
+                    child.wait().await?;
+                    stdout_handle.await?;
+                    stderr_handle.await?;
+                    Ok::<_, anyhow::Error>(())
+                });
+            }
+
+            // Wait for the shutdown signal.
+            shutdown_notifier.cancelled().await;
+
+            // Wait for all children to exit.
+            join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(0)
+        }
 
         _ => {
             options.run_with_storage(Job(options.clone())).await??;
