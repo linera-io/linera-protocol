@@ -579,11 +579,11 @@ type IncomingBundle {
 }
 
 """
-The result of an events from index.
+The result of an `events_from_index`.
 """
 type IndexAndEvent {
 	"""
-	The index of the found index.
+	The index of the found event.
 	"""
 	index: Int!
 	"""
