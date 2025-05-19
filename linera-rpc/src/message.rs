@@ -4,7 +4,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlobContent,
+    data_types::{BlobContent, NetworkDescription},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -15,7 +15,6 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
 };
-use linera_storage::NetworkDescription;
 use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 

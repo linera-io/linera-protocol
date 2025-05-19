@@ -14,10 +14,10 @@ use futures::{
     FutureExt as _,
 };
 use linera_base::{
-    crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
+    crypto::{AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorSecretKey},
     data_types::{
         Amount, ApplicationPermissions, Blob, BlobContent, ChainDescription, ChainOrigin, Epoch,
-        InitialChainConfig, Timestamp,
+        InitialChainConfig, NetworkDescription, Timestamp,
     },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
@@ -107,7 +107,6 @@ impl TestValidator {
             )]
             .into_iter()
             .collect(),
-            admin_id: None,
             epoch,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
@@ -117,6 +116,16 @@ impl TestValidator {
         let description = ChainDescription::new(origin, new_chain_config, Timestamp::from(0));
         let admin_chain_id = description.id();
 
+        let network_description = NetworkDescription {
+            name: "Test network".to_string(),
+            genesis_config_hash: CryptoHash::test_hash("genesis config"),
+            genesis_timestamp: description.timestamp(),
+            admin_chain_id,
+        };
+        storage
+            .write_network_description(&network_description)
+            .await
+            .unwrap();
         worker
             .storage_client()
             .create_chain(description.clone())
@@ -314,7 +323,6 @@ impl TestValidator {
         };
         let new_chain_config = open_chain_config.init_chain_config(
             epoch,
-            Some(admin_id),
             [(
                 epoch,
                 bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),

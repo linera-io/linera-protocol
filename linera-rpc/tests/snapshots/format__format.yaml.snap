@@ -533,9 +533,6 @@ InitialChainConfig:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
-    - admin_id:
-        OPTION:
-          TYPENAME: ChainId
     - epoch:
         TYPENAME: Epoch
     - committees:
@@ -642,6 +639,8 @@ NetworkDescription:
         TYPENAME: CryptoHash
     - genesis_timestamp:
         TYPENAME: Timestamp
+    - admin_chain_id:
+        TYPENAME: ChainId
 NodeError:
   ENUM:
     0:

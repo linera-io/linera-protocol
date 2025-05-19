@@ -526,7 +526,6 @@ where
 
     let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_public_key.into()),
-        admin_id: Some(builder.admin_id()),
         epoch: Epoch::ZERO,
         committees: builder
             .admin_description()

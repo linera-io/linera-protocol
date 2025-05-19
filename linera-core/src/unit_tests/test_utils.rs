@@ -29,7 +29,7 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, NetworkDescription, Storage, TestClock};
+use linera_storage::{DbStorage, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
@@ -178,6 +178,17 @@ where
             name: "test network".to_string(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
             genesis_timestamp: Timestamp::default(),
+            admin_chain_id: self
+                .client
+                .lock()
+                .await
+                .state
+                .storage_client()
+                .read_network_description()
+                .await
+                .unwrap()
+                .unwrap()
+                .admin_chain_id,
         })
     }
 
@@ -663,6 +674,7 @@ pub struct TestBuilder<'a, B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
     admin_description: Option<ChainDescription>,
+    network_description: Option<NetworkDescription>,
     genesis_storage_builder: GenesisStorageBuilder,
     validator_clients: Vec<LocalValidatorClient<B::Storage>>,
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
@@ -765,6 +777,7 @@ where
             storage_builder,
             initial_committee,
             admin_description: None,
+            network_description: None,
             genesis_storage_builder: GenesisStorageBuilder::default(),
             validator_clients,
             validator_storages,
@@ -817,11 +830,6 @@ where
         let public_key = self.signer.generate_new();
         let open_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(public_key.into()),
-            admin_id: if index == 0 {
-                None
-            } else {
-                Some(self.admin_id())
-            },
             epoch: Epoch(0),
             committees,
             balance,
@@ -830,6 +838,13 @@ where
         let description = ChainDescription::new(origin, open_chain_config, Timestamp::from(0));
         if index == 0 {
             self.admin_description = Some(description.clone());
+            self.network_description = Some(NetworkDescription {
+                admin_chain_id: description.id(),
+                // dummy values to fill the description
+                genesis_config_hash: CryptoHash::test_hash("genesis config"),
+                genesis_timestamp: Timestamp::from(0),
+                name: "test network".to_string(),
+            });
         }
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
@@ -839,6 +854,10 @@ where
                 .validator_storages
                 .get_mut(&validator.public_key)
                 .unwrap();
+            storage
+                .write_network_description(self.network_description.as_ref().unwrap())
+                .await
+                .expect("writing the NetworkDescription should succeed");
             if validator.fault_type().await == FaultType::Malicious {
                 let origin = description.origin();
                 let config = InitialChainConfig {
@@ -896,10 +915,12 @@ where
     }
 
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
-        Ok(self
-            .genesis_storage_builder
-            .build(self.storage_builder.build().await?)
-            .await)
+        let storage = self.storage_builder.build().await?;
+        storage
+            .write_network_description(self.network_description.as_ref().unwrap())
+            .await
+            .expect("writing the NetworkDescription should succeed");
+        Ok(self.genesis_storage_builder.build(storage).await)
     }
 
     pub async fn make_client(
