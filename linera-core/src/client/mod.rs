@@ -1091,6 +1091,127 @@ impl<Env: Environment> Client<Env> {
 
         Ok(())
     }
+
+    /// Downloads and processes confirmed block certificates that use the given blobs.
+    /// If this succeeds, the blobs will be in our storage.
+    pub async fn receive_certificates_for_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<(), ChainClientError> {
+        // Deduplicate IDs.
+        let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
+        let committee = self
+            .chain_info_with_committees(self.admin_id)
+            .await?
+            .into_current_committee()?;
+        let validators = self.make_nodes(&committee)?;
+
+        let mut missing_blobs = Vec::new();
+        for blob_id in blob_ids {
+            let mut certificate_stream = validators
+                .iter()
+                .map(|remote_node| async move {
+                    let cert = remote_node.download_certificate_for_blob(blob_id).await?;
+                    Ok::<_, NodeError>((remote_node.clone(), cert))
+                })
+                .collect::<FuturesUnordered<_>>();
+            loop {
+                let Some(result) = certificate_stream.next().await else {
+                    missing_blobs.push(blob_id);
+                    break;
+                };
+                if let Ok((remote_node, cert)) = result {
+                    if self
+                        .receive_certificate(
+                            cert,
+                            ReceiveCertificateMode::NeedsCheck,
+                            Some(vec![remote_node]),
+                        )
+                        .await
+                        .is_ok()
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if missing_blobs.is_empty() {
+            Ok(())
+        } else {
+            Err(NodeError::BlobsNotFound(missing_blobs).into())
+        }
+    }
+
+    /// Attempts to execute the block locally. If any incoming message execution fails, that
+    /// message is rejected and execution is retried, until the block accepts only messages
+    /// that succeed.
+    // TODO(#2806): Measure how failing messages affect the execution times.
+    #[tracing::instrument(level = "trace", skip(self, block))]
+    async fn stage_block_execution_and_discard_failing_messages(
+        &self,
+        mut block: ProposedBlock,
+        round: Option<u32>,
+        published_blobs: Vec<Blob>,
+    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+        loop {
+            let result = self
+                .stage_block_execution(block.clone(), round, published_blobs.clone())
+                .await;
+            if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(chain_error),
+            ))) = &result
+            {
+                if let ChainError::ExecutionError(
+                    error,
+                    ChainExecutionContext::IncomingBundle(index),
+                ) = &**chain_error
+                {
+                    let message = block
+                        .incoming_bundles
+                        .get_mut(*index as usize)
+                        .expect("Message at given index should exist");
+                    if message.bundle.is_protected() {
+                        error!("Protected incoming message failed to execute locally: {message:?}");
+                    } else {
+                        // Reject the faulty message from the block and continue.
+                        // TODO(#1420): This is potentially a bit heavy-handed for
+                        // retryable errors.
+                        info!(
+                            %error, origin = ?message.origin,
+                            "Message failed to execute locally and will be rejected."
+                        );
+                        message.action = MessageAction::Reject;
+                        continue;
+                    }
+                }
+            }
+            return result;
+        }
+    }
+
+    /// Attempts to execute the block locally. If any attempt to read a blob fails, the blob is
+    /// downloaded and execution is retried.
+    #[instrument(level = "trace", skip(self, block))]
+    async fn stage_block_execution(
+        &self,
+        block: ProposedBlock,
+        round: Option<u32>,
+        published_blobs: Vec<Blob>,
+    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
+        loop {
+            let result = self
+                .local_node
+                .stage_block_execution(block.clone(), round, published_blobs.clone())
+                .await;
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                self.receive_certificates_for_blobs(blob_ids.clone())
+                    .await?;
+                continue; // We found the missing blob: retry.
+            }
+            return Ok(result?);
+        }
+    }
 }
 
 /// Policies for automatically handling incoming messages.
@@ -2073,125 +2194,6 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.synchronize_chain_state(chain_id).await
     }
 
-    /// Downloads and processes confirmed block certificates that use the given blobs.
-    /// If this succeeds, the blobs will be in our storage.
-    pub async fn receive_certificates_for_blobs(
-        &self,
-        blob_ids: Vec<BlobId>,
-    ) -> Result<(), ChainClientError> {
-        // Deduplicate IDs.
-        let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
-        let validators = self.validator_nodes().await?;
-
-        let mut missing_blobs = Vec::new();
-        for blob_id in blob_ids {
-            let mut certificate_stream = validators
-                .iter()
-                .map(|remote_node| async move {
-                    let cert = remote_node.download_certificate_for_blob(blob_id).await?;
-                    Ok::<_, NodeError>((remote_node.clone(), cert))
-                })
-                .collect::<FuturesUnordered<_>>();
-            loop {
-                let Some(result) = certificate_stream.next().await else {
-                    missing_blobs.push(blob_id);
-                    break;
-                };
-                if let Ok((remote_node, cert)) = result {
-                    if self
-                        .client
-                        .receive_certificate(
-                            cert,
-                            ReceiveCertificateMode::NeedsCheck,
-                            Some(vec![remote_node]),
-                        )
-                        .await
-                        .is_ok()
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-
-        if missing_blobs.is_empty() {
-            Ok(())
-        } else {
-            Err(NodeError::BlobsNotFound(missing_blobs).into())
-        }
-    }
-
-    /// Attempts to execute the block locally. If any incoming message execution fails, that
-    /// message is rejected and execution is retried, until the block accepts only messages
-    /// that succeed.
-    // TODO(#2806): Measure how failing messages affect the execution times.
-    #[tracing::instrument(level = "trace", skip(block))]
-    async fn stage_block_execution_and_discard_failing_messages(
-        &self,
-        mut block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
-        loop {
-            let result = self
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
-                .await;
-            if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
-                WorkerError::ChainError(chain_error),
-            ))) = &result
-            {
-                if let ChainError::ExecutionError(
-                    error,
-                    ChainExecutionContext::IncomingBundle(index),
-                ) = &**chain_error
-                {
-                    let message = block
-                        .incoming_bundles
-                        .get_mut(*index as usize)
-                        .expect("Message at given index should exist");
-                    if message.bundle.is_protected() {
-                        error!("Protected incoming message failed to execute locally: {message:?}");
-                    } else {
-                        // Reject the faulty message from the block and continue.
-                        // TODO(#1420): This is potentially a bit heavy-handed for
-                        // retryable errors.
-                        info!(
-                            %error, origin = ?message.origin,
-                            "Message failed to execute locally and will be rejected."
-                        );
-                        message.action = MessageAction::Reject;
-                        continue;
-                    }
-                }
-            }
-            return result;
-        }
-    }
-
-    /// Attempts to execute the block locally. If any attempt to read a blob fails, the blob is
-    /// downloaded and execution is retried.
-    #[instrument(level = "trace", skip(block))]
-    async fn stage_block_execution(
-        &self,
-        block: ProposedBlock,
-        round: Option<u32>,
-        published_blobs: Vec<Blob>,
-    ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
-        loop {
-            let result = self
-                .client
-                .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone())
-                .await;
-            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                self.receive_certificates_for_blobs(blob_ids.clone())
-                    .await?;
-                continue; // We found the missing blob: retry.
-            }
-            return Ok(result?);
-        }
-    }
-
     /// Executes a list of operations.
     #[instrument(level = "trace", skip(operations, blobs))]
     pub async fn execute_operations(
@@ -2325,6 +2327,7 @@ impl<Env: Environment> ChainClient<Env> {
             Either::Right(_) => None,
         };
         let (block, _) = self
+            .client
             .stage_block_execution_and_discard_failing_messages(
                 proposed_block,
                 round,
@@ -2365,7 +2368,8 @@ impl<Env: Environment> ChainClient<Env> {
                 .query_application(self.chain_id, query.clone())
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                self.receive_certificates_for_blobs(blob_ids.clone())
+                self.client
+                    .receive_certificates_for_blobs(blob_ids.clone())
                     .await?;
                 continue; // We found the missing blob: retry.
             }
@@ -2504,6 +2508,7 @@ impl<Env: Environment> ChainClient<Env> {
             timestamp,
         };
         match self
+            .client
             .stage_block_execution_and_discard_failing_messages(block, None, Vec::new())
             .await
         {
@@ -2670,6 +2675,7 @@ impl<Env: Environment> ChainClient<Env> {
                             ChainClientError::InternalError("Missing local locking blobs")
                         })?;
                     let block = self
+                        .client
                         .stage_block_execution(proposed_block, None, blobs.clone())
                         .await?
                         .0;
@@ -2687,6 +2693,7 @@ impl<Env: Environment> ChainClient<Env> {
                 Either::Right(_) => None,
             };
             let (block, _) = self
+                .client
                 .stage_block_execution(proposed_block, round, pending_proposal.blobs.clone())
                 .await?;
             debug!("Proposing the local pending block.");
