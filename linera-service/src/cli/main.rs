@@ -19,7 +19,6 @@ use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
 use chrono::Utc;
 use colored::Colorize;
-use command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand};
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{InMemorySigner, Signer},
@@ -44,7 +43,11 @@ use linera_execution::{
 };
 use linera_faucet_server::FaucetService;
 use linera_service::{
-    cli_wrappers,
+    cli::{
+        command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand},
+        net_up_utils,
+    },
+    cli_wrappers::{self},
     node_service::NodeService,
     project::{self, Project},
     storage::{Runnable, RunnableWithStore, StorageConfigNamespace},
@@ -59,9 +62,6 @@ use serde_json::Value;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
-
-mod command;
-mod net_up_utils;
 
 use crate::persistent::PersistExt as _;
 

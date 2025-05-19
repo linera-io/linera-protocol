@@ -154,7 +154,7 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 
 [[bin]]
 name = "linera"
-path = "src/linera/main.rs"
+path = "src/cli/main.rs"
 
 [[bin]]
 name = "linera-server"

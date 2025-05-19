@@ -19,9 +19,10 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
+
 #[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::BuildMode;
-use linera_service::util::{
+use crate::cli_wrappers::local_kubernetes_net::BuildMode;
+use crate::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
 
