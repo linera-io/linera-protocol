@@ -391,6 +391,7 @@ impl<Env: Environment> Client<Env> {
         let mut info = None;
         for certificate in certificates {
             let hash = certificate.hash();
+            let certificate = Box::new(certificate);
             if certificate.block().header.chain_id != chain_id {
                 // The certificate is not as expected. Give up.
                 warn!("Failed to process network certificate {}", hash);
@@ -420,10 +421,10 @@ impl<Env: Environment> Client<Env> {
 
     async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: Box<GenericCertificate<T>>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         self.local_node
-            .handle_certificate(certificate.clone(), &self.notifier)
+            .handle_certificate(*certificate, &self.notifier)
             .await
     }
 
@@ -498,7 +499,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     pub async fn process_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: Box<GenericCertificate<T>>,
     ) -> Result<(), LocalNodeError> {
         let info = self.handle_certificate(certificate).await?.info;
         self.update_from_info(&info);
@@ -548,7 +549,8 @@ impl<Env: Environment> Client<Env> {
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
             .await?;
-        self.process_certificate(certificate.clone()).await?;
+        self.process_certificate(Box::new(certificate.clone()))
+            .await?;
         Ok(certificate)
     }
 
@@ -681,6 +683,7 @@ impl<Env: Environment> Client<Env> {
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), ChainClientError> {
+        let certificate = Box::new(certificate);
         let block = certificate.block();
 
         // Verify the certificate before doing any expensive networking.
@@ -793,7 +796,7 @@ impl<Env: Environment> Client<Env> {
             return Ok(());
         };
         if let Some(timeout) = info.manager.timeout {
-            self.handle_certificate(*timeout).await?;
+            self.handle_certificate(Box::new(*timeout)).await?;
         }
         let mut proposals = Vec::new();
         if let Some(proposal) = info.manager.requested_proposed {
@@ -884,6 +887,7 @@ impl<Env: Environment> Client<Env> {
         certificate: GenericCertificate<ValidatedBlock>,
     ) -> Result<(), ChainClientError> {
         let chain_id = certificate.inner().chain_id();
+        let certificate = Box::new(certificate);
         match self.process_certificate(certificate.clone()).await {
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                 let mut blobs = Vec::new();
@@ -1597,11 +1601,9 @@ impl<Env: Environment> ChainClient<Env> {
         proposal: Box<BlockProposal>,
         value: T,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
-        Box::pin(
-            self.client
-                .submit_block_proposal(committee, proposal, value),
-        )
-        .await
+        self.client
+            .submit_block_proposal(committee, proposal, value)
+            .await
     }
 
     /// Attempts to update all validators about the local chain.
@@ -2032,10 +2034,11 @@ impl<Env: Environment> ChainClient<Env> {
             chain_id,
         };
         let value = Timeout::new(chain_id, height, info.epoch);
-        let certificate = self
-            .client
-            .communicate_chain_action(committee, action, value)
-            .await?;
+        let certificate = Box::new(
+            self.client
+                .communicate_chain_action(committee, action, value)
+                .await?,
+        );
         self.client.process_certificate(certificate.clone()).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.client
@@ -2046,7 +2049,7 @@ impl<Env: Environment> ChainClient<Env> {
                 CrossChainMessageDelivery::NonBlocking,
             )
             .await?;
-        Ok(certificate)
+        Ok(*certificate)
     }
 
     /// Downloads and processes any certificates we are missing for the given chain.
