@@ -424,7 +424,11 @@ impl LocalNet {
         crate::util::read_json(path.join("genesis.json"))
     }
 
-    pub fn proxy_port(validator: usize, proxy_id: usize) -> usize {
+    pub fn proxy_public_port(validator: usize, proxy_id: usize) -> usize {
+        13000 + validator * 100 + proxy_id + 1
+    }
+
+    pub fn proxy_internal_port(validator: usize, proxy_id: usize) -> usize {
         10000 + validator * 100 + proxy_id + 1
     }
 
@@ -450,7 +454,7 @@ impl LocalNet {
             .path_provider
             .path()
             .join(format!("validator_{n}.toml"));
-        let port = Self::proxy_port(n, 0);
+        let port = Self::proxy_public_port(n, 0);
         let external_protocol = self.network.external.toml();
         let internal_protocol = self.network.internal.toml();
         let external_host = self.network.external.localhost();
@@ -466,7 +470,7 @@ impl LocalNet {
         );
 
         for k in 0..self.num_proxies {
-            let internal_port = Self::proxy_port(n, k);
+            let internal_port = Self::proxy_internal_port(n, k);
             let metrics_port = Self::proxy_metrics_port(n, k);
             // In the local network, the validator ingress is
             // the proxy - so the `public_port` is the validator
@@ -587,7 +591,7 @@ impl LocalNet {
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
-        let port = Self::proxy_port(validator, 0);
+        let port = Self::proxy_public_port(validator, 0);
         let nickname = format!("validator proxy {validator}");
         match self.network.external {
             Network::Grpc => {
@@ -832,7 +836,7 @@ impl LocalNet {
     /// Returns the address to connect to a validator's proxy.
     /// In local networks, the zeroth proxy _is_ the validator ingress.
     pub fn validator_address(&self, validator: usize) -> String {
-        let port = Self::proxy_port(validator, 0);
+        let port = Self::proxy_internal_port(validator, 0);
         let schema = self.network.external.schema();
 
         format!("{schema}:localhost:{port}")
