@@ -390,7 +390,8 @@ impl LocalKubernetesNet {
 
                 [[proxies]]
                 host = "proxy-{k}.default.svc.cluster.local"
-                port = {internal_port}
+                public_port = {port}
+                private_port = {internal_port}
                 metrics_port = {metrics_port}
                 "#
             ));
