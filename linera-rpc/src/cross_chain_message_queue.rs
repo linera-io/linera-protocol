@@ -43,12 +43,12 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
     F: Fn(ShardId, CrossChainRequest) -> G + Send + Clone + 'static,
     G: Future<Output = anyhow::Result<()>>,
 {
-    let mut futures = futures::stream::FuturesUnordered::new();
-    let mut job_states: HashMap<QueueId, Job> = HashMap::new();
+    let mut steps = futures::stream::FuturesUnordered::new();
+    let mut job_states: HashMap<QueueId, JobState> = HashMap::new();
 
     let run_task = |task: Task| async move { handle_request(task.shard_id, task.request).await };
 
-    let run_action = |action, queue, state: Job| async move {
+    let run_action = |action, queue, state: JobState| async move {
         linera_base::time::timer::sleep(cross_chain_sender_delay).await;
 
         let to_shard = state.task.shard_id;
@@ -87,15 +87,15 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
 
     loop {
         tokio::select! {
-            Some((queue, action)) = futures.next() => {
+            Some((queue, action)) = steps.next() => {
                 let Entry::Occupied(mut state) = job_states.entry(queue) else {
                     panic!("running job without state");
                 };
 
-                let remove = matches!(action, Action::Proceed { id } if state.get().id < id)
-                    || matches!(action, Action::Retry if state.get().retries >= cross_chain_max_retries);
-                if remove {
+                if state.get().is_finished(&action, cross_chain_max_retries) {
                     state.remove();
+                    #[cfg(with_metrics)]
+                    CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
                     continue;
                 }
 
@@ -103,7 +103,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                     state.get_mut().retries += 1
                 }
 
-                futures.push(run_action.clone()(action, queue, state.get().clone()));
+                steps.push(run_action.clone()(action, queue, state.get().clone()));
             }
 
             request = receiver.next() => {
@@ -124,10 +124,10 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                 };
 
                 match job_states.entry(queue) {
-                    Entry::Vacant(entry) => futures.push(run_action.clone()(
+                    Entry::Vacant(entry) => steps.push(run_action.clone()(
                         Action::Proceed { id: 0 },
                         queue,
-                        entry.insert(Job {
+                        entry.insert(JobState {
                             id: 0,
                             retries: 0,
                             nickname: nickname.clone(),
@@ -136,7 +136,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                     )),
 
                     Entry::Occupied(mut entry) => {
-                        entry.insert(Job {
+                        entry.insert(JobState {
                             id: entry.get().id + 1,
                             retries: 0,
                             nickname: nickname.clone(),
@@ -180,20 +180,40 @@ impl QueueId {
 }
 
 enum Action {
+    /// The request has been sent successfully and the next request can be sent.
     Proceed { id: usize },
+    /// The request failed and should be retried.
     Retry,
 }
 
 #[derive(Clone)]
 struct Task {
+    /// The ID of the shard the request is sent to.
     pub shard_id: ShardId,
+    /// The cross-chain request to be sent.
     pub request: linera_core::data_types::CrossChainRequest,
 }
 
 #[derive(Clone)]
-struct Job {
+struct JobState {
+    /// Queued requests are assigned incremental IDs.
     pub id: usize,
+    /// How often the current request has been retried.
     pub retries: u32,
+    /// The nickname of this worker, i.e. the one that is sending the request.
     pub nickname: String,
+    /// The current request to be sent.
     pub task: Task,
+}
+
+impl JobState {
+    /// Returns whether the job is finished and should be removed.
+    fn is_finished(&self, action: &Action, max_retries: u32) -> bool {
+        match action {
+            // If the action is to proceed and no new messages with a higher ID are waiting.
+            Action::Proceed { id } => self.id < *id,
+            // If the action is to retry and the maximum number of retries has been reached.
+            Action::Retry => self.retries >= max_retries,
+        }
+    }
 }

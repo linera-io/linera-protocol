@@ -399,7 +399,7 @@ where
         receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = GrpcConnectionPool::default();
-        let send_request =
+        let handle_request =
             move |shard_id: ShardId, request: linera_core::data_types::CrossChainRequest| {
                 let channel_result = pool.channel(network.shard(shard_id).http_address());
                 async move {
@@ -420,7 +420,7 @@ where
             cross_chain_sender_failure_rate,
             this_shard,
             receiver,
-            send_request,
+            handle_request,
         )
         .await;
     }

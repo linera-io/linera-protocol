@@ -94,6 +94,19 @@ where
                 .await
                 .expect("Initialization should not fail"),
         ));
+        let handle_request = move |shard_id, request| {
+            let pool = pool.clone();
+            let shard = network.shard(shard_id);
+            let remote_address = format!("{}:{}", shard.host, shard.port);
+            let message = RpcMessage::CrossChainRequest(Box::new(request));
+            async move {
+                pool.lock()
+                    .await
+                    .send_message_to(message.clone(), &remote_address)
+                    .await?;
+                anyhow::Result::<_, anyhow::Error>::Ok(())
+            }
+        };
         cross_chain_message_queue::forward_cross_chain_queries(
             nickname,
             cross_chain_max_retries,
@@ -102,19 +115,7 @@ where
             cross_chain_sender_failure_rate,
             this_shard,
             receiver,
-            move |shard_id, request| {
-                let pool = pool.clone();
-                let shard = network.shard(shard_id);
-                let remote_address = format!("{}:{}", shard.host, shard.port);
-                let message = RpcMessage::CrossChainRequest(Box::new(request));
-                async move {
-                    pool.lock()
-                        .await
-                        .send_message_to(message.clone(), &remote_address)
-                        .await?;
-                    anyhow::Result::<_, anyhow::Error>::Ok(())
-                }
-            },
+            handle_request,
         )
         .await;
     }
