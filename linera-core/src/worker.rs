@@ -880,6 +880,29 @@ where
             .await
     }
 
+    /// Applies a loose block without executing it. This does not update the execution state, but
+    /// can create cross-chain messages and store blobs. It also does _not_ check the signatures;
+    /// the caller is responsible for checking them using the correct committee.
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.block().header.chain_id),
+        height = %certificate.block().header.height,
+    ))]
+    pub async fn process_loose_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<NetworkActions, WorkerError> {
+        trace!("{} <-- {:?} (loose)", self.nickname, certificate);
+
+        self.query_chain_worker(certificate.block().header.chain_id, move |callback| {
+            ChainWorkerRequest::ProcessLooseCertificate {
+                certificate,
+                callback,
+            }
+        })
+        .await
+    }
+
     /// Processes a validated block certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,

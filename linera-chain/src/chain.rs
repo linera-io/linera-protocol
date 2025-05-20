@@ -946,6 +946,15 @@ where
         Ok(())
     }
 
+    /// Applies a loose block without executing it. This only updates the outboxes.
+    pub async fn apply_loose_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
+        let hash = block.inner().hash();
+        let block = block.inner().inner();
+        self.process_outgoing_messages(block).await?;
+        self.loose_blocks.insert(&block.header.height, hash)?;
+        Ok(())
+    }
+
     /// Executes a message as part of an incoming bundle in a block.
     #[expect(clippy::too_many_arguments)]
     async fn execute_message_in_block(
