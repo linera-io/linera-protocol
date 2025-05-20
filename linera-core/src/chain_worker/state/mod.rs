@@ -261,6 +261,18 @@ where
             .await
     }
 
+    /// Processes a loose block without executing it.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub(super) async fn process_loose_certificate(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<NetworkActions, WorkerError> {
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
+            .process_loose_certificate(certificate)
+            .await
+    }
+
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
     #[tracing::instrument(level = "debug", skip(self))]
     pub(super) async fn process_cross_chain_update(
