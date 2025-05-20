@@ -328,16 +328,11 @@ where
 {
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
-        let val = self.get_contract_address_key(address);
-        let Some(val) = val else {
-            return Ok(0);
-        };
-        let key_info = vec![val, KeyCategory::AccountInfo as u8];
-        let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let promise = runtime.read_value_bytes_new(key_info)?;
-        let result = runtime.read_value_bytes_wait(&promise)?;
-        let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
-        Ok(account_info.unwrap_or_default().nonce)
+        let account_info = self.basic_ref(address.clone())?;
+        Ok(match account_info {
+            None => 0,
+            Some(account_info) => account_info.nonce,
+        })
     }
 
     /// Checks if the contract is already initialized. It is possible
