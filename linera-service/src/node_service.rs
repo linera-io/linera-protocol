@@ -630,13 +630,13 @@ where
         stream_id: StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, Error> {
-        let client = self
+        Ok(self
             .context
             .lock()
             .await
             .make_chain_client(chain_id)
-            .await?;
-        Ok(client.events_from_index(stream_id, start_index).await?)
+            .events_from_index(stream_id, start_index)
+            .await?)
     }
 
     async fn blocks(
