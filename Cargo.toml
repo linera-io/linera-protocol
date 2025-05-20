@@ -181,8 +181,6 @@ revm-database = { git = "https://github.com/bluealloy/revm", rev = "37925695f494
 revm-database-interface = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ] }
 revm-handler = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ] }
 revm-interpreter = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ] }
-revm-inspector = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ] }
-revm-precompile = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst" ] }
 revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ] }
 revm-state = { git = "https://github.com/bluealloy/revm", rev = "37925695f4941de9654554ccea32c2d71cfc578c", default-features = false, features = [ "serde" ] }
 rocksdb = "0.21.0"

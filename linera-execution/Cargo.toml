@@ -21,8 +21,6 @@ revm = [
     "dep:revm-database-interface",
     "dep:revm-handler",
     "dep:revm-interpreter",
-    "dep:revm-inspector",
-    "dep:revm-precompile",
     "dep:revm-primitives",
     "dep:revm-state",
     "dep:alloy-primitives",
@@ -68,8 +66,6 @@ revm-database = { workspace = true, optional = true, default-features = false, f
 revm-database-interface = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
 revm-handler = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
 revm-interpreter = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-inspector = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-precompile = { workspace = true, optional = true, default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst" ] }
 revm-primitives = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
 revm-state = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
 serde.workspace = true
