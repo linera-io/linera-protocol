@@ -356,9 +356,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-primitives"
-version = "1.0.0"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70b98b99c1dcfbe74d7f0b31433ff215e7d1555e367d90e62db904f3c9d4ff53"
+checksum = "18c35fc4b03ace65001676358ffbbaefe2a2b27ee50fe777c345082c7c888be8"
 dependencies = [
  "alloy-rlp",
  "bytes",
@@ -3717,6 +3717,7 @@ name = "linera-ethereum"
 version = "0.15.0"
 dependencies = [
  "alloy",
+ "alloy-primitives",
  "anyhow",
  "async-lock",
  "async-trait",
