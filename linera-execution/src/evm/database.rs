@@ -328,7 +328,7 @@ where
 {
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
-        let account_info = self.basic_ref(address.clone())?;
+        let account_info = self.basic_ref(*address)?;
         Ok(match account_info {
             None => 0,
             Some(account_info) => account_info.nonce,

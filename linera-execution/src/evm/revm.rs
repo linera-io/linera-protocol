@@ -702,28 +702,22 @@ impl<'a, Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        tracing::info!("CallInterceptorContract, call_or_fail, step 1");
         let contract_address = Address::ZERO.create(0);
         if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
-            tracing::info!("CallInterceptorContract, call_or_fail, step 2");
             return Ok(None);
         }
-        tracing::info!("CallInterceptorContract, call_or_fail, step 3");
         let target = address_to_user_application_id(inputs.target_address);
         let argument = get_call_argument(context, &inputs.input);
         let authenticated = true;
-        tracing::info!("CallInterceptorContract, call_or_fail, step 4");
         let result = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.try_call_application(authenticated, target, argument)?
         };
-        tracing::info!("CallInterceptorContract, call_or_fail, step 5");
         let call_outcome = CallOutcome {
             result: get_interpreter_result(&result, inputs)?,
             memory_offset: inputs.return_memory_offset.clone(),
         };
-        tracing::info!("CallInterceptorContract, call_or_fail, step 6");
         Ok(Some(call_outcome))
     }
 }
@@ -745,7 +739,6 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
-        tracing::info!("Inspector, CallInterceptorService, inputs={inputs:?}");
         let result = self.call_or_fail(context, inputs);
         match result {
             Err(_error) => {
@@ -766,27 +759,22 @@ impl<'a, Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
-        tracing::info!("CallInterceptorService, call_or_fail, step 1");
         if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
-            tracing::info!("CallInterceptorService, call_or_fail, step 2");
             return Ok(None);
         }
         let target = address_to_user_application_id(inputs.target_address);
         let argument = get_call_argument(context, &inputs.input);
-        tracing::info!("CallInterceptorService, call_or_fail, step 3");
         let result = {
             let evm_query = EvmQuery::Query(argument);
             let evm_query = serde_json::to_vec(&evm_query)?;
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.try_query_application(target, evm_query)?
         };
-        tracing::info!("CallInterceptorService, call_or_fail, step 4");
         let call_outcome = CallOutcome {
             result: get_interpreter_result(&result, inputs)?,
             memory_offset: inputs.return_memory_offset.clone(),
         };
-        tracing::info!("CallInterceptorService, call_or_fail, step 5");
         Ok(Some(call_outcome))
     }
 }
@@ -843,7 +831,6 @@ where
         let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         if !instantiation_argument.is_empty() {
             let argument = get_revm_instantiation_bytes(instantiation_argument);
-            tracing::info!("instantiate: transact_commit");
             let result = self.transact_commit(Choice::Call, &argument)?;
             self.write_logs(result.logs, "instantiate")?;
         }
@@ -852,20 +839,15 @@ where
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
         ensure_message_length(operation.len(), 4)?;
-        tracing::info!("execute_operation: beginning");
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
-            tracing::info!("execute_operation: init_transact_commit, case A, step 1");
             let result = self.init_transact_commit(Choice::Call, &operation[4..])?;
-            tracing::info!("execute_operation: init_transact_commit, case A, step 2");
             result.interpreter_result_and_logs()?
         } else {
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            tracing::info!("execute_operation: init_transact_commit, case B, step 1");
             let result = self.init_transact_commit(Choice::Call, &operation)?;
-            tracing::info!("execute_operation: init_transact_commit, case B, step 2");
             result.output_and_logs()
         };
         self.consume_fuel(gas_final)?;
@@ -875,7 +857,6 @@ where
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         let operation = get_revm_execute_message_bytes(message);
-        tracing::info!("execute_message: init_transact_commit");
         let result = self.init_transact_commit(Choice::Call, &operation)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
@@ -945,11 +926,9 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
-        tracing::info!("init_transact_commit, step 1");
         if !self.db.is_initialized()? {
             self.initialize_contract()?;
         }
-        tracing::info!("init_transact_commit, step 2");
         self.transact_commit(ch, vec)
     }
 
@@ -958,7 +937,6 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        tracing::info!("initialize_contract: transact_commit");
         let result = self.transact_commit(Choice::Create, &vec_init)?;
         self.write_logs(result.logs, "deploy")
     }
@@ -984,7 +962,6 @@ where
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
         let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
-        tracing::info!("   transact_commit, read: nonce={nonce}");
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1020,7 +997,6 @@ where
         }?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        tracing::info!("   transact_commit, commit_change operation");
         process_execution_result(storage_stats, result)
     }
 
@@ -1065,7 +1041,6 @@ where
     Runtime: ServiceRuntime,
 {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
-        tracing::info!("handle_query, beginning");
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
@@ -1075,22 +1050,17 @@ where
                 return Ok(Vec::new());
             }
         };
-        tracing::info!("handle_query, has a query to process");
 
         ensure_message_length(query.len(), 4)?;
         // We drop the logs since the "eth_call" execution does not return any log.
         // Also, for handle_query, we do not have associated costs.
         // More generally, there is gas costs associated to service operation.
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
-            tracing::info!("handle_query, case A, step 1");
             let result = self.init_transact(&query[4..])?;
-            tracing::info!("handle_query, case A, step 2");
             let (_gas_final, answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
-            tracing::info!("handle_query, case B, step 1");
             let result = self.init_transact(&query)?;
-            tracing::info!("handle_query, case B, step 2");
             let (_gas_final, output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
@@ -1106,9 +1076,7 @@ where
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
-        tracing::info!("init_transact, step 1");
         if !self.db.is_initialized()? {
-            tracing::info!("init_transact, step 2");
             let changes = {
                 let mut vec_init = self.module.clone();
                 let constructor_argument = self.db.constructor_argument()?;
@@ -1117,18 +1085,13 @@ where
                 let (_, changes) = self.transact(kind, &vec_init)?;
                 changes
             };
-            tracing::info!("init_transact, step 3");
             self.db.changes = changes;
-            tracing::info!("init_transact, step 4");
         }
-        tracing::info!("init_transact, step 5");
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
         let contract_address = Address::ZERO.create(0);
         let kind = TxKind::Call(contract_address);
-        tracing::info!("init_transact, step 6");
         let (execution_result, _) = self.transact(kind, vec)?;
-        tracing::info!("init_transact, step 7");
         Ok(execution_result)
     }
 
@@ -1144,9 +1107,7 @@ where
             db: self.db.clone(),
         };
         let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
-        tracing::info!("   transact, read: nonce={nonce}");
         let result_state = {
-            tracing::info!("   transact, step 1");
             let ctx: revm_context::Context<
                 BlockEnv,
                 _,
@@ -1159,12 +1120,9 @@ where
                 SpecId::PRAGUE,
             )
             .with_block(block_env);
-            tracing::info!("   transact, step 2");
             let instructions = EthInstructions::new_mainnet();
-            tracing::info!("   transact, step 3");
             let mut evm =
                 Evm::new_with_inspector(ctx, inspector.clone(), instructions, ServicePrecompile::default());
-            tracing::info!("   transact, step 4");
             evm.inspect(TxEnv {
                 kind,
                 data,
@@ -1178,7 +1136,6 @@ where
                 ExecutionError::EvmError(error)
             })
         }?;
-        tracing::info!("   transact, We have result_state={result_state:?}");
         let storage_stats = self.db.take_storage_stats();
         Ok((
             process_execution_result(storage_stats, result_state.result)?,
