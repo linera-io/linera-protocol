@@ -186,6 +186,7 @@ secp256k1 = { version = "0.30.0", default-features = false, features = [
 ] }
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
+serde-command-opts = "0.1.1"
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
 serde-wasm-bindgen = "0.6.5"

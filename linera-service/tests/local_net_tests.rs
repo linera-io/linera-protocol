@@ -752,6 +752,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use linera_service::cli::command::BenchmarkCommand;
 
     config.num_other_initial_chains = 2;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -761,7 +762,13 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
 
     assert_eq!(client.load_wallet()?.num_chains(), 3);
     // Launch local benchmark using some additional chains.
-    client.benchmark(4, 10, None).await?;
+    client
+        .benchmark(BenchmarkCommand {
+            num_chains: 4,
+            transactions_per_block: 10,
+            ..Default::default()
+        })
+        .await?;
     assert_eq!(client.load_wallet()?.num_chains(), 7);
 
     // Now we run the benchmark again, with the fungible token application instead of the
@@ -782,7 +789,14 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
             None,
         )
         .await?;
-    client.benchmark(5, 10, Some(application_id)).await?;
+    client
+        .benchmark(BenchmarkCommand {
+            num_chains: 5,
+            transactions_per_block: 10,
+            fungible_application_id: Some(application_id.forget_abi()),
+            ..Default::default()
+        })
+        .await?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;

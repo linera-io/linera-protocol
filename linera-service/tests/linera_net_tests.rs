@@ -426,6 +426,121 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
+async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_primitives::{Bytes, Log, U256};
+    use alloy_sol_types::{sol, SolCall, SolValue};
+    use linera_base::{
+        identifiers::{GenericApplicationId, StreamId, StreamName},
+        vm::EvmQuery,
+    };
+    use linera_execution::test_utils::solidity::get_evm_contract_path;
+    use linera_sdk::abis::evm::EvmAbi;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    sol! {
+        struct ConstructorArgs {
+            uint64 start_value;
+        }
+        function increment(uint64 input);
+    }
+
+    let start_value = 35;
+    let constructor_argument = ConstructorArgs { start_value };
+    let constructor_argument = constructor_argument.abi_encode();
+
+    let increment = 5;
+
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    let (evm_contract, _dir) = get_evm_contract_path("tests/fixtures/evm_example_log.sol")?;
+
+    let instantiation_argument = Vec::new();
+    let application_id = client
+        .publish_and_create::<EvmAbi, Vec<u8>, Vec<u8>>(
+            evm_contract.clone(),
+            evm_contract,
+            VmRuntime::Evm,
+            &constructor_argument,
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await?;
+
+    let application_id = GenericApplicationId::User(application_id.forget_abi());
+    let stream_name = bcs::to_bytes("ethereum_event")?;
+    let stream_name = StreamName(stream_name);
+
+    let stream_id = StreamId {
+        application_id,
+        stream_name,
+    };
+
+    let mut start_index = 0;
+    let indices_and_events = node_service
+        .events_from_index(&chain, &stream_id, start_index)
+        .await?;
+    let index_and_event = indices_and_events[0].clone();
+    assert_eq!(index_and_event.index, 0);
+    let (origin, block_height, log) =
+        bcs::from_bytes::<(String, u64, Log)>(&index_and_event.event)?;
+    assert_eq!(&origin, "deploy");
+    assert_eq!(block_height, 1);
+    let value = U256::from(start_value);
+    let bytes = Bytes::from(value.to_be_bytes::<32>().to_vec());
+    assert_eq!(log.data.data, bytes);
+    start_index += indices_and_events.len() as u32;
+    assert_eq!(start_index, 1);
+
+    let mutation = incrementCall { input: increment };
+    let mutation = mutation.abi_encode();
+    let mutation = EvmQuery::Mutation(mutation);
+    application.run_json_query(mutation).await?;
+
+    let indices_and_events = node_service
+        .events_from_index(&chain, &stream_id, start_index)
+        .await?;
+    let index_and_event = indices_and_events[0].clone();
+    assert_eq!(index_and_event.index, 1);
+    let (origin, block_height, log) =
+        bcs::from_bytes::<(String, u64, Log)>(&index_and_event.event)?;
+    assert_eq!(&origin, "operation");
+    assert_eq!(block_height, 2);
+    let value1 = U256::from(increment);
+    let value2 = U256::from(start_value + increment);
+    let mut bytes = Vec::new();
+    bytes.extend(value1.to_be_bytes::<32>());
+    bytes.extend(value2.to_be_bytes::<32>());
+    let bytes = Bytes::from(bytes);
+    assert_eq!(log.data.data, bytes);
+    start_index += indices_and_events.len() as u32;
+    assert_eq!(start_index, 2);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
 async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use alloy_sol_types::{sol, SolValue};
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};

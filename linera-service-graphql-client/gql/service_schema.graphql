@@ -578,6 +578,20 @@ type IncomingBundle {
 	action: MessageAction!
 }
 
+"""
+The result of an `events_from_index`.
+"""
+type IndexAndEvent {
+	"""
+	The index of the found event.
+	"""
+	index: Int!
+	"""
+	The event being returned.
+	"""
+	event: [Int!]!
+}
+
 
 """
 A scalar that can represent any JSON Object value.
@@ -924,6 +938,7 @@ type QueryRoot {
 	applications(chainId: ChainId!): [ApplicationOverview!]!
 	chains: Chains!
 	block(hash: CryptoHash, chainId: ChainId!): ConfirmedBlock
+	eventsFromIndex(chainId: ChainId!, streamId: StreamIdInput!, startIndex: Int!): [IndexAndEvent!]!
 	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [ConfirmedBlock!]!
 	"""
 	Returns the version information on this node service.
@@ -1098,6 +1113,20 @@ scalar Round
 An event stream ID.
 """
 type StreamId {
+	"""
+	The application that can add events to this stream.
+	"""
+	applicationId: GenericApplicationId!
+	"""
+	The name of this stream: an application can have multiple streams with different names.
+	"""
+	streamName: StreamName!
+}
+
+"""
+An event stream ID.
+"""
+input StreamIdInput {
 	"""
 	The application that can add events to this stream.
 	"""
