@@ -17,13 +17,13 @@ use futures::{
 };
 use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
+    join_set_ext::JoinSet,
     node::NodeError,
     worker::{NetworkActions, Notification, Reason, WorkerError, WorkerState},
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
-use rand::Rng;
-use tokio::{sync::oneshot, task::JoinSet};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -50,8 +50,8 @@ use super::{
 };
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
-    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
-    HandleValidatedCertificateRequest,
+    cross_chain_message_queue, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
+    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
@@ -201,7 +201,7 @@ where
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
         shutdown_signal: CancellationToken,
-        join_set: &mut JoinSet<()>,
+        join_set: &mut JoinSet,
     ) -> GrpcServerHandle {
         info!(
             "spawning gRPC server on {}:{} for shard {}",
@@ -226,7 +226,6 @@ where
                 Duration::from_millis(cross_chain_config.retry_delay_ms),
                 Duration::from_millis(cross_chain_config.sender_delay_ms),
                 cross_chain_config.sender_failure_rate,
-                cross_chain_config.max_concurrent_tasks,
                 shard_id,
                 cross_chain_receiver,
             )
@@ -371,7 +370,6 @@ where
                         .with_label_values(&[])
                         .inc();
                 }
-                break;
             }
         }
 
@@ -397,77 +395,34 @@ where
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
-        cross_chain_max_concurrent_tasks: usize,
         this_shard: ShardId,
         receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = GrpcConnectionPool::default();
-        let max_concurrent_tasks = Some(cross_chain_max_concurrent_tasks);
-
-        receiver
-            .for_each_concurrent(max_concurrent_tasks, |(cross_chain_request, shard_id)| {
-                let shard = network.shard(shard_id);
-                let remote_address = shard.http_address();
-
-                let pool = pool.clone();
-                let nickname = nickname.clone();
-
-                // Send the cross-chain query and retry if needed.
+        let handle_request =
+            move |shard_id: ShardId, request: linera_core::data_types::CrossChainRequest| {
+                let channel_result = pool.channel(network.shard(shard_id).http_address());
                 async move {
-                    if cross_chain_sender_failure_rate > 0.0
-                        && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
-                    {
-                        warn!("Dropped 1 cross-chain message intentionally.");
-                        return;
-                    }
-
-                    for i in 0..cross_chain_max_retries {
-                        // Delay increases linearly with the attempt number.
-                        linera_base::time::timer::sleep(
-                            cross_chain_sender_delay + cross_chain_retry_delay * i,
-                        )
-                        .await;
-
-                        let result = || async {
-                            let cross_chain_request = cross_chain_request.clone().try_into()?;
-                            let request = Request::new(cross_chain_request);
-                            let mut client =
-                                ValidatorWorkerClient::new(pool.channel(remote_address.clone())?)
-                                    .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-                                    .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-                            let response = client.handle_cross_chain_request(request).await?;
-                            Ok::<_, anyhow::Error>(response)
-                        };
-                        match result().await {
-                            Err(error) => {
-                                warn!(
-                                    nickname,
-                                    %error,
-                                    i,
-                                    from_shard = this_shard,
-                                    to_shard = shard_id,
-                                    "Failed to send cross-chain query",
-                                );
-                            }
-                            _ => {
-                                trace!(
-                                    from_shard = this_shard,
-                                    to_shard = shard_id,
-                                    "Sent cross-chain query",
-                                );
-                                return;
-                            }
-                        }
-                    }
-                    error!(
-                        nickname,
-                        from_shard = this_shard,
-                        to_shard = shard_id,
-                        "Dropping cross-chain query",
-                    );
+                    let mut client = ValidatorWorkerClient::new(channel_result?)
+                        .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                        .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+                    client
+                        .handle_cross_chain_request(Request::new(request.try_into()?))
+                        .await?;
+                    anyhow::Result::<_, anyhow::Error>::Ok(())
                 }
-            })
-            .await;
+            };
+        cross_chain_message_queue::forward_cross_chain_queries(
+            nickname,
+            cross_chain_max_retries,
+            cross_chain_retry_delay,
+            cross_chain_sender_delay,
+            cross_chain_sender_failure_rate,
+            this_shard,
+            receiver,
+            handle_request,
+        )
+        .await;
     }
 
     fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
