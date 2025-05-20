@@ -399,13 +399,11 @@ where
         receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = GrpcConnectionPool::default();
-        let network = network.clone();
         let send_request =
             move |shard_id: ShardId, request: linera_core::data_types::CrossChainRequest| {
-                let pool = pool.clone();
-                let address = network.shard(shard_id).http_address();
+                let channel_result = pool.channel(network.shard(shard_id).http_address());
                 async move {
-                    let mut client = ValidatorWorkerClient::new(pool.channel(address)?)
+                    let mut client = ValidatorWorkerClient::new(channel_result?)
                         .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
                         .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
                     client

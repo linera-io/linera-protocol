@@ -38,7 +38,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
     cross_chain_sender_failure_rate: f32,
     this_shard: ShardId,
     mut receiver: mpsc::Receiver<(CrossChainRequest, ShardId)>,
-    send_request: F,
+    handle_request: F,
 ) where
     F: Fn(ShardId, CrossChainRequest) -> G + Send + Clone + 'static,
     G: Future<Output = anyhow::Result<()>>,
@@ -46,7 +46,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
     let mut futures = futures::stream::FuturesUnordered::new();
     let mut job_states: HashMap<QueueId, Job> = HashMap::new();
 
-    let run_task = |task: Task| async move { send_request(task.shard_id, task.request).await };
+    let run_task = |task: Task| async move { handle_request(task.shard_id, task.request).await };
 
     let run_action = |action, queue, state: Job| async move {
         linera_base::time::timer::sleep(cross_chain_sender_delay).await;
