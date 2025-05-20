@@ -4708,7 +4708,6 @@ version = "0.15.0"
 dependencies = [
  "amm",
  "anyhow",
- "async-trait",
  "base64 0.22.1",
  "bcs",
  "cfg-if",

@@ -7,7 +7,7 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::wasm_bindgen;
 use web_sys::DomException;
 
-use super::{dirty::Dirty, LocalPersist};
+use super::{dirty::Dirty, Persist};
 
 /// An implementation of [`Persist`] based on an IndexedDB record with a given key.
 #[derive(derive_more::Deref)]
@@ -109,7 +109,7 @@ impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
     }
 }
 
-impl<T: serde::Serialize> LocalPersist for IndexedDb<T> {
+impl<T: serde::Serialize> Persist for IndexedDb<T> {
     type Error = Error;
 
     #[instrument(level = "trace")]

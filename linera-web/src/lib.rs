@@ -19,7 +19,7 @@ use linera_base::{
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     client_options::ClientContextOptions,
-    persistent::LocalPersist as _,
+    persistent::Persist as _,
     wallet::Wallet,
 };
 use linera_core::{
@@ -122,7 +122,7 @@ impl JsFaucet {
     /// If an error occurs in the chain listener task.
     #[wasm_bindgen(js_name = claimChain)]
     pub async fn claim_chain(&self, wallet: &mut JsWallet) -> JsResult<String> {
-        use linera_client::persistent::LocalPersistExt as _;
+        use linera_client::persistent::PersistExt as _;
         let owner = AccountOwner::from(wallet.signer.mutate(InMemorySigner::generate_new).await?);
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
@@ -250,7 +250,7 @@ impl Client {
             .wallet()
             .default_chain()
             .expect("A default chain should be configured");
-        Ok(client_context.make_chain_client(chain_id).await?)
+        Ok(client_context.make_chain_client(chain_id))
     }
 
     async fn apply_client_command<Fut, T, E>(
@@ -354,7 +354,7 @@ impl Frontend {
             .wallet()
             .default_chain()
             .expect("No default chain");
-        let chain_client = client_context.make_chain_client(chain_id).await?;
+        let chain_client = client_context.make_chain_client(chain_id);
         chain_client.synchronize_from_validators().await?;
         let result = chain_client.local_committee().await;
         client_context.update_wallet(&chain_client).await?;
