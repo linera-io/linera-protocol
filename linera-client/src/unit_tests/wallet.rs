@@ -34,7 +34,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     let genesis_config = make_genesis_config(&builder);
 
     let tmp_dir = tempfile::tempdir()?;
-    let mut config_dir = tmp_dir.into_path();
+    let mut config_dir = tmp_dir.keep();
     config_dir.push("linera");
     if !config_dir.exists() {
         tracing::debug!("{} does not exist, creating", config_dir.display());
