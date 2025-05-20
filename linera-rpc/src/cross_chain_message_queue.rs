@@ -86,6 +86,8 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
     };
 
     loop {
+        #[cfg(with_metrics)]
+        CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
         tokio::select! {
             Some((queue, action)) = steps.next() => {
                 let Entry::Occupied(mut state) = job_states.entry(queue) else {
@@ -94,8 +96,6 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
 
                 if state.get().is_finished(&action, cross_chain_max_retries) {
                     state.remove();
-                    #[cfg(with_metrics)]
-                    CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
                     continue;
                 }
 
@@ -108,8 +108,6 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
 
             request = receiver.next() => {
                 let Some((request, shard_id)) = request else { break };
-                #[cfg(with_metrics)]
-                CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
 
                 if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
                     warn!("Dropped 1 cross-chain message intentionally.");
