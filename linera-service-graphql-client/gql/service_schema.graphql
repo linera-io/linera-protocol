@@ -360,6 +360,10 @@ type ChainStateExtendedView {
 	We use a `RegisterView` to prioritize speed for small maps.
 	"""
 	outboxCounters: JSONObject!
+	"""
+	Blocks that have been verified but not processed yet, and that may not be contiguous.
+	"""
+	looseBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
 }
 
 """
@@ -465,6 +469,14 @@ A GraphQL-visible map item, complete with key.
 type Entry_BlobId_Blob_9f0b41f3 {
 	key: BlobId!
 	value: Blob
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_BlockHeight_CryptoHash_74e16b71 {
+	key: BlockHeight!
+	value: CryptoHash
 }
 
 """
@@ -610,6 +622,10 @@ input MapFilters_BlobId_4d2a0555 {
 	keys: [BlobId!]
 }
 
+input MapFilters_BlockHeight_e824a938 {
+	keys: [BlockHeight!]
+}
+
 input MapFilters_ChainId_37f83aa9 {
 	keys: [ChainId!]
 }
@@ -620,6 +636,10 @@ input MapInput_AccountOwner_d6668c53 {
 
 input MapInput_BlobId_4d2a0555 {
 	filters: MapFilters_BlobId_4d2a0555
+}
+
+input MapInput_BlockHeight_e824a938 {
+	filters: MapFilters_BlockHeight_e824a938
 }
 
 input MapInput_ChainId_37f83aa9 {
@@ -642,6 +662,12 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
+}
+
+type MapView_BlockHeight_CryptoHash_1bae6d76 {
+	keys(count: Int): [BlockHeight!]!
+	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_74e16b71!
+	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_74e16b71!]!
 }
 
 type MapView_ChainId_BlockHeight_f2e56e12 {
