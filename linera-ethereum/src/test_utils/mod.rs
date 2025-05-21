@@ -1,16 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-};
 use alloy_primitives::{Address, U256};
 use alloy::{
-    network::Ethereum,
     node_bindings::{Anvil, AnvilInstance},
-    providers::{ProviderBuilder, RootProvider},
+    providers::ProviderBuilder,
     sol,
-    //    transports::http::reqwest::Client,
 };
 use linera_base::port::get_free_port;
 use url::Url;
@@ -39,7 +34,6 @@ pub struct AnvilTest {
     pub endpoint: String,
     pub ethereum_client: EthereumClient,
     pub rpc_url: Url,
-    pub provider: FillProvider<JoinFill<alloy::providers::Identity,JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>,RootProvider<Ethereum>>,
 }
 
 pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
@@ -48,13 +42,11 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let endpoint = anvil_instance.endpoint();
     let ethereum_client = EthereumClient::new(endpoint.clone())?;
     let rpc_url = Url::parse(&endpoint)?;
-    let provider = ProviderBuilder::new().connect_http(rpc_url.clone());
     Ok(AnvilTest {
         anvil_instance,
         endpoint,
         ethereum_client,
         rpc_url,
-        provider,
     })
 }
 
