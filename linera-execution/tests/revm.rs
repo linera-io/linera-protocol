@@ -103,11 +103,8 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     };
     let amount = Amount::from_tokens(1);
     *view.system.balance.get_mut() = amount;
-    let mut controller = ResourceController {
-        policy: Arc::new(policy),
-        tracker: ResourceTracker::default(),
-        account: None,
-    };
+    let mut controller =
+        ResourceController::new(Arc::new(policy), ResourceTracker::default(), None);
     for increment in &increments {
         let mut txn_tracker = TransactionTracker::new_replaying_blobs([
             app_desc_blob_id,
@@ -224,11 +221,8 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
     };
     let amount = Amount::from_tokens(1);
     *view.system.balance.get_mut() = amount;
-    let mut controller = ResourceController {
-        policy: Arc::new(policy),
-        tracker: ResourceTracker::default(),
-        account: None,
-    };
+    let mut controller =
+        ResourceController::new(Arc::new(policy), ResourceTracker::default(), None);
 
     // Trying the increment, should fail
     let mut txn_tracker = TransactionTracker::new_replaying_blobs([

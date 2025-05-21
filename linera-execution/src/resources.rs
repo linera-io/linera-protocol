@@ -20,14 +20,34 @@ use crate::{ExecutionError, Message, Operation, ResourceControlPolicy, SystemExe
 #[derive(Clone, Debug, Default)]
 pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
     /// The (fixed) policy used to charge fees and control resource usage.
-    pub policy: Arc<ResourceControlPolicy>,
+    policy: Arc<ResourceControlPolicy>,
     /// How the resources were used so far.
     pub tracker: Tracker,
     /// The account paying for the resource usage.
     pub account: Account,
 }
 
+impl<Account, Tracker> ResourceController<Account, Tracker> {
+    /// Creates a new resource controller with the given policy and account.
+    pub fn new(policy: Arc<ResourceControlPolicy>, tracker: Tracker, account: Account) -> Self {
+        Self {
+            policy,
+            tracker,
+            account,
+        }
+    }
+
+    /// Returns a reference to the policy.
+    pub fn policy(&self) -> &Arc<ResourceControlPolicy> {
+        &self.policy
+    }
+}
+
 /// The resources used so far by an execution process.
+/// Acts as an accumulator for all resources consumed during
+/// a specific execution flow. This could be the execution of a block,
+/// the processing of a single message, or a specific phase within these
+/// broader operations.
 #[derive(Copy, Debug, Clone, Default)]
 pub struct ResourceTracker {
     /// The total size of the block so far.

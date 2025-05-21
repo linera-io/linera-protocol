@@ -697,11 +697,11 @@ where
             .1
             .policy()
             .clone();
-        let mut resource_controller = ResourceController {
-            policy: Arc::new(policy),
-            tracker: ResourceTracker::default(),
-            account: block.authenticated_signer,
-        };
+        let mut resource_controller = ResourceController::new(
+            Arc::new(policy),
+            ResourceTracker::default(),
+            block.authenticated_signer,
+        );
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
             .with_execution_context(ChainExecutionContext::Block)?;

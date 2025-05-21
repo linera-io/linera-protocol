@@ -111,11 +111,7 @@ where
 
         let tracker = ResourceTracker::default();
         let policy = ResourceControlPolicy::no_fees();
-        let mut resource_controller = ResourceController {
-            policy: Arc::new(policy),
-            tracker,
-            account: None,
-        };
+        let mut resource_controller = ResourceController::new(Arc::new(policy), tracker, None);
         let mut txn_tracker = TransactionTracker::new(
             local_time,
             0,
@@ -225,11 +221,11 @@ where
             .with_state_and_grant(&mut self.system, cloned_grant.as_mut())
             .await?
             .balance()?;
-        let controller = ResourceController {
-            policy: resource_controller.policy.clone(),
-            tracker: resource_controller.tracker,
-            account: initial_balance,
-        };
+        let controller = ResourceController::new(
+            resource_controller.policy().clone(),
+            resource_controller.tracker,
+            initial_balance,
+        );
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let (code, description) = self.load_contract(application_id, txn_tracker).await?;

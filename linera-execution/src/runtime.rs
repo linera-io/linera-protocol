@@ -1175,10 +1175,19 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     }
 
     fn maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError> {
-        let policy = &self.inner().resource_controller.policy;
         Ok(match vm_runtime {
-            VmRuntime::Wasm => policy.maximum_wasm_fuel_per_block,
-            VmRuntime::Evm => policy.maximum_evm_fuel_per_block,
+            VmRuntime::Wasm => {
+                self.inner()
+                    .resource_controller
+                    .policy()
+                    .maximum_wasm_fuel_per_block
+            }
+            VmRuntime::Evm => {
+                self.inner()
+                    .resource_controller
+                    .policy()
+                    .maximum_evm_fuel_per_block
+            }
         })
     }
 
@@ -1200,7 +1209,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         let grant = this
             .resource_controller
-            .policy
+            .policy()
             .total_price(&message.grant)?;
         if grant.is_zero() {
             refund_grant_to = None;
