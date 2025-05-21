@@ -785,21 +785,12 @@ where
 
             block_execution_tracker.add_txn_outcome(&txn_outcome);
 
-            if matches!(
-                transaction,
-                Transaction::ExecuteOperation(_)
-                    | Transaction::ReceiveMessages(IncomingBundle {
-                        action: MessageAction::Accept,
-                        ..
-                    })
-            ) {
-                for message_out in &txn_outcome.outgoing_messages {
-                    resource_controller
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_message(&message_out.message)
-                        .with_execution_context(chain_execution_context)?;
-                }
+            for message_out in &txn_outcome.outgoing_messages {
+                resource_controller
+                    .with_state(&mut chain.system)
+                    .await?
+                    .track_message(&message_out.message)
+                    .with_execution_context(chain_execution_context)?;
             }
 
             resource_controller
