@@ -41,6 +41,11 @@ impl<Account, Tracker> ResourceController<Account, Tracker> {
     pub fn policy(&self) -> &Arc<ResourceControlPolicy> {
         &self.policy
     }
+
+    /// Returns a reference to the tracker.
+    pub fn tracker(&self) -> &Tracker {
+        &self.tracker
+    }
 }
 
 /// The resources used so far by an execution process.
@@ -264,14 +269,14 @@ where
     }
 
     /// Tracks a read operation.
-    pub(crate) fn track_read_operations(&mut self, count: u32) -> Result<(), ExecutionError> {
+    pub(crate) fn track_read_operation(&mut self) -> Result<(), ExecutionError> {
         self.tracker.as_mut().read_operations = self
             .tracker
             .as_mut()
             .read_operations
-            .checked_add(count)
+            .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
-        self.update_balance(self.policy.read_operations_price(count)?)
+        self.update_balance(self.policy.read_operations_price(1)?)
     }
 
     /// Tracks a write operation.

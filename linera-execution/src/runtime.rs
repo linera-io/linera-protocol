@@ -688,7 +688,7 @@ where
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKey { id, key, callback })?;
@@ -710,7 +710,7 @@ where
     ) -> Result<Self::ContainsKeys, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKeys { id, keys, callback })?;
@@ -735,7 +735,7 @@ where
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::ReadMultiValuesBytes { id, keys, callback }
         })?;
@@ -766,7 +766,7 @@ where
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ReadValueBytes { id, key, callback })?;
@@ -797,7 +797,7 @@ where
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeysByPrefix {
                 id,
@@ -834,7 +834,7 @@ where
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeyValuesByPrefix {
                 id,
