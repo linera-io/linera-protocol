@@ -722,7 +722,6 @@ async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> R
     assert_eq!(counter_value, original_counter_value);
     tracing::info!("test_evm_call_evm_end_to_end_counter, step 6");
 
-
     let mutation = nest_incrementCall { input: increment };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);

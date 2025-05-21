@@ -162,9 +162,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-contract"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e810f27a4162190b50cdf4dabedee3ad9028772bd7e370fdfc0f63b8bc116d3"
+checksum = "210f50a648d28ee4266ff42523186efab61dd54d2ab2f8853fe38ad45d254756"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -289,9 +289,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-genesis"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "765c0124a3174f136171df8498e4700266774c9de1008a0b987766cf215d08f6"
+checksum = "1cf47e07c0dbcb8f1fa2c903d9eb32b14fec3dc04e60e7fee29fc0d3799fba34"
 dependencies = [
  "alloy-eips 1.0.3",
  "alloy-primitives",
@@ -302,9 +302,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-hardforks"
-version = "0.2.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7d3b2243e2adfaea41da41982f91ecab8083fa51b240d0427955d709f65b1b4"
+checksum = "b40cc82a2283e3ce6317bc1f0134ea50d20e8c1965393045ee952fb28a65ddbd"
 dependencies = [
  "alloy-chains",
  "alloy-eip2124",
@@ -380,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-node-bindings"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1da198d78f58c199408003c7b9dc999d61e7033bba68f2e3f135e510a3bd0960"
+checksum = "6df1cbb080e0f41874a2f492939444852f4bcad754a4bfa7dc8368f4abb79640"
 dependencies = [
  "alloy-genesis",
  "alloy-hardforks",
@@ -528,9 +528,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-anvil"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7400bf7830ebc33c3533d1385eeed5418cfcddd99da0c4514e84ce480e636d8f"
+checksum = "6895febd23a9fd75a58d2fb8fa27e6ed84f4aaada309c6905e156af37afbb6e6"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",

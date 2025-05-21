@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, StreamName},
     vm::{EvmQuery, VmRuntime},
 };
-use revm::{primitives::Bytes, Inspector, InspectCommitEvm, InspectEvm};
+use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
 use revm_context::{
     result::{ExecutionResult, Output, SuccessReason},
     BlockEnv, Cfg, ContextTr, Evm, Journal, LocalContextTr, TxEnv,
@@ -22,13 +22,12 @@ use revm_database_interface::WrapDatabaseRef;
 use revm_handler::{
     instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };
-use serde::{Deserialize, Serialize};
 use revm_interpreter::{
     CallInput, CallInputs, CallOutcome, Gas, InputsImpl, InstructionResult, InterpreterResult,
 };
 use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
 use revm_state::EvmState;
-
+use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
@@ -338,7 +337,6 @@ fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, S
     }))
 }
 
-
 fn base_runtime_call<Runtime: BaseRuntime>(
     tag: BasePrecompileTag,
     vec: &[u8],
@@ -645,10 +643,11 @@ struct CallInterceptorContract<Runtime> {
 
 impl<Runtime> Clone for CallInterceptorContract<Runtime> {
     fn clone(&self) -> Self {
-        Self { db: self.db.clone() }
+        Self {
+            db: self.db.clone(),
+        }
     }
 }
-
 
 fn get_argument<Ctx: ContextTr>(context: &mut Ctx, argument: &mut Vec<u8>, input: &CallInput) {
     match input {
@@ -728,10 +727,11 @@ struct CallInterceptorService<Runtime> {
 
 impl<Runtime> Clone for CallInterceptorService<Runtime> {
     fn clone(&self) -> Self {
-        Self { db: self.db.clone() }
+        Self {
+            db: self.db.clone(),
+        }
     }
 }
-
 
 impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
     fn call(
@@ -982,13 +982,16 @@ where
                 instructions,
                 ContractPrecompile::default(),
             );
-            evm.inspect_commit(TxEnv {
-                kind,
-                data,
-                nonce,
-                gas_limit,
-                ..TxEnv::default()
-            }, inspector)
+            evm.inspect_commit(
+                TxEnv {
+                    kind,
+                    data,
+                    nonce,
+                    gas_limit,
+                    ..TxEnv::default()
+                },
+                inspector,
+            )
             .map_err(|error| {
                 let error = format!("{:?}", error);
                 let error = EvmExecutionError::TransactCommitError(error);
@@ -1121,15 +1124,22 @@ where
             )
             .with_block(block_env);
             let instructions = EthInstructions::new_mainnet();
-            let mut evm =
-                Evm::new_with_inspector(ctx, inspector.clone(), instructions, ServicePrecompile::default());
-            evm.inspect(TxEnv {
-                kind,
-                data,
-                nonce,
-                gas_limit: EVM_SERVICE_GAS_LIMIT,
-                ..TxEnv::default()
-            }, inspector)
+            let mut evm = Evm::new_with_inspector(
+                ctx,
+                inspector.clone(),
+                instructions,
+                ServicePrecompile::default(),
+            );
+            evm.inspect(
+                TxEnv {
+                    kind,
+                    data,
+                    nonce,
+                    gas_limit: EVM_SERVICE_GAS_LIMIT,
+                    ..TxEnv::default()
+                },
+                inspector,
+            )
             .map_err(|error| {
                 let error = format!("{:?}", error);
                 let error = EvmExecutionError::TransactCommitError(error);
