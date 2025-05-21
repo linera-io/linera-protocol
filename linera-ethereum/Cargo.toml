@@ -30,12 +30,20 @@ serde_json = { workspace = true, features = ["raw_value"] }
 thiserror.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth", "json-rpc", "node-bindings", "signer-local", "contract" ] }
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+    "json-rpc",
+    "node-bindings",
+    "signer-local",
+    "contract",
+] }
 url.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
