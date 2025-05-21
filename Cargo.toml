@@ -84,7 +84,7 @@ async-lock = "3.3.0"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
 aws-config = "1.1.7"
-aws-sdk-dynamodb = "1.60.0"
+aws-sdk-dynamodb = "1.76.0"
 aws-smithy-types = "1.1.7"
 axum = "0.7.4"
 base64 = "0.22.0"
