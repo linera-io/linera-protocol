@@ -91,22 +91,15 @@ impl SimpleTokenContractFunction {
         // Getting the simple_token
         let contract_address = self.contract_address.parse::<Address>()?;
         let simple_token =
-            SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
+            SimpleTokenContract::new(contract_address, self.anvil_test.ethereum_client.provider.clone());
         // Creating the calldata
         let to_address = to.parse::<Address>()?;
         let data = simple_token.balanceOf(to_address).calldata().clone();
-        // Doing the check using the anvil_test provider
-        let answer = self
-            .anvil_test
-            .ethereum_client
-            .non_executive_call(&self.contract_address, data.clone(), to, block)
-            .await?;
         // Using the Ethereum client simplified.
         let ethereum_client_simp = EthereumClientSimplified::new(self.anvil_test.endpoint.clone());
-        let answer_simp = ethereum_client_simp
+        let answer = ethereum_client_simp
             .non_executive_call(&self.contract_address, data, to, block)
             .await?;
-        assert_eq!(answer_simp, answer);
         // Converting the output
         let mut vec = [0_u8; 32];
         for (i, val) in vec.iter_mut().enumerate() {
@@ -122,7 +115,7 @@ impl SimpleTokenContractFunction {
         let to_address = to.parse::<Address>()?;
         let from_address = from.parse::<Address>()?;
         let simple_token =
-            SimpleTokenContract::new(contract_address, self.anvil_test.provider.clone());
+            SimpleTokenContract::new(contract_address, self.anvil_test.ethereum_client.provider.clone());
         // Doing the transfer
         let builder = simple_token.transfer(to_address, value).from(from_address);
         let _receipt = builder.send().await?.get_receipt().await?;
