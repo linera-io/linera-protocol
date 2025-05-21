@@ -13,8 +13,17 @@ helmDefaults:
   recreatePods: false
   kubeContext: {{ .Values.kubeContext | quote }}
 
-{{- if or .Values.usingLocalSsd .Values.usingRecommendedScyllaDbSettings }}
 hooks:
+  - events: ["prepare"]
+    showlogs: true
+    command: bash
+    args:
+      - -lc
+      - |
+        set -euxo pipefail
+        echo "Installing Prometheus ServiceMonitor CRD…"
+        kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+{{- if or .Values.usingLocalSsd .Values.usingRecommendedScyllaDbSettings }}
   - events: ["prepare"]
     showlogs: true
     command: bash
