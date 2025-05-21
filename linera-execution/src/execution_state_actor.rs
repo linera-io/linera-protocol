@@ -3,17 +3,13 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 #[cfg(not(web))]
 use std::time::Duration;
 
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::{
-    exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
-};
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, Timestamp,
@@ -24,8 +20,6 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
-#[cfg(with_metrics)]
-use prometheus::HistogramVec;
 use reqwest::{header::HeaderMap, Client, Url};
 
 use crate::{
@@ -37,26 +31,32 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// Histogram of the latency to load a contract bytecode.
-static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "load_contract_latency",
-        "Load contract latency",
-        &[],
-        exponential_bucket_latencies(250.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-/// Histogram of the latency to load a service bytecode.
-static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "load_service_latency",
-        "Load service latency",
-        &[],
-        exponential_bucket_latencies(250.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// Histogram of the latency to load a contract bytecode.
+    pub static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "load_contract_latency",
+            "Load contract latency",
+            &[],
+            exponential_bucket_latencies(250.0),
+        )
+    });
+
+    /// Histogram of the latency to load a service bytecode.
+    pub static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "load_service_latency",
+            "Load service latency",
+            &[],
+            exponential_bucket_latencies(250.0),
+        )
+    });
+}
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 
@@ -71,7 +71,7 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
-        let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
+        let _latency = metrics::LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
         let description = match txn_tracker.created_blobs().get(&blob_id) {
             Some(description) => {
@@ -98,7 +98,7 @@ where
         txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(UserServiceCode, ApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
-        let _latency = LOAD_SERVICE_LATENCY.measure_latency();
+        let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
         let description = match txn_tracker
             .as_ref()

@@ -4,8 +4,6 @@
 // `tracing::instrument` is not compatible with this nightly Clippy lint
 #![allow(unknown_lints)]
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     fmt::Debug,
     marker::PhantomData,
@@ -52,48 +50,47 @@ use tonic::{
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-};
 
 #[cfg(with_metrics)]
 use crate::prometheus_server;
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "proxy_request_latency",
-        "Proxy request latency",
-        &[],
-        linear_bucket_interval(1.0, 50.0, 2000.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> =
-    LazyLock::new(|| register_int_counter_vec("proxy_request_count", "Proxy request count", &[]));
+    use linera_base::prometheus_util::{
+        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "proxy_request_success",
-        "Proxy request success",
-        &["method_name"],
-    )
-});
+    pub static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "proxy_request_latency",
+            "Proxy request latency",
+            &[],
+            linear_bucket_interval(1.0, 50.0, 2000.0),
+        )
+    });
+    pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
+    });
 
-#[cfg(with_metrics)]
-static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "proxy_request_error",
-        "Proxy request error",
-        &["method_name"],
-    )
-});
+    pub static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "proxy_request_success",
+            "Proxy request success",
+            &["method_name"],
+        )
+    });
+
+    pub static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "proxy_request_error",
+            "Proxy request error",
+            &["method_name"],
+        )
+    });
+}
 
 #[derive(Clone)]
 pub struct PrometheusMetricsMiddlewareLayer;
@@ -132,10 +129,10 @@ where
             let response = future.await?;
             #[cfg(with_metrics)]
             {
-                PROXY_REQUEST_LATENCY
+                metrics::PROXY_REQUEST_LATENCY
                     .with_label_values(&[])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
             }
             Ok(response)
         }
@@ -318,14 +315,16 @@ where
         match result {
             Ok(chain_info_result) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_SUCCESS
+                metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&[method_name])
                     .inc();
                 Ok(chain_info_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_ERROR.with_label_values(&[method_name]).inc();
+                metrics::PROXY_REQUEST_ERROR
+                    .with_label_values(&[method_name])
+                    .inc();
                 Err(status)
             }
         }
@@ -520,14 +519,14 @@ where
         match client.download_pending_blob(inner).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_SUCCESS
+                metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&["download_pending_blob"])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_ERROR
+                metrics::PROXY_REQUEST_ERROR
                     .with_label_values(&["download_pending_blob"])
                     .inc();
                 Err(status)
@@ -545,14 +544,14 @@ where
         match client.handle_pending_blob(inner).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_SUCCESS
+                metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&["handle_pending_blob"])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
                 #[cfg(with_metrics)]
-                PROXY_REQUEST_ERROR
+                metrics::PROXY_REQUEST_ERROR
                     .with_label_values(&["handle_pending_blob"])
                     .inc();
                 Err(status)

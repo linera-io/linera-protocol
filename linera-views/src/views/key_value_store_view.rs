@@ -13,19 +13,12 @@
 //!
 //! Key tags to create the sub-keys of a `KeyValueStoreView` on top of the base key.
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
 
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
 
 use crate::{
     batch::{Batch, WriteOperation},
@@ -40,94 +33,98 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// The latency of hash computation
-static KEY_VALUE_STORE_VIEW_HASH_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "key_value_store_view_hash_latency",
-        "KeyValueStoreView hash latency",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-/// The latency of get operation
-static KEY_VALUE_STORE_VIEW_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "key_value_store_view_get_latency",
-        "KeyValueStoreView get latency",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
 
-#[cfg(with_metrics)]
-/// The latency of multi get
-static KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "key_value_store_view_multi_get_latency",
-        "KeyValueStoreView multi get latency",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
-
-#[cfg(with_metrics)]
-/// The latency of contains key
-static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "key_value_store_view_contains_key_latency",
-        "KeyValueStoreView contains key latency",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
-
-#[cfg(with_metrics)]
-/// The latency of contains keys
-static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "key_value_store_view_contains_keys_latency",
-        "KeyValueStoreView contains keys latency",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
-
-#[cfg(with_metrics)]
-/// The latency of find keys by prefix operation
-static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
-    LazyLock::new(|| {
+    /// The latency of hash computation
+    pub static KEY_VALUE_STORE_VIEW_HASH_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
-            "key_value_store_view_find_keys_by_prefix_latency",
-            "KeyValueStoreView find keys by prefix latency",
+            "key_value_store_view_hash_latency",
+            "KeyValueStoreView hash latency",
             &[],
             exponential_bucket_latencies(5.0),
         )
     });
 
-#[cfg(with_metrics)]
-/// The latency of find key values by prefix operation
-static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
-    LazyLock::new(|| {
+    /// The latency of get operation
+    pub static KEY_VALUE_STORE_VIEW_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
-            "key_value_store_view_find_key_values_by_prefix_latency",
-            "KeyValueStoreView find key values by prefix latency",
+            "key_value_store_view_get_latency",
+            "KeyValueStoreView get latency",
             &[],
             exponential_bucket_latencies(5.0),
         )
     });
 
-#[cfg(with_metrics)]
-/// The latency of write batch operation
-static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "key_value_store_view_write_batch_latency",
-        "KeyValueStoreView write batch latency",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+    /// The latency of multi get
+    pub static KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "key_value_store_view_multi_get_latency",
+                "KeyValueStoreView multi get latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            )
+        });
+
+    /// The latency of contains key
+    pub static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "key_value_store_view_contains_key_latency",
+                "KeyValueStoreView contains key latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            )
+        });
+
+    /// The latency of contains keys
+    pub static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "key_value_store_view_contains_keys_latency",
+                "KeyValueStoreView contains keys latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            )
+        });
+
+    /// The latency of find keys by prefix operation
+    pub static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "key_value_store_view_find_keys_by_prefix_latency",
+                "KeyValueStoreView find keys by prefix latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            )
+        });
+
+    /// The latency of find key values by prefix operation
+    pub static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "key_value_store_view_find_key_values_by_prefix_latency",
+                "KeyValueStoreView find key values by prefix latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            )
+        });
+
+    /// The latency of write batch operation
+    pub static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "key_value_store_view_write_batch_latency",
+                "KeyValueStoreView write batch latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            )
+        });
+}
 
 #[cfg(with_testing)]
 use {
@@ -693,7 +690,7 @@ where
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         #[cfg(with_metrics)]
-        let _latency = KEY_VALUE_STORE_VIEW_GET_LATENCY.measure_latency();
+        let _latency = metrics::KEY_VALUE_STORE_VIEW_GET_LATENCY.measure_latency();
         ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
             let value = match update {
@@ -727,7 +724,7 @@ where
     /// ```
     pub async fn contains_key(&self, index: &[u8]) -> Result<bool, ViewError> {
         #[cfg(with_metrics)]
-        let _latency = KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY.measure_latency();
+        let _latency = metrics::KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY.measure_latency();
         ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
             let test = match update {
@@ -762,7 +759,7 @@ where
     /// ```
     pub async fn contains_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
         #[cfg(with_metrics)]
-        let _latency = KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY.measure_latency();
+        let _latency = metrics::KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY.measure_latency();
         let mut results = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
@@ -813,7 +810,7 @@ where
         indices: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
         #[cfg(with_metrics)]
-        let _latency = KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY.measure_latency();
+        let _latency = metrics::KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY.measure_latency();
         let mut result = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
@@ -868,7 +865,7 @@ where
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        let _latency = KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY.measure_latency();
+        let _latency = metrics::KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY.measure_latency();
         *self.hash.get_mut().unwrap() = None;
         let max_key_size = self.max_key_size();
         for operation in batch.operations {
@@ -1006,7 +1003,7 @@ where
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         #[cfg(with_metrics)]
-        let _latency = KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY.measure_latency();
+        let _latency = metrics::KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY.measure_latency();
         ensure!(
             key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
@@ -1086,7 +1083,8 @@ where
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
         #[cfg(with_metrics)]
-        let _latency = KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY.measure_latency();
+        let _latency =
+            metrics::KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY.measure_latency();
         ensure!(
             key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
@@ -1149,7 +1147,7 @@ where
 
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = KEY_VALUE_STORE_VIEW_HASH_LATENCY.measure_latency();
+        let _hash_latency = metrics::KEY_VALUE_STORE_VIEW_HASH_LATENCY.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0u32;
         self.for_each_index_value(|index, value| -> Result<(), ViewError> {

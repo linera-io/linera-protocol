@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     net::{IpAddr, SocketAddr},
     str::FromStr,
@@ -28,13 +26,6 @@ use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-};
 
 use super::{
     api::{
@@ -58,64 +49,69 @@ type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest
 type NotificationSender = mpsc::Sender<Notification>;
 
 #[cfg(with_metrics)]
-static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "server_request_latency",
-        "Server request latency",
-        &[],
-        linear_bucket_interval(1.0, 25.0, 2000.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> =
-    LazyLock::new(|| register_int_counter_vec("server_request_count", "Server request count", &[]));
+    use linera_base::prometheus_util::{
+        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "server_request_success",
-        "Server request success",
-        &["method_name"],
-    )
-});
+    pub static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "server_request_latency",
+            "Server request latency",
+            &[],
+            linear_bucket_interval(1.0, 25.0, 2000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "server_request_error",
-        "Server request error",
-        &["method_name"],
-    )
-});
+    pub static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("server_request_count", "Server request count", &[])
+    });
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "server_request_latency_per_request_type",
-        "Server request latency per request type",
-        &["method_name"],
-        linear_bucket_interval(1.0, 25.0, 2000.0),
-    )
-});
+    pub static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "server_request_success",
+            "Server request success",
+            &["method_name"],
+        )
+    });
 
-#[cfg(with_metrics)]
-static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "cross_chain_message_channel_full",
-        "Cross-chain message channel full",
-        &[],
-    )
-});
+    pub static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "server_request_error",
+            "Server request error",
+            &["method_name"],
+        )
+    });
 
-#[cfg(with_metrics)]
-static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "notification_channel_full",
-        "Notification channel full",
-        &[],
-    )
-});
+    pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "server_request_latency_per_request_type",
+                "Server request latency per request type",
+                &["method_name"],
+                linear_bucket_interval(1.0, 25.0, 2000.0),
+            )
+        });
+
+    pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "cross_chain_message_channel_full",
+            "Cross-chain message channel full",
+            &[],
+        )
+    });
+
+    pub static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "notification_channel_full",
+            "Notification channel full",
+            &[],
+        )
+    });
+}
 
 #[derive(Clone)]
 pub struct GrpcServer<S>
@@ -176,10 +172,10 @@ where
             let response = future.await?;
             #[cfg(with_metrics)]
             {
-                SERVER_REQUEST_LATENCY
+                metrics::SERVER_REQUEST_LATENCY
                     .with_label_values(&[])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
             }
             Ok(response)
         }
@@ -366,7 +362,7 @@ where
                 error!(%error, "dropping cross-chain request");
                 #[cfg(with_metrics)]
                 if error.is_full() {
-                    CROSS_CHAIN_MESSAGE_CHANNEL_FULL
+                    metrics::CROSS_CHAIN_MESSAGE_CHANNEL_FULL
                         .with_label_values(&[])
                         .inc();
                 }
@@ -379,7 +375,9 @@ where
                 error!(%error, "dropping notification");
                 #[cfg(with_metrics)]
                 if error.is_full() {
-                    NOTIFICATION_CHANNEL_FULL.with_label_values(&[]).inc();
+                    metrics::NOTIFICATION_CHANNEL_FULL
+                        .with_label_values(&[])
+                        .inc();
                 }
                 break;
             }
@@ -429,15 +427,17 @@ where
         #![allow(unused_variables)]
         #[cfg(with_metrics)]
         {
-            SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
+            metrics::SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
                 .with_label_values(&[method_name])
                 .observe(start.elapsed().as_secs_f64() * 1000.0);
             if success {
-                SERVER_REQUEST_SUCCESS
+                metrics::SERVER_REQUEST_SUCCESS
                     .with_label_values(&[method_name])
                     .inc();
             } else {
-                SERVER_REQUEST_ERROR.with_label_values(&[method_name]).inc();
+                metrics::SERVER_REQUEST_ERROR
+                    .with_label_values(&[method_name])
+                    .inc();
             }
         }
     }

@@ -3,8 +3,6 @@
 
 //! Add LRU (least recently used) caching to a given store.
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::{btree_map, hash_map::RandomState, BTreeMap},
     sync::{Arc, Mutex},
@@ -12,8 +10,6 @@ use std::{
 
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
-#[cfg(with_metrics)]
-use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 use crate::{
     batch::{Batch, WriteOperation},
@@ -24,44 +20,48 @@ use crate::{
 use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
 #[cfg(with_metrics)]
-/// The total number of cache read value misses
-static READ_VALUE_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "num_read_value_cache_miss",
-        "Number of read value cache misses",
-        &[],
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-/// The total number of read value cache hits
-static READ_VALUE_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "num_read_value_cache_hits",
-        "Number of read value cache hits",
-        &[],
-    )
-});
+    use linera_base::prometheus_util::register_int_counter_vec;
+    use prometheus::IntCounterVec;
 
-#[cfg(with_metrics)]
-/// The total number of contains key cache misses
-static CONTAINS_KEY_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "num_contains_key_cache_miss",
-        "Number of contains key cache misses",
-        &[],
-    )
-});
+    /// The total number of cache read value misses
+    pub static READ_VALUE_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_read_value_cache_miss",
+            "Number of read value cache misses",
+            &[],
+        )
+    });
 
-#[cfg(with_metrics)]
-/// The total number of contains key cache hits
-static CONTAINS_KEY_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "num_contains_key_cache_hit",
-        "Number of contains key cache hits",
-        &[],
-    )
-});
+    /// The total number of read value cache hits
+    pub static READ_VALUE_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_read_value_cache_hits",
+            "Number of read value cache hits",
+            &[],
+        )
+    });
+
+    /// The total number of contains key cache misses
+    pub static CONTAINS_KEY_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_contains_key_cache_miss",
+            "Number of contains key cache misses",
+            &[],
+        )
+    });
+
+    /// The total number of contains key cache hits
+    pub static CONTAINS_KEY_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_contains_key_cache_hit",
+            "Number of contains key cache hits",
+            &[],
+        )
+    });
+}
 
 /// The parametrization of the cache
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -284,12 +284,16 @@ where
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_read_value(key) {
                 #[cfg(with_metrics)]
-                READ_VALUE_CACHE_HIT_COUNT.with_label_values(&[]).inc();
+                metrics::READ_VALUE_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
                 return Ok(value);
             }
         }
         #[cfg(with_metrics)]
-        READ_VALUE_CACHE_MISS_COUNT.with_label_values(&[]).inc();
+        metrics::READ_VALUE_CACHE_MISS_COUNT
+            .with_label_values(&[])
+            .inc();
         let value = self.store.read_value_bytes(key).await?;
         let mut cache = cache.lock().unwrap();
         cache.insert_read_value(key.to_vec(), &value);
@@ -304,12 +308,16 @@ where
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_contains_key(key) {
                 #[cfg(with_metrics)]
-                CONTAINS_KEY_CACHE_HIT_COUNT.with_label_values(&[]).inc();
+                metrics::CONTAINS_KEY_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
                 return Ok(value);
             }
         }
         #[cfg(with_metrics)]
-        CONTAINS_KEY_CACHE_MISS_COUNT.with_label_values(&[]).inc();
+        metrics::CONTAINS_KEY_CACHE_MISS_COUNT
+            .with_label_values(&[])
+            .inc();
         let result = self.store.contains_key(key).await?;
         let mut cache = cache.lock().unwrap();
         cache.insert_contains_key(key.to_vec(), result);
@@ -329,11 +337,15 @@ where
             for i in 0..size {
                 if let Some(value) = cache.query_contains_key(&keys[i]) {
                     #[cfg(with_metrics)]
-                    CONTAINS_KEY_CACHE_HIT_COUNT.with_label_values(&[]).inc();
+                    metrics::CONTAINS_KEY_CACHE_HIT_COUNT
+                        .with_label_values(&[])
+                        .inc();
                     results[i] = value;
                 } else {
                     #[cfg(with_metrics)]
-                    CONTAINS_KEY_CACHE_MISS_COUNT.with_label_values(&[]).inc();
+                    metrics::CONTAINS_KEY_CACHE_MISS_COUNT
+                        .with_label_values(&[])
+                        .inc();
                     indices.push(i);
                     key_requests.push(keys[i].clone());
                 }
@@ -366,11 +378,15 @@ where
             for (i, key) in keys.into_iter().enumerate() {
                 if let Some(value) = cache.query_read_value(&key) {
                     #[cfg(with_metrics)]
-                    READ_VALUE_CACHE_HIT_COUNT.with_label_values(&[]).inc();
+                    metrics::READ_VALUE_CACHE_HIT_COUNT
+                        .with_label_values(&[])
+                        .inc();
                     result.push(value);
                 } else {
                     #[cfg(with_metrics)]
-                    READ_VALUE_CACHE_MISS_COUNT.with_label_values(&[]).inc();
+                    metrics::READ_VALUE_CACHE_MISS_COUNT
+                        .with_label_values(&[])
+                        .inc();
                     result.push(None);
                     cache_miss_indices.push(i);
                     miss_keys.push(key);

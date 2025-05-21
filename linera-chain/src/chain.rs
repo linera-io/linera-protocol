@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
@@ -55,128 +53,122 @@ use crate::{
 mod chain_tests;
 
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
+use linera_base::prometheus_util::MeasureLatency;
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
-        register_int_counter_vec, MeasureLatency,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-};
+        register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
-});
+    pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
+    });
 
-#[cfg(with_metrics)]
-static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "block_execution_latency",
-        "Block execution latency",
-        &[],
-        exponential_bucket_latencies(1000.0),
-    )
-});
+    pub static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "block_execution_latency",
+            "Block execution latency",
+            &[],
+            exponential_bucket_latencies(1000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "message_execution_latency",
-        "Message execution latency",
-        &[],
-        exponential_bucket_latencies(50.0),
-    )
-});
+    #[cfg(with_metrics)]
+    pub static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "message_execution_latency",
+            "Message execution latency",
+            &[],
+            exponential_bucket_latencies(50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "operation_execution_latency",
-        "Operation execution latency",
-        &[],
-        exponential_bucket_latencies(50.0),
-    )
-});
+    pub static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "operation_execution_latency",
+            "Operation execution latency",
+            &[],
+            exponential_bucket_latencies(50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "wasm_fuel_used_per_block",
-        "Wasm fuel used per block",
-        &[],
-        exponential_bucket_interval(10.0, 1_000_000.0),
-    )
-});
+    pub static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "wasm_fuel_used_per_block",
+            "Wasm fuel used per block",
+            &[],
+            exponential_bucket_interval(10.0, 1_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "evm_fuel_used_per_block",
-        "EVM fuel used per block",
-        &[],
-        exponential_bucket_interval(10.0, 1_000_000.0),
-    )
-});
+    pub static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "evm_fuel_used_per_block",
+            "EVM fuel used per block",
+            &[],
+            exponential_bucket_interval(10.0, 1_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "vm_num_reads_per_block",
-        "VM number of reads per block",
-        &[],
-        exponential_bucket_interval(0.1, 100.0),
-    )
-});
+    pub static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "vm_num_reads_per_block",
+            "VM number of reads per block",
+            &[],
+            exponential_bucket_interval(0.1, 100.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "vm_bytes_read_per_block",
-        "VM number of bytes read per block",
-        &[],
-        exponential_bucket_interval(0.1, 10_000_000.0),
-    )
-});
+    pub static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "vm_bytes_read_per_block",
+            "VM number of bytes read per block",
+            &[],
+            exponential_bucket_interval(0.1, 10_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "vm_bytes_written_per_block",
-        "VM number of bytes written per block",
-        &[],
-        exponential_bucket_interval(0.1, 10_000_000.0),
-    )
-});
+    pub static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "vm_bytes_written_per_block",
+            "VM number of bytes written per block",
+            &[],
+            exponential_bucket_interval(0.1, 10_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "state_hash_computation_latency",
-        "Time to recompute the state hash",
-        &[],
-        exponential_bucket_latencies(500.0),
-    )
-});
+    pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "state_hash_computation_latency",
+            "Time to recompute the state hash",
+            &[],
+            exponential_bucket_latencies(500.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_inboxes",
-        "Number of inboxes",
-        &[],
-        exponential_bucket_interval(1.0, 10_000.0),
-    )
-});
+    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_inboxes",
+            "Number of inboxes",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_outboxes",
-        "Number of outboxes",
-        &[],
-        exponential_bucket_interval(1.0, 10_000.0),
-    )
-});
+    pub static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_outboxes",
+            "Number of outboxes",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
+}
 
 /// The BCS-serialized size of an empty [`Block`].
 const EMPTY_BLOCK_SIZE: usize = 94;
@@ -409,7 +401,7 @@ where
             self.outboxes.remove_entry(target)?;
         }
         #[cfg(with_metrics)]
-        NUM_OUTBOXES
+        metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
         Ok(true)
@@ -551,7 +543,7 @@ where
         // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
         #[cfg(with_metrics)]
-        NUM_INBOXES
+        metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
         let entry = BundleInInbox::new(*origin, &bundle);
@@ -675,7 +667,7 @@ where
             }
         }
         #[cfg(with_metrics)]
-        NUM_INBOXES
+        metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
         Ok(())
@@ -695,7 +687,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
-        let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
+        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
 
         ensure!(
             *chain.system.timestamp.get() <= block.timestamp,
@@ -804,7 +796,7 @@ where
                         .track_block_size_of(&operation)
                         .with_execution_context(chain_execution_context)?;
                     #[cfg(with_metrics)]
-                    let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
+                    let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
                         chain_id: block.chain_id,
                         height: block.height,
@@ -922,7 +914,7 @@ where
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
             chain.crypto_hash().await?
         };
 
@@ -1013,7 +1005,7 @@ where
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ChainError> {
         #[cfg(with_metrics)]
-        let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
+        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
         let context = MessageContext {
             chain_id: block.chain_id,
             is_bouncing: posted_message.is_bouncing(),
@@ -1141,20 +1133,20 @@ where
     /// Tracks block execution metrics in Prometheus.
     #[cfg(with_metrics)]
     fn track_block_metrics(tracker: &ResourceTracker) {
-        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-        WASM_FUEL_USED_PER_BLOCK
+        metrics::NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+        metrics::WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.wasm_fuel as f64);
-        EVM_FUEL_USED_PER_BLOCK
+        metrics::EVM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.evm_fuel as f64);
-        VM_NUM_READS_PER_BLOCK
+        metrics::VM_NUM_READS_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.read_operations as f64);
-        VM_BYTES_READ_PER_BLOCK
+        metrics::VM_BYTES_READ_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_read as f64);
-        VM_BYTES_WRITTEN_PER_BLOCK
+        metrics::VM_BYTES_WRITTEN_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_written as f64);
     }
@@ -1176,7 +1168,7 @@ where
         }
 
         #[cfg(with_metrics)]
-        NUM_OUTBOXES
+        metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
         Ok(())
