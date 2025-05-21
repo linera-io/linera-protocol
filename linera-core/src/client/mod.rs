@@ -513,6 +513,17 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
+    #[instrument(level = "trace", skip_all)]
+    pub async fn process_loose_certificate(
+        &self,
+        certificate: Box<ConfirmedBlockCertificate>,
+    ) -> Result<(), LocalNodeError> {
+        self.local_node
+            .process_loose_certificate(*certificate, &self.notifier)
+            .await?;
+        Ok(())
+    }
+
     /// Submits a validated block for finalization and returns the confirmed block certificate.
     #[instrument(level = "trace", skip_all)]
     async fn finalize_block(
@@ -663,7 +674,8 @@ impl<Env: Environment> Client<Env> {
         let block_chain_id = certificate.block().header.chain_id;
         let block_height = certificate.block().header.height;
 
-        self.receive_certificate(certificate, mode, None).await?;
+        self.receive_certificate(certificate, mode, None, false)
+            .await?;
 
         // Make sure a quorum of validators (according to the chain's new committee) are up-to-date
         // for data availability.
@@ -681,14 +693,14 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Processes the confirmed block certificate in the local node. Also downloads and processes
-    /// all ancestors that are still missing.
+    /// Processes the confirmed block as a loose certificate in the local node.
     #[instrument(level = "trace", skip_all)]
     async fn receive_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
+        loose: bool,
     ) -> Result<(), ChainClientError> {
         let certificate = Box::new(certificate);
         let block = certificate.block();
@@ -715,7 +727,11 @@ impl<Env: Environment> Client<Env> {
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self.process_certificate(certificate.clone()).await {
+        if let Err(err) = if loose {
+            self.process_loose_certificate(certificate.clone()).await
+        } else {
+            self.process_certificate(certificate.clone()).await
+        } {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     let blobs =
@@ -723,11 +739,57 @@ impl<Env: Environment> Client<Env> {
                             .await
                             .ok_or(err)?;
                     self.local_node.store_blobs(&blobs).await?;
-                    self.process_certificate(certificate).await?;
+                    if loose {
+                        self.process_loose_certificate(certificate.clone()).await
+                    } else {
+                        self.process_certificate(certificate.clone()).await
+                    }?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
                     warn!("Failed to process network hashed certificate value");
+                    return Err(err.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    async fn receive_checked_loose_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<(), ChainClientError> {
+        let certificate = Box::new(certificate);
+        let block = certificate.block();
+
+        // Verify the certificate before doing any expensive networking.
+        let (max_epoch, committees) = self.admin_committees().await?;
+        ensure!(
+            block.header.epoch <= max_epoch,
+            ChainClientError::CommitteeSynchronizationError
+        );
+        let remote_committee = committees
+            .get(&block.header.epoch)
+            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
+        // Recover history from the network.
+        let nodes = self.make_nodes(remote_committee)?;
+        // Process the received operations. Download required hashed certificate values if
+        // necessary.
+        if let Err(err) = self.process_loose_certificate(certificate.clone()).await {
+            match &err {
+                LocalNodeError::BlobsNotFound(blob_ids) => {
+                    let blobs =
+                        RemoteNode::download_blobs(blob_ids, &nodes, self.blob_download_timeout)
+                            .await
+                            .ok_or(err)?;
+                    self.local_node.store_blobs(&blobs).await?;
+                    self.process_loose_certificate(certificate).await?;
+                }
+                _ => {
+                    // The certificate is not as expected. Give up.
+                    warn!("Failed to process loosed certificate value");
                     return Err(err.into());
                 }
             }
@@ -764,9 +826,12 @@ impl<Env: Environment> Client<Env> {
 
         // Obtain the next block height we need in the local node, for each chain.
         // But first, ensure we have the chain descriptions!
-        for chain in remote_max_heights.keys() {
-            self.ensure_has_chain_description(*chain).await?;
-        }
+        future::try_join_all(
+            remote_max_heights
+                .keys()
+                .map(|chain| self.ensure_has_chain_description(*chain)),
+        )
+        .await?;
         let local_next_heights = self
             .local_node
             .next_block_heights(remote_max_heights.keys(), chain_worker_limit)
@@ -1087,7 +1152,7 @@ impl<Env: Environment> Client<Env> {
         future::try_join_all(blob_ids.into_iter().map(|blob_id| async move {
             let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
             // This will download all ancestors of the certificate and process all of them locally.
-            self.receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
+            self.receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None, true)
                 .await
         }))
         .await?;
@@ -1125,6 +1190,7 @@ impl<Env: Environment> Client<Env> {
                             cert,
                             ReceiveCertificateMode::NeedsCheck,
                             Some(vec![remote_node]),
+                            true,
                         )
                         .await
                         .is_ok()
@@ -1971,7 +2037,10 @@ impl<Env: Environment> ChainClient<Env> {
                 for certificate in certificates.into_values() {
                     let hash = certificate.hash();
                     let mode = ReceiveCertificateMode::AlreadyChecked;
-                    if let Err(e) = client.receive_certificate(certificate, mode, None).await {
+                    if let Err(e) = client
+                        .receive_certificate(certificate, mode, None, true)
+                        .await
+                    {
                         warn!("Received invalid certificate {hash}: {e}");
                     }
                 }
@@ -2886,12 +2955,13 @@ impl<Env: Environment> ChainClient<Env> {
         skip(certificate),
         fields(certificate_hash = ?certificate.hash()),
     )]
-    pub async fn receive_certificate(
+    async fn receive_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
+        loose: bool,
     ) -> Result<(), ChainClientError> {
         self.client
-            .receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
+            .receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None, loose)
             .await
     }
 

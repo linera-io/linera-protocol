@@ -470,22 +470,34 @@ where
     ) -> Result<NetworkActions, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
         let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
-        let heights_usize = heights
-            .iter()
-            .copied()
+        let (log_heights, loose_heights) =
+            heights.iter().copied().partition::<Vec<_>, _>(|height| {
+                *height < self.chain.tip_state.get().next_block_height
+            });
+        let log_heights = log_heights
+            .into_iter()
             .map(usize::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        let hashes = self
+        let mut hashes = self
             .chain
             .confirmed_log
-            .multi_get(heights_usize.clone())
+            .multi_get(log_heights.clone())
             .await?
             .into_iter()
-            .zip(heights_usize)
+            .zip(log_heights)
             .map(|(maybe_hash, height)| {
                 maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        for height in loose_heights {
+            hashes.push(
+                self.chain
+                    .loose_blocks
+                    .get(&height)
+                    .await?
+                    .ok_or_else(|| ViewError::not_found("loose block", height))?,
+            );
+        }
         let certificates = self.storage.read_certificates(hashes).await?;
         let certificates = heights
             .into_iter()

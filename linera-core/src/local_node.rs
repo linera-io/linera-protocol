@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
-    types::{Block, GenericCertificate, LiteCertificate},
+    types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{committee::Committee, Query, QueryOutcome};
@@ -57,7 +57,7 @@ pub enum LocalNodeError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Local node operation failed: {0}")]
+    #[error("Worker operation failed: {0}")]
     WorkerError(WorkerError),
 
     #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
@@ -123,6 +123,19 @@ where
                 .fully_handle_certificate_with_notifications(certificate, notifier),
         )
         .await?)
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn process_loose_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        notifier: &impl Notifier,
+    ) -> Result<(), LocalNodeError> {
+        self.node
+            .state
+            .fully_process_loose_certificate_with_notifications(certificate, notifier)
+            .await?;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip_all)]

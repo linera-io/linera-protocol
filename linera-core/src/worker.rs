@@ -888,19 +888,35 @@ where
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
-    pub async fn process_loose_certificate(
+    pub async fn fully_process_loose_certificate_with_notifications(
         &self,
         certificate: ConfirmedBlockCertificate,
-    ) -> Result<NetworkActions, WorkerError> {
+        notifier: &impl Notifier,
+    ) -> Result<(), WorkerError> {
         trace!("{} <-- {:?} (loose)", self.nickname, certificate);
 
-        self.query_chain_worker(certificate.block().header.chain_id, move |callback| {
-            ChainWorkerRequest::ProcessLooseCertificate {
-                certificate,
-                callback,
+        let notifications = (*notifier).clone();
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let actions = this
+                .query_chain_worker(certificate.block().header.chain_id, move |callback| {
+                    ChainWorkerRequest::ProcessLooseCertificate {
+                        certificate,
+                        callback,
+                    }
+                })
+                .await?;
+            notifications.notify(&actions.notifications);
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.notify(&actions.notifications);
             }
+            Ok(())
         })
         .await
+        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Processes a validated block certificate.
