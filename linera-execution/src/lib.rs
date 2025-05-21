@@ -281,6 +281,8 @@ pub enum ExecutionError {
     ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
     #[error("Failed to send service code to worker thread: {0:?}")]
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
+    #[error("The chain being queried is not active {0:?}")]
+    InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 
@@ -328,8 +330,6 @@ pub enum ExecutionError {
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<ApplicationId>),
-    #[error("Chain is not active yet.")]
-    InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
     #[error("process_streams was not called for all stream updates")]
@@ -345,8 +345,22 @@ pub enum ExecutionError {
 impl From<ViewError> for ExecutionError {
     fn from(error: ViewError) -> Self {
         match error {
+            ViewError::InactiveChain(chain_id) => ExecutionError::InactiveChain(chain_id),
             ViewError::BlobsNotFound(blob_ids) => ExecutionError::BlobsNotFound(blob_ids),
             error => ExecutionError::ViewError(error),
+        }
+    }
+}
+
+impl ExecutionError {
+    /// Returns the missing blobs from this error if any.
+    pub fn blobs_not_found(&self) -> Option<Vec<BlobId>> {
+        match self {
+            Self::InactiveChain(chain_id) => {
+                Some(vec![BlobId::new(chain_id.0, BlobType::ChainDescription)])
+            }
+            Self::BlobsNotFound(blob_ids) => Some(blob_ids.to_vec()),
+            _ => None,
         }
     }
 }
@@ -1074,7 +1088,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         Ok(self
             .blobs
             .get(&blob_id)
-            .ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?
+            .ok_or_else(|| ViewError::blob_not_found(blob_id))?
             .clone())
     }
 

@@ -99,7 +99,7 @@ pub trait ClientContextExt: ClientContext {
 
         let blob = match self.storage().read_blob(blob_id).await {
             Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
+            Err(ViewError::InactiveChain(inactive_chain_id)) if chain_id == inactive_chain_id => {
                 // we're missing the blob describing the chain we're assigning - try to
                 // get it
                 self.client().ensure_has_chain_description(chain_id).await?
