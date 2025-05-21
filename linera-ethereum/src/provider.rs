@@ -3,15 +3,16 @@
 
 use alloy_primitives::{Address, Bytes, U256};
 use alloy::{
-    network::Ethereum,
+    network::{Ethereum, EthereumWallet},
     providers::{
-        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
+        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
         Provider, ProviderBuilder, RootProvider,
     },
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
         Filter,
     },
+    signers::local::PrivateKeySigner,
     transports::http::reqwest::{header::CONTENT_TYPE, Client},
 };
 use async_lock::Mutex;
@@ -66,13 +67,7 @@ impl EthereumClientSimplified {
 
 #[derive(Clone)]
 pub struct EthereumClient {
-    pub provider: FillProvider<
-        JoinFill<
-            alloy::providers::Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        RootProvider<Ethereum>,
-    >,
+    pub provider: FillProvider<JoinFill<JoinFill<alloy::providers::Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, WalletFiller<EthereumWallet>>, RootProvider<Ethereum>>,
 }
 
 #[async_trait]
@@ -149,9 +144,20 @@ impl EthereumClient {
     /// Connects to an existing Ethereum node and creates an `EthereumClient`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
+        println!("EthereumClient, new, step 1");
         let rpc_url = Url::parse(&url)?;
-        let provider = ProviderBuilder::new().connect_http(rpc_url);
+        println!("EthereumClient, new, step 2");
+        let pk: PrivateKeySigner =
+            "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".parse().unwrap();
+        println!("EthereumClient, new, step 3");
+        let wallet = EthereumWallet::from(pk);
+        println!("EthereumClient, new, step 4");
+        let provider = ProviderBuilder::new()
+            .wallet(wallet.clone())
+            .connect_http(rpc_url);
+        println!("EthereumClient, new, step 5");
         let endpoint = Self { provider };
+        println!("EthereumClient, new, step 6");
         Ok(endpoint)
     }
 }

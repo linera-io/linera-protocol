@@ -106,6 +106,7 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-serde 1.0.5",
  "alloy-signer",
+ "alloy-signer-local",
  "alloy-transport",
  "alloy-transport-http",
 ]

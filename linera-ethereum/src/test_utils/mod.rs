@@ -54,7 +54,6 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let endpoint = anvil_instance.endpoint();
     let ethereum_client = EthereumClient::new(endpoint.clone())?;
     let rpc_url = Url::parse(&endpoint)?;
-    //    let provider = ProviderBuilder::new().connect_anvil_with_wallet();
     let provider = ProviderBuilder::new().connect_http(rpc_url.clone());
     Ok(AnvilTest {
         anvil_instance,
@@ -83,7 +82,7 @@ impl SimpleTokenContractFunction {
         let initial_supply = U256::from(1000);
         println!("SimpleTokenContract, step 1");
         let simple_token =
-            SimpleTokenContract::deploy(&anvil_test.provider, initial_supply).await?;
+            SimpleTokenContract::deploy(&anvil_test.ethereum_client.provider, initial_supply).await?;
         println!("SimpleTokenContract, step 2");
         let contract_address = simple_token.address();
         let contract_address = format!("{:?}", contract_address);
@@ -145,12 +144,17 @@ pub struct EventNumericsContractFunction {
 impl EventNumericsContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // Deploying the event numerics contract
+        println!("EventNumericsContractFunction, new, step 1");
         let initial_supply = U256::from(0);
+        println!("EventNumericsContractFunction, new, step 2");
         let event_numerics =
-            EventNumericsContract::deploy(&anvil_test.provider, initial_supply).await?;
+            EventNumericsContract::deploy(&anvil_test.ethereum_client.provider, initial_supply).await?;
+        println!("EventNumericsContractFunction, new, step 3");
         // Getting the contract address
         let contract_address = event_numerics.address();
+        println!("EventNumericsContractFunction, new, step 4");
         let contract_address = format!("{:?}", contract_address);
+        println!("EventNumericsContractFunction, new, step 5");
         Ok(Self {
             contract_address,
             anvil_test,
