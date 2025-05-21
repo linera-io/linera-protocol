@@ -695,10 +695,10 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
     }
 }
 
-impl<'a, Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
+impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     fn call_or_fail(
         &mut self,
-        context: &mut Ctx<'a, Runtime>,
+        context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
@@ -752,10 +752,10 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
     }
 }
 
-impl<'a, Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
+impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     fn call_or_fail(
         &mut self,
-        context: &mut Ctx<'a, Runtime>,
+        context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
