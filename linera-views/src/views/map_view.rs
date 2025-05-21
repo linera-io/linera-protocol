@@ -17,26 +17,25 @@
 //! [class3]: map_view::CustomMapView
 
 #[cfg(with_metrics)]
-use std::sync::LazyLock;
+use linera_base::prometheus_util::MeasureLatency as _;
 
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-/// The runtime of hash computation
-static MAP_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "map_view_hash_runtime",
-        "MapView hash runtime",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static MAP_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "map_view_hash_runtime",
+            "MapView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
+}
 
 use std::{
     borrow::{Borrow, Cow},
@@ -935,7 +934,7 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = MAP_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::MAP_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0u32;
         let prefix = Vec::new();

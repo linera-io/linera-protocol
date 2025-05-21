@@ -40,13 +40,11 @@ use linera_views::{
     views::{RootView, ViewError},
 };
 
+#[cfg(with_metrics)]
+pub use crate::db_storage::metrics;
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
 pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
-#[cfg(with_metrics)]
-pub use crate::db_storage::{
-    READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
-};
 
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "table_linera";

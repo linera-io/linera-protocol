@@ -6,6 +6,8 @@
 use core::ops::Range;
 use std::sync::Arc;
 
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
@@ -24,14 +26,6 @@ use revm_primitives::{
     SuccessReason, TxKind,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
-    },
-    prometheus::HistogramVec,
-    std::sync::LazyLock,
-};
 
 use crate::{
     evm::database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
@@ -94,24 +88,30 @@ mod tests {
 }
 
 #[cfg(with_metrics)]
-static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "evm_contract_instantiation_latency",
-        "EVM contract instantiation latency",
-        &[],
-        exponential_bucket_latencies(1.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "evm_service_instantiation_latency",
-        "EVM service instantiation latency",
-        &[],
-        exponential_bucket_latencies(1.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    pub static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "evm_contract_instantiation_latency",
+            "EVM contract instantiation latency",
+            &[],
+            exponential_bucket_latencies(1.0),
+        )
+    });
+
+    pub static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "evm_service_instantiation_latency",
+            "EVM service instantiation latency",
+            &[],
+            exponential_bucket_latencies(1.0),
+        )
+    });
+}
 
 fn get_revm_instantiation_bytes(value: Vec<u8>) -> Vec<u8> {
     use alloy_primitives::Bytes;
@@ -182,7 +182,7 @@ impl UserContractModule for EvmContractModule {
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = CONTRACT_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency = metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserContractInstance = match self {
             #[cfg(with_revm)]
@@ -243,7 +243,7 @@ impl UserServiceModule for EvmServiceModule {
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
         #[cfg(with_metrics)]
-        let _instantiation_latency = SERVICE_INSTANTIATION_LATENCY.measure_latency();
+        let _instantiation_latency = metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserServiceInstance = match self {
             #[cfg(with_revm)]

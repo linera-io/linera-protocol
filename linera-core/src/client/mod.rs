@@ -19,7 +19,7 @@ use dashmap::{
     DashMap,
 };
 use futures::{
-    future::{self, try_join_all, Either, FusedFuture, Future},
+    future::{self, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 #[cfg(with_metrics)]
@@ -1079,7 +1079,7 @@ impl<Env: Environment> Client<Env> {
         blob_ids: Vec<BlobId>,
         remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), ChainClientError> {
-        try_join_all(blob_ids.into_iter().map(|blob_id| async move {
+        future::try_join_all(blob_ids.into_iter().map(|blob_id| async move {
             let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
             // This will download all ancestors of the certificate and process all of them locally.
             self.receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
@@ -2036,7 +2036,7 @@ impl<Env: Environment> ChainClient<Env> {
             .chain(iter::once(self.client.admin_id))
             .filter(|chain_id| *chain_id != self.chain_id)
             .collect::<BTreeSet<_>>();
-        try_join_all(
+        future::try_join_all(
             chain_ids
                 .into_iter()
                 .map(|chain_id| self.client.synchronize_chain_state(chain_id)),

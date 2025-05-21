@@ -6,8 +6,6 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     mem,
@@ -32,8 +30,6 @@ use linera_views::{
     views::{ClonableView, HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-#[cfg(with_metrics)]
-use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
@@ -50,13 +46,20 @@ pub static REMOVED_EPOCH_STREAM_NAME: &[u8] = &[1];
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
-static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "open_chain_count",
-        "The number of times the `OpenChain` operation was executed",
-        &[],
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter_vec;
+    use prometheus::IntCounterVec;
+
+    pub static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "open_chain_count",
+            "The number of times the `OpenChain` operation was executed",
+            &[],
+        )
+    });
+}
 
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, ClonableView, HashableView)]
@@ -371,7 +374,7 @@ where
                     )
                     .await?;
                 #[cfg(with_metrics)]
-                OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
+                metrics::OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
             ChangeOwnership {
                 super_owners,
