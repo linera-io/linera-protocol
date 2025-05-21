@@ -38,7 +38,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::ConfirmedBlock,
+    block::{Block, ConfirmedBlock},
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
         OperationResult, PostedMessage, ProposedBlock, Transaction,
@@ -977,18 +977,9 @@ where
         let hash = block.inner().hash();
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
-        for txn_messages in &block.body.messages {
-            self.process_outgoing_messages(block.header.height, txn_messages)
-                .await?;
-        }
+        self.process_outgoing_messages(block).await?;
 
-        let recipients = block
-            .body
-            .messages
-            .iter()
-            .flatten()
-            .map(|message| message.destination)
-            .collect::<BTreeSet<_>>();
+        let recipients = block.recipients();
         for recipient in recipients {
             self.previous_message_blocks
                 .insert(&recipient, block.header.height)?;
@@ -1168,25 +1159,19 @@ where
             .observe(tracker.bytes_written as f64);
     }
 
-    async fn process_outgoing_messages(
-        &mut self,
-        height: BlockHeight,
-        messages: &[OutgoingMessage],
-    ) -> Result<(), ChainError> {
+    async fn process_outgoing_messages(&mut self, block: &Block) -> Result<(), ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
-        let recipients = messages
-            .iter()
-            .map(|msg| msg.destination)
-            .collect::<HashSet<_>>();
+        let recipients = block.recipients();
+        let block_height = block.header.height;
 
         // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for mut outbox in outboxes {
-            if outbox.schedule_message(height)? {
-                *outbox_counters.entry(height).or_default() += 1;
+            if outbox.schedule_message(block_height)? {
+                *outbox_counters.entry(block_height).or_default() += 1;
             }
         }
 

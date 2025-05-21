@@ -511,6 +511,15 @@ impl Block {
         &self.body.messages
     }
 
+    /// Returns all recipients of messages in this block.
+    pub fn recipients(&self) -> BTreeSet<ChainId> {
+        self.body
+            .messages
+            .iter()
+            .flat_map(|messages| messages.iter().map(|message| message.destination))
+            .collect()
+    }
+
     /// Returns whether there are any oracle responses in this block.
     pub fn has_oracle_responses(&self) -> bool {
         self.body
