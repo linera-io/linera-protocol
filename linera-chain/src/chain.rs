@@ -37,9 +37,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{Block, ConfirmedBlock},
+    block_tracker::BlockExecutionTracker,
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        OperationResult, PostedMessage, ProposedBlock, Transaction,
+        PostedMessage, ProposedBlock, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -723,33 +724,12 @@ where
 
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
-        let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
-        let mut next_message_index = 0;
-        let mut next_application_index = 0;
-        let mut next_chain_index = 0;
-        let mut oracle_responses = Vec::new();
-        let mut events = Vec::new();
-        let mut blobs = Vec::new();
-        let mut messages = Vec::new();
-        let mut operation_results = Vec::new();
-        for (txn_index, transaction) in block.transactions() {
-            let chain_execution_context = match transaction {
-                Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
-                Transaction::ExecuteOperation(_) => ChainExecutionContext::Operation(txn_index),
-            };
-            let maybe_responses = match replaying_oracle_responses.as_mut().map(Iterator::next) {
-                Some(Some(responses)) => Some(responses),
-                Some(None) => return Err(ChainError::MissingOracleResponseList),
-                None => None,
-            };
-            let mut txn_tracker = TransactionTracker::new(
-                local_time,
-                txn_index,
-                next_message_index,
-                next_application_index,
-                next_chain_index,
-                maybe_responses,
-            );
+        let mut block_execution_tracker =
+            BlockExecutionTracker::new(local_time, replaying_oracle_responses);
+        for transaction in block.transactions() {
+            let chain_execution_context =
+                block_execution_tracker.chain_execution_context(&transaction);
+            let mut txn_tracker = block_execution_tracker.new_transaction_tracker()?;
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
                     resource_controller
@@ -802,9 +782,8 @@ where
             let txn_outcome = txn_tracker
                 .into_outcome()
                 .with_execution_context(chain_execution_context)?;
-            next_message_index = txn_outcome.next_message_index;
-            next_application_index = txn_outcome.next_application_index;
-            next_chain_index = txn_outcome.next_chain_index;
+
+            block_execution_tracker.add_txn_outcome(&txn_outcome);
 
             if matches!(
                 transaction,
@@ -840,24 +819,15 @@ where
                         .with_execution_context(chain_execution_context)?;
                 }
             }
-            oracle_responses.push(txn_outcome.oracle_responses);
-            messages.push(txn_outcome.outgoing_messages);
-            events.push(txn_outcome.events);
-            blobs.push(txn_outcome.blobs);
 
             if let Transaction::ExecuteOperation(_) = transaction {
                 resource_controller
                     .track_block_size_of(&(&txn_outcome.operation_result))
                     .with_execution_context(chain_execution_context)?;
-                operation_results.push(OperationResult(txn_outcome.operation_result));
             }
         }
 
-        let recipients = messages
-            .iter()
-            .flatten()
-            .map(|message| message.destination)
-            .collect::<BTreeSet<_>>();
+        let recipients = block_execution_tracker.recipients();
         let mut previous_message_blocks = BTreeMap::new();
         for recipient in recipients {
             if let Some(height) = previous_message_blocks_view.get(&recipient).await? {
@@ -872,10 +842,7 @@ where
         }
 
         let txn_count = block.incoming_bundles.len() + block.operations.len();
-        assert_eq!(oracle_responses.len(), txn_count);
-        assert_eq!(messages.len(), txn_count);
-        assert_eq!(events.len(), txn_count);
-        assert_eq!(blobs.len(), txn_count);
+        block_execution_tracker.assert_outcomes_count(txn_count);
 
         #[cfg(with_metrics)]
         Self::track_block_metrics(&resource_controller.tracker);
@@ -887,13 +854,13 @@ where
         };
 
         Ok(BlockExecutionOutcome {
-            messages,
+            messages: block_execution_tracker.messages,
             previous_message_blocks,
             state_hash,
-            oracle_responses,
-            events,
-            blobs,
-            operation_results,
+            oracle_responses: block_execution_tracker.oracle_responses,
+            events: block_execution_tracker.events,
+            blobs: block_execution_tracker.blobs,
+            operation_results: block_execution_tracker.operation_results,
         })
     }
 

@@ -12,6 +12,7 @@ pub mod types {
     pub use super::{block::*, certificate::*};
 }
 
+mod block_tracker;
 mod chain;
 pub mod data_types;
 mod inbox;
