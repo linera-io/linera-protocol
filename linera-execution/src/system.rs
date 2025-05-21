@@ -437,7 +437,7 @@ where
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
                         let committee =
                             bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
-                        self.blob_used(Some(txn_tracker), blob_id).await?;
+                        self.blob_used(txn_tracker, blob_id).await?;
                         self.committees.get_mut().insert(epoch, committee);
                         self.epoch.set(epoch);
                         txn_tracker.add_event(
@@ -498,7 +498,7 @@ where
                         .await?
                         .track_blob_read(content.bytes().len() as u64)?;
                 }
-                self.blob_used(Some(txn_tracker), blob_id).await?;
+                self.blob_used(txn_tracker, blob_id).await?;
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
@@ -523,7 +523,7 @@ where
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
-                self.blob_used(Some(txn_tracker), blob_id).await?;
+                self.blob_used(txn_tracker, blob_id).await?;
                 self.committees.get_mut().insert(epoch, committee);
                 self.epoch.set(epoch);
             }
@@ -863,7 +863,7 @@ where
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
-            self.blob_used(Some(&mut txn_tracker), blob_id).await?;
+            self.blob_used(&mut txn_tracker, blob_id).await?;
         }
 
         let application_description = ApplicationDescription {
@@ -874,7 +874,7 @@ where
             parameters,
             required_application_ids,
         };
-        self.check_required_applications(&application_description, Some(&mut txn_tracker))
+        self.check_required_applications(&application_description, &mut txn_tracker)
             .await?;
 
         let blob = Blob::new_application_description(&application_description);
@@ -890,11 +890,11 @@ where
     async fn check_required_applications(
         &mut self,
         application_description: &ApplicationDescription,
-        mut txn_tracker: Option<&mut TransactionTracker>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         // Make sure that referenced applications IDs have been registered.
         for required_id in &application_description.required_application_ids {
-            Box::pin(self.describe_application(*required_id, txn_tracker.as_deref_mut())).await?;
+            Box::pin(self.describe_application(*required_id, txn_tracker)).await?;
         }
         Ok(())
     }
@@ -903,24 +903,21 @@ where
     pub async fn describe_application(
         &mut self,
         id: ApplicationId,
-        mut txn_tracker: Option<&mut TransactionTracker>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<ApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
-        let blob_content = match txn_tracker
-            .as_ref()
-            .and_then(|tracker| tracker.created_blobs().get(&blob_id))
-        {
+        let blob_content = match txn_tracker.created_blobs().get(&blob_id) {
             Some(blob) => blob.content().clone(),
             None => self.read_blob_content(blob_id).await?,
         };
-        self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
+        self.blob_used(txn_tracker, blob_id).await?;
         let description: ApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
         let blob_ids = self.check_bytecode_blobs(&description.module_id).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
-            self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
+            self.blob_used(txn_tracker, blob_id).await?;
         }
 
         self.check_required_applications(&description, txn_tracker)
@@ -958,7 +955,7 @@ where
             seen.insert(id);
             // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
             stack.push(id);
-            let app = self.describe_application(id, Some(txn_tracker)).await?;
+            let app = self.describe_application(id, txn_tracker).await?;
             for child in app.required_application_ids.iter().rev() {
                 if !seen.contains(child) {
                     stack.push(*child);
@@ -972,16 +969,14 @@ where
     /// an oracle response for it.
     pub(crate) async fn blob_used(
         &mut self,
-        maybe_txn_tracker: Option<&mut TransactionTracker>,
+        txn_tracker: &mut TransactionTracker,
         blob_id: BlobId,
     ) -> Result<bool, ExecutionError> {
         if self.used_blobs.contains(&blob_id).await? {
             return Ok(false); // Nothing to do.
         }
         self.used_blobs.insert(&blob_id)?;
-        if let Some(txn_tracker) = maybe_txn_tracker {
-            txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
-        }
+        txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
         Ok(true)
     }
 

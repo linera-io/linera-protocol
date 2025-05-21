@@ -444,7 +444,9 @@ where
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self.load_service(application_id, None).await?;
+        let (code, description) = self
+            .load_service(application_id, &mut TransactionTracker::default())
+            .await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
