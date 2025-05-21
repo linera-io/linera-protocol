@@ -20,7 +20,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::{committee::Committee, ExecutionError};
+use linera_execution::committee::Committee;
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -222,11 +222,6 @@ pub enum NodeError {
     #[error("Validator's response to block proposal failed to include a vote")]
     MissingVoteInValidatorResponse,
 
-    #[error(
-        "Failed to update validator because our local node doesn't have an active chain {0:?}"
-    )]
-    InactiveLocalChain(ChainId),
-
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
     #[error("Unexpected certificate value")]
@@ -324,7 +319,7 @@ impl From<ChainError> for NodeError {
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => {
-                if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
+                if let Some(blob_ids) = execution_error.blobs_not_found() {
                     Self::BlobsNotFound(blob_ids)
                 } else {
                     Self::ChainError {

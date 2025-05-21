@@ -515,7 +515,7 @@ where
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
@@ -545,7 +545,7 @@ where
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),

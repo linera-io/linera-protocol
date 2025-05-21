@@ -14,7 +14,7 @@ use linera_base::{
         Epoch, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -553,10 +553,8 @@ where
             // if the only issue was that we couldn't initialize the chain because of a
             // missing chain description blob, we might still want to update the inbox
             Err(ChainError::ExecutionError(exec_err, _))
-                if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
-                if blobs.iter().all(|blob_id| {
-                    blob_id.blob_type == BlobType::ChainDescription && blob_id.hash == chain_id.0
-                })) => {}
+                if matches!(*exec_err, ExecutionError::InactiveChain(inactive_chain_id)
+                            if chain_id == inactive_chain_id) => {}
             err => {
                 return err;
             }
@@ -866,9 +864,13 @@ where
 
         self.ensure_is_active(local_time).await?;
 
+        let chain_timestamp = *self.execution_state.system.timestamp.get();
         ensure!(
-            *self.execution_state.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
+            chain_timestamp <= block.timestamp,
+            ChainError::InvalidBlockTimestamp {
+                parent: chain_timestamp,
+                new: block.timestamp
+            }
         );
         ensure!(
             !block.incoming_bundles.is_empty() || !block.operations.is_empty(),

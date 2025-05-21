@@ -31,7 +31,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
+use linera_execution::{ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -222,7 +222,7 @@ impl From<ChainError> for WorkerError {
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
             ChainError::ExecutionError(execution_error, context) => {
-                if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
+                if let Some(blob_ids) = execution_error.blobs_not_found() {
                     Self::BlobsNotFound(blob_ids)
                 } else {
                     Self::ChainError(Box::new(ChainError::ExecutionError(
@@ -238,12 +238,15 @@ impl From<ChainError> for WorkerError {
 
 #[cfg(with_testing)]
 impl WorkerError {
-    /// Returns the inner [`ExecutionError`] in this error.
+    /// Returns the inner [`linera_execution::ExecutionError`] in this error.
     ///
     /// # Panics
     ///
-    /// If this is not caused by an [`ExecutionError`].
-    pub fn expect_execution_error(self, expected_context: ChainExecutionContext) -> ExecutionError {
+    /// If this is not caused by an [`linera_execution::ExecutionError`].
+    pub fn expect_execution_error(
+        self,
+        expected_context: ChainExecutionContext,
+    ) -> linera_execution::ExecutionError {
         let WorkerError::ChainError(chain_error) = self else {
             panic!("Expected an `ExecutionError`. Got: {self:#?}");
         };
