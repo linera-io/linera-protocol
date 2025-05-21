@@ -74,8 +74,6 @@ alloy-primitives = { version = "1.1.0", default-features = false, features = [
     "serde",
     "k256",
 ] }
-alloy-provider = "1.0.3"
-alloy-rpc-types-eth = "1.0.3"
 alloy-sol-types = "1.1.0"
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
@@ -174,15 +172,38 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
-revm = { version = "23.1.0", default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst", "serde" ] }
-revm-context = { version = "4.1.0", default-features = false, features = [ "serde" ] }
-revm-context-interface = { version = "4.1.0", default-features = false, features = [ "serde" ] }
-revm-database = { version = "4.0.0", default-features = false, features = [ "serde" ] }
-revm-database-interface = { version = "4.0.0", default-features = false, features = [ "serde" ] }
-revm-handler = { version = "4.1.0", default-features = false, features = [ "serde" ] }
-revm-interpreter = { version = "19.1.0", default-features = false, features = [ "serde" ] }
-revm-primitives = { version = "19.0.0", default-features = false, features = [ "serde" ] }
-revm-state = { version = "4.0.0", default-features = false, features = [ "serde" ] }
+revm = { version = "23.1.0", default-features = false, features = [
+    "std",
+    "kzg-rs",
+    "secp256k1",
+    "portable",
+    "blst",
+    "serde",
+] }
+revm-context = { version = "4.1.0", default-features = false, features = [
+    "serde",
+] }
+revm-context-interface = { version = "4.1.0", default-features = false, features = [
+    "serde",
+] }
+revm-database = { version = "4.0.0", default-features = false, features = [
+    "serde",
+] }
+revm-database-interface = { version = "4.0.0", default-features = false, features = [
+    "serde",
+] }
+revm-handler = { version = "4.1.0", default-features = false, features = [
+    "serde",
+] }
+revm-interpreter = { version = "19.1.0", default-features = false, features = [
+    "serde",
+] }
+revm-primitives = { version = "19.0.0", default-features = false, features = [
+    "serde",
+] }
+revm-state = { version = "4.0.0", default-features = false, features = [
+    "serde",
+] }
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
 scylla = "1.1.0"
