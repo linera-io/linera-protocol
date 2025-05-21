@@ -801,6 +801,7 @@ where
                     &txn_outcome.blobs,
                 ))
                 .with_execution_context(chain_execution_context)?;
+
             for blob in &txn_outcome.blobs {
                 if blob.content().blob_type() == BlobType::Data {
                     resource_controller
@@ -811,11 +812,9 @@ where
                 }
             }
 
-            if let Transaction::ExecuteOperation(_) = transaction {
-                resource_controller
-                    .track_block_size_of(&(&txn_outcome.operation_result))
-                    .with_execution_context(chain_execution_context)?;
-            }
+            resource_controller
+                .track_block_size_of(&(&txn_outcome.operation_result))
+                .with_execution_context(chain_execution_context)?;
         }
 
         let recipients = block_execution_tracker.recipients();
