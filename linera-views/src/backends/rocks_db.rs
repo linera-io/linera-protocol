@@ -43,17 +43,17 @@ static STORED_ROOT_KEYS_PREFIX: u8 = 1;
 #[cfg(with_testing)]
 const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
-// The maximum size of values in RocksDB is 3 GB
-// That is 3221225472 and so for offset reason we decrease by 400
-const MAX_VALUE_SIZE: usize = 3221225072;
+// The maximum size of values in RocksDB is 3 GiB
+// For offset reasons we decrease by 400
+const MAX_VALUE_SIZE: usize = 3 * 1024 * 1024 * 1024 - 400;
 
-// The maximum size of keys in RocksDB is 8 MB
-// 8388608 and so for offset reason we decrease by 400
-const MAX_KEY_SIZE: usize = 8388208;
+// The maximum size of keys in RocksDB is 8 MiB
+// For offset reasons we decrease by 400
+const MAX_KEY_SIZE: usize = 8 * 1024 * 1024 - 400;
 
-const WRITE_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64 MB
-const MAX_WRITE_BUFFER_NUMBER: i32 = 32;
-const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KB
+const WRITE_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
+const MAX_WRITE_BUFFER_NUMBER: i32 = 6;
+const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
 
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -317,19 +317,19 @@ impl RocksDbStoreInternal {
         options.set_write_buffer_size(WRITE_BUFFER_SIZE);
         options.set_max_write_buffer_number(MAX_WRITE_BUFFER_NUMBER);
         options.set_compression_type(rocksdb::DBCompressionType::Lz4);
-        options.set_level_zero_slowdown_writes_trigger(12);
-        options.set_level_zero_stop_writes_trigger(20);
-        // We use half the available CPUs for RocksDB parallelism to allow concurrent operations
-        // while leaving resources for other application tasks. Using a third of CPUs for background
-        // jobs (compactions, flushes) balances background maintenance with foreground operations,
-        // preventing RocksDB from consuming too many system resources, while still keeping good
-        // performance.
-        options.increase_parallelism((num_cpus / 2).max(1));
-        options.set_max_background_jobs((num_cpus / 3).max(1));
+        options.set_level_zero_slowdown_writes_trigger(8);
+        options.set_level_zero_stop_writes_trigger(12);
+        options.set_level_zero_file_num_compaction_trigger(2);
+        // We deliberately give RocksDB one background thread *per* CPU so that
+        // flush + (N-1) compactions can hammer the NVMe at full bandwidth while
+        // still leaving enough CPU time for the foreground application threads.
+        options.increase_parallelism(num_cpus);
+        options.set_max_background_jobs(num_cpus);
+        options.set_max_subcompactions(num_cpus as u32);
         options.set_level_compaction_dynamic_level_bytes(true);
 
         options.set_compaction_style(DBCompactionStyle::Level);
-        options.set_target_file_size_base(WRITE_BUFFER_SIZE as u64);
+        options.set_target_file_size_base(2 * WRITE_BUFFER_SIZE as u64);
 
         let mut block_options = BlockBasedOptions::default();
         block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
@@ -613,8 +613,8 @@ pub enum RocksDbStoreInternalError {
     #[error("error in the conversion from OsString: {0:?}")]
     IntoStringError(OsString),
 
-    /// The key must have at most 8 MB
-    #[error("The key must have at most 8 MB")]
+    /// The key must have at most 8 MiB
+    #[error("The key must have at most 8 MiB")]
     KeyTooLong,
 
     /// Namespace contains forbidden characters
