@@ -594,6 +594,7 @@ impl<Env: Environment> Client<Env> {
                     chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
+                    client: self,
                 };
                 Box::pin(async move {
                     updater
@@ -632,6 +633,7 @@ impl<Env: Environment> Client<Env> {
                     chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
+                    client: self,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })

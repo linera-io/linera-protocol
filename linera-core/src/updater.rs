@@ -25,11 +25,12 @@ use linera_storage::Storage;
 use thiserror::Error;
 
 use crate::{
-    client::ChainClientError,
+    client::{ChainClientError, Client},
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    Environment,
 };
 
 /// The default amount of time we wait for additional validators to contribute
@@ -67,14 +68,29 @@ impl CommunicateAction {
     }
 }
 
-#[derive(Clone)]
-pub struct ValidatorUpdater<A, S>
+pub struct ValidatorUpdater<'a, Env>
 where
-    S: Storage,
+    Env: Environment,
 {
     pub chain_worker_count: usize,
-    pub remote_node: RemoteNode<A>,
-    pub local_node: LocalNodeClient<S>,
+    pub remote_node: RemoteNode<Env::ValidatorNode>,
+    pub local_node: LocalNodeClient<Env::Storage>,
+    pub client: &'a Client<Env>,
+}
+
+impl<Env> Clone for ValidatorUpdater<'_, Env>
+where
+    Env: Environment,
+    Env::ValidatorNode: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            chain_worker_count: self.chain_worker_count,
+            remote_node: self.remote_node.clone(),
+            local_node: self.local_node.clone(),
+            client: self.client,
+        }
+    }
 }
 
 /// An error result for requests to a stake-weighted quorum.
@@ -208,10 +224,10 @@ where
     Err(CommunicationError::Sample(sample))
 }
 
-impl<A, S> ValidatorUpdater<A, S>
+impl<Env> ValidatorUpdater<'_, Env>
 where
-    A: ValidatorNode + Clone + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
+    Env: Environment,
+    Env::ValidatorNode: ValidatorNode + Clone,
 {
     async fn send_confirmed_certificate(
         &mut self,
