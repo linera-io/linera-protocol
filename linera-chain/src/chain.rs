@@ -969,9 +969,8 @@ where
         let hash = block.inner().hash();
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
-        self.process_outgoing_messages(block).await?;
+        let recipients = self.process_outgoing_messages(block).await?;
 
-        let recipients = block.recipients();
         for recipient in recipients {
             self.previous_message_blocks
                 .insert(&recipient, block.header.height)?;
@@ -1151,7 +1150,13 @@ where
             .observe(tracker.bytes_written as f64);
     }
 
-    async fn process_outgoing_messages(&mut self, block: &Block) -> Result<(), ChainError> {
+    /// Updates the outboxes with the messages sent in the block.
+    ///
+    /// Returns the set of all recipients.
+    async fn process_outgoing_messages(
+        &mut self,
+        block: &Block,
+    ) -> Result<Vec<ChainId>, ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
         let recipients = block.recipients();
@@ -1171,7 +1176,7 @@ where
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
-        Ok(())
+        Ok(targets)
     }
 }
 
