@@ -59,15 +59,38 @@ oneshot.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json", "stream"] }
-revm = { workspace = true, optional = true, default-features = false, features = [ "std", "kzg-rs", "secp256k1", "portable", "blst", "serde" ] }
-revm-context = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-context-interface = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-database = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-database-interface = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-handler = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-interpreter = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-primitives = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
-revm-state = { workspace = true, optional = true, default-features = false, features = [ "serde" ] }
+revm = { workspace = true, optional = true, default-features = false, features = [
+    "std",
+    "kzg-rs",
+    "secp256k1",
+    "portable",
+    "blst",
+    "serde",
+] }
+revm-context = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
+revm-context-interface = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
+revm-database = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
+revm-database-interface = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
+revm-handler = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
+revm-interpreter = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
+revm-primitives = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
+revm-state = { workspace = true, optional = true, default-features = false, features = [
+    "serde",
+] }
 serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
