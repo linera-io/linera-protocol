@@ -13,7 +13,6 @@ version.workspace = true
 
 [features]
 benchmark = ["linera-base/test"]
-metrics = ["prometheus", "linera-views/metrics", "linera-execution/metrics"]
 test = [
     "dep:anyhow",
     "dep:axum",
@@ -32,7 +31,7 @@ futures.workspace = true
 linera-base.workspace = true
 linera-execution.workspace = true
 linera-views.workspace = true
-prometheus = { workspace = true, optional = true }
+prometheus = { workspace = true }
 rand_chacha.workspace = true
 rand_distr = { workspace = true, features = ["alloc", "serde1"] }
 serde.workspace = true

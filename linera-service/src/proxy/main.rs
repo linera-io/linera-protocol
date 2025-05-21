@@ -20,7 +20,7 @@ use linera_rpc::{
     RpcMessage,
 };
 use linera_sdk::linera_base_types::Blob;
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_service::prometheus_server;
 use linera_service::{
     storage::{Runnable, StorageConfigNamespace},
@@ -263,7 +263,7 @@ where
         let mut join_set = JoinSet::new();
         let address = self.get_listen_address(self.public_config.port);
 
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         Self::start_metrics(
             self.get_listen_address(self.internal_config.metrics_port),
             shutdown_signal.clone(),
@@ -280,7 +280,7 @@ where
         Ok(())
     }
 
-    #[cfg(with_metrics)]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn start_metrics(address: SocketAddr, shutdown_signal: CancellationToken) {
         prometheus_server::start_metrics(address, shutdown_signal)
     }

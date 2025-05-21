@@ -40,7 +40,7 @@ use linera_views::{
     views::{RootView, ViewError},
 };
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub use crate::db_storage::metrics;
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;

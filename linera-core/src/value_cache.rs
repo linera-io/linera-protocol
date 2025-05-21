@@ -7,7 +7,7 @@
 #[path = "unit_tests/value_cache_tests.rs"]
 mod unit_tests;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use std::any::type_name;
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize, sync::Mutex};
 
@@ -18,7 +18,7 @@ use lru::LruCache;
 pub const DEFAULT_VALUE_CACHE_SIZE: usize = 10_000;
 
 /// A counter metric for the number of cache hits in the [`ValueCache`].
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -139,7 +139,7 @@ where
     }
 
     fn track_cache_usage(maybe_value: Option<V>) -> Option<V> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         {
             let metric = if maybe_value.is_some() {
                 &metrics::CACHE_HIT_COUNT

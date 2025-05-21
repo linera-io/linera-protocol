@@ -52,10 +52,10 @@ use crate::{
 #[path = "unit_tests/chain_tests.rs"]
 mod chain_tests;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -78,7 +78,6 @@ mod metrics {
         )
     });
 
-    #[cfg(with_metrics)]
     pub static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "message_execution_latency",
@@ -400,7 +399,7 @@ where
         if outbox.queue.count() == 0 {
             self.outboxes.remove_entry(target)?;
         }
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
@@ -542,7 +541,7 @@ where
 
         // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
@@ -666,7 +665,7 @@ where
                 self.removed_unskippable_bundles.insert(&entry)?;
             }
         }
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
@@ -686,7 +685,7 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
 
         ensure!(
@@ -795,7 +794,7 @@ where
                     resource_controller
                         .track_block_size_of(&operation)
                         .with_execution_context(chain_execution_context)?;
-                    #[cfg(with_metrics)]
+                    #[cfg(not(target_arch = "wasm32"))]
                     let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
                         chain_id: block.chain_id,
@@ -909,11 +908,11 @@ where
         assert_eq!(events.len(), txn_count);
         assert_eq!(blobs.len(), txn_count);
 
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         Self::track_block_metrics(&resource_controller.tracker);
 
         let state_hash = {
-            #[cfg(with_metrics)]
+            #[cfg(not(target_arch = "wasm32"))]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
             chain.crypto_hash().await?
         };
@@ -1003,7 +1002,7 @@ where
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ChainError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
         let context = MessageContext {
             chain_id: block.chain_id,
@@ -1130,7 +1129,7 @@ where
     }
 
     /// Tracks block execution metrics in Prometheus.
-    #[cfg(with_metrics)]
+    #[cfg(not(target_arch = "wasm32"))]
     fn track_block_metrics(tracker: &ResourceTracker) {
         metrics::NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
         metrics::WASM_FUEL_USED_PER_BLOCK
@@ -1172,7 +1171,7 @@ where
             }
         }
 
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);

@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-metrics = ["prometheus"]
 reqwest = ["dep:reqwest"]
 revm = []
 test = ["test-strategy", "proptest"]
@@ -48,7 +47,7 @@ hex.workspace = true
 is-terminal.workspace = true
 k256.workspace = true
 linera-witty = { workspace = true, features = ["macros"] }
-prometheus = { workspace = true, optional = true }
+prometheus = { workspace = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
 reqwest = { workspace = true, optional = true }

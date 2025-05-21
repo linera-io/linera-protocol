@@ -6,7 +6,7 @@
 use core::ops::Range;
 use std::sync::Arc;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
@@ -87,7 +87,7 @@ mod tests {
     }
 }
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -181,7 +181,7 @@ impl UserContractModule for EvmContractModule {
         &self,
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _instantiation_latency = metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserContractInstance = match self {
@@ -242,7 +242,7 @@ impl UserServiceModule for EvmServiceModule {
         &self,
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _instantiation_latency = metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserServiceInstance = match self {

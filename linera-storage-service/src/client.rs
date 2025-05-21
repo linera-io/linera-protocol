@@ -12,7 +12,7 @@ use std::{
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::future::join_all;
 use linera_base::ensure;
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_views::metering::MeteredStore;
 #[cfg(with_testing)]
 use linera_views::store::TestKeyValueStore;
@@ -573,10 +573,10 @@ pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), Servic
 }
 
 /// The service store client with metrics
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub type ServiceStoreClient =
     MeteredStore<LruCachingStore<MeteredStore<ServiceStoreClientInternal>>>;
 
 /// The service store client without metrics
-#[cfg(not(with_metrics))]
+#[cfg(target_arch = "wasm32")]
 pub type ServiceStoreClient = LruCachingStore<ServiceStoreClientInternal>;

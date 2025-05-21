@@ -31,7 +31,7 @@ use scylla::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::metering::MeteredStore;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueStore;
@@ -916,7 +916,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
 }
 
 /// The `ScyllaDbStore` composed type with metrics
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub type ScyllaDbStore = MeteredStore<
     LruCachingStore<
         MeteredStore<
@@ -926,7 +926,7 @@ pub type ScyllaDbStore = MeteredStore<
 >;
 
 /// The `ScyllaDbStore` composed type
-#[cfg(not(with_metrics))]
+#[cfg(target_arch = "wasm32")]
 pub type ScyllaDbStore =
     LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
 

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     data_types::{
@@ -30,7 +30,7 @@ use crate::{
     UserContractCode, UserServiceCode,
 };
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -70,7 +70,7 @@ where
         id: ApplicationId,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, ApplicationDescription), ExecutionError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::LOAD_CONTRACT_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
         let description = match txn_tracker.created_blobs().get(&blob_id) {
@@ -97,7 +97,7 @@ where
         id: ApplicationId,
         txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(UserServiceCode, ApplicationDescription), ExecutionError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::LOAD_SERVICE_LATENCY.measure_latency();
         let blob_id = id.description_blob_id();
         let description = match txn_tracker

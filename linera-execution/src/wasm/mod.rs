@@ -20,7 +20,7 @@ mod wasmer;
 mod wasmtime;
 
 use linera_base::data_types::Bytecode;
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 use thiserror::Error;
 use wasm_instrument::{gas_metering, parity_wasm};
@@ -38,7 +38,7 @@ use crate::{
     UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -113,7 +113,7 @@ impl UserContractModule for WasmContractModule {
         &self,
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _instantiation_latency = metrics::CONTRACT_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserContractInstance = match self {
@@ -176,7 +176,7 @@ impl UserServiceModule for WasmServiceModule {
         &self,
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _instantiation_latency = metrics::SERVICE_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserServiceInstance = match self {

@@ -19,7 +19,6 @@ features = ["scylladb", "rocksdb", "dynamodb", "test"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [features]
-metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
 test = ["tokio/macros"]
 web = ["linera-base/web"]
 indexeddb = ["indexed_db_futures", "wasm-bindgen"]
@@ -40,7 +39,7 @@ convert_case.workspace = true
 derive_more = { workspace = true, features = ["from"] }
 futures.workspace = true
 generic-array.workspace = true
-hex = { workspace = true, optional = true }
+hex = { workspace = true }
 linera-base.workspace = true
 linera-views-derive.workspace = true
 linera-witty.workspace = true

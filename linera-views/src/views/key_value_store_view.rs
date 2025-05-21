@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ use crate::{
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -689,7 +689,7 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_GET_LATENCY.measure_latency();
         ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
@@ -723,7 +723,7 @@ where
     /// # })
     /// ```
     pub async fn contains_key(&self, index: &[u8]) -> Result<bool, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY.measure_latency();
         ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
@@ -758,7 +758,7 @@ where
     /// # })
     /// ```
     pub async fn contains_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY.measure_latency();
         let mut results = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
@@ -809,7 +809,7 @@ where
         &self,
         indices: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY.measure_latency();
         let mut result = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
@@ -864,7 +864,7 @@ where
     /// # })
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY.measure_latency();
         *self.hash.get_mut().unwrap() = None;
         let max_key_size = self.max_key_size();
@@ -1002,7 +1002,7 @@ where
     /// # })
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY.measure_latency();
         ensure!(
             key_prefix.len() <= self.max_key_size(),
@@ -1082,7 +1082,7 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency =
             metrics::KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY.measure_latency();
         ensure!(
@@ -1146,7 +1146,7 @@ where
     }
 
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _hash_latency = metrics::KEY_VALUE_STORE_VIEW_HASH_LATENCY.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0u32;

@@ -22,7 +22,7 @@ use futures::{
     future::{self, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
@@ -89,7 +89,7 @@ mod chain_client_state;
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -899,7 +899,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
         let committee = self
@@ -1815,7 +1815,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// its current height and are not missing any received messages from the inbox.
     #[instrument(level = "trace")]
     pub async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
         let mut info = self.synchronize_to_known_height().await?;
@@ -2055,7 +2055,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// is regularly upgraded to new committees.
     #[instrument(level = "trace")]
     async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
 
         // Use network information from the local chain.
@@ -2237,7 +2237,7 @@ impl<Env: Environment> ChainClient<Env> {
         operations: Vec<Operation>,
         blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
         let mutex = self.state().client_mutex();
@@ -3242,7 +3242,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn process_inbox_without_prepare(
         &self,
     ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), ChainClientError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
         let mut epoch_change_ops = self.collect_epoch_changes().await?.into_iter();

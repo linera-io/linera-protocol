@@ -23,7 +23,7 @@ use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::prometheus_util::MeasureLatency as _;
 use crate::{
     crypto::{BcsHashable, CryptoError, CryptoHash},
@@ -1079,7 +1079,6 @@ impl Bytecode {
     /// Compresses the [`Bytecode`] into a [`CompressedBytecode`].
     #[cfg(not(target_arch = "wasm32"))]
     pub fn compress(&self) -> CompressedBytecode {
-        #[cfg(with_metrics)]
         let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
         let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
@@ -1133,7 +1132,6 @@ impl CompressedBytecode {
 
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
-        #[cfg(with_metrics)]
         let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
         let bytes = zstd::stream::decode_all(&*self.compressed_bytes)?;
 
@@ -1166,9 +1164,6 @@ impl CompressedBytecode {
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
-
-        #[cfg(with_metrics)]
-        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
 
         let compressed_bytes = &*self.compressed_bytes;
         let mut bytes = Vec::new();
@@ -1485,7 +1480,7 @@ doc_scalar!(
 );
 doc_scalar!(ApplicationDescription, "Description of a user application");
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
