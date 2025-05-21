@@ -11,11 +11,11 @@ use linera_core::{
     client::PendingProposal,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
+use linera_persistent as persistent;
 
 use super::util::make_genesis_config;
 use crate::{
     client_context::ClientContext,
-    persistent,
     wallet::{UserChain, Wallet},
 };
 

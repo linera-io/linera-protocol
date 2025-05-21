@@ -19,7 +19,6 @@ use linera_base::{
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     client_options::ClientContextOptions,
-    persistent::Persist as _,
     wallet::Wallet,
 };
 use linera_core::{
@@ -27,6 +26,7 @@ use linera_core::{
     node::{ValidatorNode as _, ValidatorNodeProvider as _},
 };
 use linera_faucet_client::Faucet;
+use linera_persistent::{self as persistent, Persist as _};
 use linera_views::store::WithError;
 use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
@@ -51,8 +51,8 @@ async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore 
     .await
 }
 
-type PersistentWallet = linera_client::persistent::Memory<Wallet>;
-type PersistentSigner = linera_client::persistent::Memory<InMemorySigner>;
+type PersistentWallet = persistent::Memory<Wallet>;
+type PersistentSigner = persistent::Memory<InMemorySigner>;
 type ClientContext = linera_client::client_context::ClientContext<WebEnvironment, PersistentWallet>;
 type ChainClient = linera_core::client::ChainClient<WebEnvironment>;
 
@@ -122,7 +122,7 @@ impl JsFaucet {
     /// If an error occurs in the chain listener task.
     #[wasm_bindgen(js_name = claimChain)]
     pub async fn claim_chain(&self, wallet: &mut JsWallet) -> JsResult<String> {
-        use linera_client::persistent::PersistExt as _;
+        use persistent::PersistExt as _;
         let owner = AccountOwner::from(wallet.signer.mutate(InMemorySigner::generate_new).await?);
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
