@@ -1376,9 +1376,9 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-config"
-version = "1.6.2"
+version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6fcc63c9860579e4cb396239570e979376e70aab79e496621748a09913f8b36"
+checksum = "02a18fd934af6ae7ca52410d4548b98eb895aab0f1ea417d168d85db1434a141"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1487,9 +1487,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sso"
-version = "1.67.0"
+version = "1.69.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d4863da26489d1e6da91d7e12b10c17e86c14f94c53f416bd10e0a9c34057ba"
+checksum = "6e9c2e5f57f4a5b7f7e7a1c54427d679ab2337a29e578efbd005e244fd90c4ea"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1503,16 +1503,15 @@ dependencies = [
  "bytes",
  "fastrand",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.68.0"
+version = "1.70.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95caa3998d7237789b57b95a8e031f60537adab21fa84c91e35bef9455c652e4"
+checksum = "0acaed9a89e82afa50045f68d27bc927600bdc0cc7d617dec61dfb9e6952d22f"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1526,16 +1525,15 @@ dependencies = [
  "bytes",
  "fastrand",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.68.0"
+version = "1.70.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4939f6f449a37308a78c5a910fd91265479bd2bb11d186f0b8fc114d89ec828d"
+checksum = "015851dba63fbf22c70c278d8e60c85f008d03640c5b40908730802e1267f651"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1550,7 +1548,6 @@ dependencies = [
  "aws-types",
  "fastrand",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
