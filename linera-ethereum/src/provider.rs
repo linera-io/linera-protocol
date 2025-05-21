@@ -5,10 +5,7 @@ use alloy::transports::http::reqwest::{header::CONTENT_TYPE, Client};
 use async_lock::Mutex;
 use async_trait::async_trait;
 
-use crate::{
-    client::JsonRpcClient,
-    common::EthereumServiceError,
-};
+use crate::{client::JsonRpcClient, common::EthereumServiceError};
 
 /// The Ethereum endpoint and its provider used for accessing the Ethereum node.
 pub struct EthereumClientSimplified {

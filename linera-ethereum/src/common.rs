@@ -5,10 +5,8 @@ use std::num::ParseIntError;
 
 #[cfg(not(target_arch = "wasm32"))]
 use alloy::rpc::json_rpc;
-use alloy_primitives::{Address, B256, U256};
 use alloy::rpc::types::eth::Log;
-
-
+use alloy_primitives::{Address, B256, U256};
 use num_bigint::{BigInt, BigUint};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};

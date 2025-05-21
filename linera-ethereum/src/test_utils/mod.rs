@@ -1,11 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy_primitives::{Address, Bytes, U256};
 use alloy::{
     network::{Ethereum, EthereumWallet},
+    node_bindings::{Anvil, AnvilInstance},
     providers::{
-        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
+        fillers::{
+            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+            WalletFiller,
+        },
         Provider, ProviderBuilder, RootProvider,
     },
     rpc::types::eth::{
@@ -13,21 +16,16 @@ use alloy::{
         Filter,
     },
     signers::local::PrivateKeySigner,
-    node_bindings::{Anvil, AnvilInstance},
     sol,
 };
+use alloy_primitives::{Address, Bytes, U256};
+use async_trait::async_trait;
 use linera_base::port::get_free_port;
 use url::Url;
-use async_trait::async_trait;
 
 use crate::{
-    client::get_block_id,
+    client::{get_block_id, EthereumQueries},
     common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError},
-};
-
-
-use crate::{
-    client::EthereumQueries,
     provider::EthereumClientSimplified,
 };
 
@@ -45,9 +43,19 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct EthereumClient {
-    pub provider: FillProvider<JoinFill<JoinFill<alloy::providers::Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, WalletFiller<EthereumWallet>>, RootProvider<Ethereum>>,
+    pub provider: FillProvider<
+        JoinFill<
+            JoinFill<
+                alloy::providers::Identity,
+                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            >,
+            WalletFiller<EthereumWallet>,
+        >,
+        RootProvider<Ethereum>,
+    >,
 }
 
 #[async_trait]
@@ -124,20 +132,17 @@ impl EthereumClient {
     /// Connects to an existing Ethereum node and creates an `EthereumClient`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        println!("EthereumClient, new, step 1");
         let rpc_url = Url::parse(&url)?;
-        println!("EthereumClient, new, step 2");
+        // this address is in the anvil test.
         let pk: PrivateKeySigner =
-            "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".parse().unwrap();
-        println!("EthereumClient, new, step 3");
+            "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                .parse()
+                .unwrap();
         let wallet = EthereumWallet::from(pk);
-        println!("EthereumClient, new, step 4");
         let provider = ProviderBuilder::new()
             .wallet(wallet.clone())
             .connect_http(rpc_url);
-        println!("EthereumClient, new, step 5");
         let endpoint = Self { provider };
-        println!("EthereumClient, new, step 6");
         Ok(endpoint)
     }
 }
@@ -181,7 +186,8 @@ impl SimpleTokenContractFunction {
         let initial_supply = U256::from(1000);
         println!("SimpleTokenContract, step 1");
         let simple_token =
-            SimpleTokenContract::deploy(&anvil_test.ethereum_client.provider, initial_supply).await?;
+            SimpleTokenContract::deploy(&anvil_test.ethereum_client.provider, initial_supply)
+                .await?;
         println!("SimpleTokenContract, step 2");
         let contract_address = simple_token.address();
         let contract_address = format!("{:?}", contract_address);
@@ -195,8 +201,10 @@ impl SimpleTokenContractFunction {
     pub async fn balance_of(&self, to: &str, block: u64) -> anyhow::Result<U256> {
         // Getting the simple_token
         let contract_address = self.contract_address.parse::<Address>()?;
-        let simple_token =
-            SimpleTokenContract::new(contract_address, self.anvil_test.ethereum_client.provider.clone());
+        let simple_token = SimpleTokenContract::new(
+            contract_address,
+            self.anvil_test.ethereum_client.provider.clone(),
+        );
         // Creating the calldata
         let to_address = to.parse::<Address>()?;
         let data = simple_token.balanceOf(to_address).calldata().clone();
@@ -219,8 +227,10 @@ impl SimpleTokenContractFunction {
         let contract_address = self.contract_address.parse::<Address>()?;
         let to_address = to.parse::<Address>()?;
         let from_address = from.parse::<Address>()?;
-        let simple_token =
-            SimpleTokenContract::new(contract_address, self.anvil_test.ethereum_client.provider.clone());
+        let simple_token = SimpleTokenContract::new(
+            contract_address,
+            self.anvil_test.ethereum_client.provider.clone(),
+        );
         // Doing the transfer
         let builder = simple_token.transfer(to_address, value).from(from_address);
         let _receipt = builder.send().await?.get_receipt().await?;
@@ -240,7 +250,8 @@ impl EventNumericsContractFunction {
         let initial_supply = U256::from(0);
         println!("EventNumericsContractFunction, new, step 2");
         let event_numerics =
-            EventNumericsContract::deploy(&anvil_test.ethereum_client.provider, initial_supply).await?;
+            EventNumericsContract::deploy(&anvil_test.ethereum_client.provider, initial_supply)
+                .await?;
         println!("EventNumericsContractFunction, new, step 3");
         // Getting the contract address
         let contract_address = event_numerics.address();

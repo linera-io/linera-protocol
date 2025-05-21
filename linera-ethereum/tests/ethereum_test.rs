@@ -48,12 +48,9 @@ async fn test_get_accounts_balance() -> anyhow::Result<()> {
 #[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_event_numerics() -> anyhow::Result<()> {
-    println!("test_event_numerics, step 1");
     let anvil_test = get_anvil().await?;
-    println!("test_event_numerics, step 2");
     let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint.clone());
     let event_numerics = EventNumericsContractFunction::new(anvil_test).await?;
-    println!("test_event_numerics, step 3");
     let contract_address = event_numerics.contract_address;
 
     // Test the conversion of the types
@@ -63,7 +60,6 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
-    println!("test_event_numerics, step 4");
     let addr0 = event_numerics.anvil_test.get_address(0);
     let big_value = U256::from_str("239675476885367459284564394732743434463843674346373355625")?;
     let target_event = EthereumEvent {
@@ -83,12 +79,10 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         ],
         block_number: 1,
     };
-    println!("test_event_numerics, step ");
     assert_eq!(*events, [target_event.clone()]);
     let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
-    println!("test_event_numerics, step 1");
     assert_eq!(*events, [target_event]);
     Ok(())
 }
@@ -96,13 +90,9 @@ async fn test_event_numerics() -> anyhow::Result<()> {
 #[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_simple_token_events() -> anyhow::Result<()> {
-    println!("SimpleTokenContractFunction, step 1");
     let anvil_test = get_anvil().await?;
-    println!("SimpleTokenContractFunction, step 2");
     let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint.clone());
-    println!("SimpleTokenContractFunction, step 3");
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
-    println!("SimpleTokenContractFunction, step 4");
     let contract_address = simple_token.contract_address.clone();
     let addr0 = simple_token.anvil_test.get_address(0);
     let addr1 = simple_token.anvil_test.get_address(1);
@@ -143,13 +133,9 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
 #[cfg(feature = "ethereum")]
 #[tokio::test]
 async fn test_simple_token_queries() -> anyhow::Result<()> {
-    println!("test_simple_token_queries, step 1");
     let anvil_test = get_anvil().await?;
-    println!("test_simple_token_queries, step 2");
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
-    println!("test_simple_token_queries, step 3");
     let contract_address = simple_token.contract_address.clone();
-    println!("test_simple_token_queries, step 4");
 
     let addr0 = simple_token.anvil_test.get_address(0);
     let addr1 = simple_token.anvil_test.get_address(1);

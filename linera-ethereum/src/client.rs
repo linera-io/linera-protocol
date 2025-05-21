@@ -3,13 +3,11 @@
 
 use std::fmt::Debug;
 
-use alloy_primitives::{Address, Bytes, U256, U64};
-use alloy::{
-    rpc::types::eth::{
-        request::{TransactionInput, TransactionRequest},
-        BlockId, BlockNumberOrTag, Filter, Log,
-    },
+use alloy::rpc::types::eth::{
+    request::{TransactionInput, TransactionRequest},
+    BlockId, BlockNumberOrTag, Filter, Log,
 };
+use alloy_primitives::{Address, Bytes, U256, U64};
 use async_trait::async_trait;
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
