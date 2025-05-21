@@ -4,6 +4,7 @@ environments:
       - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
         validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
         usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
+        usingRecommendedScyllaDbSettings: {{ env "LINERA_HELMFILE_SET_USING_RECOMMENDED_SCYLLA_DB_SETTINGS" | default "false" }}
         kubeContext: {{ env "LINERA_HELMFILE_SET_KUBE_CONTEXT" | default "" }}
         kubeConfigPath: {{ env "KUBECONFIG" | default "" }}
 
@@ -12,7 +13,7 @@ helmDefaults:
   recreatePods: false
   kubeContext: {{ .Values.kubeContext | quote }}
 
-{{- if .Values.usingLocalSsd }}
+{{- if or .Values.usingLocalSsd .Values.usingRecommendedScyllaDbSettings }}
 hooks:
   - events: ["prepare"]
     showlogs: true
