@@ -60,9 +60,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
     let from_block = 0;
     let to_block = 2;
-    let events = event_numerics
-        .anvil_test
-        .ethereum_client
+    let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
     println!("test_event_numerics, step 4");
@@ -85,12 +83,12 @@ async fn test_event_numerics() -> anyhow::Result<()> {
         ],
         block_number: 1,
     };
-    println!("test_event_numerics, step 5");
+    println!("test_event_numerics, step ");
     assert_eq!(*events, [target_event.clone()]);
     let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
-    println!("test_event_numerics, step 6");
+    println!("test_event_numerics, step 1");
     assert_eq!(*events, [target_event]);
     Ok(())
 }
@@ -121,9 +119,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
 
     // Test the Transfer entries
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-    let events = simple_token
-        .anvil_test
-        .ethereum_client
+    let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
     let value = U256::from(10);

@@ -39,13 +39,7 @@ pub struct AnvilTest {
     pub endpoint: String,
     pub ethereum_client: EthereumClient,
     pub rpc_url: Url,
-    pub provider: FillProvider<
-        JoinFill<
-            alloy::providers::Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        RootProvider<Ethereum>,
-    >,
+    pub provider: FillProvider<JoinFill<alloy::providers::Identity,JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>,RootProvider<Ethereum>>,
 }
 
 pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
