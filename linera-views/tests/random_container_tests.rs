@@ -14,11 +14,11 @@ use linera_views::{
     random::make_deterministic_rng,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::RegisterView,
-    views::{CryptoHashRootView, CryptoHashView, RootView, View, ViewError},
+    views::{CryptoHashView, View, ViewError},
 };
 use rand::{distributions::Uniform, Rng, RngCore};
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 struct CollectionStateView<C> {
     pub v: HashedCollectionView<C, u8, RegisterView<C, u32>>,
 }
@@ -132,7 +132,7 @@ async fn classic_collection_view_check() -> Result<()> {
     Ok(())
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct KeyValueStateView<C> {
     pub store: KeyValueStoreView<C>,
 }
@@ -249,7 +249,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
     Ok(())
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct ByteMapStateView<C> {
     pub map: HashedByteMapView<C, u8>,
 }
@@ -403,7 +403,7 @@ async fn map_view_mutability() -> Result<()> {
     Ok(())
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct BucketQueueStateView<C> {
     pub queue: HashedBucketQueueView<C, u8, 5>,
 }
@@ -509,7 +509,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
     Ok(())
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct QueueStateView<C> {
     pub queue: HashedQueueView<C, u8>,
 }
@@ -601,7 +601,7 @@ async fn queue_view_mutability_check() -> Result<()> {
     Ok(())
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 struct ReentrantCollectionStateView<C> {
     pub v: HashedReentrantCollectionView<C, u8, RegisterView<C, u32>>,
 }

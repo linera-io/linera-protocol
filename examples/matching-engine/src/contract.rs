@@ -9,7 +9,7 @@ use std::cmp::min;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    views::{RootView, View},
+    views::{View},
     Contract, ContractRuntime,
 };
 use matching_engine::{

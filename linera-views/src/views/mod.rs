@@ -1,20 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, io::Write};
+use std::{fmt::Debug, future::Future, io::Write};
 
 use linera_base::{
     crypto::CryptoHash,
     data_types::ArithmeticError,
     identifiers::{BlobId, EventId},
 };
-pub use linera_views_derive::{
-    ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
-};
+pub use linera_views_derive::{ClonableView, CryptoHashView, HashableView, View};
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::{batch::Batch, common::HasherOutput};
+use crate::{batch::Batch, common::HasherOutput, context::Context, store::WritableKeyValueStore};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -95,6 +93,30 @@ pub trait View<C>: Sized {
         let mut view = Self::post_load(context, &values)?;
         view.clear();
         Ok(view)
+    }
+
+    /// Saves the root view to the database context
+    fn save(&mut self) -> impl Future<Output = Result<(), ViewError>>
+    where
+        C: Context + Send,
+    {
+        #[cfg(with_metrics)]
+        crate::metrics::increment_counter(
+            &crate::metrics::SAVE_VIEW_COUNTER,
+            std::any::type_name::<Self>(),
+            &self.context().base_key().bytes,
+        );
+
+        let mut batch = Batch::new();
+        let flush_result = self.flush(&mut batch);
+        let context = self.context().clone();
+        async move {
+            flush_result?;
+            if !batch.is_empty() {
+                context.store().write_batch(batch).await?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -225,13 +247,6 @@ impl Hasher for sha3::Sha3_256 {
     }
 }
 
-/// A [`View`] whose staged modifications can be saved in storage.
-#[cfg_attr(not(web), trait_variant::make(Send))]
-pub trait RootView<C>: View<C> {
-    /// Saves the root view to the database context
-    async fn save(&mut self) -> Result<(), ViewError>;
-}
-
 /// A [`View`] that also supports crypto hash
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait CryptoHashView<C>: HashableView<C> {
@@ -241,10 +256,6 @@ pub trait CryptoHashView<C>: HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError>;
 }
-
-/// A [`RootView`] that also supports crypto hash
-#[cfg_attr(not(web), trait_variant::make(Send))]
-pub trait CryptoHashRootView<C>: RootView<C> + CryptoHashView<C> {}
 
 /// A [`ClonableView`] supports being shared (unsafely) by cloning it.
 ///

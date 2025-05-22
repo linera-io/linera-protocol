@@ -3,7 +3,7 @@
 
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_client::config::DestinationId;
-use linera_sdk::views::{RootView, View, ViewError};
+use linera_sdk::views::{View, ViewError};
 use linera_views::{
     context::Context, map_view::MapView, reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView, views::ClonableView,
@@ -12,7 +12,7 @@ use linera_views::{
 use crate::ExporterError;
 
 /// State of the linera exporter as a view.
-#[derive(Debug, RootView, ClonableView)]
+#[derive(Debug, View, ClonableView)]
 pub struct BlockExporterStateView<C> {
     /// The chain status, by chain ID.
     state: ReentrantCollectionView<C, ChainId, ChainStatusView<C>>,

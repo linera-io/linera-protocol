@@ -22,10 +22,7 @@ use linera_chain::{
 };
 use linera_execution::committee::Committee;
 use linera_storage::{Clock as _, Storage};
-use linera_views::{
-    context::Context,
-    views::{RootView, View},
-};
+use linera_views::{context::Context, views::View};
 use tokio::sync::oneshot;
 use tracing::{debug, instrument, trace, warn};
 

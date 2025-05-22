@@ -19,7 +19,7 @@ use linera_views::{
     context::{Context, ViewContext},
     map_view::MapView,
     store::KeyValueStore,
-    views::RootView,
+    views::View,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -53,7 +53,7 @@ pub struct ChainOperation {
     content: Operation,
 }
 
-#[derive(RootView)]
+#[derive(View)]
 pub struct Operations<C> {
     last: MapView<C, ChainId, OperationKey>,
     count: MapView<C, ChainId, u64>,
@@ -67,7 +67,7 @@ pub enum OperationKeyKind {
     Last(ChainId),
 }
 
-/// Implements helper functions on the `RootView`
+/// Implements helper functions on the `View`
 impl<C> Operations<C>
 where
     C: Context + Send + Sync + 'static + Clone,

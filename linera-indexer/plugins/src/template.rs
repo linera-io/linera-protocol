@@ -5,11 +5,11 @@ use linera_indexer::{plugin, common::IndexerError};
 use linera_views::{
     map_view::MapView,
     register_view::RegisterView,
-    views::{RootView, View},
+    views::View,
 };
 
-// A plugin is centered around a RootView
-#[derive(RootView)]
+// A plugin is centered around a View
+#[derive(View)]
 pub struct Template<C> {
     view1: RegisterView<C, String>,
     view2: MapView<C, u32, String>,

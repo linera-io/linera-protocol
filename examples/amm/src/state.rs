@@ -4,10 +4,10 @@
 use fungible::Account;
 use linera_sdk::{
     linera_base_types::Amount,
-    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, ViewStorageContext},
 };
 
-#[derive(RootView, async_graphql::SimpleObject)]
+#[derive(View, async_graphql::SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct AmmState {
     pub shares: MapView<Account, Amount>,

@@ -16,7 +16,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     store::KeyValueStore,
-    views::{RootView, View},
+    views::View,
 };
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
@@ -28,7 +28,7 @@ use crate::{
     service::Listener,
 };
 
-#[derive(RootView)]
+#[derive(View)]
 pub struct StateView<C> {
     chains: MapView<C, ChainId, (CryptoHash, BlockHeight)>,
     plugins: SetView<C, String>,

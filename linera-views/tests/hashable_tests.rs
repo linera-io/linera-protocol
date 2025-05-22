@@ -9,9 +9,9 @@ use linera_views::{
     register_view::{HashedRegisterView, RegisterView},
     views::{HashableView, View},
 };
-use linera_views_derive::CryptoHashRootView;
+use linera_views_derive::CryptoHashView;
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 struct TestType<C> {
     pub inner: RegisterView<C, String>,
     pub wrap: WrappedHashableContainerView<C, RegisterView<C, String>, HasherOutput>,
