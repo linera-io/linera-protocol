@@ -98,7 +98,7 @@ pub trait View<C>: Sized {
     /// Saves the root view to the database context
     fn save(&mut self) -> impl Future<Output = Result<(), ViewError>>
     where
-        C: Context + Send,
+        C: Context,
     {
         #[cfg(with_metrics)]
         crate::metrics::increment_counter(
