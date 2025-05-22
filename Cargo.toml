@@ -83,8 +83,6 @@ async-graphql-derive = "=7.0.2"
 async-lock = "3.3.0"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
-aws-config = "1.6.3"
-aws-sdk-dynamodb = "1.76.0"
 aws-smithy-types = "1.3.1"
 axum = "0.7.4"
 base64 = "0.22.0"
@@ -316,6 +314,15 @@ meta-counter = { path = "./examples/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
 non-fungible = { path = "./examples/non-fungible" }
 social = { path = "./examples/social" }
+
+[workspace.dependencies.aws-config]
+default-features = false
+version = "1.6.3"
+
+[workspace.dependencies.aws-sdk-dynamodb]
+default-features = false
+features = ["rt-tokio", "rustls"]
+version = "1.76.0"
 
 [profile.release]
 lto = "thin"
