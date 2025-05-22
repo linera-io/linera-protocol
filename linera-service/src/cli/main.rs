@@ -830,6 +830,8 @@ impl Runnable for Job {
             Faucet {
                 chain_id,
                 port,
+                #[cfg(with_metrics)]
+                metrics_port,
                 amount,
                 limit_rate_until,
                 config,
@@ -853,6 +855,8 @@ impl Runnable for Job {
                 let genesis_config = Arc::new(context.wallet().genesis_config().clone());
                 let faucet = FaucetService::new(
                     port,
+                    #[cfg(with_metrics)]
+                    metrics_port,
                     chain_id,
                     context,
                     amount,

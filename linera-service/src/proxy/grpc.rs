@@ -18,6 +18,8 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
+#[cfg(with_metrics)]
+use linera_metrics::prometheus_server;
 use linera_rpc::{
     config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
     grpc::{
@@ -48,8 +50,6 @@ use tonic::{
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
-#[cfg(with_metrics)]
-use linera_metrics::prometheus_server;
 
 #[cfg(with_metrics)]
 mod metrics {

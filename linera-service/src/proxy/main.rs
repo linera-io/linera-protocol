@@ -11,6 +11,8 @@ use futures::{FutureExt as _, SinkExt, StreamExt};
 use linera_base::listen_for_shutdown_signals;
 use linera_client::config::{GenesisConfig, ValidatorServerConfig};
 use linera_core::{node::NodeError, JoinSetExt as _};
+#[cfg(with_metrics)]
+use linera_metrics::prometheus_server;
 use linera_rpc::{
     config::{
         NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
@@ -20,8 +22,6 @@ use linera_rpc::{
     RpcMessage,
 };
 use linera_sdk::linera_base_types::Blob;
-#[cfg(with_metrics)]
-use linera_metrics::prometheus_server;
 use linera_service::{
     storage::{Runnable, StorageConfigNamespace},
     util,
