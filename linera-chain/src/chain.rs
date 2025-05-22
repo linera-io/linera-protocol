@@ -57,13 +57,14 @@ mod chain_tests;
 use linera_base::prometheus_util::MeasureLatency;
 
 #[cfg(with_metrics)]
-mod metrics {
+pub(crate) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
         register_int_counter_vec,
     };
+    use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
 
     pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -169,6 +170,26 @@ mod metrics {
             exponential_bucket_interval(1.0, 10_000.0),
         )
     });
+
+    /// Tracks block execution metrics in Prometheus.
+    pub(crate) fn track_block_metrics(tracker: &ResourceTracker) {
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.wasm_fuel as f64);
+        EVM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.evm_fuel as f64);
+        VM_NUM_READS_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.read_operations as f64);
+        VM_BYTES_READ_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_read as f64);
+        VM_BYTES_WRITTEN_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_written as f64);
+    }
 }
 
 /// The BCS-serialized size of an empty [`Block`].
@@ -812,9 +833,6 @@ where
             }
         }
 
-        #[cfg(with_metrics)]
-        Self::track_block_metrics(&block_execution_tracker.resource_controller_mut().tracker);
-
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
@@ -1063,27 +1081,6 @@ where
         self.pending_proposed_blobs.clear();
         self.manager
             .reset(ownership, next_height, local_time, fallback_owners)
-    }
-
-    /// Tracks block execution metrics in Prometheus.
-    #[cfg(with_metrics)]
-    fn track_block_metrics(tracker: &ResourceTracker) {
-        metrics::NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-        metrics::WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.wasm_fuel as f64);
-        metrics::EVM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.evm_fuel as f64);
-        metrics::VM_NUM_READS_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.read_operations as f64);
-        metrics::VM_BYTES_READ_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.bytes_read as f64);
-        metrics::VM_BYTES_WRITTEN_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.bytes_written as f64);
     }
 
     /// Updates the outboxes with the messages sent in the block.

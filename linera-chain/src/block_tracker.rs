@@ -201,6 +201,10 @@ impl<'resources> BlockExecutionTracker<'resources> {
         assert_eq!(self.messages.len(), self.expected_outcomes_count);
         assert_eq!(self.events.len(), self.expected_outcomes_count);
         assert_eq!(self.blobs.len(), self.expected_outcomes_count);
+
+        #[cfg(with_metrics)]
+        crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);
+
         (
             self.messages,
             self.oracle_responses,
