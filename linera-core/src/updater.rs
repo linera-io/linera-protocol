@@ -7,7 +7,6 @@ use std::{
     fmt,
     hash::Hash,
     mem,
-    ops::Range,
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
