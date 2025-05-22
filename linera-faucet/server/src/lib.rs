@@ -20,6 +20,8 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
+#[cfg(with_metrics)]
+use linera_metrics::prometheus_server;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
@@ -195,6 +197,8 @@ where
     config: ChainListenerConfig,
     storage: <C::Environment as linera_core::Environment>::Storage,
     port: NonZeroU16,
+    #[cfg(with_metrics)]
+    metrics_port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -213,6 +217,8 @@ where
             config: self.config.clone(),
             storage: self.storage.clone(),
             port: self.port,
+            #[cfg(with_metrics)]
+            metrics_port: self.metrics_port,
             amount: self.amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
@@ -229,6 +235,7 @@ where
     #[expect(clippy::too_many_arguments)]
     pub async fn new(
         port: NonZeroU16,
+        #[cfg(with_metrics)] metrics_port: NonZeroU16,
         chain_id: ChainId,
         context: C,
         amount: Amount,
@@ -249,6 +256,8 @@ where
             config,
             storage,
             port,
+            #[cfg(with_metrics)]
+            metrics_port,
             amount,
             end_timestamp,
             start_timestamp,
@@ -273,11 +282,19 @@ where
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
 
+    #[cfg(with_metrics)]
+    fn metrics_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
+    }
+
     /// Runs the faucet.
     #[tracing::instrument(name = "FaucetService::run", skip_all, fields(port = self.port, chain_id = ?self.chain_id))]
     pub async fn run(self, cancellation_token: CancellationToken) -> anyhow::Result<()> {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
+
+        #[cfg(with_metrics)]
+        prometheus_server::start_metrics(self.metrics_address(), cancellation_token.clone());
 
         let app = Router::new()
             .route("/", index_handler)
