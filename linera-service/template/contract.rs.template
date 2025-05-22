@@ -2,11 +2,7 @@
 
 mod state;
 
-use linera_sdk::{{
-    linera_base_types::WithContractAbi,
-    views::View,
-    Contract, ContractRuntime,
-}};
+use linera_sdk::{{linera_base_types::WithContractAbi, views::View, Contract, ContractRuntime}};
 
 use {module_name}::Operation;
 
