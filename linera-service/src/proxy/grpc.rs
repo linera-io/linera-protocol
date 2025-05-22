@@ -333,7 +333,7 @@ where
     /// Returns the appropriate gRPC status for the given [`ViewError`].
     fn error_to_status(err: ViewError) -> Status {
         let mut status = match &err {
-            ViewError::TooLargeValue | ViewError::BcsError(_) => {
+            ViewError::TooLargeValue | ViewError::BcsError(_) | ViewError::IncorrectRange => {
                 Status::invalid_argument(err.to_string())
             }
             ViewError::StoreError { .. }

@@ -134,6 +134,10 @@ pub enum ViewError {
         error: String,
     },
 
+    /// Incorrect range
+    #[error("Incorrect range")]
+    IncorrectRange,
+
     /// The key must not be too long
     #[error("The key must not be too long")]
     KeyTooLong,
