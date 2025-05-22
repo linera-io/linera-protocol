@@ -296,8 +296,12 @@ where
         let futures = chain_ids
             .into_iter()
             .map(|chain_id| async move {
-                let local_info = self.chain_info(*chain_id).await?;
-                Ok::<_, LocalNodeError>((*chain_id, local_info.next_block_height))
+                let chain = self.chain_state_view(*chain_id).await?;
+                let mut next_height = chain.tip_state.get().next_block_height;
+                while chain.loose_blocks.contains_key(&next_height).await? {
+                    next_height.try_add_assign_one()?;
+                }
+                Ok::<_, LocalNodeError>((*chain_id, next_height))
             })
             .collect::<Vec<_>>();
         stream::iter(futures)

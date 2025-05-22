@@ -951,6 +951,9 @@ where
     pub async fn apply_loose_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
+        if block.header.height < self.tip_state.get().next_block_height {
+            return Ok(());
+        }
         self.process_outgoing_messages(block).await?;
         self.loose_blocks.insert(&block.header.height, hash)?;
         Ok(())
@@ -1083,20 +1086,18 @@ where
         range: impl RangeBounds<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, ChainError> {
         let next_height = self.tip_state.get().next_block_height;
-        let start = match range.start_bound() {
-            Bound::Included(height) => *height,
-            Bound::Excluded(height) => height.try_add_one().unwrap_or(BlockHeight::MAX),
-            Bound::Unbounded => BlockHeight(0),
+        // If the range is not empty, it can always be represented as start..=end.
+        let Some((start, end)) = range.to_inclusive() else {
+            return Ok(Vec::new());
         };
-        let end = match range.end_bound() {
-            Bound::Included(height) => height.try_add_one().unwrap_or(BlockHeight::MAX),
-            Bound::Excluded(height) => *height,
-            Bound::Unbounded => BlockHeight::MAX,
+        let mut hashes = if let Ok(last_height) = next_height.try_sub_one() {
+            let usize_start = usize::try_from(start)?;
+            let usize_end = usize::try_from(end.min(last_height))?;
+            self.confirmed_log.read(usize_start..=usize_end).await?
+        } else {
+            Vec::new()
         };
-        let usize_start = usize::try_from(start)?;
-        let usize_end = usize::try_from(end.min(next_height))?;
-        let mut hashes = self.confirmed_log.read(usize_start..usize_end).await?;
-        for height in start.max(next_height).0..end.0 {
+        for height in start.max(next_height).0..=end.0 {
             hashes.push(
                 self.loose_blocks
                     .get(&BlockHeight(height))
@@ -1175,6 +1176,28 @@ where
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
         Ok(targets)
+    }
+}
+
+trait RangeExt {
+    /// Returns the range as a tuple of inclusive bounds.
+    /// If the range is empty, returns None.
+    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)>;
+}
+
+impl<T: RangeBounds<BlockHeight>> RangeExt for T {
+    fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)> {
+        let start = match self.start_bound() {
+            Bound::Included(height) => *height,
+            Bound::Excluded(height) => height.try_add_one().ok()?,
+            Bound::Unbounded => BlockHeight(0),
+        };
+        let end = match self.end_bound() {
+            Bound::Included(height) => *height,
+            Bound::Excluded(height) => height.try_sub_one().ok()?,
+            Bound::Unbounded => BlockHeight::MAX,
+        };
+        Some((start, end))
     }
 }
 
