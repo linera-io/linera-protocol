@@ -6,22 +6,25 @@ use std::collections::BTreeSet;
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Blob, Event, OracleResponse, Timestamp},
-    identifiers::{BlobType, ChainId},
+    identifiers::{AccountOwner, BlobType, ChainId},
 };
 use linera_execution::{
-    BalanceHolder, OutgoingMessage, ResourceController, ResourceTracker, TransactionOutcome,
-    TransactionTracker,
+    OutgoingMessage, ResourceController, ResourceTracker, SystemExecutionStateView,
+    TransactionOutcome, TransactionTracker,
 };
+use linera_views::context::Context;
 
 use crate::{
-    data_types::{OperationResult, Transaction},
+    chain::EMPTY_BLOCK_SIZE,
+    data_types::{OperationResult, ProposedBlock, Transaction},
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
 /// Tracks execution of transactions within a block.
 /// Captures the resource policy, produced messages, oracle events.
-#[derive(Debug, Default)]
-pub struct BlockExecutionTracker {
+#[derive(Debug)]
+pub struct BlockExecutionTracker<'resources> {
+    resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
     pub replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
@@ -40,15 +43,28 @@ pub struct BlockExecutionTracker {
     pub operation_results: Vec<OperationResult>,
     // Index of the currently executed transaction in a block.
     transaction_index: u32,
+
+    // We expect the number of outcomes to be equal to the number of transactions in the block.
+    expected_outcomes_count: usize,
 }
 
-impl BlockExecutionTracker {
+impl<'resources> BlockExecutionTracker<'resources> {
     /// Creates a new BlockExecutionTracker.
     pub fn new(
+        resource_controller: &'resources mut ResourceController<
+            Option<AccountOwner>,
+            ResourceTracker,
+        >,
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-    ) -> Self {
-        Self {
+        proposal: &ProposedBlock,
+    ) -> Result<Self, ChainError> {
+        resource_controller
+            .track_block_size(EMPTY_BLOCK_SIZE)
+            .with_execution_context(ChainExecutionContext::Block)?;
+
+        Ok(Self {
+            resource_controller,
             local_time,
             replaying_oracle_responses,
             next_message_index: 0,
@@ -60,7 +76,8 @@ impl BlockExecutionTracker {
             messages: Vec::new(),
             operation_results: Vec::new(),
             transaction_index: 0,
-        }
+            expected_outcomes_count: proposal.incoming_bundles.len() + proposal.operations.len(),
+        })
     }
 
     /// Returns a new TransactionTracker for the current transaction.
@@ -93,15 +110,14 @@ impl BlockExecutionTracker {
     /// so that the execution of the next transaction doesn't overwrite the previous ones.
     ///
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
-    pub fn process_txn_outcome<Account, Tracker>(
+    pub async fn process_txn_outcome<C>(
         &mut self,
         txn_outcome: &TransactionOutcome,
-        resource_controller: &mut ResourceController<Account, Tracker>,
+        view: &mut SystemExecutionStateView<C>,
         context: ChainExecutionContext,
     ) -> Result<(), ChainError>
     where
-        Account: BalanceHolder,
-        Tracker: AsRef<ResourceTracker> + AsMut<ResourceTracker>,
+        C: Context + Clone + Send + Sync + 'static,
     {
         self.next_message_index = txn_outcome.next_message_index;
         self.next_application_index = txn_outcome.next_application_index;
@@ -113,6 +129,8 @@ impl BlockExecutionTracker {
         self.messages.push(txn_outcome.outgoing_messages.clone());
         self.operation_results
             .push(OperationResult(txn_outcome.operation_result.clone()));
+
+        let mut resource_controller = self.resource_controller.with_state(view).await?;
 
         for message_out in &txn_outcome.outgoing_messages {
             resource_controller
@@ -137,7 +155,7 @@ impl BlockExecutionTracker {
             }
         }
 
-        resource_controller
+        self.resource_controller
             .track_block_size_of(&(&txn_outcome.operation_result))
             .with_execution_context(context)?;
 
@@ -164,6 +182,13 @@ impl BlockExecutionTracker {
                 ChainExecutionContext::Operation(self.transaction_index)
             }
         }
+    }
+
+    /// Returns a mutable reference to the resource controller.
+    pub fn resource_controller_mut(
+        &mut self,
+    ) -> &mut ResourceController<Option<AccountOwner>, ResourceTracker> {
+        self.resource_controller
     }
 
     /// Finalized the execution and returns the collected results.
