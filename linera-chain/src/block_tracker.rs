@@ -1,12 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Blob, Event, OracleResponse, Timestamp},
-    identifiers::{AccountOwner, BlobType, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_execution::{
     OutgoingMessage, ResourceController, ResourceTracker, SystemExecutionStateView,
@@ -23,7 +23,7 @@ use crate::{
 /// Tracks execution of transactions within a block.
 /// Captures the resource policy, produced messages, oracle responses and events.
 #[derive(Debug)]
-pub struct BlockExecutionTracker<'resources> {
+pub struct BlockExecutionTracker<'resources, 'blobs> {
     resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
     local_time: Timestamp,
     #[debug(skip_if = Option::is_none)]
@@ -44,17 +44,21 @@ pub struct BlockExecutionTracker<'resources> {
     // Index of the currently executed transaction in a block.
     transaction_index: u32,
 
+    // Blobs publised in the block.
+    published_blobs: BTreeMap<BlobId, &'blobs Blob>,
+
     // We expect the number of outcomes to be equal to the number of transactions in the block.
     expected_outcomes_count: usize,
 }
 
-impl<'resources> BlockExecutionTracker<'resources> {
+impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// Creates a new BlockExecutionTracker.
     pub fn new(
         resource_controller: &'resources mut ResourceController<
             Option<AccountOwner>,
             ResourceTracker,
         >,
+        published_blobs: BTreeMap<BlobId, &'blobs Blob>,
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         proposal: &ProposedBlock,
@@ -76,6 +80,7 @@ impl<'resources> BlockExecutionTracker<'resources> {
             messages: Vec::new(),
             operation_results: Vec::new(),
             transaction_index: 0,
+            published_blobs,
             expected_outcomes_count: proposal.incoming_bundles.len() + proposal.operations.len(),
         })
     }
@@ -149,11 +154,33 @@ impl<'resources> BlockExecutionTracker<'resources> {
             ))
             .with_execution_context(context)?;
 
+        // Account for blobs published by this transaction directly.
         for blob in &txn_outcome.blobs {
-            if blob.content().blob_type() == BlobType::Data {
+            resource_controller
+                .policy()
+                .check_blob_size(blob.content())
+                .with_execution_context(context)?;
+            if blob.content().blob_type().is_user_blob() {
                 resource_controller
                     .track_blob_published(blob.content())
                     .with_execution_context(context)?;
+            }
+        }
+
+        // Account for blobs published indirectly but referenced by the transaction.
+        for blob_id in &txn_outcome.blobs_published {
+            if let Some(blob) = self.published_blobs.get(blob_id) {
+                // We don't check its sizes again, it was check at the beginning
+                // of the block processing.
+                if blob.content().blob_type().is_user_blob() {
+                    resource_controller
+                        .track_blob_published(blob.content())
+                        .with_execution_context(context)?;
+                }
+            } else {
+                return Err(ChainError::InternalError(format!(
+                    "Missing published blob {blob_id}"
+                )));
             }
         }
 

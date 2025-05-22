@@ -169,6 +169,21 @@ pub enum BlobType {
     ChainDescription,
 }
 
+impl BlobType {
+    /// Returns whether the blob is proposed by user.
+    pub fn is_user_blob(&self) -> bool {
+        match self {
+            BlobType::Data
+            | BlobType::ContractBytecode
+            | BlobType::ServiceBytecode
+            | BlobType::EvmBytecode
+            | BlobType::ApplicationDescription
+            | BlobType::ChainDescription => true,
+            BlobType::Committee => false,
+        }
+    }
+}
+
 impl fmt::Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)

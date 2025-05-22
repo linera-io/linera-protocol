@@ -726,31 +726,27 @@ where
             block.authenticated_signer,
         );
 
+        for blob in published_blobs {
+            let blob_id = blob.id();
+            resource_controller
+                .policy()
+                .check_blob_size(blob.content())
+                .with_execution_context(ChainExecutionContext::Block)?;
+            chain.system.used_blobs.insert(&blob_id)?;
+        }
+
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
         let mut block_execution_tracker = BlockExecutionTracker::new(
             &mut resource_controller,
+            published_blobs
+                .iter()
+                .map(|blob| (blob.id(), blob))
+                .collect(),
             local_time,
             replaying_oracle_responses,
             block,
         )?;
-
-        for blob in published_blobs {
-            let blob_type = blob.content().blob_type();
-            if blob_type == BlobType::Data
-                || blob_type == BlobType::ContractBytecode
-                || blob_type == BlobType::ServiceBytecode
-                || blob_type == BlobType::EvmBytecode
-            {
-                block_execution_tracker
-                    .resource_controller_mut()
-                    .with_state(&mut chain.system)
-                    .await?
-                    .track_blob_published(blob.content())
-                    .with_execution_context(ChainExecutionContext::Block)?;
-            }
-            chain.system.used_blobs.insert(&blob.id())?;
-        }
 
         for transaction in block.transactions() {
             let chain_execution_context =

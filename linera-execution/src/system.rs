@@ -430,7 +430,10 @@ where
                 );
                 match admin_operation {
                     AdminOperation::PublishCommitteeBlob { blob_hash } => {
-                        self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
+                        self.blob_published(
+                            &BlobId::new(blob_hash, BlobType::Committee),
+                            txn_tracker,
+                        )?;
                     }
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
@@ -461,7 +464,7 @@ where
             }
             PublishModule { module_id } => {
                 for blob_id in module_id.bytecode_blob_ids() {
-                    self.blob_published(&blob_id)?;
+                    self.blob_published(&blob_id, txn_tracker)?;
                 }
             }
             CreateApplication {
@@ -488,7 +491,7 @@ where
                 new_application = Some((app_id, instantiation_argument));
             }
             PublishDataBlob { blob_hash } => {
-                self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
+                self.blob_published(&BlobId::new(blob_hash, BlobType::Data), txn_tracker)?;
             }
             ReadBlob { blob_id } => {
                 let content = self.read_blob_content(blob_id).await?;
@@ -982,8 +985,13 @@ where
 
     /// Records a blob that is published in this block. This does not create an oracle entry, and
     /// the blob can be used without using an oracle in the future on this chain.
-    fn blob_published(&mut self, blob_id: &BlobId) -> Result<(), ExecutionError> {
+    fn blob_published(
+        &mut self,
+        blob_id: &BlobId,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
         self.used_blobs.insert(blob_id)?;
+        txn_tracker.add_published_blob(*blob_id);
         Ok(())
     }
 
