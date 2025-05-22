@@ -51,10 +51,10 @@ use tonic::{
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::prometheus_server;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -122,12 +122,12 @@ where
     }
 
     fn call(&mut self, request: Req) -> Self::Future {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let start = linera_base::time::Instant::now();
         let future = self.service.call(request);
         async move {
             let response = future.await?;
-            #[cfg(with_metrics)]
+            #[cfg(not(target_arch = "wasm32"))]
             {
                 metrics::PROXY_REQUEST_LATENCY
                     .with_label_values(&[])
@@ -236,7 +236,7 @@ where
         info!("Starting proxy");
         let mut join_set = JoinSet::new();
 
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         prometheus_server::start_metrics(self.metrics_address(), shutdown_signal.clone());
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
@@ -314,14 +314,14 @@ where
         #![allow(unused_variables)]
         match result {
             Ok(chain_info_result) => {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&[method_name])
                     .inc();
                 Ok(chain_info_result)
             }
             Err(status) => {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::PROXY_REQUEST_ERROR
                     .with_label_values(&[method_name])
                     .inc();
@@ -515,17 +515,16 @@ where
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
         let (mut client, inner) = self.worker_client(request).await?;
-        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.download_pending_blob(inner).await {
             Ok(blob_result) => {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&["download_pending_blob"])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::PROXY_REQUEST_ERROR
                     .with_label_values(&["download_pending_blob"])
                     .inc();
@@ -540,17 +539,16 @@ where
         request: Request<HandlePendingBlobRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request).await?;
-        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.handle_pending_blob(inner).await {
             Ok(blob_result) => {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::PROXY_REQUEST_SUCCESS
                     .with_label_values(&["handle_pending_blob"])
                     .inc();
                 Ok(blob_result)
             }
             Err(status) => {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::PROXY_REQUEST_ERROR
                     .with_label_values(&["handle_pending_blob"])
                     .inc();

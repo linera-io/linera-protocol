@@ -19,7 +19,7 @@ use crate::{
 #[cfg(with_testing)]
 use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -283,14 +283,14 @@ where
         {
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_read_value(key) {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::READ_VALUE_CACHE_HIT_COUNT
                     .with_label_values(&[])
                     .inc();
                 return Ok(value);
             }
         }
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_VALUE_CACHE_MISS_COUNT
             .with_label_values(&[])
             .inc();
@@ -307,14 +307,14 @@ where
         {
             let mut cache = cache.lock().unwrap();
             if let Some(value) = cache.query_contains_key(key) {
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::CONTAINS_KEY_CACHE_HIT_COUNT
                     .with_label_values(&[])
                     .inc();
                 return Ok(value);
             }
         }
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::CONTAINS_KEY_CACHE_MISS_COUNT
             .with_label_values(&[])
             .inc();
@@ -336,13 +336,13 @@ where
             let mut cache = cache.lock().unwrap();
             for i in 0..size {
                 if let Some(value) = cache.query_contains_key(&keys[i]) {
-                    #[cfg(with_metrics)]
+                    #[cfg(not(target_arch = "wasm32"))]
                     metrics::CONTAINS_KEY_CACHE_HIT_COUNT
                         .with_label_values(&[])
                         .inc();
                     results[i] = value;
                 } else {
-                    #[cfg(with_metrics)]
+                    #[cfg(not(target_arch = "wasm32"))]
                     metrics::CONTAINS_KEY_CACHE_MISS_COUNT
                         .with_label_values(&[])
                         .inc();
@@ -377,13 +377,13 @@ where
             let mut cache = cache.lock().unwrap();
             for (i, key) in keys.into_iter().enumerate() {
                 if let Some(value) = cache.query_read_value(&key) {
-                    #[cfg(with_metrics)]
+                    #[cfg(not(target_arch = "wasm32"))]
                     metrics::READ_VALUE_CACHE_HIT_COUNT
                         .with_label_values(&[])
                         .inc();
                     result.push(value);
                 } else {
-                    #[cfg(with_metrics)]
+                    #[cfg(not(target_arch = "wasm32"))]
                     metrics::READ_VALUE_CACHE_MISS_COUNT
                         .with_label_values(&[])
                         .inc();

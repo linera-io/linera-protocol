@@ -19,7 +19,7 @@ use tracing::{trace, warn};
 
 use crate::config::ShardId;
 
-#[cfg(with_metrics)]
+#[cfg(not(web))]
 static CROSS_CHAIN_MESSAGE_TASKS: std::sync::LazyLock<prometheus::IntGauge> =
     std::sync::LazyLock::new(|| {
         prometheus::register_int_gauge!(
@@ -86,7 +86,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
     };
 
     loop {
-        #[cfg(with_metrics)]
+        #[cfg(not(web))]
         CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
         tokio::select! {
             Some((queue, action)) = steps.next() => {

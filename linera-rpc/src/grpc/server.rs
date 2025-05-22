@@ -48,7 +48,7 @@ use crate::{
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
 
-#[cfg(with_metrics)]
+#[cfg(not(web))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -165,12 +165,12 @@ where
     }
 
     fn call(&mut self, request: Req) -> Self::Future {
-        #[cfg(with_metrics)]
+        #[cfg(not(web))]
         let start = Instant::now();
         let future = self.service.call(request);
         async move {
             let response = future.await?;
-            #[cfg(with_metrics)]
+            #[cfg(not(web))]
             {
                 metrics::SERVER_REQUEST_LATENCY
                     .with_label_values(&[])
@@ -360,7 +360,7 @@ where
 
             if let Err(error) = cross_chain_sender.try_send((request, shard_id)) {
                 error!(%error, "dropping cross-chain request");
-                #[cfg(with_metrics)]
+                #[cfg(not(web))]
                 if error.is_full() {
                     metrics::CROSS_CHAIN_MESSAGE_CHANNEL_FULL
                         .with_label_values(&[])
@@ -373,7 +373,7 @@ where
             trace!("Scheduling notification query");
             if let Err(error) = notification_sender.try_send(notification) {
                 error!(%error, "dropping notification");
-                #[cfg(with_metrics)]
+                #[cfg(not(web))]
                 if error.is_full() {
                     metrics::NOTIFICATION_CHANNEL_FULL
                         .with_label_values(&[])
@@ -425,7 +425,7 @@ where
 
     fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
         #![allow(unused_variables)]
-        #[cfg(with_metrics)]
+        #[cfg(not(web))]
         {
             metrics::SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
                 .with_label_values(&[method_name])

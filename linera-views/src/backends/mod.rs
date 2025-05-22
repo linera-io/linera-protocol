@@ -3,7 +3,7 @@
 
 pub mod journaling;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod metering;
 
 pub mod value_splitting;

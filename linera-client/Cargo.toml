@@ -29,14 +29,6 @@ wasmer = [
 ]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 fs = ["fs-err", "fs4", "linera-execution/fs"]
-metrics = [
-    "linera-base/metrics",
-    "linera-chain/metrics",
-    "linera-core/metrics",
-    "linera-execution/metrics",
-    "linera-rpc/metrics",
-    "linera-views/metrics",
-]
 web = [
     "dep:web-sys",
     "dep:wasm-bindgen-futures",

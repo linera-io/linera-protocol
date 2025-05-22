@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
 storage-service = []
 test = ["linera-views/test"]

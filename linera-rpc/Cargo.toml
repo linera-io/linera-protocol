@@ -20,15 +20,6 @@ test = [
     "linera-storage/test",
 ]
 
-metrics = [
-    "prometheus",
-    "linera-base/metrics",
-    "linera-chain/metrics",
-    "linera-core/metrics",
-    "linera-execution/metrics",
-    "linera-storage/metrics",
-]
-
 server = ["tokio-util", "tonic-health", "tonic-reflection"]
 simple-network = ["tokio-util/net"]
 
@@ -57,7 +48,7 @@ linera-core.workspace = true
 linera-execution.workspace = true
 linera-storage.workspace = true
 linera-version.workspace = true
-prometheus = { workspace = true, optional = true }
+prometheus = { workspace = true }
 prost.workspace = true
 rand.workspace = true
 serde.workspace = true

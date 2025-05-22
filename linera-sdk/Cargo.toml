@@ -64,11 +64,11 @@ wit-bindgen.workspace = true
 anyhow.workspace = true
 cargo_toml.workspace = true
 dashmap.workspace = true
-linera-base = { workspace = true, features = ["metrics"] }
-linera-chain = { workspace = true, features = ["metrics"] }
-linera-core = { workspace = true, features = ["metrics", "wasmer"] }
-linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
-linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
+linera-base = { workspace = true }
+linera-chain = { workspace = true }
+linera-core = { workspace = true, features = ["wasmer"] }
+linera-execution = { workspace = true, features = ["fs", "wasmer"] }
+linera-storage = { workspace = true, features = ["wasmer"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

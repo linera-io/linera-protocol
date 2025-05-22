@@ -80,7 +80,7 @@ pub mod views;
 pub mod backends;
 
 /// Support for metrics.
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod metrics;
 
 /// GraphQL implementations.
@@ -99,7 +99,7 @@ pub mod test_utils;
 pub use backends::dynamo_db;
 #[cfg(with_indexeddb)]
 pub use backends::indexed_db;
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub use backends::metering;
 #[cfg(with_rocksdb)]
 pub use backends::rocks_db;

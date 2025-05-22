@@ -10,7 +10,7 @@ pub mod cli;
 pub mod cli_wrappers;
 pub mod node_service;
 pub mod project;
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod prometheus_server;
 pub mod storage;
 pub mod util;

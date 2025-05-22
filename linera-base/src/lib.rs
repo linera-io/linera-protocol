@@ -30,7 +30,7 @@ mod limited_writer;
 pub mod ownership;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod port;
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod prometheus_util;
 #[cfg(not(chain))]
 pub mod task;

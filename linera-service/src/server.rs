@@ -32,7 +32,7 @@ use linera_rpc::{
     grpc, simple,
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_service::prometheus_server;
 use linera_service::{
     storage::{Runnable, StorageConfigNamespace},
@@ -105,7 +105,7 @@ impl ServerContext {
             let cross_chain_config = self.cross_chain_config.clone();
             let listen_address = listen_address.to_owned();
 
-            #[cfg(with_metrics)]
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(port) = shard.metrics_port {
                 Self::start_metrics(&listen_address, port, shutdown_signal.clone());
             }
@@ -148,7 +148,7 @@ impl ServerContext {
         let handles = FuturesUnordered::new();
 
         for (state, shard_id, shard) in states {
-            #[cfg(with_metrics)]
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(port) = shard.metrics_port {
                 Self::start_metrics(listen_address, port, shutdown_signal.clone());
             }
@@ -180,7 +180,7 @@ impl ServerContext {
         join_set
     }
 
-    #[cfg(with_metrics)]
+    #[cfg(not(target_arch = "wasm32"))]
     fn start_metrics(host: &str, port: u16, shutdown_signal: CancellationToken) {
         prometheus_server::start_metrics((host.to_owned(), port), shutdown_signal);
     }

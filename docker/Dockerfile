@@ -25,7 +25,7 @@ ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
-ARG build_features=scylladb,metrics
+ARG build_features=scylladb
 
 FROM rust:1.74-slim-bookworm AS builder
 ARG git_commit

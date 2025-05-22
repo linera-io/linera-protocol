@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -14,7 +14,7 @@ use crate::{
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -201,7 +201,7 @@ where
     }
 
     fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _hash_latency = metrics::REGISTER_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(self.get())?;

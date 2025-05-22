@@ -31,14 +31,6 @@ rocksdb = ["linera-views/rocksdb"]
 dynamodb = ["linera-views/dynamodb"]
 scylladb = ["linera-views/scylladb"]
 storage-service = ["linera-storage-service"]
-metrics = [
-    "prometheus",
-    "linera-base/metrics",
-    "linera-chain/metrics",
-    "linera-execution/metrics",
-    "linera-storage/metrics",
-    "linera-views/metrics",
-]
 web = [
     "linera-base/web",
     "linera-chain/web",
@@ -65,7 +57,7 @@ linera-storage.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 lru.workspace = true
-prometheus = { workspace = true, optional = true }
+prometheus = { workspace = true }
 proptest = { workspace = true, optional = true }
 rand = { workspace = true, features = ["std_rng"] }
 serde.workspace = true

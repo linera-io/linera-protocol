@@ -130,7 +130,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         .first()
         .expect("list of names should be non-empty");
 
-    let load_metrics = if root && cfg!(feature = "metrics") {
+    let load_metrics = if root {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
             linera_views::metrics::increment_counter(
@@ -140,6 +140,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             );
             #[cfg(not(target_arch = "wasm32"))]
             use linera_views::metrics::prometheus_util::MeasureLatency as _;
+            #[cfg(not(target_arch = "wasm32"))]
             let _latency = linera_views::metrics::LOAD_VIEW_LATENCY.measure_latency();
         }
     } else {
@@ -227,17 +228,13 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
         deletes.push(quote! { self.#name.delete(batch); });
     }
 
-    let increment_counter = if cfg!(feature = "metrics") {
-        quote! {
-            #[cfg(not(target_arch = "wasm32"))]
-            linera_views::metrics::increment_counter(
-                &linera_views::metrics::SAVE_VIEW_COUNTER,
-                stringify!(#struct_name),
-                &self.context().base_key().bytes,
-            );
-        }
-    } else {
-        quote! {}
+    let increment_counter = quote! {
+        #[cfg(not(target_arch = "wasm32"))]
+        linera_views::metrics::increment_counter(
+            &linera_views::metrics::SAVE_VIEW_COUNTER,
+            stringify!(#struct_name),
+            &self.context().base_key().bytes,
+        );
     };
 
     quote! {
@@ -488,15 +485,7 @@ pub mod tests {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
             insta::assert_snapshot!(
-                format!(
-                    "test_generate_view_code{}_{}",
-                    if cfg!(feature = "metrics") {
-                        "_metrics"
-                    } else {
-                        ""
-                    },
-                    context.name,
-                ),
+                format!("test_generate_view_code_metrics_{}", context.name),
                 pretty(generate_view_code(input, true))
             );
         }
@@ -518,15 +507,7 @@ pub mod tests {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
             insta::assert_snapshot!(
-                format!(
-                    "test_generate_root_view_code{}_{}",
-                    if cfg!(feature = "metrics") {
-                        "_metrics"
-                    } else {
-                        ""
-                    },
-                    context.name,
-                ),
+                format!("test_generate_root_view_code_metrics_{}", context.name),
                 pretty(generate_root_view_code(input))
             );
         }

@@ -15,7 +15,7 @@ use linera_views::{
 #[path = "unit_tests/outbox_tests.rs"]
 mod outbox_tests;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -73,7 +73,7 @@ where
         }
         self.next_height_to_schedule.set(height.try_add_one()?);
         self.queue.push_back(height);
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::OUTBOX_SIZE
             .with_label_values(&[])
             .observe(self.queue.count() as f64);
@@ -94,7 +94,7 @@ where
             self.queue.delete_front().await?;
             updates.push(h);
         }
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::OUTBOX_SIZE
             .with_label_values(&[])
             .observe(self.queue.count() as f64);

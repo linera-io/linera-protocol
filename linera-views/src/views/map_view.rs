@@ -16,10 +16,10 @@
 //! [class2]: map_view::MapView
 //! [class3]: map_view::CustomMapView
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -933,7 +933,7 @@ where
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _hash_latency = metrics::MAP_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0u32;

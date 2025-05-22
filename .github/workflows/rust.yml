@@ -91,7 +91,7 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Run metrics tests
       run: |
-        cargo test --locked -p linera-base --features metrics
+        cargo test --locked -p linera-base
 
   wasm-application-test:
     runs-on: ubuntu-latest

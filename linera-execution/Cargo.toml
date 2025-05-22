@@ -29,7 +29,6 @@ revm = [
     "dep:tempfile",
 ]
 fs = ["tokio/fs"]
-metrics = ["prometheus", "linera-views/metrics"]
 wasmer = ["dep:wasmer", "wasmer/enable-serde", "linera-witty/wasmer"]
 wasmtime = ["dep:wasmtime", "linera-witty/wasmtime"]
 web = ["linera-base/web", "linera-views/web", "js-sys"]
@@ -56,7 +55,7 @@ linera-views-derive.workspace = true
 linera-witty = { workspace = true, features = ["log", "macros"] }
 lru.workspace = true
 oneshot.workspace = true
-prometheus = { workspace = true, optional = true }
+prometheus = { workspace = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json", "stream"] }
 revm = { workspace = true, optional = true, default-features = false, features = [

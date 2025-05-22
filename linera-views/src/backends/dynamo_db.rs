@@ -38,7 +38,7 @@ use linera_base::ensure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::metering::MeteredStore;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueStore;
@@ -1167,7 +1167,7 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
 }
 
 /// A shared DB client for DynamoDB implementing LRU caching and metrics
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub type DynamoDbStore = MeteredStore<
     LruCachingStore<
         MeteredStore<
@@ -1177,7 +1177,7 @@ pub type DynamoDbStore = MeteredStore<
 >;
 
 /// A shared DB client for DynamoDB implementing LRU caching
-#[cfg(not(with_metrics))]
+#[cfg(target_arch = "wasm32")]
 pub type DynamoDbStore =
     LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
 

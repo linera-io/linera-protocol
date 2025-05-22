@@ -16,12 +16,6 @@ revm = ["linera-execution/revm"]
 test = ["linera-execution/test", "linera-views/test"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
-metrics = [
-    "linera-base/metrics",
-    "linera-chain/metrics",
-    "linera-execution/metrics",
-    "linera-views/metrics",
-]
 web = [
     "linera-base/web",
     "linera-chain/web",

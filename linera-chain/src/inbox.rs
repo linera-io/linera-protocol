@@ -24,7 +24,7 @@ use crate::{data_types::MessageBundle, ChainError};
 #[path = "unit_tests/inbox_tests.rs"]
 mod inbox_tests;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -218,7 +218,7 @@ where
                 }
             );
             self.added_bundles.delete_front();
-            #[cfg(with_metrics)]
+            #[cfg(not(target_arch = "wasm32"))]
             metrics::INBOX_SIZE
                 .with_label_values(&[])
                 .observe(self.added_bundles.count() as f64);
@@ -240,7 +240,7 @@ where
                     }
                 );
                 self.added_bundles.delete_front();
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::INBOX_SIZE
                     .with_label_values(&[])
                     .observe(self.added_bundles.count() as f64);
@@ -250,7 +250,7 @@ where
             None => {
                 tracing::trace!("Marking bundle as expected: {:?}", bundle);
                 self.removed_bundles.push_back(bundle.clone());
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::REMOVED_BUNDLES
                     .with_label_values(&[])
                     .observe(self.removed_bundles.count() as f64);
@@ -289,7 +289,7 @@ where
                         }
                     );
                     self.removed_bundles.delete_front();
-                    #[cfg(with_metrics)]
+                    #[cfg(not(target_arch = "wasm32"))]
                     metrics::REMOVED_BUNDLES
                         .with_label_values(&[])
                         .observe(self.removed_bundles.count() as f64);
@@ -309,7 +309,7 @@ where
             None => {
                 // Otherwise, schedule the messages for execution.
                 self.added_bundles.push_back(bundle);
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::INBOX_SIZE
                     .with_label_values(&[])
                     .observe(self.added_bundles.count() as f64);

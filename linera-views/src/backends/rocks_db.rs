@@ -20,7 +20,7 @@ use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tempfile::TempDir;
 use thiserror::Error;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::metering::MeteredStore;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueStore;
@@ -671,13 +671,13 @@ impl KeyValueStoreError for RocksDbStoreInternalError {
 }
 
 /// The `RocksDbStore` composed type with metrics
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub type RocksDbStore = MeteredStore<
     LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
 >;
 
 /// The `RocksDbStore` composed type
-#[cfg(not(with_metrics))]
+#[cfg(target_arch = "wasm32")]
 pub type RocksDbStore = LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>;
 
 /// The composed error type for the `RocksDbStore`

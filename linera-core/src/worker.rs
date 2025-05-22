@@ -52,7 +52,7 @@ use crate::{
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -589,7 +589,7 @@ where
             })
             .await?;
 
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::NUM_BLOCKS.with_label_values(&[]).inc();
 
         Ok((response, actions))
@@ -810,14 +810,14 @@ where
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, proposal);
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let round = proposal.content.round;
         let response = self
             .query_chain_worker(proposal.content.block.chain_id, move |callback| {
                 ChainWorkerRequest::HandleBlockProposal { proposal, callback }
             })
             .await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
             .with_label_values(&[round.type_name()])
             .observe(round.number() as f64);
@@ -861,7 +861,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         {
             let confirmed_transactions = (certificate.block().body.incoming_bundles.len()
                 + certificate.block().body.operations.len())
@@ -902,13 +902,13 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
 
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let round = certificate.round;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let cert_str = certificate.inner().to_log_str();
 
         let (info, actions, _duplicated) = self.process_validated_block(certificate).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         {
             if !_duplicated {
                 metrics::NUM_ROUNDS_IN_CERTIFICATE

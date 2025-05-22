@@ -45,7 +45,7 @@ pub static EPOCH_STREAM_NAME: &[u8] = &[0];
 pub static REMOVED_EPOCH_STREAM_NAME: &[u8] = &[1];
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 mod metrics {
     use std::sync::LazyLock;
 
@@ -373,7 +373,7 @@ where
                         txn_tracker,
                     )
                     .await?;
-                #[cfg(with_metrics)]
+                #[cfg(not(target_arch = "wasm32"))]
                 metrics::OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
             ChangeOwnership {

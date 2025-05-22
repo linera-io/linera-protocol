@@ -9,9 +9,6 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
-[features]
-metrics = []
-
 [lib]
 proc-macro = true
 

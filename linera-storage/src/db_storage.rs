@@ -5,7 +5,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
@@ -36,7 +36,7 @@ use {
 
 use crate::{ChainRuntimeContext, Clock, Storage};
 
-#[cfg(with_metrics)]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod metrics {
     use std::sync::LazyLock;
 
@@ -240,7 +240,7 @@ trait BatchExt {
 
 impl BatchExt for Batch {
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
         self.put_key_value_bytes(blob_key.to_vec(), blob.bytes().to_vec());
@@ -257,7 +257,7 @@ impl BatchExt for Batch {
         &mut self,
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::WRITE_CERTIFICATE_COUNTER
             .with_label_values(&[])
             .inc();
@@ -270,7 +270,7 @@ impl BatchExt for Batch {
     }
 
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
         self.put_key_value_bytes(event_key.to_vec(), value);
@@ -281,7 +281,7 @@ impl BatchExt for Batch {
         &mut self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::WRITE_NETWORK_DESCRIPTION
             .with_label_values(&[])
             .inc();
@@ -543,7 +543,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, ViewError> {
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         let _metric = metrics::LOAD_CHAIN_LATENCY.measure_latency();
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
@@ -561,7 +561,7 @@ where
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let test = self.store.contains_key(&blob_key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
@@ -579,7 +579,7 @@ where
                 missing_blobs.push(*blob_id);
             }
         }
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
         Ok(missing_blobs)
     }
@@ -587,7 +587,7 @@ where
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let test = self.store.contains_key(&blob_key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::CONTAINS_BLOB_STATE_COUNTER
             .with_label_values(&[])
             .inc();
@@ -597,7 +597,7 @@ where
     async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError> {
         let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         let maybe_value = self.store.read_value::<ConfirmedBlock>(&block_key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
             .inc();
@@ -608,7 +608,7 @@ where
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?;
         Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
@@ -623,7 +623,7 @@ where
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_bytes = self.store.read_multi_values_bytes(blob_keys).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_BLOB_COUNTER
             .with_label_values(&[])
             .inc_by(blob_ids.len() as u64);
@@ -640,7 +640,7 @@ where
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
             .inc();
@@ -661,7 +661,7 @@ where
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_BLOB_STATES_COUNTER
             .with_label_values(&[])
             .inc();
@@ -819,7 +819,7 @@ where
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let results = self.store.contains_keys(keys).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::CONTAINS_CERTIFICATE_COUNTER
             .with_label_values(&[])
             .inc();
@@ -833,7 +833,7 @@ where
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
-            #[cfg(with_metrics)]
+            #[cfg(not(target_arch = "wasm32"))]
             metrics::READ_CERTIFICATE_COUNTER
                 .with_label_values(&[])
                 .inc();
@@ -853,7 +853,7 @@ where
         let keys = Self::get_keys_for_certificates(&hashes)?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
-            #[cfg(with_metrics)]
+            #[cfg(not(target_arch = "wasm32"))]
             metrics::READ_CERTIFICATES_COUNTER
                 .with_label_values(&[])
                 .inc();
@@ -870,7 +870,7 @@ where
     async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
         let maybe_value = self.store.read_value_bytes(&event_key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
         maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
     }
@@ -878,7 +878,7 @@ where
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
         let exists = self.store.contains_key(&event_key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(exists)
     }
@@ -927,7 +927,7 @@ where
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
         let maybe_value = self.store.read_value(&key).await?;
-        #[cfg(with_metrics)]
+        #[cfg(not(target_arch = "wasm32"))]
         metrics::READ_NETWORK_DESCRIPTION
             .with_label_values(&[])
             .inc();
