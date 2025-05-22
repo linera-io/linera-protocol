@@ -875,16 +875,6 @@ where
             }
         }
 
-        // Finally, charge for the block fee, except if the chain is closed. Closed chains should
-        // always be able to reject incoming messages.
-        if !chain.system.closed.get() {
-            resource_controller
-                .with_state(&mut chain.system)
-                .await?
-                .track_block()
-                .with_execution_context(ChainExecutionContext::Block)?;
-        }
-
         let recipients = messages
             .iter()
             .flatten()
