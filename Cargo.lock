@@ -5370,6 +5370,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-metrics"
+version = "0.15.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "prometheus",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "linera-parity-wasm"
 version = "0.45.1-linera.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5531,6 +5543,7 @@ dependencies = [
  "linera-execution",
  "linera-faucet-client",
  "linera-faucet-server",
+ "linera-metrics",
  "linera-persistent",
  "linera-rpc",
  "linera-sdk",

@@ -48,9 +48,8 @@ use tonic::{
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
-
 #[cfg(with_metrics)]
-use crate::prometheus_server;
+use linera_metrics::prometheus_server;
 
 #[cfg(with_metrics)]
 mod metrics {
