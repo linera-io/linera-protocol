@@ -11,7 +11,7 @@ use fungible::Account;
 use gen_nft::{GenNftAbi, Message, Nft, Operation, TokenId};
 use linera_sdk::{
     linera_base_types::{AccountOwner, WithContractAbi},
-    views::{View},
+    views::View,
     Contract, ContractRuntime,
 };
 

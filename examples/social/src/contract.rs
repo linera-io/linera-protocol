@@ -7,7 +7,7 @@ mod state;
 
 use linera_sdk::{
     linera_base_types::{ChainId, StreamUpdate, WithContractAbi},
-    views::{View},
+    views::View,
     Contract, ContractRuntime,
 };
 use serde::{Deserialize, Serialize};

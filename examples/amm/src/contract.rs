@@ -9,7 +9,7 @@ use amm::{AmmAbi, Message, Operation, Parameters};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    views::{View},
+    views::View,
     Contract, ContractRuntime,
 };
 use num_bigint::BigUint;

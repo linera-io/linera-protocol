@@ -12,7 +12,7 @@ use fungible::{
 };
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, WithContractAbi},
-    views::{View},
+    views::View,
     Contract, ContractRuntime,
 };
 
