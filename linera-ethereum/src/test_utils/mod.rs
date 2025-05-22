@@ -19,9 +19,7 @@ use linera_base::port::get_free_port;
 use url::Url;
 
 use crate::{
-    client::EthereumQueries,
-    common::EthereumServiceError,
-    provider::EthereumClientSimplified,
+    client::EthereumQueries, common::EthereumServiceError, provider::EthereumClientSimplified,
 };
 
 sol!(
