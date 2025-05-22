@@ -14,7 +14,7 @@ Grpc = "ClearText"
 [[proxies]]
 host = "proxy"
 private_port = 20100
-public_port = 20200
+public_port = 19100
 metrics_host = "proxy"
 metrics_port = 21100
 

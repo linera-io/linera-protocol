@@ -9,7 +9,7 @@ services:
       SCYLLA_AUTO_CONF: 1
     command:
       - "--developer-mode"
-      - "0"
+      - "1"
       - "--overprovisioned"
       - "1"
 
