@@ -127,8 +127,10 @@ impl<'resources> BlockExecutionTracker<'resources> {
         self.events.push(txn_outcome.events.clone());
         self.blobs.push(txn_outcome.blobs.clone());
         self.messages.push(txn_outcome.outgoing_messages.clone());
-        self.operation_results
-            .push(OperationResult(txn_outcome.operation_result.clone()));
+        if matches!(context, ChainExecutionContext::Operation(_)) {
+            self.operation_results
+                .push(OperationResult(txn_outcome.operation_result.clone()));
+        }
 
         let mut resource_controller = self.resource_controller.with_state(view).await?;
 
