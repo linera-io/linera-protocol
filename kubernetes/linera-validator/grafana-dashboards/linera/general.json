@@ -3379,7 +3379,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "browser",
   "title": "General",
   "uid": "d1c10f4e-acbf-4cb9-9abd-bade0adcbd13",
   "version": 1,

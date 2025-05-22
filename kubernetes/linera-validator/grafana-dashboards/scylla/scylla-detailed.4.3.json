@@ -9089,7 +9089,7 @@
         ]
     },
     "time": {
-        "from": "now-30m",
+        "from": "now-1h",
         "to": "now"
     },
     "timepicker": {
@@ -9118,7 +9118,7 @@
             "30d"
         ]
     },
-    "timezone": "utc",
+    "timezone": "browser",
     "title": "Detailed",
     "uid": "detailed-4-3",
     "version": 5

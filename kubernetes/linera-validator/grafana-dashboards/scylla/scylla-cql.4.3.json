@@ -4621,7 +4621,7 @@
         ]
     },
     "time": {
-        "from": "now-5m",
+        "from": "now-1h",
         "to": "now"
     },
     "timepicker": {
@@ -4650,7 +4650,7 @@
             "30d"
         ]
     },
-    "timezone": "utc",
+    "timezone": "browser",
     "title": "Scylla CQL",
     "uid": "cql-4-3",
     "version": 1
