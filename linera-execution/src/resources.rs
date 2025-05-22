@@ -30,8 +30,6 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
 /// The resources used so far by an execution process.
 #[derive(Copy, Debug, Clone, Default)]
 pub struct ResourceTracker {
-    /// The number of blocks created.
-    pub blocks: u32,
     /// The total size of the block so far.
     pub block_size: u64,
     /// The EVM fuel used so far.
@@ -147,17 +145,6 @@ where
     pub fn track_grant(&mut self, grant: Amount) -> Result<(), ExecutionError> {
         self.tracker.as_mut().grants.try_add_assign(grant)?;
         self.update_balance(grant)
-    }
-
-    /// Tracks the creation of a block.
-    pub fn track_block(&mut self) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().blocks = self
-            .tracker
-            .as_mut()
-            .blocks
-            .checked_add(1)
-            .ok_or(ArithmeticError::Overflow)?;
-        Ok(())
     }
 
     /// Tracks the execution of an operation in block.
