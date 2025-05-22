@@ -1720,6 +1720,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1803,7 +1804,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(rate(container_oom_events_total{pod=~\"(proxy|shards)-.*\"}[1m])) by (pod)",
+          "expr": "sum(rate(kube_pod_container_status_last_terminated_reason{pod=~\"(proxy|shards)-.*\"}[1m])) by (pod, reason)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1813,7 +1814,7 @@
           "useBackend": false
         }
       ],
-      "title": "OOM events per second",
+      "title": "Container termination",
       "type": "timeseries"
     },
     {
@@ -2777,6 +2778,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2837,7 +2839,7 @@
         "x": 0,
         "y": 116
       },
-      "id": 28,
+      "id": 45,
       "options": {
         "legend": {
           "calcs": [],
@@ -2858,15 +2860,19 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
+          "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(rate(container_fs_reads_total{container=\"scylla\"}[60s])) by (container)",
+          "expr": "sum(rate(kube_pod_container_status_last_terminated_reason{pod=~\"(scylla)-.*\"}[1m])) by (pod, reason)",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{container}}",
+          "legendFormat": "__auto",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "useBackend": false
         }
       ],
-      "title": "ScyllaDB FS reads per second",
+      "title": "ScyllaDB Container termination",
       "type": "timeseries"
     },
     {
@@ -3031,7 +3037,7 @@
         "x": 0,
         "y": 124
       },
-      "id": 43,
+      "id": 28,
       "options": {
         "legend": {
           "calcs": [],
@@ -3053,14 +3059,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_fs_writes_total{container=\"scylla\"}[60s])) by (container)",
+          "expr": "sum(rate(container_fs_reads_total{container=\"scylla\"}[60s])) by (container)",
           "instant": false,
           "legendFormat": "{{container}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "ScyllaDB FS writes per second",
+      "title": "ScyllaDB FS reads per second",
       "type": "timeseries"
     },
     {
@@ -3224,6 +3230,103 @@
         "w": 12,
         "x": 0,
         "y": 132
+      },
+      "id": 43,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0-83314",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(container_fs_writes_total{container=\"scylla\"}[60s])) by (container)",
+          "instant": false,
+          "legendFormat": "{{container}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "ScyllaDB FS writes per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 140
       },
       "id": 38,
       "options": {
