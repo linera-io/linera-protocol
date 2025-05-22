@@ -86,6 +86,8 @@ kube-prometheus-stack:
       # This prevents from adding any Helm label to serviceMonitorSelector if
       # above is empty.
       serviceMonitorSelectorNilUsesHelmValues: false
+      ruleSelector: {}
+      ruleSelectorNilUsesHelmValues: false
       # Relabelings needed for Scylla dashboards
       additionalScrapeConfigs:
         - job_name: scylla
