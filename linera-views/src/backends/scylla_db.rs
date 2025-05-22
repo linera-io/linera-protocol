@@ -8,25 +8,31 @@
 //! `max_concurrent_queries`.
 
 use std::{
-    collections::{hash_map::Entry, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     ops::Deref,
     sync::Arc,
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::{future::join_all, FutureExt as _, StreamExt};
+use dashmap::DashMap;
+use futures::{
+    future::{join_all, try_join_all, BoxFuture},
+    FutureExt as _, StreamExt,
+};
 use linera_base::ensure;
 use scylla::{
-    client::{session::Session, session_builder::SessionBuilder},
+    client::{
+        execution_profile::ExecutionProfile, session::Session, session_builder::SessionBuilder,
+    },
     deserialize::{DeserializationError, TypeCheckError},
     errors::{
         DbError, ExecutionError, IntoRowsResultError, NewSessionError, NextPageError, NextRowError,
         PagerExecutionError, PrepareError, RequestAttemptError, RequestError, RowsError,
     },
-    statement::{
-        batch::{BatchStatement, BatchType},
-        prepared::PreparedStatement,
-    },
+    frame::Compression,
+    policies::{load_balancing::DefaultPolicy, retry::DefaultRetryPolicy},
+    response::PagingState,
+    statement::{prepared::PreparedStatement, Consistency},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -51,15 +57,15 @@ use crate::{
 /// The limit is in reality 100. But we need one entry for the root key.
 const MAX_MULTI_KEYS: usize = 99;
 
-/// The maximal size of an operation on ScyllaDB seems to be 16 MB
+/// The maximal size of an operation on ScyllaDB seems to be 16 MiB
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
-/// "There is a hard limit at 16 MB, and nothing bigger than that can arrive at once
+/// "There is a hard limit at 16 MiB, and nothing bigger than that can arrive at once
 ///  at the database at any particular time"
-/// So, we set up the maximal size of 16 MB - 10 KB for the values and 10 KB for the keys
+/// So, we set up the maximal size of 16 MiB - 10 KiB for the values and 10 KiB for the keys
 /// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
 /// taken internally by the database.
-const RAW_MAX_VALUE_SIZE: usize = 16762976;
-const MAX_KEY_SIZE: usize = 10240;
+const RAW_MAX_VALUE_SIZE: usize = 16 * 1024 * 1024 - 10 * 1024 - 4000;
+const MAX_KEY_SIZE: usize = 10 * 1024;
 const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
 
 /// The `RAW_MAX_VALUE_SIZE` is the maximum size on the ScyllaDB storage.
@@ -78,9 +84,7 @@ const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
     - MAX_KEY_SIZE
     - get_uleb128_size(RAW_MAX_VALUE_SIZE)
     - get_uleb128_size(MAX_KEY_SIZE)
-    - 1
-    - 1
-    - 1;
+    - 3;
 
 /// The constant 14000 is an empirical constant that was found to be necessary
 /// to make the ScyllaDB system work. We have not been able to find this or
@@ -98,17 +102,59 @@ struct ScyllaDbClient {
     namespace: String,
     read_value: PreparedStatement,
     contains_key: PreparedStatement,
-    write_batch_delete_prefix_unbounded: BatchStatement,
-    write_batch_delete_prefix_bounded: BatchStatement,
-    write_batch_deletion: BatchStatement,
-    write_batch_insertion: BatchStatement,
+    write_batch_delete_prefix_unbounded: PreparedStatement,
+    write_batch_delete_prefix_bounded: PreparedStatement,
+    write_batch_deletion: PreparedStatement,
+    write_batch_insertion: PreparedStatement,
     find_keys_by_prefix_unbounded: PreparedStatement,
     find_keys_by_prefix_bounded: PreparedStatement,
     find_key_values_by_prefix_unbounded: PreparedStatement,
     find_key_values_by_prefix_bounded: PreparedStatement,
+    multi_key_values: DashMap<usize, PreparedStatement>,
+    multi_keys: DashMap<usize, PreparedStatement>,
 }
 
 impl ScyllaDbClient {
+    async fn get_multi_key_values_statement(
+        &self,
+        num_markers: usize,
+    ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
+        if let Some(entry) = self.multi_key_values.get(&num_markers) {
+            return Ok(entry.clone());
+        }
+        let markers = std::iter::repeat_n("?", num_markers)
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT k,v FROM kv.{} WHERE root_key = ? AND k IN ({})",
+            self.namespace, markers
+        );
+        let prepared_statement = self.session.prepare(query).await?;
+        self.multi_key_values
+            .insert(num_markers, prepared_statement.clone());
+        Ok(prepared_statement)
+    }
+
+    async fn get_multi_keys_statement(
+        &self,
+        num_markers: usize,
+    ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
+        if let Some(entry) = self.multi_keys.get(&num_markers) {
+            return Ok(entry.clone());
+        }
+        let markers = std::iter::repeat_n("?", num_markers)
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT k FROM kv.{} WHERE root_key = ? AND k IN ({})",
+            self.namespace, markers
+        );
+        let prepared_statement = self.session.prepare(query).await?;
+        self.multi_keys
+            .insert(num_markers, prepared_statement.clone());
+        Ok(prepared_statement)
+    }
+
     fn check_key_size(key: &[u8]) -> Result<(), ScyllaDbStoreInternalError> {
         ensure!(
             key.len() <= MAX_KEY_SIZE,
@@ -135,54 +181,75 @@ impl ScyllaDbClient {
 
     async fn new(session: Session, namespace: &str) -> Result<Self, ScyllaDbStoreInternalError> {
         let namespace = namespace.to_string();
-        let query = format!(
-            "SELECT v FROM kv.{} WHERE root_key = ? AND k = ? ALLOW FILTERING",
-            namespace
-        );
-        let read_value = session.prepare(query).await?;
+        let read_value = session
+            .prepare(format!(
+                "SELECT v FROM kv.{} WHERE root_key = ? AND k = ?",
+                namespace
+            ))
+            .await?;
 
-        let query = format!(
-            "SELECT root_key FROM kv.{} WHERE root_key = ? AND k = ? ALLOW FILTERING",
-            namespace
-        );
-        let contains_key = session.prepare(query).await?;
+        let contains_key = session
+            .prepare(format!(
+                "SELECT root_key FROM kv.{} WHERE root_key = ? AND k = ?",
+                namespace
+            ))
+            .await?;
 
-        let query = format!("DELETE FROM kv.{} WHERE root_key = ? AND k >= ?", namespace);
-        let write_batch_delete_prefix_unbounded = session.prepare(query).await?.into();
-        let query = format!(
-            "DELETE FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ?",
-            namespace
-        );
-        let write_batch_delete_prefix_bounded = session.prepare(query).await?.into();
-        let query = format!("DELETE FROM kv.{} WHERE root_key = ? AND k = ?", namespace);
-        let write_batch_deletion = session.prepare(query).await?.into();
-        let query = format!(
-            "INSERT INTO kv.{} (root_key, k, v) VALUES (?, ?, ?)",
-            namespace
-        );
-        let write_batch_insertion = session.prepare(query).await?.into();
+        let write_batch_delete_prefix_unbounded = session
+            .prepare(format!(
+                "DELETE FROM kv.{} WHERE root_key = ? AND k >= ?",
+                namespace
+            ))
+            .await?;
 
-        let query = format!(
-            "SELECT k FROM kv.{} WHERE root_key = ? AND k >= ? ALLOW FILTERING",
-            namespace
-        );
-        let find_keys_by_prefix_unbounded = session.prepare(query).await?;
-        let query = format!(
-            "SELECT k FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ? ALLOW FILTERING",
-            namespace
-        );
-        let find_keys_by_prefix_bounded = session.prepare(query).await?;
+        let write_batch_delete_prefix_bounded = session
+            .prepare(format!(
+                "DELETE FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ?",
+                namespace
+            ))
+            .await?;
 
-        let query = format!(
-            "SELECT k,v FROM kv.{} WHERE root_key = ? AND k >= ? ALLOW FILTERING",
-            namespace
-        );
-        let find_key_values_by_prefix_unbounded = session.prepare(query).await?;
-        let query = format!(
-            "SELECT k,v FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ? ALLOW FILTERING",
-            namespace
-        );
-        let find_key_values_by_prefix_bounded = session.prepare(query).await?;
+        let write_batch_deletion = session
+            .prepare(format!(
+                "DELETE FROM kv.{} WHERE root_key = ? AND k = ?",
+                namespace
+            ))
+            .await?;
+
+        let write_batch_insertion = session
+            .prepare(format!(
+                "INSERT INTO kv.{} (root_key, k, v) VALUES (?, ?, ?)",
+                namespace
+            ))
+            .await?;
+
+        let find_keys_by_prefix_unbounded = session
+            .prepare(format!(
+                "SELECT k FROM kv.{} WHERE root_key = ? AND k >= ?",
+                namespace
+            ))
+            .await?;
+
+        let find_keys_by_prefix_bounded = session
+            .prepare(format!(
+                "SELECT k FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ?",
+                namespace
+            ))
+            .await?;
+
+        let find_key_values_by_prefix_unbounded = session
+            .prepare(format!(
+                "SELECT k,v FROM kv.{} WHERE root_key = ? AND k >= ?",
+                namespace
+            ))
+            .await?;
+
+        let find_key_values_by_prefix_bounded = session
+            .prepare(format!(
+                "SELECT k,v FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ?",
+                namespace
+            ))
+            .await?;
 
         Ok(Self {
             session,
@@ -197,6 +264,8 @@ impl ScyllaDbClient {
             find_keys_by_prefix_bounded,
             find_key_values_by_prefix_unbounded,
             find_key_values_by_prefix_bounded,
+            multi_key_values: DashMap::new(),
+            multi_keys: DashMap::new(),
         })
     }
 
@@ -210,15 +279,26 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (root_key.to_vec(), key);
 
-        let results = session
-            .execute_unpaged(&self.read_value, &values)
-            .await?
-            .into_rows_result()?;
-        let mut rows = results.rows::<(Vec<u8>,)>()?;
+        let (result, _) = session
+            .execute_single_page(&self.read_value, &values, PagingState::start())
+            .await?;
+        let rows = result.into_rows_result()?;
+        let mut rows = rows.rows::<(Vec<u8>,)>()?;
         Ok(match rows.next() {
             Some(row) => Some(row?.0),
             None => None,
         })
+    }
+
+    fn get_occurences_map(
+        keys: Vec<Vec<u8>>,
+    ) -> Result<HashMap<Vec<u8>, Vec<usize>>, ScyllaDbStoreInternalError> {
+        let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
+        for (i_key, key) in keys.into_iter().enumerate() {
+            Self::check_key_size(&key)?;
+            map.entry(key).or_default().push(i_key);
+        }
+        Ok(map)
     }
 
     async fn read_multi_values_internal(
@@ -226,43 +306,21 @@ impl ScyllaDbClient {
         root_key: &[u8],
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
-        let num_keys = keys.len();
-        let session = &self.session;
-        let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
-        let mut inputs = Vec::new();
-        inputs.push(root_key.to_vec());
-        for (i_key, key) in keys.into_iter().enumerate() {
-            Self::check_key_size(&key)?;
-            match map.entry(key.clone()) {
-                Entry::Occupied(entry) => {
-                    let entry = entry.into_mut();
-                    entry.push(i_key);
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(vec![i_key]);
-                    inputs.push(key);
-                }
-            }
-        }
-        let num_unique_keys = map.len();
-        let mut group_query = "?".to_string();
-        group_query.push_str(&",?".repeat(num_unique_keys - 1));
-        let query = format!(
-            "SELECT k,v FROM kv.{} WHERE root_key = ? AND k IN ({}) ALLOW FILTERING",
-            self.namespace, group_query
-        );
-
-        let mut rows = session
-            .query_iter(&*query, &inputs)
+        let mut values = vec![None; keys.len()];
+        let map = Self::get_occurences_map(keys)?;
+        let statement = self.get_multi_key_values_statement(map.len()).await?;
+        let mut inputs = vec![root_key.to_vec()];
+        inputs.extend(map.keys().cloned());
+        let mut rows = self
+            .session
+            .execute_iter(statement, &inputs)
             .await?
             .rows_stream::<(Vec<u8>, Vec<u8>)>()?;
 
-        let mut values = vec![None; num_keys];
         while let Some(row) = rows.next().await {
             let (key, value) = row?;
-            for i_key in map.get(&key).unwrap().clone() {
-                let value = Some(value.clone());
-                *values.get_mut(i_key).expect("an entry in values") = value;
+            for i_key in map.get(&key).expect("key is supposed to be in map") {
+                values[*i_key] = Some(value.clone());
             }
         }
         Ok(values)
@@ -273,44 +331,24 @@ impl ScyllaDbClient {
         root_key: &[u8],
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
-        let num_keys = keys.len();
-        let session = &self.session;
-        let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
-        let mut inputs = Vec::new();
-        inputs.push(root_key.to_vec());
-        for (i_key, key) in keys.into_iter().enumerate() {
-            Self::check_key_size(&key)?;
-            match map.entry(key.clone()) {
-                Entry::Occupied(entry) => {
-                    let entry = entry.into_mut();
-                    entry.push(i_key);
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(vec![i_key]);
-                    inputs.push(key);
-                }
-            }
-        }
-        let num_unique_keys = map.len();
-        let mut group_query = "?".to_string();
-        group_query.push_str(&",?".repeat(num_unique_keys - 1));
-        let query = format!(
-            "SELECT k FROM kv.{} WHERE root_key = ? AND k IN ({}) ALLOW FILTERING",
-            self.namespace, group_query
-        );
-
-        let mut rows = session
-            .query_iter(&*query, &inputs)
+        let mut values = vec![false; keys.len()];
+        let map = Self::get_occurences_map(keys)?;
+        let statement = self.get_multi_keys_statement(map.len()).await?;
+        let mut inputs = vec![root_key.to_vec()];
+        inputs.extend(map.keys().cloned());
+        let mut rows = self
+            .session
+            .execute_iter(statement, &inputs)
             .await?
             .rows_stream::<(Vec<u8>,)>()?;
 
-        let mut values = vec![false; num_keys];
         while let Some(row) = rows.next().await {
             let (key,) = row?;
-            for i_key in map.get(&key).unwrap().clone() {
-                *values.get_mut(i_key).expect("an entry in values") = true;
+            for i_key in map.get(&key).expect("key is supposed to be in map") {
+                values[*i_key] = true;
             }
         }
+
         Ok(values)
     }
 
@@ -324,11 +362,11 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (root_key.to_vec(), key);
 
-        let results = session
-            .execute_unpaged(&self.contains_key, &values)
-            .await?
-            .into_rows_result()?;
-        let mut rows = results.rows::<(Vec<u8>,)>()?;
+        let (result, _) = session
+            .execute_single_page(&self.contains_key, &values, PagingState::start())
+            .await?;
+        let rows = result.into_rows_result()?;
+        let mut rows = rows.rows::<(Vec<u8>,)>()?;
         Ok(rows.next().is_some())
     }
 
@@ -337,43 +375,69 @@ impl ScyllaDbClient {
         root_key: &[u8],
         batch: UnorderedBatch,
     ) -> Result<(), ScyllaDbStoreInternalError> {
-        let session = &self.session;
-        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        let mut batch_values = Vec::new();
-        let query1 = &self.write_batch_delete_prefix_unbounded;
-        let query2 = &self.write_batch_delete_prefix_bounded;
         Self::check_batch_len(&batch)?;
+        let session = &self.session;
+        let root_key = root_key.to_vec();
+
+        let mut futures: Vec<BoxFuture<'_, Result<(), ScyllaDbStoreInternalError>>> = Vec::new();
         for key_prefix in batch.key_prefix_deletions {
             Self::check_key_size(&key_prefix)?;
             match get_upper_bound_option(&key_prefix) {
                 None => {
-                    let values = vec![root_key.to_vec(), key_prefix];
-                    batch_values.push(values);
-                    batch_query.append_statement(query1.clone());
+                    let prepared_statement = &self.write_batch_delete_prefix_unbounded;
+                    let values = (root_key.clone(), key_prefix);
+                    futures.push(Box::pin(async move {
+                        session
+                            .execute_single_page(prepared_statement, values, PagingState::start())
+                            .await
+                            .map(|_| ())
+                            .map_err(Into::into)
+                    }));
                 }
-                Some(upper_bound) => {
-                    let values = vec![root_key.to_vec(), key_prefix, upper_bound];
-                    batch_values.push(values);
-                    batch_query.append_statement(query2.clone());
+                Some(upper) => {
+                    let prepared_statement = &self.write_batch_delete_prefix_bounded;
+                    let values = (root_key.clone(), key_prefix, upper);
+                    futures.push(Box::pin(async move {
+                        session
+                            .execute_single_page(prepared_statement, values, PagingState::start())
+                            .await
+                            .map(|_| ())
+                            .map_err(Into::into)
+                    }));
                 }
             }
         }
-        let query3 = &self.write_batch_deletion;
+        try_join_all(futures).await?;
+
+        let mut futures: Vec<BoxFuture<'_, Result<(), ScyllaDbStoreInternalError>>> = Vec::new();
         for key in batch.simple_unordered_batch.deletions {
             Self::check_key_size(&key)?;
-            let values = vec![root_key.to_vec(), key];
-            batch_values.push(values);
-            batch_query.append_statement(query3.clone());
+            let prepared_statement = &self.write_batch_deletion;
+            let values = (root_key.clone(), key);
+            futures.push(Box::pin(async move {
+                session
+                    .execute_single_page(prepared_statement, values, PagingState::start())
+                    .await
+                    .map(|_| ())
+                    .map_err(Into::into)
+            }));
         }
-        let query4 = &self.write_batch_insertion;
+
         for (key, value) in batch.simple_unordered_batch.insertions {
             Self::check_key_size(&key)?;
             Self::check_value_size(&value)?;
-            let values = vec![root_key.to_vec(), key, value];
-            batch_values.push(values);
-            batch_query.append_statement(query4.clone());
+            let prepared_statement = &self.write_batch_insertion;
+            let values = (root_key.clone(), key, value);
+            futures.push(Box::pin(async move {
+                session
+                    .execute_single_page(prepared_statement, values, PagingState::start())
+                    .await
+                    .map(|_| ())
+                    .map_err(Into::into)
+            }));
         }
-        session.batch(&batch_query, batch_values).await?;
+
+        try_join_all(futures).await?;
         Ok(())
     }
 
@@ -442,6 +506,24 @@ impl ScyllaDbClient {
         }
         Ok(key_values)
     }
+}
+
+async fn build_session(uri: &str) -> Result<Session, ScyllaDbStoreInternalError> {
+    let policy = DefaultPolicy::builder().token_aware(true).build();
+    let default_profile = ExecutionProfile::builder()
+        .load_balancing_policy(policy)
+        .retry_policy(Arc::new(DefaultRetryPolicy::new()))
+        .consistency(Consistency::LocalQuorum)
+        .build();
+    let handle = default_profile.into_handle();
+    SessionBuilder::new()
+        .known_node(uri)
+        .default_execution_profile_handle(handle)
+        .compression(Some(Compression::Lz4))
+        .build()
+        .boxed()
+        .await
+        .map_err(Into::into)
 }
 
 /// The client itself and the keeping of the count of active connections.
@@ -661,11 +743,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         namespace: &str,
     ) -> Result<Self, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = SessionBuilder::new()
-            .known_node(config.uri.as_str())
-            .build()
-            .boxed()
-            .await?;
+        let session = build_session(&config.uri).await?;
         let store = ScyllaDbClient::new(session, namespace).await?;
         let store = Arc::new(store);
         let semaphore = config
@@ -696,12 +774,9 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreInternalError> {
-        let session = SessionBuilder::new()
-            .known_node(config.uri.as_str())
-            .build()
-            .boxed()
-            .await?;
-        let result = session.query_iter("DESCRIBE KEYSPACE kv", &[]).await;
+        let session = build_session(&config.uri).await?;
+        let statement = session.prepare("DESCRIBE KEYSPACE kv").await?;
+        let result = session.execute_iter(statement, &[]).await;
         let miss_msg = "'kv' not found in keyspaces";
         let result = match result {
             Ok(result) => result,
@@ -735,15 +810,16 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = SessionBuilder::new()
-            .known_node(config.uri.as_str())
-            .build()
-            .boxed()
+        let session = build_session(&config.uri).await?;
+        let statement = session
+            .prepare(format!(
+                "SELECT root_key FROM kv.{} ALLOW FILTERING",
+                namespace
+            ))
             .await?;
-        let query = format!("SELECT root_key FROM kv.{} ALLOW FILTERING", namespace);
 
         // Execute the query
-        let rows = session.query_iter(query, &[]).await?;
+        let rows = session.execute_iter(statement, &[]).await?;
         let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
         let mut root_keys = BTreeSet::new();
         while let Some(row) = rows.next().await {
@@ -755,16 +831,12 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     }
 
     async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbStoreInternalError> {
-        let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
-            .build()
-            .boxed()
+        let session = build_session(&store_config.uri).await?;
+        let statement = session.prepare("DROP KEYSPACE IF EXISTS kv;").await?;
+
+        session
+            .execute_single_page(&statement, &[], PagingState::start())
             .await?;
-
-        let query = "DROP KEYSPACE IF EXISTS kv;";
-        let prepared = session.prepare(query).await?;
-
-        session.execute_unpaged(&prepared, &[]).await?;
         Ok(())
     }
 
@@ -773,19 +845,15 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         namespace: &str,
     ) -> Result<bool, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = SessionBuilder::new()
-            .known_node(config.uri.as_str())
-            .build()
-            .boxed()
-            .await?;
-        // We check the way the test can fail. It can fail in different ways.
-        let query = format!(
-            "SELECT root_key FROM kv.{} LIMIT 1 ALLOW FILTERING",
-            namespace
-        );
+        let session = build_session(&config.uri).await?;
 
-        // Execute the query
-        let result = session.prepare(&*query).await;
+        // We check the way the test can fail. It can fail in different ways.
+        let result = session
+            .prepare(format!(
+                "SELECT root_key FROM kv.{} LIMIT 1 ALLOW FILTERING",
+                namespace
+            ))
+            .await;
 
         // The missing table translates into a very specific error that we matched
         let miss_msg1 = format!("unconfigured table {}", namespace);
@@ -822,35 +890,46 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         namespace: &str,
     ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = SessionBuilder::new()
-            .known_node(config.uri.as_str())
-            .build()
-            .boxed()
-            .await?;
+        let session = build_session(&config.uri).await?;
+
         // Create a keyspace if it doesn't exist
-        let query = format!(
-            "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = {{ \
+        let statement = session
+            .prepare(format!(
+                "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = {{ \
                 'class' : 'NetworkTopologyStrategy', \
                 'replication_factor' : {} \
             }}",
-            config.common_config.replication_factor
-        );
+                config.common_config.replication_factor
+            ))
+            .await?;
+        session
+            .execute_single_page(&statement, &[], PagingState::start())
+            .await?;
 
-        // Execute the query
-        let prepared = session.prepare(query).await?;
-        session.execute_unpaged(&prepared, &[]).await?;
-
-        // Create a table if it doesn't exist
-        // The schema appears too complicated for non-trivial reasons.
-        // See TODO(#1069).
-        let query = format!(
-            "CREATE TABLE kv.{} (root_key blob, k blob, v blob, primary key (root_key, k))",
-            namespace
-        );
-
-        // Execute the query
-        let prepared = session.prepare(&*query).await?;
-        session.execute_unpaged(&prepared, &[]).await?;
+        let statement = session
+            .prepare(format!(
+                "CREATE TABLE kv.{} (\
+                root_key blob, \
+                k blob, \
+                v blob, \
+                PRIMARY KEY (root_key, k) \
+            ) \
+            WITH compaction = {{ \
+                'class'            : 'SizeTieredCompactionStrategy', \
+                'min_sstable_size' : 268435456, \
+                'bucket_low'       : 0.5, \
+                'bucket_high'      : 1.5, \
+                'min_threshold'    : 4, \
+                'max_threshold'    : 32 \
+            }} \
+            AND compression = {{ 'sstable_compression': 'LZ4Compressor', 'chunk_length_kb':'8' }} \
+            AND caching = {{ 'enabled': 'true' }}",
+                namespace
+            ))
+            .await?;
+        session
+            .execute_single_page(&statement, &[], PagingState::start())
+            .await?;
         Ok(())
     }
 
@@ -859,15 +938,13 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         namespace: &str,
     ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = SessionBuilder::new()
-            .known_node(config.uri.as_str())
-            .build()
-            .boxed()
+        let session = build_session(&config.uri).await?;
+        let statement = session
+            .prepare(format!("DROP TABLE IF EXISTS kv.{};", namespace))
             .await?;
-
-        let query = format!("DROP TABLE IF EXISTS kv.{};", namespace);
-        let prepared = session.prepare(&*query).await?;
-        let _result = session.execute_unpaged(&prepared, &[]).await?;
+        session
+            .execute_single_page(&statement, &[], PagingState::start())
+            .await?;
         Ok(())
     }
 }

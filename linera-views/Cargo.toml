@@ -37,6 +37,7 @@ aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-smithy-types = { workspace = true, optional = true }
 bcs.workspace = true
 convert_case.workspace = true
+dashmap.workspace = true
 derive_more = { workspace = true, features = ["from"] }
 futures.workspace = true
 generic-array.workspace = true

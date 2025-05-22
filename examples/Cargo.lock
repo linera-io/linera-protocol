@@ -3938,6 +3938,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case",
+ "dashmap 5.5.3",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
