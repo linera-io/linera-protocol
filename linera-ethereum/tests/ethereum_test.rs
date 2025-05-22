@@ -17,29 +17,18 @@ use {
 #[tokio::test]
 async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
-    let ethereum_client = anvil_test.ethereum_client;
     let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);
-    let addresses = ethereum_client
+    let addresses = ethereum_client_simp
         .get_accounts()
         .await?
         .into_iter()
         .collect::<BTreeSet<_>>();
-    let addresses_simp = ethereum_client_simp
-        .get_accounts()
-        .await?
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-    assert_eq!(addresses, addresses_simp);
-    let block_number = ethereum_client.get_block_number().await?;
-    let block_number_simp = ethereum_client_simp.get_block_number().await?;
-    assert_eq!(block_number, block_number_simp);
+    let block_number = ethereum_client_simp.get_block_number().await?;
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
-        let balance = ethereum_client.get_balance(&address, block_number).await?;
-        let balance_simp = ethereum_client_simp
+        let balance = ethereum_client_simp
             .get_balance(&address, block_number)
             .await?;
-        assert_eq!(balance, balance_simp);
         assert_eq!(balance, target_balance);
     }
     Ok(())

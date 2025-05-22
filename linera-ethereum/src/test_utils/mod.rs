@@ -9,23 +9,18 @@ use alloy::{
             BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
             WalletFiller,
         },
-        Provider, ProviderBuilder, RootProvider,
-    },
-    rpc::types::eth::{
-        request::{TransactionInput, TransactionRequest},
-        Filter,
+        ProviderBuilder, RootProvider,
     },
     signers::local::PrivateKeySigner,
     sol,
 };
-use alloy_primitives::{Address, Bytes, U256};
-use async_trait::async_trait;
+use alloy_primitives::{Address, U256};
 use linera_base::port::get_free_port;
 use url::Url;
 
 use crate::{
-    client::{get_block_id, EthereumQueries},
-    common::{event_name_from_expanded, parse_log, EthereumEvent, EthereumServiceError},
+    client::EthereumQueries,
+    common::EthereumServiceError,
     provider::EthereumClientSimplified,
 };
 
@@ -56,76 +51,6 @@ pub struct EthereumClient {
         >,
         RootProvider<Ethereum>,
     >,
-}
-
-#[async_trait]
-impl EthereumQueries for EthereumClient {
-    type Error = EthereumServiceError;
-
-    async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
-        Ok(self
-            .provider
-            .get_accounts()
-            .await?
-            .into_iter()
-            .map(|x| format!("{:?}", x))
-            .collect::<Vec<_>>())
-    }
-
-    async fn get_block_number(&self) -> Result<u64, EthereumServiceError> {
-        Ok(self.provider.get_block_number().await?)
-    }
-
-    async fn get_balance(
-        &self,
-        address: &str,
-        block_number: u64,
-    ) -> Result<U256, EthereumServiceError> {
-        let address = address.parse::<Address>()?;
-        let block_id = get_block_id(block_number);
-        let request = self.provider.get_balance(address).block_id(block_id);
-        Ok(request.await?)
-    }
-
-    async fn read_events(
-        &self,
-        contract_address: &str,
-        event_name_expanded: &str,
-        from_block: u64,
-        to_block: u64,
-    ) -> Result<Vec<EthereumEvent>, EthereumServiceError> {
-        let contract_address = contract_address.parse::<Address>()?;
-        let event_name = event_name_from_expanded(event_name_expanded);
-        let filter = Filter::new()
-            .address(contract_address)
-            .event(&event_name)
-            .from_block(from_block)
-            .to_block(to_block - 1);
-        let events = self.provider.get_logs(&filter).await?;
-        events
-            .into_iter()
-            .map(|x| parse_log(event_name_expanded, x))
-            .collect::<Result<_, _>>()
-    }
-
-    async fn non_executive_call(
-        &self,
-        contract_address: &str,
-        data: Bytes,
-        from: &str,
-        block: u64,
-    ) -> Result<Bytes, EthereumServiceError> {
-        let contract_address = contract_address.parse::<Address>()?;
-        let from = from.parse::<Address>()?;
-        let input = TransactionInput::new(data);
-        let tx = TransactionRequest::default()
-            .from(from)
-            .to(contract_address)
-            .input(input);
-        let block_id = get_block_id(block);
-        let eth_call = self.provider.call(tx).block(block_id);
-        Ok(eth_call.await?)
-    }
 }
 
 impl EthereumClient {
@@ -184,11 +109,9 @@ impl SimpleTokenContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // 2: initializing the contract
         let initial_supply = U256::from(1000);
-        println!("SimpleTokenContract, step 1");
         let simple_token =
             SimpleTokenContract::deploy(&anvil_test.ethereum_client.provider, initial_supply)
                 .await?;
-        println!("SimpleTokenContract, step 2");
         let contract_address = simple_token.address();
         let contract_address = format!("{:?}", contract_address);
         Ok(Self {
@@ -246,18 +169,13 @@ pub struct EventNumericsContractFunction {
 impl EventNumericsContractFunction {
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // Deploying the event numerics contract
-        println!("EventNumericsContractFunction, new, step 1");
         let initial_supply = U256::from(0);
-        println!("EventNumericsContractFunction, new, step 2");
         let event_numerics =
             EventNumericsContract::deploy(&anvil_test.ethereum_client.provider, initial_supply)
                 .await?;
-        println!("EventNumericsContractFunction, new, step 3");
         // Getting the contract address
         let contract_address = event_numerics.address();
-        println!("EventNumericsContractFunction, new, step 4");
         let contract_address = format!("{:?}", contract_address);
-        println!("EventNumericsContractFunction, new, step 5");
         Ok(Self {
             contract_address,
             anvil_test,
