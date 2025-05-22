@@ -3,6 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    ops::{Bound, RangeBounds},
     sync::Arc,
 };
 
@@ -1075,6 +1076,37 @@ where
             ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
         Ok(())
+    }
+
+    pub async fn block_hashes(
+        &self,
+        range: impl RangeBounds<BlockHeight>,
+    ) -> Result<Vec<CryptoHash>, ChainError> {
+        let next_height = self.tip_state.get().next_block_height;
+        let start = match range.start_bound() {
+            Bound::Included(height) => *height,
+            Bound::Excluded(height) => height.try_add_one().unwrap_or(BlockHeight::MAX),
+            Bound::Unbounded => BlockHeight(0),
+        };
+        let end = match range.end_bound() {
+            Bound::Included(height) => height.try_add_one().unwrap_or(BlockHeight::MAX),
+            Bound::Excluded(height) => *height,
+            Bound::Unbounded => BlockHeight::MAX,
+        };
+        let usize_start = usize::try_from(start)?;
+        let usize_end = usize::try_from(end.min(next_height))?;
+        let mut hashes = self.confirmed_log.read(usize_start..usize_end).await?;
+        for height in start.max(next_height).0..end.0 {
+            hashes.push(
+                self.loose_blocks
+                    .get(&BlockHeight(height))
+                    .await?
+                    .ok_or_else(|| {
+                        ChainError::InternalError("missing entry in loose_blocks".into())
+                    })?,
+            );
+        }
+        Ok(hashes)
     }
 
     /// Resets the chain manager for the next block height.
