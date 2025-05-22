@@ -6,13 +6,16 @@ use std::collections::BTreeSet;
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Blob, Event, OracleResponse, Timestamp},
-    identifiers::ChainId,
+    identifiers::{BlobType, ChainId},
 };
-use linera_execution::{OutgoingMessage, TransactionOutcome, TransactionTracker};
+use linera_execution::{
+    BalanceHolder, OutgoingMessage, ResourceController, ResourceTracker, TransactionOutcome,
+    TransactionTracker,
+};
 
 use crate::{
     data_types::{OperationResult, Transaction},
-    ChainError, ChainExecutionContext,
+    ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
 /// Tracks execution of transactions within a block.
@@ -84,8 +87,22 @@ impl BlockExecutionTracker {
         }
     }
 
-    /// Processes the transaction outcome and updates the tracker.
-    pub fn add_txn_outcome(&mut self, txn_outcome: &TransactionOutcome) {
+    /// Processes the transaction outcome.
+    ///
+    /// Updates block tracker with indexes for the next messages, applicatios, etc.
+    /// so that the execution of the next transaction doesn't overwrite the previous ones.
+    ///
+    /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
+    pub fn process_txn_outcome<Account, Tracker>(
+        &mut self,
+        txn_outcome: &TransactionOutcome,
+        resource_controller: &mut ResourceController<Account, Tracker>,
+        context: ChainExecutionContext,
+    ) -> Result<(), ChainError>
+    where
+        Account: BalanceHolder,
+        Tracker: AsRef<ResourceTracker> + AsMut<ResourceTracker>,
+    {
         self.next_message_index = txn_outcome.next_message_index;
         self.next_application_index = txn_outcome.next_application_index;
         self.next_chain_index = txn_outcome.next_chain_index;
@@ -97,7 +114,35 @@ impl BlockExecutionTracker {
         self.operation_results
             .push(OperationResult(txn_outcome.operation_result.clone()));
 
+        for message_out in &txn_outcome.outgoing_messages {
+            resource_controller
+                .track_message(&message_out.message)
+                .with_execution_context(context)?;
+        }
+
+        resource_controller
+            .track_block_size_of(&(
+                &txn_outcome.oracle_responses,
+                &txn_outcome.outgoing_messages,
+                &txn_outcome.events,
+                &txn_outcome.blobs,
+            ))
+            .with_execution_context(context)?;
+
+        for blob in &txn_outcome.blobs {
+            if blob.content().blob_type() == BlobType::Data {
+                resource_controller
+                    .track_blob_published(blob.content())
+                    .with_execution_context(context)?;
+            }
+        }
+
+        resource_controller
+            .track_block_size_of(&(&txn_outcome.operation_result))
+            .with_execution_context(context)?;
+
         self.transaction_index += 1;
+        Ok(())
     }
 
     /// Returns recipient chain ids for outgoing messages in the block.

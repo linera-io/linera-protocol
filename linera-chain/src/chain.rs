@@ -783,38 +783,11 @@ where
                 .into_outcome()
                 .with_execution_context(chain_execution_context)?;
 
-            block_execution_tracker.add_txn_outcome(&txn_outcome);
-
-            for message_out in &txn_outcome.outgoing_messages {
-                resource_controller
-                    .with_state(&mut chain.system)
-                    .await?
-                    .track_message(&message_out.message)
-                    .with_execution_context(chain_execution_context)?;
-            }
-
-            resource_controller
-                .track_block_size_of(&(
-                    &txn_outcome.oracle_responses,
-                    &txn_outcome.outgoing_messages,
-                    &txn_outcome.events,
-                    &txn_outcome.blobs,
-                ))
-                .with_execution_context(chain_execution_context)?;
-
-            for blob in &txn_outcome.blobs {
-                if blob.content().blob_type() == BlobType::Data {
-                    resource_controller
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_blob_published(blob.content())
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
-
-            resource_controller
-                .track_block_size_of(&(&txn_outcome.operation_result))
-                .with_execution_context(chain_execution_context)?;
+            block_execution_tracker.process_txn_outcome(
+                &txn_outcome,
+                &mut resource_controller.with_state(&mut chain.system).await?,
+                chain_execution_context,
+            )?;
         }
 
         let recipients = block_execution_tracker.recipients();
@@ -831,8 +804,8 @@ where
             }
         }
 
-        let txn_count = block.incoming_bundles.len() + block.operations.len();
-        block_execution_tracker.assert_outcomes_count(txn_count);
+        block_execution_tracker
+            .assert_outcomes_count(block.incoming_bundles.len() + block.operations.len());
 
         #[cfg(with_metrics)]
         Self::track_block_metrics(&resource_controller.tracker);
