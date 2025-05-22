@@ -368,7 +368,7 @@ where
     ) -> Result<ApplicationDescription, ChainError> {
         self.execution_state
             .system
-            .describe_application(application_id, None)
+            .describe_application(application_id, &mut TransactionTracker::default())
             .await
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
