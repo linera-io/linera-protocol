@@ -804,9 +804,6 @@ where
             }
         }
 
-        block_execution_tracker
-            .assert_outcomes_count(block.incoming_bundles.len() + block.operations.len());
-
         #[cfg(with_metrics)]
         Self::track_block_metrics(&resource_controller.tracker);
 
@@ -816,14 +813,17 @@ where
             chain.crypto_hash().await?
         };
 
+        let (messages, oracle_responses, events, blobs, operation_results) =
+            block_execution_tracker.finalize();
+
         Ok(BlockExecutionOutcome {
-            messages: block_execution_tracker.messages,
+            messages,
             previous_message_blocks,
             state_hash,
-            oracle_responses: block_execution_tracker.oracle_responses,
-            events: block_execution_tracker.events,
-            blobs: block_execution_tracker.blobs,
-            operation_results: block_execution_tracker.operation_results,
+            oracle_responses,
+            events,
+            blobs,
+            operation_results,
         })
     }
 

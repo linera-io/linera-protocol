@@ -154,14 +154,6 @@ impl BlockExecutionTracker {
             .collect()
     }
 
-    /// Asserts that the number of outcomes matches the expected count.
-    pub fn assert_outcomes_count(&self, txn_count: usize) {
-        assert_eq!(self.oracle_responses.len(), txn_count);
-        assert_eq!(self.messages.len(), txn_count);
-        assert_eq!(self.events.len(), txn_count);
-        assert_eq!(self.blobs.len(), txn_count);
-    }
-
     /// Returns the execution context for the current transaction.
     pub fn chain_execution_context(&self, transaction: &Transaction<'_>) -> ChainExecutionContext {
         match transaction {
@@ -173,4 +165,31 @@ impl BlockExecutionTracker {
             }
         }
     }
+
+    /// Finalized the execution and returns the collected results.
+    ///
+    /// This method should be called after all transactions have been processed.
+    /// Panics if the number of outcomes does match the expected count.
+    pub fn finalize(self) -> FinalizeExecutionResult {
+        // Asserts that the number of outcomes matches the expected count.
+        assert_eq!(self.oracle_responses.len(), self.expected_outcomes_count);
+        assert_eq!(self.messages.len(), self.expected_outcomes_count);
+        assert_eq!(self.events.len(), self.expected_outcomes_count);
+        assert_eq!(self.blobs.len(), self.expected_outcomes_count);
+        (
+            self.messages,
+            self.oracle_responses,
+            self.events,
+            self.blobs,
+            self.operation_results,
+        )
+    }
 }
+
+pub(crate) type FinalizeExecutionResult = (
+    Vec<Vec<OutgoingMessage>>,
+    Vec<Vec<OracleResponse>>,
+    Vec<Vec<Event>>,
+    Vec<Vec<Blob>>,
+    Vec<OperationResult>,
+);
