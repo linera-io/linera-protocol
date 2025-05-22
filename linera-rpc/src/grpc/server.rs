@@ -8,11 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{
-    channel::mpsc::self,
-    future::BoxFuture,
-    FutureExt as _,
-};
+use futures::{channel::mpsc, future::BoxFuture, FutureExt as _};
 use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
     join_set_ext::JoinSet,
@@ -103,7 +99,6 @@ mod metrics {
             &[],
         )
     });
-
 }
 
 #[derive(Clone)]
