@@ -21,7 +21,7 @@ use linera_rpc::{
 };
 use linera_sdk::linera_base_types::Blob;
 #[cfg(with_metrics)]
-use linera_service::prometheus_server;
+use linera_metrics::prometheus_server;
 use linera_service::{
     storage::{Runnable, StorageConfigNamespace},
     util,
