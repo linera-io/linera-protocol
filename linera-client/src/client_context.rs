@@ -743,7 +743,7 @@ where
             .default_chain()
             .expect("should have default chain");
         let default_chain_client = self.make_chain_client(default_chain_id);
-        let (epoch, committee) = default_chain_client.latest_committee().await?;
+        let (epoch, committee) = default_chain_client.admin_committee().await?;
         let blocks_infos = Benchmark::<Env>::make_benchmark_block_info(
             key_pairs,
             transactions_per_block,

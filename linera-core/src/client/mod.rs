@@ -445,6 +445,20 @@ impl<Env: Environment> Client<Env> {
         Ok((info.epoch, info.into_committees()?))
     }
 
+    /// Obtains the committee for the latest epoch on the admin chain.
+    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+        let info = self.chain_info_with_committees(self.admin_id).await?;
+        Ok((info.epoch, info.into_current_committee()?))
+    }
+
+    /// Obtains the validators for the latest epoch.
+    async fn validator_nodes(
+        &self,
+    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, ChainClientError> {
+        let (_, committee) = self.admin_committee().await?;
+        Ok(self.make_nodes(&committee)?)
+    }
+
     fn make_nodes(
         &self,
         committee: &Committee,
@@ -472,12 +486,9 @@ impl<Env: Environment> Client<Env> {
             // We have the blob - return it.
             return Ok(blob);
         }
-        // We can't get the committee from the chain we're assigned to because we don't
-        // have the description - use the admin chain.
-        let info = self.chain_info_with_committees(self.admin_id).await?;
-        // Recover history from the network.
+        // Recover history from the current validators, according to the admin chain.
         // TODO(#2351): make sure that the blob is legitimately created!
-        let nodes = self.make_nodes(info.current_committee()?)?;
+        let nodes = self.validator_nodes().await?;
         let blob = RemoteNode::download_blob(&nodes, chain_desc_id, self.blob_download_timeout)
             .await
             .ok_or(LocalNodeError::BlobsNotFound(vec![chain_desc_id]))?;
@@ -700,8 +711,7 @@ impl<Env: Environment> Client<Env> {
         let nodes = if let Some(nodes) = nodes {
             nodes
         } else {
-            // We assume that the committee that signed the certificate is still active.
-            self.make_nodes(remote_committee)?
+            self.validator_nodes().await?
         };
         self.download_certificates(&nodes, block.header.chain_id, block.header.height)
             .await?;
@@ -902,10 +912,7 @@ impl<Env: Environment> Client<Env> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let committee = self
-            .chain_info_with_committees(chain_id)
-            .await?
-            .into_current_committee()?;
+        let (_, committee) = self.admin_committee().await?;
         let validators = self.make_nodes(&committee)?;
         communicate_with_quorum(
             &validators,
@@ -1098,11 +1105,7 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), ChainClientError> {
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
-        let committee = self
-            .chain_info_with_committees(self.admin_id)
-            .await?
-            .into_current_committee()?;
-        let validators = self.make_nodes(&committee)?;
+        let validators = self.validator_nodes().await?;
 
         let mut missing_blobs = Vec::new();
         for blob_id in blob_ids {
@@ -1729,21 +1732,8 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Obtains the committee for the latest epoch on the admin chain.
     #[instrument(level = "trace")]
-    pub async fn latest_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
-        let (epoch, mut committees) = self.client.admin_committees().await?;
-        let committee = committees
-            .remove(&epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-        Ok((epoch, committee))
-    }
-
-    /// Obtains the validators for the latest epoch.
-    #[instrument(level = "trace")]
-    async fn validator_nodes(
-        &self,
-    ) -> Result<Vec<RemoteNode<Env::ValidatorNode>>, ChainClientError> {
-        let (_, committee) = self.latest_committee().await?;
-        Ok(self.client.make_nodes(&committee)?)
+    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+        self.client.admin_committee().await
     }
 
     /// Obtains the current epoch of the local chain.
@@ -1853,7 +1843,7 @@ impl<Env: Environment> ChainClient<Env> {
     // network.
     // The known height only differs if the wallet is ahead of storage.
     async fn synchronize_to_known_height(&self) -> Result<Box<ChainInfo>, ChainClientError> {
-        let nodes = self.validator_nodes().await?;
+        let nodes = self.client.validator_nodes().await?;
         let height = self.next_block_height();
         let info = self
             .client
@@ -2060,15 +2050,15 @@ impl<Env: Environment> ChainClient<Env> {
 
         // Use network information from the local chain.
         let chain_id = self.chain_id;
-        let local_committee = self.local_committee().await?;
-        let nodes = self.client.make_nodes(&local_committee)?;
+        let (_, committee) = self.admin_committee().await?;
+        let nodes = self.client.make_nodes(&committee)?;
         // Proceed to downloading received certificates. Split the available chain workers so that
         // the tasks don't use more than the limit in total.
         let chain_worker_limit =
-            (self.client.max_loaded_chains.get() / local_committee.validators().len()).max(1);
+            (self.client.max_loaded_chains.get() / committee.validators().len()).max(1);
         let result = communicate_with_quorum(
             &nodes,
-            &local_committee,
+            &committee,
             |_| (),
             |remote_node| {
                 let client = &self.client;
@@ -3588,7 +3578,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut process_notifications = FuturesUnordered::new();
 
-        match self.update_streams(&mut senders).await {
+        match self.update_notification_streams(&mut senders).await {
             Ok(handler) => process_notifications.push(handler),
             Err(error) => error!("Failed to update committee: {error}"),
         };
@@ -3603,7 +3593,7 @@ impl<Env: Environment> ChainClient<Env> {
             {
                 if let Reason::NewBlock { .. } = notification.reason {
                     match await_while_polling(
-                        this.update_streams(&mut senders).fuse(),
+                        this.update_notification_streams(&mut senders).fuse(),
                         &mut process_notifications,
                     )
                     .await
@@ -3626,7 +3616,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     #[instrument(level = "trace", skip(senders))]
-    async fn update_streams(
+    async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
