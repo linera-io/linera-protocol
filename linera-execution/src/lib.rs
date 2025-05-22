@@ -68,7 +68,7 @@ pub use crate::{
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
-    resources::{ResourceController, ResourceTracker},
+    resources::{BalanceHolder, ResourceController, ResourceTracker},
     runtime::{
         ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,
         ServiceSyncRuntimeHandle,

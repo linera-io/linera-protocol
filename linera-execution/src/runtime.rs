@@ -688,7 +688,7 @@ where
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKey { id, key, callback })?;
@@ -710,7 +710,7 @@ where
     ) -> Result<Self::ContainsKeys, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ContainsKeys { id, keys, callback })?;
@@ -735,7 +735,7 @@ where
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::ReadMultiValuesBytes { id, keys, callback }
         })?;
@@ -766,7 +766,7 @@ where
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this
             .execution_state_sender
             .send_request(move |callback| ExecutionRequest::ReadValueBytes { id, key, callback })?;
@@ -797,7 +797,7 @@ where
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeysByPrefix {
                 id,
@@ -834,7 +834,7 @@ where
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
         let mut this = self.inner();
         let id = this.current_application().id;
-        this.resource_controller.track_read_operations(1)?;
+        this.resource_controller.track_read_operation()?;
         let receiver = this.execution_state_sender.send_request(move |callback| {
             ExecutionRequest::FindKeyValuesByPrefix {
                 id,
@@ -1175,10 +1175,19 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     }
 
     fn maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError> {
-        let policy = &self.inner().resource_controller.policy;
         Ok(match vm_runtime {
-            VmRuntime::Wasm => policy.maximum_wasm_fuel_per_block,
-            VmRuntime::Evm => policy.maximum_evm_fuel_per_block,
+            VmRuntime::Wasm => {
+                self.inner()
+                    .resource_controller
+                    .policy()
+                    .maximum_wasm_fuel_per_block
+            }
+            VmRuntime::Evm => {
+                self.inner()
+                    .resource_controller
+                    .policy()
+                    .maximum_evm_fuel_per_block
+            }
         })
     }
 
@@ -1200,7 +1209,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         let grant = this
             .resource_controller
-            .policy
+            .policy()
             .total_price(&message.grant)?;
         if grant.is_zero() {
             refund_grant_to = None;

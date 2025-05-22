@@ -37,9 +37,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{Block, ConfirmedBlock},
+    block_tracker::BlockExecutionTracker,
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        OperationResult, PostedMessage, ProposedBlock, Transaction,
+        PostedMessage, ProposedBlock, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -56,13 +57,14 @@ mod chain_tests;
 use linera_base::prometheus_util::MeasureLatency;
 
 #[cfg(with_metrics)]
-mod metrics {
+pub(crate) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
         register_int_counter_vec,
     };
+    use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
 
     pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -168,10 +170,30 @@ mod metrics {
             exponential_bucket_interval(1.0, 10_000.0),
         )
     });
+
+    /// Tracks block execution metrics in Prometheus.
+    pub(crate) fn track_block_metrics(tracker: &ResourceTracker) {
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.wasm_fuel as f64);
+        EVM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.evm_fuel as f64);
+        VM_NUM_READS_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.read_operations as f64);
+        VM_BYTES_READ_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_read as f64);
+        VM_BYTES_WRITTEN_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_written as f64);
+    }
 }
 
 /// The BCS-serialized size of an empty [`Block`].
-const EMPTY_BLOCK_SIZE: usize = 94;
+pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
@@ -688,37 +710,31 @@ where
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
-
-        ensure!(
-            *chain.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
-        );
-
         chain.system.timestamp.set(block.timestamp);
-        ensure!(
-            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
-            ChainError::EmptyBlock
-        );
-        let (_, committee) = chain
+
+        let policy = chain
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
-        let mut resource_controller = ResourceController {
-            policy: Arc::new(committee.policy().clone()),
-            tracker: ResourceTracker::default(),
-            account: block.authenticated_signer,
-        };
-        ensure!(
-            block.published_blob_ids()
-                == published_blobs
-                    .iter()
-                    .map(|blob| blob.id())
-                    .collect::<BTreeSet<_>>(),
-            ChainError::InternalError("published_blobs mismatch".to_string())
+            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
+            .1
+            .policy()
+            .clone();
+
+        let mut resource_controller = ResourceController::new(
+            Arc::new(policy),
+            ResourceTracker::default(),
+            block.authenticated_signer,
         );
-        resource_controller
-            .track_block_size(EMPTY_BLOCK_SIZE)
-            .with_execution_context(ChainExecutionContext::Block)?;
+
+        // Execute each incoming bundle as a transaction, then each operation.
+        // Collect messages, events and oracle responses, each as one list per transaction.
+        let mut block_execution_tracker = BlockExecutionTracker::new(
+            &mut resource_controller,
+            local_time,
+            replaying_oracle_responses,
+            block,
+        )?;
+
         for blob in published_blobs {
             let blob_type = blob.content().blob_type();
             if blob_type == BlobType::Data
@@ -726,7 +742,8 @@ where
                 || blob_type == BlobType::ServiceBytecode
                 || blob_type == BlobType::EvmBytecode
             {
-                resource_controller
+                block_execution_tracker
+                    .resource_controller_mut()
                     .with_state(&mut chain.system)
                     .await?
                     .track_blob_published(blob.content())
@@ -735,46 +752,14 @@ where
             chain.system.used_blobs.insert(&blob.id())?;
         }
 
-        if *chain.system.closed.get() {
-            ensure!(
-                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
-                ChainError::ClosedChain
-            );
-        }
-        Self::check_app_permissions(chain.system.application_permissions.get(), block)?;
-
-        // Execute each incoming bundle as a transaction, then each operation.
-        // Collect messages, events and oracle responses, each as one list per transaction.
-        let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
-        let mut next_message_index = 0;
-        let mut next_application_index = 0;
-        let mut next_chain_index = 0;
-        let mut oracle_responses = Vec::new();
-        let mut events = Vec::new();
-        let mut blobs = Vec::new();
-        let mut messages = Vec::new();
-        let mut operation_results = Vec::new();
-        for (txn_index, transaction) in block.transactions() {
-            let chain_execution_context = match transaction {
-                Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
-                Transaction::ExecuteOperation(_) => ChainExecutionContext::Operation(txn_index),
-            };
-            let maybe_responses = match replaying_oracle_responses.as_mut().map(Iterator::next) {
-                Some(Some(responses)) => Some(responses),
-                Some(None) => return Err(ChainError::MissingOracleResponseList),
-                None => None,
-            };
-            let mut txn_tracker = TransactionTracker::new(
-                local_time,
-                txn_index,
-                next_message_index,
-                next_application_index,
-                next_chain_index,
-                maybe_responses,
-            );
+        for transaction in block.transactions() {
+            let chain_execution_context =
+                block_execution_tracker.chain_execution_context(&transaction);
+            let mut txn_tracker = block_execution_tracker.new_transaction_tracker()?;
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
-                    resource_controller
+                    block_execution_tracker
+                        .resource_controller_mut()
                         .track_block_size_of(&incoming_bundle)
                         .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
@@ -786,13 +771,16 @@ where
                             block,
                             round,
                             &mut txn_tracker,
-                            &mut resource_controller,
+                            block_execution_tracker.resource_controller_mut(),
                         ))
                         .await?;
                     }
                 }
                 Transaction::ExecuteOperation(operation) => {
-                    resource_controller
+                    block_execution_tracker
+                        .resource_controller_mut()
+                        .with_state(&mut chain.system)
+                        .await?
                         .track_block_size_of(&operation)
                         .with_execution_context(chain_execution_context)?;
                     #[cfg(with_metrics)]
@@ -809,11 +797,12 @@ where
                         context,
                         operation.clone(),
                         &mut txn_tracker,
-                        &mut resource_controller,
+                        block_execution_tracker.resource_controller_mut(),
                     ))
                     .await
                     .with_execution_context(chain_execution_context)?;
-                    resource_controller
+                    block_execution_tracker
+                        .resource_controller_mut()
                         .with_state(&mut chain.system)
                         .await?
                         .track_operation(operation)
@@ -824,62 +813,13 @@ where
             let txn_outcome = txn_tracker
                 .into_outcome()
                 .with_execution_context(chain_execution_context)?;
-            next_message_index = txn_outcome.next_message_index;
-            next_application_index = txn_outcome.next_application_index;
-            next_chain_index = txn_outcome.next_chain_index;
 
-            if matches!(
-                transaction,
-                Transaction::ExecuteOperation(_)
-                    | Transaction::ReceiveMessages(IncomingBundle {
-                        action: MessageAction::Accept,
-                        ..
-                    })
-            ) {
-                for message_out in &txn_outcome.outgoing_messages {
-                    resource_controller
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_message(&message_out.message)
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
-
-            resource_controller
-                .track_block_size_of(&(
-                    &txn_outcome.oracle_responses,
-                    &txn_outcome.outgoing_messages,
-                    &txn_outcome.events,
-                    &txn_outcome.blobs,
-                ))
-                .with_execution_context(chain_execution_context)?;
-            for blob in &txn_outcome.blobs {
-                if blob.content().blob_type() == BlobType::Data {
-                    resource_controller
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_blob_published(blob.content())
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
-            oracle_responses.push(txn_outcome.oracle_responses);
-            messages.push(txn_outcome.outgoing_messages);
-            events.push(txn_outcome.events);
-            blobs.push(txn_outcome.blobs);
-
-            if let Transaction::ExecuteOperation(_) = transaction {
-                resource_controller
-                    .track_block_size_of(&(&txn_outcome.operation_result))
-                    .with_execution_context(chain_execution_context)?;
-                operation_results.push(OperationResult(txn_outcome.operation_result));
-            }
+            block_execution_tracker
+                .process_txn_outcome(&txn_outcome, &mut chain.system, chain_execution_context)
+                .await?;
         }
 
-        let recipients = messages
-            .iter()
-            .flatten()
-            .map(|message| message.destination)
-            .collect::<BTreeSet<_>>();
+        let recipients = block_execution_tracker.recipients();
         let mut previous_message_blocks = BTreeMap::new();
         for recipient in recipients {
             if let Some(height) = previous_message_blocks_view.get(&recipient).await? {
@@ -893,20 +833,14 @@ where
             }
         }
 
-        let txn_count = block.incoming_bundles.len() + block.operations.len();
-        assert_eq!(oracle_responses.len(), txn_count);
-        assert_eq!(messages.len(), txn_count);
-        assert_eq!(events.len(), txn_count);
-        assert_eq!(blobs.len(), txn_count);
-
-        #[cfg(with_metrics)]
-        Self::track_block_metrics(&resource_controller.tracker);
-
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
             chain.crypto_hash().await?
         };
+
+        let (messages, oracle_responses, events, blobs, operation_results) =
+            block_execution_tracker.finalize();
 
         Ok(BlockExecutionOutcome {
             messages,
@@ -935,6 +869,36 @@ where
         );
 
         self.ensure_is_active(local_time).await?;
+
+        ensure!(
+            *self.execution_state.system.timestamp.get() <= block.timestamp,
+            ChainError::InvalidBlockTimestamp
+        );
+        ensure!(
+            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
+            ChainError::EmptyBlock
+        );
+
+        ensure!(
+            block.published_blob_ids()
+                == published_blobs
+                    .iter()
+                    .map(|blob| blob.id())
+                    .collect::<BTreeSet<_>>(),
+            ChainError::InternalError("published_blobs mismatch".to_string())
+        );
+
+        if *self.execution_state.system.closed.get() {
+            ensure!(
+                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
+                ChainError::ClosedChain
+            );
+        }
+
+        Self::check_app_permissions(
+            self.execution_state.system.application_permissions.get(),
+            block,
+        )?;
 
         Self::execute_block_inner(
             &mut self.execution_state,
@@ -1117,27 +1081,6 @@ where
         self.pending_proposed_blobs.clear();
         self.manager
             .reset(ownership, next_height, local_time, fallback_owners)
-    }
-
-    /// Tracks block execution metrics in Prometheus.
-    #[cfg(with_metrics)]
-    fn track_block_metrics(tracker: &ResourceTracker) {
-        metrics::NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-        metrics::WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.wasm_fuel as f64);
-        metrics::EVM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.evm_fuel as f64);
-        metrics::VM_NUM_READS_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.read_operations as f64);
-        metrics::VM_BYTES_READ_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.bytes_read as f64);
-        metrics::VM_BYTES_WRITTEN_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.bytes_written as f64);
     }
 
     /// Updates the outboxes with the messages sent in the block.

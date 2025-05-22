@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains types related to fees and pricing.
+//! Defines the economic parameters and hard limits for resource consumption
+//! within the Linera network. It specifies prices for fundamental units like fuel,
+//! individual read/write operations, costs per byte read/written,
+//! base costs for messages and operations, and costs associated with publishing blobs.
+//! It also sets overarching limits such as the maximum fuel allowed per block,
+//! the maximum block size, and limits on concurrent operations.
 
 use std::{collections::BTreeSet, fmt};
 
