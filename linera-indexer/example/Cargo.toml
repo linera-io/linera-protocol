@@ -13,7 +13,6 @@ version.workspace = true
 
 [features]
 default = ["rocksdb"]
-benchmark = ["linera-base/test", "linera-indexer/benchmark"]
 rocksdb = ["linera-indexer/rocksdb", "linera-indexer-plugins/rocksdb"]
 dynamodb = ["linera-indexer/dynamodb", "linera-indexer-plugins/dynamodb"]
 scylladb = ["linera-indexer/scylladb", "linera-indexer-plugins/scylladb"]

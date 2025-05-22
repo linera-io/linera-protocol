@@ -24,6 +24,8 @@ This document contains the help content for the `linera` command-line program.
 * [`linera remove-validator`↴](#linera-remove-validator)
 * [`linera finalize-committee`↴](#linera-finalize-committee)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
+* [`linera benchmark`↴](#linera-benchmark)
+* [`linera multi-benchmark`↴](#linera-multi-benchmark)
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
 * [`linera service`↴](#linera-service)
@@ -88,6 +90,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `remove-validator` — Remove a validator (admin only)
 * `finalize-committee` — Deprecates all committees except the last one
 * `resource-control-policy` — View or update the resource control policy
+* `benchmark` — Start a benchmark, maintaining a given TPS or just sending one transfer per chain in bulk mode
+* `multi-benchmark` — Runs multiple `linera benchmark` processes in parallel
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
@@ -508,6 +512,70 @@ View or update the resource control policy
 * `--maximum-http-response-bytes <MAXIMUM_HTTP_RESPONSE_BYTES>` — Set the maximum size in bytes of a received HTTP response
 * `--http-request-timeout-ms <HTTP_REQUEST_TIMEOUT_MS>` — Set the maximum amount of time allowed to wait for an HTTP response
 * `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
+
+
+
+## `linera benchmark`
+
+Start a benchmark, maintaining a given TPS or just sending one transfer per chain in bulk mode
+
+**Usage:** `linera benchmark [OPTIONS]`
+
+###### **Options:**
+
+* `--num-chains <NUM_CHAINS>` — How many chains to use for the benchmark
+
+  Default value: `10`
+* `--tokens-per-chain <TOKENS_PER_CHAIN>` — How many tokens to assign to each newly created chain. These need to cover the transaction fees per chain for the benchmark
+
+  Default value: `0.1`
+* `--transactions-per-block <TRANSACTIONS_PER_BLOCK>` — How many transactions to put in each block
+
+  Default value: `1`
+* `--fungible-application-id <FUNGIBLE_APPLICATION_ID>` — The application ID of a fungible token on the wallet's default chain. If none is specified, the benchmark uses the native token
+* `--bps <BPS>` — If provided, will be long running, and block proposals will be sent at the provided fixed BPS rate
+* `--close-chains` — If provided, will close the chains after the benchmark is finished. Keep in mind that closing the chains might take a while, and will increase the validator latency while they're being closed
+* `--health-check-endpoints <HEALTH_CHECK_ENDPOINTS>` — A comma-separated list of host:port pairs to query for health metrics. If provided, the benchmark will check these endpoints for validator health and terminate if any validator is unhealthy. Example: "127.0.0.1:21100,validator-1.some-network.linera.net:21100"
+* `--wrap-up-max-in-flight <WRAP_UP_MAX_IN_FLIGHT>` — The maximum number of in-flight requests to validators when wrapping up the benchmark. While wrapping up, this controls the concurrency level when processing inboxes and closing chains
+
+  Default value: `5`
+* `--confirm-before-start` — Confirm before starting the benchmark
+
+
+
+## `linera multi-benchmark`
+
+Runs multiple `linera benchmark` processes in parallel
+
+**Usage:** `linera multi-benchmark [OPTIONS] --faucet <FAUCET>`
+
+###### **Options:**
+
+* `--processes <PROCESSES>` — The number of `linera benchmark` processes to run in parallel
+
+  Default value: `1`
+* `--faucet <FAUCET>` — The faucet (which implicitly defines the network)
+* `--ssd-dir <SSD_DIR>` — If running on local SSD, specify the directory to store the storage and wallet. If not specified, a temporary directory will be used for each client
+* `--num-chains <NUM_CHAINS>` — How many chains to use for the benchmark
+
+  Default value: `10`
+* `--tokens-per-chain <TOKENS_PER_CHAIN>` — How many tokens to assign to each newly created chain. These need to cover the transaction fees per chain for the benchmark
+
+  Default value: `0.1`
+* `--transactions-per-block <TRANSACTIONS_PER_BLOCK>` — How many transactions to put in each block
+
+  Default value: `1`
+* `--fungible-application-id <FUNGIBLE_APPLICATION_ID>` — The application ID of a fungible token on the wallet's default chain. If none is specified, the benchmark uses the native token
+* `--bps <BPS>` — If provided, will be long running, and block proposals will be sent at the provided fixed BPS rate
+* `--close-chains` — If provided, will close the chains after the benchmark is finished. Keep in mind that closing the chains might take a while, and will increase the validator latency while they're being closed
+* `--health-check-endpoints <HEALTH_CHECK_ENDPOINTS>` — A comma-separated list of host:port pairs to query for health metrics. If provided, the benchmark will check these endpoints for validator health and terminate if any validator is unhealthy. Example: "127.0.0.1:21100,validator-1.some-network.linera.net:21100"
+* `--wrap-up-max-in-flight <WRAP_UP_MAX_IN_FLIGHT>` — The maximum number of in-flight requests to validators when wrapping up the benchmark. While wrapping up, this controls the concurrency level when processing inboxes and closing chains
+
+  Default value: `5`
+* `--confirm-before-start` — Confirm before starting the benchmark
+* `--delay-between-processes <DELAY_BETWEEN_PROCESSES>` — The delay between starting the benchmark processes, in seconds
+
+  Default value: `10`
 
 
 

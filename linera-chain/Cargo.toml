@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-benchmark = ["linera-base/test"]
 test = [
     "dep:anyhow",
     "dep:axum",

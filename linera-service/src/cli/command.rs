@@ -19,20 +19,14 @@ use linera_client::{
     util,
 };
 use linera_rpc::config::CrossChainConfig;
-#[cfg(feature = "benchmark")]
 use serde::Serialize;
 
-#[cfg(feature = "benchmark")]
 const DEFAULT_NUM_CHAINS: usize = 10;
-#[cfg(feature = "benchmark")]
 const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
-#[cfg(feature = "benchmark")]
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
-#[cfg(feature = "benchmark")]
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 
 // Make sure that the default values are consts, and that they are used in the Default impl.
-#[cfg(feature = "benchmark")]
 #[derive(Clone, Serialize, clap::Args)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchmarkCommand {
@@ -81,7 +75,6 @@ pub struct BenchmarkCommand {
     pub confirm_before_start: bool,
 }
 
-#[cfg(feature = "benchmark")]
 impl Default for BenchmarkCommand {
     fn default() -> Self {
         Self {
@@ -441,11 +434,9 @@ pub enum ClientCommand {
     },
 
     /// Start a benchmark, maintaining a given TPS or just sending one transfer per chain in bulk mode.
-    #[cfg(feature = "benchmark")]
     Benchmark(BenchmarkCommand),
 
     /// Runs multiple `linera benchmark` processes in parallel.
-    #[cfg(feature = "benchmark")]
     MultiBenchmark {
         /// The number of `linera benchmark` processes to run in parallel.
         #[arg(long = "processes", default_value = "1")]
@@ -914,9 +905,7 @@ impl ClientCommand {
             | ClientCommand::Assign { .. }
             | ClientCommand::Wallet { .. }
             | ClientCommand::RetryPendingBlock { .. } => "client".into(),
-            #[cfg(feature = "benchmark")]
             ClientCommand::Benchmark { .. } => "benchmark".into(),
-            #[cfg(feature = "benchmark")]
             ClientCommand::MultiBenchmark { .. } => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),
             ClientCommand::Project { .. } => "project".into(),

@@ -392,7 +392,7 @@ pub struct LiteVote {
 
 impl LiteVote {
     /// Returns the full vote, with the value, if it matches.
-    #[cfg(any(feature = "benchmark", with_testing))]
+    #[cfg(with_testing)]
     pub fn with_value<T: CertificateValue>(self, value: T) -> Option<Vote<T>> {
         if self.value.value_hash != value.hash() {
             return None;

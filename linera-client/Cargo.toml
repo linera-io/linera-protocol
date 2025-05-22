@@ -13,15 +13,6 @@ version.workspace = true
 
 [features]
 test = ["linera-views/test", "linera-execution/test"]
-benchmark = [
-    "linera-base/test",
-    "dep:linera-sdk",
-    "dep:crossbeam-channel",
-    "dep:num-format",
-    "dep:reqwest",
-    "dep:anyhow",
-    "dep:prometheus-parse",
-]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -45,11 +36,11 @@ indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
 web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
+anyhow = { workspace = true }
 bcs.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
-crossbeam-channel = { workspace = true, optional = true }
+crossbeam-channel = { workspace = true }
 derive_more = { workspace = true, features = ["deref", "deref_mut"] }
 futures.workspace = true
 linera-base.workspace = true
@@ -57,13 +48,13 @@ linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
 linera-rpc.workspace = true
-linera-sdk = { workspace = true, optional = true }
+linera-sdk = { workspace = true }
 linera-storage.workspace = true
 linera-version = { workspace = true }
 linera-views.workspace = true
-num-format = { workspace = true, optional = true }
-prometheus-parse = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
+num-format = { workspace = true }
+prometheus-parse = { workspace = true }
+reqwest = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

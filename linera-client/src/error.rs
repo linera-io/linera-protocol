@@ -8,9 +8,7 @@ use linera_core::node::NodeError;
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 
-#[cfg(feature = "benchmark")]
-use crate::benchmark::BenchmarkError;
-use crate::{persistent, util};
+use crate::{benchmark::BenchmarkError, persistent, util};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -39,7 +37,6 @@ pub(crate) enum Inner {
     Arithmetic(#[from] linera_base::data_types::ArithmeticError),
     #[error("incorrect chain ownership")]
     ChainOwnership,
-    #[cfg(feature = "benchmark")]
     #[error("Benchmark error: {0}")]
     Benchmark(#[from] BenchmarkError),
     #[error("Validator version {remote} is not compatible with local version {local}.")]

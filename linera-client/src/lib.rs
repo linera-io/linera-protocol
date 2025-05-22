@@ -16,7 +16,6 @@ pub mod persistent;
 pub mod util;
 pub mod wallet;
 
-#[cfg(feature = "benchmark")]
 pub mod benchmark;
 
 #[cfg(test)]

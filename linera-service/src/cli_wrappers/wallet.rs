@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     mem,
     path::{Path, PathBuf},
+    process::Stdio,
     str::FromStr,
     sync,
     time::Duration,
@@ -33,23 +34,19 @@ use linera_core::worker::Notification;
 use linera_execution::committee::Committee;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
+use serde_command_opts::to_args;
 use serde_json::{json, Value};
 use tempfile::TempDir;
-use tokio::process::{Child, Command};
-use tracing::{error, info, warn};
-#[cfg(feature = "benchmark")]
-use {
-    crate::cli::command::BenchmarkCommand,
-    serde_command_opts::to_args,
-    std::process::Stdio,
-    tokio::{
-        io::{AsyncBufReadExt, BufReader},
-        sync::oneshot,
-        task::JoinHandle,
-    },
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::{Child, Command},
+    sync::oneshot,
+    task::JoinHandle,
 };
+use tracing::{error, info, warn};
 
 use crate::{
+    cli::command::BenchmarkCommand,
     cli_wrappers::{
         local_net::{PathProvider, ProcessInbox},
         Network,
@@ -647,7 +644,6 @@ impl ClientWrapper {
         Ok(())
     }
 
-    #[cfg(feature = "benchmark")]
     fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
         let args = to_args(&args)?
             .chunks_exact(2)
@@ -664,7 +660,6 @@ impl ClientWrapper {
         Ok(())
     }
 
-    #[cfg(feature = "benchmark")]
     async fn benchmark_command_with_envs(
         &self,
         args: BenchmarkCommand,
@@ -675,7 +670,6 @@ impl ClientWrapper {
         Ok(command)
     }
 
-    #[cfg(feature = "benchmark")]
     async fn benchmark_command(&self, args: BenchmarkCommand) -> Result<Command> {
         let mut command = self.command().await?;
         Self::benchmark_command_internal(&mut command, args)?;
@@ -683,7 +677,6 @@ impl ClientWrapper {
     }
 
     /// Runs `linera benchmark`.
-    #[cfg(feature = "benchmark")]
     pub async fn benchmark(&self, args: BenchmarkCommand) -> Result<()> {
         let mut command = self.benchmark_command(args).await?;
         command.spawn_and_wait_for_stdout().await?;
@@ -692,7 +685,6 @@ impl ClientWrapper {
 
     /// Runs `linera benchmark`, but detached: don't wait for the command to finish, just spawn it
     /// and return the child process, and the handles to the stdout and stderr.
-    #[cfg(feature = "benchmark")]
     pub async fn benchmark_detached(
         &self,
         args: BenchmarkCommand,

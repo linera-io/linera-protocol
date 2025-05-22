@@ -566,7 +566,7 @@ impl<Env: Environment> Benchmark<Env> {
             .last()
             .expect("There should be a last element")
             .0;
-        let amount = Amount::from(1);
+        let amount = Amount::from_attos(1);
         for (chain_id, owner) in keys {
             let operation = match fungible_application_id {
                 Some(application_id) => {

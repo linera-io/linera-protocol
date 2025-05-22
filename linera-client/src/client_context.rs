@@ -3,46 +3,40 @@
 
 #[cfg(with_testing)]
 use std::num::NonZeroUsize;
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    iter,
+    sync::Arc,
+};
 
-use futures::Future;
+use futures::{stream, Future, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::{CryptoHash, Signer, ValidatorPublicKey},
-    data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, AccountOwner, ChainId},
+    crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    data_types::{Amount, BlockHeight, Epoch, Timestamp},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
-    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
+    client::{
+        BlanketMessagePolicy, ChainClient, ChainClientError, Client, MessagePolicy, PendingProposal,
+    },
     data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::{CrossChainMessageDelivery, ValidatorNode},
     Environment, JoinSetExt as _,
 };
+use linera_execution::{
+    committee::Committee,
+    system::{OpenChainConfig, SystemOperation},
+    Operation,
+};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_version::VersionInfo;
 use thiserror_context::Context;
+use tokio::task;
 use tracing::{debug, info};
-#[cfg(feature = "benchmark")]
-use {
-    crate::benchmark::{Benchmark, BenchmarkError},
-    futures::{stream, StreamExt, TryStreamExt},
-    linera_base::{
-        crypto::AccountPublicKey,
-        data_types::{Amount, Epoch},
-        identifiers::ApplicationId,
-    },
-    linera_core::client::ChainClientError,
-    linera_execution::{
-        committee::Committee,
-        system::{OpenChainConfig, SystemOperation},
-        Operation,
-    },
-    std::{collections::HashMap, iter},
-    tokio::task,
-};
 #[cfg(feature = "fs")]
 use {
     linera_base::{
@@ -55,6 +49,7 @@ use {
 };
 
 use crate::{
+    benchmark::{Benchmark, BenchmarkError},
     chain_listener::{self, ClientContext as _, ClientContextExt as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
     error,
@@ -688,7 +683,6 @@ where
     }
 }
 
-#[cfg(feature = "benchmark")]
 impl<Env: Environment, W> ClientContext<Env, W>
 where
     W: Persist<Target = Wallet>,
@@ -975,7 +969,7 @@ where
             .default_chain()
             .expect("should have default chain");
         let default_key = self.wallet.get(default_chain_id).unwrap().owner.unwrap();
-        let amount = Amount::from(1_000_000);
+        let amount = Amount::from_attos(1_000_000);
         let operations: Vec<_> = key_pairs
             .iter()
             .map(|(chain_id, owner)| {

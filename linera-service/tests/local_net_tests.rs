@@ -15,12 +15,11 @@ use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use guard::INTEGRATION_TEST_GUARD;
-#[cfg(any(feature = "benchmark", feature = "ethereum"))]
-use linera_base::vm::VmRuntime;
 use linera_base::{
     crypto::Secp256k1SecretKey,
     data_types::{Amount, BlockHeight, Epoch},
     identifiers::{Account, AccountOwner},
+    vm::VmRuntime,
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_sdk::linera_base_types::AccountSecretKey;
@@ -40,7 +39,6 @@ use {
     linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet, std::process::Command,
 };
 
-#[cfg(feature = "benchmark")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
@@ -740,7 +738,6 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     return Ok(());
 }
 
-#[cfg(feature = "benchmark")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

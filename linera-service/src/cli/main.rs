@@ -12,7 +12,7 @@ use std::{
     path::PathBuf,
     process,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
@@ -45,10 +45,13 @@ use linera_execution::{
 use linera_faucet_server::FaucetService;
 use linera_service::{
     cli::{
-        command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand},
+        command::{
+            BenchmarkCommand, ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand,
+            WalletCommand,
+        },
         net_up_utils,
     },
-    cli_wrappers::{self},
+    cli_wrappers::{self, local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
     node_service::NodeService,
     project::{self, Project},
     storage::{Runnable, RunnableWithStore, StorageConfigNamespace},
@@ -60,18 +63,9 @@ use linera_views::{
     store::{CommonStoreConfig, KeyValueStore},
 };
 use serde_json::Value;
-use tokio::task::JoinSet;
+use tokio::{io::AsyncWriteExt, process::ChildStdin, sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument as _};
-#[cfg(feature = "benchmark")]
-use {
-    linera_service::{
-        cli::command::BenchmarkCommand,
-        cli_wrappers::{local_net::PathProvider, ClientWrapper, Network, OnClientDrop},
-    },
-    std::time::Duration,
-    tokio::{io::AsyncWriteExt, process::ChildStdin, sync::oneshot},
-};
 
 use crate::persistent::PersistExt as _;
 
@@ -787,7 +781,6 @@ impl Runnable for Job {
                 );
             }
 
-            #[cfg(feature = "benchmark")]
             Benchmark(benchmark_config) => {
                 let BenchmarkCommand {
                     num_chains,
@@ -1292,7 +1285,6 @@ impl Runnable for Job {
                 );
             }
 
-            #[cfg(feature = "benchmark")]
             MultiBenchmark { .. } => {
                 unreachable!()
             }
@@ -2126,7 +2118,6 @@ Make sure to use a Linera client compatible with this network.
             }
         },
 
-        #[cfg(feature = "benchmark")]
         ClientCommand::MultiBenchmark {
             processes,
             faucet,
