@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// Tracks execution of transactions within a block.
-/// Captures the resource policy, produced messages, oracle events.
+/// Captures the resource policy, produced messages, oracle responses and events.
 #[derive(Debug)]
 pub struct BlockExecutionTracker<'resources> {
     resource_controller: &'resources mut ResourceController<Option<AccountOwner>, ResourceTracker>,
@@ -106,7 +106,7 @@ impl<'resources> BlockExecutionTracker<'resources> {
 
     /// Processes the transaction outcome.
     ///
-    /// Updates block tracker with indexes for the next messages, applicatios, etc.
+    /// Updates block tracker with indexes for the next messages, applications, etc.
     /// so that the execution of the next transaction doesn't overwrite the previous ones.
     ///
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
@@ -191,7 +191,7 @@ impl<'resources> BlockExecutionTracker<'resources> {
         self.resource_controller
     }
 
-    /// Finalized the execution and returns the collected results.
+    /// Finalizes the execution and returns the collected results.
     ///
     /// This method should be called after all transactions have been processed.
     /// Panics if the number of outcomes does match the expected count.
