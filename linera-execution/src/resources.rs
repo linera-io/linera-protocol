@@ -450,6 +450,54 @@ where
     }
 }
 
+impl ResourceController<Option<AccountOwner>, ResourceTracker> {
+    /// Provides a reference to the current execution state and obtains a temporary object
+    /// where the accounting functions of [`ResourceController`] are available.
+    pub async fn with_state<'a, C>(
+        &mut self,
+        view: &'a mut SystemExecutionStateView<C>,
+    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+    {
+        self.with_state_and_grant(view, None).await
+    }
+
+    /// Provides a reference to the current execution state as well as an optional grant,
+    /// and obtains a temporary object where the accounting functions of
+    /// [`ResourceController`] are available.
+    pub async fn with_state_and_grant<'a, C>(
+        &mut self,
+        view: &'a mut SystemExecutionStateView<C>,
+        grant: Option<&'a mut Amount>,
+    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+    {
+        let mut sources = Vec::new();
+        // First, use the grant (e.g. for messages) and otherwise use the chain account
+        // (e.g. for blocks and operations).
+        if let Some(grant) = grant {
+            sources.push(grant);
+        } else {
+            sources.push(view.balance.get_mut());
+        }
+        // Then the local account, if any. Currently, any negative fee (e.g. storage
+        // refund) goes preferably to this account.
+        if let Some(owner) = &self.account {
+            if let Some(balance) = view.balances.get_mut(owner).await? {
+                sources.push(balance);
+            }
+        }
+
+        Ok(ResourceController {
+            policy: self.policy.clone(),
+            tracker: &mut self.tracker,
+            account: Sources { sources },
+        })
+    }
+}
+
 // The simplest `BalanceHolder` is an `Amount`.
 impl BalanceHolder for Amount {
     fn balance(&self) -> Result<Amount, ArithmeticError> {
@@ -513,53 +561,5 @@ impl BalanceHolder for Sources<'_> {
         } else {
             Ok(())
         }
-    }
-}
-
-impl ResourceController<Option<AccountOwner>, ResourceTracker> {
-    /// Provides a reference to the current execution state and obtains a temporary object
-    /// where the accounting functions of [`ResourceController`] are available.
-    pub async fn with_state<'a, C>(
-        &mut self,
-        view: &'a mut SystemExecutionStateView<C>,
-    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
-    where
-        C: Context + Clone + Send + Sync + 'static,
-    {
-        self.with_state_and_grant(view, None).await
-    }
-
-    /// Provides a reference to the current execution state as well as an optional grant,
-    /// and obtains a temporary object where the accounting functions of
-    /// [`ResourceController`] are available.
-    pub async fn with_state_and_grant<'a, C>(
-        &mut self,
-        view: &'a mut SystemExecutionStateView<C>,
-        grant: Option<&'a mut Amount>,
-    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
-    where
-        C: Context + Clone + Send + Sync + 'static,
-    {
-        let mut sources = Vec::new();
-        // First, use the grant (e.g. for messages) and otherwise use the chain account
-        // (e.g. for blocks and operations).
-        if let Some(grant) = grant {
-            sources.push(grant);
-        } else {
-            sources.push(view.balance.get_mut());
-        }
-        // Then the local account, if any. Currently, any negative fee (e.g. storage
-        // refund) goes preferably to this account.
-        if let Some(owner) = &self.account {
-            if let Some(balance) = view.balances.get_mut(owner).await? {
-                sources.push(balance);
-            }
-        }
-
-        Ok(ResourceController {
-            policy: self.policy.clone(),
-            tracker: &mut self.tracker,
-            account: Sources { sources },
-        })
     }
 }
