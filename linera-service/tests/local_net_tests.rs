@@ -880,6 +880,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
     use linera_ethereum::{
         client::EthereumQueries,
+        provider::EthereumClientSimplified,
         test_utils::{get_anvil, SimpleTokenContractFunction},
     };
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -890,12 +891,12 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     let address0 = anvil_test.get_address(0);
     let address1 = anvil_test.get_address(1);
     let ethereum_endpoint = anvil_test.endpoint.clone();
-    let ethereum_client = anvil_test.ethereum_client.clone();
+    let ethereum_client_simp = EthereumClientSimplified::new(ethereum_endpoint.clone());
 
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
     let contract_address = simple_token.contract_address.clone();
     let event_name_expanded = "Initial(address,uint256)";
-    let events = ethereum_client
+    let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, 0, 2)
         .await?;
     let start_block = events.first().unwrap().block_number;
@@ -956,7 +957,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 
     let value = U256::from(10);
     simple_token.transfer(&address0, &address1, value).await?;
-    let last_block = ethereum_client.get_block_number().await?;
+    let last_block = ethereum_client_simp.get_block_number().await?;
     // increment by 1 since the read_events is exclusive in the last block.
     app.update(last_block + 1).await;
 

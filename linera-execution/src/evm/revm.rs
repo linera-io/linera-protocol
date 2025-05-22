@@ -4,7 +4,7 @@
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
 
 use core::ops::Range;
-use std::sync::Arc;
+use std::convert::TryFrom;
 
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -15,16 +15,20 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, StreamName},
     vm::{EvmQuery, VmRuntime},
 };
-use revm::{
-    db::WrapDatabaseRef, inspector_handle_register, primitives::Bytes, ContextPrecompile,
-    ContextStatefulPrecompile, Evm, EvmContext, InnerEvmContext, Inspector,
+use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
+use revm_context::{
+    result::{ExecutionResult, Output, SuccessReason},
+    BlockEnv, Cfg, ContextTr, Evm, Journal, LocalContextTr, TxEnv,
 };
-use revm_interpreter::{CallInputs, CallOutcome, Gas, InstructionResult, InterpreterResult};
-use revm_precompile::PrecompileResult;
-use revm_primitives::{
-    address, Address, EvmState, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput,
-    SuccessReason, TxKind,
+use revm_database_interface::WrapDatabaseRef;
+use revm_handler::{
+    instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };
+use revm_interpreter::{
+    CallInput, CallInputs, CallOutcome, Gas, InputsImpl, InstructionResult, InterpreterResult,
+};
+use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
+use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -260,6 +264,9 @@ impl UserServiceModule for EvmServiceModule {
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
+// This is the zero address of the contract
+const ZERO_ADDRESS: Address = address!("0000000000000000000000000000000000000000");
+
 fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
     // In calls the length is 32, so no problem unwrapping
     let hash = CryptoHash::try_from(vec).unwrap();
@@ -302,14 +309,6 @@ enum ContractPrecompileTag {
     MessageIsBouncing,
 }
 
-fn get_precompile_output(result: Vec<u8>) -> PrecompileOutput {
-    // The gas usage is set to zero since the proper accounting is done
-    // by the called application
-    let gas_used = 0;
-    let bytes = Bytes::copy_from_slice(&result);
-    PrecompileOutput { gas_used, bytes }
-}
-
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
 enum ServicePrecompileTag {
@@ -325,37 +324,26 @@ enum PrecompileTag {
     Service(ServicePrecompileTag),
 }
 
-struct GeneralContractCall;
-
-impl<Runtime: ContractRuntime>
-    ContextStatefulPrecompile<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>
-    for GeneralContractCall
-{
-    fn call(
-        &self,
-        input: &Bytes,
-        _gas_limit: u64,
-        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
-    ) -> PrecompileResult {
-        match Self::call_or_fail(input, context) {
-            Err(msg) => Err(PrecompileErrors::Fatal { msg }),
-            Ok(vec) => {
-                let gas_used = 0;
-                let bytes = Bytes::from(vec);
-                let result = PrecompileOutput { gas_used, bytes };
-                Ok(result)
-            }
-        }
-    }
+fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, String> {
+    // The gas usage is set to zero since the proper accounting is done
+    // by the called application
+    let output = Bytes::copy_from_slice(&output);
+    let result = InstructionResult::default();
+    let gas = Gas::new(0);
+    Ok(Some(InterpreterResult {
+        result,
+        output,
+        gas,
+    }))
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(
     tag: BasePrecompileTag,
     vec: &[u8],
-    context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+    context: &mut Ctx<'_, Runtime>,
 ) -> Result<Vec<u8>, String> {
     let mut runtime = context
-        .db
+        .db()
         .0
         .runtime
         .lock()
@@ -402,18 +390,61 @@ fn base_runtime_call<Runtime: BaseRuntime>(
     }
 }
 
+type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<Runtime>>>;
+
+#[derive(Debug, Default)]
+struct ContractPrecompile {
+    inner: EthPrecompiles,
+}
+
+impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for ContractPrecompile {
+    type Output = InterpreterResult;
+
+    fn set_spec(&mut self, spec: <<Ctx<'a, Runtime> as ContextTr>::Cfg as Cfg>::Spec) -> bool {
+        <EthPrecompiles as PrecompileProvider<Ctx<'a, Runtime>>>::set_spec(&mut self.inner, spec)
+    }
+
+    fn run(
+        &mut self,
+        context: &mut Ctx<'a, Runtime>,
+        address: &Address,
+        inputs: &InputsImpl,
+        is_static: bool,
+        gas_limit: u64,
+    ) -> Result<Option<InterpreterResult>, String> {
+        if address == &PRECOMPILE_ADDRESS {
+            let input = get_precompile_argument(context, &inputs.input);
+            let output = Self::call_or_fail(&input, gas_limit, context)?;
+            return get_precompile_output(output);
+        }
+        self.inner
+            .run(context, address, inputs, is_static, gas_limit)
+    }
+
+    fn warm_addresses(&self) -> Box<impl Iterator<Item = Address>> {
+        let mut addresses = self.inner.warm_addresses().collect::<Vec<Address>>();
+        addresses.push(PRECOMPILE_ADDRESS);
+        Box::new(addresses.into_iter())
+    }
+
+    fn contains(&self, address: &Address) -> bool {
+        address == &PRECOMPILE_ADDRESS || self.inner.contains(address)
+    }
+}
+
 const MESSAGE_IS_BOUNCING_NONE: u8 = 0;
 const MESSAGE_IS_BOUNCING_SOME_TRUE: u8 = 1;
 const MESSAGE_IS_BOUNCING_SOME_FALSE: u8 = 2;
 
-impl GeneralContractCall {
+impl<'a> ContractPrecompile {
     fn contract_runtime_call<Runtime: ContractRuntime>(
         tag: ContractPrecompileTag,
         vec: &[u8],
-        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        _gas_limit: u64,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
         let mut runtime = context
-            .db
+            .db()
             .0
             .runtime
             .lock()
@@ -481,50 +512,36 @@ impl GeneralContractCall {
     }
 
     fn call_or_fail<Runtime: ContractRuntime>(
-        input: &Bytes,
-        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        vec: &[u8],
+        gas_limit: u64,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
-        let vec = input.to_vec();
         ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
         match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
             PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
             PrecompileTag::Contract(contract_tag) => {
-                Self::contract_runtime_call(contract_tag, &vec[2..], context)
+                Self::contract_runtime_call(contract_tag, &vec[2..], gas_limit, context)
             }
             PrecompileTag::Service(_) => {
-                Err("Service tags are not available in GeneralContractCall".to_string())
+                Err("Service tags are not available in ContractPrecompile".to_string())
             }
         }
     }
 }
 
-struct GeneralServiceCall;
-
-impl<Runtime: ServiceRuntime>
-    ContextStatefulPrecompile<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>
-    for GeneralServiceCall
-{
-    fn call(
-        &self,
-        input: &Bytes,
-        _gas_limit: u64,
-        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
-    ) -> PrecompileResult {
-        match Self::call_or_fail(input, context) {
-            Err(msg) => Err(PrecompileErrors::Fatal { msg }),
-            Ok(vec) => Ok(get_precompile_output(vec)),
-        }
-    }
+#[derive(Debug, Default)]
+struct ServicePrecompile {
+    inner: EthPrecompiles,
 }
 
-impl GeneralServiceCall {
+impl<'a> ServicePrecompile {
     fn service_runtime_call<Runtime: ServiceRuntime>(
         tag: ServicePrecompileTag,
         vec: &[u8],
-        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
         let mut runtime = context
-            .db
+            .db()
             .0
             .runtime
             .lock()
@@ -541,10 +558,10 @@ impl GeneralServiceCall {
     }
 
     fn call_or_fail<Runtime: ServiceRuntime>(
-        input: &Bytes,
-        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        vec: &[u8],
+        _gas_limit: u64,
+        context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, String> {
-        let vec = input.to_vec();
         ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
         match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
             PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
@@ -555,6 +572,41 @@ impl GeneralServiceCall {
                 Self::service_runtime_call(service_tag, &vec[2..], context)
             }
         }
+    }
+}
+
+impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for ServicePrecompile {
+    type Output = InterpreterResult;
+
+    fn set_spec(&mut self, spec: <<Ctx<'a, Runtime> as ContextTr>::Cfg as Cfg>::Spec) -> bool {
+        <EthPrecompiles as PrecompileProvider<Ctx<'a, Runtime>>>::set_spec(&mut self.inner, spec)
+    }
+
+    fn run(
+        &mut self,
+        context: &mut Ctx<'a, Runtime>,
+        address: &Address,
+        inputs: &InputsImpl,
+        is_static: bool,
+        gas_limit: u64,
+    ) -> Result<Option<InterpreterResult>, String> {
+        if address == &PRECOMPILE_ADDRESS {
+            let input = get_precompile_argument(context, &inputs.input);
+            let output = Self::call_or_fail(&input, gas_limit, context)?;
+            return get_precompile_output(output);
+        }
+        self.inner
+            .run(context, address, inputs, is_static, gas_limit)
+    }
+
+    fn warm_addresses(&self) -> Box<impl Iterator<Item = Address>> {
+        let mut addresses = self.inner.warm_addresses().collect::<Vec<Address>>();
+        addresses.push(PRECOMPILE_ADDRESS);
+        Box::new(addresses.into_iter())
+    }
+
+    fn contains(&self, address: &Address) -> bool {
+        address == &PRECOMPILE_ADDRESS || self.inner.contains(address)
     }
 }
 
@@ -589,12 +641,45 @@ struct CallInterceptorContract<Runtime> {
     db: DatabaseRuntime<Runtime>,
 }
 
-impl<Runtime: ContractRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>
+impl<Runtime> Clone for CallInterceptorContract<Runtime> {
+    fn clone(&self) -> Self {
+        Self {
+            db: self.db.clone(),
+        }
+    }
+}
+
+fn get_argument<Ctx: ContextTr>(context: &mut Ctx, argument: &mut Vec<u8>, input: &CallInput) {
+    match input {
+        CallInput::Bytes(bytes) => {
+            argument.extend(bytes.to_vec());
+        }
+        CallInput::SharedBuffer(range) => {
+            if let Some(slice) = context.local().shared_memory_buffer_slice(range.clone()) {
+                argument.extend(&*slice);
+            }
+        }
+    };
+}
+
+fn get_call_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
+    let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
+    get_argument(context, &mut argument, input);
+    argument
+}
+
+fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput) -> Vec<u8> {
+    let mut argument = Vec::new();
+    get_argument(context, &mut argument, input);
+    argument
+}
+
+impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
     fn call(
         &mut self,
-        context: &mut EvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
@@ -613,7 +698,7 @@ impl<Runtime: ContractRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Ru
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     fn call_or_fail(
         &mut self,
-        _context: &mut EvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
@@ -621,10 +706,8 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         {
             return Ok(None);
         }
-        let vec = inputs.input.to_vec();
         let target = address_to_user_application_id(inputs.target_address);
-        let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
-        argument.extend(&vec);
+        let argument = get_call_argument(context, &inputs.input);
         let authenticated = true;
         let result = {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
@@ -642,12 +725,18 @@ struct CallInterceptorService<Runtime> {
     db: DatabaseRuntime<Runtime>,
 }
 
-impl<Runtime: ServiceRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>
-    for CallInterceptorService<Runtime>
-{
+impl<Runtime> Clone for CallInterceptorService<Runtime> {
+    fn clone(&self) -> Self {
+        Self {
+            db: self.db.clone(),
+        }
+    }
+}
+
+impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
     fn call(
         &mut self,
-        context: &mut EvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
@@ -666,7 +755,7 @@ impl<Runtime: ServiceRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Run
 impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     fn call_or_fail(
         &mut self,
-        _context: &mut EvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         let contract_address = Address::ZERO.create(0);
@@ -674,10 +763,8 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         {
             return Ok(None);
         }
-        let vec = inputs.input.to_vec();
         let target = address_to_user_application_id(inputs.target_address);
-        let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
-        argument.extend(&vec);
+        let argument = get_call_argument(context, &inputs.input);
         let result = {
             let evm_query = EvmQuery::Query(argument);
             let evm_query = serde_json::to_vec(&evm_query)?;
@@ -859,14 +946,14 @@ where
         ch: Choice,
         input: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        let (kind, tx_data) = match ch {
+        let (kind, data) = match ch {
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
             Choice::Call => {
-                let tx_data = Bytes::copy_from_slice(input);
-                (TxKind::Call(Address::ZERO.create(0)), tx_data)
+                let data = Bytes::copy_from_slice(input);
+                (TxKind::Call(Address::ZERO.create(0)), data)
             }
         };
-        let mut inspector = CallInterceptorContract {
+        let inspector = CallInterceptorContract {
             db: self.db.clone(),
         };
         let block_env = self.db.get_contract_block_env()?;
@@ -874,34 +961,38 @@ where
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
+        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
         let result = {
-            let mut evm: Evm<'_, _, _> = Evm::builder()
-                .with_ref_db(&mut self.db)
-                .with_external_context(&mut inspector)
-                .modify_tx_env(|tx| {
-                    tx.clear();
-                    tx.transact_to = kind;
-                    tx.data = tx_data;
-                    tx.gas_limit = gas_limit;
-                })
-                .modify_block_env(|block| {
-                    *block = block_env;
-                })
-                .append_handler_register(|handler| {
-                    inspector_handle_register(handler);
-                    let precompiles = handler.pre_execution.load_precompiles();
-                    handler.pre_execution.load_precompiles = Arc::new(move || {
-                        let mut precompiles = precompiles.clone();
-                        precompiles.extend([(
-                            PRECOMPILE_ADDRESS,
-                            ContextPrecompile::ContextStateful(Arc::new(GeneralContractCall)),
-                        )]);
-                        precompiles
-                    });
-                })
-                .build();
-
-            evm.transact_commit().map_err(|error| {
+            let ctx: revm_context::Context<
+                BlockEnv,
+                _,
+                _,
+                _,
+                Journal<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+                (),
+            > = revm_context::Context::<BlockEnv, _, _, _, _, _>::new(
+                WrapDatabaseRef(&mut self.db),
+                SpecId::PRAGUE,
+            )
+            .with_block(block_env);
+            let instructions = EthInstructions::new_mainnet();
+            let mut evm = Evm::new_with_inspector(
+                ctx,
+                inspector.clone(),
+                instructions,
+                ContractPrecompile::default(),
+            );
+            evm.inspect_commit(
+                TxEnv {
+                    kind,
+                    data,
+                    nonce,
+                    gas_limit,
+                    ..TxEnv::default()
+                },
+                inspector,
+            )
+            .map_err(|error| {
                 let error = format!("{:?}", error);
                 let error = EvmExecutionError::TransactCommitError(error);
                 ExecutionError::EvmError(error)
@@ -1012,42 +1103,46 @@ where
         kind: TxKind,
         input: &[u8],
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
-        let tx_data = Bytes::copy_from_slice(input);
-        let mut inspector = CallInterceptorService {
-            db: self.db.clone(),
-        };
+        let data = Bytes::copy_from_slice(input);
 
         let block_env = self.db.get_service_block_env()?;
+        let inspector = CallInterceptorService {
+            db: self.db.clone(),
+        };
+        let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
         let result_state = {
-            let mut evm: Evm<'_, _, _> = Evm::builder()
-                .with_ref_db(&mut self.db)
-                .with_external_context(&mut inspector)
-                .modify_tx_env(|tx| {
-                    tx.clear();
-                    tx.transact_to = kind;
-                    tx.data = tx_data;
-                    tx.gas_limit = EVM_SERVICE_GAS_LIMIT;
-                })
-                .modify_block_env(|block| {
-                    *block = block_env;
-                })
-                .append_handler_register(|handler| {
-                    inspector_handle_register(handler);
-                    let precompiles = handler.pre_execution.load_precompiles();
-                    handler.pre_execution.load_precompiles = Arc::new(move || {
-                        let mut precompiles = precompiles.clone();
-                        precompiles.extend([(
-                            PRECOMPILE_ADDRESS,
-                            ContextPrecompile::ContextStateful(Arc::new(GeneralServiceCall)),
-                        )]);
-                        precompiles
-                    });
-                })
-                .build();
-
-            evm.transact().map_err(|error| {
+            let ctx: revm_context::Context<
+                BlockEnv,
+                _,
+                _,
+                _,
+                Journal<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+                (),
+            > = revm_context::Context::<BlockEnv, _, _, _, _, _>::new(
+                WrapDatabaseRef(&mut self.db),
+                SpecId::PRAGUE,
+            )
+            .with_block(block_env);
+            let instructions = EthInstructions::new_mainnet();
+            let mut evm = Evm::new_with_inspector(
+                ctx,
+                inspector.clone(),
+                instructions,
+                ServicePrecompile::default(),
+            );
+            evm.inspect(
+                TxEnv {
+                    kind,
+                    data,
+                    nonce,
+                    gas_limit: EVM_SERVICE_GAS_LIMIT,
+                    ..TxEnv::default()
+                },
+                inspector,
+            )
+            .map_err(|error| {
                 let error = format!("{:?}", error);
-                let error = EvmExecutionError::TransactError(error);
+                let error = EvmExecutionError::TransactCommitError(error);
                 ExecutionError::EvmError(error)
             })
         }?;

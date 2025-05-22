@@ -911,6 +911,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let result = application1.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_value);
+
     let result = application2.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, 0);
@@ -935,6 +936,7 @@ async fn test_evm_execute_message_end_to_end_counter(config: impl LineraNetConfi
     let result = application1.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_value - moved_value);
+
     let result = application2.run_json_query(query.clone()).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, moved_value);
