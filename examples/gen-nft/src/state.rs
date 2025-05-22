@@ -7,7 +7,7 @@ use async_graphql::SimpleObject;
 use gen_nft::{Nft, TokenId};
 use linera_sdk::{
     linera_base_types::AccountOwner,
-    views::{linera_views, MapView, RegisterView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, View, ViewStorageContext},
 };
 
 /// The application state.

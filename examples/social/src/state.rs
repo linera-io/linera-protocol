@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::views::{linera_views, CustomMapView, LogView, ViewStorageContext};
+use linera_sdk::views::{linera_views, CustomMapView, LogView, View, ViewStorageContext};
 use social::{Key, OwnPost, Post};
 
 /// The application state.
