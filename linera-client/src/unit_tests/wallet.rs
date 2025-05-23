@@ -26,7 +26,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     let mut signer = InMemorySigner::new(Some(42));
     let new_pubkey = signer.generate_new();
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id = builder.admin_id();
     let storage = builder.make_storage().await?;
@@ -66,7 +66,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         },
         blobs: vec![Blob::new_data(b"blob".to_vec())],
     });
-    let mut context = ClientContext::new_test_client_context(storage, wallet, Box::new(signer));
+    let mut context = ClientContext::new_test_client_context(storage, wallet, signer);
     context.save_wallet().await?;
     Ok(())
 }

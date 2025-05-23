@@ -98,7 +98,7 @@ async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
-    let mut keys = InMemorySigner::new(None);
+    let keys = InMemorySigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
@@ -113,7 +113,7 @@ where
         .len()
         .max(service_bytecode.bytes.len()) as u64;
     policy.maximum_blob_size = contract_compressed_len.max(service_compressed_len) as u64;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
         .await?
         .with_policy(policy.clone());
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
@@ -263,9 +263,9 @@ async fn run_test_run_application_with_dependency<B>(storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let mut keys = InMemorySigner::new(None);
+    let keys = InMemorySigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the module.
@@ -533,9 +533,9 @@ async fn run_test_cross_chain_message<B>(storage_builder: B) -> anyhow::Result<(
 where
     B: StorageBuilder,
 {
-    let mut keys = InMemorySigner::new(None);
+    let keys = InMemorySigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let _admin = builder.add_root_chain(0, Amount::ONE).await?;
@@ -713,9 +713,9 @@ async fn run_test_event_streams<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut keys = InMemorySigner::new(None);
+    let keys = InMemorySigner::new(None);
     let vm_runtime = VmRuntime::Wasm;
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let sender = builder.add_root_chain(0, Amount::ONE).await?;
@@ -889,8 +889,8 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         blob_byte_published: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
     };
-    let mut keys = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys)
         .await?
         .with_policy(policy.clone());
     let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;

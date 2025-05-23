@@ -36,8 +36,11 @@ use web_sys::{js_sys, wasm_bindgen};
 type WebStorage =
     linera_storage::DbStorage<linera_views::memory::MemoryStore, linera_storage::WallClock>;
 
-type WebEnvironment =
-    linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider>;
+type WebEnvironment = linera_core::environment::Impl<
+    WebStorage,
+    linera_rpc::node_provider::NodeProvider,
+    InMemorySigner,
+>;
 
 type JsResult<T> = Result<T, JsError>;
 
@@ -200,7 +203,7 @@ impl Client {
             storage.clone(),
             OPTIONS,
             wallet,
-            Box::new(signer.into_value()) as _,
+            signer.into_value(),
         )));
         ChainListener::new(
             ChainListenerConfig::default(),

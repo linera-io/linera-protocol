@@ -29,7 +29,7 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
-use linera_storage::{DbStorage, Storage};
+use linera_storage::DbStorage;
 use linera_version::VersionInfo;
 use linera_views::memory::MemoryStore;
 
@@ -163,20 +163,20 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 )]
 struct Options {}
 
-struct DummyContext<P, S> {
-    _phantom: std::marker::PhantomData<(P, S)>,
-}
+struct DummyContext;
 
-impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static> ClientContext
-    for DummyContext<P, S>
-{
-    type Environment = linera_core::environment::Impl<S, P>;
+impl ClientContext for DummyContext {
+    type Environment = linera_core::environment::Impl<
+        DbStorage<MemoryStore>,
+        DummyValidatorNodeProvider,
+        linera_base::crypto::InMemorySigner,
+    >;
 
     fn wallet(&self) -> &Wallet {
         unimplemented!()
     }
 
-    fn storage(&self) -> &S {
+    fn storage(&self) -> &DbStorage<MemoryStore> {
         unimplemented!()
     }
 
@@ -205,16 +205,11 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let _options = <Options as clap::Parser>::parse();
-
-    let config = ChainListenerConfig::default();
-    let context = DummyContext::<DummyValidatorNodeProvider, DbStorage<MemoryStore>> {
-        _phantom: std::marker::PhantomData,
-    };
     let service = NodeService::new(
-        config,
+        ChainListenerConfig::default(),
         std::num::NonZeroU16::new(8080).unwrap(),
         None,
-        context,
+        DummyContext,
     )
     .await;
     let schema = service.schema().sdl();
