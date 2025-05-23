@@ -44,7 +44,7 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     // Index of the currently executed transaction in a block.
     transaction_index: u32,
 
-    // Blobs publised in the block.
+    // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
 
     // We expect the number of outcomes to be equal to the number of transactions in the block.

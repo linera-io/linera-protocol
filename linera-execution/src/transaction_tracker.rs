@@ -39,14 +39,14 @@ pub struct TransactionTracker {
     /// Blobs created by contracts.
     ///
     /// As of right now, blobs created by the contracts are one of the two:
-    /// - OpenChain
-    /// - CreateApplication
+    /// - [`OpenChain`]
+    /// - [`CreateApplication`]
     blobs: BTreeMap<BlobId, Blob>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
     streams_to_process: BTreeMap<ApplicationId, AppStreamUpdates>,
-    /// Published blobs this transaction refers to by BlobId.
+    /// Published blobs this transaction refers to by [`BlobId`].
     blobs_published: BTreeSet<BlobId>,
 }
 
