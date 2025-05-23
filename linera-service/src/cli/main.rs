@@ -113,7 +113,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_client = context.make_chain_client(sender.chain_id);
                 info!(
@@ -148,7 +148,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -191,7 +191,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -240,7 +240,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 context.change_ownership(chain_id, ownership_config).await?
             }
@@ -250,7 +250,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 context.set_preferred_owner(chain_id, owner).await?
             }
@@ -263,7 +263,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -296,7 +296,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_client = context.make_chain_client(chain_id);
                 info!("Closing chain {}", chain_id);
@@ -328,7 +328,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
@@ -345,7 +345,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
@@ -365,7 +365,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
@@ -389,7 +389,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -409,7 +409,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -433,7 +433,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let node = context.make_node_provider().make_node(&address)?;
                 let mut has_errors = false;
@@ -476,7 +476,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id);
@@ -540,7 +540,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 if chains.is_empty() {
@@ -565,7 +565,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let context = Arc::new(Mutex::new(context));
@@ -762,7 +762,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
@@ -807,7 +807,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
@@ -870,7 +870,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let mut join_set = JoinSet::new();
@@ -895,7 +895,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let default_chain = context.wallet().default_chain();
@@ -917,7 +917,7 @@ impl Runnable for Job {
                     storage.clone(),
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let chain_id = chain_id.unwrap_or_else(|| context.first_non_admin_chain());
@@ -957,7 +957,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let start_time = Instant::now();
@@ -983,7 +983,7 @@ impl Runnable for Job {
                     storage.clone(),
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -1002,7 +1002,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let start_time = Instant::now();
@@ -1023,7 +1023,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let start_time = Instant::now();
@@ -1047,7 +1047,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let start_time = Instant::now();
@@ -1103,7 +1103,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
 
                 let start_time = Instant::now();
@@ -1148,7 +1148,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let start_time = Instant::now();
                 info!(
@@ -1179,7 +1179,7 @@ impl Runnable for Job {
                         storage,
                         options.inner.clone(),
                         wallet,
-                        Box::new(signer.into_value()),
+                        signer.into_value(),
                     );
                     let start_time = Instant::now();
                     let publisher = publisher.unwrap_or_else(|| context.default_chain());
@@ -1231,7 +1231,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
@@ -1264,7 +1264,7 @@ impl Runnable for Job {
                     storage,
                     options.inner.clone(),
                     wallet,
-                    Box::new(signer.into_value()),
+                    signer.into_value(),
                 );
                 let owner = public_key.into();
                 info!(

@@ -165,8 +165,6 @@ pub struct Client<Env: Environment> {
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
-    /// A reference to the [`Signer`] used to sign block proposals.
-    signer: Box<dyn Signer>,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
     /// The maximum active chain workers.
@@ -181,7 +179,6 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         environment: Env,
-        signer: Box<dyn Signer>,
         max_pending_message_bundles: usize,
         admin_id: ChainId,
         cross_chain_message_delivery: CrossChainMessageDelivery,
@@ -215,7 +212,6 @@ impl<Env: Environment> Client<Env> {
             grace_period,
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
-            signer,
             max_loaded_chains,
             blob_download_timeout,
         }
@@ -239,7 +235,7 @@ impl<Env: Environment> Client<Env> {
     /// Returns a reference to the [`Signer`] of the client.
     #[instrument(level = "trace", skip(self))]
     pub fn signer(&self) -> &impl Signer {
-        &self.signer
+        self.environment.signer()
     }
 
     /// Adds a chain to the set of chains tracked by the local node.
@@ -1473,7 +1469,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Gets a reference to the client's signer instance.
     #[instrument(level = "trace", skip(self))]
     pub fn signer(&self) -> &impl Signer {
-        &self.client.signer
+        self.client.signer()
     }
 
     /// Gets a mutable reference to the per-`ChainClient` options.
