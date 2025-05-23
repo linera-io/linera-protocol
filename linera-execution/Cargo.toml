@@ -18,7 +18,6 @@ revm = [
     "dep:revm-context",
     "dep:revm-context-interface",
     "dep:revm-database",
-    "dep:revm-database-interface",
     "dep:revm-handler",
     "dep:revm-interpreter",
     "dep:revm-primitives",
@@ -74,9 +73,6 @@ revm-context-interface = { workspace = true, optional = true, default-features =
     "serde",
 ] }
 revm-database = { workspace = true, optional = true, default-features = false, features = [
-    "serde",
-] }
-revm-database-interface = { workspace = true, optional = true, default-features = false, features = [
     "serde",
 ] }
 revm-handler = { workspace = true, optional = true, default-features = false, features = [

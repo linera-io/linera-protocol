@@ -4,7 +4,7 @@
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
 
 use core::ops::Range;
-use std::convert::TryFrom;
+use std::{collections::BTreeSet, convert::TryFrom};
 
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -20,12 +20,13 @@ use revm_context::{
     result::{ExecutionResult, Output, SuccessReason},
     BlockEnv, Cfg, ContextTr, Evm, Journal, LocalContextTr, TxEnv,
 };
-use revm_database_interface::WrapDatabaseRef;
+use revm_database::WrapDatabaseRef;
 use revm_handler::{
     instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };
 use revm_interpreter::{
-    CallInput, CallInputs, CallOutcome, Gas, InputsImpl, InstructionResult, InterpreterResult,
+    CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl,
+    InstructionResult, InterpreterResult,
 };
 use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
 use revm_state::EvmState;
@@ -397,6 +398,15 @@ fn base_runtime_call<Runtime: BaseRuntime>(
 
 type Ctx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut DatabaseRuntime<Runtime>>>;
 
+fn precompile_addresses() -> BTreeSet<Address> {
+    let mut addresses = BTreeSet::new();
+    for address in EthPrecompiles::default().warm_addresses() {
+        addresses.insert(address);
+    }
+    addresses.insert(PRECOMPILE_ADDRESS);
+    addresses
+}
+
 #[derive(Debug, Default)]
 struct ContractPrecompile {
     inner: EthPrecompiles,
@@ -644,12 +654,17 @@ fn get_interpreter_result(
 
 struct CallInterceptorContract<Runtime> {
     db: DatabaseRuntime<Runtime>,
+    // This is the caller contract address
+    contract_address: Address,
+    precompile_addresses: BTreeSet<Address>,
 }
 
 impl<Runtime> Clone for CallInterceptorContract<Runtime> {
     fn clone(&self) -> Self {
         Self {
             db: self.db.clone(),
+            contract_address: self.contract_address,
+            precompile_addresses: self.precompile_addresses.clone(),
         }
     }
 }
@@ -682,6 +697,17 @@ fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput)
 impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
+    fn create(
+        &mut self,
+        _context: &mut Ctx<'a, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Option<CreateOutcome> {
+        inputs.scheme = CreateScheme::Custom {
+            address: self.contract_address,
+        };
+        None
+    }
+
     fn call(
         &mut self,
         context: &mut Ctx<'a, Runtime>,
@@ -706,11 +732,19 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = Address::ZERO.create(0);
-        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
+        // Every call to a contract passes by this function.
+        // Three kinds:
+        // --- Call to the PRECOMPILE smart contract.
+        // --- Call to the EVM smart contract itself
+        // --- Call to other EVM smart contract
+        if self.precompile_addresses.contains(&inputs.target_address)
+            || inputs.target_address == self.contract_address
         {
+            // Precompile calls are handled by the precompile code.
+            // The EVM smart contract is being called
             return Ok(None);
         }
+        // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
         let argument = get_call_argument(context, &inputs.input);
         let authenticated = true;
@@ -728,17 +762,33 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
 
 struct CallInterceptorService<Runtime> {
     db: DatabaseRuntime<Runtime>,
+    // This is the caller contract address
+    contract_address: Address,
+    precompile_addresses: BTreeSet<Address>,
 }
 
 impl<Runtime> Clone for CallInterceptorService<Runtime> {
     fn clone(&self) -> Self {
         Self {
             db: self.db.clone(),
+            contract_address: self.contract_address,
+            precompile_addresses: self.precompile_addresses.clone(),
         }
     }
 }
 
 impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
+    fn create(
+        &mut self,
+        _context: &mut Ctx<'a, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Option<CreateOutcome> {
+        inputs.scheme = CreateScheme::Custom {
+            address: self.contract_address,
+        };
+        None
+    }
+
     fn call(
         &mut self,
         context: &mut Ctx<'a, Runtime>,
@@ -763,11 +813,19 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = Address::ZERO.create(0);
-        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
+        // Every call to a contract passes by this function.
+        // Three kinds:
+        // --- Call to the PRECOMPILE smart contract.
+        // --- Call to the EVM smart contract itself
+        // --- Call to other EVM smart contract
+        if self.precompile_addresses.contains(&inputs.target_address)
+            || inputs.target_address == self.contract_address
         {
+            // Precompile calls are handled by the precompile code.
+            // The EVM smart contract is being called
             return Ok(None);
         }
+        // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
         let argument = get_call_argument(context, &inputs.input);
         let result = {
@@ -806,7 +864,7 @@ impl ExecutionResultSuccess {
     fn interpreter_result_and_logs(self) -> Result<(u64, Vec<u8>, Vec<Log>), ExecutionError> {
         let result: InstructionResult = self.reason.into();
         let Output::Call(output) = self.output else {
-            unreachable!("The Output is not a call which is impossible");
+            unreachable!("The output should have been created from a Choice::Call");
         };
         let gas = Gas::new(0);
         let result = InterpreterResult {
@@ -820,10 +878,26 @@ impl ExecutionResultSuccess {
 
     fn output_and_logs(self) -> (u64, Vec<u8>, Vec<Log>) {
         let Output::Call(output) = self.output else {
-            unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
+            unreachable!("The output should have been created from a Choice::Call");
         };
         let output = output.as_ref().to_vec();
         (self.gas_final, output, self.logs)
+    }
+
+    // Checks that the contract has been correctly instantiated
+    fn check_contract_initialization(&self, expected_address: Address) -> Result<(), String> {
+        // Checks that the output is the expected one.
+        let Output::Create(_, contract_address) = self.output else {
+            return Err("Input should be Choice::Create".to_string());
+        };
+        // Checks that the contract address exists.
+        let contract_address = contract_address.ok_or("Deployment failed")?;
+        // Checks that the created contract address is the one of the `ApplicationId`.
+        if contract_address == expected_address {
+            Ok(())
+        } else {
+            Err("Contract address is not the same as ApplicationId".to_string())
+        }
     }
 }
 
@@ -832,6 +906,7 @@ where
     Runtime: ContractRuntime,
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
+        self.db.set_contract_address()?;
         self.initialize_contract()?;
         let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         if !instantiation_argument.is_empty() {
@@ -843,6 +918,7 @@ where
     }
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
@@ -861,6 +937,7 @@ where
     }
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
+        self.db.set_contract_address()?;
         let operation = get_revm_execute_message_bytes(message);
         let result = self.init_transact_commit(Choice::Call, &operation)?;
         let (gas_final, output, logs) = result.output_and_logs();
@@ -943,6 +1020,11 @@ where
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(Choice::Create, &vec_init)?;
+        result
+            .check_contract_initialization(self.db.contract_address)
+            .map_err(|error| {
+                ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error))
+            })?;
         self.write_logs(result.logs, "deploy")
     }
 
@@ -955,11 +1037,13 @@ where
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
             Choice::Call => {
                 let data = Bytes::copy_from_slice(input);
-                (TxKind::Call(Address::ZERO.create(0)), data)
+                (TxKind::Call(self.db.contract_address), data)
             }
         };
         let inspector = CallInterceptorContract {
             db: self.db.clone(),
+            contract_address: self.db.contract_address,
+            precompile_addresses: precompile_addresses(),
         };
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
@@ -1049,6 +1133,7 @@ where
     Runtime: ServiceRuntime,
 {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.db.set_contract_address()?;
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
@@ -1089,16 +1174,21 @@ where
                 let mut vec_init = self.module.clone();
                 let constructor_argument = self.db.constructor_argument()?;
                 vec_init.extend_from_slice(&constructor_argument);
-                let kind = TxKind::Create;
-                let (_, changes) = self.transact(kind, &vec_init)?;
+                let (result, changes) = self.transact(TxKind::Create, &vec_init)?;
+                result
+                    .check_contract_initialization(self.db.contract_address)
+                    .map_err(|error| {
+                        ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(
+                            error,
+                        ))
+                    })?;
                 changes
             };
             self.db.changes = changes;
         }
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
-        let contract_address = Address::ZERO.create(0);
-        let kind = TxKind::Call(contract_address);
+        let kind = TxKind::Call(self.db.contract_address);
         let (execution_result, _) = self.transact(kind, vec)?;
         Ok(execution_result)
     }
@@ -1113,6 +1203,8 @@ where
         let block_env = self.db.get_service_block_env()?;
         let inspector = CallInterceptorService {
             db: self.db.clone(),
+            contract_address: self.db.contract_address,
+            precompile_addresses: precompile_addresses(),
         };
         let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
         let result_state = {
