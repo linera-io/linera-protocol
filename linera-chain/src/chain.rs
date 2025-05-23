@@ -22,6 +22,7 @@ use linera_execution::{
     Operation, OperationContext, OutgoingMessage, Query, QueryContext, QueryOutcome,
     ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
+#[test]
 use linera_views::{
     bucket_queue_view::BucketQueueView,
     context::Context,
