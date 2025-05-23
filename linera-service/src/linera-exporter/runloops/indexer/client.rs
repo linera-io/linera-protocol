@@ -51,8 +51,9 @@ impl IndexerClient {
                     if retry_count > self.max_retries {
                         return Err(ExporterError::SynchronizationFailed(e.into()));
                     }
-                    println!("{:?}", e);
+
                     let delay = self.retry_delay.saturating_mul(retry_count);
+                    tracing::error!("recieved error:{:?} when in attempt to establish a stream, re-trying in {:?} seconds", e, delay);
                     sleep(delay).await;
                     retry_count += 1;
                 }

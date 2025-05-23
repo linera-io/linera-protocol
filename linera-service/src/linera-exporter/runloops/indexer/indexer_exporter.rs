@@ -68,7 +68,7 @@ where
             let (outgoing_stream, incoming_stream) = client
                 .synchronize_long_lived_stream(self.work_queue_size)
                 .await?;
-            let mut streamer = ExportTaskQueue::new(
+            let streamer = ExportTaskQueue::new(
                 self.work_queue_size,
                 outgoing_stream,
                 self.destination_id,
@@ -170,7 +170,7 @@ where
         }
     }
 
-    async fn run(&mut self) -> anyhow::Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let mut index = self.start_height;
         let mut futures = FuturesOrdered::new();
         while futures.len() != self.queue_size {

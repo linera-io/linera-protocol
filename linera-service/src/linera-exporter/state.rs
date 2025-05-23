@@ -171,7 +171,7 @@ impl<'de> Deserialize<'de> for DestinationStates {
                     items.push(AtomicU64::new(item));
                 }
 
-                let states: Arc<[AtomicU64]> = Arc::from(items);
+                let states = Arc::from(items);
                 let states = DestinationStates { states };
                 Ok(states)
             }
@@ -191,7 +191,7 @@ impl DestinationStates {
             .into_iter()
             .map(AtomicU64::new)
             .collect::<Vec<_>>();
-        let states: Arc<[AtomicU64]> = Arc::from(slice);
+        let states = Arc::from(slice);
         Self { states }
     }
 

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    path::PathBuf,
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Once,
     },
 };
 
@@ -40,6 +41,7 @@ use linera_rpc::{
     HandleConfirmedCertificateRequest,
 };
 use linera_storage::Storage;
+use tempfile::env::override_temp_dir;
 use tokio_stream::{wrappers::UnboundedReceiverStream, Stream};
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -52,6 +54,19 @@ use crate::{
         Element,
     },
 };
+
+// walrus client requires that the cargo directory and the temp file dir is configured same
+// this can be done here, if needed
+static OVERRIDE_DIR: Option<&'static str> = None;
+static GUARD: Once = Once::new();
+
+pub(crate) fn init_walrus_test_enviroment() {
+    GUARD.call_once(|| {
+        if let Some(dir) = OVERRIDE_DIR {
+            override_temp_dir(PathBuf::from(dir).as_path()).expect("unable to override");
+        }
+    });
+}
 
 #[derive(Clone, Default)]
 pub(crate) struct DummyIndexer {
@@ -424,7 +439,6 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
         ChainOrigin::Root(0),
         InitialChainConfig {
             ownership: Default::default(),
-            admin_id: Default::default(),
             epoch: Default::default(),
             committees: Default::default(),
             balance: Default::default(),

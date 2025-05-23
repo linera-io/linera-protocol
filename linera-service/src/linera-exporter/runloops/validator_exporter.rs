@@ -74,7 +74,7 @@ where
         let node = self.node_provider.make_node(&address)?;
 
         let export_task = ExportTask::new(node, self.destination_id, &self.storage);
-        let (mut task_queue, task_receiver) =
+        let (task_queue, task_receiver) =
             TaskQueue::new(self.work_queue_size, self.destination_id, &self.storage);
 
         tokio::select! {
@@ -195,7 +195,7 @@ where
         (queue, receiver)
     }
 
-    async fn run(&mut self) -> anyhow::Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let mut index = self.start_height;
         let mut futures = FuturesOrdered::new();
         while futures.len() != self.queue_size {

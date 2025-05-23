@@ -132,6 +132,7 @@ hex = "0.4.3"
 http = "1.1.0"
 humantime = "2.1.0"
 indexed_db_futures = "0.4.1"
+indicatif = "0.17.11"
 insta = "1.36.1"
 is-terminal = "0.4.12"
 js-sys = "0.3.70"
@@ -213,7 +214,7 @@ secp256k1 = { version = "0.30.0", default-features = false, features = [
     "serde",
 ] }
 semver = "1.0.22"
-serde = { version = "1.0.197", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }
 serde-command-opts = "0.1.1"
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
@@ -258,6 +259,9 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 tracing-web = "0.1.3"
 trait-variant = "0.1.1"
 url = "2.4"
+walrus-core = { git = "https://github.com/MystenLabs/walrus.git", package = "walrus-core", tag = "mainnet-v1.24.2" }
+walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", package = "walrus-sdk", tag = "mainnet-v1.24.2" }
+walrus-service = { git = "https://github.com/MystenLabs/walrus.git", package = "walrus-service", tag = "mainnet-v1.24.2" }
 wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.42"

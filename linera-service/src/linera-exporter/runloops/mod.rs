@@ -10,7 +10,8 @@ use std::{
 use block_processor::BlockProcessor;
 use indexer::indexer_exporter::Exporter as IndexerExporter;
 use linera_client::config::{
-    Destination, DestinationConfig, DestinationId, DestinationKind, LimitsConfig,
+    Destination, DestinationConfig, DestinationId, DestinationKind, LimitsConfig, WalrusConfig,
+    WalrusStoreConfig,
 };
 use linera_rpc::{grpc::GrpcNodeProvider, NodeOptions};
 use linera_storage::Storage;
@@ -19,6 +20,7 @@ use tokio::{
     task::JoinSet,
 };
 use validator_exporter::Exporter as ValidatorExporter;
+use walrus::walrus_exporter::Exporter as WalrusExporter;
 
 use crate::{
     common::{BlockId, ExporterError},
@@ -28,6 +30,7 @@ use crate::{
 mod block_processor;
 mod indexer;
 mod validator_exporter;
+mod walrus;
 
 #[cfg(test)]
 pub use indexer::indexer_api;
@@ -48,6 +51,7 @@ where
     let number_of_threads = destination_config
         .destinations
         .len()
+        .saturating_add(1)
         .div_ceil(clients_per_thread);
     let _threadpool = {
         let mut pool = Vec::new();
@@ -67,11 +71,18 @@ where
                 })
                 .collect();
 
+            let walrus_config = if 0 == n {
+                destination_config.walrus.clone()
+            } else {
+                None
+            };
+
             let handle = thread::spawn(move || {
                 start_exporter_tasks(
                     moved_signal,
                     options,
                     work_queue_size,
+                    walrus_config,
                     moved_storage,
                     destinations,
                 )
@@ -91,6 +102,7 @@ async fn start_exporter_tasks<S, F>(
     signal: F,
     options: NodeOptions,
     work_queue_size: usize,
+    walrus_config: Option<WalrusConfig<WalrusStoreConfig>>,
     mut storage: ExporterStorage<S>,
     destinations: Vec<(DestinationId, Destination)>,
 ) where
@@ -105,7 +117,7 @@ async fn start_exporter_tasks<S, F>(
         spawn_exporter_task_on_set(
             &mut set,
             signal.clone(),
-            id,
+            id + 1,
             options,
             work_queue_size,
             destination,
@@ -114,8 +126,14 @@ async fn start_exporter_tasks<S, F>(
         );
     }
 
+    if let Some(config) = walrus_config {
+        let walrus_exporter =
+            WalrusExporter::new(0, work_queue_size, storage.clone().unwrap(), config);
+        set.spawn(walrus_exporter.run_with_shutdown(signal));
+    }
+
     while let Some(res) = set.join_next().await {
-        let _res = res.unwrap();
+        res.unwrap().unwrap();
     }
 }
 
@@ -140,7 +158,7 @@ where
     let (block_processor_storage, exporter_storage) = BlockProcessorStorage::load(
         storage.clone(),
         block_exporter_id,
-        destination_config.destinations.len() as u16,
+        destination_config.destinations.len() as u16 + 1,
         limits,
     )
     .await?;
@@ -235,11 +253,14 @@ mod test {
     use std::{sync::atomic::Ordering, time::Duration};
 
     use linera_base::port::get_free_port;
-    use linera_client::config::{Destination, DestinationConfig, LimitsConfig};
+    use linera_client::config::{
+        Destination, DestinationConfig, LimitsConfig, WalrusConfig, WalrusStoreConfig,
+    };
     use linera_rpc::{config::TlsConfig, NodeOptions};
     use linera_service::cli_wrappers::local_net::LocalNet;
     use linera_storage::{DbStorage, Storage};
     use linera_views::memory::MemoryStore;
+    use tempfile::tempdir;
     use test_case::test_case;
     use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
@@ -248,7 +269,10 @@ mod test {
     use crate::{
         common::CanonicalBlock,
         state::BlockExporterStateView,
-        test_utils::{make_simple_state_with_blobs, DummyIndexer, DummyValidator, TestDestination},
+        test_utils::{
+            init_walrus_test_enviroment, make_simple_state_with_blobs, DummyIndexer,
+            DummyValidator, TestDestination,
+        },
         ExporterCancellationSignal,
     };
 
@@ -289,6 +313,7 @@ mod test {
             0,
             10,
             DestinationConfig {
+                walrus: None,
                 destinations: vec![destination_address],
             },
         )?;
@@ -346,6 +371,7 @@ mod test {
             0,
             1,
             DestinationConfig {
+                walrus: None,
                 destinations: destinations.clone(),
             },
         )?;
@@ -363,7 +389,7 @@ mod test {
         let (_, _, destination_states) =
             BlockExporterStateView::initiate(context.clone(), 4).await?;
         for i in 0..4 {
-            let state = destination_states.load_state(i);
+            let state = destination_states.load_state(i + 1);
             if i % 2 == 0 {
                 assert_eq!(state, 2);
             } else {
@@ -395,7 +421,10 @@ mod test {
             },
             0,
             1,
-            DestinationConfig { destinations },
+            DestinationConfig {
+                destinations,
+                walrus: None,
+            },
         )?;
 
         sleep(Duration::from_secs(4)).await;
@@ -404,9 +433,83 @@ mod test {
 
         let (_, _, destination_states) =
             BlockExporterStateView::initiate(context.clone(), 4).await?;
-        for i in 0..4 {
+        for i in 1..5 {
             assert_eq!(destination_states.load_state(i), 2);
         }
+
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_walrus_destination() -> anyhow::Result<()> {
+        let cancellation_token = CancellationToken::new();
+        let signal = ExporterCancellationSignal::new(cancellation_token.clone());
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(None).await;
+
+        init_walrus_test_enviroment();
+
+        let path = tempdir()?;
+        let config = WalrusConfig {
+            log: path.path().to_path_buf(),
+            client_config: path.path().to_path_buf(),
+            wallet_config: path.path().to_path_buf(),
+            context: None,
+            behaviour: WalrusStoreConfig::default(),
+        };
+
+        let notifier = start_runloops(
+            signal,
+            storage.clone(),
+            LimitsConfig {
+                persistence_period: 2,
+                ..Default::default()
+            },
+            NodeOptions {
+                send_timeout: Duration::from_millis(4000),
+                recv_timeout: Duration::from_millis(4000),
+                retry_delay: Duration::from_millis(1000),
+                max_retries: 10,
+            },
+            0,
+            10,
+            DestinationConfig {
+                walrus: Some(config),
+                destinations: vec![],
+            },
+        )?;
+
+        let (notification, _state) = make_simple_state_with_blobs(&storage).await;
+
+        assert!(
+            notifier.send(notification).is_ok(),
+            "notifier should work as long as there exists a receiver to receive notifications"
+        );
+
+        // walrus client takes much time to boot up
+        // hopefully it does
+        tokio::time::sleep(Duration::from_secs(10)).await;
+
+        // we wait till walrus processes everything
+        loop {
+            let context = storage.block_exporter_context(0).await?;
+            let (_, _, destination_states) =
+                BlockExporterStateView::initiate(context.clone(), 1).await?;
+            let state = destination_states.load_state(0);
+
+            if state == 2 {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_secs(10)).await;
+        }
+
+        cancellation_token.cancel();
+
+        // just a little more till everything persists
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let bytes = tokio::fs::read(path.path().join("current.walrus_log")).await?;
+        let string = String::from_utf8(bytes)?;
+        assert!(string.contains("successfully stored blob with id"));
 
         Ok(())
     }

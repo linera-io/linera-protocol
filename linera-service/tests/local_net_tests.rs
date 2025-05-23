@@ -1036,7 +1036,9 @@ async fn test_linera_exporter(database: Database, network: Network) -> Result<()
 
     let destination_config = DestinationConfig {
         destinations: vec![destination],
+        walrus: None,
     };
+
     let block_exporter_config = BlockExporterConfig {
         destination_config,
         id: 0,

@@ -80,6 +80,7 @@ fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 heck.workspace = true
 http.workspace = true
+indicatif.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
@@ -106,6 +107,7 @@ reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde-command-opts.workspace = true
 serde_json.workspace = true
+serde_with.workspace = true
 stdext = { workspace = true, optional = true }
 tempfile.workspace = true
 thiserror.workspace = true
@@ -120,6 +122,9 @@ tonic-web.workspace = true
 tower.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
+walrus-core.workspace = true
+walrus-service = { workspace = true, features = ["test-utils"] }
+walrus-sdk.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
