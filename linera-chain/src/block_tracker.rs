@@ -164,8 +164,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         // Account for blobs published indirectly but referenced by the transaction.
         for blob_id in &txn_outcome.blobs_published {
             if let Some(blob) = self.published_blobs.get(blob_id) {
-                // We don't check its sizes again, it was check at the beginning
-                // of the block processing.
                 resource_controller
                     .track_blob_published(blob)
                     .with_execution_context(context)?;
