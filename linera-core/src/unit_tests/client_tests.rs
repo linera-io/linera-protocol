@@ -50,7 +50,6 @@ use crate::{
     },
     local_node::LocalNodeError,
     node::{
-        CrossChainMessageDelivery,
         NodeError::{self, ClientIoError},
         ValidatorNode,
     },
@@ -526,7 +525,6 @@ where
 
     let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_public_key.into()),
-        admin_id: Some(builder.admin_id()),
         epoch: Epoch::ZERO,
         committees: builder
             .admin_description()
@@ -1007,12 +1005,7 @@ where
         .await
         .unwrap();
     client1
-        .communicate_chain_updates(
-            &builder.initial_committee,
-            client1.chain_id,
-            client1.next_block_height(),
-            CrossChainMessageDelivery::NonBlocking,
-        )
+        .communicate_chain_updates(&builder.initial_committee)
         .await
         .unwrap();
     // Client2 does not know about the money yet.
@@ -1095,12 +1088,13 @@ where
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    admin.finalize_committee().await.unwrap();
 
     // Root chain 1 receives the notification about the new epoch.
+    // This must happen before the old committee is removed.
     user.synchronize_from_validators().await.unwrap();
     user.process_inbox().await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
+    admin.finalize_committee().await.unwrap();
 
     // Create a new committee.
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());

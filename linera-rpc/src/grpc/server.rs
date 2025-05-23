@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     net::{IpAddr, SocketAddr},
     str::FromStr,
@@ -17,24 +15,17 @@ use futures::{
 };
 use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
+    join_set_ext::JoinSet,
     node::NodeError,
     worker::{NetworkActions, Notification, Reason, WorkerError, WorkerState},
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
-use rand::Rng;
-use tokio::{sync::oneshot, task::JoinSet};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tonic::{transport::Channel, Request, Response, Status};
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-};
 
 use super::{
     api::{
@@ -50,72 +41,77 @@ use super::{
 };
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
-    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
-    HandleValidatedCertificateRequest,
+    cross_chain_message_queue, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
+    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
 
 #[cfg(with_metrics)]
-static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "server_request_latency",
-        "Server request latency",
-        &[],
-        linear_bucket_interval(1.0, 25.0, 2000.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> =
-    LazyLock::new(|| register_int_counter_vec("server_request_count", "Server request count", &[]));
+    use linera_base::prometheus_util::{
+        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "server_request_success",
-        "Server request success",
-        &["method_name"],
-    )
-});
+    pub static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "server_request_latency",
+            "Server request latency",
+            &[],
+            linear_bucket_interval(1.0, 25.0, 2000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "server_request_error",
-        "Server request error",
-        &["method_name"],
-    )
-});
+    pub static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("server_request_count", "Server request count", &[])
+    });
 
-#[cfg(with_metrics)]
-static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "server_request_latency_per_request_type",
-        "Server request latency per request type",
-        &["method_name"],
-        linear_bucket_interval(1.0, 25.0, 2000.0),
-    )
-});
+    pub static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "server_request_success",
+            "Server request success",
+            &["method_name"],
+        )
+    });
 
-#[cfg(with_metrics)]
-static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "cross_chain_message_channel_full",
-        "Cross-chain message channel full",
-        &[],
-    )
-});
+    pub static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "server_request_error",
+            "Server request error",
+            &["method_name"],
+        )
+    });
 
-#[cfg(with_metrics)]
-static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "notification_channel_full",
-        "Notification channel full",
-        &[],
-    )
-});
+    pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            register_histogram_vec(
+                "server_request_latency_per_request_type",
+                "Server request latency per request type",
+                &["method_name"],
+                linear_bucket_interval(1.0, 25.0, 2000.0),
+            )
+        });
+
+    pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "cross_chain_message_channel_full",
+            "Cross-chain message channel full",
+            &[],
+        )
+    });
+
+    pub static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "notification_channel_full",
+            "Notification channel full",
+            &[],
+        )
+    });
+}
 
 #[derive(Clone)]
 pub struct GrpcServer<S>
@@ -176,10 +172,10 @@ where
             let response = future.await?;
             #[cfg(with_metrics)]
             {
-                SERVER_REQUEST_LATENCY
+                metrics::SERVER_REQUEST_LATENCY
                     .with_label_values(&[])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
-                SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
+                metrics::SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
             }
             Ok(response)
         }
@@ -201,7 +197,7 @@ where
         cross_chain_config: CrossChainConfig,
         notification_config: NotificationConfig,
         shutdown_signal: CancellationToken,
-        join_set: &mut JoinSet<()>,
+        join_set: &mut JoinSet,
     ) -> GrpcServerHandle {
         info!(
             "spawning gRPC server on {}:{} for shard {}",
@@ -226,7 +222,6 @@ where
                 Duration::from_millis(cross_chain_config.retry_delay_ms),
                 Duration::from_millis(cross_chain_config.sender_delay_ms),
                 cross_chain_config.sender_failure_rate,
-                cross_chain_config.max_concurrent_tasks,
                 shard_id,
                 cross_chain_receiver,
             )
@@ -367,11 +362,10 @@ where
                 error!(%error, "dropping cross-chain request");
                 #[cfg(with_metrics)]
                 if error.is_full() {
-                    CROSS_CHAIN_MESSAGE_CHANNEL_FULL
+                    metrics::CROSS_CHAIN_MESSAGE_CHANNEL_FULL
                         .with_label_values(&[])
                         .inc();
                 }
-                break;
             }
         }
 
@@ -381,7 +375,9 @@ where
                 error!(%error, "dropping notification");
                 #[cfg(with_metrics)]
                 if error.is_full() {
-                    NOTIFICATION_CHANNEL_FULL.with_label_values(&[]).inc();
+                    metrics::NOTIFICATION_CHANNEL_FULL
+                        .with_label_values(&[])
+                        .inc();
                 }
                 break;
             }
@@ -397,92 +393,51 @@ where
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
-        cross_chain_max_concurrent_tasks: usize,
         this_shard: ShardId,
         receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = GrpcConnectionPool::default();
-        let max_concurrent_tasks = Some(cross_chain_max_concurrent_tasks);
-
-        receiver
-            .for_each_concurrent(max_concurrent_tasks, |(cross_chain_request, shard_id)| {
-                let shard = network.shard(shard_id);
-                let remote_address = shard.http_address();
-
-                let pool = pool.clone();
-                let nickname = nickname.clone();
-
-                // Send the cross-chain query and retry if needed.
+        let handle_request =
+            move |shard_id: ShardId, request: linera_core::data_types::CrossChainRequest| {
+                let channel_result = pool.channel(network.shard(shard_id).http_address());
                 async move {
-                    if cross_chain_sender_failure_rate > 0.0
-                        && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
-                    {
-                        warn!("Dropped 1 cross-chain message intentionally.");
-                        return;
-                    }
-
-                    for i in 0..cross_chain_max_retries {
-                        // Delay increases linearly with the attempt number.
-                        linera_base::time::timer::sleep(
-                            cross_chain_sender_delay + cross_chain_retry_delay * i,
-                        )
-                        .await;
-
-                        let result = || async {
-                            let cross_chain_request = cross_chain_request.clone().try_into()?;
-                            let request = Request::new(cross_chain_request);
-                            let mut client =
-                                ValidatorWorkerClient::new(pool.channel(remote_address.clone())?)
-                                    .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
-                                    .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-                            let response = client.handle_cross_chain_request(request).await?;
-                            Ok::<_, anyhow::Error>(response)
-                        };
-                        match result().await {
-                            Err(error) => {
-                                warn!(
-                                    nickname,
-                                    %error,
-                                    i,
-                                    from_shard = this_shard,
-                                    to_shard = shard_id,
-                                    "Failed to send cross-chain query",
-                                );
-                            }
-                            _ => {
-                                trace!(
-                                    from_shard = this_shard,
-                                    to_shard = shard_id,
-                                    "Sent cross-chain query",
-                                );
-                                return;
-                            }
-                        }
-                    }
-                    error!(
-                        nickname,
-                        from_shard = this_shard,
-                        to_shard = shard_id,
-                        "Dropping cross-chain query",
-                    );
+                    let mut client = ValidatorWorkerClient::new(channel_result?)
+                        .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                        .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+                    client
+                        .handle_cross_chain_request(Request::new(request.try_into()?))
+                        .await?;
+                    anyhow::Result::<_, anyhow::Error>::Ok(())
                 }
-            })
-            .await;
+            };
+        cross_chain_message_queue::forward_cross_chain_queries(
+            nickname,
+            cross_chain_max_retries,
+            cross_chain_retry_delay,
+            cross_chain_sender_delay,
+            cross_chain_sender_failure_rate,
+            this_shard,
+            receiver,
+            handle_request,
+        )
+        .await;
     }
 
     fn log_request_outcome_and_latency(start: Instant, success: bool, method_name: &str) {
         #![allow(unused_variables)]
         #[cfg(with_metrics)]
         {
-            SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
+            metrics::SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
                 .with_label_values(&[method_name])
                 .observe(start.elapsed().as_secs_f64() * 1000.0);
             if success {
-                SERVER_REQUEST_SUCCESS
+                metrics::SERVER_REQUEST_SUCCESS
                     .with_label_values(&[method_name])
                     .inc();
             } else {
-                SERVER_REQUEST_ERROR.with_label_values(&[method_name]).inc();
+                metrics::SERVER_REQUEST_ERROR
+                    .with_label_values(&[method_name])
+                    .inc();
             }
         }
     }

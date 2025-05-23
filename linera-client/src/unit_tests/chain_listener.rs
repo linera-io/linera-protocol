@@ -5,7 +5,6 @@
 
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
-use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
@@ -35,8 +34,6 @@ struct ClientContext {
     client: Arc<Client<environment::Test>>,
 }
 
-#[cfg_attr(not(web), async_trait)]
-#[cfg_attr(web, async_trait(?Send))]
 impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
@@ -52,25 +49,19 @@ impl chain_listener::ClientContext for ClientContext {
         &self.client
     }
 
-    async fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainClient<environment::Test>, Error> {
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
         let chain = self
             .wallet
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        Ok(self
-            .client
-            .create_chain_client(
-                chain_id,
-                chain.block_hash,
-                chain.timestamp,
-                chain.next_block_height,
-                chain.pending_proposal.clone(),
-                chain.owner,
-            )
-            .await?)
+        self.client.create_chain_client(
+            chain_id,
+            chain.block_hash,
+            chain.timestamp,
+            chain.next_block_height,
+            chain.pending_proposal.clone(),
+            chain.owner,
+        )
     }
 
     async fn update_wallet_for_new_chain(

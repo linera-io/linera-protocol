@@ -15,7 +15,7 @@ use linera_base::{
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, Bytecode, Epoch, TimeDelta,
     },
-    identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -77,8 +77,6 @@ enum NodeServiceError {
     BcsHexError(#[from] BcsHexParseError),
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
-    #[error("chain ID not found: {chain_id}")]
-    UnknownChainId { chain_id: String },
     #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
 }
@@ -93,10 +91,6 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::JsonError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
-            NodeServiceError::UnknownChainId { chain_id } => (
-                StatusCode::NOT_FOUND,
-                vec![format!("unknown chain ID: {}", chain_id)],
-            ),
             NodeServiceError::InvalidChainId(_) => (
                 StatusCode::BAD_REQUEST,
                 vec!["invalid chain ID".to_string()],
@@ -110,19 +104,14 @@ impl IntoResponse for NodeServiceError {
 #[Subscription]
 impl<C> SubscriptionRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         Ok(client.subscribe().await?)
     }
 }
@@ -164,12 +153,7 @@ where
         Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<C::Environment>)>,
     {
         loop {
-            let client = self
-                .context
-                .lock()
-                .await
-                .make_chain_client(*chain_id)
-                .await?;
+            let client = self.context.lock().await.make_chain_client(*chain_id);
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -186,18 +170,13 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> MutationRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let client = self
-                .context
-                .lock()
-                .await
-                .make_chain_client(chain_id)
-                .await?;
+            let client = self.context.lock().await.make_chain_client(chain_id);
             client.synchronize_from_validators().await?;
             let result = client.process_inbox_without_prepare().await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -216,12 +195,7 @@ where
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await?;
         match outcome {
@@ -591,7 +565,7 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> QueryRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     async fn chain(
         &self,
@@ -600,23 +574,13 @@ where
         ChainStateExtendedView<<C::Environment as linera_core::Environment>::StorageContext>,
         Error,
     > {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let applications = client
             .chain_state_view()
             .await?
@@ -644,12 +608,7 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<ConfirmedBlock>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
@@ -665,18 +624,28 @@ where
         }
     }
 
+    async fn events_from_index(
+        &self,
+        chain_id: ChainId,
+        stream_id: StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>, Error> {
+        Ok(self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .events_from_index(stream_id, start_index)
+            .await?)
+    }
+
     async fn blocks(
         &self,
         from: Option<CryptoHash>,
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<ConfirmedBlock>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
@@ -800,7 +769,7 @@ impl ApplicationOverview {
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     config: ChainListenerConfig,
     port: NonZeroU16,
@@ -810,7 +779,7 @@ where
 
 impl<C> Clone for NodeService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -914,15 +883,7 @@ where
         }
 
         trace!("Query requested a new block with operations: {operations:?}");
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await
-            .map_err(|_| NodeServiceError::UnknownChainId {
-                chain_id: chain_id.to_string(),
-            })?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let hash = loop {
             let timeout = match client
                 .execute_operations(operations.clone(), vec![])
@@ -951,15 +912,7 @@ where
             application_id,
             bytes,
         };
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await
-            .map_err(|_| NodeServiceError::UnknownChainId {
-                chain_id: chain_id.to_string(),
-            })?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let QueryOutcome {
             response,
             operations,

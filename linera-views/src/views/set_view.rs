@@ -1,18 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData, mem};
 
-use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
+use linera_base::prometheus_util::MeasureLatency as _;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
@@ -24,15 +17,22 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// The runtime of hash computation
-static SET_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "set_view_hash_runtime",
-        "SetView hash runtime",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static SET_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "set_view_hash_runtime",
+            "SetView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
+}
 
 /// A [`View`] that supports inserting and removing values indexed by a key.
 #[derive(Debug)]
@@ -372,7 +372,7 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = SET_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::SET_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0u32;
         self.for_each_key(|key| {

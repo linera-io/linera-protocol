@@ -6,7 +6,7 @@ use std::{fmt, future::Future, iter};
 use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlobContent,
+    data_types::{BlobContent, NetworkDescription},
     ensure,
     identifiers::{BlobId, ChainId},
     time::Duration,
@@ -23,7 +23,6 @@ use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
-use linera_storage::NetworkDescription;
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
 use tracing::{debug, error, info, instrument, warn};

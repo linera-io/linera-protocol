@@ -10,7 +10,7 @@
 mod database;
 pub mod revm;
 
-use revm_primitives::HaltReason;
+use revm_context::result::HaltReason;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

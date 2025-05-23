@@ -105,14 +105,16 @@ impl ProposedBlock {
             .sum()
     }
 
-    /// Returns an iterator over all transactions, by index.
-    pub fn transactions(&self) -> impl Iterator<Item = (u32, Transaction<'_>)> {
+    /// Returns an iterator over all transactions.
+    ///
+    /// First incoming bundles, then operations.
+    pub fn transactions(&self) -> impl Iterator<Item = Transaction<'_>> {
         let bundles = self
             .incoming_bundles
             .iter()
             .map(Transaction::ReceiveMessages);
         let operations = self.operations.iter().map(Transaction::ExecuteOperation);
-        (0u32..).zip(bundles.chain(operations))
+        bundles.chain(operations)
     }
 
     pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {

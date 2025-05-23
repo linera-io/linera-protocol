@@ -6,8 +6,6 @@
 
 #[cfg(with_testing)]
 use std::ops;
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
     fmt::{self, Display},
@@ -22,15 +20,11 @@ use std::{
 use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
-#[cfg(with_metrics)]
-use prometheus::HistogramVec;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::prometheus_util::{
-    exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-};
+use crate::prometheus_util::MeasureLatency as _;
 use crate::{
     crypto::{BcsHashable, CryptoError, CryptoHash},
     doc_scalar, hex_debug, http,
@@ -811,8 +805,6 @@ impl Epoch {
 pub struct InitialChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
-    /// The ID of the admin chain.
-    pub admin_id: Option<ChainId>,
     /// The epoch in which the chain is created.
     pub epoch: Epoch,
     /// Serialized committees corresponding to epochs.
@@ -868,6 +860,19 @@ impl ChainDescription {
 }
 
 impl BcsHashable<'_> for ChainDescription {}
+
+/// A description of the current Linera network to be stored in every node's database.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct NetworkDescription {
+    /// The name of the network.
+    pub name: String,
+    /// Hash of the network's genesis config.
+    pub genesis_config_hash: CryptoHash,
+    /// Genesis timestamp.
+    pub genesis_timestamp: Timestamp,
+    /// The chain ID of the admin chain.
+    pub admin_chain_id: ChainId,
+}
 
 /// Permissions for applications on a chain.
 #[derive(
@@ -1075,7 +1080,7 @@ impl Bytecode {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn compress(&self) -> CompressedBytecode {
         #[cfg(with_metrics)]
-        let _compression_latency = BYTECODE_COMPRESSION_LATENCY.measure_latency();
+        let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
         let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
 
@@ -1129,7 +1134,7 @@ impl CompressedBytecode {
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         #[cfg(with_metrics)]
-        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
+        let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
         let bytes = zstd::stream::decode_all(&*self.compressed_bytes)?;
 
         Ok(Bytecode { bytes })
@@ -1369,6 +1374,11 @@ impl Blob {
     pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
         Ok(Self::new_data(fs::read(path)?))
     }
+
+    /// Returns whether the blob is of [`BlobType::Committee`] variant.
+    pub fn is_committee_blob(&self) -> bool {
+        self.content().blob_type().is_committee_blob()
+    }
 }
 
 impl Serialize for Blob {
@@ -1480,27 +1490,34 @@ doc_scalar!(
 );
 doc_scalar!(ApplicationDescription, "Description of a user application");
 
-/// The time it takes to compress a bytecode.
 #[cfg(with_metrics)]
-static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "bytecode_compression_latency",
-        "Bytecode compression latency",
-        &[],
-        exponential_bucket_latencies(10.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-/// The time it takes to decompress a bytecode.
-#[cfg(with_metrics)]
-static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "bytecode_decompression_latency",
-        "Bytecode decompression latency",
-        &[],
-        exponential_bucket_latencies(10.0),
-    )
-});
+    use prometheus::HistogramVec;
+
+    use crate::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+
+    /// The time it takes to compress a bytecode.
+    pub static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "bytecode_compression_latency",
+            "Bytecode compression latency",
+            &[],
+            exponential_bucket_latencies(10.0),
+        )
+    });
+
+    /// The time it takes to decompress a bytecode.
+    pub static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "bytecode_decompression_latency",
+            "Bytecode decompression latency",
+            &[],
+            exponential_bucket_latencies(10.0),
+        )
+    });
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     borrow::Borrow,
     collections::{btree_map, BTreeMap},
@@ -12,14 +10,9 @@ use std::{
 };
 
 use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
+use linera_base::prometheus_util::MeasureLatency as _;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
@@ -31,15 +24,22 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// The runtime of hash computation
-static COLLECTION_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "collection_view_hash_runtime",
-        "CollectionView hash runtime",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static COLLECTION_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "collection_view_hash_runtime",
+            "CollectionView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
+}
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// `Vec<u8>`, one subview at a time.
@@ -644,7 +644,7 @@ where
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         let count = keys.len() as u32;
@@ -676,7 +676,7 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         let count = keys.len() as u32;

@@ -32,10 +32,6 @@ pub struct CrossChainConfig {
     /// Drop cross-chain messages randomly at the given rate (0 <= rate < 1) (meant for testing).
     #[arg(long = "cross-chain-sender-failure-rate", default_value = "0.0")]
     pub(crate) sender_failure_rate: f32,
-
-    /// How many concurrent tasks to spawn for cross-chain message handling RPCs.
-    #[arg(long = "cross-chain-max-tasks", default_value = "10")]
-    pub(crate) max_concurrent_tasks: usize,
 }
 
 impl Default for CrossChainConfig {
@@ -57,8 +53,6 @@ impl CrossChainConfig {
             self.sender_delay_ms.to_string(),
             "--cross-chain-sender-failure-rate".to_string(),
             self.sender_failure_rate.to_string(),
-            "--cross-chain-max-tasks".to_string(),
-            self.max_concurrent_tasks.to_string(),
         ]
     }
 }

@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
@@ -38,10 +36,11 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::ConfirmedBlock,
+    block::{Block, ConfirmedBlock},
+    block_tracker::BlockExecutionTracker,
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
-        OperationResult, PostedMessage, ProposedBlock, Transaction,
+        PostedMessage, ProposedBlock, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -55,131 +54,146 @@ use crate::{
 mod chain_tests;
 
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
+use linera_base::prometheus_util::MeasureLatency;
+
+#[cfg(with_metrics)]
+pub(crate) mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
-        register_int_counter_vec, MeasureLatency,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-};
+        register_int_counter_vec,
+    };
+    use linera_execution::ResourceTracker;
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
-});
+    pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
+    });
 
-#[cfg(with_metrics)]
-static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "block_execution_latency",
-        "Block execution latency",
-        &[],
-        exponential_bucket_latencies(1000.0),
-    )
-});
+    pub static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "block_execution_latency",
+            "Block execution latency",
+            &[],
+            exponential_bucket_latencies(1000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "message_execution_latency",
-        "Message execution latency",
-        &[],
-        exponential_bucket_latencies(50.0),
-    )
-});
+    #[cfg(with_metrics)]
+    pub static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "message_execution_latency",
+            "Message execution latency",
+            &[],
+            exponential_bucket_latencies(50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "operation_execution_latency",
-        "Operation execution latency",
-        &[],
-        exponential_bucket_latencies(50.0),
-    )
-});
+    pub static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "operation_execution_latency",
+            "Operation execution latency",
+            &[],
+            exponential_bucket_latencies(50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "wasm_fuel_used_per_block",
-        "Wasm fuel used per block",
-        &[],
-        exponential_bucket_interval(10.0, 1_000_000.0),
-    )
-});
+    pub static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "wasm_fuel_used_per_block",
+            "Wasm fuel used per block",
+            &[],
+            exponential_bucket_interval(10.0, 1_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "evm_fuel_used_per_block",
-        "EVM fuel used per block",
-        &[],
-        exponential_bucket_interval(10.0, 1_000_000.0),
-    )
-});
+    pub static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "evm_fuel_used_per_block",
+            "EVM fuel used per block",
+            &[],
+            exponential_bucket_interval(10.0, 1_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "vm_num_reads_per_block",
-        "VM number of reads per block",
-        &[],
-        exponential_bucket_interval(0.1, 100.0),
-    )
-});
+    pub static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "vm_num_reads_per_block",
+            "VM number of reads per block",
+            &[],
+            exponential_bucket_interval(0.1, 100.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "vm_bytes_read_per_block",
-        "VM number of bytes read per block",
-        &[],
-        exponential_bucket_interval(0.1, 10_000_000.0),
-    )
-});
+    pub static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "vm_bytes_read_per_block",
+            "VM number of bytes read per block",
+            &[],
+            exponential_bucket_interval(0.1, 10_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "vm_bytes_written_per_block",
-        "VM number of bytes written per block",
-        &[],
-        exponential_bucket_interval(0.1, 10_000_000.0),
-    )
-});
+    pub static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "vm_bytes_written_per_block",
+            "VM number of bytes written per block",
+            &[],
+            exponential_bucket_interval(0.1, 10_000_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "state_hash_computation_latency",
-        "Time to recompute the state hash",
-        &[],
-        exponential_bucket_latencies(500.0),
-    )
-});
+    pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "state_hash_computation_latency",
+            "Time to recompute the state hash",
+            &[],
+            exponential_bucket_latencies(500.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_inboxes",
-        "Number of inboxes",
-        &[],
-        exponential_bucket_interval(1.0, 10_000.0),
-    )
-});
+    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_inboxes",
+            "Number of inboxes",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_outboxes",
-        "Number of outboxes",
-        &[],
-        exponential_bucket_interval(1.0, 10_000.0),
-    )
-});
+    pub static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_outboxes",
+            "Number of outboxes",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
+
+    /// Tracks block execution metrics in Prometheus.
+    pub(crate) fn track_block_metrics(tracker: &ResourceTracker) {
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.wasm_fuel as f64);
+        EVM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.evm_fuel as f64);
+        VM_NUM_READS_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.read_operations as f64);
+        VM_BYTES_READ_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_read as f64);
+        VM_BYTES_WRITTEN_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_written as f64);
+    }
+}
 
 /// The BCS-serialized size of an empty [`Block`].
-const EMPTY_BLOCK_SIZE: usize = 94;
+pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
@@ -376,7 +390,7 @@ where
     ) -> Result<ApplicationDescription, ChainError> {
         self.execution_state
             .system
-            .describe_application(application_id, None)
+            .describe_application(application_id, &mut TransactionTracker::default())
             .await
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
@@ -409,7 +423,7 @@ where
             self.outboxes.remove_entry(target)?;
         }
         #[cfg(with_metrics)]
-        NUM_OUTBOXES
+        metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
         Ok(true)
@@ -551,7 +565,7 @@ where
         // Process the inbox bundle and update the inbox state.
         let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
         #[cfg(with_metrics)]
-        NUM_INBOXES
+        metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
         let entry = BundleInInbox::new(*origin, &bundle);
@@ -675,7 +689,7 @@ where
             }
         }
         #[cfg(with_metrics)]
-        NUM_INBOXES
+        metrics::NUM_INBOXES
             .with_label_values(&[])
             .observe(self.inboxes.count().await? as f64);
         Ok(())
@@ -695,94 +709,53 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
-        let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
-
-        ensure!(
-            *chain.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
-        );
-
+        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
         chain.system.timestamp.set(block.timestamp);
-        ensure!(
-            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
-            ChainError::EmptyBlock
-        );
-        let (_, committee) = chain
+
+        let policy = chain
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
-        let mut resource_controller = ResourceController {
-            policy: Arc::new(committee.policy().clone()),
-            tracker: ResourceTracker::default(),
-            account: block.authenticated_signer,
-        };
-        ensure!(
-            block.published_blob_ids()
-                == published_blobs
-                    .iter()
-                    .map(|blob| blob.id())
-                    .collect::<BTreeSet<_>>(),
-            ChainError::InternalError("published_blobs mismatch".to_string())
-        );
-        resource_controller
-            .track_block_size(EMPTY_BLOCK_SIZE)
-            .with_execution_context(ChainExecutionContext::Block)?;
-        for blob in published_blobs {
-            let blob_type = blob.content().blob_type();
-            if blob_type == BlobType::Data
-                || blob_type == BlobType::ContractBytecode
-                || blob_type == BlobType::ServiceBytecode
-                || blob_type == BlobType::EvmBytecode
-            {
-                resource_controller
-                    .with_state(&mut chain.system)
-                    .await?
-                    .track_blob_published(blob.content())
-                    .with_execution_context(ChainExecutionContext::Block)?;
-            }
-            chain.system.used_blobs.insert(&blob.id())?;
-        }
+            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
+            .1
+            .policy()
+            .clone();
 
-        if *chain.system.closed.get() {
-            ensure!(
-                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
-                ChainError::ClosedChain
-            );
+        let mut resource_controller = ResourceController::new(
+            Arc::new(policy),
+            ResourceTracker::default(),
+            block.authenticated_signer,
+        );
+
+        for blob in published_blobs {
+            let blob_id = blob.id();
+            resource_controller
+                .policy()
+                .check_blob_size(blob.content())
+                .with_execution_context(ChainExecutionContext::Block)?;
+            chain.system.used_blobs.insert(&blob_id)?;
         }
-        Self::check_app_permissions(chain.system.application_permissions.get(), block)?;
 
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
-        let mut replaying_oracle_responses = replaying_oracle_responses.map(Vec::into_iter);
-        let mut next_message_index = 0;
-        let mut next_application_index = 0;
-        let mut next_chain_index = 0;
-        let mut oracle_responses = Vec::new();
-        let mut events = Vec::new();
-        let mut blobs = Vec::new();
-        let mut messages = Vec::new();
-        let mut operation_results = Vec::new();
-        for (txn_index, transaction) in block.transactions() {
-            let chain_execution_context = match transaction {
-                Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
-                Transaction::ExecuteOperation(_) => ChainExecutionContext::Operation(txn_index),
-            };
-            let maybe_responses = match replaying_oracle_responses.as_mut().map(Iterator::next) {
-                Some(Some(responses)) => Some(responses),
-                Some(None) => return Err(ChainError::MissingOracleResponseList),
-                None => None,
-            };
-            let mut txn_tracker = TransactionTracker::new(
-                local_time,
-                txn_index,
-                next_message_index,
-                next_application_index,
-                next_chain_index,
-                maybe_responses,
-            );
+        let mut block_execution_tracker = BlockExecutionTracker::new(
+            &mut resource_controller,
+            published_blobs
+                .iter()
+                .map(|blob| (blob.id(), blob))
+                .collect(),
+            local_time,
+            replaying_oracle_responses,
+            block,
+        )?;
+
+        for transaction in block.transactions() {
+            let chain_execution_context =
+                block_execution_tracker.chain_execution_context(&transaction);
+            let mut txn_tracker = block_execution_tracker.new_transaction_tracker()?;
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
-                    resource_controller
+                    block_execution_tracker
+                        .resource_controller_mut()
                         .track_block_size_of(&incoming_bundle)
                         .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
@@ -794,17 +767,20 @@ where
                             block,
                             round,
                             &mut txn_tracker,
-                            &mut resource_controller,
+                            block_execution_tracker.resource_controller_mut(),
                         ))
                         .await?;
                     }
                 }
                 Transaction::ExecuteOperation(operation) => {
-                    resource_controller
+                    block_execution_tracker
+                        .resource_controller_mut()
+                        .with_state(&mut chain.system)
+                        .await?
                         .track_block_size_of(&operation)
                         .with_execution_context(chain_execution_context)?;
                     #[cfg(with_metrics)]
-                    let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
+                    let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
                         chain_id: block.chain_id,
                         height: block.height,
@@ -817,11 +793,12 @@ where
                         context,
                         operation.clone(),
                         &mut txn_tracker,
-                        &mut resource_controller,
+                        block_execution_tracker.resource_controller_mut(),
                     ))
                     .await
                     .with_execution_context(chain_execution_context)?;
-                    resource_controller
+                    block_execution_tracker
+                        .resource_controller_mut()
                         .with_state(&mut chain.system)
                         .await?
                         .track_operation(operation)
@@ -832,72 +809,13 @@ where
             let txn_outcome = txn_tracker
                 .into_outcome()
                 .with_execution_context(chain_execution_context)?;
-            next_message_index = txn_outcome.next_message_index;
-            next_application_index = txn_outcome.next_application_index;
-            next_chain_index = txn_outcome.next_chain_index;
 
-            if matches!(
-                transaction,
-                Transaction::ExecuteOperation(_)
-                    | Transaction::ReceiveMessages(IncomingBundle {
-                        action: MessageAction::Accept,
-                        ..
-                    })
-            ) {
-                for message_out in &txn_outcome.outgoing_messages {
-                    resource_controller
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_message(&message_out.message)
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
-
-            resource_controller
-                .track_block_size_of(&(
-                    &txn_outcome.oracle_responses,
-                    &txn_outcome.outgoing_messages,
-                    &txn_outcome.events,
-                    &txn_outcome.blobs,
-                ))
-                .with_execution_context(chain_execution_context)?;
-            for blob in &txn_outcome.blobs {
-                if blob.content().blob_type() == BlobType::Data {
-                    resource_controller
-                        .with_state(&mut chain.system)
-                        .await?
-                        .track_blob_published(blob.content())
-                        .with_execution_context(chain_execution_context)?;
-                }
-            }
-            oracle_responses.push(txn_outcome.oracle_responses);
-            messages.push(txn_outcome.outgoing_messages);
-            events.push(txn_outcome.events);
-            blobs.push(txn_outcome.blobs);
-
-            if let Transaction::ExecuteOperation(_) = transaction {
-                resource_controller
-                    .track_block_size_of(&(&txn_outcome.operation_result))
-                    .with_execution_context(chain_execution_context)?;
-                operation_results.push(OperationResult(txn_outcome.operation_result));
-            }
+            block_execution_tracker
+                .process_txn_outcome(&txn_outcome, &mut chain.system, chain_execution_context)
+                .await?;
         }
 
-        // Finally, charge for the block fee, except if the chain is closed. Closed chains should
-        // always be able to reject incoming messages.
-        if !chain.system.closed.get() {
-            resource_controller
-                .with_state(&mut chain.system)
-                .await?
-                .track_block()
-                .with_execution_context(ChainExecutionContext::Block)?;
-        }
-
-        let recipients = messages
-            .iter()
-            .flatten()
-            .map(|message| message.destination)
-            .collect::<BTreeSet<_>>();
+        let recipients = block_execution_tracker.recipients();
         let mut previous_message_blocks = BTreeMap::new();
         for recipient in recipients {
             if let Some(height) = previous_message_blocks_view.get(&recipient).await? {
@@ -911,20 +829,14 @@ where
             }
         }
 
-        let txn_count = block.incoming_bundles.len() + block.operations.len();
-        assert_eq!(oracle_responses.len(), txn_count);
-        assert_eq!(messages.len(), txn_count);
-        assert_eq!(events.len(), txn_count);
-        assert_eq!(blobs.len(), txn_count);
-
-        #[cfg(with_metrics)]
-        Self::track_block_metrics(&resource_controller.tracker);
-
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
             chain.crypto_hash().await?
         };
+
+        let (messages, oracle_responses, events, blobs, operation_results) =
+            block_execution_tracker.finalize();
 
         Ok(BlockExecutionOutcome {
             messages,
@@ -954,6 +866,36 @@ where
 
         self.ensure_is_active(local_time).await?;
 
+        ensure!(
+            *self.execution_state.system.timestamp.get() <= block.timestamp,
+            ChainError::InvalidBlockTimestamp
+        );
+        ensure!(
+            !block.incoming_bundles.is_empty() || !block.operations.is_empty(),
+            ChainError::EmptyBlock
+        );
+
+        ensure!(
+            block.published_blob_ids()
+                == published_blobs
+                    .iter()
+                    .map(|blob| blob.id())
+                    .collect::<BTreeSet<_>>(),
+            ChainError::InternalError("published_blobs mismatch".to_string())
+        );
+
+        if *self.execution_state.system.closed.get() {
+            ensure!(
+                !block.incoming_bundles.is_empty() && block.has_only_rejected_messages(),
+                ChainError::ClosedChain
+            );
+        }
+
+        Self::check_app_permissions(
+            self.execution_state.system.application_permissions.get(),
+            block,
+        )?;
+
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
@@ -977,18 +919,8 @@ where
         let hash = block.inner().hash();
         let block = block.inner().inner();
         self.execution_state_hash.set(Some(block.header.state_hash));
-        for txn_messages in &block.body.messages {
-            self.process_outgoing_messages(block.header.height, txn_messages)
-                .await?;
-        }
+        let recipients = self.process_outgoing_messages(block).await?;
 
-        let recipients = block
-            .body
-            .messages
-            .iter()
-            .flatten()
-            .map(|message| message.destination)
-            .collect::<BTreeSet<_>>();
         for recipient in recipients {
             self.previous_message_blocks
                 .insert(&recipient, block.header.height)?;
@@ -1022,7 +954,7 @@ where
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ChainError> {
         #[cfg(with_metrics)]
-        let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
+        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency();
         let context = MessageContext {
             chain_id: block.chain_id,
             is_bouncing: posted_message.is_bouncing(),
@@ -1147,54 +1079,33 @@ where
             .reset(ownership, next_height, local_time, fallback_owners)
     }
 
-    /// Tracks block execution metrics in Prometheus.
-    #[cfg(with_metrics)]
-    fn track_block_metrics(tracker: &ResourceTracker) {
-        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-        WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.wasm_fuel as f64);
-        EVM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.evm_fuel as f64);
-        VM_NUM_READS_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.read_operations as f64);
-        VM_BYTES_READ_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.bytes_read as f64);
-        VM_BYTES_WRITTEN_PER_BLOCK
-            .with_label_values(&[])
-            .observe(tracker.bytes_written as f64);
-    }
-
+    /// Updates the outboxes with the messages sent in the block.
+    ///
+    /// Returns the set of all recipients.
     async fn process_outgoing_messages(
         &mut self,
-        height: BlockHeight,
-        messages: &[OutgoingMessage],
-    ) -> Result<(), ChainError> {
+        block: &Block,
+    ) -> Result<Vec<ChainId>, ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
-        let recipients = messages
-            .iter()
-            .map(|msg| msg.destination)
-            .collect::<HashSet<_>>();
+        let recipients = block.recipients();
+        let block_height = block.header.height;
 
         // Update the outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for mut outbox in outboxes {
-            if outbox.schedule_message(height)? {
-                *outbox_counters.entry(height).or_default() += 1;
+            if outbox.schedule_message(block_height)? {
+                *outbox_counters.entry(block_height).or_default() += 1;
             }
         }
 
         #[cfg(with_metrics)]
-        NUM_OUTBOXES
+        metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.outboxes.count().await? as f64);
-        Ok(())
+        Ok(targets)
     }
 }
 

@@ -143,34 +143,19 @@ where
         let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage,
-{
     #[instrument(level = "trace", skip_all)]
     pub fn new(state: WorkerState<S>) -> Self {
         Self {
             node: Arc::new(LocalNode { state }),
         }
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage + Clone,
-{
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn storage_client(&self) -> S {
         self.node.state.storage_client().clone()
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
     #[instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,

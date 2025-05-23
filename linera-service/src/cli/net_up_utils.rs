@@ -7,13 +7,6 @@ use colored::Colorize as _;
 use linera_base::{data_types::Amount, listen_for_shutdown_signals, time::Duration};
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_rpc::config::CrossChainConfig;
-use linera_service::{
-    cli_wrappers::{
-        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-        ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
-    },
-    storage::{StorageConfig, StorageConfigNamespace},
-};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     child::{StorageService, StorageServiceGuard},
@@ -23,8 +16,16 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 #[cfg(feature = "kubernetes")]
 use {
-    linera_service::cli_wrappers::local_kubernetes_net::{BuildMode, LocalKubernetesNetConfig},
+    crate::cli_wrappers::local_kubernetes_net::{BuildMode, LocalKubernetesNetConfig},
     std::path::PathBuf,
+};
+
+use crate::{
+    cli_wrappers::{
+        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+        ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
+    },
+    storage::{StorageConfig, StorageConfigNamespace},
 };
 
 struct StorageConfigProvider {

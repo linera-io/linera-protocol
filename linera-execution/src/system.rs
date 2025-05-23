@@ -6,8 +6,6 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     mem,
@@ -32,8 +30,6 @@ use linera_views::{
     views::{ClonableView, HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-#[cfg(with_metrics)]
-use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
@@ -50,13 +46,20 @@ pub static REMOVED_EPOCH_STREAM_NAME: &[u8] = &[1];
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
-static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "open_chain_count",
-        "The number of times the `OpenChain` operation was executed",
-        &[],
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter_vec;
+    use prometheus::IntCounterVec;
+
+    pub static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "open_chain_count",
+            "The number of times the `OpenChain` operation was executed",
+            &[],
+        )
+    });
+}
 
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, ClonableView, HashableView)]
@@ -117,11 +120,9 @@ impl OpenChainConfig {
     pub fn init_chain_config(
         &self,
         epoch: Epoch,
-        admin_id: Option<ChainId>,
         committees: BTreeMap<Epoch, Vec<u8>>,
     ) -> InitialChainConfig {
         InitialChainConfig {
-            admin_id,
             application_permissions: self.application_permissions.clone(),
             balance: self.balance,
             committees,
@@ -373,7 +374,7 @@ where
                     )
                     .await?;
                 #[cfg(with_metrics)]
-                OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
+                metrics::OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
             ChangeOwnership {
                 super_owners,
@@ -429,14 +430,17 @@ where
                 );
                 match admin_operation {
                     AdminOperation::PublishCommitteeBlob { blob_hash } => {
-                        self.blob_published(&BlobId::new(blob_hash, BlobType::Committee))?;
+                        self.blob_published(
+                            &BlobId::new(blob_hash, BlobType::Committee),
+                            txn_tracker,
+                        )?;
                     }
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
                         let committee =
                             bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
-                        self.blob_used(Some(txn_tracker), blob_id).await?;
+                        self.blob_used(txn_tracker, blob_id).await?;
                         self.committees.get_mut().insert(epoch, committee);
                         self.epoch.set(epoch);
                         txn_tracker.add_event(
@@ -460,7 +464,7 @@ where
             }
             PublishModule { module_id } => {
                 for blob_id in module_id.bytecode_blob_ids() {
-                    self.blob_published(&blob_id)?;
+                    self.blob_published(&blob_id, txn_tracker)?;
                 }
             }
             CreateApplication {
@@ -487,7 +491,7 @@ where
                 new_application = Some((app_id, instantiation_argument));
             }
             PublishDataBlob { blob_hash } => {
-                self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
+                self.blob_published(&BlobId::new(blob_hash, BlobType::Data), txn_tracker)?;
             }
             ReadBlob { blob_id } => {
                 let content = self.read_blob_content(blob_id).await?;
@@ -497,7 +501,7 @@ where
                         .await?
                         .track_blob_read(content.bytes().len() as u64)?;
                 }
-                self.blob_used(Some(txn_tracker), blob_id).await?;
+                self.blob_used(txn_tracker, blob_id).await?;
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
@@ -522,7 +526,7 @@ where
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 txn_tracker.add_oracle_response(OracleResponse::Event(event_id, bytes));
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
-                self.blob_used(Some(txn_tracker), blob_id).await?;
+                self.blob_used(txn_tracker, blob_id).await?;
                 self.committees.get_mut().insert(epoch, committee);
                 self.epoch.set(epoch);
             }
@@ -769,7 +773,6 @@ where
         let description: ChainDescription = bcs::from_bytes(description_blob.bytes())?;
         let InitialChainConfig {
             ownership,
-            admin_id,
             epoch,
             committees,
             balance,
@@ -788,7 +791,14 @@ where
             .collect();
         self.committees.set(committees);
         // If `admin_id` is `None`, this chain is its own admin chain.
-        self.admin_id.set(admin_id.or(Some(chain_id)));
+        let admin_id = self
+            .context()
+            .extra()
+            .get_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?
+            .admin_chain_id;
+        self.admin_id.set(Some(admin_id));
         self.ownership.set(ownership);
         self.balance.set(balance);
         self.application_permissions.set(application_permissions);
@@ -827,8 +837,7 @@ where
             chain_index,
         };
         let committees = self.get_committees();
-        let init_chain_config =
-            config.init_chain_config(*self.epoch.get(), *self.admin_id.get(), committees);
+        let init_chain_config = config.init_chain_config(*self.epoch.get(), committees);
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
         self.debit(&AccountOwner::CHAIN, config.balance).await?;
@@ -857,7 +866,7 @@ where
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
-            self.blob_used(Some(&mut txn_tracker), blob_id).await?;
+            self.blob_used(&mut txn_tracker, blob_id).await?;
         }
 
         let application_description = ApplicationDescription {
@@ -868,7 +877,7 @@ where
             parameters,
             required_application_ids,
         };
-        self.check_required_applications(&application_description, Some(&mut txn_tracker))
+        self.check_required_applications(&application_description, &mut txn_tracker)
             .await?;
 
         let blob = Blob::new_application_description(&application_description);
@@ -884,11 +893,11 @@ where
     async fn check_required_applications(
         &mut self,
         application_description: &ApplicationDescription,
-        mut txn_tracker: Option<&mut TransactionTracker>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         // Make sure that referenced applications IDs have been registered.
         for required_id in &application_description.required_application_ids {
-            Box::pin(self.describe_application(*required_id, txn_tracker.as_deref_mut())).await?;
+            Box::pin(self.describe_application(*required_id, txn_tracker)).await?;
         }
         Ok(())
     }
@@ -897,24 +906,21 @@ where
     pub async fn describe_application(
         &mut self,
         id: ApplicationId,
-        mut txn_tracker: Option<&mut TransactionTracker>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<ApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
-        let blob_content = match txn_tracker
-            .as_ref()
-            .and_then(|tracker| tracker.created_blobs().get(&blob_id))
-        {
+        let blob_content = match txn_tracker.created_blobs().get(&blob_id) {
             Some(blob) => blob.content().clone(),
             None => self.read_blob_content(blob_id).await?,
         };
-        self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
+        self.blob_used(txn_tracker, blob_id).await?;
         let description: ApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
 
         let blob_ids = self.check_bytecode_blobs(&description.module_id).await?;
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
-            self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
+            self.blob_used(txn_tracker, blob_id).await?;
         }
 
         self.check_required_applications(&description, txn_tracker)
@@ -952,7 +958,7 @@ where
             seen.insert(id);
             // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
             stack.push(id);
-            let app = self.describe_application(id, Some(txn_tracker)).await?;
+            let app = self.describe_application(id, txn_tracker).await?;
             for child in app.required_application_ids.iter().rev() {
                 if !seen.contains(child) {
                     stack.push(*child);
@@ -966,23 +972,26 @@ where
     /// an oracle response for it.
     pub(crate) async fn blob_used(
         &mut self,
-        maybe_txn_tracker: Option<&mut TransactionTracker>,
+        txn_tracker: &mut TransactionTracker,
         blob_id: BlobId,
     ) -> Result<bool, ExecutionError> {
         if self.used_blobs.contains(&blob_id).await? {
             return Ok(false); // Nothing to do.
         }
         self.used_blobs.insert(&blob_id)?;
-        if let Some(txn_tracker) = maybe_txn_tracker {
-            txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
-        }
+        txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
         Ok(true)
     }
 
     /// Records a blob that is published in this block. This does not create an oracle entry, and
     /// the blob can be used without using an oracle in the future on this chain.
-    fn blob_published(&mut self, blob_id: &BlobId) -> Result<(), ExecutionError> {
+    fn blob_published(
+        &mut self,
+        blob_id: &BlobId,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
         self.used_blobs.insert(blob_id)?;
+        txn_tracker.add_published_blob(*blob_id);
         Ok(())
     }
 

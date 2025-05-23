@@ -34,6 +34,7 @@ use linera_service::{
         ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     test_name,
+    util::eventually,
 };
 use test_case::test_case;
 #[cfg(feature = "ethereum")]
@@ -132,7 +133,6 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client
         .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
-    client.finalize_committee().await?;
 
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
@@ -145,28 +145,34 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client
         .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
-    client.finalize_committee().await?;
     if matches!(network, Network::Grpc) {
-        assert_eq!(faucet.current_validators().await?.len(), 6);
+        assert!(
+            eventually(|| async { faucet.current_validators().await.unwrap().len() == 6 }).await
+        );
     }
 
     // Remove 5th validator
     client
         .remove_validator(&net.validator_keys(4).unwrap().0)
         .await?;
-    client.finalize_committee().await?;
     net.remove_validator(4)?;
     if matches!(network, Network::Grpc) {
-        assert_eq!(faucet.current_validators().await?.len(), 5);
+        assert!(
+            eventually(|| async { faucet.current_validators().await.unwrap().len() == 5 }).await
+        )
     }
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
     if let Some(service) = &node_service_2 {
         service.process_inbox(&chain_2).await?;
+        client.finalize_committee().await?;
+        service.process_inbox(&chain_2).await?;
         let committees = service.query_committees(&chain_2).await?;
         let epochs = committees.into_keys().collect::<Vec<_>>();
         assert_eq!(&epochs, &[Epoch(3)]);
     } else {
+        client_2.process_inbox(chain_2).await?;
+        client.finalize_committee().await?;
         client_2.process_inbox(chain_2).await?;
     }
 
@@ -174,13 +180,16 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     for i in 0..4 {
         let validator_key = net.validator_keys(i).unwrap();
         client.remove_validator(&validator_key.0).await?;
-        client.finalize_committee().await?;
         if let Some(service) = &node_service_2 {
+            service.process_inbox(&chain_2).await?;
+            client.finalize_committee().await?;
             service.process_inbox(&chain_2).await?;
             let committees = service.query_committees(&chain_2).await?;
             let epochs = committees.into_keys().collect::<Vec<_>>();
             assert_eq!(&epochs, &[Epoch(4 + i as u32)]);
         } else {
+            client_2.process_inbox(chain_2).await?;
+            client.finalize_committee().await?;
             client_2.process_inbox(chain_2).await?;
         }
         net.remove_validator(i)?;
@@ -373,11 +382,12 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     client
         .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
-    client.finalize_committee().await?;
 
     client.query_validators(None).await?;
 
-    // Ensure the faucet is on the new epoch
+    // Ensure the faucet is on the new epoch before removing the old ones.
+    faucet_client.process_inbox(faucet_chain).await?;
+    client.finalize_committee().await?;
     faucet_client.process_inbox(faucet_chain).await?;
 
     if matches!(network, Network::Grpc) {
@@ -746,6 +756,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
+    use linera_service::cli::command::BenchmarkCommand;
 
     config.num_other_initial_chains = 2;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -755,7 +766,13 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
 
     assert_eq!(client.load_wallet()?.num_chains(), 3);
     // Launch local benchmark using some additional chains.
-    client.benchmark(4, 10, None).await?;
+    client
+        .benchmark(BenchmarkCommand {
+            num_chains: 4,
+            transactions_per_block: 10,
+            ..Default::default()
+        })
+        .await?;
     assert_eq!(client.load_wallet()?.num_chains(), 7);
 
     // Now we run the benchmark again, with the fungible token application instead of the
@@ -776,7 +793,14 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
             None,
         )
         .await?;
-    client.benchmark(5, 10, Some(application_id)).await?;
+    client
+        .benchmark(BenchmarkCommand {
+            num_chains: 5,
+            transactions_per_block: 10,
+            fungible_application_id: Some(application_id.forget_abi()),
+            ..Default::default()
+        })
+        .await?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
@@ -860,6 +884,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
     use linera_ethereum::{
         client::EthereumQueries,
+        provider::EthereumClientSimplified,
         test_utils::{get_anvil, SimpleTokenContractFunction},
     };
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -870,12 +895,12 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     let address0 = anvil_test.get_address(0);
     let address1 = anvil_test.get_address(1);
     let ethereum_endpoint = anvil_test.endpoint.clone();
-    let ethereum_client = anvil_test.ethereum_client.clone();
+    let ethereum_client_simp = EthereumClientSimplified::new(ethereum_endpoint.clone());
 
     let simple_token = SimpleTokenContractFunction::new(anvil_test).await?;
     let contract_address = simple_token.contract_address.clone();
     let event_name_expanded = "Initial(address,uint256)";
-    let events = ethereum_client
+    let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, 0, 2)
         .await?;
     let start_block = events.first().unwrap().block_number;
@@ -936,7 +961,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 
     let value = U256::from(10);
     simple_token.transfer(&address0, &address1, value).await?;
-    let last_block = ethereum_client.get_block_number().await?;
+    let last_block = ethereum_client_simp.get_block_number().await?;
     // increment by 1 since the read_events is exclusive in the last block.
     app.update(last_block + 1).await;
 

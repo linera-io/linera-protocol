@@ -104,6 +104,7 @@ quick_cache = { workspace = true }
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
+serde-command-opts.workspace = true
 serde_json.workspace = true
 stdext = { workspace = true, optional = true }
 tempfile.workspace = true
@@ -160,7 +161,7 @@ tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [[bin]]
 name = "linera"
-path = "src/linera/main.rs"
+path = "src/cli/main.rs"
 
 [[bin]]
 name = "linera-server"

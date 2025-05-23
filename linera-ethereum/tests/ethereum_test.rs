@@ -3,7 +3,7 @@
 
 #[cfg(feature = "ethereum")]
 use {
-    alloy::primitives::U256,
+    alloy_primitives::U256,
     linera_ethereum::{
         client::EthereumQueries,
         common::{EthereumDataType, EthereumEvent},
@@ -17,29 +17,18 @@ use {
 #[tokio::test]
 async fn test_get_accounts_balance() -> anyhow::Result<()> {
     let anvil_test = get_anvil().await?;
-    let ethereum_client = anvil_test.ethereum_client;
     let ethereum_client_simp = EthereumClientSimplified::new(anvil_test.endpoint);
-    let addresses = ethereum_client
+    let addresses = ethereum_client_simp
         .get_accounts()
         .await?
         .into_iter()
         .collect::<BTreeSet<_>>();
-    let addresses_simp = ethereum_client_simp
-        .get_accounts()
-        .await?
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-    assert_eq!(addresses, addresses_simp);
-    let block_number = ethereum_client.get_block_number().await?;
-    let block_number_simp = ethereum_client_simp.get_block_number().await?;
-    assert_eq!(block_number, block_number_simp);
+    let block_number = ethereum_client_simp.get_block_number().await?;
     let target_balance = U256::from_str("10000000000000000000000")?;
     for address in addresses {
-        let balance = ethereum_client.get_balance(&address, block_number).await?;
-        let balance_simp = ethereum_client_simp
+        let balance = ethereum_client_simp
             .get_balance(&address, block_number)
             .await?;
-        assert_eq!(balance, balance_simp);
         assert_eq!(balance, target_balance);
     }
     Ok(())
@@ -57,9 +46,7 @@ async fn test_event_numerics() -> anyhow::Result<()> {
     let event_name_expanded = "Types(address indexed,address,uint256,uint64,int64,uint32,int32,uint16,int16,uint8,int8,bool)";
     let from_block = 0;
     let to_block = 2;
-    let events = event_numerics
-        .anvil_test
-        .ethereum_client
+    let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
     let addr0 = event_numerics.anvil_test.get_address(0);
@@ -111,9 +98,7 @@ async fn test_simple_token_events() -> anyhow::Result<()> {
 
     // Test the Transfer entries
     let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-    let events = simple_token
-        .anvil_test
-        .ethereum_client
+    let events = ethereum_client_simp
         .read_events(&contract_address, event_name_expanded, from_block, to_block)
         .await?;
     let value = U256::from(10);

@@ -16,6 +16,11 @@ spec:
     spec:
       nodeSelector:
         cloud.google.com/gke-local-nvme-ssd: "true"
+      tolerations:
+        - key: "scylla-db"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
       hostPID: true
       containers:
       - name: startup-script

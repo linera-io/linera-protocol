@@ -12,6 +12,7 @@ rocksdbStorageSize: {{ env "LINERA_HELMFILE_SET_ROCKSDB_STORAGE_SIZE" | default 
 storage: {{ env "LINERA_HELMFILE_SET_STORAGE" | default "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042" }}
 dualStore: {{ env "LINERA_HELMFILE_SET_DUAL_STORE" | default "false" }}
 usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
+usingRecommendedScyllaDbSettings: {{ env "LINERA_HELMFILE_SET_USING_RECOMMENDED_SCYLLA_DB_SETTINGS" | default "false" }}
 storageReplicationFactor: {{ env "LINERA_HELMFILE_SET_STORAGE_REPLICATION_FACTOR" | default 1 }}
 
 # Loki

@@ -1,10 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, Timestamp},
+    data_types::{BlobContent, NetworkDescription, Timestamp},
     identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
@@ -30,7 +29,7 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
-use linera_storage::{DbStorage, NetworkDescription, Storage};
+use linera_storage::{DbStorage, Storage};
 use linera_version::VersionInfo;
 use linera_views::memory::MemoryStore;
 
@@ -168,7 +167,6 @@ struct DummyContext<P, S> {
     _phantom: std::marker::PhantomData<(P, S)>,
 }
 
-#[async_trait]
 impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static> ClientContext
     for DummyContext<P, S>
 {
@@ -186,7 +184,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
         unimplemented!()
     }
 
-    async fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<Self::Environment>, Error> {
+    fn make_chain_client(&self, _: ChainId) -> ChainClient<Self::Environment> {
         unimplemented!()
     }
 
@@ -201,10 +199,6 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
 
     async fn update_wallet(&mut self, _: &ChainClient<Self::Environment>) -> Result<(), Error> {
         Ok(())
-    }
-
-    async fn clients(&self) -> Result<Vec<ChainClient<Self::Environment>>, Error> {
-        Ok(vec![])
     }
 }
 

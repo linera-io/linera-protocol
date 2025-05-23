@@ -4,7 +4,7 @@ import NewPost from './components/NewPost'
 import PostCard from './components/PostCard'
 import LeftSideMenu from './components/LeftSideMenu'
 import { gql, useSubscription, useLazyQuery } from '@apollo/client'
-import { Post, Social } from './__generated__/graphql'
+import { Post, SocialState } from './__generated__/graphql'
 
 interface ReceivedPosts {
   value: Post
@@ -37,7 +37,7 @@ export const RECEIVED_POSTS = gql`
 // rather than the application.  This exists to prevent
 // `graphql-codegen` getting confused when generating TypeScript
 // bindings for the application GraphQL queries.
-const nodeGql = gql;
+const nodeGql = gql
 
 const NOTIFICATION_SUBSCRIPTION = nodeGql`
   subscription Notifications($chainId: String!) {
@@ -46,15 +46,20 @@ const NOTIFICATION_SUBSCRIPTION = nodeGql`
 `
 export default function App({ chainId }: { chainId: string }) {
   const [posts, setPosts] = React.useState<ReceivedPosts[]>([])
-  const [receivedPosts, { called }] = useLazyQuery<Social>(RECEIVED_POSTS, {
-    onCompleted: (data: Social) => {
-      setPosts(data.receivedPosts.entries as ReceivedPosts[])
-    },
-    fetchPolicy: 'network-only',
-  })
+  const [receivedPosts, { called }] = useLazyQuery<SocialState>(
+    RECEIVED_POSTS,
+    {
+      onCompleted: (data: SocialState) => {
+        setPosts(data.receivedPosts.entries as ReceivedPosts[])
+      },
+      fetchPolicy: 'network-only',
+    }
+  )
   useSubscription(NOTIFICATION_SUBSCRIPTION, {
     variables: { chainId },
-    onData: () => receivedPosts(),
+    onData: () => {
+      receivedPosts()
+    },
   })
   if (!called) {
     void receivedPosts()

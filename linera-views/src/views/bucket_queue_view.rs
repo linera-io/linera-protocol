@@ -2,17 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{vec_deque::IterMut, VecDeque};
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-    },
-    prometheus::HistogramVec,
-};
+use linera_base::prometheus_util::MeasureLatency as _;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     batch::Batch,
@@ -24,15 +17,22 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-/// The runtime of hash computation
-static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "bucket_queue_view_hash_runtime",
-        "BucketQueueView hash runtime",
-        &[],
-        exponential_bucket_latencies(5.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The runtime of hash computation
+    pub static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "bucket_queue_view_hash_runtime",
+            "BucketQueueView hash runtime",
+            &[],
+            exponential_bucket_latencies(5.0),
+        )
+    });
+}
 
 /// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.
 /// * The Front is special and downloaded at the view loading.
@@ -713,7 +713,7 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
-        let _hash_latency = BUCKET_QUEUE_VIEW_HASH_RUNTIME.measure_latency();
+        let _hash_latency = metrics::BUCKET_QUEUE_VIEW_HASH_RUNTIME.measure_latency();
         let elements = self.elements().await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;

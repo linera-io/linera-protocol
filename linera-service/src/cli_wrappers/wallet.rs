@@ -23,7 +23,9 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
     data_types::{Amount, Bytecode, Epoch},
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
+    },
     vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
@@ -35,6 +37,17 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
 use tracing::{error, info, warn};
+#[cfg(feature = "benchmark")]
+use {
+    crate::cli::command::BenchmarkCommand,
+    serde_command_opts::to_args,
+    std::process::Stdio,
+    tokio::{
+        io::{AsyncBufReadExt, BufReader},
+        sync::oneshot,
+        task::JoinHandle,
+    },
+};
 
 use crate::{
     cli_wrappers::{
@@ -66,6 +79,7 @@ pub struct ClientWrapper {
     network: Network,
     pub path_provider: PathProvider,
     on_drop: OnClientDrop,
+    extra_args: Vec<String>,
 }
 
 /// Action to perform when the [`ClientWrapper`] is dropped.
@@ -85,6 +99,24 @@ impl ClientWrapper {
         id: usize,
         on_drop: OnClientDrop,
     ) -> Self {
+        Self::new_with_extra_args(
+            path_provider,
+            network,
+            testing_prng_seed,
+            id,
+            on_drop,
+            vec!["--wait-for-outgoing-messages".to_string()],
+        )
+    }
+
+    pub fn new_with_extra_args(
+        path_provider: PathProvider,
+        network: Network,
+        testing_prng_seed: Option<u64>,
+        id: usize,
+        on_drop: OnClientDrop,
+        extra_args: Vec<String>,
+    ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
             path_provider.path().display(),
@@ -102,6 +134,7 @@ impl ClientWrapper {
             network,
             path_provider,
             on_drop,
+            extra_args,
         }
     }
 
@@ -160,16 +193,24 @@ impl ClientWrapper {
         Ok(())
     }
 
-    async fn command(&self) -> Result<Command> {
+    async fn command_with_envs(&self, envs: &[(&str, &str)]) -> Result<Command> {
         let mut command = self.command_binary().await?;
-        command.current_dir(self.path_provider.path()).env(
-            "RUST_LOG",
-            std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
-        );
+        command.current_dir(self.path_provider.path());
+        for (key, value) in envs {
+            command.env(key, value);
+        }
         for argument in self.command_arguments() {
             command.arg(&*argument);
         }
         Ok(command)
+    }
+
+    async fn command(&self) -> Result<Command> {
+        self.command_with_envs(&[(
+            "RUST_LOG",
+            &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+        )])
+        .await
     }
 
     /// Returns an iterator over the arguments that should be added to all command invocations.
@@ -187,9 +228,9 @@ impl ClientWrapper {
             "500000".into(),
             "--recv-timeout-ms".into(),
             "500000".into(),
-            "--wait-for-outgoing-messages".into(),
         ]
         .into_iter()
+        .chain(self.extra_args.iter().map(|s| s.as_str().into()))
     }
 
     /// Returns the [`Command`] instance configured to run the appropriate binary.
@@ -606,30 +647,91 @@ impl ClientWrapper {
         Ok(())
     }
 
+    #[cfg(feature = "benchmark")]
+    fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
+        let args = to_args(&args)?
+            .chunks_exact(2)
+            .flat_map(|pair| {
+                let option = format!("--{}", pair[0]);
+                match pair[1].as_str() {
+                    "true" => vec![option],
+                    "false" => vec![],
+                    _ => vec![option, pair[1].clone()],
+                }
+            })
+            .collect::<Vec<_>>();
+        command.arg("benchmark").args(args);
+        Ok(())
+    }
+
+    #[cfg(feature = "benchmark")]
+    async fn benchmark_command_with_envs(
+        &self,
+        args: BenchmarkCommand,
+        envs: &[(&str, &str)],
+    ) -> Result<Command> {
+        let mut command = self.command_with_envs(envs).await?;
+        Self::benchmark_command_internal(&mut command, args)?;
+        Ok(command)
+    }
+
+    #[cfg(feature = "benchmark")]
+    async fn benchmark_command(&self, args: BenchmarkCommand) -> Result<Command> {
+        let mut command = self.command().await?;
+        Self::benchmark_command_internal(&mut command, args)?;
+        Ok(command)
+    }
+
     /// Runs `linera benchmark`.
     #[cfg(feature = "benchmark")]
-    pub async fn benchmark(
-        &self,
-        num_chains: usize,
-        transactions_per_block: usize,
-        fungible_application_id: Option<
-            ApplicationId<linera_sdk::abis::fungible::FungibleTokenAbi>,
-        >,
-    ) -> Result<()> {
-        let mut command = self.command().await?;
-        command
-            .arg("benchmark")
-            .args(["--num-chains", &num_chains.to_string()])
-            .args([
-                "--transactions-per-block",
-                &transactions_per_block.to_string(),
-            ]);
-        if let Some(application_id) = fungible_application_id {
-            let application_id = application_id.forget_abi().to_string();
-            command.args(["--fungible-application-id", &application_id]);
-        }
+    pub async fn benchmark(&self, args: BenchmarkCommand) -> Result<()> {
+        let mut command = self.benchmark_command(args).await?;
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
+    }
+
+    /// Runs `linera benchmark`, but detached: don't wait for the command to finish, just spawn it
+    /// and return the child process, and the handles to the stdout and stderr.
+    #[cfg(feature = "benchmark")]
+    pub async fn benchmark_detached(
+        &self,
+        args: BenchmarkCommand,
+        tx: oneshot::Sender<()>,
+    ) -> Result<(Child, JoinHandle<()>, JoinHandle<()>)> {
+        let mut child = self
+            .benchmark_command_with_envs(args, &[("RUST_LOG", "linera=info")])
+            .await?
+            .kill_on_drop(true)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let pid = child.id().expect("failed to get pid");
+        let stdout = child.stdout.take().expect("stdout not open");
+        let stdout_handle = tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                println!("benchmark{{pid={pid}}} {line}");
+            }
+        });
+
+        let stderr = child.stderr.take().expect("stderr not open");
+        let stderr_handle = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            let mut tx = Some(tx);
+            while let Ok(Some(line)) = lines.next_line().await {
+                if line.contains("Ready to start benchmark") {
+                    tx.take()
+                        .expect("Should only send signal once")
+                        .send(())
+                        .expect("failed to send ready signal to main thread");
+                } else {
+                    println!("benchmark{{pid={pid}}} {line}");
+                }
+            }
+        });
+        Ok((child, stdout_handle, stderr_handle))
     }
 
     /// Runs `linera open-chain`.
@@ -1035,7 +1137,7 @@ impl ClientWrapper {
 }
 
 fn truncate_query_output(input: &str) -> String {
-    let max_len = 200;
+    let max_len = 1000;
     if input.len() < max_len {
         input.to_string()
     } else {
@@ -1143,6 +1245,24 @@ impl NodeService {
         let mut response = self.query_node(query).await?;
         let committees = response["chain"]["executionState"]["system"]["committees"].take();
         Ok(serde_json::from_value(committees)?)
+    }
+
+    pub async fn events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>> {
+        let query = format!(
+            "query {{
+               eventsFromIndex(chainId: \"{chain_id}\", streamId: {}, startIndex: {start_index})
+               {{ index event }}
+             }}",
+            stream_id.to_value()
+        );
+        let mut response = self.query_node(query).await?;
+        let response = response["eventsFromIndex"].take();
+        Ok(serde_json::from_value(response)?)
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
