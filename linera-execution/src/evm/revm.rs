@@ -25,7 +25,7 @@ use revm_handler::{
     instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };
 use revm_interpreter::{
-    CallInput, CallInputs, CallOutcome, Gas, InputsImpl, InstructionResult, InterpreterResult,
+    CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl, InstructionResult, InterpreterResult,
 };
 use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
 use revm_state::EvmState;
@@ -191,7 +191,7 @@ impl UserContractModule for EvmContractModule {
         let instance: UserContractInstance = match self {
             #[cfg(with_revm)]
             EvmContractModule::Revm { module } => {
-                Box::new(RevmContractInstance::prepare(module.to_vec(), runtime))
+                Box::new(RevmContractInstance::prepare(module.to_vec(), runtime)?)
             }
         };
 
@@ -252,7 +252,7 @@ impl UserServiceModule for EvmServiceModule {
         let instance: UserServiceInstance = match self {
             #[cfg(with_revm)]
             EvmServiceModule::Revm { module } => {
-                Box::new(RevmServiceInstance::prepare(module.to_vec(), runtime))
+                Box::new(RevmServiceInstance::prepare(module.to_vec(), runtime)?)
             }
         };
 
@@ -677,6 +677,12 @@ fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput)
 impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
+    fn create(&mut self, _context: &mut Ctx<'a, Runtime>, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        let address = self.db.contract_address;
+        inputs.scheme = CreateScheme::Custom { address };
+        None
+    }
+
     fn call(
         &mut self,
         context: &mut Ctx<'a, Runtime>,
@@ -701,7 +707,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = Address::ZERO.create(0);
+        let contract_address = self.db.contract_address;
         if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
             return Ok(None);
@@ -734,6 +740,12 @@ impl<Runtime> Clone for CallInterceptorService<Runtime> {
 }
 
 impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
+    fn create(&mut self, _context: &mut Ctx<'a, Runtime>, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        let address = self.db.contract_address;
+        inputs.scheme = CreateScheme::Custom { address };
+        None
+    }
+
     fn call(
         &mut self,
         context: &mut Ctx<'a, Runtime>,
@@ -758,7 +770,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = Address::ZERO.create(0);
+        let contract_address = self.db.contract_address;
         if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
             return Ok(None);
@@ -912,9 +924,9 @@ impl<Runtime> RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
-    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
-        let db = DatabaseRuntime::new(runtime);
-        Self { module, db }
+    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Result<Self, ExecutionError> {
+        let db = DatabaseRuntime::new(runtime)?;
+        Ok(Self { module, db })
     }
 
     /// Executes the transaction. If needed initializes the contract.
@@ -946,11 +958,12 @@ where
         ch: Choice,
         input: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
+        let contract_address = self.db.contract_address;
         let (kind, data) = match ch {
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
             Choice::Call => {
                 let data = Bytes::copy_from_slice(input);
-                (TxKind::Call(Address::ZERO.create(0)), data)
+                (TxKind::Call(contract_address), data)
             }
         };
         let inspector = CallInterceptorContract {
@@ -1033,9 +1046,9 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
-        let db = DatabaseRuntime::new(runtime);
-        Self { module, db }
+    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Result<Self, ExecutionError> {
+        let db = DatabaseRuntime::new(runtime)?;
+        Ok(Self { module, db })
     }
 }
 
@@ -1092,7 +1105,7 @@ where
         }
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
-        let contract_address = Address::ZERO.create(0);
+        let contract_address = self.db.contract_address;
         let kind = TxKind::Call(contract_address);
         let (execution_result, _) = self.transact(kind, vec)?;
         Ok(execution_result)

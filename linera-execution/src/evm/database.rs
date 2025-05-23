@@ -67,6 +67,7 @@ impl StorageStats {
 
 pub(crate) struct DatabaseRuntime<Runtime> {
     storage_stats: Arc<Mutex<StorageStats>>,
+    pub contract_address: Address,
     pub runtime: Arc<Mutex<Runtime>>,
     pub changes: EvmState,
 }
@@ -75,6 +76,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
         Self {
             storage_stats: self.storage_stats.clone(),
+            contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
         }
@@ -96,7 +98,7 @@ pub enum KeyCategory {
     Storage,
 }
 
-impl<Runtime> DatabaseRuntime<Runtime> {
+impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Encode the `index` of the EVM storage associated to the smart contract
     /// in a linera key.
     fn get_linera_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
@@ -110,20 +112,25 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         if address == &Address::ZERO {
             return Some(KeyTag::NullAddress as u8);
         }
-        if address == &Address::ZERO.create(0) {
+        if address == &self.contract_address {
             return Some(KeyTag::ContractAddress as u8);
         }
         None
     }
 
     /// Creates a new `DatabaseRuntime`.
-    pub fn new(runtime: Runtime) -> Self {
+    pub fn new(mut runtime: Runtime) -> Result<Self, ExecutionError> {
         let storage_stats = StorageStats::default();
-        Self {
+        let application_id = runtime.application_id()?;
+        let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
+        let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+        let contract_address = Address::from_slice(&application_id[0..20]);
+        Ok(Self {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
+            contract_address,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
-        }
+        })
     }
 
     /// Returns the current storage states and clears it to default.
@@ -316,6 +323,9 @@ where
         Ok(())
     }
 }
+
+
+
 
 impl<Runtime> DatabaseRuntime<Runtime>
 where
