@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scylla-dashboards-config-1
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Scylla"
+data:
+    # ConfigMaps can't be bigger than 1048576 bytes, so we need to split the dashboards into multiple ConfigMaps
+    scylla-detailed.6.2.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-detailed.6.2.json" | quote | indent 4 }}
+    scylla-ks.6.2.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-ks.6.2.json" | quote | indent 4 }}
+    scylla-os.6.2.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-os.6.2.json" | quote | indent 4 }}
+    scylla-overview.6.2.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-overview.6.2.json" | quote | indent 4 }}
