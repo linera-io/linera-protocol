@@ -1,6 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*!
+This crate handles persisting data types to disk with a variety of backends.
+*/
+
+#![allow(async_fn_in_trait)]
+
 mod dirty;
 use dirty::Dirty;
 

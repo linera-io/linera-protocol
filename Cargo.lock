@@ -5021,13 +5021,11 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "bcs",
- "cfg-if",
  "cfg_aliases",
  "clap",
  "counter",
  "crossbeam-channel",
  "crowd-funding",
- "derive_more 1.0.0",
  "ethereum-tracker",
  "flarch",
  "fs-err",
@@ -5042,6 +5040,7 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
+ "linera-persistent",
  "linera-rpc",
  "linera-sdk",
  "linera-storage",
@@ -5056,7 +5055,6 @@ dependencies = [
  "reqwest 0.11.27",
  "serde",
  "serde-wasm-bindgen 0.6.5",
- "serde_json",
  "social",
  "tempfile",
  "test-case",
@@ -5359,6 +5357,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
+name = "linera-persistent"
+version = "0.15.0"
+dependencies = [
+ "cfg-if",
+ "cfg_aliases",
+ "derive_more 1.0.0",
+ "fs-err",
+ "fs4",
+ "gloo-utils",
+ "indexed_db_futures",
+ "serde",
+ "serde-wasm-bindgen 0.6.5",
+ "serde_json",
+ "thiserror 1.0.69",
+ "thiserror-context",
+ "tracing",
+ "trait-variant",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "linera-rpc"
 version = "0.15.0"
 dependencies = [
@@ -5492,6 +5512,7 @@ dependencies = [
  "linera-execution",
  "linera-faucet-client",
  "linera-faucet-server",
+ "linera-persistent",
  "linera-rpc",
  "linera-sdk",
  "linera-service",
@@ -5848,6 +5869,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
+ "linera-persistent",
  "linera-rpc",
  "linera-storage",
  "linera-views",

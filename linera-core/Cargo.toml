@@ -108,7 +108,7 @@ criterion = { workspace = true, default-features = true, features = [
 ] }
 
 [package.metadata.cargo-machete]
-ignored = ["async-graphql", "proptest"]
+ignored = ["proptest"]
 
 [[bench]]
 name = "client_benchmarks"
