@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["GraphQL","GraphQLBatchRequest","GraphQLProtocol","GraphQLRequest","GraphQLResponse","GraphQLSubscription","GraphQLWebSocket"]};

@@ -1,0 +1,111 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate a flags type."><title>bitflags in bitflags - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bitflags" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bitflags/index.html">bitflags</a><span class="version">2.9.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">bitflags</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#struct-mode" title="`struct` mode"><code>struct</code> mode</a><ul><li><a href="#examples" title="Examples">Examples</a></li></ul></li><li><a href="#impl-mode" title="`impl` mode"><code>impl</code> mode</a><ul><li><a href="#examples-1" title="Examples">Examples</a></li></ul></li><li><a href="#named-and-unnamed-flags" title="Named and unnamed flags">Named and unnamed flags</a><ul><li><a href="#examples-2" title="Examples">Examples</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate bitflags</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">bitflags</a></span><h1>Macro <span class="macro">bitflags</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/bitflags/lib.rs.html#447-588">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! bitflags {
+    (
+        $(#[$outer:meta])*
+        $vis:vis struct $BitFlags:ident: $T:ty {
+            $(
+                $(#[$inner:ident $($args:tt)*])*
+                const $Flag:tt = $value:expr;
+            )*
+        }
+
+        $($t:tt)*
+    ) =&gt; { ... };
+    (
+        $(#[$outer:meta])*
+        impl $BitFlags:ident: $T:ty {
+            $(
+                $(#[$inner:ident $($args:tt)*])*
+                const $Flag:tt = $value:expr;
+            )*
+        }
+
+        $($t:tt)*
+    ) =&gt; { ... };
+    () =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate a flags type.</p>
+<h2 id="struct-mode"><a class="doc-anchor" href="#struct-mode">§</a><code>struct</code> mode</h2>
+<p>A declaration that begins with <code>$vis struct</code> will generate a <code>struct</code> for a flags type, along with
+methods and trait implementations for it. The body of the declaration defines flags as constants,
+where each constant is a flags value of the generated flags type.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>Generate a flags type using <code>u8</code> as the bits type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>Flags: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+        <span class="kw">const </span>B = <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+        <span class="kw">const </span>C = <span class="number">0b0000_0100</span>;
+    }
+}</code></pre></div>
+<p>Flags types are private by default and accept standard visibility modifiers. Flags themselves
+are always public:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">pub struct </span>Flags: u8 {
+        <span class="comment">// Constants are always `pub`
+        </span><span class="kw">const </span>A = <span class="number">1</span>;
+    }
+}</code></pre></div>
+<p>Flags may refer to other flags using their <a href="trait.Flags.html#tymethod.bits" title="method bitflags::Flags::bits"><code>Flags::bits</code></a> value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>Flags: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+        <span class="kw">const </span>B = <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+        <span class="kw">const </span>AB = Flags::A.bits() | Flags::B.bits();
+    }
+}</code></pre></div>
+<p>A single <code>bitflags</code> invocation may include zero or more flags type declarations:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {}
+
+<span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>Flags1: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+    }
+
+    <span class="kw">struct </span>Flags2: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+    }
+}</code></pre></div>
+<h2 id="impl-mode"><a class="doc-anchor" href="#impl-mode">§</a><code>impl</code> mode</h2>
+<p>A declaration that begins with <code>impl</code> will only generate methods and trait implementations for the
+<code>struct</code> defined outside of the <code>bitflags</code> macro.</p>
+<p>The struct itself must be a newtype using the bits type as its field.</p>
+<p>The syntax for <code>impl</code> mode is identical to <code>struct</code> mode besides the starting token.</p>
+<h3 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h3>
+<p>Implement flags methods and traits for a custom flags type using <code>u8</code> as its underlying bits type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>Flags(u8);
+
+<span class="macro">bitflags!</span> {
+    <span class="kw">impl </span>Flags: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+        <span class="kw">const </span>B = <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+        <span class="kw">const </span>C = <span class="number">0b0000_0100</span>;
+    }
+}</code></pre></div>
+<h2 id="named-and-unnamed-flags"><a class="doc-anchor" href="#named-and-unnamed-flags">§</a>Named and unnamed flags</h2>
+<p>Constants in the body of a declaration are flags. The identifier of the constant is the name of
+the flag. If the identifier is <code>_</code>, then the flag is unnamed. Unnamed flags don’t appear in the
+generated API, but affect how bits are truncated.</p>
+<h3 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h3>
+<p>Adding an unnamed flag that makes all bits known:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>Flags: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+        <span class="kw">const </span>B = <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+
+        <span class="kw">const _ </span>= !<span class="number">0</span>;
+    }
+}</code></pre></div>
+<p>Flags types may define multiple unnamed flags:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>Flags: u8 {
+        <span class="kw">const _ </span>= <span class="number">1</span>;
+        <span class="kw">const _ </span>= <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

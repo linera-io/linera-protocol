@@ -1,0 +1,303 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ark-bls12-381-0.5.0/src/curves/g2_swu_iso.rs`."><title>g2_swu_iso.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ark_bls12_381" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../../static.files/storage-59e33391.js"></script><script defer src="../../../static.files/src-script-56102188.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">ark_bls12_381/curves/</div>g2_swu_iso.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a></pre></div><pre class="rust"><code><span class="kw">use crate</span>::<span class="kw-2">*</span>;
+
+<span class="kw">use </span>ark_ec::{
+    hashing::curve_maps::{swu::SWUConfig, wb::IsogenyMap},
+    models::{
+        short_weierstrass::{Affine, SWCurveConfig},
+        CurveConfig,
+    },
+};
+<span class="kw">use </span>ark_ff::MontFp;
+
+<span class="kw">type </span>G2Affine = Affine&lt;SwuIsoConfig&gt;;
+
+<span class="attr">#[derive(Clone, Default, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>SwuIsoConfig;
+
+<span class="kw">impl </span>CurveConfig <span class="kw">for </span>SwuIsoConfig {
+    <span class="kw">type </span>BaseField = Fq2;
+    <span class="kw">type </span>ScalarField = Fr;
+
+    <span class="doccomment">/// Cofactors of g2_iso and g2 are the same.
+    /// COFACTOR = (x^8 - 4 x^7 + 5 x^6) - (4 x^4 + 6 x^3 - 4 x^2 - 4 x + 13) //
+    /// 9
+    /// = 3055023339312683442009997531931215042144660192541881426676640329822676041829718840265074273592599778478322728390416166612858038233783720963550777062779109
+    </span><span class="attr">#[rustfmt::skip]
+    </span><span class="kw">const </span>COFACTOR: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u64] = <span class="kw-2">&amp;</span>[
+        <span class="number">0xcf1c38e31c7238e5</span>,
+        <span class="number">0x1616ec6e786f0c70</span>,
+        <span class="number">0x21537e293a6691ae</span>,
+        <span class="number">0xa628f1cb4d9e82ef</span>,
+        <span class="number">0xa68a205b2e5a7ddf</span>,
+        <span class="number">0xcd91de4547085aba</span>,
+        <span class="number">0x91d50792876a202</span>,
+        <span class="number">0x5d543a95414e7f1</span>,
+    ];
+
+    <span class="doccomment">/// COFACTOR_INV = COFACTOR^{-1} mod r
+    /// 26652489039290660355457965112010883481355318854675681319708643586776743290055
+    </span><span class="kw">const </span>COFACTOR_INV: Fr =
+        <span class="macro">MontFp!</span>(<span class="string">"26652489039290660355457965112010883481355318854675681319708643586776743290055"</span>);
+}
+
+<span class="comment">// https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/
+// Hashing to Elliptic Curves
+// 8.8.2.  BLS12-381 G2
+//   * E': y'^2 = x'^3 + A' * x' + B', where
+//
+//      - A' = 240 * I
+//
+//      - B' = 1012 * (1 + I)
+//
+//   * Z: -(2 + I)
+</span><span class="kw">impl </span>SWCurveConfig <span class="kw">for </span>SwuIsoConfig {
+    <span class="doccomment">/// COEFF_A = 240 * I
+    </span><span class="kw">const </span>COEFF_A: Fq2 = Fq2::new(<span class="macro">MontFp!</span>(<span class="string">"0"</span>), <span class="macro">MontFp!</span>(<span class="string">"240"</span>));
+
+    <span class="doccomment">/// COEFF_B = 1012 + 1012 * I
+    </span><span class="kw">const </span>COEFF_B: Fq2 = Fq2::new(<span class="macro">MontFp!</span>(<span class="string">"1012"</span>), <span class="macro">MontFp!</span>(<span class="string">"1012"</span>));
+
+    <span class="kw">const </span>GENERATOR: G2Affine = G2Affine::new_unchecked(G2_GENERATOR_X, G2_GENERATOR_Y);
+}
+
+<span class="doccomment">/// Lexicographically smallest, valid x-coordinate of a point P on the curve
+/// (with its corresponding y) multiplied by the cofactor. P_x = 1
+/// P_y = 1199519624119946820355795551601605892701128025883245860600494152840508171012839086684258857614063467038089173303263 + 2721622435888802346851223931977585460571674503470326381323808470905804676865417627238564067834747838523978879375704 * I
+/// P = E(P_x, P_y)
+/// G = P * COFACTOR
+</span><span class="kw">const </span>G2_GENERATOR_X: Fq2 = Fq2::new(
+    <span class="macro">MontFp!</span>(<span class="string">"2595569946714414516067015540153643524656442638788025933727967960306287756885400469291119095920626560658971252184199"</span>),
+    <span class="macro">MontFp!</span>(<span class="string">"1037079738597573406765355774006601850633656296583542639082316151670128374872040593053087014315526494961765370307992"</span>)
+);
+<span class="kw">const </span>G2_GENERATOR_Y: Fq2 = Fq2::new(
+    <span class="macro">MontFp!</span>(<span class="string">"3927929472994661655038722055497331445175131868678630546921475383290711810401295661250673209427965906654429357114487"</span>),
+    <span class="macro">MontFp!</span>(<span class="string">"3300326318345570015758639333209189167876318321385223785506096497597561910823001330832964776707374262378602791224889"</span>)
+);
+
+<span class="kw">impl </span>SWUConfig <span class="kw">for </span>SwuIsoConfig {
+    <span class="comment">// ZETA = -(2 + u) as per IETF draft.
+    </span><span class="kw">const </span>ZETA: Fq2 = Fq2::new(<span class="macro">MontFp!</span>(<span class="string">"-2"</span>), <span class="macro">MontFp!</span>(<span class="string">"-1"</span>));
+}
+
+<span class="kw">pub const </span>ISOGENY_MAP_TO_G2  : IsogenyMap&lt;<span class="lifetime">'_</span>, SwuIsoConfig, g2::Config&gt; = IsogenyMap {
+    x_map_numerator: <span class="kw-2">&amp;</span>[
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"889424345604814976315064405719089812568196182208668418962679585805340366775741747653930584250892369786198727235542"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"889424345604814976315064405719089812568196182208668418962679585805340366775741747653930584250892369786198727235542"</span>)), 
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"2668273036814444928945193217157269437704588546626005256888038757416021100327225242961791752752677109358596181706522"</span>)),
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"2668273036814444928945193217157269437704588546626005256888038757416021100327225242961791752752677109358596181706526"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"1334136518407222464472596608578634718852294273313002628444019378708010550163612621480895876376338554679298090853261"</span>)), 
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"3557697382419259905260257622876359250272784728834673675850718343221361467102966990615722337003569479144794908942033"</span>), 
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>)),
+    ],
+
+    x_map_denominator:  <span class="kw-2">&amp;</span>[
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>), 
+                   <span class="macro">MontFp!</span>(<span class="string">"4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559715"</span>)), 
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"12"</span>), 
+                   <span class="macro">MontFp!</span>(<span class="string">"4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559775"</span>)), 
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"1"</span>), 
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>)),
+    ],
+
+    y_map_numerator: <span class="kw-2">&amp;</span>[
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"3261222600550988246488569487636662646083386001431784202863158481286248011511053074731078808919938689216061999863558"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"3261222600550988246488569487636662646083386001431784202863158481286248011511053074731078808919938689216061999863558"</span>)),
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"889424345604814976315064405719089812568196182208668418962679585805340366775741747653930584250892369786198727235518"</span>)),
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"2668273036814444928945193217157269437704588546626005256888038757416021100327225242961791752752677109358596181706524"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"1334136518407222464472596608578634718852294273313002628444019378708010550163612621480895876376338554679298090853263"</span>)),
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"2816510427748580758331037284777117739799287910327449993381818688383577828123182200904113516794492504322962636245776"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>)),
+    ],
+
+    y_map_denominator: <span class="kw-2">&amp;</span>[
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559355"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559355"</span>)),
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559571"</span>)),
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"18"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559769"</span>)),
+        Fq2::new(
+                   <span class="macro">MontFp!</span>(<span class="string">"1"</span>),
+                   <span class="macro">MontFp!</span>(<span class="string">"0"</span>)),
+    ],
+};
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>test {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_gen() {
+        <span class="kw">let </span>gen: G2Affine = curves::g2_swu_iso::SwuIsoConfig::GENERATOR;
+        <span class="macro">assert!</span>(gen.is_on_curve());
+        <span class="macro">assert!</span>(gen.is_in_correct_subgroup_assuming_on_curve());
+    }
+}
+</code></pre></div></section></main></body></html>

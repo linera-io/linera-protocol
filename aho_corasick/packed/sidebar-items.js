@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MatchKind"],"struct":["Builder","Config","FindIter","Searcher"]};

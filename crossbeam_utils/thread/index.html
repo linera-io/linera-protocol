@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Threads that can borrow variables from the stack."><title>crossbeam_utils::thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="crossbeam_utils" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../crossbeam_utils/index.html">crossbeam_<wbr>utils</a><span class="version">0.8.21</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module thread</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#why-scoped-threads" title="Why scoped threads?">Why scoped threads?</a></li><li><a href="#how-scoped-threads-work" title="How scoped threads work">How scoped threads work</a></li><li><a href="#nesting-scoped-threads" title="Nesting scoped threads">Nesting scoped threads</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate crossbeam_<wbr>utils</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../index.html">crossbeam_utils</a></span><h1>Module <span>thread</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/crossbeam_utils/thread.rs.html#1-611">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Threads that can borrow variables from the stack.</p>
+<p>Create a scope when spawned threads need to access variables on the stack:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::thread;
+
+<span class="kw">let </span>people = <span class="macro">vec!</span>[
+    <span class="string">"Alice"</span>.to_string(),
+    <span class="string">"Bob"</span>.to_string(),
+    <span class="string">"Carol"</span>.to_string(),
+];
+
+thread::scope(|s| {
+    <span class="kw">for </span>person <span class="kw">in </span><span class="kw-2">&amp;</span>people {
+        s.spawn(<span class="kw">move </span>|<span class="kw">_</span>| {
+            <span class="macro">println!</span>(<span class="string">"Hello, {}!"</span>, person);
+        });
+    }
+}).unwrap();</code></pre></div>
+<h2 id="why-scoped-threads"><a class="doc-anchor" href="#why-scoped-threads">§</a>Why scoped threads?</h2>
+<p>Suppose we wanted to re-write the previous example using plain threads:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>people = <span class="macro">vec!</span>[
+    <span class="string">"Alice"</span>.to_string(),
+    <span class="string">"Bob"</span>.to_string(),
+    <span class="string">"Carol"</span>.to_string(),
+];
+
+<span class="kw">let </span><span class="kw-2">mut </span>threads = Vec::new();
+
+<span class="kw">for </span>person <span class="kw">in </span><span class="kw-2">&amp;</span>people {
+    threads.push(thread::spawn(<span class="kw">move </span>|| {
+        <span class="macro">println!</span>(<span class="string">"Hello, {}!"</span>, person);
+    }));
+}
+
+<span class="kw">for </span>thread <span class="kw">in </span>threads {
+    thread.join().unwrap();
+}</code></pre></div>
+<p>This doesn’t work because the borrow checker complains about <code>people</code> not living long enough:</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0597]: `people` does not live long enough
+  --&gt; src/main.rs:12:20
+   |
+12 |     for person in &amp;people {
+   |                    ^^^^^^ borrowed value does not live long enough
+...
+21 | }
+   | - borrowed value only lives until here
+   |
+   = note: borrowed value must be valid for the static lifetime...</code></pre></div>
+<p>The problem here is that spawned threads are not allowed to borrow variables on stack because
+the compiler cannot prove they will be joined before <code>people</code> is destroyed.</p>
+<p>Scoped threads are a mechanism to guarantee to the compiler that spawned threads will be joined
+before the scope ends.</p>
+<h2 id="how-scoped-threads-work"><a class="doc-anchor" href="#how-scoped-threads-work">§</a>How scoped threads work</h2>
+<p>If a variable is borrowed by a thread, the thread must complete before the variable is
+destroyed. Threads spawned using <a href="https://doc.rust-lang.org/1.85.0/std/thread/fn.spawn.html" title="fn std::thread::spawn"><code>std::thread::spawn</code></a> can only borrow variables with the
+<code>'static</code> lifetime because the borrow checker cannot be sure when the thread will complete.</p>
+<p>A scope creates a clear boundary between variables outside the scope and threads inside the
+scope. Whenever a scope spawns a thread, it promises to join the thread before the scope ends.
+This way we guarantee to the borrow checker that scoped threads only live within the scope and
+can safely access variables outside it.</p>
+<h2 id="nesting-scoped-threads"><a class="doc-anchor" href="#nesting-scoped-threads">§</a>Nesting scoped threads</h2>
+<p>Sometimes scoped threads need to spawn more threads within the same scope. This is a little
+tricky because argument <code>s</code> lives <em>inside</em> the invocation of <code>thread::scope()</code> and as such
+cannot be borrowed by scoped threads:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::thread;
+
+thread::scope(|s| {
+    s.spawn(|<span class="kw">_</span>| {
+        <span class="comment">// Not going to compile because we're trying to borrow `s`,
+        // which lives *inside* the scope! :(
+        </span>s.spawn(|<span class="kw">_</span>| <span class="macro">println!</span>(<span class="string">"nested thread"</span>));
+    });
+});</code></pre></div>
+<p>Fortunately, there is a solution. Every scoped thread is passed a reference to its scope as an
+argument, which can be used for spawning nested threads:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::thread;
+
+thread::scope(|s| {
+    <span class="comment">// Note the `|s|` here.
+    </span>s.spawn(|s| {
+        <span class="comment">// Yay, this works because we're using a fresh argument `s`! :)
+        </span>s.spawn(|<span class="kw">_</span>| <span class="macro">println!</span>(<span class="string">"nested thread"</span>));
+    });
+}).unwrap();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Scope.html" title="struct crossbeam_utils::thread::Scope">Scope</a></div><div class="desc docblock-short">A scope for spawning threads.</div></li><li><div class="item-name"><a class="struct" href="struct.ScopedJoinHandle.html" title="struct crossbeam_utils::thread::ScopedJoinHandle">Scoped<wbr>Join<wbr>Handle</a></div><div class="desc docblock-short">A handle that can be used to join its scoped thread.</div></li><li><div class="item-name"><a class="struct" href="struct.ScopedThreadBuilder.html" title="struct crossbeam_utils::thread::ScopedThreadBuilder">Scoped<wbr>Thread<wbr>Builder</a></div><div class="desc docblock-short">Configures the properties of a new thread.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.scope.html" title="fn crossbeam_utils::thread::scope">scope</a></div><div class="desc docblock-short">Creates a new scope for spawning threads.</div></li></ul></section></div></main></body></html>

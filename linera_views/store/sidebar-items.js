@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CommonStoreConfig","CommonStoreInternalConfig"],"trait":["AdminKeyValueStore","KeyIterable","KeyValueIterable","KeyValueStore","KeyValueStoreError","ReadableKeyValueStore","RestrictedKeyValueStore","TestKeyValueStore","WithError","WritableKeyValueStore"]};

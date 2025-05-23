@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Prints to `stdout`, with a newline."><title>println in anstream - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="anstream" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../anstream/index.html">anstream</a><span class="version">0.6.18</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">println</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#panics" title="Panics">Panics</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate anstream</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">anstream</a></span><h1>Macro <span class="macro">println</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/anstream/_macros.rs.html#130-151">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! println {
+    () =&gt; { ... };
+    ($($arg:tt)*) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Prints to <a href="fn.stdout.html" title="fn anstream::stdout"><code>stdout</code></a>, with a newline.</p>
+<p>On all platforms, the newline is the LINE FEED character (<code>\n</code>/<code>U+000A</code>) alone
+(no additional CARRIAGE RETURN (<code>\r</code>/<code>U+000D</code>)).</p>
+<p>This macro uses the same syntax as <a href="https://doc.rust-lang.org/1.85.0/alloc/macro.format.html" title="macro alloc::format"><code>format!</code></a>, but writes to the standard output instead.
+See <a href="https://doc.rust-lang.org/1.85.0/alloc/fmt/index.html" title="mod alloc::fmt"><code>std::fmt</code></a> for more information.</p>
+<p><strong>NOTE:</strong> The <code>println!</code> macro will lock the standard output on each call. If you call
+<code>println!</code> within a hot loop, this behavior may be the bottleneck of the loop.
+To avoid this, lock stdout with <a href="struct.AutoStream.html#method.lock" title="method anstream::AutoStream::lock"><code>AutoStream::lock</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>lock = anstream::stdout().lock();
+<span class="macro">writeln!</span>(lock, <span class="string">"hello world"</span>).unwrap();</code></pre></div>
+<p>Use <code>println!</code> only for the primary output of your program. Use
+<a href="https://doc.rust-lang.org/1.85.0/std/macro.eprintln.html" title="macro std::eprintln"><code>eprintln!</code></a> instead to print error and progress messages.</p>
+<p><strong>NOTE:</strong> Not all <code>println!</code> calls will be captured in tests like <a href="https://doc.rust-lang.org/1.85.0/std/macro.println.html" title="macro std::println"><code>std::println!</code></a></p>
+<ul>
+<li>Capturing will automatically be activated in test binaries</li>
+<li>Otherwise, only when the <code>test</code> feature is enabled</li>
+</ul>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Panics if writing to <code>stdout</code> fails for any reason <strong>except</strong> broken pipe.</p>
+<p>Writing to non-blocking stdout can cause an error, which will lead
+this macro to panic.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>anstream::println;
+
+<span class="macro">println!</span>(); <span class="comment">// prints just a newline
+</span><span class="macro">println!</span>(<span class="string">"hello there!"</span>);
+<span class="macro">println!</span>(<span class="string">"format {} arguments"</span>, <span class="string">"some"</span>);
+<span class="kw">let </span>local_variable = <span class="string">"some"</span>;
+<span class="macro">println!</span>(<span class="string">"format {local_variable} arguments"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

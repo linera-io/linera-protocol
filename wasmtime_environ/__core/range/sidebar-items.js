@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Bound"],"mod":["legacy"],"struct":["IterRange","IterRangeFrom","IterRangeInclusive","Range","RangeFrom","RangeFull","RangeInclusive","RangeTo","RangeToInclusive"],"trait":["OneSidedRange","RangeBounds","Step"]};

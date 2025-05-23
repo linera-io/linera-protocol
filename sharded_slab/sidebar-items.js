@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["implementation","pool"],"struct":["DefaultConfig","Entry","OwnedEntry","Pool","Slab","UniqueIter","VacantEntry"],"trait":["Clear","Config"]};
