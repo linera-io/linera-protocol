@@ -7,7 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use futures::Future;
 use linera_base::{
-    crypto::{CryptoHash, InMemorySigner, ValidatorPublicKey},
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::ChainOwnership,
@@ -126,17 +126,13 @@ where
     }
 }
 
-impl<S, W> ClientContext<linera_core::environment::Impl<S, NodeProvider, InMemorySigner>, W>
+impl<S, Si, W> ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>
 where
     S: linera_core::environment::Storage,
+    Si: linera_core::environment::Signer,
     W: Persist<Target = Wallet>,
 {
-    pub fn new(
-        storage: S,
-        options: ClientContextOptions,
-        wallet: W,
-        signer: InMemorySigner,
-    ) -> Self {
+    pub fn new(storage: S, options: ClientContextOptions, wallet: W, signer: Si) -> Self {
         let node_provider = NodeProvider::new(NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,

@@ -166,7 +166,11 @@ struct Options {}
 struct DummyContext;
 
 impl ClientContext for DummyContext {
-    type Environment = linera_core::environment::Impl<DbStorage<MemoryStore>, DummyValidatorNodeProvider, linera_base::crypto::InMemorySigner>;
+    type Environment = linera_core::environment::Impl<
+        DbStorage<MemoryStore>,
+        DummyValidatorNodeProvider,
+        linera_base::crypto::InMemorySigner,
+    >;
 
     fn wallet(&self) -> &Wallet {
         unimplemented!()
