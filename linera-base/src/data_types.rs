@@ -1375,9 +1375,9 @@ impl Blob {
         Ok(Self::new_data(fs::read(path)?))
     }
 
-    /// Returns whether the blob is a "user blob".
-    pub fn is_user_blob(&self) -> bool {
-        self.content().blob_type().is_user_blob()
+    /// Returns whether the blob is of [`BlobType::Committee`] variant.
+    pub fn is_committee_blob(&self) -> bool {
+        self.content().blob_type().is_committee_blob()
     }
 }
 

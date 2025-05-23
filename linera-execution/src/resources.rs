@@ -341,7 +341,7 @@ where
     pub fn track_blob_published(&mut self, blob: &Blob) -> Result<(), ExecutionError> {
         self.policy.check_blob_size(blob.content())?;
         let size = blob.content().bytes().len() as u64;
-        if !blob.is_user_blob() {
+        if blob.is_committee_blob() {
             return Ok(());
         }
         {
