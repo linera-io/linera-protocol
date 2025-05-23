@@ -869,7 +869,7 @@ where
             chain_timestamp <= block.timestamp,
             ChainError::InvalidBlockTimestamp {
                 parent: chain_timestamp,
-                new: blobk.timestamp
+                new: block.timestamp
             }
         );
         ensure!(
