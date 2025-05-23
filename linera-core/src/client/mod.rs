@@ -1394,6 +1394,9 @@ pub enum ChainClientError {
         expected_hash: CryptoHash,
         expected_round: Round,
     },
+
+    #[error("signer error: {0:?}")]
+    Signer(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -1403,8 +1406,8 @@ impl From<Infallible> for ChainClientError {
 }
 
 impl ChainClientError {
-    pub fn signer_failure(_err: Box<dyn std::error::Error>) -> Self {
-        Self::BlockProposalError("Signer failure")
+    pub fn signer_failure(err: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self::Signer(Box::new(err))
     }
 }
 
