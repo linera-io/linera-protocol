@@ -18,7 +18,7 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
+use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -67,7 +67,6 @@ impl StorageStats {
 
 pub(crate) struct DatabaseRuntime<Runtime> {
     storage_stats: Arc<Mutex<StorageStats>>,
-    pub contract_address: Address,
     pub runtime: Arc<Mutex<Runtime>>,
     pub changes: EvmState,
 }
@@ -76,7 +75,6 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
         Self {
             storage_stats: self.storage_stats.clone(),
-            contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
         }
@@ -98,6 +96,12 @@ pub enum KeyCategory {
     Storage,
 }
 
+fn application_id_to_address(application_id: ApplicationId) -> Address {
+    let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
+    let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+    Address::from_slice(&application_id[0..20])
+}
+
 impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Encode the `index` of the EVM storage associated to the smart contract
     /// in a linera key.
@@ -108,31 +112,24 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     }
 
     /// Returns the tag associated to the contract.
-    fn get_contract_address_key(&self, address: &Address) -> Option<u8> {
+    fn get_contract_address_key(&self, address: &Address, contract_address: &Address) -> Option<u8> {
         if address == &Address::ZERO {
             return Some(KeyTag::NullAddress as u8);
         }
-        if address == &self.contract_address {
+        if address == contract_address {
             return Some(KeyTag::ContractAddress as u8);
         }
         None
     }
 
     /// Creates a new `DatabaseRuntime`.
-    pub fn new(mut runtime: Runtime) -> Result<Self, ExecutionError> {
+    pub fn new(runtime: Runtime) -> Self {
         let storage_stats = StorageStats::default();
-        let contract_address = {
-            let application_id = runtime.application_id()?;
-            let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
-            let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
-            Address::from_slice(&application_id[0..20])
-        };
-        Ok(Self {
+        Self {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
-            contract_address,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
-        })
+        }
     }
 
     /// Returns the current storage states and clears it to default.
@@ -193,7 +190,9 @@ where
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let val = self.get_contract_address_key(&address);
+        let application_id = runtime.application_id()?;
+        let contract_address = application_id_to_address(application_id);
+        let val = self.get_contract_address_key(&address, &contract_address);
         let Some(val) = val else {
             return Ok(Some(AccountInfo::default()));
         };
@@ -216,7 +215,12 @@ where
                 Some(slot) => slot.present_value(),
             });
         }
-        let val = self.get_contract_address_key(&address);
+        let val = {
+            let mut runtime = self.runtime.lock().expect("The lock should be possible");
+            let application_id = runtime.application_id()?;
+            let contract_address = application_id_to_address(application_id);
+            self.get_contract_address_key(&address, &contract_address)
+        };
         let Some(val) = val else {
             panic!("There is no storage associated to externally owned account");
         };
@@ -252,13 +256,15 @@ where
             .lock()
             .expect("The lock should be possible");
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let application_id = runtime.application_id()?;
+        let contract_address = application_id_to_address(application_id);
         let mut batch = Batch::new();
         let mut list_new_balances = Vec::new();
         for (address, account) in &self.changes {
             if !account.is_touched() {
                 continue;
             }
-            let val = self.get_contract_address_key(address);
+            let val = self.get_contract_address_key(address, &contract_address);
             if let Some(val) = val {
                 let key_prefix = vec![val, KeyCategory::Storage as u8];
                 let key_info = vec![val, KeyCategory::AccountInfo as u8];
@@ -340,6 +346,13 @@ where
             None => 0,
             Some(account_info) => account_info.nonce,
         })
+    }
+
+    /// The EVM contract address
+    pub fn get_contract_address(&self) -> Result<Address, ExecutionError> {
+        let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let application_id = runtime.application_id()?;
+        Ok(application_id_to_address(application_id))
     }
 
     /// Checks if the contract is already initialized. It is possible

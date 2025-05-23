@@ -191,7 +191,7 @@ impl UserContractModule for EvmContractModule {
         let instance: UserContractInstance = match self {
             #[cfg(with_revm)]
             EvmContractModule::Revm { module } => {
-                Box::new(RevmContractInstance::prepare(module.to_vec(), runtime)?)
+                Box::new(RevmContractInstance::prepare(module.to_vec(), runtime))
             }
         };
 
@@ -252,7 +252,7 @@ impl UserServiceModule for EvmServiceModule {
         let instance: UserServiceInstance = match self {
             #[cfg(with_revm)]
             EvmServiceModule::Revm { module } => {
-                Box::new(RevmServiceInstance::prepare(module.to_vec(), runtime)?)
+                Box::new(RevmServiceInstance::prepare(module.to_vec(), runtime))
             }
         };
 
@@ -639,12 +639,14 @@ fn get_interpreter_result(
 
 struct CallInterceptorContract<Runtime> {
     db: DatabaseRuntime<Runtime>,
+    contract_address: Address,
 }
 
 impl<Runtime> Clone for CallInterceptorContract<Runtime> {
     fn clone(&self) -> Self {
         Self {
             db: self.db.clone(),
+            contract_address: self.contract_address,
         }
     }
 }
@@ -678,8 +680,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
     fn create(&mut self, _context: &mut Ctx<'a, Runtime>, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
-        let address = self.db.contract_address;
-        inputs.scheme = CreateScheme::Custom { address };
+        inputs.scheme = CreateScheme::Custom { address: self.contract_address };
         None
     }
 
@@ -707,7 +708,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = self.db.contract_address;
+        let contract_address = self.db.get_contract_address()?;
         if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
             return Ok(None);
@@ -729,20 +730,21 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
 
 struct CallInterceptorService<Runtime> {
     db: DatabaseRuntime<Runtime>,
+    contract_address: Address,
 }
 
 impl<Runtime> Clone for CallInterceptorService<Runtime> {
     fn clone(&self) -> Self {
         Self {
             db: self.db.clone(),
+            contract_address: self.contract_address,
         }
     }
 }
 
 impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
     fn create(&mut self, _context: &mut Ctx<'a, Runtime>, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
-        let address = self.db.contract_address;
-        inputs.scheme = CreateScheme::Custom { address };
+        inputs.scheme = CreateScheme::Custom { address: self.contract_address };
         None
     }
 
@@ -770,7 +772,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = self.db.contract_address;
+        let contract_address = self.db.get_contract_address()?;
         if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
         {
             return Ok(None);
@@ -936,9 +938,9 @@ impl<Runtime> RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
-    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Result<Self, ExecutionError> {
-        let db = DatabaseRuntime::new(runtime)?;
-        Ok(Self { module, db })
+    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
+        let db = DatabaseRuntime::new(runtime);
+        Self { module, db }
     }
 
     /// Executes the transaction. If needed initializes the contract.
@@ -950,9 +952,12 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
+        tracing::info!("init_transact_commit, step 1");
         if !self.db.is_initialized()? {
+            tracing::info!("init_transact_commit, step 2");
             self.initialize_contract()?;
         }
+        tracing::info!("init_transact_commit, step 3");
         self.transact_commit(ch, vec)
     }
 
@@ -960,9 +965,10 @@ where
     fn initialize_contract(&mut self) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
+        let contract_address = self.db.get_contract_address()?;
         vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(Choice::Create, &vec_init)?;
-        result.check_contract_address(self.db.contract_address)
+        result.check_contract_address(contract_address)
             .map_err(|error| ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error)))?;
         self.write_logs(result.logs, "deploy")
     }
@@ -972,7 +978,7 @@ where
         ch: Choice,
         input: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        let contract_address = self.db.contract_address;
+        let contract_address = self.db.get_contract_address()?;
         let (kind, data) = match ch {
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
             Choice::Call => {
@@ -982,6 +988,7 @@ where
         };
         let inspector = CallInterceptorContract {
             db: self.db.clone(),
+            contract_address,
         };
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
@@ -1060,9 +1067,9 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Result<Self, ExecutionError> {
-        let db = DatabaseRuntime::new(runtime)?;
-        Ok(Self { module, db })
+    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
+        let db = DatabaseRuntime::new(runtime);
+        Self { module, db }
     }
 }
 
@@ -1106,13 +1113,14 @@ where
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
+        let contract_address = self.db.get_contract_address()?;
         if !self.db.is_initialized()? {
             let changes = {
                 let mut vec_init = self.module.clone();
                 let constructor_argument = self.db.constructor_argument()?;
                 vec_init.extend_from_slice(&constructor_argument);
                 let (result, changes) = self.transact(TxKind::Create, &vec_init)?;
-                result.check_contract_address(self.db.contract_address)
+                result.check_contract_address(contract_address)
                     .map_err(|error| ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error)))?;
                 changes
             };
@@ -1120,7 +1128,6 @@ where
         }
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
-        let contract_address = self.db.contract_address;
         let kind = TxKind::Call(contract_address);
         let (execution_result, _) = self.transact(kind, vec)?;
         Ok(execution_result)
@@ -1134,8 +1141,10 @@ where
         let data = Bytes::copy_from_slice(input);
 
         let block_env = self.db.get_service_block_env()?;
+        let contract_address = self.db.get_contract_address()?;
         let inspector = CallInterceptorService {
             db: self.db.clone(),
+            contract_address,
         };
         let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
         let result_state = {
