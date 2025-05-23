@@ -177,7 +177,7 @@ where
     }
 
     #[cfg(with_testing)]
-    pub fn new_test_client_context(storage: S, wallet: W, signer: Box<dyn Signer>) -> Self {
+    pub fn new_test_client_context(storage: S, wallet: W, signer: Si) -> Self {
         use linera_core::DEFAULT_GRACE_PERIOD;
 
         let send_recv_timeout = Duration::from_millis(4000);
@@ -201,8 +201,8 @@ where
             linera_core::environment::Impl {
                 storage,
                 network: NodeProvider::new(node_options),
+                signer,
             },
-            signer,
             10,
             wallet.genesis_admin_chain(),
             delivery,

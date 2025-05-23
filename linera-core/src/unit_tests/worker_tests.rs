@@ -17,9 +17,7 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{
-        AccountPublicKey, AccountSecretKey, CryptoHash, InMemorySigner, Signer, ValidatorKeypair,
-    },
+    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, InMemorySigner, ValidatorKeypair},
     data_types::*,
     identifiers::{Account, AccountOwner, ChainId, EventId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -719,10 +717,7 @@ where
     let chain_2 = chain_2_desc.id();
     let unknown_key = AccountSecretKey::generate();
     let unknown_owner = unknown_key.public().into();
-    let new_signer: Box<dyn Signer> = Box::new(InMemorySigner::from_iter(vec![(
-        unknown_owner,
-        unknown_key,
-    )]));
+    let new_signer: InMemorySigner = InMemorySigner::from_iter(vec![(unknown_owner, unknown_key)]);
     let unknown_sender_block_proposal = make_first_block(chain_1)
         .with_simple_transfer(chain_2, Amount::from_tokens(5))
         .into_first_proposal(unknown_owner, &new_signer)

@@ -670,7 +670,7 @@ where
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
 #[allow(dead_code)]
-pub struct TestBuilder<'a, B: StorageBuilder> {
+pub struct TestBuilder<B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
     admin_description: Option<ChainDescription>,
@@ -680,7 +680,7 @@ pub struct TestBuilder<'a, B: StorageBuilder> {
     validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
-    pub signer: &'a mut InMemorySigner,
+    pub signer: InMemorySigner,
 }
 
 #[async_trait]
@@ -724,9 +724,10 @@ impl GenesisStorageBuilder {
     }
 }
 
-pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
+pub type ChainClient<S> =
+    crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>, InMemorySigner>>;
 
-impl<'signer, B> TestBuilder<'signer, B>
+impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
 {
@@ -734,7 +735,7 @@ where
         mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
-        signer: &'signer mut InMemorySigner,
+        mut signer: InMemorySigner,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -937,8 +938,8 @@ where
             crate::environment::Impl {
                 network: self.make_node_provider(),
                 storage,
+                signer: self.signer.clone(),
             },
-            Box::new(self.signer.clone()),
             10,
             self.admin_id(),
             CrossChainMessageDelivery::NonBlocking,
