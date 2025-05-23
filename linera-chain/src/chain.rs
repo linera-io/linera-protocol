@@ -14,7 +14,7 @@ use linera_base::{
         Epoch, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, MessageId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
