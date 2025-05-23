@@ -121,10 +121,12 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Creates a new `DatabaseRuntime`.
     pub fn new(mut runtime: Runtime) -> Result<Self, ExecutionError> {
         let storage_stats = StorageStats::default();
-        let application_id = runtime.application_id()?;
-        let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
-        let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
-        let contract_address = Address::from_slice(&application_id[0..20]);
+        let contract_address = {
+            let application_id = runtime.application_id()?;
+            let application_id: [u64; 4] = <[u64; 4]>::from(application_id.application_description_hash);
+            let application_id: [u8; 32] = linera_base::crypto::u64_array_to_be_bytes(application_id);
+            Address::from_slice(&application_id[0..20])
+        };
         Ok(Self {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
             contract_address,
