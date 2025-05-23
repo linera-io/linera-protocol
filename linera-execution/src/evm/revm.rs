@@ -813,7 +813,7 @@ impl ExecutionResultSuccess {
     fn interpreter_result_and_logs(self) -> Result<(u64, Vec<u8>, Vec<Log>), ExecutionError> {
         let result: InstructionResult = self.reason.into();
         let Output::Call(output) = self.output else {
-            unreachable!("The Output is not a call which is impossible");
+            unreachable!("The output should have been created from a Choice::Call");
         };
         let gas = Gas::new(0);
         let result = InterpreterResult {
@@ -827,10 +827,22 @@ impl ExecutionResultSuccess {
 
     fn output_and_logs(self) -> (u64, Vec<u8>, Vec<Log>) {
         let Output::Call(output) = self.output else {
-            unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
+            unreachable!("The output should have been created from a Choice::Call");
         };
         let output = output.as_ref().to_vec();
         (self.gas_final, output, self.logs)
+    }
+
+    fn check_contract_address(&self, expected_address: Address) -> Result<(), String> {
+        let Output::Create(_, contract_address) = self.output else {
+            return Err("Input should be Choice::Create".to_string());
+        };
+        let contract_address = contract_address.ok_or("Deployment failed")?;
+        if contract_address == expected_address {
+            Ok(())
+        } else {
+            Err("Contract address is not the same as ApplicationId".to_string())
+        }
     }
 }
 
@@ -950,6 +962,8 @@ where
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(Choice::Create, &vec_init)?;
+        result.check_contract_address(self.db.contract_address)
+            .map_err(|error| ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error)))?;
         self.write_logs(result.logs, "deploy")
     }
 
@@ -1097,8 +1111,9 @@ where
                 let mut vec_init = self.module.clone();
                 let constructor_argument = self.db.constructor_argument()?;
                 vec_init.extend_from_slice(&constructor_argument);
-                let kind = TxKind::Create;
-                let (_, changes) = self.transact(kind, &vec_init)?;
+                let (result, changes) = self.transact(TxKind::Create, &vec_init)?;
+                result.check_contract_address(self.db.contract_address)
+                    .map_err(|error| ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error)))?;
                 changes
             };
             self.db.changes = changes;
