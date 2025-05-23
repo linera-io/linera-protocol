@@ -20,7 +20,7 @@ use revm_context::{
     result::{ExecutionResult, Output, SuccessReason},
     BlockEnv, Cfg, ContextTr, Evm, Journal, LocalContextTr, TxEnv,
 };
-use revm_database_interface::WrapDatabaseRef;
+use revm_database::WrapDatabaseRef;
 use revm_handler::{
     instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };

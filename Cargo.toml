@@ -187,9 +187,6 @@ revm-context-interface = { version = "5.0.0", default-features = false, features
 revm-database = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
-revm-database-interface = { version = "4.0.1", default-features = false, features = [
-    "serde",
-] }
 revm-handler = { version = "5.0.0", default-features = false, features = [
     "serde",
 ] }

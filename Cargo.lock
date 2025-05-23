@@ -5150,7 +5150,6 @@ dependencies = [
  "revm-context",
  "revm-context-interface",
  "revm-database",
- "revm-database-interface",
  "revm-handler",
  "revm-interpreter",
  "revm-primitives",
