@@ -25,7 +25,8 @@ use revm_handler::{
     instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };
 use revm_interpreter::{
-    CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl, InstructionResult, InterpreterResult,
+    CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl,
+    InstructionResult, InterpreterResult,
 };
 use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
 use revm_state::EvmState;
@@ -679,8 +680,14 @@ fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput)
 impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
     for CallInterceptorContract<Runtime>
 {
-    fn create(&mut self, _context: &mut Ctx<'a, Runtime>, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom { address: self.contract_address };
+    fn create(
+        &mut self,
+        _context: &mut Ctx<'a, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Option<CreateOutcome> {
+        inputs.scheme = CreateScheme::Custom {
+            address: self.contract_address,
+        };
         None
     }
 
@@ -743,8 +750,14 @@ impl<Runtime> Clone for CallInterceptorService<Runtime> {
 }
 
 impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallInterceptorService<Runtime> {
-    fn create(&mut self, _context: &mut Ctx<'a, Runtime>, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
-        inputs.scheme = CreateScheme::Custom { address: self.contract_address };
+    fn create(
+        &mut self,
+        _context: &mut Ctx<'a, Runtime>,
+        inputs: &mut CreateInputs,
+    ) -> Option<CreateOutcome> {
+        inputs.scheme = CreateScheme::Custom {
+            address: self.contract_address,
+        };
         None
     }
 
@@ -968,8 +981,11 @@ where
         let contract_address = self.db.get_contract_address()?;
         vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(Choice::Create, &vec_init)?;
-        result.check_contract_address(contract_address)
-            .map_err(|error| ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error)))?;
+        result
+            .check_contract_address(contract_address)
+            .map_err(|error| {
+                ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error))
+            })?;
         self.write_logs(result.logs, "deploy")
     }
 
@@ -1120,8 +1136,13 @@ where
                 let constructor_argument = self.db.constructor_argument()?;
                 vec_init.extend_from_slice(&constructor_argument);
                 let (result, changes) = self.transact(TxKind::Create, &vec_init)?;
-                result.check_contract_address(contract_address)
-                    .map_err(|error| ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error)))?;
+                result
+                    .check_contract_address(contract_address)
+                    .map_err(|error| {
+                        ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(
+                            error,
+                        ))
+                    })?;
                 changes
             };
             self.db.changes = changes;

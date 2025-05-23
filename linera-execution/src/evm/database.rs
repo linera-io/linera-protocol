@@ -18,7 +18,9 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
+use crate::{
+    ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError,
+};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -112,7 +114,11 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     }
 
     /// Returns the tag associated to the contract.
-    fn get_contract_address_key(&self, address: &Address, contract_address: &Address) -> Option<u8> {
+    fn get_contract_address_key(
+        &self,
+        address: &Address,
+        contract_address: &Address,
+    ) -> Option<u8> {
         if address == &Address::ZERO {
             return Some(KeyTag::NullAddress as u8);
         }
@@ -331,9 +337,6 @@ where
         Ok(())
     }
 }
-
-
-
 
 impl<Runtime> DatabaseRuntime<Runtime>
 where
