@@ -7,4 +7,4 @@ metadata:
   annotations:
     grafana_folder: "Scylla Manager"
 data:
-    scylla-manager.2.2.json: {{ .Files.Get "grafana-dashboards/scylla-manager/scylla-manager.2.2.json" | quote | indent 4 }}
+    scylla-manager.3.4.json: {{ .Files.Get "grafana-dashboards/scylla-manager/scylla-manager.3.4.json" | quote | indent 4 }}

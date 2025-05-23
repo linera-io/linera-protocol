@@ -7,9 +7,10 @@ use std::{sync::Arc, time::Duration};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, BlobContent},
+    data_types::{Amount, ArithmeticError, Blob},
     ensure,
     identifiers::AccountOwner,
+    vm::VmRuntime,
 };
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
@@ -19,22 +20,47 @@ use crate::{ExecutionError, Message, Operation, ResourceControlPolicy, SystemExe
 #[derive(Clone, Debug, Default)]
 pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
     /// The (fixed) policy used to charge fees and control resource usage.
-    pub policy: Arc<ResourceControlPolicy>,
+    policy: Arc<ResourceControlPolicy>,
     /// How the resources were used so far.
     pub tracker: Tracker,
     /// The account paying for the resource usage.
     pub account: Account,
 }
 
+impl<Account, Tracker> ResourceController<Account, Tracker> {
+    /// Creates a new resource controller with the given policy and account.
+    pub fn new(policy: Arc<ResourceControlPolicy>, tracker: Tracker, account: Account) -> Self {
+        Self {
+            policy,
+            tracker,
+            account,
+        }
+    }
+
+    /// Returns a reference to the policy.
+    pub fn policy(&self) -> &Arc<ResourceControlPolicy> {
+        &self.policy
+    }
+
+    /// Returns a reference to the tracker.
+    pub fn tracker(&self) -> &Tracker {
+        &self.tracker
+    }
+}
+
 /// The resources used so far by an execution process.
+/// Acts as an accumulator for all resources consumed during
+/// a specific execution flow. This could be the execution of a block,
+/// the processing of a single message, or a specific phase within these
+/// broader operations.
 #[derive(Copy, Debug, Clone, Default)]
 pub struct ResourceTracker {
-    /// The number of blocks created.
-    pub blocks: u32,
     /// The total size of the block so far.
     pub block_size: u64,
-    /// The fuel used so far.
-    pub fuel: u64,
+    /// The EVM fuel used so far.
+    pub evm_fuel: u64,
+    /// The Wasm fuel used so far.
+    pub wasm_fuel: u64,
     /// The number of read operations.
     pub read_operations: u32,
     /// The number of write operations.
@@ -71,6 +97,15 @@ pub struct ResourceTracker {
     pub grants: Amount,
 }
 
+impl ResourceTracker {
+    fn fuel(&self, vm_runtime: VmRuntime) -> u64 {
+        match vm_runtime {
+            VmRuntime::Wasm => self.wasm_fuel,
+            VmRuntime::Evm => self.evm_fuel,
+        }
+    }
+}
+
 /// How to access the balance of an account.
 pub trait BalanceHolder {
     fn balance(&self) -> Result<Amount, ArithmeticError>;
@@ -96,11 +131,13 @@ where
     /// and `other` to `self`.
     pub fn merge_balance(&mut self, initial: Amount, other: Amount) -> Result<(), ExecutionError> {
         if other <= initial {
-            self.account
-                .try_sub_assign(initial.try_sub(other).expect("other <= initial"))
-                .map_err(|_| ExecutionError::InsufficientFundingForFees {
+            let sub_amount = initial.try_sub(other).expect("other <= initial");
+            self.account.try_sub_assign(sub_amount).map_err(|_| {
+                ExecutionError::FeesExceedFunding {
+                    fees: sub_amount,
                     balance: self.balance().unwrap_or(Amount::MAX),
-                })?;
+                }
+            })?;
         } else {
             self.account
                 .try_add_assign(other.try_sub(initial).expect("other > initial"))?;
@@ -110,40 +147,29 @@ where
 
     /// Subtracts an amount from a balance and reports an error if that is impossible.
     fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
-        self.account.try_sub_assign(fees).map_err(|_| {
-            ExecutionError::InsufficientFundingForFees {
+        self.account
+            .try_sub_assign(fees)
+            .map_err(|_| ExecutionError::FeesExceedFunding {
+                fees,
                 balance: self.balance().unwrap_or(Amount::MAX),
-            }
-        })?;
+            })?;
         Ok(())
     }
 
     /// Obtains the amount of fuel that could be spent by consuming the entire balance.
-    pub(crate) fn remaining_fuel(&self) -> u64 {
+    pub(crate) fn remaining_fuel(&self, vm_runtime: VmRuntime) -> u64 {
+        let balance = self.balance().unwrap_or(Amount::MAX);
+        let fuel = self.tracker.as_ref().fuel(vm_runtime);
+        let maximum_fuel_per_block = self.policy.maximum_fuel_per_block(vm_runtime);
         self.policy
-            .remaining_fuel(self.balance().unwrap_or(Amount::MAX))
-            .min(
-                self.policy
-                    .maximum_fuel_per_block
-                    .saturating_sub(self.tracker.as_ref().fuel),
-            )
+            .remaining_fuel(balance, vm_runtime)
+            .min(maximum_fuel_per_block.saturating_sub(fuel))
     }
 
     /// Tracks the allocation of a grant.
     pub fn track_grant(&mut self, grant: Amount) -> Result<(), ExecutionError> {
         self.tracker.as_mut().grants.try_add_assign(grant)?;
         self.update_balance(grant)
-    }
-
-    /// Tracks the creation of a block.
-    pub fn track_block(&mut self) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().blocks = self
-            .tracker
-            .as_mut()
-            .blocks
-            .checked_add(1)
-            .ok_or(ArithmeticError::Overflow)?;
-        self.update_balance(self.policy.block)
     }
 
     /// Tracks the execution of an operation in block.
@@ -208,29 +234,49 @@ where
     }
 
     /// Tracks a number of fuel units used.
-    pub(crate) fn track_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().fuel = self
-            .tracker
-            .as_ref()
-            .fuel
-            .checked_add(fuel)
-            .ok_or(ArithmeticError::Overflow)?;
-        ensure!(
-            self.tracker.as_ref().fuel <= self.policy.maximum_fuel_per_block,
-            ExecutionError::MaximumFuelExceeded
-        );
-        self.update_balance(self.policy.fuel_price(fuel)?)
+    pub(crate) fn track_fuel(
+        &mut self,
+        fuel: u64,
+        vm_runtime: VmRuntime,
+    ) -> Result<(), ExecutionError> {
+        match vm_runtime {
+            VmRuntime::Wasm => {
+                self.tracker.as_mut().wasm_fuel = self
+                    .tracker
+                    .as_ref()
+                    .wasm_fuel
+                    .checked_add(fuel)
+                    .ok_or(ArithmeticError::Overflow)?;
+                ensure!(
+                    self.tracker.as_ref().wasm_fuel <= self.policy.maximum_wasm_fuel_per_block,
+                    ExecutionError::MaximumFuelExceeded(vm_runtime)
+                );
+            }
+            VmRuntime::Evm => {
+                self.tracker.as_mut().evm_fuel = self
+                    .tracker
+                    .as_ref()
+                    .evm_fuel
+                    .checked_add(fuel)
+                    .ok_or(ArithmeticError::Overflow)?;
+                ensure!(
+                    self.tracker.as_ref().evm_fuel <= self.policy.maximum_evm_fuel_per_block,
+                    ExecutionError::MaximumFuelExceeded(vm_runtime)
+                );
+            }
+        }
+        self.update_balance(self.policy.fuel_price(fuel, vm_runtime)?)
     }
 
     /// Tracks a read operation.
-    pub(crate) fn track_read_operations(&mut self, count: u32) -> Result<(), ExecutionError> {
+    pub(crate) fn track_read_operation(&mut self) -> Result<(), ExecutionError> {
         self.tracker.as_mut().read_operations = self
             .tracker
             .as_mut()
             .read_operations
-            .checked_add(count)
+            .checked_add(1)
             .ok_or(ArithmeticError::Overflow)?;
-        self.update_balance(self.policy.read_operations_price(count)?)
+        self.update_balance(self.policy.read_operations_price(1)?)
     }
 
     /// Tracks a write operation.
@@ -292,9 +338,12 @@ where
     }
 
     /// Tracks a number of blob bytes published.
-    pub fn track_blob_published(&mut self, content: &BlobContent) -> Result<(), ExecutionError> {
-        self.policy.check_blob_size(content)?;
-        let size = content.bytes().len() as u64;
+    pub fn track_blob_published(&mut self, blob: &Blob) -> Result<(), ExecutionError> {
+        self.policy.check_blob_size(blob.content())?;
+        let size = blob.content().bytes().len() as u64;
+        if blob.is_committee_blob() {
+            return Ok(());
+        }
         {
             let tracker = self.tracker.as_mut();
             tracker.blob_bytes_published = tracker
@@ -404,6 +453,54 @@ where
     }
 }
 
+impl ResourceController<Option<AccountOwner>, ResourceTracker> {
+    /// Provides a reference to the current execution state and obtains a temporary object
+    /// where the accounting functions of [`ResourceController`] are available.
+    pub async fn with_state<'a, C>(
+        &mut self,
+        view: &'a mut SystemExecutionStateView<C>,
+    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+    {
+        self.with_state_and_grant(view, None).await
+    }
+
+    /// Provides a reference to the current execution state as well as an optional grant,
+    /// and obtains a temporary object where the accounting functions of
+    /// [`ResourceController`] are available.
+    pub async fn with_state_and_grant<'a, C>(
+        &mut self,
+        view: &'a mut SystemExecutionStateView<C>,
+        grant: Option<&'a mut Amount>,
+    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+    {
+        let mut sources = Vec::new();
+        // First, use the grant (e.g. for messages) and otherwise use the chain account
+        // (e.g. for blocks and operations).
+        if let Some(grant) = grant {
+            sources.push(grant);
+        } else {
+            sources.push(view.balance.get_mut());
+        }
+        // Then the local account, if any. Currently, any negative fee (e.g. storage
+        // refund) goes preferably to this account.
+        if let Some(owner) = &self.account {
+            if let Some(balance) = view.balances.get_mut(owner).await? {
+                sources.push(balance);
+            }
+        }
+
+        Ok(ResourceController {
+            policy: self.policy.clone(),
+            tracker: &mut self.tracker,
+            account: Sources { sources },
+        })
+    }
+}
+
 // The simplest `BalanceHolder` is an `Amount`.
 impl BalanceHolder for Amount {
     fn balance(&self) -> Result<Amount, ArithmeticError> {
@@ -467,53 +564,5 @@ impl BalanceHolder for Sources<'_> {
         } else {
             Ok(())
         }
-    }
-}
-
-impl ResourceController<Option<AccountOwner>, ResourceTracker> {
-    /// Provides a reference to the current execution state and obtains a temporary object
-    /// where the accounting functions of [`ResourceController`] are available.
-    pub async fn with_state<'a, C>(
-        &mut self,
-        view: &'a mut SystemExecutionStateView<C>,
-    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
-    where
-        C: Context + Clone + Send + Sync + 'static,
-    {
-        self.with_state_and_grant(view, None).await
-    }
-
-    /// Provides a reference to the current execution state as well as an optional grant,
-    /// and obtains a temporary object where the accounting functions of
-    /// [`ResourceController`] are available.
-    pub async fn with_state_and_grant<'a, C>(
-        &mut self,
-        view: &'a mut SystemExecutionStateView<C>,
-        grant: Option<&'a mut Amount>,
-    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
-    where
-        C: Context + Clone + Send + Sync + 'static,
-    {
-        let mut sources = Vec::new();
-        // First, use the grant (e.g. for messages) and otherwise use the chain account
-        // (e.g. for blocks and operations).
-        if let Some(grant) = grant {
-            sources.push(grant);
-        } else {
-            sources.push(view.balance.get_mut());
-        }
-        // Then the local account, if any. Currently, any negative fee (e.g. storage
-        // refund) goes preferably to this account.
-        if let Some(owner) = &self.account {
-            if let Some(balance) = view.balances.get_mut(owner).await? {
-                sources.push(balance);
-            }
-        }
-
-        Ok(ResourceController {
-            policy: self.policy.clone(),
-            tracker: &mut self.tracker,
-            account: Sources { sources },
-        })
     }
 }

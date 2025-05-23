@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
@@ -26,7 +25,6 @@ struct ClientContext {
     update_calls: usize,
 }
 
-#[async_trait]
 impl chain_listener::ClientContext for ClientContext {
     type Environment = environment::Test;
 
@@ -42,12 +40,9 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
-    async fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<ChainClient<environment::Test>, linera_client::Error> {
+    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
         assert_eq!(chain_id, self.client.chain_id());
-        Ok(self.client.clone())
+        self.client.clone()
     }
 
     async fn update_wallet_for_new_chain(
@@ -137,7 +132,11 @@ async fn test_faucet_rate_limiting() {
 
 #[test]
 fn test_multiply() {
-    let mul = MutationRoot::<()>::multiply;
-    assert_eq!(mul((1 << 127) + (1 << 63), 1 << 63), [1 << 62, 1 << 62, 0]);
-    assert_eq!(mul(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
+    use super::multiply;
+
+    assert_eq!(
+        multiply((1 << 127) + (1 << 63), 1 << 63),
+        [1 << 62, 1 << 62, 0]
+    );
+    assert_eq!(multiply(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
 }

@@ -7,13 +7,13 @@ use std::{
     sync::Mutex,
 };
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
     common::from_bytes_option,
     context::Context,
+    store::ReadableKeyValueStore as _,
     views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -35,7 +35,6 @@ enum KeyTag {
     Hash,
 }
 
-#[async_trait]
 impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
@@ -51,8 +50,8 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        let mut v = vec![context.base_tag(KeyTag::Hash as u8)];
-        let base_key = context.base_tag(KeyTag::Inner as u8);
+        let mut v = vec![context.base_key().base_tag(KeyTag::Hash as u8)];
+        let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
         let context = context.clone_with_base_key(base_key);
         v.extend(W::pre_load(&context)?);
         Ok(v)
@@ -60,7 +59,7 @@ where
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        let base_key = context.base_tag(KeyTag::Inner as u8);
+        let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
         let context = context.clone_with_base_key(base_key);
         let inner = W::post_load(
             context,
@@ -76,7 +75,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
+        let values = context.store().read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
 
@@ -97,13 +96,13 @@ where
         let delete_view = self.inner.flush(batch)?;
         let hash = self.hash.get_mut().unwrap();
         if delete_view {
-            let mut key_prefix = self.inner.context().base_key();
+            let mut key_prefix = self.inner.context().base_key().bytes.clone();
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
             self.stored_hash = None;
             *hash = None;
         } else if self.stored_hash != *hash {
-            let mut key = self.inner.context().base_key();
+            let mut key = self.inner.context().base_key().bytes.clone();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
             match hash {
@@ -139,7 +138,6 @@ where
     }
 }
 
-#[async_trait]
 impl<C, W, O> HashableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
@@ -192,6 +190,7 @@ impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
     }
 }
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 

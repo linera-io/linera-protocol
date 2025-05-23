@@ -15,7 +15,7 @@ version.workspace = true
 development = ["linera-sdk"]
 
 [package.metadata.docs.rs]
-features = ["test", "wasmer"]
+features = ["wasmer"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
 [package.metadata.cargo-machete]

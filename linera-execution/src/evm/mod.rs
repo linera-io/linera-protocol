@@ -10,7 +10,7 @@
 mod database;
 pub mod revm;
 
-use revm_primitives::HaltReason;
+use revm_context::result::HaltReason;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -34,7 +34,7 @@ pub enum EvmExecutionError {
     #[error("The operation was reverted")]
     Revert {
         gas_used: u64,
-        output: alloy::primitives::Bytes,
+        output: revm_primitives::Bytes,
     },
     #[error("The operation was halted")]
     Halt { gas_used: u64, reason: HaltReason },

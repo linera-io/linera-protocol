@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use async_trait::async_trait;
 use futures::{
     future::{join_all, select_all},
     lock::Mutex,
@@ -16,7 +15,7 @@ use futures::{
 use linera_base::{
     crypto::{CryptoHash, Signer},
     data_types::{ChainDescription, Timestamp},
-    identifiers::{AccountOwner, BlobType, ChainId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId},
     task::NonBlockingFuture,
 };
 use linera_core::{
@@ -26,6 +25,7 @@ use linera_core::{
     Environment,
 };
 use linera_storage::{Clock as _, Storage as _};
+use linera_views::views::ViewError;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
@@ -60,17 +60,16 @@ pub struct ChainListenerConfig {
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
-#[cfg_attr(not(web), async_trait, trait_variant::make(Send))]
-#[cfg_attr(web, async_trait(?Send))]
-pub trait ClientContext: 'static {
+#[cfg_attr(not(web), trait_variant::make(Send))]
+#[allow(async_fn_in_trait)]
+pub trait ClientContext {
     type Environment: linera_core::Environment;
 
     fn wallet(&self) -> &Wallet;
 
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
-    async fn make_chain_client(&self, chain_id: ChainId)
-        -> Result<ContextChainClient<Self>, Error>;
+    fn make_chain_client(&self, chain_id: ChainId) -> ContextChainClient<Self>;
 
     fn client(&self) -> &linera_core::client::Client<Self::Environment>;
 
@@ -82,15 +81,39 @@ pub trait ClientContext: 'static {
     ) -> Result<(), Error>;
 
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
+}
 
-    async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
+#[allow(async_fn_in_trait)]
+pub trait ClientContextExt: ClientContext {
+    fn clients(&self) -> Vec<ContextChainClient<Self>> {
+        let chain_ids = self.wallet().chain_ids();
         let mut clients = vec![];
-        for chain_id in &self.wallet().chain_ids() {
-            clients.push(self.make_chain_client(*chain_id).await?);
+        for chain_id in chain_ids {
+            clients.push(self.make_chain_client(chain_id));
         }
-        Ok(clients)
+        clients
+    }
+
+    async fn chain_description(&mut self, chain_id: ChainId) -> Result<ChainDescription, Error> {
+        let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+
+        let blob = match self.storage().read_blob(blob_id).await {
+            Ok(blob) => blob,
+            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
+                // we're missing the blob describing the chain we're assigning - try to
+                // get it
+                self.client().ensure_has_chain_description(chain_id).await?
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
+        };
+
+        Ok(bcs::from_bytes(blob.bytes())?)
     }
 }
+
+impl<T: ClientContext> ClientContextExt for T {}
 
 /// A chain client together with the stream of notifications from the local node.
 ///
@@ -287,12 +310,7 @@ impl<C: ClientContext> ChainListener<C> {
         if self.listening.contains_key(&chain_id) {
             return Ok(BTreeSet::new());
         }
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(chain_id);
         let (listener, abort_handle, notification_stream) = client.listen().await?;
         if client.is_tracked() {
             client.synchronize_from_validators().await?;

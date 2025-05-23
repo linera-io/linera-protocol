@@ -62,8 +62,8 @@ INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
 INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
-OWNER_1="${INFO_1[2]}"
-OWNER_2="${INFO_2[2]}"
+OWNER_1="${INFO_1[1]}"
+OWNER_2="${INFO_2[1]}"
 ```
 
 Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wallet

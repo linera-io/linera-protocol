@@ -14,10 +14,10 @@ use futures::{
     FutureExt as _,
 };
 use linera_base::{
-    crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
+    crypto::{AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorSecretKey},
     data_types::{
         Amount, ApplicationPermissions, Blob, BlobContent, ChainDescription, ChainOrigin, Epoch,
-        InitialChainConfig, Timestamp,
+        InitialChainConfig, NetworkDescription, Timestamp,
     },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
@@ -39,12 +39,12 @@ use crate::ContractAbi;
 ///
 /// ```rust
 /// # use linera_sdk::test::*;
-/// # use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+/// # use linera_base::{data_types::Amount, identifiers::ChainId};
 /// # tokio_test::block_on(async {
 /// let validator = TestValidator::new().await;
 /// assert_eq!(
-///     validator.new_chain().await.get_tip_height().await,
-///     BlockHeight(0)
+///     validator.new_chain().await.chain_balance().await,
+///     Amount::from_tokens(10)
 /// );
 /// # });
 /// ```
@@ -107,7 +107,6 @@ impl TestValidator {
             )]
             .into_iter()
             .collect(),
-            admin_id: None,
             epoch,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
@@ -117,6 +116,16 @@ impl TestValidator {
         let description = ChainDescription::new(origin, new_chain_config, Timestamp::from(0));
         let admin_chain_id = description.id();
 
+        let network_description = NetworkDescription {
+            name: "Test network".to_string(),
+            genesis_config_hash: CryptoHash::test_hash("genesis config"),
+            genesis_timestamp: description.timestamp(),
+            admin_chain_id,
+        };
+        storage
+            .write_network_description(&network_description)
+            .await
+            .unwrap();
         worker
             .storage_client()
             .create_chain(description.clone())
@@ -309,12 +318,11 @@ impl TestValidator {
 
         let open_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
-            balance: Amount::ZERO,
+            balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };
         let new_chain_config = open_chain_config.init_chain_config(
             epoch,
-            Some(admin_id),
             [(
                 epoch,
                 bcs::to_bytes(&committee).expect("Serializing a committee should not fail!"),

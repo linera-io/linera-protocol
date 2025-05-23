@@ -77,16 +77,13 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let policy = ResourceControlPolicy {
-        fuel_unit: Amount::from_attos(1),
+        wasm_fuel_unit: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
     };
     let amount = Amount::from_tokens(1);
     *view.system.balance.get_mut() = amount;
-    let mut controller = ResourceController {
-        policy: Arc::new(policy),
-        tracker: ResourceTracker::default(),
-        account: None,
-    };
+    let mut controller =
+        ResourceController::new(Arc::new(policy), ResourceTracker::default(), None);
 
     for (index, increment) in increments.iter().enumerate() {
         let mut txn_tracker = TransactionTracker::new_replaying_blobs(if index == 0 {
@@ -104,7 +101,7 @@ async fn test_fuel_for_counter_wasm_application(
         let txn_outcome = txn_tracker.into_outcome().unwrap();
         assert!(txn_outcome.outgoing_messages.is_empty());
     }
-    assert_eq!(controller.tracker.fuel, expected_fuel);
+    assert_eq!(controller.tracker.wasm_fuel, expected_fuel);
     assert_eq!(
         controller
             .with_state(&mut view.system)

@@ -10,7 +10,7 @@ use std::{
 
 use convert_case::{Case, Casing};
 use linera_base::prometheus_util::{
-    register_histogram_vec, register_int_counter_vec, MeasureLatency,
+    register_histogram_vec, register_int_counter_vec, MeasureLatency as _,
 };
 use prometheus::{HistogramVec, IntCounterVec};
 

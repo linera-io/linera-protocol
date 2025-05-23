@@ -8,6 +8,7 @@ use linera_views::{
     context::{Context, MemoryContext},
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
+    store::WritableKeyValueStore as _,
     views::View,
 };
 use serde::{Deserialize, Serialize};
@@ -205,6 +206,7 @@ async fn create_and_store_populated_reentrant_collection_view(
     view.flush(&mut batch)
         .expect("Failed to flush populated `ReentrantCollectionView`'s contents");
     context
+        .store()
         .write_batch(batch)
         .await
         .expect("Failed to store populated `ReentrantCollectionView`'s contents");

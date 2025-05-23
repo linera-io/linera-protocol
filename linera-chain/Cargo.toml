@@ -26,7 +26,6 @@ web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 [dependencies]
 anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
-async-trait.workspace = true
 axum = { workspace = true, optional = true }
 custom_debug_derive.workspace = true
 futures.workspace = true

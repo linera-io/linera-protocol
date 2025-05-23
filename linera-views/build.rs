@@ -10,5 +10,6 @@ fn main() {
         with_indexeddb: { all(web, feature = "indexeddb") },
         with_rocksdb: { all(not(target_arch = "wasm32"), feature = "rocksdb") },
         with_scylladb: { all(not(target_arch = "wasm32"), feature = "scylladb") },
+        with_graphql: { not(web) },
     };
 }

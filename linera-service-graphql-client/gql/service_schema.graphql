@@ -578,6 +578,20 @@ type IncomingBundle {
 	action: MessageAction!
 }
 
+"""
+The result of an `events_from_index`.
+"""
+type IndexAndEvent {
+	"""
+	The index of the found event.
+	"""
+	index: Int!
+	"""
+	The event being returned.
+	"""
+	event: [Int!]!
+}
+
 
 """
 A scalar that can represent any JSON Object value.
@@ -924,6 +938,7 @@ type QueryRoot {
 	applications(chainId: ChainId!): [ApplicationOverview!]!
 	chains: Chains!
 	block(hash: CryptoHash, chainId: ChainId!): ConfirmedBlock
+	eventsFromIndex(chainId: ChainId!, streamId: StreamIdInput!, startIndex: Int!): [IndexAndEvent!]!
 	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [ConfirmedBlock!]!
 	"""
 	Returns the version information on this node service.
@@ -963,13 +978,13 @@ A collection of prices and limits associated with block execution.
 """
 input ResourceControlPolicy {
 	"""
-	The base price for creating a new block.
+	The price per unit of fuel (aka gas) for Wasm execution.
 	"""
-	block: Amount!
+	wasmFuelUnit: Amount!
 	"""
-	The price per unit of fuel (aka gas) for VM execution.
+	The price per unit of fuel (aka gas) for EVM execution.
 	"""
-	fuelUnit: Amount!
+	evmFuelUnit: Amount!
 	"""
 	The price of one read operation.
 	"""
@@ -1031,9 +1046,13 @@ input ResourceControlPolicy {
 	"""
 	httpRequest: Amount!
 	"""
-	The maximum amount of fuel a block can consume.
+	The maximum amount of Wasm fuel a block can consume.
 	"""
-	maximumFuelPerBlock: Int!
+	maximumWasmFuelPerBlock: Int!
+	"""
+	The maximum amount of EVM fuel a block can consume.
+	"""
+	maximumEvmFuelPerBlock: Int!
 	"""
 	The maximum time in milliseconds that a block can spend executing services as oracles.
 	"""
@@ -1105,6 +1124,20 @@ type StreamId {
 }
 
 """
+An event stream ID.
+"""
+input StreamIdInput {
+	"""
+	The application that can add events to this stream.
+	"""
+	applicationId: GenericApplicationId!
+	"""
+	The name of this stream: an application can have multiple streams with different names.
+	"""
+	streamName: StreamName!
+}
+
+"""
 The name of an event stream
 """
 scalar StreamName
@@ -1119,7 +1152,7 @@ type SubscriptionRoot {
 
 type SystemExecutionStateView {
 	description: ChainDescription
-	epoch: Epoch
+	epoch: Epoch!
 	adminId: ChainId
 	committees: JSONObject!
 	ownership: ChainOwnership!

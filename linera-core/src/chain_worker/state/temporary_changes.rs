@@ -4,14 +4,14 @@
 //! Operations that don't persist any changes to the chain state.
 
 use linera_base::{
-    data_types::{ApplicationDescription, ArithmeticError, Blob, Timestamp},
+    data_types::{ApplicationDescription, ArithmeticError, Blob, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, ApplicationId},
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, IncomingBundle, MessageAction, ProposalContent,
-        ProposedBlock,
+        BlockExecutionOutcome, BlockProposal, IncomingBundle, MessageAction, OriginalProposal,
+        ProposalContent, ProposedBlock,
     },
     manager,
     types::Block,
@@ -161,7 +161,7 @@ where
         let BlockProposal {
             content,
             public_key,
-            validated_block_certificate,
+            original_proposal,
             signature: _,
         } = proposal;
         let block = &content.block;
@@ -178,12 +178,47 @@ where
             chain.manager.verify_owner(proposal),
             WorkerError::InvalidOwner
         );
-        if let Some(lite_certificate) = validated_block_certificate {
-            // Verify that this block has been validated by a quorum before.
-            lite_certificate.check(committee)?;
-        } else if let Some(signer) = block.authenticated_signer {
-            // Check the authentication of the operations in the new block.
-            ensure!(signer == owner, WorkerError::InvalidSigner(signer));
+        match original_proposal {
+            None => {
+                if let Some(signer) = block.authenticated_signer {
+                    // Check the authentication of the operations in the new block.
+                    ensure!(signer == owner, WorkerError::InvalidSigner(owner));
+                }
+            }
+            Some(OriginalProposal::Regular { certificate }) => {
+                // Verify that this block has been validated by a quorum before.
+                certificate.check(committee)?;
+            }
+            Some(OriginalProposal::Fast {
+                public_key,
+                signature,
+            }) => {
+                let super_owner = AccountOwner::from(*public_key);
+                ensure!(
+                    chain
+                        .manager
+                        .ownership
+                        .get()
+                        .super_owners
+                        .contains(&super_owner),
+                    WorkerError::InvalidOwner
+                );
+                if let Some(signer) = block.authenticated_signer {
+                    // Check the authentication of the operations in the new block.
+                    ensure!(signer == super_owner, WorkerError::InvalidSigner(signer));
+                }
+                let old_proposal = BlockProposal {
+                    content: ProposalContent {
+                        block: proposal.content.block.clone(),
+                        round: Round::Fast,
+                        outcome: None,
+                    },
+                    public_key: *public_key,
+                    signature: *signature,
+                    original_proposal: None,
+                };
+                old_proposal.check_signature()?;
+            }
         }
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;

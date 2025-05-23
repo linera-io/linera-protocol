@@ -10,6 +10,7 @@ pub mod committee;
 pub mod evm;
 mod execution;
 mod execution_state_actor;
+#[cfg(with_graphql)]
 mod graphql;
 mod policy;
 mod resources;
@@ -35,7 +36,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        DecompressionError, Epoch, SendMessageRequest, StreamUpdate, Timestamp,
+        DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -44,6 +45,7 @@ use linera_base::{
     },
     ownership::ChainOwnership,
     task,
+    vm::VmRuntime,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -53,6 +55,8 @@ use thiserror::Error;
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
+#[cfg(with_testing)]
+use crate::test_utils::dummy_chain_description;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
@@ -64,7 +68,7 @@ pub use crate::{
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
-    resources::{ResourceController, ResourceTracker},
+    resources::{BalanceHolder, ResourceController, ResourceTracker},
     runtime::{
         ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,
         ServiceSyncRuntimeHandle,
@@ -75,9 +79,10 @@ pub use crate::{
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
 
-/// The `linera.sol` library code to be included in solidity smart
+/// The `Linera.sol` library code to be included in solidity smart
 /// contracts using Linera features.
-pub const LINERA_SOL: &str = include_str!("../solidity/linera.sol");
+pub const LINERA_SOL: &str = include_str!("../solidity/Linera.sol");
+pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
@@ -226,8 +231,8 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
-    #[error("Block execution required too much fuel")]
-    MaximumFuelExceeded,
+    #[error("Block execution required too much fuel for VM {0}")]
+    MaximumFuelExceeded(VmRuntime),
     #[error("Services running as oracles in block took longer than allowed")]
     MaximumServiceOracleExecutionTimeExceeded,
     #[error("Service running as an oracle produced a response that's too large")]
@@ -284,8 +289,8 @@ pub enum ExecutionError {
     #[error("Invalid HTTP header value used for HTTP request")]
     InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
 
-    #[error("Invalid admin ID in new chain: {0}")]
-    InvalidNewChainAdminId(ChainId),
+    #[error("No NetworkDescription found in storage")]
+    NoNetworkDescriptionFound,
     #[error("Invalid committees")]
     InvalidCommittees,
     #[error("{epoch:?} is not recognized by chain {chain_id:}")]
@@ -295,12 +300,12 @@ pub enum ExecutionError {
     #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
     #[error("The transferred amount must not exceed the balance of the current account {account}: {balance}")]
-    InsufficientFunding {
+    InsufficientBalance {
         balance: Amount,
         account: AccountOwner,
     },
-    #[error("Required execution fees exceeded the total funding available: {balance}")]
-    InsufficientFundingForFees { balance: Amount },
+    #[error("Required execution fees exceeded the total funding available. Fees {fees}, available balance: {balance}")]
+    FeesExceedFunding { fees: Amount, balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
@@ -400,6 +405,8 @@ pub trait ExecutionRuntimeContext {
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -718,11 +725,14 @@ pub trait ContractRuntime: BaseRuntime {
     /// based on the execution context.
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError>;
 
+    /// Returns the maximum gas fuel per block.
+    fn maximum_fuel_per_block(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;
+
     /// Returns the amount of execution fuel remaining before execution is aborted.
-    fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
+    fn remaining_fuel(&mut self, vm_runtime: VmRuntime) -> Result<u64, ExecutionError>;
 
     /// Consumes some of the execution fuel.
-    fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
+    fn consume_fuel(&mut self, fuel: u64, vm_runtime: VmRuntime) -> Result<(), ExecutionError>;
 
     /// Schedules a message to be sent.
     fn send_message(&mut self, message: SendMessageRequest<Vec<u8>>) -> Result<(), ExecutionError>;
@@ -1074,6 +1084,15 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .get(&event_id)
             .ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))?
             .clone())
+    }
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        Ok(Some(NetworkDescription {
+            admin_chain_id: dummy_chain_description(0).id(),
+            genesis_config_hash: CryptoHash::test_hash("genesis config"),
+            genesis_timestamp: Timestamp::from(0),
+            name: "dummy network description".to_string(),
+        }))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

@@ -6,6 +6,8 @@ mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
@@ -29,8 +31,8 @@ use linera_execution::{
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
-    assert_insufficient_funding, assert_insufficient_funding_during_operation,
-    assert_insufficient_funding_fees,
+    assert_fees_exceed_funding, assert_insufficient_balance_during_operation,
+    assert_insufficient_funding,
 };
 
 #[cfg(feature = "dynamodb")]
@@ -48,7 +50,6 @@ use crate::{
     },
     local_node::LocalNodeError,
     node::{
-        CrossChainMessageDelivery,
         NodeError::{self, ClientIoError},
         ValidatorNode,
     },
@@ -94,7 +95,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let chain_2 = builder.add_root_chain(2, Amount::ZERO).await?;
     // Listen to the notifications on the sender chain.
@@ -115,7 +116,7 @@ where
         assert!(sender.pending_proposal().is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
-            Amount::from_millis(999)
+            Amount::from_millis(1000)
         );
         assert_eq!(
             builder
@@ -148,7 +149,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner = sender.identity().await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -174,7 +175,7 @@ where
         .unwrap();
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(898)
+        Amount::from_millis(900)
     );
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -183,7 +184,7 @@ where
     // The friend paid to receive the message.
     assert_eq!(
         receiver.local_owner_balance(friend).await.unwrap(),
-        Amount::from_millis(99)
+        Amount::from_millis(100)
     );
     // The received amount is not in the unprotected balance.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
@@ -198,11 +199,11 @@ where
     assert_eq!(receiver.query_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         receiver.query_owner_balance(owner).await.unwrap(),
-        Amount::from_millis(2999)
+        Amount::from_millis(3000)
     );
     assert_eq!(
         receiver.query_balances_with_owner(owner).await.unwrap(),
-        (Amount::ZERO, Some(Amount::from_millis(2999)))
+        (Amount::ZERO, Some(Amount::from_millis(3000)))
     );
 
     // First attempt that should be rejected.
@@ -249,7 +250,7 @@ where
     sender.process_inbox().await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(2895)
+        Amount::from_millis(2900)
     );
 
     Ok(())
@@ -270,7 +271,7 @@ where
     let new_owner = AccountOwner::from(new_public_key);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let mut sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let certificate = sender
         .rotate_key_pair(new_public_key)
@@ -290,7 +291,7 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(3999)
+        Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
@@ -314,7 +315,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
     let new_owner: AccountOwner = builder.signer.generate_new().into();
@@ -334,7 +335,7 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_millis(3999)
+        Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
     // Cannot use the chain any more.
@@ -524,7 +525,6 @@ where
 
     let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_public_key.into()),
-        admin_id: Some(builder.admin_id()),
         epoch: Epoch::ZERO,
         committees: builder
             .admin_description()
@@ -765,7 +765,7 @@ where
         client1.execute_operations(vec![], vec![]).await,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::ClosedChain)
+        )) if matches!(*error, ChainError::EmptyBlock)
     );
 
     // Trying to close the chain again returns None.
@@ -934,7 +934,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let certificate = client1
@@ -949,7 +949,7 @@ where
     // Transfer was executed locally.
     assert_eq!(
         client1.local_balance().await.unwrap(),
-        Amount::from_millis(999)
+        Amount::from_millis(1000)
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
     assert!(client1.pending_proposal().is_none());
@@ -963,7 +963,7 @@ where
         .unwrap();
     assert_eq!(
         client2.query_balance().await.unwrap(),
-        Amount::from_millis(1999)
+        Amount::from_millis(2000)
     );
     Ok(())
 }
@@ -1005,12 +1005,7 @@ where
         .await
         .unwrap();
     client1
-        .communicate_chain_updates(
-            &builder.initial_committee,
-            client1.chain_id,
-            client1.next_block_height(),
-            CrossChainMessageDelivery::NonBlocking,
-        )
+        .communicate_chain_updates(&builder.initial_committee)
         .await
         .unwrap();
     // Client2 does not know about the money yet.
@@ -1080,7 +1075,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
         .with_policy(ResourceControlPolicy {
-            maximum_fuel_per_block: 30_000,
+            maximum_wasm_fuel_per_block: 30_000,
             blob_read: initial_balance + Amount::ONE,
             blob_published: initial_balance + Amount::ONE,
             blob_byte_read: initial_balance + Amount::ONE,
@@ -1093,12 +1088,13 @@ where
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    admin.finalize_committee().await.unwrap();
 
     // Root chain 1 receives the notification about the new epoch.
+    // This must happen before the old committee is removed.
     user.synchronize_from_validators().await.unwrap();
     user.process_inbox().await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
+    admin.finalize_committee().await.unwrap();
 
     // Create a new committee.
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
@@ -1203,20 +1199,24 @@ where
     B: StorageBuilder,
 {
     let mut signer = InMemorySigner::new(None);
+    let mut policy = ResourceControlPolicy::only_fuel();
+    policy.operation = Amount::from_micros(1); // Otherwise BURN passes b/c it will be free.
     let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_block());
+        .with_policy(policy);
     let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
 
     let obtained_error = sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
         .await;
-    assert_insufficient_funding_during_operation(obtained_error, 0);
+    assert_insufficient_balance_during_operation(obtained_error, 0);
 
     let obtained_error = sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await;
-    assert_insufficient_funding_fees(obtained_error);
+    // We have balance=3, we try to burn 3 tokens but the operation itself
+    // costs 1 microtoken so we don't have enough balance to pay for it.
+    assert_fees_exceed_funding(obtained_error);
     Ok(())
 }
 
@@ -2246,6 +2246,117 @@ where
     assert_eq!(
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(3)
+    );
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_re_propose_fast_block<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // Configure a chain with one regular and one super owner.
+    let mut signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, &mut signer).await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
+    let owner0 = client0.public_key().await.unwrap().into();
+    let owner1 = builder.signer.generate_new().into();
+
+    let timeout_config = TimeoutConfig {
+        fast_round_duration: Some(TimeDelta::from_secs(5)),
+        ..TimeoutConfig::default()
+    };
+    let ownership = ChainOwnership {
+        super_owners: BTreeSet::from_iter([owner0]),
+        owners: BTreeMap::from_iter([(owner1, 100)]),
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config,
+    };
+    client0.change_ownership(ownership).await.unwrap();
+    let mut client1 = builder
+        .make_client(chain_id, client0.block_hash(), BlockHeight::from(1))
+        .await?;
+    client1.set_preferred_owner(owner1);
+
+    // Client 0 transfers 5 tokens from the chain account to themselves.
+    client0
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(5),
+            Account::new(chain_id, owner0),
+        )
+        .await?;
+
+    // Client 0 tries to burn 3 of their own tokens, but three validators are faulty.
+    builder
+        .set_fault_type([1, 2, 3], FaultType::OfflineWithInfo)
+        .await;
+
+    let result = client0.burn(owner0, Amount::from_tokens(3)).await;
+    assert!(result.is_err());
+    let manager = client0
+        .chain_info_with_manager_values()
+        .await
+        .unwrap()
+        .manager;
+    // Validator 0 may or may not have processed the proposal before the update was
+    // canceled due to the errors from the faulty validators. Submit it again to make sure
+    // it's there, so that client 1 can download and re-propose it later.
+    let locking = *manager.requested_locking.unwrap();
+    let LockingBlock::Fast(proposal) = locking else {
+        panic!("Unexpected locking regular block.");
+    };
+    builder
+        .node(0)
+        .handle_block_proposal(proposal)
+        .await
+        .unwrap();
+
+    // Round 0 times out.
+    clock.add(TimeDelta::from_secs(5));
+    builder.set_fault_type([0], FaultType::Offline).await;
+    builder.set_fault_type([1, 2, 3], FaultType::Honest).await;
+    client1.synchronize_from_validators().await.unwrap();
+    client1.request_leader_timeout().await.unwrap();
+
+    // Client 1 wants to burn 2 tokens. But now validators 0 and 3 is offline, so they don't learn
+    // about the proposed fast block and make their own instead.
+    builder.set_fault_type([3], FaultType::Offline).await;
+    let result = client1
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+        .await;
+    assert!(result.is_err());
+
+    // Finally, three validators are online and honest again. Client 1 realizes there has been a
+    // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
+    builder.set_fault_type([0, 1, 2], FaultType::Honest).await;
+    client1.synchronize_from_validators().await.unwrap();
+    assert!(client1.pending_proposal().is_some());
+    client1
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+        .await
+        .unwrap();
+    // Round 0 needs to time out again, so client 1 is actually allowed to propose.
+    clock.add(TimeDelta::from_secs(5));
+    client1.process_pending_block().await.unwrap();
+
+    // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
+    client0.synchronize_from_validators().await.unwrap();
+    assert_eq!(
+        client0.local_balance().await.unwrap(),
+        Amount::from_tokens(1)
+    );
+    assert_eq!(
+        client0.local_owner_balance(owner0).await.unwrap(),
+        Amount::from_tokens(2)
     );
     Ok(())
 }

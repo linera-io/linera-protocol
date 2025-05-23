@@ -160,8 +160,7 @@ pub struct ChainInfo {
     /// The chain ID.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
-    #[debug(skip_if = Option::is_none)]
-    pub epoch: Option<Epoch>,
+    pub epoch: Epoch,
     /// The chain description.
     #[debug(skip_if = Option::is_none)]
     pub description: Option<ChainDescription>,
@@ -306,12 +305,6 @@ impl ChainInfoResponse {
             Some(sig) => sig.check(&*self.info, public_key),
             None => Err(CryptoError::MissingValidatorSignature),
         }
-    }
-
-    /// Returns the committee in the latest epoch.
-    pub fn latest_committee(&self) -> Option<&Committee> {
-        let committees = self.info.requested_committees.as_ref()?;
-        committees.get(&self.info.epoch?)
     }
 }
 

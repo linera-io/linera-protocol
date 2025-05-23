@@ -6,8 +6,6 @@
 
 #[cfg(with_testing)]
 use std::ops;
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
     fmt::{self, Display},
@@ -22,15 +20,11 @@ use std::{
 use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
-#[cfg(with_metrics)]
-use prometheus::HistogramVec;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::prometheus_util::{
-    exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
-};
+use crate::prometheus_util::MeasureLatency as _;
 use crate::{
     crypto::{BcsHashable, CryptoError, CryptoHash},
     doc_scalar, hex_debug, http,
@@ -142,17 +136,17 @@ pub struct TimeDelta(u64);
 
 impl TimeDelta {
     /// Returns the given number of microseconds as a [`TimeDelta`].
-    pub fn from_micros(micros: u64) -> Self {
+    pub const fn from_micros(micros: u64) -> Self {
         TimeDelta(micros)
     }
 
     /// Returns the given number of milliseconds as a [`TimeDelta`].
-    pub fn from_millis(millis: u64) -> Self {
+    pub const fn from_millis(millis: u64) -> Self {
         TimeDelta(millis.saturating_mul(1_000))
     }
 
     /// Returns the given number of seconds as a [`TimeDelta`].
-    pub fn from_secs(secs: u64) -> Self {
+    pub const fn from_secs(secs: u64) -> Self {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
@@ -163,12 +157,12 @@ impl TimeDelta {
     }
 
     /// Returns this [`TimeDelta`] as a number of microseconds.
-    pub fn as_micros(&self) -> u64 {
+    pub const fn as_micros(&self) -> u64 {
         self.0
     }
 
     /// Returns this [`TimeDelta`] as a [`Duration`].
-    pub fn as_duration(&self) -> Duration {
+    pub const fn as_duration(&self) -> Duration {
         Duration::from_micros(self.as_micros())
     }
 }
@@ -206,41 +200,35 @@ impl Timestamp {
     }
 
     /// Returns the number of microseconds since the Unix epoch.
-    pub fn micros(&self) -> u64 {
+    pub const fn micros(&self) -> u64 {
         self.0
     }
 
     /// Returns the [`TimeDelta`] between `other` and `self`, or zero if `other` is not earlier
     /// than `self`.
-    pub fn delta_since(&self, other: Timestamp) -> TimeDelta {
+    pub const fn delta_since(&self, other: Timestamp) -> TimeDelta {
         TimeDelta::from_micros(self.0.saturating_sub(other.0))
     }
 
     /// Returns the [`Duration`] between `other` and `self`, or zero if `other` is not
     /// earlier than `self`.
-    pub fn duration_since(&self, other: Timestamp) -> Duration {
+    pub const fn duration_since(&self, other: Timestamp) -> Duration {
         Duration::from_micros(self.0.saturating_sub(other.0))
     }
 
     /// Returns the timestamp that is `duration` later than `self`.
-    pub fn saturating_add(&self, duration: TimeDelta) -> Timestamp {
+    pub const fn saturating_add(&self, duration: TimeDelta) -> Timestamp {
         Timestamp(self.0.saturating_add(duration.0))
     }
 
     /// Returns the timestamp that is `duration` earlier than `self`.
-    pub fn saturating_sub(&self, duration: TimeDelta) -> Timestamp {
+    pub const fn saturating_sub(&self, duration: TimeDelta) -> Timestamp {
         Timestamp(self.0.saturating_sub(duration.0))
-    }
-
-    /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
-    /// if it would overflow.
-    pub fn saturating_add_micros(&self, micros: u64) -> Timestamp {
-        Timestamp(self.0.saturating_add(micros))
     }
 
     /// Returns a timestamp `micros` microseconds earlier than `self`, or the lowest possible value
     /// if it would underflow.
-    pub fn saturating_sub_micros(&self, micros: u64) -> Timestamp {
+    pub const fn saturating_sub_micros(&self, micros: u64) -> Timestamp {
         Timestamp(self.0.saturating_sub(micros))
     }
 }
@@ -269,8 +257,10 @@ impl Display for Timestamp {
     Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, WitLoad, WitStore, WitType,
 )]
 pub struct Resources {
-    /// An amount of execution fuel.
-    pub fuel: u64,
+    /// An amount of Wasm execution fuel.
+    pub wasm_fuel: u64,
+    /// An amount of EVM execution fuel.
+    pub evm_fuel: u64,
     /// A number of read operations to be executed.
     pub read_operations: u32,
     /// A number of write operations to be executed.
@@ -372,7 +362,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating addition.
-            pub fn saturating_add(self, other: Self) -> Self {
+            pub const fn saturating_add(self, other: Self) -> Self {
                 let val = self.0.saturating_add(other.0);
                 Self(val)
             }
@@ -393,7 +383,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating subtraction.
-            pub fn saturating_sub(self, other: Self) -> Self {
+            pub const fn saturating_sub(self, other: Self) -> Self {
                 let val = self.0.saturating_sub(other.0);
                 Self(val)
             }
@@ -414,7 +404,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating in-place addition.
-            pub fn saturating_add_assign(&mut self, other: Self) {
+            pub const fn saturating_add_assign(&mut self, other: Self) {
                 self.0 = self.0.saturating_add(other.0);
             }
 
@@ -428,7 +418,7 @@ macro_rules! impl_wrapped_number {
             }
 
             /// Saturating multiplication.
-            pub fn saturating_mul(&self, other: $wrapped) -> Self {
+            pub const fn saturating_mul(&self, other: $wrapped) -> Self {
                 Self(self.0.saturating_mul(other))
             }
 
@@ -663,37 +653,37 @@ impl Amount {
     pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
 
     /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
-    pub fn from_tokens(tokens: u128) -> Amount {
+    pub const fn from_tokens(tokens: u128) -> Amount {
         Self::ONE.saturating_mul(tokens)
     }
 
     /// Returns an `Amount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
-    pub fn from_millis(millitokens: u128) -> Amount {
+    pub const fn from_millis(millitokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 3)).saturating_mul(millitokens)
     }
 
     /// Returns an `Amount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
-    pub fn from_micros(microtokens: u128) -> Amount {
+    pub const fn from_micros(microtokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 6)).saturating_mul(microtokens)
     }
 
     /// Returns an `Amount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
-    pub fn from_nanos(nanotokens: u128) -> Amount {
+    pub const fn from_nanos(nanotokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 9)).saturating_mul(nanotokens)
     }
 
     /// Returns an `Amount` corresponding to that many attotokens.
-    pub fn from_attos(attotokens: u128) -> Amount {
+    pub const fn from_attos(attotokens: u128) -> Amount {
         Amount(attotokens)
     }
 
     /// Helper function to obtain the 64 most significant bits of the balance.
-    pub fn upper_half(self) -> u64 {
+    pub const fn upper_half(self) -> u64 {
         (self.0 >> 64) as u64
     }
 
     /// Helper function to obtain the 64 least significant bits of the balance.
-    pub fn lower_half(self) -> u64 {
+    pub const fn lower_half(self) -> u64 {
         self.0 as u64
     }
 
@@ -815,8 +805,6 @@ impl Epoch {
 pub struct InitialChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
-    /// The ID of the admin chain.
-    pub admin_id: Option<ChainId>,
     /// The epoch in which the chain is created.
     pub epoch: Epoch,
     /// Serialized committees corresponding to epochs.
@@ -872,6 +860,19 @@ impl ChainDescription {
 }
 
 impl BcsHashable<'_> for ChainDescription {}
+
+/// A description of the current Linera network to be stored in every node's database.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct NetworkDescription {
+    /// The name of the network.
+    pub name: String,
+    /// Hash of the network's genesis config.
+    pub genesis_config_hash: CryptoHash,
+    /// Genesis timestamp.
+    pub genesis_timestamp: Timestamp,
+    /// The chain ID of the admin chain.
+    pub admin_chain_id: ChainId,
+}
 
 /// Permissions for applications on a chain.
 #[derive(
@@ -930,6 +931,19 @@ impl ApplicationPermissions {
             change_application_permissions: vec![app_id],
             call_service_as_oracle: Some(vec![app_id]),
             make_http_requests: Some(vec![app_id]),
+        }
+    }
+
+    /// Creates new `ApplicationPermissions` where the given applications are the only ones
+    /// whose operations are allowed and mandatory, and they can also close the chain.
+    pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
+        Self {
+            execute_operations: Some(app_ids.clone()),
+            mandatory_applications: app_ids.clone(),
+            close_chain: app_ids.clone(),
+            change_application_permissions: app_ids.clone(),
+            call_service_as_oracle: Some(app_ids.clone()),
+            make_http_requests: Some(app_ids),
         }
     }
 
@@ -1066,7 +1080,7 @@ impl Bytecode {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn compress(&self) -> CompressedBytecode {
         #[cfg(with_metrics)]
-        let _compression_latency = BYTECODE_COMPRESSION_LATENCY.measure_latency();
+        let _compression_latency = metrics::BYTECODE_COMPRESSION_LATENCY.measure_latency();
         let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
 
@@ -1120,7 +1134,7 @@ impl CompressedBytecode {
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         #[cfg(with_metrics)]
-        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
+        let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
         let bytes = zstd::stream::decode_all(&*self.compressed_bytes)?;
 
         Ok(Bytecode { bytes })
@@ -1360,6 +1374,11 @@ impl Blob {
     pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
         Ok(Self::new_data(fs::read(path)?))
     }
+
+    /// Returns whether the blob is of [`BlobType::Committee`] variant.
+    pub fn is_committee_blob(&self) -> bool {
+        self.content().blob_type().is_committee_blob()
+    }
 }
 
 impl Serialize for Blob {
@@ -1471,27 +1490,34 @@ doc_scalar!(
 );
 doc_scalar!(ApplicationDescription, "Description of a user application");
 
-/// The time it takes to compress a bytecode.
 #[cfg(with_metrics)]
-static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "bytecode_compression_latency",
-        "Bytecode compression latency",
-        &[],
-        exponential_bucket_latencies(10.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-/// The time it takes to decompress a bytecode.
-#[cfg(with_metrics)]
-static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "bytecode_decompression_latency",
-        "Bytecode decompression latency",
-        &[],
-        exponential_bucket_latencies(10.0),
-    )
-});
+    use prometheus::HistogramVec;
+
+    use crate::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+
+    /// The time it takes to compress a bytecode.
+    pub static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "bytecode_compression_latency",
+            "Bytecode compression latency",
+            &[],
+            exponential_bucket_latencies(10.0),
+        )
+    });
+
+    /// The time it takes to decompress a bytecode.
+    pub static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "bytecode_decompression_latency",
+            "Bytecode decompression latency",
+            &[],
+            exponential_bucket_latencies(10.0),
+        )
+    });
+}
 
 #[cfg(test)]
 mod tests {

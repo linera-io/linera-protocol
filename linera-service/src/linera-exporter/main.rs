@@ -167,6 +167,7 @@ impl ExporterOptions {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
             storage_cache_config,
+            replication_factor: 1,
         };
 
         let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;

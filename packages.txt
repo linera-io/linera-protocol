@@ -2,6 +2,7 @@
 # - Specific arguments for cargo publish or cargo package may be added at the end, on the same line.
 # - See scripts/publish.sh and scripts/test_publish.sh for usage.
 linera-version --no-verify
+linera-persistent
 linera-witty-macros
 linera-witty
 linera-base
@@ -17,7 +18,6 @@ linera-sdk-derive
 linera-sdk
 linera-rpc
 linera-client
-linera-faucet
 linera-faucet-client
 linera-faucet-server
 linera-service

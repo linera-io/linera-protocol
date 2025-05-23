@@ -1,0 +1,19 @@
+developerMode: true
+sysctls:
+  - "fs.aio-max-nr=4082080"
+datacenter: validator
+racks:
+  - name: rack
+    members: {{ env "LINERA_HELMFILE_SET_STORAGE_REPLICATION_FACTOR" | default 1 }}
+    scyllaConfig: "scylla-config"
+    storage:
+      capacity: 2Gi
+    resources:
+      limits:
+        cpu: 1
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 2Gi
+serviceMonitor:
+  create: true

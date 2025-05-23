@@ -1,0 +1,64 @@
+[package]
+name = "linera-web"
+description = "The Linera Web client"
+version = "0.14.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+repository = "https://github.com/linera-io/linera-protocol/"
+license = "Apache-2.0"
+
+[lints.clippy]
+pedantic = "warn"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+console_error_panic_hook.workspace = true
+futures.workspace = true
+js-sys.workspace = true
+linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
+log.workspace = true
+nonzero_lit.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[dependencies.linera-base]
+features = ["web"]
+workspace = true
+
+[dependencies.linera-client]
+default-features = false
+features = ["web", "wasmer", "indexed-db"]
+workspace = true
+
+[dependencies.linera-core]
+features = ["web", "wasmer"]
+workspace = true
+
+[dependencies.linera-execution]
+features = ["web", "wasmer"]
+workspace = true
+
+[dependencies.linera-faucet-client]
+workspace = true
+
+[dependencies.linera-rpc]
+features = ["web"]
+workspace = true
+
+[dependencies.linera-storage]
+features = ["web", "wasmer"]
+workspace = true
+
+[dependencies.linera-views]
+features = ["web", "indexeddb"]
+workspace = true
+
+[dependencies.web-sys]
+features = ["console", "Window"]
+workspace = true

@@ -3,7 +3,6 @@
 
 use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
@@ -21,6 +20,7 @@ use crate::{
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::{HashedRegisterView, RegisterView},
+    store::WritableKeyValueStore as _,
     test_utils::test_views::{
         TestBucketQueueView, TestCollectionView, TestLogView, TestMapView, TestQueueView,
         TestRegisterView, TestSetView, TestView,
@@ -133,7 +133,7 @@ async fn run_test_queue_operations<C>(
     context: C,
 ) -> Result<(), anyhow::Error>
 where
-    C: Context + Clone + Send + Sync + 'static,
+    C: Context<Error: Send + Sync> + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
     let mut expected_state = VecDeque::new();
@@ -168,7 +168,7 @@ async fn check_queue_state<C>(
     expected_state: &VecDeque<usize>,
 ) -> Result<(), anyhow::Error>
 where
-    C: Context + Clone + Send + Sync,
+    C: Context<Error: Send + Sync> + Clone + Send + Sync,
     ViewError: From<C::Error>,
 {
     let count = expected_state.len();
@@ -187,16 +187,14 @@ fn check_contents(contents: Vec<usize>, expected: &VecDeque<usize>) {
     assert_eq!(&contents.into_iter().collect::<VecDeque<_>>(), expected);
 }
 
-#[async_trait]
 trait TestContextFactory {
-    type Context: Context + Clone + Send + Sync + 'static;
+    type Context: Context<Error: Send + Sync> + Clone + Send + Sync + 'static;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error>;
 }
 
 struct MemoryContextFactory;
 
-#[async_trait]
 impl TestContextFactory for MemoryContextFactory {
     type Context = MemoryContext<()>;
 
@@ -209,7 +207,6 @@ impl TestContextFactory for MemoryContextFactory {
 struct RocksDbContextFactory;
 
 #[cfg(with_rocksdb)]
-#[async_trait]
 impl TestContextFactory for RocksDbContextFactory {
     type Context = ViewContext<(), RocksDbStore>;
 
@@ -227,7 +224,6 @@ impl TestContextFactory for RocksDbContextFactory {
 struct DynamoDbContextFactory;
 
 #[cfg(with_dynamodb)]
-#[async_trait]
 impl TestContextFactory for DynamoDbContextFactory {
     type Context = ViewContext<(), DynamoDbStore>;
 
@@ -243,7 +239,6 @@ impl TestContextFactory for DynamoDbContextFactory {
 struct ScyllaDbContextFactory;
 
 #[cfg(with_scylladb)]
-#[async_trait]
 impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ViewContext<(), ScyllaDbStore>;
 
@@ -510,11 +505,11 @@ async fn test_flushing_cleared_view<V: TestView>(_view_type: PhantomData<V>) -> 
 /// Saves a [`View`] into the [`MemoryContext<()>`] storage simulation.
 async fn save_view<C>(context: &C, view: &mut impl View<C>) -> anyhow::Result<()>
 where
-    C: Context,
+    C: Context<Error: Send + Sync>,
 {
     let mut batch = Batch::new();
     view.flush(&mut batch)?;
-    context.write_batch(batch).await?;
+    context.store().write_batch(batch).await?;
     Ok(())
 }
 

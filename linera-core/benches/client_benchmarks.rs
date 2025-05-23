@@ -10,7 +10,7 @@ use linera_base::{
 };
 use linera_core::test_utils::{ChainClient, MemoryStorageBuilder, StorageBuilder, TestBuilder};
 use linera_execution::system::Recipient;
-use linera_storage::{
+use linera_storage::metrics::{
     READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
 };
 use linera_views::metrics::{LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};

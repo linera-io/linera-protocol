@@ -45,7 +45,6 @@ linera-storage-service = { path = ".", default-features = false, features = [
 ] }
 proptest = { workspace = true, features = ["alloc"] }
 serde-reflection.workspace = true
-serde_yaml.workspace = true
 similar-asserts.workspace = true
 test-strategy.workspace = true
 

@@ -7,6 +7,13 @@ logLevel: "debug"
 proxyPort: 19100
 metricsPort: 21100
 numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
+# Size of the RocksDB storage per shard, IF using `DualStore`. Otherwise will be ignored.
+rocksdbStorageSize: {{ env "LINERA_HELMFILE_SET_ROCKSDB_STORAGE_SIZE" | default "2Gi" }}
+storage: {{ env "LINERA_HELMFILE_SET_STORAGE" | default "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042" }}
+dualStore: {{ env "LINERA_HELMFILE_SET_DUAL_STORE" | default "false" }}
+usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
+usingRecommendedScyllaDbSettings: {{ env "LINERA_HELMFILE_SET_USING_RECOMMENDED_SCYLLA_DB_SETTINGS" | default "false" }}
+storageReplicationFactor: {{ env "LINERA_HELMFILE_SET_STORAGE_REPLICATION_FACTOR" | default 1 }}
 
 # Loki
 loki-stack:
@@ -79,6 +86,8 @@ kube-prometheus-stack:
       # This prevents from adding any Helm label to serviceMonitorSelector if
       # above is empty.
       serviceMonitorSelectorNilUsesHelmValues: false
+      ruleSelector: {}
+      ruleSelectorNilUsesHelmValues: false
       # Relabelings needed for Scylla dashboards
       additionalScrapeConfigs:
         - job_name: scylla

@@ -228,9 +228,9 @@ BlockProposal:
         TYPENAME: AccountPublicKey
     - signature:
         TYPENAME: AccountSignature
-    - validated_block_certificate:
+    - original_proposal:
         OPTION:
-          TYPENAME: LiteCertificate
+          TYPENAME: OriginalProposal
 Certificate:
   ENUM:
     0:
@@ -275,8 +275,7 @@ ChainInfo:
     - chain_id:
         TYPENAME: ChainId
     - epoch:
-        OPTION:
-          TYPENAME: Epoch
+        TYPENAME: Epoch
     - description:
         OPTION:
           TYPENAME: ChainDescription
@@ -534,9 +533,6 @@ InitialChainConfig:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
-    - admin_id:
-        OPTION:
-          TYPENAME: ChainId
     - epoch:
         TYPENAME: Epoch
     - committees:
@@ -643,6 +639,8 @@ NetworkDescription:
         TYPENAME: CryptoHash
     - genesis_timestamp:
         TYPENAME: Timestamp
+    - admin_chain_id:
+        TYPENAME: ChainId
 NodeError:
   ENUM:
     0:
@@ -784,6 +782,20 @@ OracleResponse:
         TUPLE:
           - TYPENAME: EventId
           - SEQ: U8
+OriginalProposal:
+  ENUM:
+    0:
+      Fast:
+        STRUCT:
+          - public_key:
+              TYPENAME: AccountPublicKey
+          - signature:
+              TYPENAME: AccountSignature
+    1:
+      Regular:
+        STRUCT:
+          - certificate:
+              TYPENAME: LiteCertificate
 OutgoingMessage:
   STRUCT:
     - destination:
@@ -856,9 +868,9 @@ Recipient:
           TYPENAME: Account
 ResourceControlPolicy:
   STRUCT:
-    - block:
+    - wasm_fuel_unit:
         TYPENAME: Amount
-    - fuel_unit:
+    - evm_fuel_unit:
         TYPENAME: Amount
     - read_operation:
         TYPENAME: Amount
@@ -890,7 +902,8 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - http_request:
         TYPENAME: Amount
-    - maximum_fuel_per_block: U64
+    - maximum_wasm_fuel_per_block: U64
+    - maximum_evm_fuel_per_block: U64
     - maximum_service_oracle_execution_ms: U64
     - maximum_block_size: U64
     - maximum_bytecode_size: U64

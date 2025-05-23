@@ -3,6 +3,54 @@ environments:
     values:
       - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
         validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
+        usingLocalSsd: {{ env "LINERA_HELMFILE_SET_USING_LOCAL_SSD" | default "false" }}
+        usingRecommendedScyllaDbSettings: {{ env "LINERA_HELMFILE_SET_USING_RECOMMENDED_SCYLLA_DB_SETTINGS" | default "false" }}
+        kubeContext: {{ env "LINERA_HELMFILE_SET_KUBE_CONTEXT" | default "" }}
+        kubeConfigPath: {{ env "KUBECONFIG" | default "" }}
+
+helmDefaults:
+  wait: true
+  recreatePods: false
+  kubeContext: {{ .Values.kubeContext | quote }}
+
+hooks:
+  - events: ["prepare"]
+    showlogs: true
+    command: bash
+    args:
+      - -lc
+      - |
+        set -euxo pipefail
+        echo "Installing Prometheus ServiceMonitor CRD…"
+        kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+{{- if or .Values.usingLocalSsd .Values.usingRecommendedScyllaDbSettings }}
+  - events: ["prepare"]
+    showlogs: true
+    command: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
+
+        kube_args=(
+          {{- if .Values.kubeContext }}
+          --context {{ .Values.kubeContext }}
+          {{- end }}
+          {{- if .Values.kubeConfigPath }}
+          --kubeconfig {{ .Values.kubeConfigPath }}
+          {{- end }}
+        )
+
+        echo "Ensuring RAID0 and Local‑CSI driver are setup..."
+
+        kubectl "${kube_args[@]}" apply -f ./scylla-setup/gke-daemonset-raid-disks.yaml
+        kubectl "${kube_args[@]}" -n default rollout status daemonset/gke-raid-disks
+
+        kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-csi-driver
+        kubectl "${kube_args[@]}" -n local-csi-driver rollout status daemonset.apps/local-csi-driver --timeout=5m
+
+        kubectl "${kube_args[@]}" apply -f ./scylla-setup/local-ssd-sc.yaml
+{{- end }}
 
 ---
 
@@ -34,7 +82,7 @@ releases:
       - name: crds.enabled
         value: "true"
   - name: scylla
-    version: v1.13.0
+    version: v1.16.0
     namespace: scylla
     chart: scylla/scylla
     timeout: 900
@@ -42,9 +90,9 @@ releases:
       - scylla-manager/scylla-manager
       - scylla-operator/scylla-operator
     values:
-      - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml" }}
+      - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml.gotmpl" }}
   - name: scylla-manager
-    version: v1.13.0
+    version: v1.16.0
     namespace: scylla-manager
     chart: scylla/scylla-manager
     timeout: 900
@@ -53,7 +101,7 @@ releases:
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA_MANAGER" | default "scylla-manager.values.yaml" }}
   - name: scylla-operator
-    version: v1.13.0
+    version: v1.16.0
     namespace: scylla-operator
     chart: scylla/scylla-operator
     timeout: 900
@@ -62,11 +110,10 @@ releases:
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA_OPERATOR" | default "scylla-operator.values.yaml" }}
   - name: cert-manager
-    version: v1.15.3
+    version: v1.17.0
     namespace: cert-manager
     chart: jetstack/cert-manager
     timeout: 900
     set:
       - name: crds.enabled
         value: "true"
-

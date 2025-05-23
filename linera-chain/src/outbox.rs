@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
-
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
 use linera_views::context::MemoryContext;
@@ -19,20 +16,21 @@ use linera_views::{
 mod outbox_tests;
 
 #[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec},
-    prometheus::HistogramVec,
-};
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static OUTBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "outbox_size",
-        "Outbox size",
-        &[],
-        exponential_bucket_interval(1.0, 10_000.0),
-    )
-});
+    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    pub static OUTBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "outbox_size",
+            "Outbox size",
+            &[],
+            exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
+}
 
 // The number of block heights in a bucket
 // The `BlockHeight` has just 8 bytes so the size is constant.
@@ -47,7 +45,8 @@ const BLOCK_HEIGHT_BUCKET_SIZE: usize = 1000;
 ///   we just send the certified blocks over and let the receivers figure out what were the
 ///   messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (i.e. dequeued).
-#[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+#[derive(Debug, ClonableView, View)]
 pub struct OutboxStateView<C>
 where
     C: Context + Send + Sync + 'static,
@@ -75,7 +74,7 @@ where
         self.next_height_to_schedule.set(height.try_add_one()?);
         self.queue.push_back(height);
         #[cfg(with_metrics)]
-        OUTBOX_SIZE
+        metrics::OUTBOX_SIZE
             .with_label_values(&[])
             .observe(self.queue.count() as f64);
         Ok(true)
@@ -96,7 +95,7 @@ where
             updates.push(h);
         }
         #[cfg(with_metrics)]
-        OUTBOX_SIZE
+        metrics::OUTBOX_SIZE
             .with_label_values(&[])
             .observe(self.queue.count() as f64);
         Ok(updates)

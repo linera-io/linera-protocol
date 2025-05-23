@@ -5,13 +5,13 @@
 
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
+#![allow(async_fn_in_trait)]
 
 pub mod chain_listener;
 pub mod client_context;
 pub mod client_options;
 pub mod config;
 mod error;
-pub mod persistent;
 pub mod util;
 pub mod wallet;
 

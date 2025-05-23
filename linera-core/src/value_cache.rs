@@ -8,36 +8,40 @@
 mod unit_tests;
 
 #[cfg(with_metrics)]
-use std::{any::type_name, sync::LazyLock};
+use std::any::type_name;
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize, sync::Mutex};
 
 use linera_base::{crypto::CryptoHash, data_types::Blob, hashed::Hashed, identifiers::BlobId};
 use lru::LruCache;
-#[cfg(with_metrics)]
-use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 /// The default cache size.
 pub const DEFAULT_VALUE_CACHE_SIZE: usize = 10_000;
 
 /// A counter metric for the number of cache hits in the [`ValueCache`].
 #[cfg(with_metrics)]
-static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "value_cache_hit",
-        "Cache hits in `ValueCache`",
-        &["key_type", "value_type"],
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-/// A counter metric for the number of cache misses in the [`ValueCache`].
-#[cfg(with_metrics)]
-static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "value_cache_miss",
-        "Cache misses in `ValueCache`",
-        &["key_type", "value_type"],
-    )
-});
+    use linera_base::prometheus_util::register_int_counter_vec;
+    use prometheus::IntCounterVec;
+
+    pub static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "value_cache_hit",
+            "Cache hits in `ValueCache`",
+            &["key_type", "value_type"],
+        )
+    });
+
+    /// A counter metric for the number of cache misses in the [`ValueCache`].
+    pub static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "value_cache_miss",
+            "Cache misses in `ValueCache`",
+            &["key_type", "value_type"],
+        )
+    });
+}
 
 /// A least-recently used cache of a value.
 pub struct ValueCache<K, V>
@@ -138,9 +142,9 @@ where
         #[cfg(with_metrics)]
         {
             let metric = if maybe_value.is_some() {
-                &CACHE_HIT_COUNT
+                &metrics::CACHE_HIT_COUNT
             } else {
-                &CACHE_MISS_COUNT
+                &metrics::CACHE_MISS_COUNT
             };
 
             metric

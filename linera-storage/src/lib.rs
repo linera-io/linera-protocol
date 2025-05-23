@@ -14,10 +14,10 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch, TimeDelta,
-        Timestamp,
+        ApplicationDescription, Blob, ChainDescription, CompressedBytecode, Epoch,
+        NetworkDescription, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, ChainId, EventId},
+    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
 use linera_chain::{
@@ -39,15 +39,12 @@ use linera_views::{
     context::Context,
     views::{RootView, ViewError},
 };
-use serde::{Deserialize, Serialize};
 
+#[cfg(with_metrics)]
+pub use crate::db_storage::metrics;
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
 pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
-#[cfg(with_metrics)]
-pub use crate::db_storage::{
-    READ_CERTIFICATE_COUNTER, READ_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,
-};
 
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "table_linera";
@@ -167,6 +164,14 @@ pub trait Storage: Sized {
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
+
+    /// Lists all the events from a starting index
+    async fn read_events_from_index(
+        &self,
+        chain_id: &ChainId,
+        stream_id: &StreamId,
+        start_index: u32,
+    ) -> Result<Vec<IndexAndEvent>, ViewError>;
 
     /// Writes a vector of events.
     async fn write_events(
@@ -328,14 +333,6 @@ pub trait Storage: Sized {
     ) -> Result<Self::BlockExporterContext, ViewError>;
 }
 
-/// A description of the current Linera network to be stored in every node's database.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct NetworkDescription {
-    pub name: String,
-    pub genesis_config_hash: CryptoHash,
-    pub genesis_timestamp: Timestamp,
-}
-
 /// An implementation of `ExecutionRuntimeContext` suitable for the core protocol.
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
@@ -402,6 +399,10 @@ where
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
         self.storage.read_event(event_id).await
+    }
+
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        self.storage.read_network_description().await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

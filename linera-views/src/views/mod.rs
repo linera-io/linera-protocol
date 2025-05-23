@@ -3,7 +3,6 @@
 
 use std::{fmt::Debug, io::Write};
 
-use async_trait::async_trait;
 use linera_base::{
     crypto::CryptoHash,
     data_types::ArithmeticError,
@@ -56,7 +55,7 @@ pub const MIN_VIEW_TAG: u8 = 1;
 
 /// A view gives exclusive access to read and write the data stored at an underlying
 /// address in storage.
-#[async_trait]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait View<C>: Sized {
     /// The number of keys used for the initialization
     const NUM_INIT_KEYS: usize;
@@ -177,7 +176,7 @@ impl ViewError {
 }
 
 /// A view that supports hashing its values.
-#[async_trait]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait HashableView<C>: View<C> {
     /// How to compute hashes.
     type Hasher: Hasher;
@@ -227,14 +226,14 @@ impl Hasher for sha3::Sha3_256 {
 }
 
 /// A [`View`] whose staged modifications can be saved in storage.
-#[async_trait]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait RootView<C>: View<C> {
     /// Saves the root view to the database context
     async fn save(&mut self) -> Result<(), ViewError>;
 }
 
 /// A [`View`] that also supports crypto hash
-#[async_trait]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait CryptoHashView<C>: HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
@@ -244,7 +243,7 @@ pub trait CryptoHashView<C>: HashableView<C> {
 }
 
 /// A [`RootView`] that also supports crypto hash
-#[async_trait]
+#[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait CryptoHashRootView<C>: RootView<C> + CryptoHashView<C> {}
 
 /// A [`ClonableView`] supports being shared (unsafely) by cloning it.

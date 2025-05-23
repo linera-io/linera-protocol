@@ -39,14 +39,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn};
-#[cfg(with_metrics)]
-use {
-    linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
-    },
-    prometheus::{HistogramVec, IntCounterVec},
-    std::sync::LazyLock,
-};
 
 use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
@@ -61,42 +53,47 @@ use crate::{
 mod worker_tests;
 
 #[cfg(with_metrics)]
-static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_rounds_in_certificate",
-        "Number of rounds in certificate",
-        &["certificate_value", "round_type"],
-        exponential_bucket_interval(0.1, 50.0),
-    )
-});
+mod metrics {
+    use std::sync::LazyLock;
 
-#[cfg(with_metrics)]
-static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "num_rounds_in_block_proposal",
-        "Number of rounds in block proposal",
-        &["round_type"],
-        exponential_bucket_interval(0.1, 50.0),
-    )
-});
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
-#[cfg(with_metrics)]
-static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
-    LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
+    pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_rounds_in_certificate",
+            "Number of rounds in certificate",
+            &["certificate_value", "round_type"],
+            exponential_bucket_interval(0.1, 50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
-});
+    pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "num_rounds_in_block_proposal",
+            "Number of rounds in block proposal",
+            &["round_type"],
+            exponential_bucket_interval(0.1, 50.0),
+        )
+    });
 
-#[cfg(with_metrics)]
-static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "certificates_signed",
-        "Number of confirmed block certificates signed by each validator",
-        &["validator_name"],
-    )
-});
+    pub static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
+
+    pub static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
+    });
+
+    pub static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "certificates_signed",
+            "Number of confirmed block certificates signed by each validator",
+            &["validator_name"],
+        )
+    });
+}
 
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
 #[derive(Default, Debug)]
@@ -385,16 +382,6 @@ where
         self
     }
 
-    #[instrument(level = "trace", skip(self, tracked_chains))]
-    /// Configures the subset of chains that this worker is tracking.
-    pub fn with_tracked_chains(
-        mut self,
-        tracked_chains: impl IntoIterator<Item = ChainId>,
-    ) -> Self {
-        self.tracked_chains = Some(Arc::new(RwLock::new(tracked_chains.into_iter().collect())));
-        self
-    }
-
     /// Returns an instance with the specified grace period, in microseconds.
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
@@ -603,7 +590,7 @@ where
             .await?;
 
         #[cfg(with_metrics)]
-        NUM_BLOCKS.with_label_values(&[]).inc();
+        metrics::NUM_BLOCKS.with_label_values(&[]).inc();
 
         Ok((response, actions))
     }
@@ -831,7 +818,7 @@ where
             })
             .await?;
         #[cfg(with_metrics)]
-        NUM_ROUNDS_IN_BLOCK_PROPOSAL
+        metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
             .with_label_values(&[round.type_name()])
             .observe(round.number() as f64);
         Ok(response)
@@ -880,20 +867,20 @@ where
                 + certificate.block().body.operations.len())
                 as u64;
 
-            NUM_ROUNDS_IN_CERTIFICATE
+            metrics::NUM_ROUNDS_IN_CERTIFICATE
                 .with_label_values(&[
                     certificate.inner().to_log_str(),
                     certificate.round.type_name(),
                 ])
                 .observe(certificate.round.number() as f64);
             if confirmed_transactions > 0 {
-                TRANSACTION_COUNT
+                metrics::TRANSACTION_COUNT
                     .with_label_values(&[])
                     .inc_by(confirmed_transactions);
             }
 
             for (validator_name, _) in certificate.signatures() {
-                CERTIFICATES_SIGNED
+                metrics::CERTIFICATES_SIGNED
                     .with_label_values(&[&validator_name.to_string()])
                     .inc();
             }
@@ -924,7 +911,7 @@ where
         #[cfg(with_metrics)]
         {
             if !_duplicated {
-                NUM_ROUNDS_IN_CERTIFICATE
+                metrics::NUM_ROUNDS_IN_CERTIFICATE
                     .with_label_values(&[cert_str, round.type_name()])
                     .observe(round.number() as f64);
             }

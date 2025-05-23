@@ -12,16 +12,12 @@ use linera_base::{
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::ResourceControlPolicy;
 
-#[cfg(any(with_indexed_db, not(with_persist)))]
-use crate::{config::WalletState, wallet::Wallet};
-use crate::{persistent, util};
+use crate::util;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("no wallet found")]
-    NonexistentWallet,
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("persistence error: {0}")]
@@ -31,10 +27,10 @@ pub enum Error {
 }
 
 #[cfg(feature = "fs")]
-util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
+util::impl_from_dynamic!(Error:Persistence, linera_persistent::file::Error);
 
-#[cfg(with_indexed_db)]
-util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
+#[cfg(web)]
+util::impl_from_dynamic!(Error:Persistence, linera_persistent::indexed_db::Error);
 
 util::impl_from_infallible!(Error);
 
@@ -114,26 +110,6 @@ pub struct ClientContextOptions {
         value_parser = util::parse_millis
     )]
     pub blob_download_timeout: Duration,
-}
-
-#[cfg(with_indexed_db)]
-impl ClientContextOptions {
-    pub async fn wallet(&self) -> Result<WalletState<persistent::IndexedDb<Wallet>>, Error> {
-        Ok(WalletState::new(
-            persistent::IndexedDb::read("linera-wallet")
-                .await?
-                .ok_or(Error::NonexistentWallet)?,
-        ))
-    }
-}
-
-#[cfg(not(with_persist))]
-impl ClientContextOptions {
-    pub async fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
-        #![allow(unreachable_code)]
-        let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `indexed-db` features");
-        Ok(WalletState::new(persistent::Memory::new(_wallet)))
-    }
 }
 
 #[derive(Debug, Clone, clap::Args)]
@@ -287,8 +263,6 @@ pub enum ResourceControlPolicyConfig {
     #[cfg(with_testing)]
     OnlyFuel,
     #[cfg(with_testing)]
-    FuelAndBlock,
-    #[cfg(with_testing)]
     AllCategories,
 }
 
@@ -299,8 +273,6 @@ impl ResourceControlPolicyConfig {
             ResourceControlPolicyConfig::Testnet => ResourceControlPolicy::testnet(),
             #[cfg(with_testing)]
             ResourceControlPolicyConfig::OnlyFuel => ResourceControlPolicy::only_fuel(),
-            #[cfg(with_testing)]
-            ResourceControlPolicyConfig::FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
             #[cfg(with_testing)]
             ResourceControlPolicyConfig::AllCategories => ResourceControlPolicy::all_categories(),
         }

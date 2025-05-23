@@ -11,12 +11,12 @@ use axum::{Extension, Router};
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, ChainDescription, Timestamp},
     identifiers::{AccountOwner, ChainId},
     ownership::ChainOwnership,
 };
 use linera_client::{
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext, ClientContextExt as _},
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
@@ -32,7 +32,12 @@ pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoR
         async_graphql::http::GraphiQLSource::build()
             .endpoint(uri.path())
             .subscription_endpoint("/ws")
-            .finish(),
+            .finish()
+            .replace("@17", "@18")
+            .replace(
+                "ReactDOM.render(",
+                "ReactDOM.createRoot(document.getElementById(\"graphiql\")).render(",
+            ),
     )
 }
 
@@ -74,7 +79,7 @@ pub struct Validator {
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> QueryRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Returns the version information on this faucet service.
     async fn version(&self) -> linera_version::VersionInfo {
@@ -88,12 +93,7 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(self.chain_id)
-            .await?;
+        let client = self.context.lock().await.make_chain_client(self.chain_id);
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -109,10 +109,10 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> MutationRoot<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
-    async fn claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
+    async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
         self.do_claim(owner).await
     }
 }
@@ -121,13 +121,8 @@ impl<C> MutationRoot<C>
 where
     C: ClientContext,
 {
-    async fn do_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(self.chain_id)
-            .await?;
+    async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
+        let client = self.context.lock().await.make_chain_client(self.chain_id);
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -145,21 +140,24 @@ where
                 // tokens remain locked, so the remaining balance must be at least 1/3 of the start
                 // balance. In general:
                 // start_balance / full_duration <= remaining_balance / remaining_duration.
-                if Self::multiply(u128::from(self.start_balance), remaining_duration)
-                    > Self::multiply(u128::from(remaining_balance), full_duration)
+                if multiply(u128::from(self.start_balance), remaining_duration)
+                    > multiply(u128::from(remaining_balance), full_duration)
                 {
                     return Err(Error::new("Not enough unlocked balance; try again later."));
                 }
             }
         }
 
-        let ownership = ChainOwnership::single(owner);
         let result = client
-            .open_chain(ownership, ApplicationPermissions::default(), self.amount)
+            .open_chain(
+                ChainOwnership::single(owner),
+                ApplicationPermissions::default(),
+                self.amount,
+            )
             .await;
         self.context.lock().await.update_wallet(&client).await?;
-        let (chain_id, certificate) = match result? {
-            ClientOutcome::Committed(result) => result,
+        let chain_id = match result? {
+            ClientOutcome::Committed((chain_id, _certificate)) => chain_id,
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
                     "This faucet is using a multi-owner chain and is not the leader right now. \
@@ -168,23 +166,22 @@ where
                 )));
             }
         };
-        Ok(ClaimOutcome {
-            chain_id,
-            certificate_hash: certificate.hash(),
-        })
+        Ok(self
+            .context
+            .lock()
+            .await
+            .chain_description(chain_id)
+            .await?)
     }
 }
-
-impl<C> MutationRoot<C> {
-    /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
-    fn multiply(a: u128, b: u64) -> [u64; 3] {
-        let lower = u128::from(u64::MAX);
-        let b = u128::from(b);
-        let mut a1 = (a >> 64) * b;
-        let a0 = (a & lower) * b;
-        a1 += a0 >> 64;
-        [(a1 >> 64) as u64, (a1 & lower) as u64, (a0 & lower) as u64]
-    }
+/// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
+fn multiply(a: u128, b: u64) -> [u64; 3] {
+    let lower = u128::from(u64::MAX);
+    let b = u128::from(b);
+    let mut a1 = (a >> 64) * b;
+    let a0 = (a & lower) * b;
+    a1 += a0 >> 64;
+    [(a1 >> 64) as u64, (a1 & lower) as u64, (a0 & lower) as u64]
 }
 
 /// A GraphQL interface to request a new chain with tokens.
@@ -206,7 +203,7 @@ where
 
 impl<C> Clone for FaucetService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -226,7 +223,7 @@ where
 
 impl<C> FaucetService<C>
 where
-    C: ClientContext,
+    C: ClientContext + 'static,
 {
     /// Creates a new instance of the faucet service.
     #[expect(clippy::too_many_arguments)]
@@ -240,7 +237,7 @@ where
         config: ChainListenerConfig,
         storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
-        let client = context.make_chain_client(chain_id).await?;
+        let client = context.make_chain_client(chain_id);
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;

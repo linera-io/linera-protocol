@@ -10,15 +10,15 @@ use std::{
 use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight},
+    data_types::{ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch},
     identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{BlockProposal, ProposedBlock},
-    types::{Block, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{Block, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{Query, QueryOutcome};
+use linera_execution::{committee::Committee, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -26,7 +26,7 @@ use tokio::sync::OwnedRwLockReadGuard;
 use tracing::{instrument, warn};
 
 use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     notifier::Notifier,
     worker::{ProcessableCertificate, WorkerError, WorkerState},
 };
@@ -143,34 +143,19 @@ where
         let (response, _actions) = self.node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage,
-{
     #[instrument(level = "trace", skip_all)]
     pub fn new(state: WorkerState<S>) -> Self {
         Self {
             node: Arc::new(LocalNode { state }),
         }
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage + Clone,
-{
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn storage_client(&self) -> S {
         self.node.state.storage_client().clone()
     }
-}
 
-impl<S> LocalNodeClient<S>
-where
-    S: Storage + Clone + Send + Sync + 'static,
-{
     #[instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,
@@ -205,24 +190,6 @@ where
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
             match chain.manager.locking_blobs.get(blob_id).await? {
-                None => return Ok(None),
-                Some(blob) => blobs.push(blob),
-            }
-        }
-        Ok(Some(blobs))
-    }
-
-    /// Looks for the specified blobs in the local chain manager's pending blobs.
-    /// Returns `Ok(None)` if any of the blobs is not found.
-    pub async fn get_pending_blobs(
-        &self,
-        blob_ids: &[BlobId],
-        chain_id: ChainId,
-    ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
-        let chain = self.chain_state_view(chain_id).await?;
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            match chain.manager.pending_blob(blob_id).await? {
                 None => return Ok(None),
                 Some(blob) => blobs.push(blob),
             }
@@ -294,35 +261,6 @@ where
         Ok(response)
     }
 
-    /// Obtains the certificate containing the specified message.
-    #[instrument(level = "trace", skip(self))]
-    pub async fn certificate_for_block(
-        &self,
-        chain_id: ChainId,
-        block_height: BlockHeight,
-    ) -> Result<ConfirmedBlockCertificate, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id)
-            .with_sent_certificate_hashes_in_range(BlockHeightRange::single(block_height));
-        let info = self.handle_chain_info_query(query).await?.info;
-        let certificates = self
-            .storage_client()
-            .read_certificates(info.requested_sent_certificate_hashes)
-            .await?;
-        let certificate = certificates
-            .into_iter()
-            .find(|certificate| {
-                certificate.block().header.chain_id == chain_id
-                    && certificate.block().header.height == block_height
-            })
-            .ok_or_else(|| {
-                ViewError::not_found(
-                    "could not find certificate with block chain ID and height {}",
-                    (chain_id, block_height),
-                )
-            })?;
-        Ok(certificate)
-    }
-
     /// Handles any pending local cross-chain requests.
     #[instrument(level = "trace", skip(self))]
     pub async fn retry_pending_cross_chain_requests(
@@ -374,5 +312,40 @@ where
             .update_received_certificate_trackers(chain_id, new_trackers)
             .await?;
         Ok(())
+    }
+}
+
+/// Extension trait for [`ChainInfo`]s from our local node. These should always be valid and
+/// contain the requested information.
+pub trait LocalChainInfoExt {
+    /// Returns the requested map of committees.
+    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError>;
+
+    /// Returns the current committee.
+    fn into_current_committee(self) -> Result<Committee, LocalNodeError>;
+
+    /// Returns a reference to the current committee.
+    fn current_committee(&self) -> Result<&Committee, LocalNodeError>;
+}
+
+impl LocalChainInfoExt for ChainInfo {
+    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
+        self.requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)
+    }
+
+    fn into_current_committee(self) -> Result<Committee, LocalNodeError> {
+        self.requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .remove(&self.epoch)
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
+    }
+
+    fn current_committee(&self) -> Result<&Committee, LocalNodeError> {
+        self.requested_committees
+            .as_ref()
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .get(&self.epoch)
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 }
