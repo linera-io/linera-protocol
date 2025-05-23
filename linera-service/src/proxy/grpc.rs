@@ -346,6 +346,7 @@ where
                 Status::out_of_range(err.to_string())
             }
             ViewError::NotFound(_)
+            | ViewError::InactiveChain(_)
             | ViewError::BlobsNotFound(_)
             | ViewError::EventsNotFound(_)
             | ViewError::CannotAcquireCollectionEntry

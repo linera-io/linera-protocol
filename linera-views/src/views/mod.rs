@@ -6,7 +6,7 @@ use std::{fmt::Debug, io::Write};
 use linera_base::{
     crypto::CryptoHash,
     data_types::ArithmeticError,
-    identifiers::{BlobId, EventId},
+    identifiers::{BlobId, BlobType, ChainId, EventId},
 };
 pub use linera_views_derive::{
     ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
@@ -159,6 +159,10 @@ pub enum ViewError {
     #[error("The value is too large for the client")]
     TooLargeValue,
 
+    /// The chain being queried is not active.
+    #[error("The chain being queried is not active {0:?}")]
+    InactiveChain(ChainId),
+
     /// Some blobs were not found.
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
@@ -172,6 +176,17 @@ impl ViewError {
     /// Creates a `NotFound` error with the given message and key.
     pub fn not_found<T: Debug>(msg: &str, key: T) -> ViewError {
         ViewError::NotFound(format!("{} {:?}", msg, key))
+    }
+}
+
+impl ViewError {
+    /// Creates a `NotFound` error with the given message and key.
+    pub fn blob_not_found(blob_id: BlobId) -> ViewError {
+        if matches!(blob_id.blob_type, BlobType::ChainDescription) {
+            Self::InactiveChain(ChainId(blob_id.hash))
+        } else {
+            Self::BlobsNotFound(vec![blob_id])
+        }
     }
 }
 

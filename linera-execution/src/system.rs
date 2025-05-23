@@ -27,7 +27,7 @@ use linera_views::{
     map_view::{HashedMapView, MapView},
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    views::{ClonableView, HashableView, View, ViewError},
+    views::{ClonableView, HashableView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -508,7 +508,7 @@ where
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
@@ -538,7 +538,7 @@ where
                 let admin_id = self
                     .admin_id
                     .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain)?;
+                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
                 let event_id = EventId {
                     chain_id: admin_id,
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -996,11 +996,7 @@ where
     }
 
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
-        match self.context().extra().get_blob(blob_id).await {
-            Ok(blob) => Ok(blob.into()),
-            Err(ViewError::BlobsNotFound(_)) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
-            Err(error) => Err(error.into()),
-        }
+        Ok(self.context().extra().get_blob(blob_id).await?.into())
     }
 
     pub async fn assert_blob_exists(&mut self, blob_id: BlobId) -> Result<(), ExecutionError> {
