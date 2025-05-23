@@ -18,7 +18,7 @@ pub(crate) enum ExporterError {
     BadNotification(BadNotificationKind),
 
     #[error("unable to load the exporter state")]
-    StateError(ViewError),
+    ViewError(ViewError),
 
     #[error("generic storage error: {0}")]
     StorageError(#[from] ViewError),
@@ -26,7 +26,7 @@ pub(crate) enum ExporterError {
     #[error("block not processed by the block processor yet")]
     UnprocessedBlock,
 
-    #[error("chain not yet processed by the block exxporter")]
+    #[error("chain not yet processed by the block exporter")]
     UnprocessedChain,
 
     #[error("chain should be initialized from block zero")]

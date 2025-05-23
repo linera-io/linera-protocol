@@ -276,7 +276,7 @@ pub struct LimitsConfig {
     pub block_cache_items_capacity: u16,
     /// Maximum weight in megabytes for the combined
     /// cache, consisting of small miscellaneous items.
-    pub auxialiary_cache_size: u16,
+    pub auxiliary_cache_size: u16,
 }
 
 impl Default for LimitsConfig {
@@ -288,7 +288,7 @@ impl Default for LimitsConfig {
             blob_cache_items_capacity: 8192,
             block_cache_weight: 1024,
             block_cache_items_capacity: 8192,
-            auxialiary_cache_size: 1024,
+            auxiliary_cache_size: 1024,
         }
     }
 }

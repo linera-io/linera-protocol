@@ -44,7 +44,7 @@ where
     ) -> Result<(Self, LogView<C, CryptoHash>, DestinationStates), ExporterError> {
         let mut view = BlockExporterStateView::load(context)
             .await
-            .map_err(ExporterError::StateError)?;
+            .map_err(ExporterError::ViewError)?;
         if view.destination_states.get().states.is_empty() {
             let states = DestinationStates::new(number_of_destinations);
             view.destination_states.set(states);
@@ -79,8 +79,8 @@ where
             Err(ExporterError::ChainAlreadyExists(block.chain_id))?
         }
 
-        let copy = block.chain_id;
-        self.chain_states.insert(&copy, block.into())?;
+        let chain_id = block.chain_id;
+        self.chain_states.insert(&chain_id, block.into())?;
         Ok(())
     }
 

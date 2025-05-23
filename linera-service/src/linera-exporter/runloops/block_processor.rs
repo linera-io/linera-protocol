@@ -70,8 +70,8 @@ where
     where
         F: IntoFuture<Output = ()>,
     {
-        let furure = signal.into_future();
-        let mut pinned = Box::pin(furure);
+        let future = signal.into_future();
+        let mut pinned = Box::pin(future);
 
         let mut interval = interval(Duration::from_secs(persistence_period.into()));
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);

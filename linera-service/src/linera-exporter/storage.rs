@@ -16,7 +16,10 @@ use linera_sdk::{
     views::{View, ViewError},
 };
 use linera_storage::Storage;
-use linera_views::{batch::Batch, context::Context, log_view::LogView, views::ClonableView};
+use linera_views::{
+    batch::Batch, context::Context, log_view::LogView, store::WritableKeyValueStore as _,
+    views::ClonableView,
+};
 use mini_moka::unsync::Cache as LfuCache;
 use quick_cache::{sync::Cache as FifoCache, Weighter};
 
@@ -64,7 +67,7 @@ where
         limits: LimitsConfig,
     ) -> Self {
         let shared_canonical_state =
-            CanonicalState::new((limits.auxialiary_cache_size / 2).into(), state_context);
+            CanonicalState::new((limits.auxiliary_cache_size / 2).into(), state_context);
         let blobs_cache = Arc::new(FifoCache::with_weighter(
             limits.blob_cache_items_capacity as usize,
             limits.blob_cache_weight as u64,
@@ -193,7 +196,7 @@ where
         let (view, canonical_state, destination_states) =
             BlockExporterStateView::initiate(context, number_of_destinaions).await?;
 
-        let chain_states_cache_capacity = ((limits.auxialiary_cache_size / 2) as u64 * 1024 * 1024)
+        let chain_states_cache_capacity = ((limits.auxiliary_cache_size / 2) as u64 * 1024 * 1024)
             / (size_of::<CryptoHash>() + size_of::<LiteBlockId>()) as u64;
         let chain_states_cache = LfuCache::builder()
             .max_capacity(chain_states_cache_capacity)
@@ -284,8 +287,14 @@ where
             .set_destination_states(self.shared_storage.destination_states.clone());
         self.exporter_state_view.flush(&mut batch)?;
         self.exporter_state_view.rollback();
-        if let Err(e) = self.exporter_state_view.context().write_batch(batch).await {
-            Err(ExporterError::GenericError(Box::new(e)))?;
+        if let Err(e) = self
+            .exporter_state_view
+            .context()
+            .store()
+            .write_batch(batch)
+            .await
+        {
+            Err(ExporterError::ViewError(e.into()))?;
         };
 
         Ok(())
