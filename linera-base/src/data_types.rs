@@ -1374,6 +1374,11 @@ impl Blob {
     pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
         Ok(Self::new_data(fs::read(path)?))
     }
+
+    /// Returns whether the blob is a "user blob".
+    pub fn is_user_blob(&self) -> bool {
+        self.content().blob_type().is_user_blob()
+    }
 }
 
 impl Serialize for Blob {

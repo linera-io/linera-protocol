@@ -157,14 +157,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         // Account for blobs published by this transaction directly.
         for blob in &txn_outcome.blobs {
             resource_controller
-                .policy()
-                .check_blob_size(blob.content())
+                .track_blob_published(blob)
                 .with_execution_context(context)?;
-            if blob.content().blob_type().is_user_blob() {
-                resource_controller
-                    .track_blob_published(blob.content())
-                    .with_execution_context(context)?;
-            }
         }
 
         // Account for blobs published indirectly but referenced by the transaction.
@@ -172,11 +166,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             if let Some(blob) = self.published_blobs.get(blob_id) {
                 // We don't check its sizes again, it was check at the beginning
                 // of the block processing.
-                if blob.content().blob_type().is_user_blob() {
-                    resource_controller
-                        .track_blob_published(blob.content())
-                        .with_execution_context(context)?;
-                }
+                resource_controller
+                    .track_blob_published(blob)
+                    .with_execution_context(context)?;
             } else {
                 return Err(ChainError::InternalError(format!(
                     "Missing published blob {blob_id}"
