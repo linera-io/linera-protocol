@@ -169,6 +169,21 @@ pub enum BlobType {
     ChainDescription,
 }
 
+impl BlobType {
+    /// Returns whether the blob is of [`BlobType::Committee`] variant.
+    pub fn is_committee_blob(&self) -> bool {
+        match self {
+            BlobType::Data
+            | BlobType::ContractBytecode
+            | BlobType::ServiceBytecode
+            | BlobType::EvmBytecode
+            | BlobType::ApplicationDescription
+            | BlobType::ChainDescription => false,
+            BlobType::Committee => true,
+        }
+    }
+}
+
 impl fmt::Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)

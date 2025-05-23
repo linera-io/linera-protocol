@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, mem, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem, vec,
+};
 
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -34,11 +37,17 @@ pub struct TransactionTracker {
     /// Events recorded by contracts' `emit` calls.
     events: Vec<Event>,
     /// Blobs created by contracts.
+    ///
+    /// As of right now, blobs created by the contracts are one of the two:
+    /// - [`OpenChain`]
+    /// - [`CreateApplication`]
     blobs: BTreeMap<BlobId, Blob>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
     streams_to_process: BTreeMap<ApplicationId, AppStreamUpdates>,
+    /// Published blobs this transaction refers to by [`BlobId`].
+    blobs_published: BTreeSet<BlobId>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -57,6 +66,8 @@ pub struct TransactionOutcome {
     pub blobs: Vec<Blob>,
     /// Operation result.
     pub operation_result: Vec<u8>,
+    /// Blobs published by this transaction.
+    pub blobs_published: BTreeSet<BlobId>,
 }
 
 impl TransactionTracker {
@@ -144,6 +155,10 @@ impl TransactionTracker {
 
     pub fn add_created_blob(&mut self, blob: Blob) {
         self.blobs.insert(blob.id(), blob);
+    }
+
+    pub fn add_published_blob(&mut self, blob_id: BlobId) {
+        self.blobs_published.insert(blob_id);
     }
 
     pub fn created_blobs(&self) -> &BTreeMap<BlobId, Blob> {
@@ -266,6 +281,7 @@ impl TransactionTracker {
             blobs,
             operation_result,
             streams_to_process,
+            blobs_published,
         } = self;
         ensure!(
             streams_to_process.is_empty(),
@@ -286,6 +302,7 @@ impl TransactionTracker {
             events,
             blobs: blobs.into_values().collect(),
             operation_result: operation_result.unwrap_or_default(),
+            blobs_published,
         })
     }
 }
