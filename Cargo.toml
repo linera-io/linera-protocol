@@ -171,7 +171,7 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
-revm = { version = "23.1.0", default-features = false, features = [
+revm = { version = "24.0.0", default-features = false, features = [
     "std",
     "kzg-rs",
     "secp256k1",
@@ -179,28 +179,25 @@ revm = { version = "23.1.0", default-features = false, features = [
     "blst",
     "serde",
 ] }
-revm-context = { version = "4.1.0", default-features = false, features = [
+revm-context = { version = "5.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-context-interface = { version = "4.1.0", default-features = false, features = [
+revm-context-interface = { version = "5.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-database = { version = "4.0.0", default-features = false, features = [
+revm-database = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
-revm-database-interface = { version = "4.0.0", default-features = false, features = [
+revm-handler = { version = "5.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-handler = { version = "4.1.0", default-features = false, features = [
+revm-interpreter = { version = "20.0.0", default-features = false, features = [
     "serde",
 ] }
-revm-interpreter = { version = "19.1.0", default-features = false, features = [
+revm-primitives = { version = "19.1.0", default-features = false, features = [
     "serde",
 ] }
-revm-primitives = { version = "19.0.0", default-features = false, features = [
-    "serde",
-] }
-revm-state = { version = "4.0.0", default-features = false, features = [
+revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
 rocksdb = "0.21.0"
