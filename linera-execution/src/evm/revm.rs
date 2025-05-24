@@ -1159,7 +1159,6 @@ where
         let data = Bytes::copy_from_slice(input);
 
         let block_env = self.db.get_service_block_env()?;
-        self.db.set_contract_address()?;
         let inspector = CallInterceptorService {
             db: self.db.clone(),
             contract_address: self.db.contract_address,
