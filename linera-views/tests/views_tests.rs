@@ -374,7 +374,11 @@ where
             assert_eq!(view.x2.get(), &2);
         }
         if config.with_log {
-            assert_eq!(view.log.read(0..10).await?, vec![4]);
+            assert!(view.log.read(0..10).await.is_err());
+            assert!(view.log.read(0..2).await.is_err());
+            assert!(view.log.read(2..).await.is_err());
+            assert_eq!(view.log.read(1..).await?, Vec::<u32>::new());
+            assert_eq!(view.log.read(0..1).await?, vec![4]);
         }
         if config.with_queue {
             assert_eq!(view.queue.read_front(10).await?, vec![7]);
@@ -401,7 +405,7 @@ where
                 assert_eq!(count, 1);
             }
             let subview = view.collection.try_load_entry("hola").await?.unwrap();
-            assert_eq!(subview.read(0..10).await?, vec![17, 18]);
+            assert_eq!(subview.read(0..).await?, vec![17, 18]);
         }
     };
     let staged_hash = {
@@ -414,7 +418,7 @@ where
             assert_eq!(view.x2.get(), &0);
         }
         if config.with_log {
-            assert_eq!(view.log.read(0..10).await?, Vec::<u32>::new());
+            assert_eq!(view.log.read(..).await?, Vec::<u32>::new());
         }
         if config.with_queue {
             assert_eq!(view.queue.read_front(10).await?, Vec::<u64>::new());
@@ -427,7 +431,7 @@ where
         }
         if config.with_collection {
             let subview = view.collection.load_entry_or_insert("hola").await?;
-            assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
+            assert_eq!(subview.read(0..).await?, Vec::<u32>::new());
             let subview = view.collection2.load_entry_mut("ciao").await?;
             let subsubview = subview.load_entry_mut("!").await?;
             subsubview.set(3);
@@ -479,7 +483,7 @@ where
             assert_eq!(view.x2.get(), &0);
         }
         if config.with_log {
-            assert_eq!(view.log.read(0..10).await?, vec![4]);
+            assert_eq!(view.log.read(..).await?, vec![4]);
         }
         if config.with_queue {
             view.queue.push_back(8);
@@ -507,7 +511,8 @@ where
         }
         if config.with_collection {
             let subview = view.collection.try_load_entry("hola").await?.unwrap();
-            assert_eq!(subview.read(0..10).await?, vec![17, 18]);
+            assert!(subview.read(0..10).await.is_err());
+            assert_eq!(subview.read(0..).await?, vec![17, 18]);
             assert_eq!(subview.read(..).await?, vec![17, 18]);
             assert_eq!(subview.read(1..).await?, vec![18]);
             assert_eq!(subview.read(..=0).await?, vec![17]);
@@ -598,7 +603,7 @@ where
         let mut view = store.load(1).await?;
         if config.with_collection {
             let subview = view.collection.load_entry_or_insert("hola").await?;
-            assert_eq!(subview.read(0..10).await?, Vec::<u32>::new());
+            assert_eq!(subview.read(..).await?, Vec::<u32>::new());
         }
         if config.with_queue {
             assert_eq!(view.queue.front().await?, Some(13));

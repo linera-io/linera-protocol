@@ -7,7 +7,6 @@ use std::{
     fmt,
     hash::Hash,
     mem,
-    ops::Range,
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
@@ -352,14 +351,16 @@ where
         let remote_info = self.remote_node.handle_chain_info_query(query).await?;
         let initial_block_height = remote_info.next_block_height;
         // Obtain the missing blocks and the manager state from the local node.
-        let range: Range<usize> =
-            initial_block_height.try_into()?..target_block_height.try_into()?;
+        let start_height: usize = initial_block_height.try_into()?;
+        let end_height: usize = target_block_height.try_into()?;
         let (keys, timeout) = {
             let chain = self.local_node.chain_state_view(chain_id).await?;
-            (
-                chain.confirmed_log.read(range).await?,
-                chain.manager.timeout.get().clone(),
-            )
+            let keys = if start_height <= end_height {
+                chain.confirmed_log.read(start_height..end_height).await?
+            } else {
+                Vec::new()
+            };
+            (keys, chain.manager.timeout.get().clone())
         };
         if !keys.is_empty() {
             // Send the requested certificates in order.

@@ -318,14 +318,22 @@ where
             Bound::Included(end) => *end + 1,
             Bound::Excluded(end) => *end,
             Bound::Unbounded => self.count(),
+        };
+        if end > self.count() {
+            return Err(ViewError::IncorrectRange);
         }
-        .min(self.count());
         let start = match range.start_bound() {
             Bound::Included(start) => *start,
             Bound::Excluded(start) => *start + 1,
             Bound::Unbounded => 0,
         };
-        if start >= end {
+        if start > self.count() {
+            return Err(ViewError::IncorrectRange);
+        }
+        if start > end {
+            return Err(ViewError::IncorrectRange);
+        }
+        if start == end {
             return Ok(Vec::new());
         }
         if start < effective_stored_count {
