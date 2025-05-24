@@ -7360,7 +7360,6 @@ version = "0.15.0"
 dependencies = [
  "amm",
  "anyhow",
- "async-trait",
  "base64 0.22.1",
  "bcs",
  "cfg_aliases",
@@ -7410,8 +7409,6 @@ dependencies = [
  "tracing",
  "trait-variant",
  "walrus-core",
- "walrus-sdk",
- "walrus-service",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -7708,7 +7705,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "derive_more 1.0.0",
- "fs-err",
+ "fs-err 2.11.0",
  "fs4",
  "gloo-utils",
  "indexed_db_futures",
@@ -19231,3 +19228,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "move-core-types"
+version = "0.0.4"
+source = "git+https://github.com/MystenLabs/sui.git?tag=testnet-v1.49.1#3b1d6b3bd63f175b774da557f89af3619b74d783"

@@ -73,13 +73,7 @@ impl ExporterService {
             .await
             .expect("a running notification server");
 
-        if cfg!(with_testing) {
-            Ok(())
-        } else {
-            Err(ExporterError::GenericError(
-                "Service should run forever.".to_string().into(),
-            ))
-        }
+        Ok(())
     }
 }
 

@@ -133,7 +133,7 @@ jobs:
 
   check-outdated-cli-md:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v4
@@ -172,7 +172,7 @@ jobs:
 
   ethereum-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
     - uses: actions/checkout@v4

@@ -54,7 +54,6 @@ web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
 crossbeam-channel = { workspace = true, optional = true }
@@ -81,8 +80,6 @@ tokio-util.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
 walrus-core.workspace = true
-walrus-sdk.workspace = true
-walrus-service.workspace = true
 
 [target.wasm32-unknown-unknown.dependencies]
 flarch = { workspace = true, optional = true }
