@@ -991,7 +991,6 @@ where
         ch: Choice,
         input: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        self.db.set_contract_address()?;
         let (kind, data) = match ch {
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
             Choice::Call => {
@@ -1091,6 +1090,7 @@ where
     Runtime: ServiceRuntime,
 {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.db.set_contract_address()?;
         let evm_query = serde_json::from_slice(&argument)?;
         let query = match evm_query {
             EvmQuery::Query(vec) => vec,
@@ -1126,7 +1126,6 @@ where
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
-        self.db.set_contract_address()?;
         if !self.db.is_initialized()? {
             let changes = {
                 let mut vec_init = self.module.clone();
