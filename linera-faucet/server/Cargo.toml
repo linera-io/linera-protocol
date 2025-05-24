@@ -11,6 +11,10 @@ homepage.workspace = true
 license.workspace = true
 edition.workspace = true
 
+[package.metadata.cargo-machete]
+ignored = ["prometheus"]
+
+
 [features]
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 
@@ -29,7 +33,7 @@ linera-core.workspace = true
 linera-metrics.workspace = true
 linera-storage.workspace = true
 linera-version.workspace = true
-prometheus = { workspace = true, optional = true}
+prometheus = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
