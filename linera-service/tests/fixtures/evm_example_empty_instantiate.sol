@@ -10,6 +10,7 @@ contract ExampleExecuteMessage {
     }
 
     function instantiate(bytes memory input) external {
+        require(input.length == 0);
         value = 42;
     }
 
