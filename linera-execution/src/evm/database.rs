@@ -349,11 +349,11 @@ where
     }
 
     /// The EVM contract address
-    pub fn get_contract_address(&mut self) -> Result<Address, ExecutionError> {
+    pub fn set_contract_address(&mut self) -> Result<(), ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let application_id = runtime.application_id()?;
         self.contract_address = application_id_to_address(application_id);
-        Ok(self.contract_address)
+        Ok(())
     }
 
     /// Checks if the contract is already initialized. It is possible

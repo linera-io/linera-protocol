@@ -715,8 +715,8 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = self.db.get_contract_address()?;
-        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
+        self.db.set_contract_address()?;
+        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == self.contract_address
         {
             return Ok(None);
         }
@@ -785,8 +785,8 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        let contract_address = self.db.get_contract_address()?;
-        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == contract_address
+        self.db.set_contract_address()?;
+        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == self.contract_address
         {
             return Ok(None);
         }
@@ -975,11 +975,11 @@ where
     fn initialize_contract(&mut self) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
-        let contract_address = self.db.get_contract_address()?;
+        self.db.set_contract_address()?;
         vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(Choice::Create, &vec_init)?;
         result
-            .check_contract_address(contract_address)
+            .check_contract_address(self.db.contract_address)
             .map_err(|error| {
                 ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(error))
             })?;
@@ -991,17 +991,17 @@ where
         ch: Choice,
         input: &[u8],
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        let contract_address = self.db.get_contract_address()?;
+        self.db.set_contract_address()?;
         let (kind, data) = match ch {
             Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
             Choice::Call => {
                 let data = Bytes::copy_from_slice(input);
-                (TxKind::Call(contract_address), data)
+                (TxKind::Call(self.db.contract_address), data)
             }
         };
         let inspector = CallInterceptorContract {
             db: self.db.clone(),
-            contract_address,
+            contract_address: self.db.contract_address,
         };
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
@@ -1126,7 +1126,7 @@ where
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
-        let contract_address = self.db.get_contract_address()?;
+        self.db.set_contract_address()?;
         if !self.db.is_initialized()? {
             let changes = {
                 let mut vec_init = self.module.clone();
@@ -1134,7 +1134,7 @@ where
                 vec_init.extend_from_slice(&constructor_argument);
                 let (result, changes) = self.transact(TxKind::Create, &vec_init)?;
                 result
-                    .check_contract_address(contract_address)
+                    .check_contract_address(self.db.contract_address)
                     .map_err(|error| {
                         ExecutionError::EvmError(EvmExecutionError::IncorrectContractCreation(
                             error,
@@ -1146,7 +1146,7 @@ where
         }
         ensure_message_length(vec.len(), 4)?;
         forbid_execute_operation_origin(&vec[..4])?;
-        let kind = TxKind::Call(contract_address);
+        let kind = TxKind::Call(self.db.contract_address);
         let (execution_result, _) = self.transact(kind, vec)?;
         Ok(execution_result)
     }
@@ -1159,10 +1159,10 @@ where
         let data = Bytes::copy_from_slice(input);
 
         let block_env = self.db.get_service_block_env()?;
-        let contract_address = self.db.get_contract_address()?;
+        self.db.set_contract_address()?;
         let inspector = CallInterceptorService {
             db: self.db.clone(),
-            contract_address,
+            contract_address: self.db.contract_address,
         };
         let nonce = self.db.get_nonce(&ZERO_ADDRESS)?;
         let result_state = {
