@@ -32,7 +32,6 @@ use linera_client::{
     client_context::ClientContext,
     client_options::ClientContextOptions,
     config::{CommitteeConfig, GenesisConfig},
-    persistent::{self, Persist},
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
@@ -43,6 +42,7 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault as _,
 };
 use linera_faucet_server::FaucetService;
+use linera_persistent::{self as persistent, Persist, PersistExt as _};
 use linera_service::{
     cli::{
         command::{ClientCommand, DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand},
@@ -72,8 +72,6 @@ use {
     std::time::Duration,
     tokio::{io::AsyncWriteExt, process::ChildStdin, sync::oneshot},
 };
-
-use crate::persistent::PersistExt as _;
 
 struct Job(ClientOptions);
 

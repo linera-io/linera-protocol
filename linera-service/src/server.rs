@@ -18,12 +18,12 @@ use linera_base::{
     crypto::{CryptoRng, Ed25519SecretKey},
     listen_for_shutdown_signals,
 };
-use linera_client::{
-    config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
-    persistent::{self, Persist},
+use linera_client::config::{
+    CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig,
 };
 use linera_core::{worker::WorkerState, JoinSetExt as _};
 use linera_execution::{WasmRuntime, WithWasmDefault};
+use linera_persistent::{self as persistent, Persist};
 use linera_rpc::{
     config::{
         CrossChainConfig, ExporterServiceConfig, NetworkProtocol, NotificationConfig, ShardConfig,

@@ -1,0 +1,1727 @@
+{
+    "annotations": {
+        "list": [
+            {
+                "builtIn": 1,
+                "datasource": "-- Grafana --",
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "type": "dashboard"
+            },
+            {
+                "class": "annotation_restart",
+                "datasource": "prometheus",
+                "enable": true,
+                "expr": "resets(scylla_gossip_heart_beat{cluster=\"$cluster\"}[$__rate_interval])>0",
+                "hide": false,
+                "iconColor": "rgba(255, 96, 96, 1)",
+                "limit": 100,
+                "name": "node_restart",
+                "showIn": 0,
+                "tagKeys": "instance,dc,cluster",
+                "tags": [],
+                "titleFormat": "restart",
+                "type": "tags"
+            },
+            {
+                "class": "annotation_manager_task",
+                "datasource": "prometheus",
+                "enable": true,
+                "expr": "scylla_manager_task_active_count{type=~\"repair|backup\",cluster=\"$cluster\"}>0",
+                "hide": false,
+                "iconColor": "#73BF69",
+                "limit": 100,
+                "name": "Task",
+                "showIn": 0,
+                "tagKeys": "type",
+                "tags": [],
+                "titleFormat": "Running",
+                "type": "tags"
+            },
+            {
+                "class": "annotation_manager_task_failed",
+                "datasource": "prometheus",
+                "enable": true,
+                "expr": "sum(changes(scylla_manager_task_run_total{status=\"ERROR\", cluster=\"$cluster\"}[$__rate_interval])) by(type)>0",
+                "hide": false,
+                "iconColor": "#73BF69",
+                "limit": 100,
+                "name": "Failed",
+                "showIn": 0,
+                "tagKeys": "type",
+                "tags": [],
+                "titleFormat": "Task Failed",
+                "type": "tags"
+            }
+        ]
+    },
+    "class": "dashboard",
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 1,
+    "hideControls": true,
+    "id": null,
+    "links": [
+        {
+            "asDropdown": true,
+            "icon": "external link",
+            "includeVars": true,
+            "keepTime": true,
+            "tags": [],
+            "type": "dashboards"
+        }
+    ],
+    "originalTitle": "Scylla Manager Metrics",
+    "overwrite": true,
+    "panels": [
+        {
+            "class": "text_panel",
+            "datasource": null,
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {}
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 24,
+                "x": 0,
+                "y": 1
+            },
+            "id": 1,
+            "isNew": true,
+            "links": [],
+            "mode": "html",
+            "options": {
+                "content": "<div>\n<img src=\"data:image/png;base64,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\" style=\"margin-top:-20px\" height=\"55\">\n<span style=\"font-size:40px\">  [[cluster_name]]</span><span style=\"padding-top: 25px;float:right\"></span><hr style=\"border-top: 3px solid #5780c1;\"></div>",
+                "mode": "html"
+            },
+            "span": 12,
+            "title": "",
+            "transparent": true,
+            "type": "text"
+        },
+        {
+            "class": "small_stat",
+            "datasource": "prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "from": "",
+                            "id": 0,
+                            "text": "Online",
+                            "to": "",
+                            "type": 1,
+                            "value": "0"
+                        },
+                        {
+                            "from": "",
+                            "id": 1,
+                            "text": "Offline",
+                            "to": "",
+                            "type": 1,
+                            "value": "1"
+                        }
+                    ],
+                    "noValue": " Offline",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "green",
+                                "value": 0
+                            }
+                        ]
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 0,
+                "y": 3
+            },
+            "id": 2,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.1.3",
+            "span": 3,
+            "targets": [
+                {
+                    "expr": "count(scrape_samples_scraped{job=\"scylla_manager\"}==0) OR vector(0)",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 40
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Manager",
+            "type": "stat"
+        },
+        {
+            "class": "small_stat",
+            "datasource": "prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {},
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 2,
+                "y": 3
+            },
+            "id": 3,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.1.3",
+            "targets": [
+                {
+                    "expr": "count(scylla_manager_healthcheck_cql_rtt_ms{cluster=\"$cluster\"})",
+                    "intervalFactor": 1,
+                    "legendFormat": "Total Nodes",
+                    "refId": "A",
+                    "step": 40
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Total Nodes",
+            "type": "stat"
+        },
+        {
+            "class": "small_stat",
+            "datasource": "prometheus",
+            "description": "The number of nodes that Scylla manager CQL probe failed connecting to. It could indicate a network or a node problem",
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {},
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "green",
+                                "value": 0
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 4,
+                "y": 3
+            },
+            "id": 4,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.1.3",
+            "targets": [
+                {
+                    "expr": "count((scylla_manager_healthcheck_cql_status{cluster=\"$cluster\"}==-1) and on(instance) (scylla_node_operation_mode{cluster=\"$cluster\"} == 3) ) OR vector(0)",
+                    "intervalFactor": 1,
+                    "legendFormat": "Nodes without CQL connection",
+                    "refId": "A",
+                    "step": 20
+                }
+            ],
+            "thresholds": "1,2",
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "CQL Fail",
+            "type": "stat"
+        },
+        {
+            "class": "vertical_lcd",
+            "datasource": "prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {},
+                    "decimals": 0,
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "percent"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 6,
+                "y": 3
+            },
+            "id": 5,
+            "options": {
+                "displayMode": "lcd",
+                "orientation": "vertical",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showUnfilled": true
+            },
+            "pluginVersion": "7.1.3",
+            "span": 2,
+            "targets": [
+                {
+                    "expr": "sum(scylla_manager_repair_progress{cluster=\"$cluster\", job=\"scylla_manager\"}) or on() manager:repair_progress{cluster=~\"[[cluster]]\"}*100",
+                    "format": "time_series",
+                    "intervalFactor": 2,
+                    "refId": "A"
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Repair",
+            "type": "bargauge"
+        },
+        {
+            "class": "small_stat",
+            "datasource": "prometheus",
+            "description": "The time of the last successful repair",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "fixedColor": "green",
+                        "mode": "fixed"
+                    },
+                    "custom": {},
+                    "mappings": [],
+                    "noValue": "Never",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": []
+                    },
+                    "unit": "dateTimeAsIsoNoDateIfToday"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 8,
+                "y": 3
+            },
+            "id": 6,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.1.3",
+            "targets": [
+                {
+                    "expr": "manager:repair_done_ts{cluster=\"$cluster\"}*1000",
+                    "intervalFactor": 1,
+                    "legendFormat": "",
+                    "refId": "A",
+                    "step": 40
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Last repair",
+            "type": "stat"
+        },
+        {
+            "class": "small_stat",
+            "datasource": "prometheus",
+            "description": "The time of the last failed repair",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "fixedColor": "green",
+                        "mode": "fixed"
+                    },
+                    "custom": {},
+                    "mappings": [],
+                    "noValue": "Never",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": []
+                    },
+                    "unit": "dateTimeAsIsoNoDateIfToday"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 10,
+                "y": 3
+            },
+            "id": 7,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.1.3",
+            "targets": [
+                {
+                    "expr": "manager:repair_fail_ts{cluster=\"$cluster\"}*1000",
+                    "intervalFactor": 1,
+                    "legendFormat": "",
+                    "refId": "A",
+                    "step": 40
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Last Failure",
+            "type": "stat"
+        },
+        {
+            "class": "vertical_lcd",
+            "datasource": "prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {},
+                    "decimals": 0,
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "percent"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 12,
+                "y": 3
+            },
+            "id": 8,
+            "options": {
+                "displayMode": "lcd",
+                "orientation": "vertical",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showUnfilled": true
+            },
+            "pluginVersion": "7.1.3",
+            "span": 2,
+            "targets": [
+                {
+                    "expr": "manager:backup_progress{cluster=~\"[[cluster]]\"}*100",
+                    "format": "time_series",
+                    "intervalFactor": 2,
+                    "refId": "A"
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Backup",
+            "type": "bargauge"
+        },
+        {
+            "class": "small_stat",
+            "datasource": "prometheus",
+            "description": "The time of the last successful backup",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "fixedColor": "green",
+                        "mode": "fixed"
+                    },
+                    "custom": {},
+                    "mappings": [],
+                    "noValue": "Never",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": []
+                    },
+                    "unit": "dateTimeAsIsoNoDateIfToday"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 14,
+                "y": 3
+            },
+            "id": 9,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.1.3",
+            "targets": [
+                {
+                    "expr": "manager:backup_done_ts{cluster=\"$cluster\"}*1000",
+                    "intervalFactor": 1,
+                    "legendFormat": "",
+                    "refId": "A",
+                    "step": 40
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Last Backup",
+            "type": "stat"
+        },
+        {
+            "class": "small_stat",
+            "datasource": "prometheus",
+            "description": "The time of the last failed backup",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "fixedColor": "green",
+                        "mode": "fixed"
+                    },
+                    "custom": {},
+                    "mappings": [],
+                    "noValue": "Never",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": []
+                    },
+                    "unit": "dateTimeAsIsoNoDateIfToday"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 2,
+                "x": 16,
+                "y": 3
+            },
+            "id": 10,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "last"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.1.3",
+            "targets": [
+                {
+                    "expr": "manager:backup_fail_ts{cluster=\"$cluster\"}*1000",
+                    "intervalFactor": 1,
+                    "legendFormat": "",
+                    "refId": "A",
+                    "step": 40
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Last Failure",
+            "type": "stat"
+        },
+        {
+            "class": "percent_panel",
+            "datasource": "prometheus",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "class": "fieldConfig_defaults",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "axisSoftMin": 0,
+                        "barAlignment": 0,
+                        "class": "fieldConfig_defaults_custom",
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "unit": "percent"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 0,
+                "y": 7
+            },
+            "id": 11,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 2,
+            "targets": [
+                {
+                    "expr": "sum(scylla_manager_repair_progress{cluster=\"$cluster\", job=\"scylla_manager\"}) or on() manager:repair_progress{cluster=~\"[[cluster]]\"}*100",
+                    "format": "time_series",
+                    "intervalFactor": 2,
+                    "refId": "A"
+                }
+            ],
+            "title": "Repair Progress",
+            "type": "timeseries"
+        },
+        {
+            "class": "ops_panel",
+            "datasource": "prometheus",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "links": [],
+                    "unit": "si:tr/s"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 10,
+                "x": 4,
+                "y": 7
+            },
+            "id": 12,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 5,
+            "targets": [
+                {
+                    "expr": "sum(rate(scylla_manager_repair_token_ranges_success{cluster=~\"[[cluster]]\", instance=~\"$instance\", shard=~\"$shard\"}[$__rate_interval])) by ([[by]])",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Repair Token-Range Rate",
+            "type": "timeseries"
+        },
+        {
+            "class": "ops_panel",
+            "datasource": "prometheus",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "links": [],
+                    "unit": "si:tr/s"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 10,
+                "x": 14,
+                "y": 7
+            },
+            "id": 13,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 5,
+            "targets": [
+                {
+                    "expr": "sum(rate(scylla_manager_repair_token_ranges_error{cluster=~\"[[cluster]]\", instance=~\"$instance\", shard=~\"$shard\"}[$__rate_interval])) by ([[by]])",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Repair Token-Range Error Rate",
+            "type": "timeseries"
+        },
+        {
+            "class": "percentunit_panel",
+            "datasource": "prometheus",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "class": "fieldConfig_defaults",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "axisSoftMax": 1,
+                        "axisSoftMin": 0,
+                        "barAlignment": 0,
+                        "class": "fieldConfig_defaults_custom",
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "unit": "percentunit"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 0,
+                "y": 13
+            },
+            "id": 14,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "span": 2,
+            "targets": [
+                {
+                    "expr": "manager:backup_progress{cluster=~\"[[cluster]]\"}",
+                    "format": "time_series",
+                    "intervalFactor": 2,
+                    "refId": "A"
+                }
+            ],
+            "title": "Backup Progress",
+            "type": "timeseries"
+        },
+        {
+            "class": "ops_panel",
+            "datasource": "prometheus",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "links": [],
+                    "unit": "decbytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 4,
+                "y": 13
+            },
+            "id": 15,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 3,
+            "targets": [
+                {
+                    "expr": "sum(scylla_manager_backup_files_uploaded_bytes{cluster=~\"[[cluster]]\", instance=~\"$instance\", shard=~\"$shard\"}) by ([[by]])",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Uploaded bytes",
+            "type": "timeseries"
+        },
+        {
+            "class": "ops_panel",
+            "datasource": "prometheus",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "links": [],
+                    "unit": "decbytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 10,
+                "y": 13
+            },
+            "id": 16,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 3,
+            "targets": [
+                {
+                    "expr": "sum(scylla_manager_backup_files_skipped_bytes{cluster=~\"[[cluster]]\", instance=~\"$instance\", shard=~\"$shard\"}) by ([[by]])",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Uploaded skipped",
+            "type": "timeseries"
+        },
+        {
+            "class": "ops_panel",
+            "datasource": "prometheus",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "links": [],
+                    "unit": "decbytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 16,
+                "y": 13
+            },
+            "id": 17,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 3,
+            "targets": [
+                {
+                    "expr": "sum(scylla_manager_backup_files_failed_bytes{cluster=~\"[[cluster]]\", instance=~\"$instance\", shard=~\"$shard\"}) by ([[by]])",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Uploaded Failed",
+            "type": "timeseries"
+        },
+        {
+            "class": "percent_panel",
+            "dashversion": ">3.2",
+            "datasource": "prometheus",
+            "description": "Shows current restore progress",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "class": "fieldConfig_defaults",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "axisSoftMin": 0,
+                        "barAlignment": 0,
+                        "class": "fieldConfig_defaults_custom",
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "unit": "percent"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 19
+            },
+            "id": 18,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 4,
+            "targets": [
+                {
+                    "expr": "scylla_manager_restore_progress{cluster=~\"[[cluster]]\"} < 100",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Restore Progress",
+            "type": "timeseries"
+        },
+        {
+            "class": "ops_panel",
+            "datasource": "prometheus",
+            "description": "Shows restore progress, the remaining bytes to complete",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "links": [],
+                    "unit": "decbytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 19
+            },
+            "id": 19,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "seriesOverrides": [
+                {}
+            ],
+            "span": 4,
+            "targets": [
+                {
+                    "expr": "sum(scylla_manager_restore_remaining_bytes{cluster=~\"[[cluster]]\", instance=~\"$instance\", shard=~\"$shard\"}) by ([[by]])",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Restore Remaining Bytes",
+            "type": "timeseries"
+        },
+        {
+            "class": "ms_panel",
+            "datasource": "prometheus",
+            "description": "Average duration time for a CQL ping operation",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "class": "fieldConfig_defaults",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "axisSoftMin": 0,
+                        "barAlignment": 0,
+                        "class": "fieldConfig_defaults_custom",
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "unit": "ms"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 10,
+                "x": 0,
+                "y": 25
+            },
+            "id": 20,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "span": 5,
+            "targets": [
+                {
+                    "expr": "avg(scylla_manager_healthcheck_cql_rtt_ms{instance=~\"$instance\", cluster=~\"[[cluster]]\"}) by ($by)",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "CQL probe duration by $by",
+            "type": "timeseries"
+        },
+        {
+            "class": "text_panel",
+            "content": "<h1 style=\"color:#5780C1; border-bottom: 3px solid #5780C1;\">Manager Agent</h1>",
+            "datasource": null,
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {}
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 2,
+                "w": 24,
+                "x": 0,
+                "y": 31
+            },
+            "id": 21,
+            "isNew": true,
+            "links": [],
+            "mode": "html",
+            "options": {},
+            "span": 12,
+            "style": {},
+            "title": "",
+            "transparent": true,
+            "type": "text"
+        },
+        {
+            "class": "bytes_panel",
+            "datasource": "prometheus",
+            "description": "An increase in memory can indicate an issue with the Manager agent",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "class": "fieldConfig_defaults",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "axisSoftMin": 0,
+                        "barAlignment": 0,
+                        "class": "fieldConfig_defaults_custom",
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "unit": "bytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 10,
+                "x": 0,
+                "y": 33
+            },
+            "id": 22,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "span": 5,
+            "targets": [
+                {
+                    "expr": "sum(go_memstats_heap_inuse_bytes{job=~\"manager_agent.?\", instance=~\"$instance\"}) by ($by)",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Agent Memory Heap usage",
+            "type": "timeseries"
+        },
+        {
+            "class": "graph_panel",
+            "datasource": "prometheus",
+            "description": "An increase in the number of threads can indicate an issue with the Manager agent",
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "class": "fieldConfig_defaults",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "axisSoftMin": 0,
+                        "barAlignment": 0,
+                        "class": "fieldConfig_defaults_custom",
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 10,
+                "x": 10,
+                "y": 33
+            },
+            "id": 23,
+            "isNew": true,
+            "links": [],
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "hidden",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "maxHeight": 600,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "span": 5,
+            "targets": [
+                {
+                    "expr": "avg(go_threads{job=~\"manager_agent.?\", instance=~\"$instance\"}) by ($by)",
+                    "intervalFactor": 1,
+                    "refId": "A",
+                    "step": 4
+                }
+            ],
+            "title": "Agent Threads",
+            "type": "timeseries"
+        },
+        {
+            "class": "plain_text",
+            "datasource": null,
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {}
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 24,
+                "x": 0,
+                "y": 39
+            },
+            "id": 24,
+            "isNew": true,
+            "links": [],
+            "mode": "html",
+            "options": {
+                "content": "<div style=\"color:#5780C1; border-bottom: 0px solid #5780C1;\">Scylla Monitoring version - 4.9.4</div> <div style=\"\"><a href=\"https://github.com/scylladb/scylla-monitoring/issues/new?body=scylla-version%3D[[scylla_version]]%0Amonitoring-version%3D[[monitoring_version]]%0Adashboard%3D${__dashboard.uid}\" target=\"_blank\">\n<input title=\"Report an issue with Scylla Monitoring\" type=\"button\" style=\"background-color:#306EE6;color:white;border-radius: 15px;font-size:14px;line-height:22px;padding:2px\" value=\"&nbsp;Report an issue on this page&nbsp;\"></a>&nbsp;&nbsp;&nbsp;&nbsp;<a href=\"/render/d/${__dashboard.uid}?orgId=1&from=${__from}&to=${__to}&width=1600&height=-1&kiosk\" target=\"_blank\" download=\"dashboard_${__dashboard.uid}-${__from:date:iso}.png\"><input title=\"Make a Screenshot\" type=\"button\" style=\"background-color:#306EE6;color:white;border-radius: 15px;font-size:14px;line-height:22px;padding:2px\" value=\"&nbsp;&nbsp;&nbsp;Screenshot&nbsp;&nbsp;&nbsp;\"></input></a></span></div>",
+                "mode": "html"
+            },
+            "span": 12,
+            "style": {},
+            "title": "",
+            "transparent": true,
+            "type": "text"
+        }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 26,
+    "style": "dark",
+    "tags": [
+        "3.4"
+    ],
+    "templating": {
+        "list": [
+            {
+                "allValue": null,
+                "current": {
+                    "tags": [],
+                    "text": "Cluster",
+                    "value": "cluster"
+                },
+                "hide": 0,
+                "includeAll": false,
+                "label": "by",
+                "multi": false,
+                "name": "by",
+                "options": [
+                    {
+                        "selected": true,
+                        "text": "Cluster",
+                        "value": "cluster"
+                    },
+                    {
+                        "selected": false,
+                        "text": "Instance",
+                        "value": "instance"
+                    },
+                    {
+                        "selected": false,
+                        "text": "Keyspace",
+                        "value": "keyspace"
+                    },
+                    {
+                        "selected": false,
+                        "text": "Shard",
+                        "value": "shard"
+                    }
+                ],
+                "query": "Instance,Shard,Keyspace,Cluster",
+                "type": "custom"
+            },
+            {
+                "allValue": null,
+                "class": "template_variable_single",
+                "current": {
+                    "isNone": true,
+                    "selected": false,
+                    "text": "None",
+                    "value": ""
+                },
+                "datasource": "prometheus",
+                "definition": "",
+                "error": null,
+                "hide": 0,
+                "includeAll": false,
+                "label": "cluster",
+                "multi": false,
+                "name": "cluster_name",
+                "options": [],
+                "query": "label_values(scylla_manager_cluster_name,name)",
+                "refresh": 2,
+                "regex": "",
+                "skipUrlSync": false,
+                "sort": 1,
+                "tagValuesQuery": "",
+                "tags": [],
+                "tagsQuery": "",
+                "type": "query",
+                "useTags": false
+            },
+            {
+                "allValue": null,
+                "class": "template_variable_single",
+                "current": {
+                    "isNone": true,
+                    "selected": false,
+                    "text": "None",
+                    "value": ""
+                },
+                "datasource": "prometheus",
+                "definition": "",
+                "error": null,
+                "hide": 2,
+                "includeAll": false,
+                "label": "cluster_id",
+                "multi": false,
+                "name": "cluster",
+                "options": [],
+                "query": "label_values(scylla_manager_cluster_name{name=\"$cluster_name\"}, cluster)",
+                "refresh": 2,
+                "regex": "",
+                "skipUrlSync": false,
+                "sort": 1,
+                "tagValuesQuery": "",
+                "tags": [],
+                "tagsQuery": "",
+                "type": "query",
+                "useTags": false
+            },
+            {
+                "allValue": ".*",
+                "class": "template_variable_all",
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                },
+                "datasource": "prometheus",
+                "definition": "",
+                "error": null,
+                "hide": 0,
+                "includeAll": true,
+                "label": "instance",
+                "multi": true,
+                "name": "instance",
+                "options": [],
+                "query": "label_values(scylla_manager_healthcheck_cql_rtt_ms{cluster=\"$cluster\"}, instance)",
+                "refresh": 2,
+                "regex": "",
+                "skipUrlSync": false,
+                "sort": 1,
+                "tagValuesQuery": "",
+                "tags": [],
+                "tagsQuery": "",
+                "type": "query",
+                "useTags": false
+            },
+            {
+                "allValue": ".*",
+                "class": "template_variable_all",
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                },
+                "datasource": "prometheus",
+                "definition": "",
+                "error": null,
+                "hide": 0,
+                "includeAll": true,
+                "label": "shard",
+                "multi": true,
+                "name": "shard",
+                "options": [],
+                "query": "label_values(scylla_manager_repair_segments_total, shard)",
+                "refresh": 2,
+                "regex": "",
+                "skipUrlSync": false,
+                "sort": 3,
+                "tagValuesQuery": "",
+                "tags": [],
+                "tagsQuery": "",
+                "type": "query",
+                "useTags": false
+            },
+            {
+                "allValue": null,
+                "class": "template_variable_custom",
+                "current": {
+                    "text": "3.4",
+                    "value": "3.4"
+                },
+                "error": null,
+                "hide": 2,
+                "includeAll": false,
+                "label": null,
+                "multi": false,
+                "name": "scylla_version",
+                "options": [
+                    {
+                        "selected": true,
+                        "text": "3.4",
+                        "value": "3.4"
+                    }
+                ],
+                "query": "3.4",
+                "skipUrlSync": false,
+                "type": "custom"
+            },
+            {
+                "allValue": null,
+                "class": "monitor_version_var",
+                "current": {
+                    "text": "4.9.4",
+                    "value": "4.9.4"
+                },
+                "error": null,
+                "hide": 2,
+                "includeAll": false,
+                "label": null,
+                "multi": false,
+                "name": "monitoring_version",
+                "options": [
+                    {
+                        "selected": true,
+                        "text": "4.9.4",
+                        "value": "4.9.4"
+                    }
+                ],
+                "query": "4.9.4",
+                "skipUrlSync": false,
+                "type": "custom"
+            }
+        ]
+    },
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "timepicker": {
+        "now": true,
+        "refresh_intervals": [
+            "5s",
+            "10s",
+            "30s",
+            "1m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "1d"
+        ],
+        "time_options": [
+            "5m",
+            "15m",
+            "1h",
+            "6h",
+            "12h",
+            "24h",
+            "2d",
+            "7d",
+            "30d"
+        ]
+    },
+    "timezone": "browser",
+    "title": "Scylla Manager Metrics",
+    "uid": "manager-3-4",
+    "version": 3
+}

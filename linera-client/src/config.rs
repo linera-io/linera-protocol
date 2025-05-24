@@ -23,6 +23,7 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
+use linera_persistent as persistent;
 use linera_rpc::config::{
     ExporterServiceConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
 };
@@ -44,10 +45,10 @@ pub enum Error {
     NoAdminChain,
 }
 
-use crate::{persistent, util};
+use crate::util;
 
 util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
-#[cfg(with_indexed_db)]
+#[cfg(web)]
 util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);

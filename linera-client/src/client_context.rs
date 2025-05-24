@@ -21,6 +21,7 @@ use linera_core::{
     node::{CrossChainMessageDelivery, ValidatorNode},
     Environment, JoinSetExt as _,
 };
+use linera_persistent::{Persist, PersistExt as _};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_version::VersionInfo;
 use thiserror_context::Context;
@@ -57,9 +58,7 @@ use {
 use crate::{
     chain_listener::{self, ClientContext as _, ClientContextExt as _},
     client_options::{ChainOwnershipConfig, ClientContextOptions},
-    error,
-    persistent::{Persist, PersistExt as _},
-    util,
+    error, util,
     wallet::{UserChain, Wallet},
     Error,
 };
