@@ -347,19 +347,6 @@ enum ContractRuntimePrecompile {
     },
 }
 
-fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, String> {
-    // The gas usage is set to zero since the proper accounting is done
-    // by the called application
-    let output = Bytes::copy_from_slice(&output);
-    let result = InstructionResult::default();
-    let gas = Gas::new(0);
-    Ok(Some(InterpreterResult {
-        result,
-        output,
-        gas,
-    }))
-}
-
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
 enum ServiceRuntimePrecompile {
@@ -376,6 +363,19 @@ enum RuntimePrecompile {
     Base(BaseRuntimePrecompile),
     Contract(ContractRuntimePrecompile),
     Service(ServiceRuntimePrecompile),
+}
+
+fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, String> {
+    // The gas usage is set to zero since the proper accounting is done
+    // by the called application
+    let output = Bytes::from(output);
+    let result = InstructionResult::default();
+    let gas = Gas::new(0);
+    Ok(Some(InterpreterResult {
+        result,
+        output,
+        gas,
+    }))
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(

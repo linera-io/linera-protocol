@@ -31,7 +31,7 @@ contract ExampleExecuteMessage {
             bytes32 chain_id = update.chain_id.value.value;
             for (uint32 index=update.previous_index; index<update.next_index; index++) {
                 bytes memory result = Linera.read_event(chain_id, stream_name, index);
-                uint32 value = abi.decode(result, (uint32));
+                uint64 value = abi.decode(result, (uint64));
                 chain_values[chain_id] = value;
             }
         }
