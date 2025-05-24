@@ -965,12 +965,9 @@ where
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
         // be missing.
-        tracing::info!("init_transact_commit, step 1");
         if !self.db.is_initialized()? {
-            tracing::info!("init_transact_commit, step 2");
             self.initialize_contract()?;
         }
-        tracing::info!("init_transact_commit, step 3");
         self.transact_commit(ch, vec)
     }
 

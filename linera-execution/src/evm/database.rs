@@ -69,6 +69,7 @@ impl StorageStats {
 
 pub(crate) struct DatabaseRuntime<Runtime> {
     storage_stats: Arc<Mutex<StorageStats>>,
+    pub contract_address: Address,
     pub runtime: Arc<Mutex<Runtime>>,
     pub changes: EvmState,
 }
@@ -77,6 +78,7 @@ impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
         Self {
             storage_stats: self.storage_stats.clone(),
+            contract_address: self.contract_address,
             runtime: self.runtime.clone(),
             changes: self.changes.clone(),
         }
@@ -131,8 +133,12 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     /// Creates a new `DatabaseRuntime`.
     pub fn new(runtime: Runtime) -> Self {
         let storage_stats = StorageStats::default();
+        // We cannot acquire a lock on runtime here.
+        // So, we set the contract_address to a default value
+        // and update it later.
         Self {
             storage_stats: Arc::new(Mutex::new(storage_stats)),
+            contract_address: Address::ZERO,
             runtime: Arc::new(Mutex::new(runtime)),
             changes: HashMap::new(),
         }
@@ -352,10 +358,11 @@ where
     }
 
     /// The EVM contract address
-    pub fn get_contract_address(&self) -> Result<Address, ExecutionError> {
+    pub fn get_contract_address(&mut self) -> Result<Address, ExecutionError> {
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
         let application_id = runtime.application_id()?;
-        Ok(application_id_to_address(application_id))
+        self.contract_address = application_id_to_address(application_id);
+        Ok(self.contract_address)
     }
 
     /// Checks if the contract is already initialized. It is possible
