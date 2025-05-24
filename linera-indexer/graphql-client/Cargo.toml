@@ -2,7 +2,7 @@
 name = "linera-indexer-graphql-client"
 description = "GraphQL client for the indexer"
 readme = "README.md"
-documentation = "https://docs.rs/linera-indexer-graphql-client/latest/linera_indexer_graphql_client/"
+documentation = "https://docs.rs/linera-service-graphql-client/latest/linera_service_graphql_client/"
 
 authors.workspace = true
 edition.workspace = true
