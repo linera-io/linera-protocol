@@ -210,7 +210,7 @@ rocksdb = "0.21.0"
 ruzstd = "0.7.1"
 scylla = "1.1.0"
 semver = "1.0.22"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
 serde-command-opts = "0.1.1"
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
@@ -356,7 +356,7 @@ git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
 
 [patch.crates-io]
-move-core-types = { git = "https://github.com/MystenLabs/sui.git", tag = "testnet-v1.49.1", subdir = "external-crates/move/move-core-types" }
+move-core-types = { git = "https://github.com/MystenLabs/sui.git", tag = "testnet-v1.49.1", subdir = "external-crates/move/move-core-types", package = "move-core-types" }
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"
