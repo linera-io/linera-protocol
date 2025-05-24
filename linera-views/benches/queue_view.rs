@@ -17,7 +17,7 @@ use linera_views::{
     queue_view::QueueView,
     random::{make_deterministic_rng, DeterministicRng},
     store::TestKeyValueStore,
-    views::{CryptoHashRootView, RootView, View},
+    views::{CryptoHashView, View},
 };
 use rand::Rng;
 use tokio::runtime::Runtime;
@@ -50,7 +50,7 @@ fn generate_test_case(n_operation: usize, rng: &mut DeterministicRng) -> Vec<Ope
     operations
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct QueueStateView<C> {
     pub queue: QueueView<C, u8>,
 }
@@ -130,7 +130,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
     });
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct BucketQueueStateView<C> {
     pub queue: BucketQueueView<C, u8, 100>,
 }

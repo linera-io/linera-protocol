@@ -34,11 +34,11 @@ use linera_views::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         span_random_reordering_put_delete,
     },
-    views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
+    views::{CryptoHashView, HashableView, Hasher, View, ViewError},
 };
 use rand::{Rng, RngCore};
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct StateView<C> {
     pub x1: HashedRegisterView<C, u64>,
     pub x2: HashedRegisterView<C, u32>,
@@ -612,7 +612,7 @@ where
     Ok(staged_hash)
 }
 
-#[derive(CryptoHashRootView)]
+#[derive(CryptoHashView)]
 pub struct ByteMapStateView<C> {
     pub map: ByteMapView<C, u8>,
 }

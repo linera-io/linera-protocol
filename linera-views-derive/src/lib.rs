@@ -210,57 +210,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     }
 }
 
-fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
-    let ContextAndConstraints {
-        context,
-        context_constraints,
-        input_constraints,
-        impl_generics,
-        type_generics,
-    } = ContextAndConstraints::get(&input);
-    let struct_name = &input.ident;
-    let mut flushes = Vec::new();
-    let mut deletes = Vec::new();
-    for e in &input.fields {
-        let name = e.ident.clone().unwrap();
-        flushes.push(quote! { self.#name.flush(&mut batch)?; });
-        deletes.push(quote! { self.#name.delete(batch); });
-    }
-
-    let increment_counter = if cfg!(feature = "metrics") {
-        quote! {
-            #[cfg(not(target_arch = "wasm32"))]
-            linera_views::metrics::increment_counter(
-                &linera_views::metrics::SAVE_VIEW_COUNTER,
-                stringify!(#struct_name),
-                &self.context().base_key().bytes,
-            );
-        }
-    } else {
-        quote! {}
-    };
-
-    quote! {
-        impl #impl_generics linera_views::views::RootView<#context> for #struct_name #type_generics
-        where
-            #(#input_constraints,)*
-            #(#context_constraints,)*
-            Self: Send + Sync,
-        {
-            async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{context::Context, batch::Batch, store::WritableKeyValueStore as _, views::View};
-                #increment_counter
-                let mut batch = Batch::new();
-                #(#flushes)*
-                if !batch.is_empty() {
-                    self.context().store().write_batch(batch).await?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
 fn hash_view_constraints(input: &ItemStruct, context: &syn::Type) -> Vec<syn::WherePredicate> {
     input
         .fields
@@ -426,40 +375,12 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(RootView, attributes(view))]
-pub fn derive_root_view(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_root_view_code(input));
-    stream.into()
-}
-
 #[proc_macro_derive(CryptoHashView, attributes(view))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
-    stream.into()
-}
-
-#[proc_macro_derive(CryptoHashRootView, attributes(view))]
-pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_root_view_code(input.clone()));
-    stream.extend(generate_hash_view_code(input.clone()));
-    stream.extend(generate_crypto_hash_code(input));
-    stream.into()
-}
-
-#[proc_macro_derive(HashableRootView, attributes(view))]
-#[cfg(test)]
-pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone(), true);
-    stream.extend(generate_root_view_code(input.clone()));
-    stream.extend(generate_hash_view_code(input));
     stream.into()
 }
 
@@ -509,25 +430,6 @@ pub mod tests {
             insta::assert_snapshot!(
                 format!("test_generate_hash_view_code_{}", context.name),
                 pretty(generate_hash_view_code(input))
-            );
-        }
-    }
-
-    #[test]
-    fn test_generate_root_view_code() {
-        for context in SpecificContextInfo::test_cases() {
-            let input = context.test_view_input();
-            insta::assert_snapshot!(
-                format!(
-                    "test_generate_root_view_code{}_{}",
-                    if cfg!(feature = "metrics") {
-                        "_metrics"
-                    } else {
-                        ""
-                    },
-                    context.name,
-                ),
-                pretty(generate_root_view_code(input))
             );
         }
     }

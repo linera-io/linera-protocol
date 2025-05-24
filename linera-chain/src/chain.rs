@@ -31,7 +31,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, CryptoHashView, RootView, View},
+    views::{ClonableView, CryptoHashView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -234,7 +234,7 @@ const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
     derive(async_graphql::SimpleObject),
     graphql(cache_control(no_cache))
 )]
-#[derive(Debug, RootView, ClonableView)]
+#[derive(Debug, View, ClonableView)]
 pub struct ChainStateView<C>
 where
     C: Clone + Context + Send + Sync + 'static,

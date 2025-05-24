@@ -11,7 +11,7 @@ mod system_api;
 pub use linera_views::{
     self,
     common::CustomSerialize,
-    views::{RootView, View, ViewError},
+    views::{View, ViewError},
 };
 
 pub use self::{

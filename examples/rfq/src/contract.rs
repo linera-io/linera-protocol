@@ -11,7 +11,7 @@ use linera_sdk::{
         AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, TimeoutConfig,
         WithContractAbi,
     },
-    views::{RootView, View},
+    views::View,
     Contract, ContractRuntime,
 };
 use rfq::{Message, Operation, RequestId, RfqAbi, TokenPair, Tokens};

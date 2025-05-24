@@ -16,7 +16,7 @@ use linera_rpc::{
         Notification,
     },
 };
-use linera_sdk::views::{RootView, View};
+use linera_sdk::views::View as _;
 use linera_service::storage::Runnable;
 use linera_storage::Storage;
 #[cfg(test)]

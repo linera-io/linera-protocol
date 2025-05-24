@@ -18,12 +18,12 @@ use crate::{
     queue_view::QueueView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, RootView, ViewError},
+    views::{ClonableView, View, ViewError},
 };
 
 /// A [`View`][`crate::views::View`] to be used in test cases.
 pub trait TestView:
-    RootView<MemoryContext<()>> + ClonableView<MemoryContext<()>> + Send + Sync + 'static
+    View<MemoryContext<()>> + ClonableView<MemoryContext<()>> + Send + Sync + 'static
 {
     /// Representation of the view's state.
     type State: Debug + Eq + Send;
@@ -49,7 +49,7 @@ pub trait TestView:
 }
 
 /// Wrapper to test with a [`RegisterView`].
-#[derive(RootView, ClonableView)]
+#[derive(View, ClonableView)]
 pub struct TestRegisterView<C> {
     byte: RegisterView<C, u8>,
 }
@@ -83,7 +83,7 @@ impl TestView for TestRegisterView<MemoryContext<()>> {
 const INITIAL_LOG_QUEUE_VIEW_CHANGES: &[u16] = &[1, 2, 3, 4, 5];
 
 /// Wrapper to test with a [`LogView`].
-#[derive(RootView, ClonableView)]
+#[derive(View, ClonableView)]
 pub struct TestLogView<C> {
     log: LogView<C, u16>,
 }
@@ -142,7 +142,7 @@ const INITIAL_MAP_COLLECTION_VIEW_CHANGES: &[(i32, &str)] = &[
 ];
 
 /// Wrapper to test with a [`MapView`].
-#[derive(RootView, ClonableView)]
+#[derive(View, ClonableView)]
 pub struct TestMapView<C> {
     map: MapView<C, i32, String>,
 }
@@ -225,7 +225,7 @@ impl TestView for TestMapView<MemoryContext<()>> {
 }
 
 /// Wrapper to test with a [`SetView`].
-#[derive(RootView, ClonableView)]
+#[derive(View, ClonableView)]
 pub struct TestSetView<C> {
     set: SetView<C, i32>,
 }
@@ -294,7 +294,7 @@ impl TestView for TestSetView<MemoryContext<()>> {
 }
 
 /// Wrapper to test with a [`CollectionView`].
-#[derive(RootView, ClonableView)]
+#[derive(View, ClonableView)]
 pub struct TestCollectionView<C> {
     collection: CollectionView<C, i32, RegisterView<C, String>>,
 }
@@ -381,7 +381,7 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
 }
 
 /// Wrapper to test with a [`QueueView`].
-#[derive(RootView, ClonableView)]
+#[derive(View, ClonableView)]
 pub struct TestQueueView<C> {
     queue: QueueView<C, u16>,
 }
@@ -433,7 +433,7 @@ impl TestView for TestQueueView<MemoryContext<()>> {
 }
 
 /// Wrapper to test with a [`BucketQueueView`].
-#[derive(RootView, ClonableView)]
+#[derive(View, ClonableView)]
 pub struct TestBucketQueueView<C> {
     queue: BucketQueueView<C, u16, 2>,
 }

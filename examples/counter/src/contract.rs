@@ -6,11 +6,7 @@
 mod state;
 
 use counter::CounterAbi;
-use linera_sdk::{
-    linera_base_types::WithContractAbi,
-    views::{RootView, View},
-    Contract, ContractRuntime,
-};
+use linera_sdk::{linera_base_types::WithContractAbi, views::View, Contract, ContractRuntime};
 
 use self::state::CounterState;
 

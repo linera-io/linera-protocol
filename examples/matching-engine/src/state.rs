@@ -8,7 +8,7 @@ use fungible::Account;
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount},
     views::{
-        linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
+        linera_views, CustomCollectionView, MapView, QueueView, RegisterView, View,
         ViewStorageContext,
     },
 };
@@ -58,7 +58,7 @@ pub struct LevelView {
 }
 
 /// The matching engine containing the information.
-#[derive(RootView, SimpleObject)]
+#[derive(View, SimpleObject)]
 #[view(context = ViewStorageContext)]
 pub struct MatchingEngineState {
     ///The next_order_number contains the order_id so that

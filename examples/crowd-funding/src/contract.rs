@@ -9,7 +9,7 @@ use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    views::{RootView, View},
+    views::View,
     Contract, ContractRuntime,
 };
 use state::{CrowdFundingState, Status};

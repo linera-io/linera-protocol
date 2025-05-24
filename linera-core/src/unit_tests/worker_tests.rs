@@ -55,7 +55,7 @@ use linera_views::{
     memory::MemoryStore,
     random::generate_test_namespace,
     store::TestKeyValueStore as _,
-    views::{CryptoHashView, RootView},
+    views::{CryptoHashView, View},
 };
 use test_case::test_case;
 use test_log::test;
