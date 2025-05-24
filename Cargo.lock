@@ -5248,14 +5248,17 @@ dependencies = [
  "async-graphql-axum",
  "async-trait",
  "axum",
+ "cfg_aliases",
  "derive_more 1.0.0",
  "futures",
  "linera-base",
  "linera-client",
  "linera-core",
+ "linera-metrics",
  "linera-storage",
  "linera-version",
  "linera-views",
+ "prometheus",
  "serde",
  "serde_json",
  "tokio",
@@ -5347,6 +5350,18 @@ dependencies = [
  "linera-views",
  "serde",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "linera-metrics"
+version = "0.15.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "prometheus",
+ "tokio",
+ "tokio-util",
  "tracing",
 ]
 
@@ -5512,6 +5527,7 @@ dependencies = [
  "linera-execution",
  "linera-faucet-client",
  "linera-faucet-server",
+ "linera-metrics",
  "linera-persistent",
  "linera-rpc",
  "linera-sdk",
