@@ -202,9 +202,7 @@ where
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let application_id = runtime.application_id()?;
-        let contract_address = application_id_to_address(application_id);
-        let val = self.get_contract_address_key(&address, &contract_address);
+        let val = self.get_contract_address_key(&address, &self.contract_address);
         let Some(val) = val else {
             return Ok(Some(AccountInfo::default()));
         };
@@ -227,12 +225,7 @@ where
                 Some(slot) => slot.present_value(),
             });
         }
-        let val = {
-            let mut runtime = self.runtime.lock().expect("The lock should be possible");
-            let application_id = runtime.application_id()?;
-            let contract_address = application_id_to_address(application_id);
-            self.get_contract_address_key(&address, &contract_address)
-        };
+        let val = self.get_contract_address_key(&address, &self.contract_address);
         let Some(val) = val else {
             panic!("There is no storage associated to externally owned account");
         };
@@ -268,15 +261,13 @@ where
             .lock()
             .expect("The lock should be possible");
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let application_id = runtime.application_id()?;
-        let contract_address = application_id_to_address(application_id);
         let mut batch = Batch::new();
         let mut list_new_balances = Vec::new();
         for (address, account) in &self.changes {
             if !account.is_touched() {
                 continue;
             }
-            let val = self.get_contract_address_key(address, &contract_address);
+            let val = self.get_contract_address_key(address, &self.contract_address);
             if let Some(val) = val {
                 let key_prefix = vec![val, KeyCategory::Storage as u8];
                 let key_info = vec![val, KeyCategory::AccountInfo as u8];
