@@ -356,7 +356,7 @@ git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
 
 [patch.crates-io]
-move-core-types = { git = "https://github.com/MystenLabs/sui.git", tag = "testnet-v1.49.1", subdir = "external-crates/move/crates/move-core-types" }
+move-core-types = { git = "https://github.com/MystenLabs/sui.git", tag = "testnet-v1.49.1", subdir = "external-crates/move/move-core-types" }
 
 [workspace.metadata.spellcheck]
 config = "spellcheck-cfg.toml"

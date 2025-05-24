@@ -124,8 +124,8 @@ tower.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
 walrus-core.workspace = true
-walrus-service = { workspace = true, features = ["test-utils"] }
 walrus-sdk.workspace = true
+walrus-service = { workspace = true, features = ["test-utils"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
