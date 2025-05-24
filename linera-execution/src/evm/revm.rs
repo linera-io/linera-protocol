@@ -864,6 +864,7 @@ where
     Runtime: ContractRuntime,
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
+        self.db.set_contract_address()?;
         self.initialize_contract()?;
         let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         if !instantiation_argument.is_empty() {
@@ -875,6 +876,7 @@ where
     }
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
@@ -893,6 +895,7 @@ where
     }
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
+        self.db.set_contract_address()?;
         let operation = get_revm_execute_message_bytes(message);
         let result = self.init_transact_commit(Choice::Call, &operation)?;
         let (gas_final, output, logs) = result.output_and_logs();
@@ -973,7 +976,6 @@ where
     fn initialize_contract(&mut self) -> Result<(), ExecutionError> {
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
-        self.db.set_contract_address()?;
         vec_init.extend_from_slice(&constructor_argument);
         let result = self.transact_commit(Choice::Create, &vec_init)?;
         result
