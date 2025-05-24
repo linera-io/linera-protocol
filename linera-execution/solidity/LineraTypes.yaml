@@ -1,0 +1,199 @@
+---
+TimeoutConfig:
+  STRUCT:
+    - fast_round_duration:
+        OPTION:
+          TYPENAME: TimeDelta
+    - base_timeout:
+        TYPENAME: TimeDelta
+    - timeout_increment:
+        TYPENAME: TimeDelta
+    - fallback_duration:
+        TYPENAME: TimeDelta
+TimeDelta:
+  NEWTYPESTRUCT: U64
+ChainOwnership:
+  STRUCT:
+    - super_owners:
+        SEQ:
+          TYPENAME: AccountOwner
+    - owners:
+        MAP:
+          KEY:
+            TYPENAME: AccountOwner
+          VALUE: U64
+    - multi_leader_rounds: U32
+    - open_multi_leader_rounds: BOOL
+    - timeout_config:
+        TYPENAME: TimeoutConfig
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+MessageId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
+    - index: U32
+BlockHeight:
+  NEWTYPESTRUCT: U64
+ChainId:
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
+MessageIsBouncing:
+  NEWTYPESTRUCT:
+    OPTION: BOOL
+MessageIsBouncing:
+  NEWTYPESTRUCT:
+    OPTION: BOOL
+OptionU32:
+  NEWTYPESTRUCT:
+    OPTION: U32
+OptionMessageId:
+  NEWTYPESTRUCT:
+    OPTION:
+      TYPENAME: MessageId
+StreamName:
+  NEWTYPESTRUCT: BYTES
+ApplicationId:
+  STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
+BaseRuntimePrecompile:
+  ENUM:
+    0:
+      ChainId: UNIT
+    1:
+      ApplicationCreatorChainId: UNIT
+    2:
+      ChainOwnership: UNIT
+    3:
+      ReadDataBlob:
+        STRUCT:
+          - hash:
+              TYPENAME: CryptoHash
+    4:
+      AssertDataBlobExists:
+        STRUCT:
+          - hash:
+              TYPENAME: CryptoHash
+ContractRuntimePrecompile:
+  ENUM:
+    0:
+      TryCallApplication:
+        STRUCT:
+          - target:
+              TYPENAME: ApplicationId
+          - argument: BYTES
+    1:
+      ValidationRound: UNIT
+    2:
+      SendMessage:
+        STRUCT:
+          - destination:
+              TYPENAME: ChainId
+          - message: BYTES
+    3:
+      MessageId: UNIT
+    4:
+      MessageIsBouncing: UNIT
+    5:
+      Emit:
+        STRUCT:
+          - stream_name:
+              TYPENAME: StreamName
+          - value: BYTES
+    6:
+      ReadEvent:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - stream_name:
+              TYPENAME: StreamName
+          - index: U32
+    7:
+      SubscribeToEvents:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - application_id:
+              TYPENAME: ApplicationId
+          - stream_name:
+              TYPENAME: StreamName
+
+    8:
+      UnsubscribeFromEvents:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - application_id:
+              TYPENAME: ApplicationId
+          - stream_name:
+              TYPENAME: StreamName
+ServiceRuntimePrecompile:
+  ENUM:
+    0:
+      TryQueryApplication:
+        STRUCT:
+          - target:
+              TYPENAME: ApplicationId
+          - argument: BYTES
+RuntimePrecompile:
+  ENUM:
+    0:
+      Base:
+        NEWTYPE:
+          TYPENAME: BaseRuntimePrecompile
+    1:
+      Contract:
+        NEWTYPE:
+          TYPENAME: ContractRuntimePrecompile
+    2:
+      Service:
+        NEWTYPE:
+          TYPENAME: ServiceRuntimePrecompile
+StreamUpdate:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - stream_id:
+        TYPENAME: StreamId
+    - previous_index: U32
+    - next_index: U32
+StreamId:
+  STRUCT:
+    - application_id:
+        TYPENAME: GenericApplicationId
+    - stream_name:
+        TYPENAME: StreamName
+GenericApplicationId:
+  ENUM:
+    0:
+      System: UNIT
+    1:
+      User:
+        NEWTYPE:
+          TYPENAME: ApplicationId
+StreamUpdates:
+  STRUCT:
+    - entries:
+        SEQ:
+          TYPENAME: StreamUpdate
