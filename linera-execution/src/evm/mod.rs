@@ -33,11 +33,11 @@ pub enum EvmExecutionError {
     TransactCommitError(String),
     #[error("Precompile error: {0}")]
     PrecompileError(String),
-    #[error("The operation was reverted")]
+    #[error("The operation was reverted with {gas_used} gas used and output {output:?}")]
     Revert {
         gas_used: u64,
         output: revm_primitives::Bytes,
     },
-    #[error("The operation was halted")]
+    #[error("The operation was halted with {gas_used} gas used due to {reason:?}")]
     Halt { gas_used: u64, reason: HaltReason },
 }

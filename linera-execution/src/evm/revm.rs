@@ -365,12 +365,15 @@ enum RuntimePrecompile {
     Service(ServiceRuntimePrecompile),
 }
 
-fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, String> {
+fn get_precompile_output(
+    output: Vec<u8>,
+    gas_limit: u64,
+) -> Result<Option<InterpreterResult>, String> {
     // The gas usage is set to zero since the proper accounting is done
     // by the called application
     let output = Bytes::from(output);
     let result = InstructionResult::default();
-    let gas = Gas::new(0);
+    let gas = Gas::new(gas_limit);
     Ok(Some(InterpreterResult {
         result,
         output,
@@ -437,11 +440,9 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
     ) -> Result<Option<InterpreterResult>, String> {
         if address == &PRECOMPILE_ADDRESS {
             let input = get_precompile_argument(context, &inputs.input);
-            tracing::info!("ContractPrecompile, input={input:?}");
             let output = Self::call_or_fail(&input, context)
                 .map_err(|error| format!("ContractPrecompile error: {error}"))?;
-            tracing::info!("ContractPrecompile, output={output:?}");
-            return get_precompile_output(output);
+            return get_precompile_output(output, gas_limit);
         }
         self.inner
             .run(context, address, inputs, is_static, gas_limit)
@@ -535,8 +536,6 @@ impl<'a> ContractPrecompile {
         input: &[u8],
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let input_deser : RuntimePrecompile = bcs::from_bytes(input)?;
-        tracing::info!("ContractRuntime::call_or_fail, input_deser={input_deser:?}");
         match bcs::from_bytes(input)? {
             RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
             RuntimePrecompile::Contract(contract_tag) => {
@@ -579,8 +578,6 @@ impl<'a> ServicePrecompile {
         input: &[u8],
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let input_deser : RuntimePrecompile = bcs::from_bytes(input)?;
-        tracing::info!("ServiceRuntime::call_or_fail, input_deser={input_deser:?}");
         match bcs::from_bytes(input)? {
             RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
             RuntimePrecompile::Contract(_) => {
@@ -613,12 +610,9 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
     ) -> Result<Option<InterpreterResult>, String> {
         if address == &PRECOMPILE_ADDRESS {
             let input = get_precompile_argument(context, &inputs.input);
-            tracing::info!("           -----------");
-            tracing::info!("ServicePrecompile, input={input:?}");
             let output = Self::call_or_fail(&input, context)
                 .map_err(|error| format!("ServicePrecompile error: {error}"))?;
-            tracing::info!("ServicePrecompile, output={output:?}");
-            return get_precompile_output(output);
+            return get_precompile_output(output, gas_limit);
         }
         self.inner
             .run(context, address, inputs, is_static, gas_limit)
@@ -895,7 +889,6 @@ fn process_execution_result(
             logs,
             output,
         } => {
-            tracing::info!("process_execution_result::Success");
             let mut gas_final = gas_used;
             gas_final -= storage_stats.storage_costs();
             assert_eq!(gas_refunded, storage_stats.storage_refund());
@@ -907,12 +900,10 @@ fn process_execution_result(
             })
         }
         ExecutionResult::Revert { gas_used, output } => {
-            tracing::info!("process_execution_result::Revert");
             let error = EvmExecutionError::Revert { gas_used, output };
             Err(ExecutionError::EvmError(error))
         }
         ExecutionResult::Halt { gas_used, reason } => {
-            tracing::info!("process_execution_result::Halt, gas_used={gas_used}, reason={reason:?}");
             let error = EvmExecutionError::Halt { gas_used, reason };
             Err(ExecutionError::EvmError(error))
         }
