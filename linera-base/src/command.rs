@@ -67,7 +67,11 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
     let current_binary_parent =
         binary_parent(current_binary).expect("Fetching binary directory should not fail");
 
-    let binary = current_binary_parent.join(name);
+    let mut binary = current_binary_parent.join(name);
+    if cfg!(windows) {
+        binary.set_extension("exe");
+    }
+
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
     if !binary.exists() {
         error!(
