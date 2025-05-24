@@ -8,11 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{
-    channel::mpsc::{self, Receiver},
-    future::BoxFuture,
-    FutureExt as _, StreamExt,
-};
+use futures::{channel::mpsc, future::BoxFuture, FutureExt as _};
 use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
     join_set_ext::JoinSet,
@@ -46,7 +42,7 @@ use crate::{
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
-type NotificationSender = mpsc::Sender<Notification>;
+type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -100,14 +96,6 @@ mod metrics {
         register_int_counter_vec(
             "cross_chain_message_channel_full",
             "Cross-chain message channel full",
-            &[],
-        )
-    });
-
-    pub static NOTIFICATION_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "notification_channel_full",
-            "Notification channel full",
             &[],
         )
     });
@@ -207,8 +195,8 @@ where
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
 
-        let (notification_sender, notification_receiver) =
-            mpsc::channel(notification_config.notification_queue_size);
+        let (notification_sender, _) =
+            tokio::sync::broadcast::channel(notification_config.notification_queue_size);
 
         join_set.spawn_task({
             info!(
@@ -227,18 +215,21 @@ where
             )
         });
 
-        join_set.spawn_task({
-            info!(
-                nickname = state.nickname(),
-                "spawning notifications thread on {} for shard {}", host, shard_id
-            );
-            Self::forward_notifications(
-                state.nickname().to_string(),
-                internal_network.proxy_address(),
-                internal_network.exporter_addresses(),
-                notification_receiver,
-            )
-        });
+        for proxy in &internal_network.proxies {
+            let receiver = notification_sender.subscribe();
+            join_set.spawn_task({
+                info!(
+                    nickname = state.nickname(),
+                    "spawning notifications thread on {} for shard {}", host, shard_id
+                );
+                Self::forward_notifications(
+                    state.nickname().to_string(),
+                    proxy.internal_address(&internal_network.protocol),
+                    internal_network.exporter_addresses(),
+                    receiver,
+                )
+            });
+        }
 
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -290,7 +281,7 @@ where
         nickname: String,
         proxy_address: String,
         exporter_addresses: Vec<String>,
-        mut receiver: Receiver<Notification>,
+        mut receiver: tokio::sync::broadcast::Receiver<Notification>,
     ) {
         let channel = tonic::transport::Channel::from_shared(proxy_address.clone())
             .expect("Proxy URI should be valid")
@@ -311,7 +302,7 @@ where
             })
             .collect::<Vec<_>>();
 
-        while let Some(notification) = receiver.next().await {
+        while let Ok(notification) = receiver.recv().await {
             let reason = &notification.reason;
             let notification: api::Notification = match notification.clone().try_into() {
                 Ok(notification) => notification,
@@ -348,7 +339,7 @@ where
 
     fn handle_network_actions(&self, actions: NetworkActions) {
         let mut cross_chain_sender = self.cross_chain_sender.clone();
-        let mut notification_sender = self.notification_sender.clone();
+        let notification_sender = self.notification_sender.clone();
 
         for request in actions.cross_chain_requests {
             let shard_id = self.network.get_shard_id(request.target_chain_id());
@@ -371,14 +362,8 @@ where
 
         for notification in actions.notifications {
             trace!("Scheduling notification query");
-            if let Err(error) = notification_sender.try_send(notification) {
+            if let Err(error) = notification_sender.send(notification) {
                 error!(%error, "dropping notification");
-                #[cfg(with_metrics)]
-                if error.is_full() {
-                    metrics::NOTIFICATION_CHANNEL_FULL
-                        .with_label_values(&[])
-                        .inc();
-                }
                 break;
             }
         }

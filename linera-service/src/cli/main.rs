@@ -1944,6 +1944,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *initial_amount,
                     *validators,
                     *shards,
+                    1,
                     *testing_prng_seed,
                     *policy_config,
                     cross_chain_config.clone(),

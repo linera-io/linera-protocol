@@ -376,15 +376,27 @@ impl LocalKubernetesNet {
                 server_config_path = "server_{n}.json"
                 host = "127.0.0.1"
                 port = {port}
-                internal_host = "proxy-internal.default.svc.cluster.local"
-                internal_port = {internal_port}
-                metrics_port = {metrics_port}
                 [external_protocol]
                 Grpc = "ClearText"
                 [internal_protocol]
                 Grpc = "ClearText"
             "#
         );
+
+        // TODO config
+        for k in 0..3 {
+            content.push_str(&format!(
+                r#"
+
+                [[proxies]]
+                host = "proxy-{k}.default.svc.cluster.local"
+                public_port = {port}
+                private_port = {internal_port}
+                metrics_port = {metrics_port}
+                "#
+            ));
+        }
+
         for k in 0..self.num_shards {
             let shard_port = 19100;
             let shard_metrics_port = 21100;
@@ -486,15 +498,11 @@ impl LocalKubernetesNet {
                 .await?;
 
                 let mut kubectl_instance = kubectl_instance.lock().await;
-                let output = kubectl_instance.get_pods(cluster_id).await?;
-                let validator_pod_name = output
-                    .split_whitespace()
-                    .find(|&t| t.contains("proxy"))
-                    .expect("Getting validator pod name should not fail");
+                let proxy_service = "svc/proxy";
 
                 let local_port = 19100 + i;
                 kubectl_instance.port_forward(
-                    validator_pod_name,
+                    proxy_service,
                     &format!("{local_port}:{local_port}"),
                     cluster_id,
                 )?;

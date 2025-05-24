@@ -1,4 +1,5 @@
 services:
+
   scylla:
     image: scylladb/scylla:6.1.3
     container_name: scylla
@@ -8,7 +9,7 @@ services:
       SCYLLA_AUTO_CONF: 1
     command:
       - "--developer-mode"
-      - "0"
+      - "1"
       - "--overprovisioned"
       - "1"
 

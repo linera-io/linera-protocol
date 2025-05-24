@@ -1,6 +1,7 @@
 #!/bin/sh
 
 storage_replication_factor=$1
+# Extract the ordinal number from the pod hostname
 
 exec ./linera-proxy \
   --storage scylladb:tcp:scylla:9042 \
