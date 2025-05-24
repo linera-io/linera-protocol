@@ -1,0 +1,46 @@
+syntax = "proto3";
+package indexer.linera_indexer;
+
+import "google/protobuf/empty.proto";
+
+service Indexer {
+    rpc IndexBatch(stream Element) returns (stream google.protobuf.Empty) {}
+}
+
+message Element {
+    oneof payload {
+        Blob blob = 1;
+        Block block = 2;
+    }
+}
+
+message CryptoHash {
+    fixed64 part1 = 1;
+    fixed64 part2 = 2;
+    fixed64 part3 = 3;
+    fixed64 part4 = 4;
+}
+
+enum BlobType {
+    DATA = 0;
+    CONTRACT_BYTECODE = 1;
+    SERVICE_BYTECODE = 2;
+    EVM_BYTECODE = 3;
+    APPLICATION_DESCRIPTION = 4;
+    COMMITTEE = 5;  
+    CHAIN_DESCRIPTION = 6;
+}
+
+message BlobContent {
+    BlobType blob_type = 1;
+    bytes bytes = 2;
+}
+
+message Blob {
+    CryptoHash hash = 1;
+    BlobContent content = 2;
+}
+
+message Block {
+    bytes bytes = 1;
+}

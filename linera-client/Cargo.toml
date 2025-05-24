@@ -19,7 +19,6 @@ benchmark = [
     "dep:crossbeam-channel",
     "dep:num-format",
     "dep:reqwest",
-    "dep:anyhow",
     "dep:prometheus-parse",
 ]
 wasmer = [
@@ -54,7 +53,7 @@ indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
 web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
+anyhow = { workspace = true }
 bcs.workspace = true
 clap.workspace = true
 crossbeam-channel = { workspace = true, optional = true }
@@ -80,6 +79,7 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
+walrus-core.workspace = true
 
 [target.wasm32-unknown-unknown.dependencies]
 flarch = { workspace = true, optional = true }
