@@ -19,7 +19,7 @@ use linera_views::{
     },
     collection_view::HashedCollectionView,
     context::{Context, MemoryContext, ViewContext},
-    key_value_store_view::{KeyValueStoreView, ViewContainer},
+    key_value_store_view::{BigKeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::{LruCachingMemoryStore, LruCachingStore, DEFAULT_STORAGE_CACHE_CONFIG},
     map_view::{ByteMapView, HashedMapView},
@@ -54,7 +54,7 @@ pub struct StateView<C> {
     >,
     pub collection3: HashedCollectionView<C, String, HashedQueueView<C, u64>>,
     pub collection4: HashedReentrantCollectionView<C, String, HashedQueueView<C, u64>>,
-    pub key_value_store: KeyValueStoreView<C>,
+    pub key_value_store: BigKeyValueStoreView<C>,
 }
 
 #[allow(async_fn_in_trait)]
