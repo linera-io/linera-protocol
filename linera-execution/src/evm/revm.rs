@@ -715,7 +715,8 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == self.contract_address
+        if inputs.target_address == PRECOMPILE_ADDRESS
+            || inputs.target_address == self.contract_address
         {
             return Ok(None);
         }
@@ -784,7 +785,8 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
-        if inputs.target_address == PRECOMPILE_ADDRESS || inputs.target_address == self.contract_address
+        if inputs.target_address == PRECOMPILE_ADDRESS
+            || inputs.target_address == self.contract_address
         {
             return Ok(None);
         }
