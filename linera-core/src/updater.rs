@@ -7,7 +7,6 @@ use std::{
     fmt,
     hash::Hash,
     mem,
-    ops::Range,
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
@@ -25,11 +24,12 @@ use linera_storage::Storage;
 use thiserror::Error;
 
 use crate::{
-    client::ChainClientError,
+    client::{ChainClientError, Client},
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    Environment,
 };
 
 /// The default amount of time we wait for additional validators to contribute
@@ -67,14 +67,29 @@ impl CommunicateAction {
     }
 }
 
-#[derive(Clone)]
-pub struct ValidatorUpdater<A, S>
+pub struct ValidatorUpdater<'a, Env>
 where
-    S: Storage,
+    Env: Environment,
 {
     pub chain_worker_count: usize,
-    pub remote_node: RemoteNode<A>,
-    pub local_node: LocalNodeClient<S>,
+    pub remote_node: RemoteNode<Env::ValidatorNode>,
+    pub local_node: LocalNodeClient<Env::Storage>,
+    pub client: &'a Client<Env>,
+}
+
+impl<Env> Clone for ValidatorUpdater<'_, Env>
+where
+    Env: Environment,
+    Env::ValidatorNode: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            chain_worker_count: self.chain_worker_count,
+            remote_node: self.remote_node.clone(),
+            local_node: self.local_node.clone(),
+            client: self.client,
+        }
+    }
 }
 
 /// An error result for requests to a stake-weighted quorum.
@@ -208,10 +223,10 @@ where
     Err(CommunicationError::Sample(sample))
 }
 
-impl<A, S> ValidatorUpdater<A, S>
+impl<Env> ValidatorUpdater<'_, Env>
 where
-    A: ValidatorNode + Clone + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
+    Env: Environment,
+    Env::ValidatorNode: ValidatorNode + Clone,
 {
     async fn send_confirmed_certificate(
         &mut self,
@@ -352,12 +367,11 @@ where
         let remote_info = self.remote_node.handle_chain_info_query(query).await?;
         let initial_block_height = remote_info.next_block_height;
         // Obtain the missing blocks and the manager state from the local node.
-        let range: Range<usize> =
-            initial_block_height.try_into()?..target_block_height.try_into()?;
+        let range = initial_block_height..target_block_height;
         let (keys, timeout) = {
             let chain = self.local_node.chain_state_view(chain_id).await?;
             (
-                chain.confirmed_log.read(range).await?,
+                chain.block_hashes(range).await?,
                 chain.manager.timeout.get().clone(),
             )
         };
