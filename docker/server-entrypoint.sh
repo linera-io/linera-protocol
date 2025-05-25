@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 storage=$1
 storage_replication_factor=$2
