@@ -510,9 +510,13 @@ where
         let blob = validator
             .state
             .storage_client()
-            .read_blob(blob_id)
+            .maybe_read_blob(blob_id)
             .await
             .map_err(Into::into);
+        let blob = match blob {
+            Ok(blob) => blob.ok_or(NodeError::BlobsNotFound(vec![blob_id])),
+            Err(error) => Err(error),
+        };
         sender.send(blob.map(|blob| blob.into_content()))
     }
 

@@ -18,7 +18,6 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
-use linera_execution::StorageError;
 use linera_rpc::{
     config::{
         ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
@@ -331,9 +330,9 @@ where
         }
     }
 
-    /// Gets the status error for the given [`ViewError`].
-    fn view_error_to_status_inner(err: &ViewError) -> Status {
-        match err {
+    /// Returns the appropriate gRPC status for the given [`ViewError`].
+    fn view_error_to_status(err: ViewError) -> Status {
+        let mut status = match &err {
             ViewError::TooLargeValue | ViewError::BcsError(_) => {
                 Status::invalid_argument(err.to_string())
             }
@@ -349,21 +348,6 @@ where
             ViewError::NotFound(_)
             | ViewError::CannotAcquireCollectionEntry
             | ViewError::MissingEntries => Status::not_found(err.to_string()),
-        }
-    }
-
-    /// Returns the appropriate gRPC status for the given [`ViewError`].
-    fn view_error_to_status(err: ViewError) -> Status {
-        let mut status = Self::view_error_to_status_inner(&err);
-        status.set_source(Arc::new(err));
-        status
-    }
-
-    /// Returns the appropriate gRPC status for the given [`StorageError`].
-    fn storage_error_to_status(err: StorageError) -> Status {
-        let mut status = match &err {
-            StorageError::BlobsNotFound(_) | StorageError::EventsNotFound(_) => Status::not_found(err.to_string()),
-            StorageError::ViewError(error) => Self::view_error_to_status_inner(error),
         };
         status.set_source(Arc::new(err));
         status
@@ -518,9 +502,10 @@ where
         let blob = self
             .0
             .storage
-            .read_blob(blob_id)
+            .maybe_read_blob(blob_id)
             .await
-            .map_err(Self::storage_error_to_status)?;
+            .map_err(Self::view_error_to_status)?;
+        let blob = blob.ok_or(Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
 

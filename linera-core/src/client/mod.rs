@@ -477,15 +477,11 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<Blob, ChainClientError> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-        if let Ok(blob) = self
-            .local_node
-            .storage_client()
-            .read_blob(chain_desc_id)
-            .await
-        {
+        let blob = self.local_node.storage_client().maybe_read_blob(chain_desc_id).await?;
+        if let Some(blob) = blob {
             // We have the blob - return it.
             return Ok(blob);
-        }
+        };
         // Recover history from the current validators, according to the admin chain.
         // TODO(#2351): make sure that the blob is legitimately created!
         let nodes = self.validator_nodes().await?;

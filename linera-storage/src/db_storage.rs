@@ -93,9 +93,9 @@ pub mod metrics {
 
     /// The metric counting how often a blob is read from storage.
     #[doc(hidden)]
-    pub static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub static MAYBE_READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "read_blob",
+            "maybe_read_blob",
             "The metric counting how often a blob is read from storage",
             &[],
         )
@@ -605,15 +605,12 @@ where
         Ok(value)
     }
 
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError> {
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))
-            .map_err(|error| StorageError::ViewError(error.into()))?;
-        let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await
-            .map_err(|error| StorageError::ViewError(error.into()))?;
+    async fn maybe_read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
-        metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_bytes = maybe_blob_bytes.ok_or_else(|| StorageError::BlobsNotFound(vec![blob_id]))?;
-        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
+        metrics::MAYBE_READ_BLOB_COUNTER.with_label_values(&[]).inc();
+        Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
     async fn maybe_read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
@@ -626,7 +623,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_bytes = self.store.read_multi_values_bytes(blob_keys).await?;
         #[cfg(with_metrics)]
-        metrics::READ_BLOB_COUNTER
+        metrics::MAYBE_READ_BLOB_COUNTER
             .with_label_values(&[])
             .inc_by(blob_ids.len() as u64);
 

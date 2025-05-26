@@ -431,7 +431,7 @@ pub trait ExecutionRuntimeContext {
         description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError>;
+    async fn maybe_get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError>;
 
@@ -1099,12 +1099,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError> {
-        Ok(self
-            .blobs
-            .get(&blob_id)
-            .ok_or_else(|| StorageError::BlobsNotFound(vec![blob_id]))?
-            .clone())
+    async fn maybe_get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        match self.blobs.get(&blob_id) {
+            None => Ok(None),
+            Some(blob) => Ok(Some(blob.clone())),
+        }
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError> {
