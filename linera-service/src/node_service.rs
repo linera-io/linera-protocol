@@ -838,7 +838,7 @@ where
         let app = Router::new()
             .route("/", index_handler)
             .route(
-                "/chains/:chain_id/applications/:application_id",
+                "/chains/{chain_id}/applications/{application_id}",
                 application_handler,
             )
             .route("/ready", axum::routing::get(|| async { "ready!" }))
