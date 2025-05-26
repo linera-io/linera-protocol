@@ -328,8 +328,10 @@ fn get_precompile_output(
     output: Vec<u8>,
     gas_limit: u64,
 ) -> Result<Option<InterpreterResult>, String> {
-    // The gas usage is set to zero since the proper accounting is done
-    // by the called application
+    // The gas usage is set to `gas_limit` and no spending is being done on it.
+    // This means that for REVM, it looks like the precompile call costs nothing.
+    // This is because the costs of the EVM precompile calls is accounted for
+    // separately in Linera.
     let output = Bytes::copy_from_slice(&output);
     let result = InstructionResult::default();
     let gas = Gas::new(gas_limit);
