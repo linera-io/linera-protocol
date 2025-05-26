@@ -104,7 +104,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let config = ChainListenerConfig::default();
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut signer).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
@@ -120,8 +120,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             environment::Impl {
                 storage: storage.clone(),
                 network: builder.make_node_provider(),
+                signer,
             },
-            Box::new(signer),
             10,
             admin_id,
             delivery,

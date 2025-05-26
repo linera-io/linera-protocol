@@ -67,12 +67,10 @@ impl chain_listener::ClientContext for ClientContext {
 #[tokio::test]
 async fn test_faucet_rate_limiting() {
     let storage_builder = MemoryStorageBuilder::default();
-    let mut keys = InMemorySigner::new(None);
+    let keys = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, &mut keys)
-        .await
-        .unwrap();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await.unwrap();
     let client = builder
         .add_root_chain(1, Amount::from_tokens(6))
         .await

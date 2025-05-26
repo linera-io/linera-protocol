@@ -7,7 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use futures::Future;
 use linera_base::{
-    crypto::{CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::ChainOwnership,
@@ -126,17 +126,13 @@ where
     }
 }
 
-impl<S, W> ClientContext<linera_core::environment::Impl<S, NodeProvider>, W>
+impl<S, Si, W> ClientContext<linera_core::environment::Impl<S, NodeProvider, Si>, W>
 where
     S: linera_core::environment::Storage,
+    Si: linera_core::environment::Signer,
     W: Persist<Target = Wallet>,
 {
-    pub fn new(
-        storage: S,
-        options: ClientContextOptions,
-        wallet: W,
-        signer: Box<dyn Signer>,
-    ) -> Self {
+    pub fn new(storage: S, options: ClientContextOptions, wallet: W, signer: Si) -> Self {
         let node_provider = NodeProvider::new(NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
@@ -154,8 +150,8 @@ where
             linera_core::environment::Impl {
                 network: node_provider,
                 storage,
+                signer,
             },
-            signer,
             options.max_pending_message_bundles,
             wallet.genesis_admin_chain(),
             delivery,
@@ -181,7 +177,7 @@ where
     }
 
     #[cfg(with_testing)]
-    pub fn new_test_client_context(storage: S, wallet: W, signer: Box<dyn Signer>) -> Self {
+    pub fn new_test_client_context(storage: S, wallet: W, signer: Si) -> Self {
         use linera_core::DEFAULT_GRACE_PERIOD;
 
         let send_recv_timeout = Duration::from_millis(4000);
@@ -205,8 +201,8 @@ where
             linera_core::environment::Impl {
                 storage,
                 network: NodeProvider::new(node_options),
+                signer,
             },
-            signer,
             10,
             wallet.genesis_admin_chain(),
             delivery,
