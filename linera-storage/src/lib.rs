@@ -398,33 +398,33 @@ where
         self.storage.read_event(event_id).await
     }
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, StorageError> {
-        Ok(self.storage.read_network_description().await?)
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        self.storage.read_network_description().await
     }
 
-    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, StorageError> {
-        Ok(self.storage.contains_blob(blob_id).await?)
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        self.storage.contains_blob(blob_id).await
     }
 
-    async fn contains_event(&self, event_id: EventId) -> Result<bool, StorageError> {
-        Ok(self.storage.contains_event(event_id).await?)
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        self.storage.contains_event(event_id).await
     }
 
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
-    ) -> Result<(), StorageError> {
+    ) -> Result<(), ViewError> {
         let blobs = Vec::from_iter(blobs);
-        Ok(self.storage.write_blobs(&blobs).await?)
+        self.storage.write_blobs(&blobs).await
     }
 
     #[cfg(with_testing)]
     async fn add_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
-    ) -> Result<(), StorageError> {
-        Ok(self.storage.write_events(events).await?)
+    ) -> Result<(), ViewError> {
+        self.storage.write_events(events).await
     }
 }
 

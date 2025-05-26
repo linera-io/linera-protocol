@@ -435,23 +435,23 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError>;
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, StorageError>;
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
-    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, StorageError>;
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
-    async fn contains_event(&self, event_id: EventId) -> Result<bool, StorageError>;
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError>;
 
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
-    ) -> Result<(), StorageError>;
+    ) -> Result<(), ViewError>;
 
     #[cfg(with_testing)]
     async fn add_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
-    ) -> Result<(), StorageError>;
+    ) -> Result<(), ViewError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1115,7 +1115,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, StorageError> {
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         Ok(Some(NetworkDescription {
             admin_chain_id: dummy_chain_description(0).id(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
@@ -1124,11 +1124,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         }))
     }
 
-    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, StorageError> {
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
     }
 
-    async fn contains_event(&self, event_id: EventId) -> Result<bool, StorageError> {
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
         Ok(self.events.contains_key(&event_id))
     }
 
@@ -1136,7 +1136,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
-    ) -> Result<(), StorageError> {
+    ) -> Result<(), ViewError> {
         for blob in blobs {
             self.blobs.insert(blob.id(), blob);
         }
@@ -1148,7 +1148,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn add_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
-    ) -> Result<(), StorageError> {
+    ) -> Result<(), ViewError> {
         for (event_id, bytes) in events {
             self.events.insert(event_id, bytes);
         }
