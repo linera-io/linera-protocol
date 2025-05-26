@@ -405,7 +405,7 @@ pub trait ExecutionRuntimeContext {
 
     async fn maybe_get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+    async fn maybe_get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1083,7 +1083,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         }
     }
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+    async fn maybe_get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         Ok(Some(NetworkDescription {
             admin_chain_id: dummy_chain_description(0).id(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),

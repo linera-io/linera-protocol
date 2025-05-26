@@ -317,7 +317,7 @@ where
             NetworkDescriptionQuery => {
                 let description = self
                     .storage
-                    .read_network_description()
+                    .maybe_read_network_description()
                     .await?
                     .ok_or(anyhow!("Cannot find network description in the database"))?;
                 Ok(Some(RpcMessage::NetworkDescriptionResponse(Box::new(

@@ -173,7 +173,7 @@ impl GenesisConfig {
         S: Storage + Clone + Send + Sync + 'static,
     {
         if let Some(description) = storage
-            .read_network_description()
+            .maybe_read_network_description()
             .await
             .map_err(linera_chain::ChainError::from)?
         {

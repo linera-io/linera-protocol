@@ -177,7 +177,7 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Reads the network description.
-    async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+    async fn maybe_read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
     /// Writes the network description.
     async fn write_network_description(
@@ -400,8 +400,8 @@ where
         self.storage.maybe_read_event(event_id).await
     }
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
-        self.storage.read_network_description().await
+    async fn maybe_get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        self.storage.maybe_read_network_description().await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

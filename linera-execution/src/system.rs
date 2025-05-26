@@ -798,7 +798,7 @@ where
         let admin_id = self
             .context()
             .extra()
-            .get_network_description()
+            .maybe_get_network_description()
             .await?
             .ok_or(ExecutionError::NoNetworkDescriptionFound)?
             .admin_chain_id;

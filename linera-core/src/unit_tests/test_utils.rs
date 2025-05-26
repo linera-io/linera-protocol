@@ -184,7 +184,7 @@ where
                 .await
                 .state
                 .storage_client()
-                .read_network_description()
+                .maybe_read_network_description()
                 .await
                 .unwrap()
                 .unwrap()

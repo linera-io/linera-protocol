@@ -471,7 +471,7 @@ where
         let description = self
             .0
             .storage
-            .read_network_description()
+            .maybe_read_network_description()
             .await
             .map_err(Self::view_error_to_status)?
             .ok_or(Status::not_found(

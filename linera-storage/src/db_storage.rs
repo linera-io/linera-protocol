@@ -922,7 +922,7 @@ where
         self.write_batch(batch).await
     }
 
-    async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+    async fn maybe_read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
         let maybe_value = self.store.read_value(&key).await?;
         #[cfg(with_metrics)]
