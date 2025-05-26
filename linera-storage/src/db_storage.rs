@@ -34,7 +34,7 @@ use {
     std::{cmp::Reverse, collections::BTreeMap},
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage, StorageError};
+use crate::{ChainRuntimeContext, Clock, Storage};
 
 #[cfg(with_metrics)]
 pub mod metrics {
@@ -866,14 +866,11 @@ where
         Ok(certificates)
     }
 
-    async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError> {
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))
-            .map_err(|error| StorageError::ViewError(error.into()))?;
-        let maybe_value = self.store.read_value_bytes(&event_key).await
-            .map_err(|error| StorageError::ViewError(error.into()))?;
+    async fn maybe_read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
-        maybe_value.ok_or_else(|| StorageError::EventsNotFound(vec![event_id]))
+        Ok(self.store.read_value_bytes(&event_key).await?)
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {

@@ -433,7 +433,7 @@ pub trait ExecutionRuntimeContext {
 
     async fn maybe_get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError>;
+    async fn maybe_get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
@@ -1106,12 +1106,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         }
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError> {
-        Ok(self
-            .events
-            .get(&event_id)
-            .ok_or_else(|| StorageError::EventsNotFound(vec![event_id]))?
-            .clone())
+    async fn maybe_get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+        match self.events.get(&event_id) {
+            None => Ok(None),
+            Some(event) => Ok(Some(event.clone())),
+        }
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {

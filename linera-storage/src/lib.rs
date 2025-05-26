@@ -30,7 +30,7 @@ use linera_execution::{
     EvmRuntime,
 };
 use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, StorageError,
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
     UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
@@ -157,7 +157,7 @@ pub trait Storage: Sized {
     ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads the event with the given ID.
-    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, StorageError>;
+    async fn maybe_read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
@@ -396,8 +396,8 @@ where
         self.storage.maybe_read_blob(blob_id).await
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError> {
-        self.storage.read_event(event_id).await
+    async fn maybe_get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+        self.storage.maybe_read_event(event_id).await
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {

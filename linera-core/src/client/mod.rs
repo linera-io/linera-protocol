@@ -57,7 +57,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse, StorageError,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::views::ViewError;
@@ -3300,12 +3300,7 @@ impl<Env: Environment> ChainClient<Env> {
             stream_id: StreamId::system(stream_name),
             index,
         };
-        match self.client.storage_client().read_event(event_id).await {
-            Ok(_) => Ok(true),
-            Err(StorageError::EventsNotFound(_)) => Ok(false),
-            Err(StorageError::BlobsNotFound(blob_ids)) => Err(ChainClientError::BlobsNotFound(blob_ids)),
-            Err(StorageError::ViewError(error)) => Err(error.into()),
-        }
+        Ok(self.client.storage_client().maybe_read_event(event_id).await?.is_some())
     }
 
     /// Returns the indices and events from the storage

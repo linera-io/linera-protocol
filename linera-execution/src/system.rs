@@ -351,6 +351,13 @@ where
             .collect()
     }
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+        match self.context().extra().maybe_get_event(event_id.clone()).await? {
+            None => Err(ExecutionError::EventsNotFound(vec![event_id])),
+            Some(vec) => Ok(vec),
+        }
+    }
+
     /// Executes the sender's side of an operation and returns a list of actions to be
     /// taken.
     pub async fn execute_operation(
@@ -512,7 +519,7 @@ where
                     index: epoch.0,
                 };
                 let bytes = match txn_tracker.next_replayed_oracle_response()? {
-                    None => self.context().extra().get_event(event_id.clone()).await?,
+                    None => self.get_event(event_id.clone()).await?,
                     Some(OracleResponse::Event(recorded_event_id, bytes))
                         if recorded_event_id == event_id =>
                     {
@@ -542,7 +549,7 @@ where
                     index: epoch.0,
                 };
                 let bytes = match txn_tracker.next_replayed_oracle_response()? {
-                    None => self.context().extra().get_event(event_id.clone()).await?,
+                    None => self.get_event(event_id.clone()).await?,
                     Some(OracleResponse::Event(recorded_event_id, bytes))
                         if recorded_event_id == event_id =>
                     {
