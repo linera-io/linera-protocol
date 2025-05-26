@@ -54,9 +54,16 @@ async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore 
     .await
 }
 
-type PersistentWallet = persistent::Memory<Wallet>;
-type PersistentSigner = persistent::Memory<InMemorySigner>;
-type ClientContext = linera_client::client_context::ClientContext<WebEnvironment, PersistentWallet>;
+/// A wallet that stores the user's chains and keys in memory.
+#[wasm_bindgen]
+pub struct InMemoryWallet(persistent::Memory<Wallet>);
+
+/// A signer that stores the user's keys in memory.
+#[wasm_bindgen(js_name = InMemorySigner)]
+pub struct InMemoryJSSigner(persistent::Memory<InMemorySigner>);
+
+type ClientContext =
+    linera_client::client_context::ClientContext<WebEnvironment, persistent::Memory<Wallet>>;
 type ChainClient = linera_core::client::ChainClient<WebEnvironment>;
 
 // TODO(#13): get from user
@@ -82,12 +89,6 @@ pub const OPTIONS: ClientContextOptions = ClientContextOptions {
     with_wallet: None,
 };
 
-#[wasm_bindgen(js_name = Wallet)]
-pub struct JsWallet {
-    wallet: PersistentWallet,
-    signer: PersistentSigner,
-}
-
 #[wasm_bindgen(js_name = Faucet)]
 pub struct JsFaucet(Faucet);
 
@@ -104,13 +105,10 @@ impl JsFaucet {
     /// # Errors
     /// If we couldn't retrieve the genesis config from the faucet.
     #[wasm_bindgen(js_name = createWallet)]
-    pub async fn create_wallet(&self) -> JsResult<JsWallet> {
-        Ok(JsWallet {
-            wallet: PersistentWallet::new(linera_client::wallet::Wallet::new(
-                self.0.genesis_config().await?,
-            )),
-            signer: PersistentSigner::new(InMemorySigner::new(None)),
-        })
+    pub async fn create_wallet(&self) -> JsResult<InMemoryWallet> {
+        Ok(InMemoryWallet(persistent::Memory::new(
+            linera_client::wallet::Wallet::new(self.0.genesis_config().await?),
+        )))
     }
 
     // TODO(#40): figure out a way to alias or specify this string for TypeScript
@@ -124,33 +122,42 @@ impl JsFaucet {
     /// # Panics
     /// If an error occurs in the chain listener task.
     #[wasm_bindgen(js_name = claimChain)]
-    pub async fn claim_chain(&self, wallet: &mut JsWallet) -> JsResult<String> {
+    pub async fn claim_chain(
+        &self,
+        wallet: &mut InMemoryWallet,
+        owner: JsValue,
+    ) -> JsResult<String> {
         use persistent::PersistExt as _;
-        let owner = AccountOwner::from(wallet.signer.mutate(InMemorySigner::generate_new).await?);
+        let account_owner: AccountOwner = serde_wasm_bindgen::from_value(owner)?;
+        // let owner = AccountOwner::from(wallet.signer.mutate(InMemorySigner::generate_new).await?);
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
-            owner,
+            account_owner,
             self.0.url(),
         );
-        let description = self.0.claim(&owner).await?;
+        let description = self.0.claim(&account_owner).await?;
         wallet
-            .wallet
+            .0
             .mutate(|wallet| {
-                wallet.assign_new_chain_to_owner(owner, description.id(), description.timestamp())
+                wallet.assign_new_chain_to_owner(
+                    account_owner,
+                    description.id(),
+                    description.timestamp(),
+                )
             })
             .await??;
         Ok(description.id().to_string())
     }
 }
 
-#[wasm_bindgen(js_class = "Wallet")]
-impl JsWallet {
+#[wasm_bindgen(js_class = "InMemoryWallet")]
+impl InMemoryWallet {
     /// Attempts to read the wallet from persistent storage.
     ///
     /// # Errors
     /// If storage is inaccessible.
     #[wasm_bindgen]
-    pub async fn read() -> Result<Option<JsWallet>, JsError> {
+    pub async fn read() -> Result<Option<InMemoryWallet>, JsError> {
         Ok(None)
     }
 }
@@ -192,18 +199,18 @@ impl Client {
     /// On transport or protocol error, or if persistent storage is
     /// unavailable.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: JsWallet) -> Result<Client, JsError> {
-        let JsWallet { signer, wallet } = wallet;
+    pub async fn new(wallet: InMemoryWallet, signer: InMemoryJSSigner) -> Result<Client, JsError> {
         let mut storage = get_storage().await?;
         wallet
+            .0
             .genesis_config()
             .initialize_storage(&mut storage)
             .await?;
         let client_context = Arc::new(AsyncMutex::new(ClientContext::new(
             storage.clone(),
             OPTIONS,
-            wallet,
-            signer.into_value(),
+            wallet.0,
+            signer.0.into_value(),
         )));
         ChainListener::new(
             ChainListenerConfig::default(),
