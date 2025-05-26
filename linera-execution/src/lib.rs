@@ -350,36 +350,6 @@ impl From<ViewError> for ExecutionError {
     }
 }
 
-impl From<ViewError> for StorageError {
-    fn from(error: ViewError) -> Self {
-        StorageError::ViewError(error)
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum StorageError {
-    #[error(transparent)]
-    ViewError(ViewError),
-
-    /// Some blobs were not found.
-    #[error("Blobs not found: {0:?}")]
-    BlobsNotFound(Vec<BlobId>),
-
-    /// Some events were not found.
-    #[error("Events not found: {0:?}")]
-    EventsNotFound(Vec<EventId>),
-}
-
-impl From<StorageError> for ExecutionError {
-    fn from(error: StorageError) -> Self {
-        match error {
-            StorageError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            StorageError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
-            StorageError::ViewError(error) => Self::ViewError(error),
-        }
-    }
-}
-
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.

@@ -31,7 +31,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, StorageError};
+use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -241,16 +241,6 @@ impl From<ChainError> for WorkerError {
 impl From<ViewError> for WorkerError {
     fn from(error: ViewError) -> Self {
         Self::ViewError(error)
-    }
-}
-
-impl From<StorageError> for WorkerError {
-    fn from(error: StorageError) -> Self {
-        match error {
-            StorageError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            StorageError::EventsNotFound(blob_ids) => Self::EventsNotFound(blob_ids),
-            StorageError::ViewError(error) => Self::ViewError(error),
-        }
     }
 }
 

@@ -20,7 +20,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::{committee::Committee, ExecutionError, StorageError};
+use linera_execution::{committee::Committee, ExecutionError};
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -292,16 +292,6 @@ impl CrossChainMessageDelivery {
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
         Self::ViewError { error: error.to_string() }
-    }
-}
-
-impl From<StorageError> for NodeError {
-    fn from(error: StorageError) -> Self {
-        match error {
-            StorageError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
-            StorageError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            StorageError::ViewError(error) => Self::ViewError { error: error.to_string() },
-        }
     }
 }
 
