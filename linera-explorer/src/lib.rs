@@ -690,11 +690,6 @@ pub fn short_crypto_hash(s: String) -> String {
     format!("{:?}", hash)
 }
 
-#[wasm_bindgen]
-pub fn short_app_id(s: String) -> String {
-    format!("{}..{}..{}..", &s[..4], &s[64..68], &s[152..156])
-}
-
 fn set_onpopstate(app: JsValue) {
     let callback = Closure::<dyn FnMut(JsValue)>::new(move |v: JsValue| {
         setf(&app, "page", &getf(&v, "state"));
