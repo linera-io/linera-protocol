@@ -1379,9 +1379,6 @@ pub enum ChainClientError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Blobs not found: {0:?}")]
-    BlobsNotFound(Vec<BlobId>),
-
     #[error(
         "Failed to download certificates and update local node to the next height \
          {target_next_block_height} of chain {chain_id:?}"

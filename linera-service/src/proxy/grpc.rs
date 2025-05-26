@@ -331,7 +331,7 @@ where
     }
 
     /// Returns the appropriate gRPC status for the given [`ViewError`].
-    fn view_error_to_status(err: ViewError) -> Status {
+    fn error_to_status(err: ViewError) -> Status {
         let mut status = match &err {
             ViewError::TooLargeValue | ViewError::BcsError(_) => {
                 Status::invalid_argument(err.to_string())
@@ -472,7 +472,7 @@ where
             .storage
             .maybe_read_network_description()
             .await
-            .map_err(Self::view_error_to_status)?
+            .map_err(Self::error_to_status)?
             .ok_or(Status::not_found(
                 "Cannot find network description in the database",
             ))?;
@@ -486,7 +486,7 @@ where
         let blob = Blob::new(content);
         let id = blob.id();
         let result = self.0.storage.maybe_write_blobs(&[blob]).await;
-        if !result.map_err(Self::view_error_to_status)?[0] {
+        if !result.map_err(Self::error_to_status)?[0] {
             return Err(Status::not_found("Blob not found"));
         }
         Ok(Response::new(id.try_into()?))
@@ -503,7 +503,7 @@ where
             .storage
             .maybe_read_blob(blob_id)
             .await
-            .map_err(Self::view_error_to_status)?;
+            .map_err(Self::error_to_status)?;
         let blob = blob.ok_or(Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
@@ -569,7 +569,7 @@ where
             .storage
             .read_certificate(hash)
             .await
-            .map_err(Self::view_error_to_status)?
+            .map_err(Self::error_to_status)?
             .into();
         Ok(Response::new(certificate.try_into()?))
     }
@@ -599,7 +599,7 @@ where
                 .storage
                 .read_certificates(batch.to_vec())
                 .await
-                .map_err(Self::view_error_to_status)?
+                .map_err(Self::error_to_status)?
             {
                 if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
                     certificates.push(linera_chain::types::Certificate::from(certificate));
@@ -625,7 +625,7 @@ where
             .storage
             .read_blob_state(blob_id)
             .await
-            .map_err(Self::view_error_to_status)?;
+            .map_err(Self::error_to_status)?;
         Ok(Response::new(blob_state.last_used_by.into()))
     }
 
@@ -640,7 +640,7 @@ where
             .storage
             .missing_blobs(&blob_ids)
             .await
-            .map_err(Self::view_error_to_status)?;
+            .map_err(Self::error_to_status)?;
         Ok(Response::new(missing_blob_ids.try_into()?))
     }
 }

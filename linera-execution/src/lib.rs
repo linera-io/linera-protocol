@@ -283,8 +283,6 @@ pub enum ExecutionError {
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-    #[error("Events not found: {0:?}")]
-    EventsNotFound(Vec<EventId>),
 
     #[error("Invalid HTTP header name used for HTTP request")]
     InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),

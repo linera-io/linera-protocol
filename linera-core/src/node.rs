@@ -10,7 +10,7 @@ use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId, EventId},
+    identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -211,9 +211,6 @@ pub enum NodeError {
 
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-
-    #[error("Events not found: {0:?}")]
-    EventsNotFound(Vec<EventId>),
 
     // This error must be normalized during conversions.
     #[error("We don't have the value for the certificate.")]

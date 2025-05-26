@@ -18,7 +18,7 @@ use linera_base::{
     },
     doc_scalar,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
     time::timer::{sleep, timeout},
 };
 #[cfg(with_testing)]
@@ -203,8 +203,6 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-    #[error("Events not found: {0:?}")]
-    EventsNotFound(Vec<EventId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
