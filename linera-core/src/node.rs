@@ -10,7 +10,7 @@ use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -20,7 +20,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::{committee::Committee, ExecutionError};
+use linera_execution::{committee::Committee, ExecutionError, StorageError};
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -212,6 +212,9 @@ pub enum NodeError {
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 
+    #[error("Events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
+
     // This error must be normalized during conversions.
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
@@ -288,11 +291,16 @@ impl CrossChainMessageDelivery {
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
+        Self::ViewError { error: error.to_string() }
+    }
+}
+
+impl From<StorageError> for NodeError {
+    fn from(error: StorageError) -> Self {
         match error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError {
-                error: error.to_string(),
-            },
+            StorageError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
+            StorageError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            StorageError::ViewError(error) => Self::ViewError { error: error.to_string() },
         }
     }
 }

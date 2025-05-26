@@ -57,7 +57,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse, StorageError,
 };
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::views::ViewError;
@@ -1378,6 +1378,9 @@ pub enum ChainClientError {
 
     #[error(transparent)]
     ViewError(#[from] ViewError),
+
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
 
     #[error(
         "Failed to download certificates and update local node to the next height \
@@ -3303,8 +3306,9 @@ impl<Env: Environment> ChainClient<Env> {
         };
         match self.client.storage_client().read_event(event_id).await {
             Ok(_) => Ok(true),
-            Err(ViewError::EventsNotFound(_)) => Ok(false),
-            Err(error) => Err(error.into()),
+            Err(StorageError::EventsNotFound(_)) => Ok(false),
+            Err(StorageError::BlobsNotFound(blob_ids)) => Err(ChainClientError::BlobsNotFound(blob_ids)),
+            Err(StorageError::ViewError(error)) => Err(error.into()),
         }
     }
 

@@ -27,7 +27,7 @@ use linera_views::{
     map_view::{HashedMapView, MapView},
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    views::{ClonableView, HashableView, View, ViewError},
+    views::{ClonableView, HashableView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +36,7 @@ use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::Committee, ApplicationDescription, ApplicationId, ExecutionError,
     ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, OutgoingMessage,
-    QueryContext, QueryOutcome, ResourceController, TransactionTracker,
+    QueryContext, QueryOutcome, ResourceController, StorageError, TransactionTracker,
 };
 
 /// The event stream name for new epochs and committees.
@@ -990,7 +990,7 @@ where
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
             Ok(blob) => Ok(blob.into()),
-            Err(ViewError::BlobsNotFound(_)) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
+            Err(StorageError::BlobsNotFound(_)) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error.into()),
         }
     }

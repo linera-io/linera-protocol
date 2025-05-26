@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::ValidatorPublicKey, data_types::NetworkDescription, identifiers::ChainId,
+    crypto::ValidatorPublicKey, data_types::NetworkDescription, identifiers::{BlobId, ChainId, EventId},
 };
 use linera_core::node::NodeError;
 use linera_version::VersionInfo;
@@ -27,6 +27,10 @@ pub(crate) enum Inner {
     Persistence(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("view error: {0}")]
     View(#[from] linera_views::views::ViewError),
+    #[error("blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
+    #[error("events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
     #[error("non-existent chain: {0:?}")]
     NonexistentChain(linera_base::identifiers::ChainId),
     #[error("no keypair found for chain: {0:?}")]

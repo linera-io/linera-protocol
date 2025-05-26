@@ -18,7 +18,7 @@ use linera_base::{
     },
     doc_scalar,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId},
     time::timer::{sleep, timeout},
 };
 #[cfg(with_testing)]
@@ -31,7 +31,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
+use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, StorageError};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -203,6 +203,8 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("Events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
@@ -238,10 +240,17 @@ impl From<ChainError> for WorkerError {
 }
 
 impl From<ViewError> for WorkerError {
-    fn from(view_error: ViewError) -> Self {
-        match view_error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError(error),
+    fn from(error: ViewError) -> Self {
+        Self::ViewError(error)
+    }
+}
+
+impl From<StorageError> for WorkerError {
+    fn from(error: StorageError) -> Self {
+        match error {
+            StorageError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            StorageError::EventsNotFound(blob_ids) => Self::EventsNotFound(blob_ids),
+            StorageError::ViewError(error) => Self::ViewError(error),
         }
     }
 }

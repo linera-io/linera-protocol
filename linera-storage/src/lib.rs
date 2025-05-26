@@ -30,15 +30,12 @@ use linera_execution::{
     EvmRuntime,
 };
 use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, StorageError,
+    UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
-use linera_views::{
-    context::Context,
-    views::{RootView, ViewError},
-};
+use linera_views::{context::Context, views::{RootView, ViewError}};
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
@@ -87,7 +84,7 @@ pub trait Storage: Sized {
     async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError>;
 
     /// Reads the blob with the given blob ID.
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError>;
 
     /// Reads the blobs with the given blob IDs.
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
@@ -160,7 +157,7 @@ pub trait Storage: Sized {
     ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads the event with the given ID.
-    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
+    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, StorageError>;
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
@@ -393,41 +390,41 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError> {
         self.storage.read_blob(blob_id).await
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError> {
         self.storage.read_event(event_id).await
     }
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
-        self.storage.read_network_description().await
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, StorageError> {
+        Ok(self.storage.read_network_description().await?)
     }
 
-    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        self.storage.contains_blob(blob_id).await
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, StorageError> {
+        Ok(self.storage.contains_blob(blob_id).await?)
     }
 
-    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        self.storage.contains_event(event_id).await
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, StorageError> {
+        Ok(self.storage.contains_event(event_id).await?)
     }
 
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
-    ) -> Result<(), ViewError> {
+    ) -> Result<(), StorageError> {
         let blobs = Vec::from_iter(blobs);
-        self.storage.write_blobs(&blobs).await
+        Ok(self.storage.write_blobs(&blobs).await?)
     }
 
     #[cfg(with_testing)]
     async fn add_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
-    ) -> Result<(), ViewError> {
-        self.storage.write_events(events).await
+    ) -> Result<(), StorageError> {
+        Ok(self.storage.write_events(events).await?)
     }
 }
 

@@ -283,6 +283,8 @@ pub enum ExecutionError {
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("Events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
 
     #[error("Invalid HTTP header name used for HTTP request")]
     InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
@@ -344,9 +346,36 @@ pub enum ExecutionError {
 
 impl From<ViewError> for ExecutionError {
     fn from(error: ViewError) -> Self {
+        ExecutionError::ViewError(error)
+    }
+}
+
+impl From<ViewError> for StorageError {
+    fn from(error: ViewError) -> Self {
+        StorageError::ViewError(error)
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum StorageError {
+    #[error(transparent)]
+    ViewError(ViewError),
+
+    /// Some blobs were not found.
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
+
+    /// Some events were not found.
+    #[error("Events not found: {0:?}")]
+    EventsNotFound(Vec<EventId>),
+}
+
+impl From<StorageError> for ExecutionError {
+    fn from(error: StorageError) -> Self {
         match error {
-            ViewError::BlobsNotFound(blob_ids) => ExecutionError::BlobsNotFound(blob_ids),
-            error => ExecutionError::ViewError(error),
+            StorageError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            StorageError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
+            StorageError::ViewError(error) => Self::ViewError(error),
         }
     }
 }
@@ -402,27 +431,27 @@ pub trait ExecutionRuntimeContext {
         description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError>;
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError>;
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, StorageError>;
 
-    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, StorageError>;
 
-    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError>;
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, StorageError>;
 
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
-    ) -> Result<(), ViewError>;
+    ) -> Result<(), StorageError>;
 
     #[cfg(with_testing)]
     async fn add_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
-    ) -> Result<(), ViewError>;
+    ) -> Result<(), StorageError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1070,23 +1099,23 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError> {
         Ok(self
             .blobs
             .get(&blob_id)
-            .ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?
+            .ok_or_else(|| StorageError::BlobsNotFound(vec![blob_id]))?
             .clone())
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, StorageError> {
         Ok(self
             .events
             .get(&event_id)
-            .ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))?
+            .ok_or_else(|| StorageError::EventsNotFound(vec![event_id]))?
             .clone())
     }
 
-    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, StorageError> {
         Ok(Some(NetworkDescription {
             admin_chain_id: dummy_chain_description(0).id(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),
@@ -1095,11 +1124,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         }))
     }
 
-    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, StorageError> {
         Ok(self.blobs.contains_key(&blob_id))
     }
 
-    async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+    async fn contains_event(&self, event_id: EventId) -> Result<bool, StorageError> {
         Ok(self.events.contains_key(&event_id))
     }
 
@@ -1107,7 +1136,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
-    ) -> Result<(), ViewError> {
+    ) -> Result<(), StorageError> {
         for blob in blobs {
             self.blobs.insert(blob.id(), blob);
         }
@@ -1119,7 +1148,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn add_events(
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
-    ) -> Result<(), ViewError> {
+    ) -> Result<(), StorageError> {
         for (event_id, bytes) in events {
             self.events.insert(event_id, bytes);
         }

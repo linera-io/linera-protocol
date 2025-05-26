@@ -24,12 +24,12 @@ use linera_core::{
     worker::{Notification, Reason},
     Environment,
 };
+use linera_execution::StorageError;
 use linera_storage::{Clock as _, Storage as _};
-use linera_views::views::ViewError;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
-use crate::{wallet::Wallet, Error};
+use crate::{wallet::Wallet, Error, error::Inner};
 
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct ChainListenerConfig {
@@ -99,12 +99,17 @@ pub trait ClientContextExt: ClientContext {
 
         let blob = match self.storage().read_blob(blob_id).await {
             Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
-                // we're missing the blob describing the chain we're assigning - try to
-                // get it
-                self.client().ensure_has_chain_description(chain_id).await?
+            Err(StorageError::BlobsNotFound(blob_ids)) => {
+                if blob_ids == [blob_id] {
+                    // we're missing the blob describing the chain we're assigning - try to
+                    // get it
+                    self.client().ensure_has_chain_description(chain_id).await?
+                } else {
+                    return Err(Inner::BlobsNotFound(blob_ids).into());
+                }
             }
-            Err(err) => {
+            Err(StorageError::EventsNotFound(event_ids)) => return Err(Inner::EventsNotFound(event_ids).into()),
+            Err(StorageError::ViewError(err)) => {
                 return Err(err.into());
             }
         };
