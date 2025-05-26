@@ -1,6 +1,3 @@
-directive @oneOf on INPUT_OBJECT
-
-
 """
 The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
 """
@@ -18,9 +15,6 @@ type ChainOperation {
 A Keccak256 value
 """
 scalar CryptoHash
-
-
-
 
 """
 An operation to be executed in a block
@@ -59,8 +53,17 @@ type OperationsPlugin {
 	last(chainId: ChainId!): OperationKey
 }
 
-
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)
+"""
+directive @oneOf on INPUT_OBJECT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: OperationsPlugin
