@@ -30,12 +30,15 @@ use linera_execution::{
     EvmRuntime,
 };
 use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, UserContractCode,
+    UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
-use linera_views::{context::Context, views::{RootView, ViewError}};
+use linera_views::{
+    context::Context,
+    views::{RootView, ViewError},
+};
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
@@ -177,7 +180,8 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Reads the network description.
-    async fn maybe_read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+    async fn maybe_read_network_description(&self)
+        -> Result<Option<NetworkDescription>, ViewError>;
 
     /// Writes the network description.
     async fn write_network_description(
@@ -218,8 +222,12 @@ pub trait Storage: Sized {
         application_description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
-        let contract_blob = self.maybe_read_blob(contract_bytecode_blob_id).await?
-            .ok_or(ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]))?;
+        let contract_blob = self
+            .maybe_read_blob(contract_bytecode_blob_id)
+            .await?
+            .ok_or(ExecutionError::BlobsNotFound(vec![
+                contract_bytecode_blob_id,
+            ]))?;
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
@@ -276,8 +284,12 @@ pub trait Storage: Sized {
         application_description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
-        let service_blob = self.maybe_read_blob(service_bytecode_blob_id).await?
-            .ok_or(ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]))?;
+        let service_blob = self
+            .maybe_read_blob(service_bytecode_blob_id)
+            .await?
+            .ok_or(ExecutionError::BlobsNotFound(vec![
+                service_bytecode_blob_id,
+            ]))?;
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
         };

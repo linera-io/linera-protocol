@@ -452,7 +452,11 @@ where
             }
 
             ReadEvent { event_id, callback } => {
-                let event = self.context().extra().maybe_get_event(event_id.clone()).await?;
+                let event = self
+                    .context()
+                    .extra()
+                    .maybe_get_event(event_id.clone())
+                    .await?;
                 let event = event.ok_or(ExecutionError::EventsNotFound(vec![event_id]))?;
                 callback.respond(event);
             }

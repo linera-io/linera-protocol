@@ -3,10 +3,7 @@
 
 use std::{fmt::Debug, io::Write};
 
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::ArithmeticError,
-};
+use linera_base::{crypto::CryptoHash, data_types::ArithmeticError};
 pub use linera_views_derive::{
     ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
 };

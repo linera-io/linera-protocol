@@ -609,7 +609,9 @@ where
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
-        metrics::MAYBE_READ_BLOB_COUNTER.with_label_values(&[]).inc();
+        metrics::MAYBE_READ_BLOB_COUNTER
+            .with_label_values(&[])
+            .inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
@@ -922,7 +924,9 @@ where
         self.write_batch(batch).await
     }
 
-    async fn maybe_read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+    async fn maybe_read_network_description(
+        &self,
+    ) -> Result<Option<NetworkDescription>, ViewError> {
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
         let maybe_value = self.store.read_value(&key).await?;
         #[cfg(with_metrics)]

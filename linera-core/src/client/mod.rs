@@ -477,7 +477,11 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<Blob, ChainClientError> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-        let blob = self.local_node.storage_client().maybe_read_blob(chain_desc_id).await?;
+        let blob = self
+            .local_node
+            .storage_client()
+            .maybe_read_blob(chain_desc_id)
+            .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
             return Ok(blob);
@@ -3300,7 +3304,12 @@ impl<Env: Environment> ChainClient<Env> {
             stream_id: StreamId::system(stream_name),
             index,
         };
-        Ok(self.client.storage_client().maybe_read_event(event_id).await?.is_some())
+        Ok(self
+            .client
+            .storage_client()
+            .maybe_read_event(event_id)
+            .await?
+            .is_some())
     }
 
     /// Returns the indices and events from the storage

@@ -352,7 +352,12 @@ where
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
-        match self.context().extra().maybe_get_event(event_id.clone()).await? {
+        match self
+            .context()
+            .extra()
+            .maybe_get_event(event_id.clone())
+            .await?
+        {
             None => Err(ExecutionError::EventsNotFound(vec![event_id])),
             Some(vec) => Ok(vec),
         }

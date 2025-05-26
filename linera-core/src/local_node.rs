@@ -173,7 +173,11 @@ where
         blob_ids: &[BlobId],
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         let storage = self.storage_client();
-        Ok(storage.maybe_read_blobs(blob_ids).await?.into_iter().collect())
+        Ok(storage
+            .maybe_read_blobs(blob_ids)
+            .await?
+            .into_iter()
+            .collect())
     }
 
     /// Looks for the specified blobs in the local chain manager's locking blobs.

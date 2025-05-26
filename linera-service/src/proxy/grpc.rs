@@ -352,7 +352,6 @@ where
         status.set_source(Arc::new(err));
         status
     }
-
 }
 
 #[async_trait]

@@ -291,7 +291,9 @@ impl CrossChainMessageDelivery {
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
-        Self::ViewError { error: error.to_string() }
+        Self::ViewError {
+            error: error.to_string(),
+        }
     }
 }
 
