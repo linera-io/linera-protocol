@@ -394,7 +394,7 @@ where
             }
         }
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);
-        let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
+        let blobs_from_storage = self.storage.maybe_read_blobs(&missing_blob_ids).await?;
         for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {
             maybe_blobs.insert(blob_id, maybe_blob);
         }

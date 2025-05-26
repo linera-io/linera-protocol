@@ -616,7 +616,7 @@ where
         Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
     }
 
-    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
+    async fn maybe_read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }

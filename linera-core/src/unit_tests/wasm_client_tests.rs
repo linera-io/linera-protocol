@@ -911,7 +911,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
     let mut blobs = publisher
         .storage_client()
-        .read_blobs(&[
+        .maybe_read_blobs(&[
             BlobId::new(module_id.contract_blob_hash, BlobType::ContractBytecode),
             BlobId::new(module_id.service_blob_hash, BlobType::ServiceBytecode),
         ])

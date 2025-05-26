@@ -87,7 +87,7 @@ pub trait Storage: Sized {
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, StorageError>;
 
     /// Reads the blobs with the given blob IDs.
-    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
+    async fn maybe_read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
 
     /// Reads the blob state with the given blob ID.
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError>;
