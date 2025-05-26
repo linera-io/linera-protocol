@@ -3,7 +3,6 @@ A block height to identify blocks in a chain
 """
 scalar BlockHeight
 
-
 """
 The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
 """
@@ -14,14 +13,11 @@ A Keccak256 value
 """
 scalar CryptoHash
 
-
 type HighestBlock {
 	chain: ChainId!
 	block: CryptoHash
 	height: BlockHeight
 }
-
-
 
 type State {
 	"""
@@ -34,8 +30,13 @@ type State {
 	state: [HighestBlock!]!
 }
 
-
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: State
