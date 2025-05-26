@@ -347,8 +347,6 @@ where
                 Status::out_of_range(err.to_string())
             }
             ViewError::NotFound(_)
-            | ViewError::BlobsNotFound(_)
-            | ViewError::EventsNotFound(_)
             | ViewError::CannotAcquireCollectionEntry
             | ViewError::MissingEntries => Status::not_found(err.to_string()),
         }

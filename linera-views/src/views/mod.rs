@@ -6,7 +6,6 @@ use std::{fmt::Debug, io::Write};
 use linera_base::{
     crypto::CryptoHash,
     data_types::ArithmeticError,
-    identifiers::{BlobId, EventId},
 };
 pub use linera_views_derive::{
     ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
@@ -158,14 +157,6 @@ pub enum ViewError {
     /// The value is too large for the client
     #[error("The value is too large for the client")]
     TooLargeValue,
-
-    /// Some blobs were not found.
-    #[error("Blobs not found: {0:?}")]
-    BlobsNotFound(Vec<BlobId>),
-
-    /// Some events were not found.
-    #[error("Events not found: {0:?}")]
-    EventsNotFound(Vec<EventId>),
 }
 
 impl ViewError {

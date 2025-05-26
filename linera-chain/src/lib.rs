@@ -174,10 +174,7 @@ pub enum ChainError {
 
 impl From<ViewError> for ChainError {
     fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => ChainError::BlobsNotFound(blob_ids),
-            error => ChainError::ViewError(error),
-        }
+        ChainError::ViewError(error)
     }
 }
 

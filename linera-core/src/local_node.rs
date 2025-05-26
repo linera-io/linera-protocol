@@ -84,10 +84,7 @@ impl From<WorkerError> for LocalNodeError {
 
 impl From<ViewError> for LocalNodeError {
     fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
-            error => LocalNodeError::ViewError(error),
-        }
+        LocalNodeError::ViewError(error)
     }
 }
 
