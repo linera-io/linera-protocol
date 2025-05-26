@@ -9,13 +9,12 @@ This module defines the client API for the Web extension.
 // ensure the generated code will return a `Promise`.
 #![allow(clippy::unused_async)]
 
+pub mod signer;
+
 use std::{collections::HashMap, future::Future, sync::Arc};
 
 use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex, stream::StreamExt};
-use linera_base::{
-    crypto::InMemorySigner,
-    identifiers::{AccountOwner, ApplicationId},
-};
+use linera_base::identifiers::{AccountOwner, ApplicationId};
 use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     client_options::ClientContextOptions,
@@ -26,9 +25,10 @@ use linera_core::{
     node::{ValidatorNode as _, ValidatorNodeProvider as _},
 };
 use linera_faucet_client::Faucet;
-use linera_persistent::{self as persistent, Persist as _};
+use linera_persistent::{self as persistent};
 use linera_views::store::WithError;
 use serde::ser::Serialize as _;
+use signer::in_memory::JsInMemorySigner;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
@@ -39,7 +39,7 @@ type WebStorage =
 type WebEnvironment = linera_core::environment::Impl<
     WebStorage,
     linera_rpc::node_provider::NodeProvider,
-    InMemorySigner,
+    JsInMemorySigner,
 >;
 
 type JsResult<T> = Result<T, JsError>;
@@ -57,10 +57,6 @@ async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore 
 /// A wallet that stores the user's chains and keys in memory.
 #[wasm_bindgen]
 pub struct InMemoryWallet(persistent::Memory<Wallet>);
-
-/// A signer that stores the user's keys in memory.
-#[wasm_bindgen(js_name = InMemorySigner)]
-pub struct InMemoryJSSigner(persistent::Memory<InMemorySigner>);
 
 type ClientContext =
     linera_client::client_context::ClientContext<WebEnvironment, persistent::Memory<Wallet>>;
@@ -199,7 +195,7 @@ impl Client {
     /// On transport or protocol error, or if persistent storage is
     /// unavailable.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: InMemoryWallet, signer: InMemoryJSSigner) -> Result<Client, JsError> {
+    pub async fn new(wallet: InMemoryWallet, signer: JsInMemorySigner) -> Result<Client, JsError> {
         let mut storage = get_storage().await?;
         wallet
             .0
@@ -210,7 +206,7 @@ impl Client {
             storage.clone(),
             OPTIONS,
             wallet.0,
-            signer.0.into_value(),
+            signer,
         )));
         ChainListener::new(
             ChainListenerConfig::default(),
