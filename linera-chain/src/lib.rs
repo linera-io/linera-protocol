@@ -28,7 +28,7 @@ use linera_base::{
     bcs,
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId},
+    identifiers::{ApplicationId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
@@ -168,8 +168,6 @@ pub enum ChainError {
         expected: CryptoHash,
         actual: CryptoHash,
     },
-    #[error("Blobs not found: {0:?}")]
-    BlobsNotFound(Vec<BlobId>),
 }
 
 impl From<ViewError> for ChainError {
