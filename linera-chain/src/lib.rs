@@ -46,7 +46,7 @@ pub enum ChainError {
     #[error("Execution error: {0} during {1:?}")]
     ExecutionError(Box<ExecutionError>, ChainExecutionContext),
 
-    #[error("The chain being queried is not active {0:?}")]
+    #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error(
         "Cannot vote for block proposal of chain {chain_id:?} because a message \

@@ -195,7 +195,7 @@ pub enum NodeError {
     WorkerError { error: String },
 
     // This error must be normalized during conversions.
-    #[error("The chain {0:?} is not active in validator")]
+    #[error("The chain {0} is not active in validator")]
     InactiveChain(ChainId),
 
     // This error must be normalized during conversions.

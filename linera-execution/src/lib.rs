@@ -281,7 +281,7 @@ pub enum ExecutionError {
     ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
     #[error("Failed to send service code to worker thread: {0:?}")]
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
-    #[error("The chain being queried is not active {0:?}")]
+    #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
