@@ -588,13 +588,19 @@ where
         sender: oneshot::Sender<Result<CryptoHash, NodeError>>,
     ) -> Result<(), Result<CryptoHash, NodeError>> {
         let validator = self.client.lock().await;
-        let certificate_hash = validator
+        let blob_state = validator
             .state
             .storage_client()
             .read_blob_state(blob_id)
             .await
-            .map(|blob_state| blob_state.last_used_by)
             .map_err(Into::into);
+        let certificate_hash = match blob_state {
+            Err(err) => Err(err),
+            Ok(blob_state) => match blob_state {
+                None => Err(NodeError::BlobsNotFound(vec![blob_id])),
+                Some(blob_state) => Ok(blob_state.last_used_by),
+            },
+        };
 
         sender.send(certificate_hash)
     }

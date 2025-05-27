@@ -18,7 +18,7 @@ use linera_chain::{
     types::{Block, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{committee::Committee, Query, QueryOutcome};
+use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -168,6 +168,31 @@ where
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         let storage = self.storage_client();
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
+    }
+
+    /// Reads blob states from storage
+    pub async fn read_blob_states_from_storage(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<BlobState>, LocalNodeError> {
+        let storage = self.storage_client();
+        let mut blobs_not_found = Vec::new();
+        let mut blob_states = Vec::new();
+        for (blob_state, blob_id) in storage
+            .read_blob_states(blob_ids)
+            .await?
+            .into_iter()
+            .zip(blob_ids)
+        {
+            match blob_state {
+                None => blobs_not_found.push(*blob_id),
+                Some(blob_state) => blob_states.push(blob_state),
+            }
+        }
+        if !blobs_not_found.is_empty() {
+            return Err(LocalNodeError::BlobsNotFound(blobs_not_found));
+        }
+        Ok(blob_states)
     }
 
     /// Looks for the specified blobs in the local chain manager's locking blobs.

@@ -626,6 +626,8 @@ where
             .read_blob_state(blob_id)
             .await
             .map_err(Self::error_to_status)?;
+        let blob_state =
+            blob_state.ok_or(Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob_state.last_used_by.into()))
     }
 

@@ -636,19 +636,20 @@ where
             .collect())
     }
 
-    async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
+    async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
+        let blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
             .inc();
-        let blob_state = maybe_blob_state
-            .ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id))?;
         Ok(blob_state)
     }
 
-    async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError> {
+    async fn read_blob_states(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<BlobState>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -656,21 +657,14 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
             .collect::<Result<_, _>>()?;
-        let maybe_blob_states = self
+        let blob_states = self
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATES_COUNTER
             .with_label_values(&[])
-            .inc();
-        let blob_states = maybe_blob_states
-            .into_iter()
-            .zip(blob_ids)
-            .map(|(blob_state, blob_id)| {
-                blob_state.ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id))
-            })
-            .collect::<Result<_, _>>()?;
+            .inc_by(blob_ids.len() as u64);
         Ok(blob_states)
     }
 
@@ -704,14 +698,13 @@ where
         blob_id: BlobId,
         blob_state: BlobState,
     ) -> Result<Epoch, ViewError> {
-        let current_blob_state = self.read_blob_state(blob_id).await;
+        let current_blob_state = self.read_blob_state(blob_id).await?;
         let (should_write, latest_epoch) = match current_blob_state {
-            Ok(current_blob_state) => (
+            Some(current_blob_state) => (
                 current_blob_state.epoch < blob_state.epoch,
                 current_blob_state.epoch.max(blob_state.epoch),
             ),
-            Err(ViewError::NotFound(_)) => (true, blob_state.epoch),
-            Err(err) => return Err(err),
+            None => (true, blob_state.epoch),
         };
 
         if should_write {
@@ -855,7 +848,7 @@ where
             #[cfg(with_metrics)]
             metrics::READ_CERTIFICATES_COUNTER
                 .with_label_values(&[])
-                .inc();
+                .inc_by(hashes.len() as u64);
         }
         let values = values?;
         let mut certificates = Vec::new();
@@ -868,9 +861,10 @@ where
 
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+        let event = self.store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
-        Ok(self.store.read_value_bytes(&event_key).await?)
+        Ok(event)
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
