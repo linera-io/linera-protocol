@@ -28,7 +28,7 @@ use linera_faucet_client::Faucet;
 use linera_persistent::{self as persistent};
 use linera_views::store::WithError;
 use serde::ser::Serialize as _;
-use signer::in_memory::JsInMemorySigner;
+use signer::embedded::EmbeddedSigner;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
@@ -39,7 +39,7 @@ type WebStorage =
 type WebEnvironment = linera_core::environment::Impl<
     WebStorage,
     linera_rpc::node_provider::NodeProvider,
-    JsInMemorySigner,
+    EmbeddedSigner,
 >;
 
 type JsResult<T> = Result<T, JsError>;
@@ -125,7 +125,6 @@ impl JsFaucet {
     ) -> JsResult<String> {
         use persistent::PersistExt as _;
         let account_owner: AccountOwner = serde_wasm_bindgen::from_value(owner)?;
-        // let owner = AccountOwner::from(wallet.signer.mutate(InMemorySigner::generate_new).await?);
         tracing::info!(
             "Requesting a new chain for owner {} using the faucet at address {}",
             account_owner,
@@ -195,7 +194,7 @@ impl Client {
     /// On transport or protocol error, or if persistent storage is
     /// unavailable.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: InMemoryWallet, signer: JsInMemorySigner) -> Result<Client, JsError> {
+    pub async fn new(wallet: InMemoryWallet, signer: EmbeddedSigner) -> Result<Client, JsError> {
         let mut storage = get_storage().await?;
         wallet
             .0
