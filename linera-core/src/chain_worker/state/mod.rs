@@ -27,7 +27,7 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionStateView, Query, QueryOutcome, ServiceRuntimeEndpoint};
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::{ClonableView, ViewError};
+use linera_views::views::ClonableView;
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
 
 #[cfg(test)]
@@ -470,33 +470,33 @@ where
     ) -> Result<NetworkActions, WorkerError> {
         // Load all the certificates we will need, regardless of the medium.
         let heights = BTreeSet::from_iter(heights_by_recipient.values().flatten().copied());
-        let (log_heights, loose_heights) =
-            heights.iter().copied().partition::<Vec<_>, _>(|height| {
-                *height < self.chain.tip_state.get().next_block_height
-            });
-        let log_heights = log_heights
-            .into_iter()
+        let next_block_height = self.chain.tip_state.get().next_block_height;
+        let log_heights = heights
+            .range(..next_block_height)
+            .copied()
             .map(usize::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         let mut hashes = self
             .chain
             .confirmed_log
-            .multi_get(log_heights.clone())
+            .multi_get(log_heights)
             .await?
             .into_iter()
-            .zip(log_heights)
+            .zip(&heights)
             .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
+                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                    height: *height,
+                    chain_id: self.chain_id(),
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        for height in loose_heights {
-            hashes.push(
-                self.chain
-                    .loose_blocks
-                    .get(&height)
-                    .await?
-                    .ok_or_else(|| ViewError::not_found("loose block", height))?,
-            );
+        for height in heights.range(next_block_height..) {
+            hashes.push(self.chain.loose_blocks.get(height).await?.ok_or_else(|| {
+                WorkerError::LooseBlocksEntryNotFound {
+                    height: *height,
+                    chain_id: self.chain_id(),
+                }
+            })?);
         }
         let certificates = self.storage.read_certificates(hashes).await?;
         let certificates = heights

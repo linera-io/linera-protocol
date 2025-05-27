@@ -203,6 +203,16 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
+    ConfirmedLogEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
+    #[error("loose_blocks entry at height {height} for chain {chain_id:8} not found")]
+    LooseBlocksEntryNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
