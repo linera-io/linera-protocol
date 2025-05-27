@@ -96,7 +96,7 @@ pub trait ClientContextExt: ClientContext {
     async fn chain_description(&mut self, chain_id: ChainId) -> Result<ChainDescription, Error> {
         let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
 
-        let blob = match self.storage().maybe_read_blob(blob_id).await {
+        let blob = match self.storage().read_blob(blob_id).await {
             Ok(Some(blob)) => blob,
             Ok(None) => {
                 // we're missing the blob describing the chain we're assigning - try to

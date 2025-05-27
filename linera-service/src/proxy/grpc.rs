@@ -470,7 +470,7 @@ where
         let description = self
             .0
             .storage
-            .maybe_read_network_description()
+            .read_network_description()
             .await
             .map_err(Self::error_to_status)?
             .ok_or(Status::not_found(
@@ -501,7 +501,7 @@ where
         let blob = self
             .0
             .storage
-            .maybe_read_blob(blob_id)
+            .read_blob(blob_id)
             .await
             .map_err(Self::error_to_status)?;
         let blob = blob.ok_or(Status::not_found(format!("Blob not found {}", blob_id)))?;

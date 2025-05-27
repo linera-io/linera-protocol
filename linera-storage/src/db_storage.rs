@@ -93,9 +93,9 @@ pub mod metrics {
 
     /// The metric counting how often a blob is read from storage.
     #[doc(hidden)]
-    pub static MAYBE_READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "maybe_read_blob",
+            "read_blob",
             "The metric counting how often a blob is read from storage",
             &[],
         )
@@ -174,9 +174,9 @@ pub mod metrics {
 
     /// The metric counting how often an event is read from storage.
     #[doc(hidden)]
-    pub static MAYBE_READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "maybe_read_event",
+            "read_event",
             "The metric counting how often an event is read from storage",
             &[],
         )
@@ -605,17 +605,15 @@ where
         Ok(value)
     }
 
-    async fn maybe_read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
-        metrics::MAYBE_READ_BLOB_COUNTER
-            .with_label_values(&[])
-            .inc();
+        metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
-    async fn maybe_read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
+    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -625,7 +623,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_bytes = self.store.read_multi_values_bytes(blob_keys).await?;
         #[cfg(with_metrics)]
-        metrics::MAYBE_READ_BLOB_COUNTER
+        metrics::READ_BLOB_COUNTER
             .with_label_values(&[])
             .inc_by(blob_ids.len() as u64);
 
@@ -868,12 +866,10 @@ where
         Ok(certificates)
     }
 
-    async fn maybe_read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+    async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
         #[cfg(with_metrics)]
-        metrics::MAYBE_READ_EVENT_COUNTER
-            .with_label_values(&[])
-            .inc();
+        metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
         Ok(self.store.read_value_bytes(&event_key).await?)
     }
 
@@ -926,9 +922,7 @@ where
         self.write_batch(batch).await
     }
 
-    async fn maybe_read_network_description(
-        &self,
-    ) -> Result<Option<NetworkDescription>, ViewError> {
+    async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
         let maybe_value = self.store.read_value(&key).await?;
         #[cfg(with_metrics)]

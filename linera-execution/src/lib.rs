@@ -395,11 +395,11 @@ pub trait ExecutionRuntimeContext {
         description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn maybe_get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
 
-    async fn maybe_get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
-    async fn maybe_get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1063,21 +1063,21 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn maybe_get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         match self.blobs.get(&blob_id) {
             None => Ok(None),
             Some(blob) => Ok(Some(blob.clone())),
         }
     }
 
-    async fn maybe_get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         match self.events.get(&event_id) {
             None => Ok(None),
             Some(event) => Ok(Some(event.clone())),
         }
     }
 
-    async fn maybe_get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+    async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         Ok(Some(NetworkDescription {
             admin_chain_id: dummy_chain_description(0).id(),
             genesis_config_hash: CryptoHash::test_hash("genesis config"),

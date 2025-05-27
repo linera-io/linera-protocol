@@ -317,7 +317,7 @@ where
             NetworkDescriptionQuery => {
                 let description = self
                     .storage
-                    .maybe_read_network_description()
+                    .read_network_description()
                     .await?
                     .ok_or(anyhow!("Cannot find network description in the database"))?;
                 Ok(Some(RpcMessage::NetworkDescriptionResponse(Box::new(
@@ -334,7 +334,7 @@ where
                 Ok(Some(RpcMessage::UploadBlobResponse(Box::new(id))))
             }
             DownloadBlob(blob_id) => {
-                let blob = self.storage.maybe_read_blob(*blob_id).await?;
+                let blob = self.storage.read_blob(*blob_id).await?;
                 let blob = blob.ok_or(anyhow!("Blob not found {}", blob_id))?;
                 let content = blob.into_content();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))

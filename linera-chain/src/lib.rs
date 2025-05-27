@@ -42,7 +42,7 @@ pub enum ChainError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
     #[error("Execution error: {0} during {1:?}")]
     ExecutionError(Box<ExecutionError>, ChainExecutionContext),
 
@@ -168,12 +168,6 @@ pub enum ChainError {
         expected: CryptoHash,
         actual: CryptoHash,
     },
-}
-
-impl From<ViewError> for ChainError {
-    fn from(error: ViewError) -> Self {
-        ChainError::ViewError(error)
-    }
 }
 
 #[derive(Copy, Clone, Debug)]

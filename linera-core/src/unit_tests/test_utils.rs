@@ -184,7 +184,7 @@ where
                 .await
                 .state
                 .storage_client()
-                .maybe_read_network_description()
+                .read_network_description()
                 .await
                 .unwrap()
                 .unwrap()
@@ -510,7 +510,7 @@ where
         let blob = validator
             .state
             .storage_client()
-            .maybe_read_blob(blob_id)
+            .read_blob(blob_id)
             .await
             .map_err(Into::into);
         let blob = match blob {

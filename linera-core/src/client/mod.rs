@@ -480,7 +480,7 @@ impl<Env: Environment> Client<Env> {
         let blob = self
             .local_node
             .storage_client()
-            .maybe_read_blob(chain_desc_id)
+            .read_blob(chain_desc_id)
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
@@ -3304,7 +3304,7 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(self
             .client
             .storage_client()
-            .maybe_read_event(event_id)
+            .read_event(event_id)
             .await?
             .is_some())
     }
