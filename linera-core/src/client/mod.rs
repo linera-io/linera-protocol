@@ -298,7 +298,7 @@ impl<Env: Environment> Client<Env> {
                 let blobs =
                     RemoteNode::download_blobs(&blob_ids, validators, self.blob_download_timeout)
                         .await
-                        .ok_or(LocalNodeError::InactiveChain(chain_id))?;
+                        .ok_or(LocalNodeError::BlobsNotFound(blob_ids))?;
                 self.local_node.storage_client().write_blobs(&blobs).await?;
                 self.local_node.chain_info(chain_id).await
             }
@@ -489,7 +489,7 @@ impl<Env: Environment> Client<Env> {
         let nodes = self.validator_nodes().await?;
         let blob = RemoteNode::download_blob(&nodes, chain_desc_id, self.blob_download_timeout)
             .await
-            .ok_or(LocalNodeError::InactiveChain(chain_id))?;
+            .ok_or(LocalNodeError::BlobsNotFound(vec![chain_desc_id]))?;
         self.local_node.storage_client().write_blob(&blob).await?;
         Ok(blob)
     }

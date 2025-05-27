@@ -344,19 +344,6 @@ pub enum ExecutionError {
     OutdatedUpdateStreams,
 }
 
-impl ExecutionError {
-    /// Returns the missing blobs from this error if any.
-    pub fn blobs_not_found(&self) -> Option<Vec<BlobId>> {
-        match self {
-            Self::InactiveChain(chain_id) => {
-                Some(vec![BlobId::new(chain_id.0, BlobType::ChainDescription)])
-            }
-            Self::BlobsNotFound(blob_ids) => Some(blob_ids.to_vec()),
-            _ => None,
-        }
-    }
-}
-
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.

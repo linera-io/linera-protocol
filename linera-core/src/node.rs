@@ -20,7 +20,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, ExecutionError};
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -319,7 +319,7 @@ impl From<ChainError> for NodeError {
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => {
-                if let Some(blob_ids) = execution_error.blobs_not_found() {
+                if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
                     Self::BlobsNotFound(blob_ids)
                 } else {
                     Self::ChainError {
