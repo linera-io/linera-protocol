@@ -55,7 +55,7 @@ pub enum LocalNodeError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
 
     #[error("Local node operation failed: {0}")]
     WorkerError(WorkerError),
@@ -79,12 +79,6 @@ impl From<WorkerError> for LocalNodeError {
             WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
             error => LocalNodeError::WorkerError(error),
         }
-    }
-}
-
-impl From<ViewError> for LocalNodeError {
-    fn from(error: ViewError) -> Self {
-        LocalNodeError::ViewError(error)
     }
 }
 

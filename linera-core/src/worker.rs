@@ -150,7 +150,7 @@ pub enum WorkerError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
 
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
@@ -233,12 +233,6 @@ impl From<ChainError> for WorkerError {
             }
             error => Self::ChainError(Box::new(error)),
         }
-    }
-}
-
-impl From<ViewError> for WorkerError {
-    fn from(error: ViewError) -> Self {
-        Self::ViewError(error)
     }
 }
 

@@ -193,7 +193,7 @@ const _: () = {
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error("User application reported an error: {0}")]
@@ -342,12 +342,6 @@ pub enum ExecutionError {
     EventNotFound(EventId),
     #[error("UpdateStreams is outdated")]
     OutdatedUpdateStreams,
-}
-
-impl From<ViewError> for ExecutionError {
-    fn from(error: ViewError) -> Self {
-        ExecutionError::ViewError(error)
-    }
 }
 
 /// The public entry points provided by the contract part of an application.

@@ -174,9 +174,9 @@ pub mod metrics {
 
     /// The metric counting how often an event is read from storage.
     #[doc(hidden)]
-    pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    pub static MAYBE_READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "read_event",
+            "maybe_read_event",
             "The metric counting how often an event is read from storage",
             &[],
         )
@@ -871,7 +871,9 @@ where
     async fn maybe_read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
         #[cfg(with_metrics)]
-        metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
+        metrics::MAYBE_READ_EVENT_COUNTER
+            .with_label_values(&[])
+            .inc();
         Ok(self.store.read_value_bytes(&event_key).await?)
     }
 
