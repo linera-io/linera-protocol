@@ -243,10 +243,7 @@ impl WorkerError {
     /// # Panics
     ///
     /// If this is not caused by an [`ExecutionError`].
-    pub fn expect_execution_error(
-        self,
-        expected_context: ChainExecutionContext,
-    ) -> ExecutionError {
+    pub fn expect_execution_error(self, expected_context: ChainExecutionContext) -> ExecutionError {
         let WorkerError::ChainError(chain_error) = self else {
             panic!("Expected an `ExecutionError`. Got: {self:#?}");
         };
