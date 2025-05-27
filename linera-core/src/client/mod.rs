@@ -676,7 +676,7 @@ impl<Env: Environment> Client<Env> {
         let block_chain_id = certificate.block().header.chain_id;
         let block_height = certificate.block().header.height;
 
-        self.receive_certificate(certificate, mode, None).await?;
+        self.receive_certificate(certificate, mode).await?;
 
         // Make sure a quorum of validators (according to the chain's new committee) are up-to-date
         // for data availability.
@@ -701,29 +701,17 @@ impl<Env: Environment> Client<Env> {
         &self,
         certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
-        nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), ChainClientError> {
         let certificate = Box::new(certificate);
         let block = certificate.block();
 
         // Verify the certificate before doing any expensive networking.
         let (max_epoch, committees) = self.admin_committees().await?;
-        ensure!(
-            block.header.epoch <= max_epoch,
-            ChainClientError::CommitteeSynchronizationError
-        );
-        let remote_committee = committees
-            .get(&block.header.epoch)
-            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
         if let ReceiveCertificateMode::NeedsCheck = mode {
-            certificate.check(remote_committee)?;
+            Self::check_certificate(max_epoch, &committees, &certificate)?.into_result()?;
         }
         // Recover history from the network.
-        let nodes = if let Some(nodes) = nodes {
-            nodes
-        } else {
-            self.validator_nodes().await?
-        };
+        let nodes = self.validator_nodes().await?;
         self.download_certificates(&nodes, block.header.chain_id, block.header.height)
             .await?;
         // Process the received operations. Download required hashed certificate values if
@@ -758,19 +746,11 @@ impl<Env: Environment> Client<Env> {
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), ChainClientError> {
         let certificate = Box::new(certificate);
-        let block = certificate.block();
 
         // Verify the certificate before doing any expensive networking.
         let (max_epoch, committees) = self.admin_committees().await?;
-        ensure!(
-            block.header.epoch <= max_epoch,
-            ChainClientError::CommitteeSynchronizationError
-        );
-        let remote_committee = committees
-            .get(&block.header.epoch)
-            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
         if let ReceiveCertificateMode::NeedsCheck = mode {
-            certificate.check(remote_committee)?;
+            Self::check_certificate(max_epoch, &committees, &certificate)?.into_result()?;
         }
         // Recover history from the network.
         let nodes = if let Some(nodes) = nodes {
@@ -778,8 +758,6 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        // Process the received operations. Download required hashed certificate values if
-        // necessary.
         if let Err(err) = self.process_loose_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
@@ -3004,7 +2982,7 @@ impl<Env: Environment> ChainClient<Env> {
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
         self.client
-            .receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck, None)
+            .receive_certificate(certificate, ReceiveCertificateMode::NeedsCheck)
             .await
     }
 
@@ -3934,6 +3912,16 @@ enum CheckCertificateResult {
     OldEpoch,
     New,
     FutureEpoch,
+}
+
+impl CheckCertificateResult {
+    fn into_result(self) -> Result<(), ChainClientError> {
+        match self {
+            Self::OldEpoch => Err(ChainClientError::CommitteeSynchronizationError),
+            Self::New => Ok(()),
+            Self::FutureEpoch => Err(ChainClientError::CommitteeDeprecationError),
+        }
+    }
 }
 
 /// Creates a compressed Contract, Service and bytecode.
