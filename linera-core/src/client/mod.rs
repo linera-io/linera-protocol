@@ -594,7 +594,6 @@ impl<Env: Environment> Client<Env> {
                     chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
-                    client: self,
                 };
                 Box::pin(async move {
                     updater
@@ -633,7 +632,6 @@ impl<Env: Environment> Client<Env> {
                     chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
-                    client: self,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
@@ -3917,9 +3915,9 @@ enum CheckCertificateResult {
 impl CheckCertificateResult {
     fn into_result(self) -> Result<(), ChainClientError> {
         match self {
-            Self::OldEpoch => Err(ChainClientError::CommitteeSynchronizationError),
+            Self::OldEpoch => Err(ChainClientError::CommitteeDeprecationError),
             Self::New => Ok(()),
-            Self::FutureEpoch => Err(ChainClientError::CommitteeDeprecationError),
+            Self::FutureEpoch => Err(ChainClientError::CommitteeSynchronizationError),
         }
     }
 }
