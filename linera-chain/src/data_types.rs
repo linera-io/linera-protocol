@@ -118,7 +118,7 @@ impl ProposedBlock {
         let size = bcs::serialized_size(self)?;
         ensure!(
             size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
-            ChainError::BlockProposalTooLarge
+            ChainError::BlockProposalTooLarge(size)
         );
         Ok(())
     }

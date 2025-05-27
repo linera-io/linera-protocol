@@ -2502,7 +2502,7 @@ where
         result,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
-        )) if matches!(*chain_error, ChainError::BlockProposalTooLarge)
+        )) if matches!(*chain_error, ChainError::BlockProposalTooLarge(_))
     );
 
     assert_matches!(

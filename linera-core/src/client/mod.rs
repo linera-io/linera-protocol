@@ -292,6 +292,8 @@ impl<Env: Environment> Client<Env> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                // If the chain is missing then the error is a WorkerError
+                // and so a BlobsNotFound
                 // TODO(#2351): make sure the blobs are legitimate!
                 let blobs =
                     RemoteNode::download_blobs(&blob_ids, validators, self.blob_download_timeout)

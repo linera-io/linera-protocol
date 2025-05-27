@@ -689,7 +689,7 @@ where
         assert_matches!(
             env.worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(error))
-                if matches!(*error, ChainError::InvalidBlockTimestamp)
+                if matches!(*error, ChainError::InvalidBlockTimestamp { .. })
         );
     }
     Ok(())

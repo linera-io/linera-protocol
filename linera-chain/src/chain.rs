@@ -866,9 +866,13 @@ where
 
         self.ensure_is_active(local_time).await?;
 
+        let chain_timestamp = *self.execution_state.system.timestamp.get();
         ensure!(
-            *self.execution_state.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
+            chain_timestamp <= block.timestamp,
+            ChainError::InvalidBlockTimestamp {
+                parent: chain_timestamp,
+                new: block.timestamp
+            }
         );
         ensure!(
             !block.incoming_bundles.is_empty() || !block.operations.is_empty(),

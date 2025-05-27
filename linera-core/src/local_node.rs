@@ -63,7 +63,7 @@ pub enum LocalNodeError {
     #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
     CannotReadLocalBlob { chain_id: ChainId, blob_id: BlobId },
 
-    #[error("The local node doesn't have an active chain {0:?}")]
+    #[error("The local node doesn't have an active chain {0}")]
     InactiveChain(ChainId),
 
     #[error("The chain info response received from the local node is invalid")]

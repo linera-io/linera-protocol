@@ -281,6 +281,8 @@ pub enum ExecutionError {
     ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
     #[error("Failed to send service code to worker thread: {0:?}")]
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
+    #[error("The chain being queried is not active {0}")]
+    InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     #[error("Events not found: {0:?}")]
@@ -330,8 +332,6 @@ pub enum ExecutionError {
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<ApplicationId>),
-    #[error("Chain is not active yet.")]
-    InactiveChain,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
     #[error("process_streams was not called for all stream updates")]

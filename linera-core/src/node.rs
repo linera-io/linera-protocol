@@ -195,7 +195,7 @@ pub enum NodeError {
     WorkerError { error: String },
 
     // This error must be normalized during conversions.
-    #[error("The chain {0:?} is not active in validator")]
+    #[error("The chain {0} is not active in validator")]
     InactiveChain(ChainId),
 
     // This error must be normalized during conversions.
@@ -221,11 +221,6 @@ pub enum NodeError {
 
     #[error("Validator's response to block proposal failed to include a vote")]
     MissingVoteInValidatorResponse,
-
-    #[error(
-        "Failed to update validator because our local node doesn't have an active chain {0:?}"
-    )]
-    InactiveLocalChain(ChainId),
 
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
