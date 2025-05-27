@@ -10,10 +10,11 @@
 use std::{
     collections::{BTreeSet, HashMap},
     ops::Deref,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
+use crc32fast::Hasher;
 use dashmap::DashMap;
 use futures::{
     future::{join_all, try_join_all, BoxFuture},
@@ -93,8 +94,25 @@ const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
 /// correct.
 const MAX_BATCH_SIZE: usize = 5000;
 
+/// The number of buckets for each `BaseKey` type.
+/// There should be one entry here for each `BaseKey` discriminant.
+/// Number of buckets should always be a power of two.
+static NUM_BUCKETS: LazyLock<HashMap<u8, u16>> = LazyLock::new(|| {
+    HashMap::from([
+        (0, 1 << 0),  // ChainState
+        (1, 1 << 10), // Certificate
+        (2, 1 << 10), // ConfirmedBlock
+        (3, 1 << 10), // Blob
+        (4, 1 << 10), // BlobState
+        (5, 1 << 10), // Event
+        (6, 1 << 10), // BlockExporterState
+        (7, 1 << 0),  // NetworkDescription
+    ])
+});
+
 type OccurencesMap = HashMap<Vec<u8>, Vec<usize>>;
-type OccurencesMapByType = HashMap<u8, OccurencesMap>;
+type OccurencesMapByBucketId = HashMap<Vec<u8>, OccurencesMap>;
+type OccurencesMapByType = HashMap<u8, OccurencesMapByBucketId>;
 
 /// The client for ScyllaDB:
 /// * The session allows to pass queries
@@ -129,7 +147,7 @@ impl ScyllaDbClient {
             .collect::<Vec<_>>()
             .join(",");
         let query = format!(
-            "SELECT k,v FROM kv.{} WHERE root_key = ? AND type_id = ? AND k IN ({})",
+            "SELECT k,v FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k IN ({})",
             self.namespace, markers
         );
         let prepared_statement = self.session.prepare(query).await?;
@@ -149,7 +167,7 @@ impl ScyllaDbClient {
             .collect::<Vec<_>>()
             .join(",");
         let query = format!(
-            "SELECT k FROM kv.{} WHERE root_key = ? AND type_id = ? AND k IN ({})",
+            "SELECT k FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k IN ({})",
             self.namespace, markers
         );
         let prepared_statement = self.session.prepare(query).await?;
@@ -186,70 +204,70 @@ impl ScyllaDbClient {
         let namespace = namespace.to_string();
         let read_value = session
             .prepare(format!(
-                "SELECT v FROM kv.{} WHERE root_key = ? AND type_id = ? AND k = ?",
+                "SELECT v FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k = ?",
                 namespace
             ))
             .await?;
 
         let contains_key = session
             .prepare(format!(
-                "SELECT root_key FROM kv.{} WHERE root_key = ? AND type_id = ? AND k = ?",
+                "SELECT root_key FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k = ?",
                 namespace
             ))
             .await?;
 
         let write_batch_delete_prefix_unbounded = session
             .prepare(format!(
-                "DELETE FROM kv.{} WHERE root_key = ? AND type_id = ? AND k >= ?",
+                "DELETE FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k >= ?",
                 namespace
             ))
             .await?;
 
         let write_batch_delete_prefix_bounded = session
             .prepare(format!(
-                "DELETE FROM kv.{} WHERE root_key = ? AND type_id = ? AND k >= ? AND k < ?",
+                "DELETE FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k >= ? AND k < ?",
                 namespace
             ))
             .await?;
 
         let write_batch_deletion = session
             .prepare(format!(
-                "DELETE FROM kv.{} WHERE root_key = ? AND type_id = ? AND k = ?",
+                "DELETE FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k = ?",
                 namespace
             ))
             .await?;
 
         let write_batch_insertion = session
             .prepare(format!(
-                "INSERT INTO kv.{} (root_key, type_id, k, v) VALUES (?, ?, ?, ?)",
+                "INSERT INTO kv.{} (root_key, type_id, bucket_id, k, v) VALUES (?, ?, ?, ?, ?)",
                 namespace
             ))
             .await?;
 
         let find_keys_by_prefix_unbounded = session
             .prepare(format!(
-                "SELECT k FROM kv.{} WHERE root_key = ? AND type_id = ? AND k >= ?",
+                "SELECT k FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k >= ?",
                 namespace
             ))
             .await?;
 
         let find_keys_by_prefix_bounded = session
             .prepare(format!(
-                "SELECT k FROM kv.{} WHERE root_key = ? AND type_id = ? AND k >= ? AND k < ?",
+                "SELECT k FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k >= ? AND k < ?",
                 namespace
             ))
             .await?;
 
         let find_key_values_by_prefix_unbounded = session
             .prepare(format!(
-                "SELECT k,v FROM kv.{} WHERE root_key = ? AND type_id = ? AND k >= ?",
+                "SELECT k,v FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k >= ?",
                 namespace
             ))
             .await?;
 
         let find_key_values_by_prefix_bounded = session
             .prepare(format!(
-                "SELECT k,v FROM kv.{} WHERE root_key = ? AND type_id = ? AND k >= ? AND k < ?",
+                "SELECT k,v FROM kv.{} WHERE root_key = ? AND type_id = ? AND bucket_id = ? AND k >= ? AND k < ?",
                 namespace
             ))
             .await?;
@@ -272,6 +290,16 @@ impl ScyllaDbClient {
         })
     }
 
+    fn get_bucket_id(type_id: u8, key: &[u8]) -> Vec<u8> {
+        let mut hasher = Hasher::new();
+        hasher.update(key);
+        let hash = hasher.finalize() as u16;
+        let num_buckets = NUM_BUCKETS
+            .get(&type_id)
+            .expect("type_id is supposed to be in map");
+        (hash & (*num_buckets - 1)).to_le_bytes().to_vec()
+    }
+
     async fn read_value_internal(
         &self,
         root_key: &[u8],
@@ -280,7 +308,12 @@ impl ScyllaDbClient {
         Self::check_key_size(&key)?;
         let session = &self.session;
         // Read the value of a key
-        let values = (root_key.to_vec(), vec![key[0]], key);
+        let values = (
+            root_key.to_vec(),
+            vec![key[0]],
+            Self::get_bucket_id(key[0], &key),
+            key,
+        );
 
         let (result, _) = session
             .execute_single_page(&self.read_value, &values, PagingState::start())
@@ -300,7 +333,11 @@ impl ScyllaDbClient {
         for (i_key, key) in keys.into_iter().enumerate() {
             Self::check_key_size(&key)?;
             let type_id = key[0];
+            let bucket_id = Self::get_bucket_id(type_id, &key);
+
             map.entry(type_id)
+                .or_default()
+                .entry(bucket_id)
                 .or_default()
                 .entry(key)
                 .or_default()
@@ -318,18 +355,28 @@ impl ScyllaDbClient {
         let map = Self::get_occurences_map(keys)?;
         let statements = map
             .iter()
-            .map(|(type_id, map)| async {
-                let statement = self.get_multi_key_values_statement(map.len()).await?;
-                let mut inputs = vec![root_key.to_vec(), vec![*type_id]];
-                inputs.extend(map.keys().cloned());
-                Ok::<_, ScyllaDbStoreInternalError>((*type_id, statement, inputs))
+            .flat_map(|(type_id, buckets_map)| {
+                buckets_map
+                    .iter()
+                    .map(|(bucket_id, keys_map)| async {
+                        let statement = self.get_multi_key_values_statement(keys_map.len()).await?;
+                        let mut inputs = vec![root_key.to_vec(), vec![*type_id], bucket_id.clone()];
+                        inputs.extend(keys_map.keys().cloned());
+                        Ok::<_, ScyllaDbStoreInternalError>((
+                            *type_id,
+                            bucket_id.clone(),
+                            statement,
+                            inputs,
+                        ))
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
         let statements = try_join_all(statements).await?;
 
         let mut futures = Vec::new();
         let map_ref = &map;
-        for (type_id, statement, inputs) in statements {
+        for (type_id, bucket_id, statement, inputs) in statements {
             futures.push(async move {
                 let mut rows = self
                     .session
@@ -342,6 +389,8 @@ impl ScyllaDbClient {
                     for i_key in map_ref
                         .get(&type_id)
                         .expect("type_id is supposed to be in map")
+                        .get(&bucket_id)
+                        .expect("bucket_id is supposed to be in map")
                         .get(&key)
                         .expect("key is supposed to be in map")
                     {
@@ -370,18 +419,28 @@ impl ScyllaDbClient {
         let map = Self::get_occurences_map(keys)?;
         let statements = map
             .iter()
-            .map(|(type_id, map)| async {
-                let statement = self.get_multi_keys_statement(map.len()).await?;
-                let mut inputs = vec![root_key.to_vec(), vec![*type_id]];
-                inputs.extend(map.keys().cloned());
-                Ok::<_, ScyllaDbStoreInternalError>((*type_id, statement, inputs))
+            .flat_map(|(type_id, buckets_map)| {
+                buckets_map
+                    .iter()
+                    .map(|(bucket_id, keys_map)| async {
+                        let statement = self.get_multi_keys_statement(keys_map.len()).await?;
+                        let mut inputs = vec![root_key.to_vec(), vec![*type_id], bucket_id.clone()];
+                        inputs.extend(keys_map.keys().cloned());
+                        Ok::<_, ScyllaDbStoreInternalError>((
+                            *type_id,
+                            bucket_id.clone(),
+                            statement,
+                            inputs,
+                        ))
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
         let statements = try_join_all(statements).await?;
 
         let mut futures = Vec::new();
         let map_ref = &map;
-        for (type_id, statement, inputs) in statements {
+        for (type_id, bucket_id, statement, inputs) in statements {
             futures.push(async move {
                 let mut rows = self
                     .session
@@ -394,6 +453,8 @@ impl ScyllaDbClient {
                     for i_key in map_ref
                         .get(&type_id)
                         .expect("type_id is supposed to be in map")
+                        .get(&bucket_id)
+                        .expect("bucket_id is supposed to be in map")
                         .get(&key)
                         .expect("key is supposed to be in map")
                     {
@@ -421,7 +482,12 @@ impl ScyllaDbClient {
         Self::check_key_size(&key)?;
         let session = &self.session;
         // Read the value of a key
-        let values = (root_key.to_vec(), vec![key[0]], key);
+        let values = (
+            root_key.to_vec(),
+            vec![key[0]],
+            Self::get_bucket_id(key[0], &key),
+            key,
+        );
 
         let (result, _) = session
             .execute_single_page(&self.contains_key, &values, PagingState::start())
@@ -446,7 +512,12 @@ impl ScyllaDbClient {
             match get_upper_bound_option(&key_prefix) {
                 None => {
                     let prepared_statement = &self.write_batch_delete_prefix_unbounded;
-                    let values = (root_key.clone(), vec![key_prefix[0]], key_prefix);
+                    let values = (
+                        root_key.clone(),
+                        vec![key_prefix[0]],
+                        Self::get_bucket_id(key_prefix[0], &key_prefix),
+                        key_prefix,
+                    );
                     futures.push(Box::pin(async move {
                         session
                             .execute_single_page(prepared_statement, values, PagingState::start())
@@ -457,7 +528,13 @@ impl ScyllaDbClient {
                 }
                 Some(upper) => {
                     let prepared_statement = &self.write_batch_delete_prefix_bounded;
-                    let values = (root_key.clone(), vec![key_prefix[0]], key_prefix, upper);
+                    let values = (
+                        root_key.clone(),
+                        vec![key_prefix[0]],
+                        Self::get_bucket_id(key_prefix[0], &key_prefix),
+                        key_prefix,
+                        upper,
+                    );
                     futures.push(Box::pin(async move {
                         session
                             .execute_single_page(prepared_statement, values, PagingState::start())
@@ -474,7 +551,12 @@ impl ScyllaDbClient {
         for key in batch.simple_unordered_batch.deletions {
             Self::check_key_size(&key)?;
             let prepared_statement = &self.write_batch_deletion;
-            let values = (root_key.clone(), vec![key[0]], key);
+            let values = (
+                root_key.clone(),
+                vec![key[0]],
+                Self::get_bucket_id(key[0], &key),
+                key,
+            );
             futures.push(Box::pin(async move {
                 session
                     .execute_single_page(prepared_statement, values, PagingState::start())
@@ -488,7 +570,13 @@ impl ScyllaDbClient {
             Self::check_key_size(&key)?;
             Self::check_value_size(&value)?;
             let prepared_statement = &self.write_batch_insertion;
-            let values = (root_key.clone(), vec![key[0]], key, value);
+            let values = (
+                root_key.clone(),
+                vec![key[0]],
+                Self::get_bucket_id(key[0], &key),
+                key,
+                value,
+            );
             futures.push(Box::pin(async move {
                 session
                     .execute_single_page(prepared_statement, values, PagingState::start())
@@ -515,7 +603,12 @@ impl ScyllaDbClient {
         let query_bounded = &self.find_keys_by_prefix_bounded;
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (root_key.to_vec(), vec![key_prefix[0]], key_prefix.clone());
+                let values = (
+                    root_key.to_vec(),
+                    vec![key_prefix[0]],
+                    Self::get_bucket_id(key_prefix[0], &key_prefix),
+                    key_prefix.clone(),
+                );
                 session
                     .execute_iter(query_unbounded.clone(), values)
                     .await?
@@ -524,6 +617,7 @@ impl ScyllaDbClient {
                 let values = (
                     root_key.to_vec(),
                     vec![key_prefix[0]],
+                    Self::get_bucket_id(key_prefix[0], &key_prefix),
                     key_prefix.clone(),
                     upper_bound,
                 );
@@ -553,7 +647,12 @@ impl ScyllaDbClient {
         let query_bounded = &self.find_key_values_by_prefix_bounded;
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (root_key.to_vec(), vec![key_prefix[0]], key_prefix.clone());
+                let values = (
+                    root_key.to_vec(),
+                    vec![key_prefix[0]],
+                    Self::get_bucket_id(key_prefix[0], &key_prefix),
+                    key_prefix.clone(),
+                );
                 session
                     .execute_iter(query_unbounded.clone(), values)
                     .await?
@@ -562,6 +661,7 @@ impl ScyllaDbClient {
                 let values = (
                     root_key.to_vec(),
                     vec![key_prefix[0]],
+                    Self::get_bucket_id(key_prefix[0], &key_prefix),
                     key_prefix.clone(),
                     upper_bound,
                 );
@@ -982,9 +1082,10 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
                 "CREATE TABLE kv.{} (\
                 root_key blob, \
                 type_id blob, \
+                bucket_id blob, \
                 k blob, \
                 v blob, \
-                PRIMARY KEY ((root_key, type_id), k) \
+                PRIMARY KEY ((root_key, type_id, bucket_id), k) \
             ) \
             WITH compaction = {{ \
                 'class'            : 'SizeTieredCompactionStrategy', \

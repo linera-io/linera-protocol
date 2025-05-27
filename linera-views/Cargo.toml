@@ -26,7 +26,7 @@ indexeddb = ["indexed_db_futures", "wasm-bindgen"]
 web-default = ["web", "indexeddb"]
 
 dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
-scylladb = ["scylla"]
+scylladb = ["scylla", "crc32fast"]
 
 [dependencies]
 anyhow.workspace = true
@@ -37,6 +37,7 @@ aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-smithy-types = { workspace = true, optional = true }
 bcs.workspace = true
 convert_case.workspace = true
+crc32fast = { workspace = true, optional = true }
 dashmap.workspace = true
 derive_more = { workspace = true, features = ["from"] }
 futures.workspace = true
