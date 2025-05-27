@@ -318,7 +318,8 @@ where
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
             return Ok(blob);
         }
-        Ok(self.storage.read_blob(blob_id).await?)
+        let blob = self.storage.read_blob(blob_id).await?;
+        blob.ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
     /// Adds the blob to pending blocks or validated block certificates that are missing it.

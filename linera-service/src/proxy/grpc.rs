@@ -346,8 +346,6 @@ where
                 Status::out_of_range(err.to_string())
             }
             ViewError::NotFound(_)
-            | ViewError::BlobsNotFound(_)
-            | ViewError::EventsNotFound(_)
             | ViewError::CannotAcquireCollectionEntry
             | ViewError::MissingEntries => Status::not_found(err.to_string()),
         };
@@ -506,6 +504,7 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Self::error_to_status)?;
+        let blob = blob.ok_or(Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
 

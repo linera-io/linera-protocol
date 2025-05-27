@@ -87,7 +87,7 @@ pub trait Storage: Sized {
     async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, ViewError>;
 
     /// Reads the blob with the given blob ID.
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
 
     /// Reads the blobs with the given blob IDs.
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
@@ -160,7 +160,7 @@ pub trait Storage: Sized {
     ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
 
     /// Reads the event with the given ID.
-    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
+    async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
@@ -221,7 +221,9 @@ pub trait Storage: Sized {
         application_description: &ApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
-        let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
+        let contract_blob = self.read_blob(contract_bytecode_blob_id).await?.ok_or(
+            ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
+        )?;
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
@@ -278,7 +280,9 @@ pub trait Storage: Sized {
         application_description: &ApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
-        let service_blob = self.read_blob(service_bytecode_blob_id).await?;
+        let service_blob = self.read_blob(service_bytecode_blob_id).await?.ok_or(
+            ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
+        )?;
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
         };
@@ -393,11 +397,11 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         self.storage.read_blob(blob_id).await
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         self.storage.read_event(event_id).await
     }
 

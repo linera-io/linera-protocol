@@ -473,15 +473,15 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<Blob, ChainClientError> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-        if let Ok(blob) = self
+        let blob = self
             .local_node
             .storage_client()
             .read_blob(chain_desc_id)
-            .await
-        {
+            .await?;
+        if let Some(blob) = blob {
             // We have the blob - return it.
             return Ok(blob);
-        }
+        };
         // Recover history from the current validators, according to the admin chain.
         // TODO(#2351): make sure that the blob is legitimately created!
         let nodes = self.validator_nodes().await?;
@@ -3300,11 +3300,12 @@ impl<Env: Environment> ChainClient<Env> {
             stream_id: StreamId::system(stream_name),
             index,
         };
-        match self.client.storage_client().read_event(event_id).await {
-            Ok(_) => Ok(true),
-            Err(ViewError::EventsNotFound(_)) => Ok(false),
-            Err(error) => Err(error.into()),
-        }
+        Ok(self
+            .client
+            .storage_client()
+            .read_event(event_id)
+            .await?
+            .is_some())
     }
 
     /// Returns the indices and events from the storage

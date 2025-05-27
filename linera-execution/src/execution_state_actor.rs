@@ -452,8 +452,9 @@ where
             }
 
             ReadEvent { event_id, callback } => {
-                let event_value = self.context().extra().get_event(event_id).await?;
-                callback.respond(event_value);
+                let event = self.context().extra().get_event(event_id.clone()).await?;
+                let event = event.ok_or(ExecutionError::EventsNotFound(vec![event_id]))?;
+                callback.respond(event);
             }
 
             SubscribeToEvents {

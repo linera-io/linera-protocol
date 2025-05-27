@@ -288,11 +288,8 @@ impl CrossChainMessageDelivery {
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError {
-                error: error.to_string(),
-            },
+        Self::ViewError {
+            error: error.to_string(),
         }
     }
 }
@@ -326,7 +323,6 @@ impl From<ChainError> for NodeError {
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
-            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             ChainError::ExecutionError(execution_error, context) => {
                 if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
                     Self::BlobsNotFound(blob_ids)

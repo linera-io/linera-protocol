@@ -334,7 +334,9 @@ where
                 Ok(Some(RpcMessage::UploadBlobResponse(Box::new(id))))
             }
             DownloadBlob(blob_id) => {
-                let content = self.storage.read_blob(*blob_id).await?.into_content();
+                let blob = self.storage.read_blob(*blob_id).await?;
+                let blob = blob.ok_or(anyhow!("Blob not found {}", blob_id))?;
+                let content = blob.into_content();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
             DownloadConfirmedBlock(hash) => Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(

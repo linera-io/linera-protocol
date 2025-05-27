@@ -605,13 +605,12 @@ where
         Ok(value)
     }
 
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = self.store.read_value_bytes(&blob_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?;
-        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
+        Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
     }
 
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
@@ -867,12 +866,11 @@ where
         Ok(certificates)
     }
 
-    async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+    async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
-        let maybe_value = self.store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
-        maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
+        Ok(self.store.read_value_bytes(&event_key).await?)
     }
 
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {

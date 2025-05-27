@@ -150,7 +150,7 @@ pub enum WorkerError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
 
     #[error(transparent)]
     ChainError(#[from] Box<ChainError>),
@@ -221,7 +221,6 @@ impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
-            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             ChainError::ExecutionError(execution_error, context) => {
                 if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
                     Self::BlobsNotFound(blob_ids)
@@ -233,15 +232,6 @@ impl From<ChainError> for WorkerError {
                 }
             }
             error => Self::ChainError(Box::new(error)),
-        }
-    }
-}
-
-impl From<ViewError> for WorkerError {
-    fn from(view_error: ViewError) -> Self {
-        match view_error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError(error),
         }
     }
 }

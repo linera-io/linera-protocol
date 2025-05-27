@@ -25,7 +25,6 @@ use linera_core::{
     Environment,
 };
 use linera_storage::{Clock as _, Storage as _};
-use linera_views::views::ViewError;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn, Instrument as _};
 
@@ -98,8 +97,8 @@ pub trait ClientContextExt: ClientContext {
         let blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
 
         let blob = match self.storage().read_blob(blob_id).await {
-            Ok(blob) => blob,
-            Err(ViewError::BlobsNotFound(blob_ids)) if blob_ids == [blob_id] => {
+            Ok(Some(blob)) => blob,
+            Ok(None) => {
                 // we're missing the blob describing the chain we're assigning - try to
                 // get it
                 self.client().ensure_has_chain_description(chain_id).await?
