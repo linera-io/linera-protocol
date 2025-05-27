@@ -778,8 +778,6 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        self.download_certificates(&nodes, block.header.chain_id, block.header.height)
-            .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
         if let Err(err) = self.process_loose_certificate(certificate.clone()).await {
