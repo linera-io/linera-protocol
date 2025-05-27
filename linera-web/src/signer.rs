@@ -55,11 +55,13 @@ pub mod in_memory {
 pub mod embedded {
     use std::fmt::Display;
 
+    use js_sys::Promise as JsPromise;
     use linera_base::{
         crypto::{AccountPublicKey, AccountSignature, CryptoHash, Signer},
         identifiers::AccountOwner,
     };
     use wasm_bindgen::prelude::*;
+    use wasm_bindgen_futures::JsFuture;
     use web_sys::wasm_bindgen;
 
     #[repr(u8)]
@@ -68,6 +70,7 @@ pub mod embedded {
     pub enum EmbeddedSignerError {
         MissingKey = 0,
         SigningError = 1,
+        UknownError = 9,
     }
 
     impl Display for EmbeddedSignerError {
@@ -75,13 +78,26 @@ pub mod embedded {
             match self {
                 EmbeddedSignerError::MissingKey => write!(f, "No key found for the given owner"),
                 EmbeddedSignerError::SigningError => write!(f, "Error signing the value"),
+                EmbeddedSignerError::UknownError => write!(f, "An unknown error occurred"),
+            }
+        }
+    }
+
+    impl From<JsValue> for EmbeddedSignerError {
+        fn from(value: JsValue) -> Self {
+            if let Some(fnum) = value.as_f64() {
+                match fnum as u8 {
+                    0 => EmbeddedSignerError::MissingKey,
+                    1 => EmbeddedSignerError::SigningError,
+                    _ => EmbeddedSignerError::UknownError,
+                }
+            } else {
+                EmbeddedSignerError::UknownError
             }
         }
     }
 
     impl std::error::Error for EmbeddedSignerError {}
-
-    unsafe impl Send for EmbeddedSignerError {}
 
     #[wasm_bindgen]
     pub struct EmbeddedSigner {
@@ -113,10 +129,15 @@ pub mod embedded {
         async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error> {
             let context = JsValue::null();
             let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-            let result = self
-                .contains_key_handler
-                .call1(&context, &js_owner)
-                .unwrap();
+            let result = JsFuture::from(JsPromise::resolve(
+                &self
+                    .contains_key_handler
+                    .call1(&context, &js_owner)
+                    .map_err(EmbeddedSignerError::from)?,
+            ))
+            .await
+            .map_err(EmbeddedSignerError::from)?;
+
             Ok(serde_wasm_bindgen::from_value(result).unwrap())
         }
 
