@@ -351,6 +351,22 @@ impl<Env: Environment> Client<Env> {
         mut start: BlockHeight,
         stop: BlockHeight,
     ) -> Result<(), ChainClientError> {
+        // First load any blocks from local storage, if available.
+        let mut hashes = Vec::new();
+        {
+            let chain = self.local_node.chain_state_view(chain_id).await?;
+            while start < stop {
+                let Some(hash) = chain.loose_blocks.get(&start).await? else {
+                    break;
+                };
+                hashes.push(hash);
+                start = start.try_add_one()?;
+            }
+        }
+        for certificate in self.storage_client().read_certificates(hashes).await? {
+            self.handle_certificate(Box::new(certificate)).await?;
+        }
+        // Now download the rest in batches from the remote node.
         while start < stop {
             // TODO(#2045): Analyze network errors instead of guessing the batch size.
             let limit = u64::from(stop)
