@@ -10,8 +10,6 @@ pub mod cli;
 pub mod cli_wrappers;
 pub mod node_service;
 pub mod project;
-#[cfg(with_metrics)]
-pub mod prometheus_server;
 pub mod storage;
 pub mod util;
 pub mod wallet;

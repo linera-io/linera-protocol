@@ -49,6 +49,7 @@ COPY linera-execution linera-execution
 COPY linera-explorer linera-explorer
 COPY linera-faucet linera-faucet
 COPY linera-indexer linera-indexer
+COPY linera-metrics linera-metrics
 COPY linera-rpc linera-rpc
 COPY linera-sdk linera-sdk
 COPY linera-sdk-derive linera-sdk-derive
