@@ -88,7 +88,10 @@ impl chain_listener::ClientContext for ClientContext {
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
-        self.wallet.update_from_info(client, &info);
+        let client_owner = client.preferred_owner();
+        let pending_proposal = client.pending_proposal().clone();
+        self.wallet
+            .update_from_info(pending_proposal, client_owner, &info);
         Ok(())
     }
 }
