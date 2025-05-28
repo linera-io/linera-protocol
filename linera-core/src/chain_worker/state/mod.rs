@@ -263,13 +263,13 @@ where
 
     /// Processes a loose block without executing it.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub(super) async fn process_loose_certificate(
+    pub(super) async fn process_unexecuted_certificate(
         &mut self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<NetworkActions, WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_loose_certificate(certificate)
+            .process_unexecuted_certificate(certificate)
             .await
     }
 
@@ -491,12 +491,16 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         for height in heights.range(next_block_height..) {
-            hashes.push(self.chain.loose_blocks.get(height).await?.ok_or_else(|| {
-                WorkerError::LooseBlocksEntryNotFound {
-                    height: *height,
-                    chain_id: self.chain_id(),
-                }
-            })?);
+            hashes.push(
+                self.chain
+                    .unexecuted_blocks
+                    .get(height)
+                    .await?
+                    .ok_or_else(|| WorkerError::UnexecutedBlocksEntryNotFound {
+                        height: *height,
+                        chain_id: self.chain_id(),
+                    })?,
+            );
         }
         let certificates = self.storage.read_certificates(hashes).await?;
         let certificates = heights

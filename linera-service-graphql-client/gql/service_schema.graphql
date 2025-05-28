@@ -361,9 +361,9 @@ type ChainStateExtendedView {
 	"""
 	outboxCounters: JSONObject!
 	"""
-	Blocks that have been verified but not processed yet, and that may not be contiguous.
+	Blocks that have been verified but not executed yet, and that may not be contiguous.
 	"""
-	looseBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
+	unexecutedBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
 }
 
 """

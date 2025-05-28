@@ -279,8 +279,8 @@ where
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
 
-    /// Blocks that have been verified but not processed yet, and that may not be contiguous.
-    pub loose_blocks: MapView<C, BlockHeight, CryptoHash>,
+    /// Blocks that have been verified but not executed yet, and that may not be contiguous.
+    pub unexecuted_blocks: MapView<C, BlockHeight, CryptoHash>,
 }
 
 /// Block-chaining state.
@@ -943,19 +943,22 @@ where
             &block.body.messages,
         )?;
         self.confirmed_log.push(hash);
-        self.loose_blocks.remove(&block.header.height)?;
+        self.unexecuted_blocks.remove(&block.header.height)?;
         Ok(())
     }
 
     /// Applies a loose block without executing it. This only updates the outboxes.
-    pub async fn apply_loose_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
+    pub async fn apply_unexecuted_block(
+        &mut self,
+        block: &ConfirmedBlock,
+    ) -> Result<(), ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
         if block.header.height < self.tip_state.get().next_block_height {
             return Ok(());
         }
         self.process_outgoing_messages(block).await?;
-        self.loose_blocks.insert(&block.header.height, hash)?;
+        self.unexecuted_blocks.insert(&block.header.height, hash)?;
         Ok(())
     }
 
@@ -1099,11 +1102,11 @@ where
         };
         for height in start.max(next_height).0..=end.0 {
             hashes.push(
-                self.loose_blocks
+                self.unexecuted_blocks
                     .get(&BlockHeight(height))
                     .await?
                     .ok_or_else(|| {
-                        ChainError::InternalError("missing entry in loose_blocks".into())
+                        ChainError::InternalError("missing entry in unexecuted_blocks".into())
                     })?,
             );
         }
@@ -1155,8 +1158,8 @@ where
                         })?)
                     }
                     Some(height) => {
-                        Some(self.loose_blocks.get(&height).await?.ok_or_else(|| {
-                            ChainError::InternalError("missing entry in loose_blocks".into())
+                        Some(self.unexecuted_blocks.get(&height).await?.ok_or_else(|| {
+                            ChainError::InternalError("missing entry in unexecuted_blocks".into())
                         })?)
                     }
                     None => None,

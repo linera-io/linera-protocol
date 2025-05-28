@@ -416,7 +416,7 @@ where
     }
 
     /// Processes a loose block without executing it.
-    pub(super) async fn process_loose_certificate(
+    pub(super) async fn process_unexecuted_certificate(
         &mut self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<NetworkActions, WorkerError> {
@@ -455,7 +455,7 @@ where
         // Update the outboxes.
         self.state
             .chain
-            .apply_loose_block(certificate.value())
+            .apply_unexecuted_block(certificate.value())
             .await?;
         // Persist chain.
         self.save().await?;

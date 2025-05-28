@@ -122,7 +122,7 @@ where
     },
 
     /// Apply a loose block without executing it.
-    ProcessLooseCertificate {
+    ProcessUnexecutedCertificate {
         certificate: ConfirmedBlockCertificate,
         #[debug(skip)]
         callback: oneshot::Sender<Result<NetworkActions, WorkerError>>,
@@ -399,11 +399,15 @@ where
                         .await,
                 )
                 .is_ok(),
-            ChainWorkerRequest::ProcessLooseCertificate {
+            ChainWorkerRequest::ProcessUnexecutedCertificate {
                 certificate,
                 callback,
             } => callback
-                .send(self.worker.process_loose_certificate(certificate).await)
+                .send(
+                    self.worker
+                        .process_unexecuted_certificate(certificate)
+                        .await,
+                )
                 .is_ok(),
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
@@ -493,7 +497,7 @@ where
             ChainWorkerRequest::ProcessConfirmedBlock { callback, .. } => {
                 callback.send(Err(error)).is_ok()
             }
-            ChainWorkerRequest::ProcessLooseCertificate { callback, .. } => {
+            ChainWorkerRequest::ProcessUnexecutedCertificate { callback, .. } => {
                 callback.send(Err(error)).is_ok()
             }
             ChainWorkerRequest::ProcessCrossChainUpdate { callback, .. } => {

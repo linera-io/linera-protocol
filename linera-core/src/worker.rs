@@ -208,8 +208,8 @@ pub enum WorkerError {
         height: BlockHeight,
         chain_id: ChainId,
     },
-    #[error("loose_blocks entry at height {height} for chain {chain_id:8} not found")]
-    LooseBlocksEntryNotFound {
+    #[error("unexecuted_blocks entry at height {height} for chain {chain_id:8} not found")]
+    UnexecutedBlocksEntryNotFound {
         height: BlockHeight,
         chain_id: ChainId,
     },
@@ -898,7 +898,7 @@ where
         chain_id = format!("{:.8}", certificate.block().header.chain_id),
         height = %certificate.block().header.height,
     ))]
-    pub async fn fully_process_loose_certificate_with_notifications(
+    pub async fn fully_process_unexecuted_certificate_with_notifications(
         &self,
         certificate: ConfirmedBlockCertificate,
         notifier: &impl Notifier,
@@ -910,7 +910,7 @@ where
         linera_base::task::spawn(async move {
             let actions = this
                 .query_chain_worker(certificate.block().header.chain_id, move |callback| {
-                    ChainWorkerRequest::ProcessLooseCertificate {
+                    ChainWorkerRequest::ProcessUnexecutedCertificate {
                         certificate,
                         callback,
                     }
