@@ -87,7 +87,9 @@ impl chain_listener::ClientContext for ClientContext {
         &mut self,
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
-        Box::pin(self.wallet.update_from_state(client)).await
+        let info = client.chain_info().await?;
+        self.wallet.update_from_info(client, &info);
+        Ok(())
     }
 }
 

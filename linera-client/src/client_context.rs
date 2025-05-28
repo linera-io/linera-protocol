@@ -313,7 +313,8 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         &mut self,
         client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
-        self.wallet.as_mut().update_from_state(client).await?;
+        let info = client.chain_info().await?;
+        self.wallet.as_mut().update_from_info(client, &info);
         self.save_wallet().await
     }
 
@@ -774,7 +775,8 @@ where
 
             info!("Updating wallet from chain clients...");
             for chain_client in chain_clients.values() {
-                self.wallet.as_mut().update_from_state(chain_client).await?;
+                let info = chain_client.chain_info().await?;
+                self.wallet.as_mut().update_from_info(chain_client, &info);
             }
             self.save_wallet().await?;
         }

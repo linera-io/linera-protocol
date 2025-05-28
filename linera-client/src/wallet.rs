@@ -11,6 +11,7 @@ use linera_base::{
 };
 use linera_core::{
     client::{ChainClient, PendingProposal},
+    data_types::ChainInfo,
     Environment,
 };
 use serde::{Deserialize, Serialize};
@@ -132,12 +133,12 @@ impl Wallet {
         Ok(())
     }
 
-    pub async fn update_from_state<Env: Environment>(
+    pub fn update_from_info<Env: Environment>(
         &mut self,
         chain_client: &ChainClient<Env>,
-    ) -> Result<(), Error> {
+        info: &ChainInfo,
+    ) {
         let client_owner = chain_client.preferred_owner();
-        let info = chain_client.chain_info().await?;
         self.insert(UserChain {
             chain_id: chain_client.chain_id(),
             owner: client_owner,
@@ -146,7 +147,6 @@ impl Wallet {
             timestamp: info.timestamp,
             pending_proposal: chain_client.state().pending_proposal().clone(),
         });
-        Ok(())
     }
 
     pub fn genesis_admin_chain(&self) -> ChainId {
