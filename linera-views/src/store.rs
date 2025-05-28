@@ -13,7 +13,7 @@ use crate::{
     batch::Batch,
     common::from_bytes_option,
     lru_caching::{StorageCacheConfig, DEFAULT_STORAGE_CACHE_CONFIG},
-    views::ViewError,
+    ViewError,
 };
 
 /// The common initialization parameters for the `KeyValueStore`
@@ -63,7 +63,7 @@ impl Default for CommonStoreConfig {
 }
 
 /// The error type for the key-value stores.
-pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'static {
+pub trait KeyValueStoreError: std::error::Error + From<bcs::Error> + Debug + Send + Sync + 'static {
     /// The name of the backend.
     const BACKEND: &'static str;
 }
@@ -71,8 +71,8 @@ pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'st
 impl<E: KeyValueStoreError> From<E> for ViewError {
     fn from(error: E) -> Self {
         Self::StoreError {
-            backend: E::BACKEND.to_string(),
-            error: error.to_string(),
+            backend: E::BACKEND,
+            error: Box::new(error),
         }
     }
 }

@@ -8,7 +8,8 @@ use linera_views::{
     bucket_queue_view::BucketQueueView,
     context::Context,
     register_view::RegisterView,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, View},
+    ViewError,
 };
 
 #[cfg(test)]

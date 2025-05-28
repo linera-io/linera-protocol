@@ -73,6 +73,9 @@ pub mod context;
 /// Common definitions used for views and backends.
 pub mod common;
 
+mod error;
+pub use error::ViewError;
+
 /// Elementary data-structures implementing the [`views::View`] trait.
 pub mod views;
 

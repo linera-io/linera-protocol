@@ -37,7 +37,8 @@ use linera_execution::{
 use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{
     context::Context,
-    views::{RootView, ViewError},
+    views::RootView,
+    ViewError,
 };
 
 #[cfg(with_metrics)]

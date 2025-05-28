@@ -161,21 +161,21 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 self.#first_name_quote.context()
             }
 
-            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
                 use linera_views::context::Context as _;
                 let mut keys = Vec::new();
                 #(#pre_load_keys_quotes)*
                 Ok(keys)
             }
 
-            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
+            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::ViewError> {
                 use linera_views::context::Context as _;
                 let mut pos = 0;
                 #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
             }
 
-            async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
+            async fn load(context: #context) -> Result<Self, linera_views::ViewError> {
                 use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
                 #load_metrics
                 if Self::NUM_INIT_KEYS == 0 {
@@ -197,7 +197,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 false
             }
 
-            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::views::ViewError> {
+            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
                 use linera_views::views::View;
                 #(#flush_quotes)*
                 Ok( #(#test_flush_quotes)&&* )
@@ -247,7 +247,7 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
             #(#context_constraints,)*
             Self: Send + Sync,
         {
-            async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+            async fn save(&mut self) -> Result<(), linera_views::ViewError> {
                 use linera_views::{context::Context, batch::Batch, store::WritableKeyValueStore as _, views::View};
                 #increment_counter
                 let mut batch = Batch::new();
@@ -301,7 +301,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         {
             type Hasher = linera_views::sha3::Sha3_256;
 
-            async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
+            async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::ViewError> {
                 use linera_views::views::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
@@ -309,7 +309,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
                 Ok(hasher.finalize())
             }
 
-            async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
+            async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::ViewError> {
                 use linera_views::views::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
@@ -340,7 +340,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
             #(#hash_constraints,)*
             Self: Send + Sync,
         {
-            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::{
                     batch::Batch,
@@ -356,7 +356,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
                 Ok(CryptoHash::new(&#hash_type(hash)))
             }
 
-            async fn crypto_hash_mut(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+            async fn crypto_hash_mut(&mut self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::{
                     batch::Batch,
@@ -403,7 +403,7 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
             #(#clone_constraints,)*
             Self: Send + Sync,
         {
-            fn clone_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
+            fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
                 Ok(Self {
                     #(#clone_fields,)*
                 })

@@ -15,7 +15,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum IndexerError {
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(#[from] linera_views::ViewError),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
     #[error(transparent)]

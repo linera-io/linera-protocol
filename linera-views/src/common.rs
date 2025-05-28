@@ -13,7 +13,7 @@ use std::{
 
 use serde::de::DeserializeOwned;
 
-use crate::views::ViewError;
+use crate::ViewError;
 
 #[doc(hidden)]
 pub type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;

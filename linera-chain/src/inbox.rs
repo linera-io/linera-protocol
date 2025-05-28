@@ -13,7 +13,8 @@ use linera_views::{
     context::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, View},
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
