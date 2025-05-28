@@ -826,7 +826,7 @@ impl<Env: Environment> Client<Env> {
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
-                    warn!("Failed to process loosed certificate value");
+                    warn!("Failed to process loose certificate value");
                     return Err(err.into());
                 }
             }
