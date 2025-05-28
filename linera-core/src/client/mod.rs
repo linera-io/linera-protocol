@@ -807,7 +807,7 @@ impl<Env: Environment> Client<Env> {
         let remote_certificates = remote_node
             .download_certificates(certificate_hashes)
             .await?;
-        let mut certificates = BTreeMap::new();
+        let mut certificates_by_height_by_chain = BTreeMap::new();
 
         // Check the signatures and keep only the ones that are valid.
         for confirmed_block_certificate in remote_certificates {
@@ -832,7 +832,7 @@ impl<Env: Environment> Client<Env> {
                     warn!("Skipping received certificate from past epoch {epoch:?}");
                 }
                 CheckCertificateResult::New => {
-                    certificates
+                    certificates_by_height_by_chain
                         .entry(sender_chain_id)
                         .or_insert_with(BTreeMap::new)
                         .insert(height, confirmed_block_certificate.clone());
@@ -842,7 +842,7 @@ impl<Env: Environment> Client<Env> {
 
         // Increase the tracker up to the first position we haven't downloaded.
         for entry in remote_log {
-            if certificates
+            if certificates_by_height_by_chain
                 .get(&entry.chain_id)
                 .is_some_and(|certs| certs.contains_key(&entry.height))
             {
@@ -852,7 +852,7 @@ impl<Env: Environment> Client<Env> {
             }
         }
 
-        for (sender_chain_id, certs) in &mut certificates {
+        for (sender_chain_id, certs) in &mut certificates_by_height_by_chain {
             if !certs
                 .values()
                 .last()
@@ -869,7 +869,7 @@ impl<Env: Environment> Client<Env> {
         Ok(ReceivedCertificatesFromValidator {
             public_key: remote_node.public_key,
             tracker,
-            certificates: certificates
+            certificates: certificates_by_height_by_chain
                 .into_values()
                 .flat_map(BTreeMap::into_values)
                 .collect(),
