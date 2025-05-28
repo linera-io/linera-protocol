@@ -53,7 +53,7 @@ async fn get_storage() -> Result<WebStorage, <linera_views::memory::MemoryStore 
 }
 
 /// A wallet that stores the user's chains and keys in memory.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "Wallet")]
 pub struct InMemoryWallet(persistent::Memory<Wallet>);
 
 type ClientContext =
