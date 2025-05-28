@@ -213,7 +213,6 @@ pub struct KeyValueStoreView<C> {
 impl<C> View<C> for KeyValueStoreView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     const NUM_INIT_KEYS: usize = 2 + ByteMapView::<C, u32>::NUM_INIT_KEYS;
 
@@ -351,7 +350,6 @@ where
 impl<C> ClonableView<C> for KeyValueStoreView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(KeyValueStoreView {
@@ -370,7 +368,6 @@ where
 impl<C> KeyValueStoreView<C>
 where
     C: Send + Context + Sync,
-    ViewError: From<C::Error>,
 {
     fn max_key_size(&self) -> usize {
         let prefix_len = self.context.base_key().bytes.len();
@@ -1165,7 +1162,6 @@ where
 impl<C> HashableView<C> for KeyValueStoreView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -1230,7 +1226,6 @@ impl KeyValueStoreError for ViewContainerError {
 impl<C> ReadableKeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
-    ViewError: From<C::Error>,
 {
     const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
@@ -1284,7 +1279,6 @@ where
 impl<C> WritableKeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
-    ViewError: From<C::Error>,
 {
     const MAX_VALUE_SIZE: usize = <C::Store as WritableKeyValueStore>::MAX_VALUE_SIZE;
 
@@ -1310,7 +1304,6 @@ where
 impl<C> ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
-    ViewError: From<C::Error>,
 {
     /// Creates a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {

@@ -85,7 +85,6 @@ enum KeyTag {
 impl<C, W> View<C> for ByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = 0;
@@ -164,7 +163,6 @@ where
 impl<C, W> ClonableView<C> for ByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: ClonableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -192,7 +190,6 @@ where
 impl<C, W> ByteCollectionView<C, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     W: View<C>,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
@@ -470,7 +467,6 @@ where
 impl<C, W> ByteCollectionView<C, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     W: View<C> + Sync,
 {
     /// Applies a function f on each index (aka key). Keys are visited in the
@@ -637,7 +633,6 @@ where
 impl<C, W> HashableView<C> for ByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -718,7 +713,6 @@ pub struct CollectionView<C, I, W> {
 impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
@@ -764,7 +758,6 @@ where
 impl<C, I, W> ClonableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
     W: ClonableView<C> + Send + Sync,
 {
@@ -779,7 +772,6 @@ where
 impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: Serialize,
     W: View<C>,
 {
@@ -936,7 +928,6 @@ where
 impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
@@ -990,7 +981,6 @@ where
 impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: DeserializeOwned,
     W: View<C> + Sync,
 {
@@ -1071,7 +1061,6 @@ where
 impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
     W: HashableView<C> + Send + Sync + 'static,
 {
@@ -1096,7 +1085,6 @@ pub struct CustomCollectionView<C, I, W> {
 impl<C, I, W> View<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync,
     W: View<C> + Send + Sync,
 {
@@ -1142,7 +1130,6 @@ where
 impl<C, I, W> ClonableView<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync,
     W: ClonableView<C> + Send + Sync,
 {
@@ -1157,7 +1144,6 @@ where
 impl<C, I, W> CustomCollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: CustomSerialize,
     W: View<C>,
 {
@@ -1314,7 +1300,6 @@ where
 impl<C, I, W> CustomCollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: Send + CustomSerialize,
     W: View<C> + Sync,
 {
@@ -1367,7 +1352,6 @@ where
 impl<C, I, W> CustomCollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: CustomSerialize,
     W: View<C> + Sync,
 {
@@ -1450,7 +1434,6 @@ where
 impl<C, I, W> HashableView<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Clone + Send + Sync + CustomSerialize,
     W: HashableView<C> + Send + Sync + 'static,
 {

@@ -14,7 +14,7 @@ use linera_views::{
     random::make_deterministic_rng,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::RegisterView,
-    views::{CryptoHashRootView, CryptoHashView, RootView, View, ViewError},
+    views::{CryptoHashRootView, CryptoHashView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, RngCore};
 
@@ -26,7 +26,6 @@ struct CollectionStateView<C> {
 impl<C> CollectionStateView<C>
 where
     C: Send + Context + Sync,
-    ViewError: From<C::Error>,
 {
     async fn key_values(&self) -> BTreeMap<u8, u32> {
         let mut map = BTreeMap::new();
@@ -609,7 +608,6 @@ struct ReentrantCollectionStateView<C> {
 impl<C> ReentrantCollectionStateView<C>
 where
     C: Send + Context + Sync,
-    ViewError: From<C::Error>,
 {
     async fn key_values(&self) -> Result<BTreeMap<u8, u32>> {
         let mut map = BTreeMap::new();

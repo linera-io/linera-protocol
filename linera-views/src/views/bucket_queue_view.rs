@@ -144,7 +144,6 @@ pub struct BucketQueueView<C, T, const N: usize> {
 impl<C, T, const N: usize> View<C> for BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = 2;
@@ -296,7 +295,6 @@ where
 impl<C, T, const N: usize> ClonableView<C> for BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -314,7 +312,6 @@ where
 impl<C, T, const N: usize> BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     /// Gets the key corresponding to the index
     fn get_index_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
@@ -375,7 +372,6 @@ where
 impl<C, T, const N: usize> BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     /// Gets a reference on the front value if any.
@@ -702,7 +698,6 @@ where
 impl<C, T, const N: usize> HashableView<C> for BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;

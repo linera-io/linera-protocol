@@ -24,7 +24,8 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
-    views::{View, ViewError},
+    views::View,
+    ViewError,
 };
 use proptest::{prelude::any, strategy::Strategy};
 use serde::{Deserialize, Serialize};

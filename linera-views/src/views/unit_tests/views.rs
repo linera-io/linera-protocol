@@ -25,7 +25,7 @@ use crate::{
         TestBucketQueueView, TestCollectionView, TestLogView, TestMapView, TestQueueView,
         TestRegisterView, TestSetView, TestView,
     },
-    views::{HashableView, View, ViewError},
+    views::{HashableView, View},
 };
 #[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
 use crate::{context::ViewContext, random::generate_test_namespace, store::AdminKeyValueStore};
@@ -63,7 +63,6 @@ pub enum Operation {
 async fn run_test_queue_operations_test_cases<C>(mut contexts: C) -> Result<(), anyhow::Error>
 where
     C: TestContextFactory,
-    ViewError: From<<C::Context as Context>::Error>,
 {
     use self::Operation::*;
 
@@ -134,7 +133,6 @@ async fn run_test_queue_operations<C>(
 ) -> Result<(), anyhow::Error>
 where
     C: Context<Error: Send + Sync> + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     let mut expected_state = VecDeque::new();
     let mut queue = QueueView::load(context.clone()).await?;
@@ -169,7 +167,6 @@ async fn check_queue_state<C>(
 ) -> Result<(), anyhow::Error>
 where
     C: Context<Error: Send + Sync> + Clone + Send + Sync,
-    ViewError: From<C::Error>,
 {
     let count = expected_state.len();
 
@@ -522,7 +519,6 @@ where
     C: Context + Send + Sync,
     Key: Serialize + DeserializeOwned + Clone + Debug + Default + Send + Sync,
     Value: Serialize + DeserializeOwned + Default + Send + Sync,
-    ViewError: From<C::Error>,
 {
     for (key, value) in entries {
         let mut entry = collection.try_load_entry_mut(&key).await?;
