@@ -473,9 +473,7 @@ where
             .read_network_description()
             .await
             .map_err(Self::error_to_status)?
-            .ok_or(Status::not_found(
-                "Cannot find network description in the database",
-            ))?;
+            .ok_or_else(|| Status::not_found("Cannot find network description in the database"))?;
         Ok(Response::new(description.into()))
     }
 
@@ -504,7 +502,7 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Self::error_to_status)?;
-        let blob = blob.ok_or(Status::not_found(format!("Blob not found {}", blob_id)))?;
+        let blob = blob.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
 
@@ -627,7 +625,7 @@ where
             .await
             .map_err(Self::error_to_status)?;
         let blob_state =
-            blob_state.ok_or(Status::not_found(format!("Blob not found {}", blob_id)))?;
+            blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob_state.last_used_by.into()))
     }
 
