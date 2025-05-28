@@ -2073,11 +2073,11 @@ impl<Env: Environment> ChainClient<Env> {
                 for certificate in certificates.into_values() {
                     let hash = certificate.hash();
                     let mode = ReceiveCertificateMode::AlreadyChecked;
-                    if let Err(e) = client
+                    if let Err(err) = client
                         .receive_loose_certificate(certificate, mode, None)
                         .await
                     {
-                        warn!("Received invalid certificate {hash}: {e}");
+                        error!("Received invalid certificate {hash}: {err}");
                     }
                 }
             }

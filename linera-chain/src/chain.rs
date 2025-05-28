@@ -1181,7 +1181,7 @@ where
 
 trait RangeExt {
     /// Returns the range as a tuple of inclusive bounds.
-    /// If the range is empty, returns None.
+    /// If the range is empty, returns `None`.
     fn to_inclusive(&self) -> Option<(BlockHeight, BlockHeight)>;
 }
 
@@ -1197,6 +1197,9 @@ impl<T: RangeBounds<BlockHeight>> RangeExt for T {
             Bound::Excluded(height) => height.try_sub_one().ok()?,
             Bound::Unbounded => BlockHeight::MAX,
         };
+        if start > end {
+            return None;
+        }
         Some((start, end))
     }
 }
