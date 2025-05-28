@@ -4,13 +4,11 @@
 //! This module contains various implementation of the [`Signer`] trait usable in the browser.
 use std::fmt::Display;
 
-use js_sys::Promise as JsPromise;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, CryptoHash, Signer},
     identifiers::AccountOwner,
 };
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
 use web_sys::wasm_bindgen;
 
 #[repr(u8)]
@@ -49,54 +47,38 @@ impl From<JsValue> for EmbeddedSignerError {
 impl std::error::Error for EmbeddedSignerError {}
 
 #[wasm_bindgen]
-pub struct EmbeddedSigner {
-    sign_handler: js_sys::Function,
-    get_public_key_handler: js_sys::Function,
-    contains_key_handler: js_sys::Function,
+extern "C" {
+    pub type JsSigner;
+
+    #[wasm_bindgen(catch, method)]
+    async fn sign(this: &JsSigner, owner: JsValue, value: JsValue) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(catch, method)]
+    async fn get_public_key(this: &JsSigner, owner: JsValue) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(catch, method)]
+    async fn contains_key(this: &JsSigner, owner: JsValue) -> Result<JsValue, JsValue>;
 }
 
-#[wasm_bindgen(js_class = "EmbeddedSigner")]
-impl EmbeddedSigner {
-    /// Creates a new embedded signer with the provided handlers.
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        sign_handler: js_sys::Function,
-        get_public_key_handler: js_sys::Function,
-        contains_key_handler: js_sys::Function,
-    ) -> Self {
-        Self {
-            sign_handler,
-            get_public_key_handler,
-            contains_key_handler,
-        }
-    }
-}
-
-impl Signer for EmbeddedSigner {
+impl Signer for JsSigner {
     type Error = EmbeddedSignerError;
 
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error> {
-        let context = JsValue::null();
         let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-        let result = JsFuture::from(JsPromise::resolve(
-            &self
-                .contains_key_handler
-                .call1(&context, &js_owner)
-                .map_err(EmbeddedSignerError::from)?,
-        ))
-        .await
-        .map_err(EmbeddedSignerError::from)?;
+        let result = self
+            .contains_key(js_owner)
+            .await
+            .map_err(EmbeddedSignerError::from)?;
 
         Ok(serde_wasm_bindgen::from_value(result).unwrap())
     }
 
     async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Self::Error> {
-        let context = JsValue::null();
         let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
         let result = self
-            .get_public_key_handler
-            .call1(&context, &js_owner)
-            .unwrap();
+            .get_public_key(js_owner)
+            .await
+            .map_err(EmbeddedSignerError::from)?;
         Ok(serde_wasm_bindgen::from_value(result).unwrap())
     }
 
@@ -105,13 +87,12 @@ impl Signer for EmbeddedSigner {
         owner: &AccountOwner,
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error> {
-        let context = JsValue::null();
         let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
         let js_cryptohash = serde_wasm_bindgen::to_value(value).unwrap();
         let result = self
-            .sign_handler
-            .call2(&context, &js_owner, &js_cryptohash)
-            .unwrap();
+            .sign(js_owner, js_cryptohash)
+            .await
+            .map_err(EmbeddedSignerError::from)?;
         Ok(serde_wasm_bindgen::from_value(result).unwrap())
     }
 }

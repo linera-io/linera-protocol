@@ -28,19 +28,17 @@ use linera_faucet_client::Faucet;
 use linera_persistent::{self as persistent};
 use linera_views::store::WithError;
 use serde::ser::Serialize as _;
-use signer::EmbeddedSigner;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
+
+use crate::signer::JsSigner;
 
 // TODO(#12): convert to IndexedDbStore once we refactor Context
 type WebStorage =
     linera_storage::DbStorage<linera_views::memory::MemoryStore, linera_storage::WallClock>;
 
-type WebEnvironment = linera_core::environment::Impl<
-    WebStorage,
-    linera_rpc::node_provider::NodeProvider,
-    EmbeddedSigner,
->;
+type WebEnvironment =
+    linera_core::environment::Impl<WebStorage, linera_rpc::node_provider::NodeProvider, JsSigner>;
 
 type JsResult<T> = Result<T, JsError>;
 
@@ -194,7 +192,7 @@ impl Client {
     /// On transport or protocol error, or if persistent storage is
     /// unavailable.
     #[wasm_bindgen(constructor)]
-    pub async fn new(wallet: InMemoryWallet, signer: EmbeddedSigner) -> Result<Client, JsError> {
+    pub async fn new(wallet: InMemoryWallet, signer: JsSigner) -> Result<Client, JsError> {
         let mut storage = get_storage().await?;
         wallet
             .0
