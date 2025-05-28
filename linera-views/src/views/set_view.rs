@@ -42,11 +42,10 @@ pub struct ByteSetView<C> {
     updates: BTreeMap<Vec<u8>, Update<()>>,
 }
 
-impl<C> View<C> for ByteSetView<C>
-where
-    C: Context + Send + Sync,
-{
+impl<C: Context> View for ByteSetView<C> {
     const NUM_INIT_KEYS: usize = 0;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -111,10 +110,7 @@ where
     }
 }
 
-impl<C> ClonableView<C> for ByteSetView<C>
-where
-    C: Context + Send + Sync,
-{
+impl<C: Context> ClonableView for ByteSetView<C> {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ByteSetView {
             context: self.context.clone(),
@@ -124,10 +120,7 @@ where
     }
 }
 
-impl<C> ByteSetView<C>
-where
-    C: Context,
-{
+impl<C: Context> ByteSetView<C> {
     /// Insert a value. If already present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -169,10 +162,7 @@ where
     }
 }
 
-impl<C> ByteSetView<C>
-where
-    C: Context,
-{
+impl<C: Context> ByteSetView<C> {
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -201,10 +191,7 @@ where
     }
 }
 
-impl<C> ByteSetView<C>
-where
-    C: Context,
-{
+impl<C: Context> ByteSetView<C> {
     /// Returns the list of keys in the set. The order is lexicographic.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -354,10 +341,7 @@ where
     }
 }
 
-impl<C> HashableView<C> for ByteSetView<C>
-where
-    C: Context + Send + Sync,
-{
+impl<C: Context> HashableView for ByteSetView<C> {
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
@@ -387,12 +371,10 @@ pub struct SetView<C, I> {
     _phantom: PhantomData<I>,
 }
 
-impl<C, I> View<C> for SetView<C, I>
-where
-    C: Context + Send + Sync,
-    I: Send + Sync + Serialize,
-{
+impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {
     const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         self.set.context()
@@ -431,9 +413,9 @@ where
     }
 }
 
-impl<C, I> ClonableView<C> for SetView<C, I>
+impl<C, I> ClonableView for SetView<C, I>
 where
-    C: Context + Send + Sync,
+    C: Context,
     I: Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -444,11 +426,7 @@ where
     }
 }
 
-impl<C, I> SetView<C, I>
-where
-    C: Context,
-    I: Serialize,
-{
+impl<C: Context, I: Serialize> SetView<C, I> {
     /// Inserts a value. If already present then no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -498,11 +476,7 @@ where
     }
 }
 
-impl<C, I> SetView<C, I>
-where
-    C: Context,
-    I: Serialize,
-{
+impl<C: Context, I: Serialize> SetView<C, I> {
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -525,11 +499,7 @@ where
     }
 }
 
-impl<C, I> SetView<C, I>
-where
-    C: Context,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
-{
+impl<C: Context, I: Serialize + DeserializeOwned + Send> SetView<C, I> {
     /// Returns the list of indices in the set. The order is determined by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -638,12 +608,12 @@ where
     }
 }
 
-impl<C, I> HashableView<C> for SetView<C, I>
+impl<C, I> HashableView for SetView<C, I>
 where
-    C: Context + Send + Sync,
-    I: Clone + Send + Sync + Serialize + DeserializeOwned,
+    Self: View + Sync,
+    ByteSetView<C>: HashableView,
 {
-    type Hasher = sha3::Sha3_256;
+    type Hasher = <ByteSetView<C> as HashableView>::Hasher;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.set.hash_mut().await
@@ -662,12 +632,14 @@ pub struct CustomSetView<C, I> {
     _phantom: PhantomData<I>,
 }
 
-impl<C, I> View<C> for CustomSetView<C, I>
+impl<C, I> View for CustomSetView<C, I>
 where
-    C: Context + Send + Sync,
+    C: Context,
     I: Send + Sync + CustomSerialize,
 {
     const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         self.set.context()
@@ -706,9 +678,9 @@ where
     }
 }
 
-impl<C, I> ClonableView<C> for CustomSetView<C, I>
+impl<C, I> ClonableView for CustomSetView<C, I>
 where
-    C: Context + Send + Sync,
+    C: Context,
     I: Send + Sync + CustomSerialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -719,11 +691,7 @@ where
     }
 }
 
-impl<C, I> CustomSetView<C, I>
-where
-    C: Context,
-    I: CustomSerialize,
-{
+impl<C: Context, I: CustomSerialize> CustomSetView<C, I> {
     /// Inserts a value. If present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -920,10 +888,9 @@ where
     }
 }
 
-impl<C, I> HashableView<C> for CustomSetView<C, I>
+impl<C: Context, I> HashableView for CustomSetView<C, I>
 where
-    C: Context + Send + Sync,
-    I: Clone + Send + Sync + CustomSerialize,
+    Self: View + Sync,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -955,7 +922,6 @@ mod graphql {
 
     impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for SetView<C, I>
     where
-        C: Send + Sync,
         I: serde::ser::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync,
     {
         fn type_name() -> Cow<'static, str> {
@@ -988,7 +954,6 @@ mod graphql {
 
     impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for CustomSetView<C, I>
     where
-        C: Send + Sync,
         I: crate::common::CustomSerialize + Clone + Send + Sync,
     {
         fn type_name() -> Cow<'static, str> {

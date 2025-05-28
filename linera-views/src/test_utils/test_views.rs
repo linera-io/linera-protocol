@@ -23,9 +23,7 @@ use crate::{
 };
 
 /// A [`View`][`crate::views::View`] to be used in test cases.
-pub trait TestView:
-    RootView<MemoryContext<()>> + ClonableView<MemoryContext<()>> + Send + Sync + 'static
-{
+pub trait TestView: RootView<Context = MemoryContext<()>> + ClonableView {
     /// Representation of the view's state.
     type State: Debug + Eq + Send;
 
