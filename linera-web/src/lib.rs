@@ -28,7 +28,7 @@ use linera_faucet_client::Faucet;
 use linera_persistent::{self as persistent};
 use linera_views::store::WithError;
 use serde::ser::Serialize as _;
-use signer::embedded::EmbeddedSigner;
+use signer::EmbeddedSigner;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
