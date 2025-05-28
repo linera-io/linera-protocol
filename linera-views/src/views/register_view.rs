@@ -11,7 +11,8 @@ use crate::{
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View},
+    ViewError,
 };
 
 #[cfg(with_metrics)]
@@ -44,7 +45,6 @@ pub struct RegisterView<C, T> {
 impl<C, T> View<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = 1;
@@ -112,7 +112,6 @@ where
 impl<C, T> ClonableView<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -212,7 +211,6 @@ where
 impl<C, T> HashableView<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;

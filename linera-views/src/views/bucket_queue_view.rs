@@ -162,7 +162,7 @@ where
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let value1 = values.first().ok_or(ViewError::PostLoadValuesError)?;
         let value2 = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
-        let front = from_bytes_option::<Vec<T>, _>(value1)?;
+        let front = from_bytes_option::<Vec<T>>(value1)?;
         let mut stored_data = VecDeque::from(match front {
             Some(front) => {
                 vec![(0, Bucket::Loaded { data: front })]
@@ -171,7 +171,7 @@ where
                 vec![]
             }
         });
-        let stored_indices = from_bytes_option_or_default::<StoredIndices, _>(value2)?;
+        let stored_indices = from_bytes_option_or_default::<StoredIndices>(value2)?;
         for i in 1..stored_indices.len() {
             let length = stored_indices.indices[i].0;
             let index = stored_indices.indices[i].1;

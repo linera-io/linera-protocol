@@ -134,7 +134,7 @@ pub trait ReadableKeyValueStore: WithError {
     where
         Self: Sync,
     {
-        async { from_bytes_option(&self.read_value_bytes(key).await?) }
+        async { Ok(from_bytes_option(&self.read_value_bytes(key).await?)?) }
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
@@ -148,7 +148,7 @@ pub trait ReadableKeyValueStore: WithError {
         async {
             let mut values = Vec::with_capacity(keys.len());
             for entry in self.read_multi_values_bytes(keys).await? {
-                values.push(from_bytes_option::<_, bcs::Error>(&entry)?);
+                values.push(from_bytes_option(&entry)?);
             }
             Ok(values)
         }
