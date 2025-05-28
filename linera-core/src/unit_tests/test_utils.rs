@@ -957,7 +957,6 @@ where
         Ok(client.create_chain_client(
             chain_id,
             block_hash,
-            Timestamp::from(0),
             block_height,
             None,
             self.chain_owners.get(&chain_id).copied(),

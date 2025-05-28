@@ -132,17 +132,21 @@ impl Wallet {
         Ok(())
     }
 
-    pub fn update_from_state<Env: Environment>(&mut self, chain_client: &ChainClient<Env>) {
+    pub async fn update_from_state<Env: Environment>(
+        &mut self,
+        chain_client: &ChainClient<Env>,
+    ) -> Result<(), Error> {
         let client_owner = chain_client.preferred_owner();
-        let state = chain_client.state();
+        let info = chain_client.chain_info().await?;
         self.insert(UserChain {
             chain_id: chain_client.chain_id(),
             owner: client_owner,
-            block_hash: state.block_hash(),
-            next_block_height: state.next_block_height(),
-            timestamp: state.timestamp(),
-            pending_proposal: state.pending_proposal().clone(),
+            block_hash: info.block_hash,
+            next_block_height: info.next_block_height,
+            timestamp: info.timestamp,
+            pending_proposal: chain_client.state().pending_proposal().clone(),
         });
+        Ok(())
     }
 
     pub fn genesis_admin_chain(&self) -> ChainId {

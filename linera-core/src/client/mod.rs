@@ -253,7 +253,6 @@ impl<Env: Environment> Client<Env> {
         self: &Arc<Self>,
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
-        timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
@@ -261,12 +260,7 @@ impl<Env: Environment> Client<Env> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
-            e.insert(ChainClientState::new(
-                block_hash,
-                timestamp,
-                next_block_height,
-                pending_proposal,
-            ));
+            e.insert(ChainClientState::new(pending_proposal));
         }
 
         ChainClient {
@@ -280,6 +274,8 @@ impl<Env: Environment> Client<Env> {
                 blob_download_timeout: self.blob_download_timeout,
             },
             preferred_owner,
+            initial_block_hash: block_hash,
+            initial_next_block_height: next_block_height,
         }
     }
 
@@ -1307,6 +1303,10 @@ pub struct ChainClient<Env: Environment> {
     /// The preferred owner of the chain used to sign proposals.
     /// `None` if we cannot propose on this chain.
     preferred_owner: Option<AccountOwner>,
+    /// The next block height as read from the wallet.
+    initial_next_block_height: BlockHeight,
+    /// The last block hash as read from the wallet.
+    initial_block_hash: Option<CryptoHash>,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -1316,6 +1316,8 @@ impl<Env: Environment> Clone for ChainClient<Env> {
             chain_id: self.chain_id,
             options: self.options.clone(),
             preferred_owner: self.preferred_owner,
+            initial_next_block_height: self.initial_next_block_height,
+            initial_block_hash: self.initial_block_hash,
         }
     }
 }
@@ -1501,24 +1503,6 @@ impl<Env: Environment> ChainClient<Env> {
         self.client.admin_id
     }
 
-    /// Gets the hash of the latest known block.
-    #[instrument(level = "trace", skip(self))]
-    pub fn block_hash(&self) -> Option<CryptoHash> {
-        self.state().block_hash()
-    }
-
-    /// Gets the earliest possible timestamp for the next block.
-    #[instrument(level = "trace", skip(self))]
-    pub fn timestamp(&self) -> Timestamp {
-        self.state().timestamp()
-    }
-
-    /// Gets the next block height.
-    #[instrument(level = "trace", skip(self))]
-    pub fn next_block_height(&self) -> BlockHeight {
-        self.state().next_block_height()
-    }
-
     /// Gets a guarded reference to the next pending block.
     #[instrument(level = "trace", skip(self))]
     pub fn pending_proposal(&self) -> ChainGuardMapped<Option<PendingProposal>> {
@@ -1637,10 +1621,9 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
             .info;
         {
-            let state = self.state();
             ensure!(
-                state.has_other_owners(&info.manager.ownership, &self.preferred_owner)
-                    || info.next_block_height == state.next_block_height(),
+                self.has_other_owners(&info.manager.ownership)
+                    || info.next_block_height >= self.initial_next_block_height,
                 ChainClientError::WalletSynchronizationError
             );
         }
@@ -1811,10 +1794,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut info = self.synchronize_to_known_height().await?;
 
-        if self
-            .state()
-            .has_other_owners(&info.manager.ownership, &self.preferred_owner)
-        {
+        if self.has_other_owners(&info.manager.ownership) {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -1845,15 +1825,14 @@ impl<Env: Environment> ChainClient<Env> {
     // The known height only differs if the wallet is ahead of storage.
     async fn synchronize_to_known_height(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         let nodes = self.client.validator_nodes().await?;
-        let height = self.next_block_height();
         let info = self
             .client
-            .download_certificates(&nodes, self.chain_id, height)
+            .download_certificates(&nodes, self.chain_id, self.initial_next_block_height)
             .await?;
-        if info.next_block_height == height {
+        if info.next_block_height == self.initial_next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
-                self.block_hash() == info.block_hash,
+                self.initial_block_hash == info.block_hash,
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
@@ -1871,15 +1850,16 @@ impl<Env: Environment> ChainClient<Env> {
         operations: &[Operation],
         super_owner: AccountOwner,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
+        let info = self.chain_info().await?;
         let proposed_block = ProposedBlock {
             epoch,
             chain_id: self.chain_id,
             incoming_bundles: Vec::new(),
             operations: operations.to_vec(),
-            previous_block_hash: self.block_hash(),
-            height: self.next_block_height(),
+            previous_block_hash: info.block_hash,
+            height: info.next_block_height,
             authenticated_signer: Some(super_owner),
-            timestamp: self.timestamp().max(Timestamp::now()),
+            timestamp: info.timestamp.max(Timestamp::now()),
         };
         let proposal = Box::new(
             BlockProposal::new_initial(super_owner, Round::Fast, proposed_block, self.signer())
@@ -1925,7 +1905,7 @@ impl<Env: Environment> ChainClient<Env> {
         committee: &Committee,
     ) -> Result<(), ChainClientError> {
         let delivery = self.options.cross_chain_message_delivery;
-        let height = self.next_block_height();
+        let height = self.chain_info().await?.next_block_height;
         self.client
             .communicate_chain_updates(committee, self.chain_id, height, delivery)
             .await
@@ -2279,35 +2259,26 @@ impl<Env: Environment> ChainClient<Env> {
         blobs: Vec<Blob>,
         identity: AccountOwner,
     ) -> Result<ConfirmedBlock, ChainClientError> {
-        let (previous_block_hash, height, timestamp) = {
-            let state = self.state();
-            ensure!(
-                state.pending_proposal().is_none(),
-                ChainClientError::BlockProposalError(
-                    "Client state already has a pending block; \
+        ensure!(
+            self.state().pending_proposal().is_none(),
+            ChainClientError::BlockProposalError(
+                "Client state already has a pending block; \
                     use the `linera retry-pending-block` command to commit that first"
-                )
-            );
-            (
-                state.block_hash(),
-                state.next_block_height(),
-                self.next_timestamp(&incoming_bundles, state.timestamp()),
             )
-        };
+        );
+        let info = self.chain_info().await?;
+        let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
         let proposed_block = ProposedBlock {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
             operations,
-            previous_block_hash,
-            height,
+            previous_block_hash: info.block_hash,
+            height: info.next_block_height,
             authenticated_signer: Some(identity),
             timestamp,
         };
-        // Make sure every incoming message succeeds and otherwise remove them.
-        // Also, compute the final certified hash while we're at it.
 
-        let info = self.chain_info().await?;
         // Use the round number assuming there are oracle responses.
         // Using the round number during execution counts as an oracle.
         // Accessing the round number in single-leader rounds where we are not the leader
@@ -2316,6 +2287,8 @@ impl<Env: Environment> ChainClient<Env> {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
+        // Make sure every incoming message succeeds and otherwise remove them.
+        // Also, compute the final certified hash while we're at it.
         let (block, _) = self
             .client
             .stage_block_execution_and_discard_failing_messages(
@@ -2475,21 +2448,15 @@ impl<Env: Environment> ChainClient<Env> {
             let owner_balance = self.local_owner_balance(owner).await?;
             return Ok((chain_balance, Some(owner_balance)));
         }
-        let (previous_block_hash, height, timestamp) = {
-            let state = self.state();
-            (
-                state.block_hash(),
-                state.next_block_height(),
-                self.next_timestamp(&incoming_bundles, state.timestamp()),
-            )
-        };
+        let info = self.chain_info().await?;
+        let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
         let block = ProposedBlock {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
             operations: Vec::new(),
-            previous_block_hash,
-            height,
+            previous_block_hash: info.block_hash,
+            height: info.next_block_height,
             authenticated_signer: if owner == AccountOwner::CHAIN {
                 None
             } else {
@@ -2562,9 +2529,8 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         owner: AccountOwner,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
-        let next_block_height = self.next_block_height();
         ensure!(
-            self.chain_info().await?.next_block_height == next_block_height,
+            self.chain_info().await?.next_block_height >= self.initial_next_block_height,
             ChainClientError::WalletSynchronizationError
         );
         let mut query = ChainInfoQuery::new(self.chain_id);
@@ -2759,12 +2725,10 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
-    /// Checks that the current height and hash match the `ChainClientState`. Then requests a
-    /// leader timeout certificate if the current round has timed out. Returns the chain info for
-    /// the (possibly new) current round.
+    /// Requests a leader timeout certificate if the current round has timed out. Returns the
+    /// chain info for the (possibly new) current round.
     async fn request_leader_timeout_if_needed(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         let mut info = self.chain_info_with_manager_values().await?;
-        self.state().check_info_is_up_to_date(&info)?;
         // If the current round has timed out, we request a timeout certificate and retry in
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
@@ -3749,6 +3713,13 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         Ok(())
+    }
+
+    /// Returns whether the given ownership includes anyone whose secret key we don't have.
+    fn has_other_owners(&self, ownership: &ChainOwnership) -> bool {
+        ownership
+            .all_owners()
+            .any(|owner| Some(owner) != self.preferred_owner.as_ref())
     }
 }
 

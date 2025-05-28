@@ -100,7 +100,6 @@ where
         self.make_chain_client_internal(
             chain_id,
             chain.block_hash,
-            chain.timestamp,
             chain.next_block_height,
             chain.pending_proposal,
             chain.owner,
@@ -272,7 +271,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         &self,
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
-        timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_proposal: Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
@@ -280,7 +278,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         let mut chain_client = self.client.create_chain_client(
             chain_id,
             block_hash,
-            timestamp,
             next_block_height,
             pending_proposal,
             preferred_owner,
@@ -316,7 +313,7 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         &mut self,
         client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
-        self.wallet.as_mut().update_from_state(client);
+        self.wallet.as_mut().update_from_state(client).await?;
         self.save_wallet().await
     }
 
@@ -777,7 +774,7 @@ where
 
             info!("Updating wallet from chain clients...");
             for chain_client in chain_clients.values() {
-                self.wallet.as_mut().update_from_state(chain_client);
+                self.wallet.as_mut().update_from_state(chain_client).await?;
             }
             self.save_wallet().await?;
         }
@@ -903,7 +900,6 @@ where
                 let mut chain_client = self.make_chain_client_internal(
                     chain_id,
                     None,
-                    certificate.block().header.timestamp,
                     BlockHeight::ZERO,
                     None,
                     Some(pub_key.into()),
