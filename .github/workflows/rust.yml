@@ -110,7 +110,7 @@ jobs:
         cargo test --locked
 
   default-features-and-witty-integration-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
     steps:
