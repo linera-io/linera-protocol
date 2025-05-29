@@ -17,7 +17,9 @@ pub enum ViewError {
     ArithmeticError(#[from] linera_base::data_types::ArithmeticError),
 
     /// An failed to lock a reentrant collection entry since it currently being accessed
-    #[error("failed to lock a reentrant collection entry since it currently being accessed: {0:?}")]
+    #[error(
+        "failed to lock a reentrant collection entry since it currently being accessed: {0:?}"
+    )]
     TryLockError(Vec<u8>),
 
     /// Tokio errors can happen while joining.
