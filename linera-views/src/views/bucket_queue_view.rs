@@ -514,7 +514,10 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// assert_eq!(queue.back().await.unwrap(), Some(37));
     /// # })
     /// ```
-    pub async fn back(&mut self) -> Result<Option<T>, ViewError> where T: Clone {
+    pub async fn back(&mut self) -> Result<Option<T>, ViewError>
+    where
+        T: Clone,
+    {
         if let Some(value) = self.new_back_values.back() {
             return Ok(Some(value.clone()));
         }
@@ -689,7 +692,8 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     }
 }
 
-impl<C: Context, T: Serialize + DeserializeOwned + Send + Sync + Clone, const N: usize> HashableView for BucketQueueView<C, T, N>
+impl<C: Context, T: Serialize + DeserializeOwned + Send + Sync + Clone, const N: usize> HashableView
+    for BucketQueueView<C, T, N>
 where
     Self: View,
 {

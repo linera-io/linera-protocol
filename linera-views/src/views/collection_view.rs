@@ -1090,7 +1090,9 @@ impl<I: Send + Sync, W: View + Sync> View for CustomCollectionView<W::Context, I
     }
 }
 
-impl<I: Send + Sync, W: ClonableView + Sync> ClonableView for CustomCollectionView<W::Context, I, W> {
+impl<I: Send + Sync, W: ClonableView + Sync> ClonableView
+    for CustomCollectionView<W::Context, I, W>
+{
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CustomCollectionView {
             collection: self.collection.clone_unchecked()?,
