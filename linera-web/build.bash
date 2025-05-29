@@ -7,11 +7,8 @@ cd $(dirname -- "${BASH_SOURCE[0]}")
 wasm_bindgen_cli_version=$(wasm-bindgen --version)
 wasm_bindgen_cli_version=${wasm_bindgen_cli_version##* }
 
-wasm_bindgen_cargo_version=
-if type -P tomlq > /dev/null
-then
-    wasm_bindgen_cargo_version=$(tomlq -r < Cargo.lock '.package[]|select(.name == "wasm-bindgen")|.version')
-fi
+wasm_bindgen_cargo_version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen").version')
+target_dir=$(cargo metadata --format-version 1 | jq -r .target_directory)
 
 if [[ "$wasm_bindgen_cargo_version" != "$wasm_bindgen_cli_version" ]]
 then
@@ -30,9 +27,8 @@ fi
 cargo build --lib --target wasm32-unknown-unknown $profile_flag
 
 wasm-bindgen \
-    target/wasm32-unknown-unknown/$profile_dir/linera_web.wasm \
+    "$target_dir"/wasm32-unknown-unknown/$profile_dir/linera_web.wasm \
     --out-dir dist \
     --typescript \
     --target web \
     --split-linked-modules
-
