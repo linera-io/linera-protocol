@@ -279,7 +279,7 @@ impl AdminKeyValueStore for IndexedDbStore {
         Self::connect_internal(config, namespace, start_key).await
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, IndexedDbStoreError> {
+    fn acquire_root_keyed_connection(&self, root_key: &[u8]) -> Result<Self, IndexedDbStoreError> {
         let database = self.database.clone();
         let object_store_name = self.object_store_name.clone();
         let max_stream_queries = self.max_stream_queries;

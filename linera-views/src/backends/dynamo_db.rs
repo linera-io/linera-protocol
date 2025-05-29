@@ -368,7 +368,10 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(store)
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreInternalError> {
+    fn acquire_root_keyed_connection(
+        &self,
+        root_key: &[u8],
+    ) -> Result<Self, DynamoDbStoreInternalError> {
         let client = self.client.clone();
         let namespace = self.namespace.clone();
         let semaphore = self.semaphore.clone();

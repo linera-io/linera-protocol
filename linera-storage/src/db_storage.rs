@@ -554,7 +554,7 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.acquire_root_keyed_connection(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
@@ -946,7 +946,7 @@ where
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
         let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.acquire_root_keyed_connection(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
 }

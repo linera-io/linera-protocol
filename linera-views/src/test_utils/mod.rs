@@ -439,7 +439,7 @@ pub async fn big_read_multi_values<C: KeyValueStore>(
     let mut rng = make_deterministic_rng();
     let namespace = generate_test_namespace();
     let store = C::recreate_and_connect(&config, &namespace).await.unwrap();
-    let store = store.clone_with_root_key(&[]).unwrap();
+    let store = store.acquire_root_keyed_connection(&[]).unwrap();
     let key_prefix = vec![42, 54];
     let mut batch = Batch::new();
     let mut keys = Vec::new();
@@ -455,7 +455,7 @@ pub async fn big_read_multi_values<C: KeyValueStore>(
     store.write_batch(batch).await.unwrap();
     // We reconnect so that the read is not using the cache.
     let store = C::connect(&config, &namespace).await.unwrap();
-    let store = store.clone_with_root_key(&[]).unwrap();
+    let store = store.acquire_root_keyed_connection(&[]).unwrap();
     let values_read = store.read_multi_values_bytes(keys).await.unwrap();
     assert_eq!(values, values_read);
 }
@@ -774,7 +774,9 @@ pub async fn root_key_admin_test<S: TestKeyValueStore>() {
 
         for _ in 0..20 {
             let root_key = get_random_byte_vector(&mut rng, &[], 4);
-            let cloned_store = store.clone_with_root_key(&root_key).expect("cloned store");
+            let cloned_store = store
+                .acquire_root_keyed_connection(&root_key)
+                .expect("cloned store");
             root_keys.push(root_key.clone());
             let size_select = rng.gen_range(0..size);
             let mut batch = Batch::new();
@@ -800,8 +802,8 @@ pub async fn root_key_admin_test<S: TestKeyValueStore>() {
         let store = S::connect(&config, &namespace)
             .await
             .expect("store")
-            .clone_with_root_key(&root_key)
-            .expect("clone_with_root_key");
+            .acquire_root_keyed_connection(&root_key)
+            .expect("acquire_root_keyed_connection");
         let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
         for key in keys.iterator() {
             let key = key.expect("key");
@@ -836,7 +838,7 @@ pub async fn exclusive_access_admin_test<S: TestKeyValueStore>(exclusive_access:
 
     let mut store1 = S::connect(&config, &namespace).await.expect("store");
     if exclusive_access {
-        store1 = store1.clone_with_root_key(&[]).expect("store1");
+        store1 = store1.acquire_root_keyed_connection(&[]).expect("store1");
     }
     let mut batch1 = Batch::new();
     batch1.delete_key(key.clone());
@@ -844,7 +846,7 @@ pub async fn exclusive_access_admin_test<S: TestKeyValueStore>(exclusive_access:
 
     let mut store2 = S::connect(&config, &namespace).await.expect("store");
     if exclusive_access {
-        store2 = store2.clone_with_root_key(&[]).expect("store2");
+        store2 = store2.acquire_root_keyed_connection(&[]).expect("store2");
     }
     let mut batch2 = Batch::new();
     batch2.put_key_value_bytes(key.clone(), vec![]);
