@@ -183,7 +183,7 @@ impl<C, T> QueueView<C, T> {
 
 impl<'a, C, T> QueueView<C, T>
 where
-    C: Context + Send + Sync,
+    C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {

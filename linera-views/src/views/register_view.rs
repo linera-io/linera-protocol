@@ -230,6 +230,7 @@ where
 pub type HashedRegisterView<C, T> =
     WrappedHashableContainerView<C, RegisterView<C, T>, HasherOutput>;
 
+#[cfg(with_graphql)]
 mod graphql {
     use std::borrow::Cow;
 
@@ -238,7 +239,7 @@ mod graphql {
 
     impl<C, T> async_graphql::OutputType for RegisterView<C, T>
     where
-        C: Context,
+        C: Context + Send + Sync,
         T: async_graphql::OutputType + Send + Sync,
     {
         fn type_name() -> Cow<'static, str> {

@@ -289,7 +289,7 @@ where
 
 impl<C, V> ByteMapView<C, V>
 where
-    C: Context + Sync,
+    C: Context,
     V: Clone + DeserializeOwned + 'static,
 {
     /// Reads the value at the given position, if any.
@@ -861,7 +861,7 @@ where
 
 impl<C, V> ByteMapView<C, V>
 where
-    C: Context + Sync,
+    C: Context,
     V: Default + DeserializeOwned + 'static,
 {
     /// Obtains a mutable reference to a value at a given position.
@@ -1017,7 +1017,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context + Sync,
+    C: Context,
     I: Serialize,
 {
     /// Inserts or resets a value at an index.
@@ -1339,7 +1339,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context + Sync,
+    C: Context,
     I: Send + DeserializeOwned,
     V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
@@ -1578,7 +1578,7 @@ impl<C: Context, I: CustomSerialize, V> CustomMapView<C, I, V> {
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
+    C: Context,
     I: CustomSerialize,
     V: Clone + DeserializeOwned + 'static,
 {
@@ -1636,7 +1636,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
+    C: Context,
     I: Send + CustomSerialize,
     V: Clone + Serialize + DeserializeOwned + 'static,
 {
@@ -1823,7 +1823,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
+    C: Context,
     I: Send + CustomSerialize,
     V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
@@ -1874,7 +1874,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context + Sync,
+    C: Context,
     I: CustomSerialize,
     V: Default + DeserializeOwned + 'static,
 {
@@ -1905,7 +1905,7 @@ where
 
 impl<C, I, V> HashableView for CustomMapView<C, I, V>
 where
-    C: Context + Send + Sync,
+    C: Context,
     I: Send + Sync + CustomSerialize,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {

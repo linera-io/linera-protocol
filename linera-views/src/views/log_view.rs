@@ -192,7 +192,7 @@ where
 
 impl<C, T> LogView<C, T>
 where
-    C: Context + Send + Sync,
+    C: Context,
     T: Clone + DeserializeOwned + Serialize + Send + Sync,
 {
     /// Reads the logged value with the given index (including staged ones).
