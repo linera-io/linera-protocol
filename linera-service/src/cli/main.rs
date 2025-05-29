@@ -1325,7 +1325,7 @@ impl ClientOptions {
     }
 
     fn config_path(&self) -> Result<PathBuf, Error> {
-        let mut config_dir = dirs::config_dir().ok_or(anyhow!(
+        let mut config_dir = dirs::config_dir().ok_or_else(|| anyhow!(
             "Default wallet directory is not supported in this platform: please specify storage and wallet paths"
         ))?;
         config_dir.push("linera");

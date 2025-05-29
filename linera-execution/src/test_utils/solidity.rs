@@ -104,10 +104,10 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
         .lines()
         .filter_map(|line| line.trim_start().strip_prefix("contract "))
         .next()
-        .ok_or(anyhow::anyhow!("Not matching"))?;
+        .ok_or_else(|| anyhow::anyhow!("Not matching"))?;
     let contract_name: &str = contract_name
         .strip_suffix(" {")
-        .ok_or(anyhow::anyhow!("Not matching"))?;
+        .ok_or_else(|| anyhow::anyhow!("Not matching"))?;
     get_bytecode(&source_code, contract_name)
 }
 

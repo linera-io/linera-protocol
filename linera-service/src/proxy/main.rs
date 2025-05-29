@@ -319,7 +319,7 @@ where
                     .storage
                     .read_network_description()
                     .await?
-                    .ok_or(anyhow!("Cannot find network description in the database"))?;
+                    .ok_or_else(|| anyhow!("Cannot find network description in the database"))?;
                 Ok(Some(RpcMessage::NetworkDescriptionResponse(Box::new(
                     description,
                 ))))
@@ -335,7 +335,7 @@ where
             }
             DownloadBlob(blob_id) => {
                 let blob = self.storage.read_blob(*blob_id).await?;
-                let blob = blob.ok_or(anyhow!("Blob not found {}", blob_id))?;
+                let blob = blob.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
                 let content = blob.into_content();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
@@ -346,9 +346,13 @@ where
                 let certificates = self.storage.read_certificates(hashes).await?;
                 Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }
-            BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
-                self.storage.read_blob_state(*blob_id).await?.last_used_by,
-            )))),
+            BlobLastUsedBy(blob_id) => {
+                let blob_state = self.storage.read_blob_state(*blob_id).await?;
+                let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
+                    blob_state.last_used_by,
+                ))))
+            }
             MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(
                 self.storage.missing_blobs(&blob_ids).await?,
             ))),
