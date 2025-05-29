@@ -16,10 +16,8 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
-        batch_write_item::BatchWriteItemError,
         create_table::CreateTableError,
         delete_table::DeleteTableError,
-        describe_table::DescribeTableError,
         get_item::GetItemError,
         list_tables::ListTablesError,
         query::{QueryError, QueryOutput},
@@ -1007,10 +1005,6 @@ pub enum DynamoDbStoreInternalError {
     #[error(transparent)]
     Get(#[from] Box<SdkError<GetItemError>>),
 
-    /// An error occurred while writing a batch of items.
-    #[error(transparent)]
-    BatchWriteItem(#[from] Box<SdkError<BatchWriteItemError>>),
-
     /// An error occurred while writing a transaction of items.
     #[error(transparent)]
     TransactWriteItem(#[from] Box<SdkError<TransactWriteItemsError>>),
@@ -1026,10 +1020,6 @@ pub enum DynamoDbStoreInternalError {
     /// An error occurred while listing tables
     #[error(transparent)]
     ListTables(#[from] Box<SdkError<ListTablesError>>),
-
-    /// An error occurred while describing tables
-    #[error(transparent)]
-    DescribeTables(#[from] Box<SdkError<DescribeTableError>>),
 
     /// The transact maximum size is `MAX_TRANSACT_WRITE_ITEM_SIZE`.
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
@@ -1050,10 +1040,6 @@ pub enum DynamoDbStoreInternalError {
     /// Key prefixes have to be of non-zero length.
     #[error("The key_prefix must be of strictly positive length")]
     ZeroLengthKeyPrefix,
-
-    /// The recovery failed.
-    #[error("The DynamoDB database recovery failed")]
-    DatabaseRecoveryFailed,
 
     /// The journal is not coherent
     #[error(transparent)]
