@@ -2,17 +2,8 @@
 source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
-impl linera_views::views::View<custom::path::to::ContextType> for TestView
+impl linera_views::views::View for TestView
 where
-    RegisterView<
-        custom::path::to::ContextType,
-        usize,
-    >: linera_views::views::View<custom::path::to::ContextType>,
-    CollectionView<
-        custom::path::to::ContextType,
-        usize,
-        RegisterView<custom::path::to::ContextType, usize>,
-    >: linera_views::views::View<custom::path::to::ContextType>,
     Self: Send + Sync,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<
@@ -24,6 +15,7 @@ where
             usize,
             RegisterView<custom::path::to::ContextType, usize>,
         >::NUM_INIT_KEYS;
+    type Context = custom::path::to::ContextType;
     fn context(&self) -> &custom::path::to::ContextType {
         use linera_views::views::View;
         self.register.context()

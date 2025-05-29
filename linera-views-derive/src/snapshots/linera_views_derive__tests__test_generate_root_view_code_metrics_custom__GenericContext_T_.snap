@@ -2,7 +2,7 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_root_view_code(input))
 ---
-impl linera_views::views::RootView<custom::GenericContext<T>> for TestView
+impl linera_views::views::RootView for TestView
 where
     Self: Send + Sync,
 {

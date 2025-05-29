@@ -2,17 +2,14 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_hash_view_code(input))
 ---
-impl linera_views::views::HashableView<custom::GenericContext<T>> for TestView
+impl linera_views::views::HashableView for TestView
 where
-    RegisterView<
-        custom::GenericContext<T>,
-        usize,
-    >: linera_views::views::HashableView<custom::GenericContext<T>>,
+    RegisterView<custom::GenericContext<T>, usize>: linera_views::views::HashableView,
     CollectionView<
         custom::GenericContext<T>,
         usize,
         RegisterView<custom::GenericContext<T>, usize>,
-    >: linera_views::views::HashableView<custom::GenericContext<T>>,
+    >: linera_views::views::HashableView,
     Self: Send + Sync,
 {
     type Hasher = linera_views::sha3::Sha3_256;

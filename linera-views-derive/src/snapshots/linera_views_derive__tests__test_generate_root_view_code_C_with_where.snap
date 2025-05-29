@@ -2,9 +2,10 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_root_view_code(input))
 ---
-impl<MyParam> linera_views::views::RootView for TestView<MyParam>
+impl<C, MyParam> linera_views::views::RootView for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
+    C: linera_views::context::Context + Send + Sync + Clone + 'static,
     Self: Send + Sync,
 {
     async fn save(&mut self) -> Result<(), linera_views::ViewError> {
@@ -12,12 +13,6 @@ where
             context::Context, batch::Batch, store::WritableKeyValueStore as _,
             views::View,
         };
-        #[cfg(not(target_arch = "wasm32"))]
-        linera_views::metrics::increment_counter(
-            &linera_views::metrics::SAVE_VIEW_COUNTER,
-            stringify!(TestView),
-            &self.context().base_key().bytes,
-        );
         let mut batch = Batch::new();
         self.register.flush(&mut batch)?;
         self.collection.flush(&mut batch)?;

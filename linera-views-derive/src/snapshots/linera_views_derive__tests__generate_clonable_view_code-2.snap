@@ -2,12 +2,12 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_clonable_view_code(input))
 ---
-impl<C, MyParam> linera_views::views::ClonableView<C> for TestView<C, MyParam>
+impl<C, MyParam> linera_views::views::ClonableView for TestView<C, MyParam>
 where
     C: linera_views::context::Context + Send + Sync + Clone + 'static,
     MyParam: Send + Sync + 'static,
-    RegisterView<C, usize>: ClonableView<C>,
-    CollectionView<C, usize, RegisterView<C, usize>>: ClonableView<C>,
+    RegisterView<C, usize>: ClonableView,
+    CollectionView<C, usize, RegisterView<C, usize>>: ClonableView,
     Self: Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {

@@ -2,16 +2,15 @@
 source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
-impl<C, MyParam> linera_views::views::View<C> for TestView<C, MyParam>
+impl<C, MyParam> linera_views::views::View for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
     C: linera_views::context::Context + Send + Sync + Clone + 'static,
-    RegisterView<C, usize>: linera_views::views::View<C>,
-    CollectionView<C, usize, RegisterView<C, usize>>: linera_views::views::View<C>,
     Self: Send + Sync,
 {
     const NUM_INIT_KEYS: usize = RegisterView::<C, usize>::NUM_INIT_KEYS
         + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;
+    type Context = C;
     fn context(&self) -> &C {
         use linera_views::views::View;
         self.register.context()

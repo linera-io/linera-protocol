@@ -2,14 +2,14 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_crypto_hash_code(input))
 ---
-impl linera_views::views::CryptoHashView<CustomContext> for TestView
+impl linera_views::views::CryptoHashView for TestView
 where
-    RegisterView<CustomContext, usize>: linera_views::views::HashableView<CustomContext>,
+    RegisterView<CustomContext, usize>: linera_views::views::HashableView,
     CollectionView<
         CustomContext,
         usize,
         RegisterView<CustomContext, usize>,
-    >: linera_views::views::HashableView<CustomContext>,
+    >: linera_views::views::HashableView,
     Self: Send + Sync,
 {
     async fn crypto_hash(
