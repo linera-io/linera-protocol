@@ -18,7 +18,7 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
+use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
