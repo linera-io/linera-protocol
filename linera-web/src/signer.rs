@@ -8,7 +8,6 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, CryptoHash, EvmPublicKey, EvmSignature, Signer},
     identifiers::AccountOwner,
 };
-use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
@@ -50,53 +49,12 @@ impl From<JsValue> for JsSignerError {
 
 impl std::error::Error for JsSignerError {}
 
-#[wasm_bindgen(js_name = "CryptoHash")]
-#[derive(Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct JsCryptoHash(CryptoHash);
-
-#[wasm_bindgen(js_class = "CryptoHash")]
-impl JsCryptoHash {
-    #[wasm_bindgen(constructor)]
-    pub fn new(value: &str) -> Result<JsCryptoHash, JsError> {
-        Ok(JsCryptoHash(CryptoHash::from_str(value)?))
-    }
-}
-
-#[wasm_bindgen(js_name = "AccountOwner")]
-#[derive(Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct JsAccountOwner(AccountOwner);
-
-#[wasm_bindgen(js_class = "AccountOwner")]
-impl JsAccountOwner {
-    #[wasm_bindgen(constructor)]
-    pub fn new(value: &str) -> Result<JsAccountOwner, JsError> {
-        Ok(JsAccountOwner(AccountOwner::from_str(value).unwrap()))
-    }
-}
-
-#[wasm_bindgen(js_name = "Signature")]
-#[derive(Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct JsSignature(EvmSignature);
-
-#[wasm_bindgen(js_class = "Signature")]
-impl JsSignature {
-    #[wasm_bindgen(constructor)]
-    pub fn new(value: &str) -> Result<JsSignature, JsError> {
-        serde_wasm_bindgen::from_value(JsValue::from_str(value))
-            .map(JsSignature)
-            .map_err(|_| JsError::new("Failed to parse EvmSignature"))
-    }
-}
-
 #[wasm_bindgen(typescript_custom_section)]
 const JS_SIGNER_INTERFACE: &'static str = r#"
 export interface IJsSigner {
-  sign(owner: AccountOwner, value: CryptoHash): Promise<Signature>;
-  get_public_key(owner: AccountOwner): Promise<string>;
-  contains_key(owner: AccountOwner): Promise<boolean>;
+  sign(owner: string, value: string): Promise<string>;
+  get_public_key(owner: string): Promise<string>;
+  contains_key(owner: string): Promise<boolean>;
 }"#;
 
 #[wasm_bindgen]
@@ -119,21 +77,21 @@ impl Signer for JsSigner {
 
     async fn contains_key(&self, owner: &AccountOwner) -> Result<bool, Self::Error> {
         let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-        let result = self
+        let js_bool = self
             .contains_key(js_owner)
             .await
             .map_err(JsSignerError::from)?;
 
-        Ok(serde_wasm_bindgen::from_value(result).unwrap())
+        Ok(serde_wasm_bindgen::from_value(js_bool).unwrap())
     }
 
     async fn get_public_key(&self, owner: &AccountOwner) -> Result<AccountPublicKey, Self::Error> {
         let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
-        let result = self
+        let js_result = self
             .get_public_key(js_owner)
             .await
             .map_err(JsSignerError::from)?;
-        let evm_public_key: EvmPublicKey = serde_wasm_bindgen::from_value(result)
+        let evm_public_key: EvmPublicKey = serde_wasm_bindgen::from_value(js_result)
             .map_err(|_| JsSignerError::PublicKeyParseError)?;
         Ok(AccountPublicKey::EvmSecp256k1(evm_public_key))
     }
@@ -145,12 +103,12 @@ impl Signer for JsSigner {
     ) -> Result<AccountSignature, Self::Error> {
         let js_owner = serde_wasm_bindgen::to_value(owner).unwrap();
         let js_cryptohash = serde_wasm_bindgen::to_value(value).unwrap();
-        let result = self
+        let js_result = self
             .sign(js_owner, js_cryptohash)
             .await
             .map_err(JsSignerError::from)?;
-        let js_signature = serde_wasm_bindgen::from_value::<JsSignature>(result)
+        let signature = EvmSignature::from_str(&js_result.as_string().unwrap())
             .map_err(|_| JsSignerError::SigningError)?;
-        Ok(AccountSignature::EvmSecp256k1(js_signature.0))
+        Ok(AccountSignature::EvmSecp256k1(signature))
     }
 }
