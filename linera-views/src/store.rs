@@ -63,7 +63,9 @@ impl Default for CommonStoreConfig {
 }
 
 /// The error type for the key-value stores.
-pub trait KeyValueStoreError: std::error::Error + From<bcs::Error> + Debug + Send + Sync + 'static {
+pub trait KeyValueStoreError:
+    std::error::Error + From<bcs::Error> + Debug + Send + Sync + 'static
+{
     /// The name of the backend.
     const BACKEND: &'static str;
 }

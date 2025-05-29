@@ -102,7 +102,9 @@ pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8
 }
 
 /// Deserializes an optional vector of `u8`
-pub fn from_bytes_option<V: DeserializeOwned>(key_opt: &Option<Vec<u8>>) -> Result<Option<V>, bcs::Error> {
+pub fn from_bytes_option<V: DeserializeOwned>(
+    key_opt: &Option<Vec<u8>>,
+) -> Result<Option<V>, bcs::Error> {
     if let Some(bytes) = key_opt {
         Ok(Some(bcs::from_bytes(bytes)?))
     } else {

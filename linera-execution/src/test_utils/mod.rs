@@ -22,11 +22,7 @@ use linera_base::{
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
-use linera_views::{
-    context::Context,
-    views::View,
-    ViewError,
-};
+use linera_views::{context::Context, views::View, ViewError};
 use proptest::{prelude::any, strategy::Strategy};
 use serde::{Deserialize, Serialize};
 
