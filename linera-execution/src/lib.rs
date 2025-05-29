@@ -47,7 +47,7 @@ use linera_base::{
     task,
     vm::VmRuntime,
 };
-use linera_views::{batch::Batch, views::ViewError};
+use linera_views::{batch::Batch, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;

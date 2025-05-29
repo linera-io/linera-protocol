@@ -45,7 +45,6 @@ pub struct ByteSetView<C> {
 impl<C> View<C> for ByteSetView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     const NUM_INIT_KEYS: usize = 0;
 
@@ -115,7 +114,6 @@ where
 impl<C> ClonableView<C> for ByteSetView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ByteSetView {
@@ -129,7 +127,6 @@ where
 impl<C> ByteSetView<C>
 where
     C: Context,
-    ViewError: From<C::Error>,
 {
     /// Insert a value. If already present then it has no effect.
     /// ```rust
@@ -175,7 +172,6 @@ where
 impl<C> ByteSetView<C>
 where
     C: Context,
-    ViewError: From<C::Error>,
 {
     /// Returns true if the given index exists in the set.
     /// ```rust
@@ -208,7 +204,6 @@ where
 impl<C> ByteSetView<C>
 where
     C: Context,
-    ViewError: From<C::Error>,
 {
     /// Returns the list of keys in the set. The order is lexicographic.
     /// ```rust
@@ -362,7 +357,6 @@ where
 impl<C> HashableView<C> for ByteSetView<C>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -396,7 +390,6 @@ pub struct SetView<C, I> {
 impl<C, I> View<C> for SetView<C, I>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
@@ -441,7 +434,6 @@ where
 impl<C, I> ClonableView<C> for SetView<C, I>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -455,7 +447,6 @@ where
 impl<C, I> SetView<C, I>
 where
     C: Context,
-    ViewError: From<C::Error>,
     I: Serialize,
 {
     /// Inserts a value. If already present then no effect.
@@ -510,7 +501,6 @@ where
 impl<C, I> SetView<C, I>
 where
     C: Context,
-    ViewError: From<C::Error>,
     I: Serialize,
 {
     /// Returns true if the given index exists in the set.
@@ -538,7 +528,6 @@ where
 impl<C, I> SetView<C, I>
 where
     C: Context,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
     /// Returns the list of indices in the set. The order is determined by serialization.
@@ -652,7 +641,6 @@ where
 impl<C, I> HashableView<C> for SetView<C, I>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -677,7 +665,6 @@ pub struct CustomSetView<C, I> {
 impl<C, I> View<C> for CustomSetView<C, I>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
 {
     const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
@@ -722,7 +709,6 @@ where
 impl<C, I> ClonableView<C> for CustomSetView<C, I>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -736,7 +722,6 @@ where
 impl<C, I> CustomSetView<C, I>
 where
     C: Context,
-    ViewError: From<C::Error>,
     I: CustomSerialize,
 {
     /// Inserts a value. If present then it has no effect.
@@ -792,7 +777,6 @@ where
 impl<C, I> CustomSetView<C, I>
 where
     C: Context,
-    ViewError: From<C::Error>,
     I: CustomSerialize,
 {
     /// Returns true if the given index exists in the set.
@@ -821,7 +805,6 @@ where
 impl<C, I> CustomSetView<C, I>
 where
     C: Context,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + CustomSerialize,
 {
     /// Returns the list of indices in the set. The order is determined by the custom
@@ -940,7 +923,6 @@ where
 impl<C, I> HashableView<C> for CustomSetView<C, I>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Clone + Send + Sync + CustomSerialize,
 {
     type Hasher = sha3::Sha3_256;

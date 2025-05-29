@@ -24,7 +24,8 @@ use linera_views::{
     batch::Batch,
     context::ViewContext,
     store::{AdminKeyValueStore, KeyIterable as _, KeyValueStore},
-    views::{View, ViewError},
+    views::View,
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]

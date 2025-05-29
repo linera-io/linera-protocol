@@ -20,7 +20,7 @@ use linera_chain::{
 };
 use linera_execution::{committee::Committee, Query, QueryOutcome};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use thiserror::Error;
 use tokio::sync::OwnedRwLockReadGuard;
 use tracing::{instrument, warn};

@@ -22,7 +22,7 @@ use linera_chain::{
 };
 use linera_execution::{committee::Committee, ExecutionError};
 use linera_version::VersionInfo;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

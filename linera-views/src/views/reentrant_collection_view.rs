@@ -103,7 +103,6 @@ enum KeyTag {
 impl<C, W> View<C> for ReentrantByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = 0;
@@ -189,7 +188,6 @@ where
 impl<C, W> ClonableView<C> for ReentrantByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: ClonableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -242,7 +240,6 @@ impl<C: Context, W> ReentrantByteCollectionView<C, W> {
 impl<C, W> ReentrantByteCollectionView<C, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
     /// Reads the view and if missing returns the default view
@@ -494,7 +491,6 @@ where
 impl<C, W> ReentrantByteCollectionView<C, W>
 where
     C: Context + Send + Clone + 'static,
-    ViewError: From<C::Error>,
     W: View<C> + Send + Sync + 'static,
 {
     /// Loads multiple entries for writing at once.
@@ -840,7 +836,6 @@ where
 impl<C, W> ReentrantByteCollectionView<C, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
     /// Returns the list of indices in the collection in lexicographic order.
@@ -1006,7 +1001,6 @@ where
 impl<C, W> HashableView<C> for ReentrantByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -1103,7 +1097,6 @@ pub struct ReentrantCollectionView<C, I, W> {
 impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
@@ -1149,7 +1142,6 @@ where
 impl<C, I, W> ClonableView<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
     W: ClonableView<C> + Send + Sync,
 {
@@ -1164,7 +1156,6 @@ where
 impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
@@ -1319,7 +1310,6 @@ where
 impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Clone + 'static,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync + 'static,
 {
@@ -1467,7 +1457,6 @@ where
 impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
@@ -1594,7 +1583,6 @@ where
 impl<C, I, W> HashableView<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
     W: HashableView<C> + Send + Sync + 'static,
 {
@@ -1620,7 +1608,6 @@ pub struct ReentrantCustomCollectionView<C, I, W> {
 impl<C, I, W> View<C> for ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
     W: View<C> + Send + Sync,
 {
@@ -1666,7 +1653,6 @@ where
 impl<C, I, W> ClonableView<C> for ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
     W: ClonableView<C> + Send + Sync,
 {
@@ -1681,7 +1667,6 @@ where
 impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + CustomSerialize,
     W: View<C> + Send + Sync,
 {
@@ -1837,7 +1822,6 @@ where
 impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Clone + 'static,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + CustomSerialize,
     W: View<C> + Send + Sync + 'static,
 {
@@ -1983,7 +1967,6 @@ where
 impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send,
-    ViewError: From<C::Error>,
     I: Sync + Clone + Send + CustomSerialize,
     W: View<C> + Send + Sync,
 {
@@ -2112,7 +2095,6 @@ where
 impl<C, I, W> HashableView<C> for ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
     W: HashableView<C> + Send + Sync + 'static,
 {

@@ -60,7 +60,7 @@ use linera_execution::{
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage as _};
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use rand::prelude::SliceRandom as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

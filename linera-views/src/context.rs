@@ -80,7 +80,11 @@ impl BaseKey {
 
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
-pub trait Context: Clone {
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
+pub trait Context: Clone
+where
+    crate::ViewError: From<Self::Error>,
+{
     /// The type of the key-value store used by this context.
     type Store: ReadableKeyValueStore
         + WritableKeyValueStore

@@ -18,7 +18,8 @@ use crate::{
     queue_view::QueueView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{ClonableView, RootView, ViewError},
+    views::{ClonableView, RootView},
+    ViewError,
 };
 
 /// A [`View`][`crate::views::View`] to be used in test cases.

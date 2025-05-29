@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{get_interval, get_uleb128_size},
-    views::ViewError,
+    ViewError,
 };
 
 /// A write operation as requested by a view when it needs to persist staged changes.

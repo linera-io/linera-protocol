@@ -13,7 +13,7 @@ use std::{
 
 use serde::de::DeserializeOwned;
 
-use crate::views::ViewError;
+use crate::ViewError;
 
 #[doc(hidden)]
 pub type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
@@ -102,28 +102,23 @@ pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8
 }
 
 /// Deserializes an optional vector of `u8`
-pub fn from_bytes_option<V: DeserializeOwned, E>(key_opt: &Option<Vec<u8>>) -> Result<Option<V>, E>
-where
-    E: From<bcs::Error>,
-{
-    match key_opt {
-        Some(bytes) => {
-            let value = bcs::from_bytes(bytes)?;
-            Ok(Some(value))
-        }
-        None => Ok(None),
+pub fn from_bytes_option<V: DeserializeOwned>(
+    key_opt: &Option<Vec<u8>>,
+) -> Result<Option<V>, bcs::Error> {
+    if let Some(bytes) = key_opt {
+        Ok(Some(bcs::from_bytes(bytes)?))
+    } else {
+        Ok(None)
     }
 }
 
-pub(crate) fn from_bytes_option_or_default<V: DeserializeOwned + Default, E>(
+pub(crate) fn from_bytes_option_or_default<V: DeserializeOwned + Default>(
     key_opt: &Option<Vec<u8>>,
-) -> Result<V, E>
-where
-    E: From<bcs::Error>,
-{
-    match key_opt {
-        Some(bytes) => Ok(bcs::from_bytes(bytes)?),
-        None => Ok(V::default()),
+) -> Result<V, bcs::Error> {
+    if let Some(bytes) = key_opt {
+        Ok(bcs::from_bytes(bytes)?)
+    } else {
+        Ok(V::default())
     }
 }
 

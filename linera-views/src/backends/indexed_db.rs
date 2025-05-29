@@ -371,22 +371,23 @@ pub enum IndexedDbStoreError {
 
     /// A DOM exception occurred in the IndexedDB operations
     #[error("DOM exception: {0:?}")]
-    Dom(web_sys::DomException),
+    Dom(gloo_utils::errors::JsError),
 
     /// JavaScript threw an exception whilst handling IndexedDB operations
     #[error("JavaScript exception: {0:?}")]
-    Js(wasm_bindgen::JsValue),
+    Js(gloo_utils::errors::JsError),
 }
 
 impl From<web_sys::DomException> for IndexedDbStoreError {
     fn from(dom_exception: web_sys::DomException) -> Self {
-        Self::Dom(dom_exception)
+        let value: &wasm_bindgen::JsValue = dom_exception.as_ref();
+        Self::Dom(value.clone().try_into().unwrap())
     }
 }
 
 impl From<wasm_bindgen::JsValue> for IndexedDbStoreError {
     fn from(js_value: wasm_bindgen::JsValue) -> Self {
-        Self::Js(js_value)
+        Self::Js(js_value.try_into().unwrap())
     }
 }
 

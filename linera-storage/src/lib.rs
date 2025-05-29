@@ -35,10 +35,7 @@ use linera_execution::{
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
-use linera_views::{
-    context::Context,
-    views::{RootView, ViewError},
-};
+use linera_views::{context::Context, views::RootView, ViewError};
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;

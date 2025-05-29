@@ -59,7 +59,6 @@ pub struct QueueView<C, T> {
 impl<C, T> View<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 1;
@@ -157,7 +156,6 @@ where
 impl<C, T> ClonableView<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -184,7 +182,6 @@ impl<C, T> QueueView<C, T> {
 impl<'a, C, T> QueueView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
@@ -457,7 +454,6 @@ where
 impl<C, T> HashableView<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;

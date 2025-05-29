@@ -27,7 +27,7 @@ pub(crate) enum Inner {
     #[error("persistence error: {0}")]
     Persistence(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("view error: {0}")]
-    View(#[from] linera_views::views::ViewError),
+    View(#[from] linera_views::ViewError),
     #[error("non-existent chain: {0:?}")]
     NonexistentChain(linera_base::identifiers::ChainId),
     #[error("no keypair found for chain: {0:?}")]
