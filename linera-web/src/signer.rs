@@ -46,8 +46,18 @@ impl From<JsValue> for EmbeddedSignerError {
 
 impl std::error::Error for EmbeddedSignerError {}
 
+
+#[wasm_bindgen(typescript_custom_section)]
+const JS_SIGNER_INTERFACE: &'static str = r#"
+interface IJsSigner {
+  sign(owner: string, value: Uint8Array): Promise<string>;
+  get_public_key(owner: string): Promise<string>;
+  contains_key(owner: string): Promise<boolean>;
+}"#;
+
 #[wasm_bindgen]
 extern "C" {
+    #[wasm_bindgen(typescript_type = "IJsSigner")]
     pub type JsSigner;
 
     #[wasm_bindgen(catch, method)]
