@@ -285,6 +285,7 @@ linera-faucet-server = { version = "0.15.0", path = "linera-faucet/server" }
 linera-indexer = { version = "0.15.0", path = "./linera-indexer/lib" }
 linera-indexer-graphql-client = { version = "0.15.0", path = "./linera-indexer/graphql-client" }
 linera-indexer-plugins = { version = "0.15.0", path = "./linera-indexer/plugins" }
+linera-persistent = { version = "0.15.0", path = "./linera-persistent" }
 linera-rpc = { version = "0.15.0", path = "./linera-rpc" }
 linera-sdk = { version = "0.15.0", path = "./linera-sdk" }
 linera-sdk-derive = { version = "0.15.0", path = "./linera-sdk-derive" }
