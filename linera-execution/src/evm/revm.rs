@@ -324,12 +324,17 @@ enum PrecompileTag {
     Service(ServicePrecompileTag),
 }
 
-fn get_precompile_output(output: Vec<u8>) -> Result<Option<InterpreterResult>, String> {
-    // The gas usage is set to zero since the proper accounting is done
-    // by the called application
+fn get_precompile_output(
+    output: Vec<u8>,
+    gas_limit: u64,
+) -> Result<Option<InterpreterResult>, String> {
+    // The gas usage is set to `gas_limit` and no spending is being done on it.
+    // This means that for REVM, it looks like the precompile call costs nothing.
+    // This is because the costs of the EVM precompile calls is accounted for
+    // separately in Linera.
     let output = Bytes::copy_from_slice(&output);
     let result = InstructionResult::default();
-    let gas = Gas::new(0);
+    let gas = Gas::new(gas_limit);
     Ok(Some(InterpreterResult {
         result,
         output,
@@ -415,7 +420,7 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
         if address == &PRECOMPILE_ADDRESS {
             let input = get_precompile_argument(context, &inputs.input);
             let output = Self::call_or_fail(&input, gas_limit, context)?;
-            return get_precompile_output(output);
+            return get_precompile_output(output, gas_limit);
         }
         self.inner
             .run(context, address, inputs, is_static, gas_limit)
@@ -593,7 +598,7 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
         if address == &PRECOMPILE_ADDRESS {
             let input = get_precompile_argument(context, &inputs.input);
             let output = Self::call_or_fail(&input, gas_limit, context)?;
-            return get_precompile_output(output);
+            return get_precompile_output(output, gas_limit);
         }
         self.inner
             .run(context, address, inputs, is_static, gas_limit)
