@@ -339,9 +339,7 @@ where
     /// Returns the appropriate gRPC status for the given [`ViewError`].
     fn error_to_status(err: ViewError) -> Status {
         let mut status = match &err {
-            ViewError::BcsError(_) => {
-                Status::invalid_argument(err.to_string())
-            }
+            ViewError::BcsError(_) => Status::invalid_argument(err.to_string()),
             ViewError::StoreError { .. }
             | ViewError::TokioJoinError(_)
             | ViewError::TryLockError(_)
@@ -351,8 +349,9 @@ where
             ViewError::KeyTooLong | ViewError::ArithmeticError(_) => {
                 Status::out_of_range(err.to_string())
             }
-            ViewError::NotFound(_)
-            | ViewError::MissingEntries => Status::not_found(err.to_string()),
+            ViewError::NotFound(_) | ViewError::MissingEntries => {
+                Status::not_found(err.to_string())
+            }
         };
         status.set_source(Arc::new(err));
         status
