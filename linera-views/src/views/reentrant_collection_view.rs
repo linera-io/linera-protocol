@@ -1072,8 +1072,9 @@ pub struct ReentrantCollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-impl<I, W: View + Sync> View for ReentrantCollectionView<W::Context, I, W>
+impl<I, W> View for ReentrantCollectionView<W::Context, I, W>
 where
+    W: View + Sync,
     I: Send + Sync + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<W::Context, W>::NUM_INIT_KEYS;
@@ -1117,8 +1118,9 @@ where
     }
 }
 
-impl<I, W: ClonableView + Sync> ClonableView for ReentrantCollectionView<W::Context, I, W>
+impl<I, W> ClonableView for ReentrantCollectionView<W::Context, I, W>
 where
+    W: ClonableView + Sync,
     I: Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1129,8 +1131,9 @@ where
     }
 }
 
-impl<I, W: View + Sync> ReentrantCollectionView<W::Context, I, W>
+impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
+    W: View + Sync,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -1281,8 +1284,9 @@ where
     }
 }
 
-impl<I, W: View + Sync> ReentrantCollectionView<W::Context, I, W>
+impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
+    W: View + Sync,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
     /// Load multiple entries for writing at once.
@@ -1426,8 +1430,9 @@ where
     }
 }
 
-impl<I, W: View + Sync> ReentrantCollectionView<W::Context, I, W>
+impl<I, W> ReentrantCollectionView<W::Context, I, W>
 where
+    W: View + Sync,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
     /// Returns the list of indices in the collection in an order determined
@@ -1550,8 +1555,9 @@ where
     }
 }
 
-impl<I, W: HashableView + Sync> HashableView for ReentrantCollectionView<W::Context, I, W>
+impl<I, W> HashableView for ReentrantCollectionView<W::Context, I, W>
 where
+    W: HashableView + Sync,
     I: Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
@@ -1573,8 +1579,9 @@ pub struct ReentrantCustomCollectionView<C, I, W> {
     _phantom: PhantomData<I>,
 }
 
-impl<I, W: View + Sync> View for ReentrantCustomCollectionView<W::Context, I, W>
+impl<I, W> View for ReentrantCustomCollectionView<W::Context, I, W>
 where
+    W: View + Sync,
     I: Send + Sync + CustomSerialize,
 {
     const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<W::Context, W>::NUM_INIT_KEYS;
@@ -1618,8 +1625,9 @@ where
     }
 }
 
-impl<I, W: ClonableView + Sync> ClonableView for ReentrantCustomCollectionView<W::Context, I, W>
+impl<I, W> ClonableView for ReentrantCustomCollectionView<W::Context, I, W>
 where
+    W: ClonableView + Sync,
     Self: View,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1630,8 +1638,9 @@ where
     }
 }
 
-impl<I, W: View + Sync> ReentrantCustomCollectionView<W::Context, I, W>
+impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
+    W: View + Sync,
     I: Sync + Clone + Send + CustomSerialize,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -1926,8 +1935,9 @@ where
     }
 }
 
-impl<I, W: View + Sync> ReentrantCustomCollectionView<W::Context, I, W>
+impl<I, W> ReentrantCustomCollectionView<W::Context, I, W>
 where
+    W: View + Sync,
     I: Sync + Clone + Send + CustomSerialize,
 {
     /// Returns the list of indices in the collection. The order is determined by
@@ -2052,8 +2062,9 @@ where
     }
 }
 
-impl<I, W: HashableView + Sync> HashableView for ReentrantCustomCollectionView<W::Context, I, W>
+impl<I, W> HashableView for ReentrantCustomCollectionView<W::Context, I, W>
 where
+    W: HashableView + Sync,
     I: Send + Sync + CustomSerialize,
 {
     type Hasher = sha3::Sha3_256;
