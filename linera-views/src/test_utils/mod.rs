@@ -252,7 +252,16 @@ pub fn get_random_key_values_with_sizes(
     len_key: usize,
     len_value: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
-    let key_prefix = vec![0];
+    get_random_key_values_with_sizes_with_key_prefix(num_entries, len_key, len_value, vec![0])
+}
+
+/// Generates a list of random key-values with no duplicates, and a common key prefix.
+pub fn get_random_key_values_with_sizes_with_key_prefix(
+    num_entries: usize,
+    len_key: usize,
+    len_value: usize,
+    key_prefix: Vec<u8>,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     get_random_key_values_prefix(
         &mut rng,
@@ -269,7 +278,15 @@ fn get_random_key_values_with_small_keys(
     len_key: usize,
     len_value: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
-    let key_prefix = vec![0];
+    get_random_key_values_with_small_keys_with_key_prefix(num_entries, len_key, len_value, vec![0])
+}
+
+fn get_random_key_values_with_small_keys_with_key_prefix(
+    num_entries: usize,
+    len_key: usize,
+    len_value: usize,
+    key_prefix: Vec<u8>,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     get_random_key_values_prefix(
         &mut rng,
@@ -301,6 +318,19 @@ pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
         get_random_key_values_with_sizes(30, 8, 10),
         get_random_key_values_with_small_keys(30, 4, 10),
         get_random_key_values_with_small_keys(30, 4, 100),
+    ]
+}
+
+/// We build a number of scenarios for testing the reads, with a specific key prefix.
+pub fn get_random_test_scenarios_with_key_prefix(
+    key_prefix: &[u8],
+) -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
+    vec![
+        get_random_key_values_with_sizes_with_key_prefix(7, 8, 3, key_prefix.to_vec()),
+        get_random_key_values_with_sizes_with_key_prefix(150, 8, 3, key_prefix.to_vec()),
+        get_random_key_values_with_sizes_with_key_prefix(30, 8, 10, key_prefix.to_vec()),
+        get_random_key_values_with_small_keys_with_key_prefix(30, 4, 10, key_prefix.to_vec()),
+        get_random_key_values_with_small_keys_with_key_prefix(30, 4, 100, key_prefix.to_vec()),
     ]
 }
 
@@ -779,10 +809,11 @@ pub async fn root_key_admin_test<S: TestKeyValueStore>() {
     let mut keys = BTreeSet::new();
     S::create(&config, &namespace).await.expect("creation");
     let prefix = vec![0];
+
     {
-        let size = 3;
         let mut rng = make_deterministic_rng();
         let store = S::connect(&config, &namespace).await.expect("store");
+        let store = store.open_exclusive(&[]).expect("exclusive store");
         root_keys.push(vec![]);
         let mut batch = Batch::new();
         for _ in 0..2 {
@@ -792,11 +823,12 @@ pub async fn root_key_admin_test<S: TestKeyValueStore>() {
         }
         store.write_batch(batch).await.expect("write batch");
 
+        let size = 3;
         for _ in 0..20 {
             let root_key = get_random_byte_vector(&mut rng, &[], 4);
-            let cloned_store = store.open_exclusive(&root_key).expect("cloned store");
+            let cloned_store = store.open_exclusive(&root_key).expect("exclusive store");
             root_keys.push(root_key.clone());
-            let size_select = rng.gen_range(0..size);
+            let size_select = rng.gen_range(1..size);
             let mut batch = Batch::new();
             for _ in 0..size_select {
                 let key = get_random_byte_vector(&mut rng, &prefix, 4);
