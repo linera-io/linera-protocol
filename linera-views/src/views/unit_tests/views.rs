@@ -243,6 +243,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
         let config = ScyllaDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let store = ScyllaDbStore::recreate_and_connect(&config, &namespace).await?;
+        let store = store.open_exclusive(&[])?;
         let context = ViewContext::create_root_context(store, ()).await?;
         Ok(context)
     }

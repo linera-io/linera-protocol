@@ -106,11 +106,19 @@ async fn test_reads_scylla_db() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_reads_scylla_db_no_root_key() {
-    for scenario in get_random_test_scenarios() {
-        let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
-            .await
-            .unwrap();
-        run_reads(store, scenario).await;
+    use linera_views::test_utils::{
+        get_random_byte_vector, get_random_test_scenarios_with_key_prefix,
+    };
+
+    let mut rng = make_deterministic_rng();
+    for _ in 0..3 {
+        let key_prefix = get_random_byte_vector(&mut rng, &[], 4);
+        for scenario in get_random_test_scenarios_with_key_prefix(&key_prefix) {
+            let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
+                .await
+                .unwrap();
+            run_reads(store, scenario).await;
+        }
     }
 }
 
@@ -184,9 +192,12 @@ async fn test_dynamo_db_writes_from_blank() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_writes_from_blank() {
+    use linera_views::store::AdminKeyValueStore as _;
+
     let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
         .await
         .unwrap();
+    let store = store.open_exclusive(&[]).unwrap();
     run_writes_from_blank(&store).await;
 }
 
@@ -333,9 +344,12 @@ async fn test_dynamo_db_writes_from_state() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_writes_from_state() {
+    use linera_views::store::AdminKeyValueStore as _;
+
     let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
         .await
         .unwrap();
+    let store = store.open_exclusive(&[]).unwrap();
     run_writes_from_state(&store).await;
 }
 
