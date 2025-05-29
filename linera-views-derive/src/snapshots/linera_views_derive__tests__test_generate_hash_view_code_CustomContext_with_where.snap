@@ -18,7 +18,7 @@ where
         &mut self,
     ) -> Result<
         <Self::Hasher as linera_views::views::Hasher>::Output,
-        linera_views::views::ViewError,
+        linera_views::ViewError,
     > {
         use linera_views::views::{Hasher, HashableView};
         use std::io::Write;
@@ -31,7 +31,7 @@ where
         &self,
     ) -> Result<
         <Self::Hasher as linera_views::views::Hasher>::Output,
-        linera_views::views::ViewError,
+        linera_views::ViewError,
     > {
         use linera_views::views::{Hasher, HashableView};
         use std::io::Write;

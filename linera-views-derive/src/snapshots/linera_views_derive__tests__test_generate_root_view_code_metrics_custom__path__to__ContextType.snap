@@ -6,7 +6,7 @@ impl linera_views::views::RootView<custom::path::to::ContextType> for TestView
 where
     Self: Send + Sync,
 {
-    async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+    async fn save(&mut self) -> Result<(), linera_views::ViewError> {
         use linera_views::{
             context::Context, batch::Batch, store::WritableKeyValueStore as _,
             views::View,
