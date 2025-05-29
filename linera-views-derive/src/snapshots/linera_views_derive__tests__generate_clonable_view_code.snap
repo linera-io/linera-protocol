@@ -4,10 +4,9 @@ expression: pretty(generate_clonable_view_code(input))
 ---
 impl<C> linera_views::views::ClonableView for TestView<C>
 where
-    C: linera_views::context::Context + Send + Sync + Clone + 'static,
     RegisterView<C, usize>: ClonableView,
     CollectionView<C, usize, RegisterView<C, usize>>: ClonableView,
-    Self: Send + Sync,
+    Self: linera_views::views::View + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
         Ok(Self {

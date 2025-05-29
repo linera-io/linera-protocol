@@ -4,7 +4,7 @@ expression: pretty(generate_root_view_code(input))
 ---
 impl linera_views::views::RootView for TestView
 where
-    Self: Send + Sync,
+    Self: linera_views::views::View + Sync,
 {
     async fn save(&mut self) -> Result<(), linera_views::ViewError> {
         use linera_views::{
@@ -12,8 +12,7 @@ where
             views::View,
         };
         let mut batch = Batch::new();
-        self.register.flush(&mut batch)?;
-        self.collection.flush(&mut batch)?;
+        self.flush(&mut batch)?;
         if !batch.is_empty() {
             self.context().store().write_batch(batch).await?;
         }

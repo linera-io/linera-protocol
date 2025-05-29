@@ -10,7 +10,7 @@ where
         usize,
         RegisterView<custom::GenericContext<T>, usize>,
     >: ClonableView,
-    Self: Send + Sync,
+    Self: linera_views::views::View + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
         Ok(Self {

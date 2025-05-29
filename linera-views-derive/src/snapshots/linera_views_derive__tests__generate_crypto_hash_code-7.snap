@@ -10,7 +10,7 @@ where
         usize,
         RegisterView<custom::GenericContext<T>, usize>,
     >: linera_views::views::HashableView,
-    Self: Send + Sync,
+    Self: linera_views::views::View + Sync,
 {
     async fn crypto_hash(
         &self,

@@ -4,18 +4,27 @@ expression: "pretty(generate_view_code(input, true))"
 ---
 impl<MyParam> linera_views::views::View for TestView<MyParam>
 where
+    custom::path::to::ContextType: linera_views::context::Context,
     MyParam: Send + Sync + 'static,
-    Self: Send + Sync,
-{
-    const NUM_INIT_KEYS: usize = RegisterView::<
+    RegisterView<
         custom::path::to::ContextType,
         usize,
-    >::NUM_INIT_KEYS
-        + CollectionView::<
+    >: linera_views::views::View<Context = custom::path::to::ContextType>,
+    CollectionView<
+        custom::path::to::ContextType,
+        usize,
+        RegisterView<custom::path::to::ContextType, usize>,
+    >: linera_views::views::View<Context = custom::path::to::ContextType>,
+{
+    const NUM_INIT_KEYS: usize = <RegisterView<
+        custom::path::to::ContextType,
+        usize,
+    > as linera_views::views::View>::NUM_INIT_KEYS
+        + <CollectionView<
             custom::path::to::ContextType,
             usize,
             RegisterView<custom::path::to::ContextType, usize>,
-        >::NUM_INIT_KEYS;
+        > as linera_views::views::View>::NUM_INIT_KEYS;
     type Context = custom::path::to::ContextType;
     fn context(&self) -> &custom::path::to::ContextType {
         use linera_views::views::View;
