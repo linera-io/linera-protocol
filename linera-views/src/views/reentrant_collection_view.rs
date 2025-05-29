@@ -148,7 +148,7 @@ where
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(view) = update {
                     let mut view = Arc::try_unwrap(view)
-                        .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
+                        .map_err(|_| ViewError::TryLockError(index.clone()))?
                         .into_inner();
                     view.flush(batch)?;
                     self.add_index(batch, &index);
@@ -160,7 +160,7 @@ where
                 match update {
                     Update::Set(view) => {
                         let mut view = Arc::try_unwrap(view)
-                            .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
+                            .map_err(|_| ViewError::TryLockError(index.clone()))?
                             .into_inner();
                         view.flush(batch)?;
                         self.add_index(batch, &index);
@@ -200,7 +200,7 @@ where
                     Update::Set(view_lock) => {
                         let mut view = view_lock
                             .try_write()
-                            .ok_or(ViewError::CannotAcquireCollectionEntry)?;
+                            .ok_or(ViewError::TryLockError(key.to_vec()))?;
 
                         Update::Set(Arc::new(RwLock::new(view.clone_unchecked()?)))
                     }
