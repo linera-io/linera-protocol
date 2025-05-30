@@ -2,7 +2,7 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_root_view_code(input))
 ---
-impl<C> linera_views::views::RootView for TestView<C>
+impl linera_views::views::RootView for TestView
 where
     Self: linera_views::views::View + Sync,
 {
@@ -11,12 +11,6 @@ where
             context::Context, batch::Batch, store::WritableKeyValueStore as _,
             views::View,
         };
-        #[cfg(not(target_arch = "wasm32"))]
-        linera_views::metrics::increment_counter(
-            &linera_views::metrics::SAVE_VIEW_COUNTER,
-            stringify!(TestView),
-            &self.context().base_key().bytes,
-        );
         let mut batch = Batch::new();
         self.flush(&mut batch)?;
         if !batch.is_empty() {

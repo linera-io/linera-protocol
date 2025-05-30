@@ -210,11 +210,10 @@ pub struct KeyValueStoreView<C> {
     hash: Mutex<Option<HasherOutput>>,
 }
 
-impl<C> View<C> for KeyValueStoreView<C>
-where
-    C: Context + Send + Sync,
-{
+impl<C: Context> View for KeyValueStoreView<C> {
     const NUM_INIT_KEYS: usize = 2 + ByteMapView::<C, u32>::NUM_INIT_KEYS;
+
+    type Context = C;
 
     fn context(&self) -> &C {
         &self.context
@@ -347,10 +346,7 @@ where
     }
 }
 
-impl<C> ClonableView<C> for KeyValueStoreView<C>
-where
-    C: Context + Send + Sync,
-{
+impl<C: Context> ClonableView for KeyValueStoreView<C> {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(KeyValueStoreView {
             context: self.context.clone(),
@@ -365,10 +361,7 @@ where
     }
 }
 
-impl<C> KeyValueStoreView<C>
-where
-    C: Send + Context + Sync,
-{
+impl<C: Context> KeyValueStoreView<C> {
     fn max_key_size(&self) -> usize {
         let prefix_len = self.context.base_key().bytes.len();
         <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE - 1 - prefix_len
@@ -1159,10 +1152,7 @@ where
     }
 }
 
-impl<C> HashableView<C> for KeyValueStoreView<C>
-where
-    C: Context + Send + Sync,
-{
+impl<C: Context> HashableView for KeyValueStoreView<C> {
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
@@ -1223,10 +1213,7 @@ impl KeyValueStoreError for ViewContainerError {
 }
 
 #[cfg(with_testing)]
-impl<C> ReadableKeyValueStore for ViewContainer<C>
-where
-    C: Context + Sync + Send + Clone,
-{
+impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1276,10 +1263,7 @@ where
 }
 
 #[cfg(with_testing)]
-impl<C> WritableKeyValueStore for ViewContainer<C>
-where
-    C: Context + Sync + Send + Clone,
-{
+impl<C: Context> WritableKeyValueStore for ViewContainer<C> {
     const MAX_VALUE_SIZE: usize = <C::Store as WritableKeyValueStore>::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewContainerError> {
@@ -1301,10 +1285,7 @@ where
 }
 
 #[cfg(with_testing)]
-impl<C> ViewContainer<C>
-where
-    C: Context + Sync + Send + Clone,
-{
+impl<C: Context> ViewContainer<C> {
     /// Creates a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
         let view = KeyValueStoreView::load(context).await?;
