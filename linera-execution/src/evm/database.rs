@@ -66,9 +66,13 @@ impl StorageStats {
 }
 
 pub(crate) struct DatabaseRuntime<Runtime> {
+    /// This is the storage statistics.
     storage_stats: Arc<Mutex<StorageStats>>,
+    /// This is the EVM address of the contract
     pub contract_address: Address,
+    /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,
+    /// The uncommited changes to the contract.
     pub changes: EvmState,
 }
 
@@ -114,15 +118,11 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     }
 
     /// Returns the tag associated to the contract.
-    fn get_contract_address_key(
-        &self,
-        address: &Address,
-        contract_address: &Address,
-    ) -> Option<u8> {
+    fn get_contract_address_key(&self, address: &Address) -> Option<u8> {
         if address == &Address::ZERO {
             return Some(KeyTag::NullAddress as u8);
         }
-        if address == contract_address {
+        if address == &self.contract_address {
             return Some(KeyTag::ContractAddress as u8);
         }
         None
@@ -200,7 +200,7 @@ where
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
-        let val = self.get_contract_address_key(&address, &self.contract_address);
+        let val = self.get_contract_address_key(&address);
         let Some(val) = val else {
             return Ok(Some(AccountInfo::default()));
         };
@@ -223,7 +223,7 @@ where
                 Some(slot) => slot.present_value(),
             });
         }
-        let val = self.get_contract_address_key(&address, &self.contract_address);
+        let val = self.get_contract_address_key(&address);
         let Some(val) = val else {
             panic!("There is no storage associated to externally owned account");
         };
@@ -265,7 +265,7 @@ where
             if !account.is_touched() {
                 continue;
             }
-            let val = self.get_contract_address_key(address, &self.contract_address);
+            let val = self.get_contract_address_key(address);
             if let Some(val) = val {
                 let key_prefix = vec![val, KeyCategory::Storage as u8];
                 let key_info = vec![val, KeyCategory::AccountInfo as u8];
