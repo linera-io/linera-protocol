@@ -205,15 +205,20 @@ impl Client {
             wallet.0,
             signer,
         )));
-        ChainListener::new(
-            ChainListenerConfig::default(),
-            client_context.clone(),
-            storage,
-            tokio_util::sync::CancellationToken::new(),
-        )
-        .run()
-        .boxed_local()
-        .await?;
+        let client_context_clone = client_context.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Err(error) = ChainListener::new(
+                ChainListenerConfig::default(),
+                client_context_clone,
+                storage,
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .run()
+            .boxed_local()
+            .await {
+                tracing::error!("ChainListener error: {error:?}");
+            }
+        });
         log::info!("Linera Web client successfully initialized");
         Ok(Self { client_context })
     }
