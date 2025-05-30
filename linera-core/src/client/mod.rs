@@ -803,9 +803,9 @@ impl<Env: Environment> Client<Env> {
         let remote_certificates = remote_node
             .download_certificates(certificate_hashes)
             .await?;
+        let mut certificates_by_height_by_chain = BTreeMap::new();
 
         // Check the signatures and keep only the ones that are valid.
-        let mut certificates = Vec::new();
         for confirmed_block_certificate in remote_certificates {
             let block_header = &confirmed_block_certificate.inner().block().header;
             let sender_chain_id = block_header.chain_id;
@@ -828,20 +828,19 @@ impl<Env: Environment> Client<Env> {
                     warn!("Skipping received certificate from past epoch {epoch:?}");
                 }
                 CheckCertificateResult::New => {
-                    downloaded_heights
+                    certificates_by_height_by_chain
                         .entry(sender_chain_id)
-                        .and_modify(|h| *h = height.max(*h))
-                        .or_insert(height);
-                    certificates.push(confirmed_block_certificate);
+                        .or_insert_with(BTreeMap::new)
+                        .insert(height, confirmed_block_certificate.clone());
                 }
             }
         }
 
         // Increase the tracker up to the first position we haven't downloaded.
         for entry in remote_log {
-            if downloaded_heights
+            if certificates_by_height_by_chain
                 .get(&entry.chain_id)
-                .is_some_and(|h| *h >= entry.height)
+                .is_some_and(|certs| certs.contains_key(&entry.height))
             {
                 tracker += 1;
             } else {
@@ -849,10 +848,27 @@ impl<Env: Environment> Client<Env> {
             }
         }
 
+        for (sender_chain_id, certs) in &mut certificates_by_height_by_chain {
+            if !certs
+                .values()
+                .last()
+                .is_some_and(|cert| cert.block().recipients().contains(&chain_id))
+            {
+                warn!(
+                    "Skipping received certificates from chain {sender_chain_id:.8}:
+                    No messages for {chain_id:.8}."
+                );
+                certs.clear();
+            }
+        }
+
         Ok(ReceivedCertificatesFromValidator {
             public_key: remote_node.public_key,
             tracker,
-            certificates,
+            certificates: certificates_by_height_by_chain
+                .into_values()
+                .flat_map(BTreeMap::into_values)
+                .collect(),
             other_sender_chains,
         })
     }
