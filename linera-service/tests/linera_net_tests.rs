@@ -3306,8 +3306,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     assert!(client2.local_balance(account2).await? > Amount::ZERO);
 
     // Verify that a third party can also follow the chain.
-    client3.follow_chain(chain2).await?;
-    client3.sync(chain2).await?;
+    client3.follow_chain(chain2, true).await?;
     assert!(client3.local_balance(account2).await? > Amount::ZERO);
 
     net.ensure_is_running().await?;
@@ -3389,7 +3388,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     let chain_id = client3.request_chain(&faucet, false).await?.0;
     assert!(chain_id != client3.load_wallet()?.default_chain().unwrap());
     client3.forget_chain(chain_id).await?;
-    client3.follow_chain(chain_id).await?;
+    client3.follow_chain(chain_id, false).await?;
 
     let chain3 = client3.request_chain(&faucet, true).await?.0;
     assert_eq!(chain3, client3.load_wallet()?.default_chain().unwrap());

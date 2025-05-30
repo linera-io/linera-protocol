@@ -857,11 +857,15 @@ Request a new chain from a faucet and add it to the wallet
 
 Add a new followed chain (i.e. a chain without keypair) to the wallet
 
-**Usage:** `linera wallet follow-chain <CHAIN_ID>`
+**Usage:** `linera wallet follow-chain [OPTIONS] <CHAIN_ID>`
 
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — The chain ID
+
+###### **Options:**
+
+* `--sync` — Synchronize the new chain and download all its blocks from the validators
 
 
 
