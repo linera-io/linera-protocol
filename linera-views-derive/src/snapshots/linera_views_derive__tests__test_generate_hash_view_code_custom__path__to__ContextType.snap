@@ -13,15 +13,6 @@ where
         usize,
         RegisterView<custom::path::to::ContextType, usize>,
     >: linera_views::views::HashableView,
-    RegisterView<
-        custom::path::to::ContextType,
-        usize,
-    >: linera_views::views::HashableView,
-    CollectionView<
-        custom::path::to::ContextType,
-        usize,
-        RegisterView<custom::path::to::ContextType, usize>,
-    >: linera_views::views::HashableView,
     Self: linera_views::views::View + Sync,
 {
     type Hasher = linera_views::sha3::Sha3_256;

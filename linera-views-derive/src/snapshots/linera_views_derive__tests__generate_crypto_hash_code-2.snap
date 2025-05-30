@@ -4,9 +4,9 @@ expression: pretty(generate_crypto_hash_code(input))
 ---
 impl<C, MyParam> linera_views::views::CryptoHashView for TestView<C, MyParam>
 where
-    MyParam: Send + Sync + 'static,
     RegisterView<C, usize>: linera_views::views::HashableView,
     CollectionView<C, usize, RegisterView<C, usize>>: linera_views::views::HashableView,
+    MyParam: Send + Sync + 'static,
     Self: linera_views::views::View + Sync,
 {
     async fn crypto_hash(

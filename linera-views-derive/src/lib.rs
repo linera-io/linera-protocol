@@ -233,17 +233,6 @@ fn generate_root_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-fn hash_view_constraints(input: &ItemStruct) -> Vec<syn::WherePredicate> {
-    input
-        .fields
-        .iter()
-        .map(|field| {
-            let ty = &field.ty;
-            parse_quote! { #ty: linera_views::views::HashableView }
-        })
-        .collect()
-}
-
 fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     let Constraints {
         input_constraints,
@@ -251,7 +240,6 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         type_generics,
     } = Constraints::get(&input);
     let struct_name = &input.ident;
-    let hash_constraints = hash_view_constraints(&input);
 
     let field_types = input.fields.iter().map(|field| &field.ty);
     let mut field_hashes_mut = Vec::new();
@@ -267,7 +255,6 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         where
             #(#field_types: linera_views::views::HashableView,)*
             #(#input_constraints,)*
-            #(#hash_constraints,)*
             Self: linera_views::views::View + Sync,
         {
             type Hasher = linera_views::sha3::Sha3_256;
@@ -297,15 +284,15 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
         impl_generics,
         type_generics,
     } = Constraints::get(&input);
-    let hash_constraints = hash_view_constraints(&input);
+    let field_types = input.fields.iter().map(|field| &field.ty);
     let struct_name = &input.ident;
     let hash_type = syn::Ident::new(&format!("{struct_name}Hash"), Span::call_site());
     quote! {
         impl #impl_generics linera_views::views::CryptoHashView
         for #struct_name #type_generics
         where
+            #(#field_types: linera_views::views::HashableView,)*
             #(#input_constraints,)*
-            #(#hash_constraints,)*
             Self: linera_views::views::View + Sync,
         {
             async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {

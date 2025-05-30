@@ -10,12 +10,6 @@ where
         usize,
         RegisterView<custom::GenericContext<T>, usize>,
     >: linera_views::views::HashableView,
-    RegisterView<custom::GenericContext<T>, usize>: linera_views::views::HashableView,
-    CollectionView<
-        custom::GenericContext<T>,
-        usize,
-        RegisterView<custom::GenericContext<T>, usize>,
-    >: linera_views::views::HashableView,
     Self: linera_views::views::View + Sync,
 {
     type Hasher = linera_views::sha3::Sha3_256;

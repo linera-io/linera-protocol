@@ -11,12 +11,6 @@ where
         RegisterView<custom::GenericContext<T>, usize>,
     >: linera_views::views::HashableView,
     MyParam: Send + Sync + 'static,
-    RegisterView<custom::GenericContext<T>, usize>: linera_views::views::HashableView,
-    CollectionView<
-        custom::GenericContext<T>,
-        usize,
-        RegisterView<custom::GenericContext<T>, usize>,
-    >: linera_views::views::HashableView,
     Self: linera_views::views::View + Sync,
 {
     type Hasher = linera_views::sha3::Sha3_256;
