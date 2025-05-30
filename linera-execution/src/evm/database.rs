@@ -18,7 +18,7 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime, ViewError};
+use crate::{BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -191,7 +191,7 @@ where
         let key_info = vec![val, KeyCategory::AccountInfo as u8];
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
-        let account_info = from_bytes_option::<AccountInfo, ViewError>(&result)?;
+        let account_info = from_bytes_option::<AccountInfo>(&result)?;
         Ok(account_info)
     }
 
@@ -224,7 +224,7 @@ where
             let promise = runtime.read_value_bytes_new(key)?;
             runtime.read_value_bytes_wait(&promise)
         }?;
-        Ok(from_bytes_option::<U256, ViewError>(&result)?.unwrap_or_default())
+        Ok(from_bytes_option::<U256>(&result)?.unwrap_or_default())
     }
 
     fn block_hash_ref(&self, number: u64) -> Result<B256, ExecutionError> {
@@ -268,8 +268,8 @@ where
                     } else {
                         let promise = runtime.read_value_bytes_new(key_state.clone())?;
                         let result = runtime.read_value_bytes_wait(&promise)?;
-                        let account_state = from_bytes_option::<AccountState, ViewError>(&result)?
-                            .unwrap_or_default();
+                        let account_state =
+                            from_bytes_option::<AccountState>(&result)?.unwrap_or_default();
                         if account_state.is_storage_cleared() {
                             AccountState::StorageCleared
                         } else {

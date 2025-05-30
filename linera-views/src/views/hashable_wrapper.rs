@@ -38,7 +38,6 @@ enum KeyTag {
 impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: HashableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
@@ -123,7 +122,6 @@ where
 impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: HashableView<C> + ClonableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
@@ -141,7 +139,6 @@ where
 impl<C, W, O> HashableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     W: HashableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,

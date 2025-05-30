@@ -15,7 +15,7 @@ where
 {
     async fn crypto_hash(
         &self,
-    ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+    ) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
         use linera_base::crypto::{BcsHashable, CryptoHash};
         use linera_views::{
             batch::Batch, generic_array::GenericArray,
@@ -31,7 +31,7 @@ where
     }
     async fn crypto_hash_mut(
         &mut self,
-    ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+    ) -> Result<linera_base::crypto::CryptoHash, linera_views::ViewError> {
         use linera_base::crypto::{BcsHashable, CryptoHash};
         use linera_views::{
             batch::Batch, generic_array::GenericArray,

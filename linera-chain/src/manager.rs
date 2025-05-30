@@ -84,7 +84,8 @@ use linera_views::{
     context::Context,
     map_view::MapView,
     register_view::RegisterView,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, View},
+    ViewError,
 };
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};

@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 console_error_panic_hook.workspace = true
 futures.workspace = true
 js-sys.workspace = true
-linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
+linera-persistent.workspace = true
 log.workspace = true
 nonzero_lit.workspace = true
 serde.workspace = true

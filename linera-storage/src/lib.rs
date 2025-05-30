@@ -35,10 +35,7 @@ use linera_execution::{
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
-use linera_views::{
-    context::Context,
-    views::{RootView, ViewError},
-};
+use linera_views::{context::Context, views::RootView, ViewError};
 
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
@@ -93,10 +90,13 @@ pub trait Storage: Sized {
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
 
     /// Reads the blob state with the given blob ID.
-    async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError>;
+    async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError>;
 
     /// Reads the blob states with the given blob IDs.
-    async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError>;
+    async fn read_blob_states(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<BlobState>>, ViewError>;
 
     /// Reads the hashed certificate values in descending order from the given hash.
     async fn read_confirmed_blocks_downward(

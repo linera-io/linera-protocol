@@ -55,7 +55,6 @@ pub struct LogView<C, T> {
 impl<C, T> View<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 1;
@@ -131,7 +130,6 @@ where
 impl<C, T> ClonableView<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -193,7 +191,6 @@ where
 impl<C, T> LogView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Clone + DeserializeOwned + Serialize + Send,
 {
     /// Reads the logged value with the given index (including staged ones).
@@ -352,7 +349,6 @@ where
 impl<C, T> HashableView<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;

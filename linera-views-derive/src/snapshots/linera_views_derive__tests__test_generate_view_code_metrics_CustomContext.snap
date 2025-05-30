@@ -24,7 +24,7 @@ where
     }
     fn pre_load(
         context: &CustomContext,
-    ) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+    ) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
@@ -53,7 +53,7 @@ where
     fn post_load(
         context: CustomContext,
         values: &[Option<Vec<u8>>],
-    ) -> Result<Self, linera_views::views::ViewError> {
+    ) -> Result<Self, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
@@ -84,9 +84,7 @@ where
         pos = pos_next;
         Ok(Self { register, collection })
     }
-    async fn load(
-        context: CustomContext,
-    ) -> Result<Self, linera_views::views::ViewError> {
+    async fn load(context: CustomContext) -> Result<Self, linera_views::ViewError> {
         use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::metrics::increment_counter(
@@ -121,7 +119,7 @@ where
     fn flush(
         &mut self,
         batch: &mut linera_views::batch::Batch,
-    ) -> Result<bool, linera_views::views::ViewError> {
+    ) -> Result<bool, linera_views::ViewError> {
         use linera_views::views::View;
         let deleted0 = self.register.flush(batch)?;
         let deleted1 = self.collection.flush(batch)?;

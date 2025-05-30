@@ -316,8 +316,10 @@ where
                         .node
                         .missing_blob_ids(mem::take(&mut blob_ids))
                         .await?;
-                    let local_storage = self.local_node.storage_client();
-                    let blob_states = local_storage.read_blob_states(&missing_blob_ids).await?;
+                    let blob_states = self
+                        .local_node
+                        .read_blob_states_from_storage(&missing_blob_ids)
+                        .await?;
                     let mut chain_heights = BTreeMap::new();
                     for blob_state in blob_states {
                         let block_chain_id = blob_state.chain_id;

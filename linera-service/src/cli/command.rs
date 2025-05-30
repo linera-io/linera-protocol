@@ -1117,6 +1117,9 @@ pub enum WalletCommand {
     FollowChain {
         /// The chain ID.
         chain_id: ChainId,
+        /// Synchronize the new chain and download all its blocks from the validators.
+        #[arg(long)]
+        sync: bool,
     },
 
     /// Forgets the specified chain's keys. The chain will still be followed by the

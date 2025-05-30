@@ -13,7 +13,7 @@ use crate::{
     batch::Batch,
     common::from_bytes_option,
     lru_caching::{StorageCacheConfig, DEFAULT_STORAGE_CACHE_CONFIG},
-    views::ViewError,
+    ViewError,
 };
 
 /// The common initialization parameters for the `KeyValueStore`
@@ -63,7 +63,9 @@ impl Default for CommonStoreConfig {
 }
 
 /// The error type for the key-value stores.
-pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'static {
+pub trait KeyValueStoreError:
+    std::error::Error + From<bcs::Error> + Debug + Send + Sync + 'static
+{
     /// The name of the backend.
     const BACKEND: &'static str;
 }
@@ -71,8 +73,8 @@ pub trait KeyValueStoreError: std::error::Error + Debug + From<bcs::Error> + 'st
 impl<E: KeyValueStoreError> From<E> for ViewError {
     fn from(error: E) -> Self {
         Self::StoreError {
-            backend: E::BACKEND.to_string(),
-            error: error.to_string(),
+            backend: E::BACKEND,
+            error: Box::new(error),
         }
     }
 }
@@ -134,7 +136,7 @@ pub trait ReadableKeyValueStore: WithError {
     where
         Self: Sync,
     {
-        async { from_bytes_option(&self.read_value_bytes(key).await?) }
+        async { Ok(from_bytes_option(&self.read_value_bytes(key).await?)?) }
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
@@ -148,7 +150,7 @@ pub trait ReadableKeyValueStore: WithError {
         async {
             let mut values = Vec::with_capacity(keys.len());
             for entry in self.read_multi_values_bytes(keys).await? {
-                values.push(from_bytes_option::<_, bcs::Error>(&entry)?);
+                values.push(from_bytes_option(&entry)?);
             }
             Ok(values)
         }

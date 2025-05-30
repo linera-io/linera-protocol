@@ -16,6 +16,8 @@
     openssl
     protobuf
     git
+    wasm-bindgen-cli
+    pnpm
   ];
   checkInputs = with pkgs; [
     # for native testing
@@ -27,7 +29,6 @@
     # for Wasm testing
     chromium
     chromedriver
-    wasm-pack
   ];
   passthru = { inherit rust-toolchain; };
   RUST_SRC_PATH = rust-toolchain.availableComponents.rust-src;

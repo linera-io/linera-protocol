@@ -103,7 +103,6 @@ where
 impl<C, V> View<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     V: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = 0;
@@ -175,7 +174,6 @@ where
 impl<C, V> ClonableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     V: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -190,7 +188,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context,
-    ViewError: From<C::Error>,
 {
     /// Inserts or resets the value of a key of the map.
     /// ```rust
@@ -292,7 +289,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     V: Clone + DeserializeOwned + 'static,
 {
     /// Reads the value at the given position, if any.
@@ -400,7 +396,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context,
-    ViewError: From<C::Error>,
     V: Clone + Serialize + DeserializeOwned + 'static,
 {
     /// Applies the function f on each index (aka key) which has the assigned prefix.
@@ -804,7 +799,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context,
-    ViewError: From<C::Error>,
     V: Clone + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of keys and values of the map matching a prefix
@@ -867,7 +861,6 @@ where
 impl<C, V> ByteMapView<C, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     V: Default + DeserializeOwned + 'static,
 {
     /// Obtains a mutable reference to a value at a given position.
@@ -923,7 +916,6 @@ where
 impl<C, V> HashableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -965,7 +957,6 @@ pub struct MapView<C, I, V> {
 impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync,
     V: Send + Sync + Serialize,
 {
@@ -1011,7 +1002,6 @@ where
 impl<C, I, V> ClonableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync,
     V: Clone + Send + Sync + Serialize,
 {
@@ -1026,7 +1016,6 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: Serialize,
 {
     /// Inserts or resets a value at an index.
@@ -1107,7 +1096,6 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: Serialize,
     V: Clone + DeserializeOwned + 'static,
 {
@@ -1167,7 +1155,6 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: Send + DeserializeOwned,
     V: Clone + Sync + Serialize + DeserializeOwned + 'static,
 {
@@ -1351,7 +1338,6 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: Send + DeserializeOwned,
     V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
@@ -1403,7 +1389,6 @@ where
 impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: Serialize,
     V: Default + DeserializeOwned + 'static,
 {
@@ -1433,7 +1418,6 @@ where
 impl<C, I, V> HashableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
@@ -1458,7 +1442,6 @@ pub struct CustomMapView<C, I, V> {
 impl<C, I, V> View<C> for CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
     V: Clone + Send + Sync + Serialize,
 {
@@ -1504,7 +1487,6 @@ where
 impl<C, I, V> ClonableView<C> for CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
     V: Clone + Send + Sync + Serialize,
 {
@@ -1519,7 +1501,6 @@ where
 impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: CustomSerialize,
 {
     /// Insert or resets a value.
@@ -1600,7 +1581,6 @@ where
 impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: CustomSerialize,
     V: Clone + DeserializeOwned + 'static,
 {
@@ -1659,7 +1639,6 @@ where
 impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: Send + CustomSerialize,
     V: Clone + Serialize + DeserializeOwned + 'static,
 {
@@ -1847,7 +1826,6 @@ where
 impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: Send + CustomSerialize,
     V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
@@ -1899,7 +1877,6 @@ where
 impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
-    ViewError: From<C::Error>,
     I: CustomSerialize,
     V: Default + DeserializeOwned + 'static,
 {
@@ -1931,7 +1908,6 @@ where
 impl<C, I, V> HashableView<C> for CustomMapView<C, I, V>
 where
     C: Context + Send + Sync,
-    ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
     V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {

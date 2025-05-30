@@ -9,7 +9,7 @@ where
     CollectionView<C, usize, RegisterView<C, usize>>: ClonableView<C>,
     Self: Send + Sync,
 {
-    fn clone_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
+    fn clone_unchecked(&mut self) -> Result<Self, linera_views::ViewError> {
         Ok(Self {
             register: self.register.clone_unchecked()?,
             collection: self.collection.clone_unchecked()?,

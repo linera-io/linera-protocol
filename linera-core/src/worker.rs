@@ -33,7 +33,7 @@ use linera_chain::{
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

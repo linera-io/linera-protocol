@@ -1178,6 +1178,24 @@ impl Runnable for Job {
                 );
             }
 
+            Wallet(WalletCommand::FollowChain {
+                chain_id,
+                sync: true,
+            }) => {
+                let mut context =
+                    ClientContext::new(storage, options.inner.clone(), wallet, signer.into_value());
+                let chain_client = context.make_chain_client(chain_id);
+                info!("Synchronizing chain information");
+                let time_start = Instant::now();
+                chain_client.synchronize_from_validators().await?;
+                context.update_wallet_from_client(&chain_client).await?;
+                let time_total = time_start.elapsed();
+                info!(
+                    "Synchronized chain information in {} ms",
+                    time_total.as_millis()
+                );
+            }
+
             #[cfg(feature = "benchmark")]
             MultiBenchmark { .. } => {
                 unreachable!()
@@ -1325,7 +1343,7 @@ impl ClientOptions {
     }
 
     fn config_path(&self) -> Result<PathBuf, Error> {
-        let mut config_dir = dirs::config_dir().ok_or(anyhow!(
+        let mut config_dir = dirs::config_dir().ok_or_else(|| anyhow!(
             "Default wallet directory is not supported in this platform: please specify storage and wallet paths"
         ))?;
         config_dir.push("linera");
@@ -1933,7 +1951,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 Ok(0)
             }
 
-            WalletCommand::FollowChain { chain_id } => {
+            WalletCommand::FollowChain { chain_id, sync } => {
                 let start_time = Instant::now();
                 options
                     .wallet()
@@ -1942,6 +1960,9 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                         wallet.extend([UserChain::make_other(*chain_id, Timestamp::now())])
                     })
                     .await?;
+                if *sync {
+                    options.run_with_storage(Job(options.clone())).await??;
+                }
                 info!(
                     "Chain followed and added in {} ms",
                     start_time.elapsed().as_millis()

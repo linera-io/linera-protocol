@@ -3,14 +3,13 @@
 
 use std::{fmt::Debug, io::Write};
 
-use linera_base::{crypto::CryptoHash, data_types::ArithmeticError};
+use linera_base::crypto::CryptoHash;
 pub use linera_views_derive::{
     ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
 };
 use serde::Serialize;
-use thiserror::Error;
 
-use crate::{batch::Batch, common::HasherOutput};
+use crate::{batch::Batch, common::HasherOutput, ViewError};
 
 #[cfg(test)]
 #[path = "unit_tests/views.rs"]
@@ -91,75 +90,6 @@ pub trait View<C>: Sized {
         let mut view = Self::post_load(context, &values)?;
         view.clear();
         Ok(view)
-    }
-}
-
-/// Main error type for the crate.
-#[derive(Error, Debug)]
-pub enum ViewError {
-    /// BCS serialization error.
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
-
-    /// We failed to acquire an entry in a `CollectionView` or a `ReentrantCollectionView`.
-    #[error("trying to access a collection view or reentrant collection view while some entries are still being accessed")]
-    CannotAcquireCollectionEntry,
-
-    /// Input output error.
-    #[error("I/O error")]
-    IoError(#[from] std::io::Error),
-
-    /// Arithmetic error
-    #[error(transparent)]
-    ArithmeticError(#[from] ArithmeticError),
-
-    /// An error happened while trying to lock.
-    #[error("Failed to lock collection entry: {0:?}")]
-    TryLockError(Vec<u8>),
-
-    /// Tokio errors can happen while joining.
-    #[error("Panic in sub-task: {0}")]
-    TokioJoinError(#[from] tokio::task::JoinError),
-
-    /// Errors within the context can occur and are presented as `ViewError`.
-    #[error("Storage operation error in {backend}: {error}")]
-    StoreError {
-        /// backend can be e.g. RocksDB / DynamoDB / Memory / etc.
-        backend: String,
-        /// error is the specific problem that occurred within that context
-        error: String,
-    },
-
-    /// The key must not be too long
-    #[error("The key must not be too long")]
-    KeyTooLong,
-
-    /// The entry does not exist in memory
-    // FIXME(#148): This belongs to a future `linera_storage::StoreError`.
-    #[error("Entry does not exist in memory: {0}")]
-    NotFound(String),
-
-    /// The database is corrupt: Entries don't have the expected hash.
-    #[error("Inconsistent database entries")]
-    InconsistentEntries,
-
-    /// The database is corrupt: Some entries are missing
-    #[error("Missing database entries")]
-    MissingEntries,
-
-    /// The values are incoherent.
-    #[error("Post load values error")]
-    PostLoadValuesError,
-
-    /// The value is too large for the client
-    #[error("The value is too large for the client")]
-    TooLargeValue,
-}
-
-impl ViewError {
-    /// Creates a `NotFound` error with the given message and key.
-    pub fn not_found<T: Debug>(msg: &str, key: T) -> ViewError {
-        ViewError::NotFound(format!("{} {:?}", msg, key))
     }
 }
 
