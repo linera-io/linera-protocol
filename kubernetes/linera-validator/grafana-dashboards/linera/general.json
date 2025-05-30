@@ -1741,7 +1741,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
+            "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
@@ -1790,31 +1790,28 @@
           "showLegend": true
         },
         "tooltip": {
-          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "10.1.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(rate(kube_pod_container_status_last_terminated_reason{pod=~\"(proxy|shards)-.*\"}[1m])) by (pod, reason)",
-          "fullMetaSearch": false,
-          "includeNullMetadata": true,
+          "expr": "sum(rate(kube_pod_container_status_last_terminated_reason[1m])) by (pod, reason)",
+          "hide": false,
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{pod}} - {{reason}}",
           "range": true,
-          "refId": "A",
-          "useBackend": false
+          "refId": "B"
         }
       ],
       "title": "Container termination",
+      "transformations": [],
       "type": "timeseries"
     },
     {
@@ -1907,7 +1904,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(rate(container_memory_failures_total{pod=~\"(proxy|shards)-.*\"}[60s])) by (pod, failure_type)",
+          "expr": "sum by(pod, failure_type) (rate(container_memory_failures_total{pod=~\"(proxy|shards)-.*\", failure_type!=\"pgfault\"}[60s]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1925,6 +1922,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Some useful codes to remember:\n137 - SIGKILL - can happen on OOMs\n143 - SIGTERM",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1974,8 +1972,7 @@
                 "value": 80
               }
             ]
-          },
-          "unit": "none"
+          }
         },
         "overrides": []
       },
@@ -1985,7 +1982,7 @@
         "x": 12,
         "y": 75
       },
-      "id": 41,
+      "id": 46,
       "options": {
         "legend": {
           "calcs": [],
@@ -1999,35 +1996,26 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "10.1.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "editorMode": "code",
-          "expr": "sum(rate(container_fs_reads_total{container=\"linera-server\"}[60s])) by (pod)",
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "kube_pod_container_status_last_terminated_exitcode",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
           "instant": false,
           "legendFormat": "{{pod}}",
           "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(container_fs_reads_total{container=\"linera-server\"}[60s]))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "Total",
-          "range": true,
-          "refId": "B"
+          "refId": "A",
+          "useBackend": false
         }
       ],
-      "title": "Shards FS reads per second",
+      "title": "Container termination exit code",
       "type": "timeseries"
     },
     {
@@ -2205,7 +2193,7 @@
         "x": 12,
         "y": 83
       },
-      "id": 31,
+      "id": 41,
       "options": {
         "legend": {
           "calcs": [],
@@ -2227,7 +2215,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_fs_writes_total{container=\"linera-server\"}[60s])) by (pod)",
+          "expr": "sum(rate(container_fs_reads_total{container=\"linera-server\"}[60s])) by (pod)",
           "instant": false,
           "legendFormat": "{{pod}}",
           "range": true,
@@ -2239,7 +2227,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_fs_writes_total{container=\"linera-server\"}[60s]))",
+          "expr": "sum(rate(container_fs_reads_total{container=\"linera-server\"}[60s]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Total",
@@ -2247,7 +2235,7 @@
           "refId": "B"
         }
       ],
-      "title": "Shards FS writes per second",
+      "title": "Shards FS reads per second",
       "type": "timeseries"
     },
     {
@@ -2358,6 +2346,116 @@
         }
       ],
       "title": "Shards FS written bytes per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 91
+      },
+      "id": 31,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0-83314",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(container_fs_writes_total{container=\"linera-server\"}[60s])) by (pod)",
+          "instant": false,
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(container_fs_writes_total{container=\"linera-server\"}[60s]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Shards FS writes per second",
       "type": "timeseries"
     },
     {
