@@ -9,10 +9,7 @@ use linera_base::{
     ensure,
     identifiers::{AccountOwner, ChainId},
 };
-use linera_core::{
-    client::{ChainClient, PendingProposal},
-    Environment,
-};
+use linera_core::{client::PendingProposal, data_types::ChainInfo};
 use serde::{Deserialize, Serialize};
 
 use crate::{config::GenesisConfig, error, Error};
@@ -132,16 +129,19 @@ impl Wallet {
         Ok(())
     }
 
-    pub fn update_from_state<Env: Environment>(&mut self, chain_client: &ChainClient<Env>) {
-        let client_owner = chain_client.preferred_owner();
-        let state = chain_client.state();
+    pub fn update_from_info(
+        &mut self,
+        pending_proposal: Option<PendingProposal>,
+        owner: Option<AccountOwner>,
+        info: &ChainInfo,
+    ) {
         self.insert(UserChain {
-            chain_id: chain_client.chain_id(),
-            owner: client_owner,
-            block_hash: state.block_hash(),
-            next_block_height: state.next_block_height(),
-            timestamp: state.timestamp(),
-            pending_proposal: state.pending_proposal().clone(),
+            chain_id: info.chain_id,
+            owner,
+            block_hash: info.block_hash,
+            next_block_height: info.next_block_height,
+            timestamp: info.timestamp,
+            pending_proposal,
         });
     }
 

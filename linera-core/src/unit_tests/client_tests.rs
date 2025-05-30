@@ -112,7 +112,10 @@ where
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+        assert_eq!(
+            sender.chain_info().await?.next_block_height,
+            BlockHeight::from(1)
+        );
         assert!(sender.pending_proposal().is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
@@ -279,7 +282,10 @@ where
         .unwrap()
         .unwrap();
     sender.set_preferred_owner(new_owner);
-    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        sender.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await?, new_owner);
     assert_eq!(
@@ -320,7 +326,10 @@ where
 
     let new_owner: AccountOwner = builder.signer.generate_new().into();
     let certificate = sender.transfer_ownership(new_owner).await.unwrap().unwrap();
-    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        sender.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(sender.pending_proposal().is_none());
     assert_matches!(
         sender.identity().await,
@@ -367,7 +376,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        sender.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_eq!(
@@ -387,10 +399,15 @@ where
         .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
         .await
         .unwrap();
-    assert_eq!(sender.next_block_height(), BlockHeight::from(2));
+    let sender_info = sender.chain_info().await?;
+    assert_eq!(sender_info.next_block_height, BlockHeight::from(2));
     // Make a client to try the new key.
     let mut client = builder
-        .make_client(sender.chain_id, sender.block_hash(), BlockHeight::from(2))
+        .make_client(
+            sender.chain_id,
+            sender_info.block_hash,
+            BlockHeight::from(2),
+        )
         .await?;
     client.set_preferred_owner(new_owner);
     // Local balance fails because the client has block height 2 but we haven't downloaded
@@ -445,7 +462,7 @@ where
     // The other client doesn't know the new round number yet:
     sender.synchronize_from_validators().await.unwrap();
     sender.process_inbox().await.unwrap();
-    assert_eq!(client.next_block_height(), sender.next_block_height());
+    assert_eq!(client.chain_info().await?, sender.chain_info().await?);
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_proposal();
     sender
@@ -489,7 +506,10 @@ where
         .unwrap()
         .unwrap();
 
-    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        sender.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     // Make a client to try the new chain.
@@ -563,8 +583,14 @@ where
         .unwrap()
         .unwrap();
     assert_eq!(new_id, new_id2);
-    assert_eq!(sender.next_block_height(), BlockHeight::from(1));
-    assert_eq!(parent.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        sender.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
+    assert_eq!(
+        parent.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     assert_matches!(
@@ -646,7 +672,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.next_block_height(), BlockHeight::from(2));
+    assert_eq!(
+        sender.chain_info().await?.next_block_height,
+        BlockHeight::from(2)
+    );
     assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
     // Make a client to try the new chain.
@@ -702,7 +731,10 @@ where
         Some(SystemOperation::CloseChain),
         "Unexpected certificate value",
     );
-    assert_eq!(client1.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        client1.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(client1.pending_proposal().is_none());
     assert!(client1.identity().await.is_ok());
     assert_eq!(
@@ -804,7 +836,10 @@ where
         )),
         "unexpected result"
     );
-    assert_eq!(sender.next_block_height(), BlockHeight::ZERO);
+    assert_eq!(
+        sender.chain_info().await?.next_block_height,
+        BlockHeight::ZERO
+    );
     assert!(sender.pending_proposal().is_some());
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -851,7 +886,10 @@ where
         .unwrap()
         .unwrap();
 
-    assert_eq!(client1.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        client1.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(client1.pending_proposal().is_none());
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
@@ -889,7 +927,10 @@ where
     );
 
     // Process the inbox and send back some money.
-    assert_eq!(client2.next_block_height(), BlockHeight::ZERO);
+    assert_eq!(
+        client2.chain_info().await?.next_block_height,
+        BlockHeight::ZERO
+    );
     client2
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -898,7 +939,10 @@ where
         )
         .await
         .unwrap();
-    assert_eq!(client2.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        client2.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(client2.pending_proposal().is_none());
     assert_eq!(
         client2.local_balance().await.unwrap(),
@@ -951,7 +995,10 @@ where
         client1.local_balance().await.unwrap(),
         Amount::from_millis(1000)
     );
-    assert_eq!(client1.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        client1.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(client1.pending_proposal().is_none());
     // The receiver doesn't know about the transfer.
     client2.process_inbox().await.unwrap();
@@ -1039,10 +1086,16 @@ where
         .unwrap();
     // Blocks were executed locally.
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
-    assert_eq!(client1.next_block_height(), BlockHeight::from(2));
+    assert_eq!(
+        client1.chain_info().await?.next_block_height,
+        BlockHeight::from(2)
+    );
     assert!(client1.pending_proposal().is_none());
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
-    assert_eq!(client2.next_block_height(), BlockHeight::from(1));
+    assert_eq!(
+        client2.chain_info().await?.next_block_height,
+        BlockHeight::from(1)
+    );
     assert!(client2.pending_proposal().is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1099,7 +1152,10 @@ where
     // Create a new committee.
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.next_block_height(), BlockHeight::from(5));
+    assert_eq!(
+        admin.chain_info().await?.next_block_height,
+        BlockHeight::from(5)
+    );
     assert!(admin.pending_proposal().is_none());
     assert!(admin.identity().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
@@ -1243,7 +1299,11 @@ where
     client_1a.change_ownership(ownership).await?;
 
     let client_1b = builder
-        .make_client(chain_1, client_1a.block_hash(), BlockHeight::from(1))
+        .make_client(
+            chain_1,
+            client_1a.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
         .await?;
 
     let client_2a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
@@ -1257,7 +1317,11 @@ where
     client_2a.change_ownership(ownership).await.unwrap();
 
     let mut client_2b = builder
-        .make_client(chain_2, client_2a.block_hash(), BlockHeight::from(1))
+        .make_client(
+            chain_2,
+            client_2a.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
         .await?;
     client_2b.set_preferred_owner(owner_2b);
 
@@ -1437,7 +1501,11 @@ where
         .unwrap();
 
     let mut client2_b = builder
-        .make_client(chain_id2, client2_a.block_hash(), BlockHeight::from(1))
+        .make_client(
+            chain_id2,
+            client2_a.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
         .await?;
     client2_b.set_preferred_owner(owner2_b);
 
@@ -1560,7 +1628,11 @@ where
         .await
         .unwrap();
     let mut client2 = builder
-        .make_client(chain_id, client1.block_hash(), BlockHeight::from(1))
+        .make_client(
+            chain_id,
+            client1.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
         .await?;
     client2.set_preferred_owner(owner2);
     client2.synchronize_from_validators().await.unwrap();
@@ -1607,7 +1679,10 @@ where
     client1.synchronize_from_validators().await.unwrap();
     client1.publish_data_blob(b"foo".to_vec()).await?;
 
-    assert_eq!(client1.next_block_height(), BlockHeight::from(3));
+    assert_eq!(
+        client1.chain_info().await?.next_block_height,
+        BlockHeight::from(3)
+    );
     Ok(())
 }
 
@@ -1647,13 +1722,14 @@ where
         .await
         .unwrap();
 
+    let block_hash = client3_a.chain_info().await?.block_hash;
     let mut client3_b = builder
-        .make_client(chain_id3, client3_a.block_hash(), BlockHeight::from(1))
+        .make_client(chain_id3, block_hash, BlockHeight::from(1))
         .await?;
     client3_b.set_preferred_owner(owner3_b);
 
     let mut client3_c = builder
-        .make_client(chain_id3, client3_a.block_hash(), BlockHeight::from(1))
+        .make_client(chain_id3, block_hash, BlockHeight::from(1))
         .await?;
     client3_c.set_preferred_owner(owner3_c);
 
@@ -2019,8 +2095,9 @@ where
     let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
     client0.change_ownership(ownership).await.unwrap();
 
+    let info = client0.chain_info().await?;
     let mut client1 = builder
-        .make_client(chain_id, client0.block_hash(), client0.next_block_height())
+        .make_client(chain_id, info.block_hash, info.next_block_height)
         .await?;
     client1.set_preferred_owner(owner1);
     assert!(owner0 != owner1);
@@ -2166,7 +2243,11 @@ where
     let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
     client0.change_ownership(ownership).await.unwrap();
     let mut client1 = builder
-        .make_client(chain_id, client0.block_hash(), BlockHeight::from(1))
+        .make_client(
+            chain_id,
+            client0.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
         .await?;
     client1.set_preferred_owner(owner1);
 
@@ -2282,7 +2363,11 @@ where
     };
     client0.change_ownership(ownership).await.unwrap();
     let mut client1 = builder
-        .make_client(chain_id, client0.block_hash(), BlockHeight::from(1))
+        .make_client(
+            chain_id,
+            client0.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
         .await?;
     client1.set_preferred_owner(owner1);
 

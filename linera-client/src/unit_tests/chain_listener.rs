@@ -57,7 +57,6 @@ impl chain_listener::ClientContext for ClientContext {
         self.client.create_chain_client(
             chain_id,
             chain.block_hash,
-            chain.timestamp,
             chain.next_block_height,
             chain.pending_proposal.clone(),
             chain.owner,
@@ -88,7 +87,11 @@ impl chain_listener::ClientContext for ClientContext {
         &mut self,
         client: &ChainClient<environment::Test>,
     ) -> Result<(), Error> {
-        self.wallet.update_from_state(client);
+        let info = client.chain_info().await?;
+        let client_owner = client.preferred_owner();
+        let pending_proposal = client.pending_proposal().clone();
+        self.wallet
+            .update_from_info(pending_proposal, client_owner, &info);
         Ok(())
     }
 }
