@@ -36,7 +36,7 @@ pub struct KeyValueStoreMetrics {
     write_batch_latency: HistogramVec,
     clear_journal_latency: HistogramVec,
     connect_latency: HistogramVec,
-    clone_with_root_key_latency: HistogramVec,
+    acquire_root_keyed_connection_latency: HistogramVec,
     list_all_latency: HistogramVec,
     list_root_keys_latency: HistogramVec,
     delete_all_latency: HistogramVec,
@@ -130,9 +130,10 @@ impl KeyValueStoreMetrics {
         let entry2 = format!("{} connect latency", title_name);
         let connect_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_clone_with_root_key_latency", var_name);
+        let entry1 = format!("{}_acquire_root_keyed_connection_latency", var_name);
         let entry2 = format!("{} clone with root key latency", title_name);
-        let clone_with_root_key_latency = register_histogram_vec(&entry1, &entry2, &[], None);
+        let acquire_root_keyed_connection_latency =
+            register_histogram_vec(&entry1, &entry2, &[], None);
 
         let entry1 = format!("{}_list_all_latency", var_name);
         let entry2 = format!("{} list all latency", title_name);
@@ -239,7 +240,7 @@ impl KeyValueStoreMetrics {
             write_batch_latency,
             clear_journal_latency,
             connect_latency,
-            clone_with_root_key_latency,
+            acquire_root_keyed_connection_latency,
             list_all_latency,
             list_root_keys_latency,
             delete_all_latency,
@@ -455,9 +456,12 @@ where
         Ok(Self { counter, store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let _latency = self.counter.clone_with_root_key_latency.measure_latency();
-        let store = self.store.clone_with_root_key(root_key)?;
+    fn acquire_root_keyed_connection(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let _latency = self
+            .counter
+            .acquire_root_keyed_connection_latency
+            .measure_latency();
+        let store = self.store.acquire_root_keyed_connection(root_key)?;
         let counter = self.counter.clone();
         Ok(Self { counter, store })
     }

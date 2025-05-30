@@ -182,8 +182,9 @@ pub trait AdminKeyValueStore: WithError + Sized {
     /// Connects to an existing namespace using the given configuration.
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
 
-    /// Takes a connection and creates a new one with a different `root_key`.
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
+    /// Takes a connection and creates a clone of it exclusive to a specific `root_key`.
+    /// It is assumed that the caller is the only writer to the `root_key`.
+    fn acquire_root_keyed_connection(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;

@@ -166,7 +166,7 @@ impl StateStorage for RocksDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.acquire_root_keyed_connection(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -194,7 +194,7 @@ impl StateStorage for ScyllaDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.acquire_root_keyed_connection(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
@@ -222,7 +222,7 @@ impl StateStorage for DynamoDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.acquire_root_keyed_connection(&root_key)?;
         let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
