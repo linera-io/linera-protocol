@@ -69,7 +69,7 @@ where
         }
 
         // after implementation of future destinations
-        // this will be offloaded to a seperate thread.
+        // this will be offloaded to a separate thread.
         #[cfg(with_testing)]
         {
             let block = self
