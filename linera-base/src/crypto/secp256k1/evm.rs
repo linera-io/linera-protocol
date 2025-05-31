@@ -67,7 +67,6 @@ pub struct EvmKeyPair {
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct EvmSignature(pub(crate) Signature);
 
-#[cfg(with_testing)]
 impl FromStr for EvmSignature {
     type Err = CryptoError;
 
