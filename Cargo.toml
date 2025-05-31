@@ -70,43 +70,73 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
+# Ethereum primitives and serialization utilities
 alloy = { version = "1.0.5", default-features = false }
 alloy-primitives = { version = "1.1.0", default-features = false, features = [
     "serde",
     "k256",
 ] }
 alloy-sol-types = "1.1.0"
-anyhow = "1.0.80"
-assert_matches = "1.5.0"
+
+# Error handling and testing
+anyhow = "1.0.80"   # Flexible error handling
+assert_matches = "1.5.0"     # Test pattern matching assertions
+
+# GraphQL support for async APIs
 async-graphql = "=7.0.17"
 async-graphql-axum = "=7.0.17"
 async-graphql-derive = "=7.0.17"
-async-lock = "3.3.0"
-async-trait = "0.1.77"
+
+# Async and concurrency utilities
+async-lock = "3.3.0"    # Async lock primitives
+async-trait = "0.1.77"  # Trait support in async contexts
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
+
+# AWS SDK support
 aws-smithy-types = "1.3.1"
-axum = "0.8.1"
+
+# Web framework
+axum = "0.8.1"  # Web framework built on hyper and tower
+
+# Encoding, binary formats, and byte manipulation
 base64 = "0.22.0"
 bcs = "0.1.6"
 bincode = "1.3.3"
 bytes = "1.5.0"
+
+# Cargo and TOML parsing utilities
 cargo_metadata = "0.18.1"
 cargo_toml = "0.19.2"
+
+# Conditional compilation helpers
 cfg-if = "1.0.0"
 cfg_aliases = "0.2.1"
+
+# Date and time
 chrono = { version = "0.4.35", default-features = false }
+
+# CLI parsing
 clap = { version = "4", features = ["cargo", "derive", "env"] }
-clap-markdown = "0.1.3"
+clap-markdown = "0.1.3" # Markdown documentation for clap commands
+
+# Terminal output formatting
 colored = "2.1.0"
-comfy-table = "7.1.0"
-console_error_panic_hook = "0.1.7"
+comfy-table = "7.1.0"   # Pretty ASCII tables for CLI output
+console_error_panic_hook = "0.1.7"  # Better error messages in WASM
+
+# Case conversion and string formatting
 convert_case = "0.6.0"
+# Benchmarking
 criterion = { version = "0.5.1", default-features = false }
+
+# Concurrency and threading
 crossbeam-channel = "0.5.14"
-custom_debug_derive = "0.6.1"
-dashmap = "5.5.3"
+
+# Custom debug formatting
 deluxe = "0.5.0"
-derive_more = "1.0.0"
+derive_more = "1.0.0"                # Custom derive implementations
+
+# File system and directory utilities
 dirs = "5.0.1"
 dyn-clone = "1.0.17"
 ed25519-dalek = { version = "2.1.1", default-features = false, features = [
@@ -121,21 +151,40 @@ frunk = "0.4.2"
 fs-err = "2.11.0"
 fs4 = "0.8.2"
 fs_extra = "1.3.0"
+# Futures and generators
 futures = "0.3.30"
 genawaiter = "0.99.1"
+
+# Cryptographic primitives and libraries
 generic-array = { version = "0.14.7", features = ["serde"] }
 getrandom = "0.2.12"
 git2 = "0.19.0"
+
+# File globbing
 glob = "0.3.1"
+
+# WebAssembly support
 gloo-utils = "0.2.0"
+
+# Case handling and hex utilities
 heck = "0.4.1"
 hex = "0.4.3"
+
+# HTTP support
 http = "1.1.0"
+
+# Time formatting
 humantime = "2.1.0"
+
+# Database and testing tools
 indexed_db_futures = "0.4.1"
-insta = "1.36.1"
+insta = "1.36.1"                      # Snapshot testing
 is-terminal = "0.4.12"
+
+# WASM and JavaScript bindings
 js-sys = "0.3.70"
+
+# Cryptographic elliptic curve library
 k256 = { version = "0.13.4", default-features = false, features = [
     "ecdsa",
     "pem",
