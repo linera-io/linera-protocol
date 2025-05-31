@@ -244,13 +244,16 @@ impl Project {
         // We're putting the Cargo.toml file one level above the current directory.
         let linera_root = PathBuf::from("..").join(linera_root);
         let linera_sdk_path = linera_root.join("linera-sdk");
-        let linera_sdk_dep = format!(
-            "linera-sdk = {{ path = \"{}\" }}",
-            linera_sdk_path.display()
-        );
+
+        let path_str = linera_sdk_path
+            .to_str()
+            .expect("Invalid UTF-8 path")
+            .replace('\\', "/");
+
+        let linera_sdk_dep = format!("linera-sdk = {{ path = \"{}\" }}", path_str);
         let linera_sdk_dev_dep = format!(
             "linera-sdk = {{ path = \"{}\", features = [\"test\", \"wasmer\"] }}",
-            linera_sdk_path.display()
+            path_str
         );
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
