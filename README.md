@@ -10,14 +10,7 @@
 <!-- [![Build Status for Kubernetes](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml) -->
 
 [Linera](https://linera.io) is a decentralized blockchain infrastructure designed for highly scalable,
-low-latency Web3 applications.
-
-## Key Features
-
-- **High Scalability**: Process thousands of transactions per second with sub-second confirmation times
-- **Microchain Architecture**: Each user operates their own chain, eliminating global bottlenecks
-- **Low Fees**: Efficient consensus mechanism keeps transaction costs minimal
-- **Developer Friendly**: Build applications using familiar Rust and WebAssembly tools
+secure, low-latency Web3 applications.
 
 ## Documentation
 
@@ -71,15 +64,11 @@ from low to high levels in the dependency graph)
 
 * [`examples`](./examples) Examples of Linera applications written in Rust.
 
+## Prerequisites
+
+See [`INSTALL.md`](./INSTALL.md) for software requirements to develop in this repo.
 
 ## Quickstart with the Linera CLI tool
-
-### Prerequisites
-
-- [Rust](https://www.rust-lang.org/tools/install) (version 1.70 or higher)
-- [Git](https://git-scm.com/downloads) 
-- Approximately 2GB of free disk space
-- Linux or macOS (Windows users should use WSL2)
 
 The following commands set up a local test network and run some transfers between the
 microchains owned by a single wallet.
