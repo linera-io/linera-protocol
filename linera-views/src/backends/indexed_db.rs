@@ -365,10 +365,6 @@ pub enum IndexedDbStoreError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The value is too large for the `IndexedDbStore`
-    #[error("The value is too large for the IndexedDbStore")]
-    TooLargeValue,
-
     /// A DOM exception occurred in the IndexedDB operations
     #[error("DOM exception: {0:?}")]
     Dom(gloo_utils::errors::JsError),
