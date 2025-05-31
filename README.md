@@ -130,3 +130,8 @@ linera query-balance "$CHAIN2:$ACCOUNT2"
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well
 as the [example applications](./examples) in this repository.
+
+echo "# Contributor update" >> CONTRIBUTORS.md
+git add CONTRIBUTORS.md
+git commit -m "Added myself to contributors"
+
