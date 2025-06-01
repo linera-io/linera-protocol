@@ -182,8 +182,12 @@ pub trait AdminKeyValueStore: WithError + Sized {
     /// Connects to an existing namespace using the given configuration.
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
 
-    /// Takes a connection and creates a clone of it exclusive to a specific `root_key`.
-    /// It is assumed that the caller is the only writer to the `root_key`.
+    /// Opens the key partition starting at `root_key` and returns a clone of the
+    /// connection to work in this partition.
+    ///
+    /// IMPORTANT: It is assumed that the returned connection is the only user of the
+    /// partition (for both read and write) and will remain so until it is ended. Future
+    /// implementations of this method may fail if this is not the case.
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
