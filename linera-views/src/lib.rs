@@ -91,7 +91,6 @@ pub mod metrics;
 mod graphql;
 
 /// Functions for random generation
-#[cfg(with_testing)]
 pub mod random;
 
 /// Helper types for tests.
