@@ -487,10 +487,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         RocksDbStoreInternal::build(config, namespace, start_key)
     }
 
-    fn acquire_root_keyed_connection(
-        &self,
-        root_key: &[u8],
-    ) -> Result<Self, RocksDbStoreInternalError> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreInternalError> {
         let mut store = self.clone();
         let mut start_key = ROOT_KEY_DOMAIN.to_vec();
         start_key.extend(root_key);

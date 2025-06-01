@@ -487,8 +487,8 @@ where
         ))
     }
 
-    fn acquire_root_keyed_connection(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.acquire_root_keyed_connection(root_key)?;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.open_exclusive(root_key)?;
         let store = LruCachingStore::new(store, self.storage_cache_config());
         store.enable_exclusive_access();
         Ok(store)

@@ -194,8 +194,8 @@ where
         })
     }
 
-    fn acquire_root_keyed_connection(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.acquire_root_keyed_connection(root_key)?;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.open_exclusive(root_key)?;
         Ok(Self {
             store,
             has_exclusive_access: true,

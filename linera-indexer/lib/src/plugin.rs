@@ -73,7 +73,7 @@ where
 {
     let root_key = name.as_bytes().to_vec();
     let store = store
-        .acquire_root_keyed_connection(&root_key)
+        .open_exclusive(&root_key)
         .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
     let context = ViewContext::create_root_context(store, ())
         .await

@@ -184,7 +184,7 @@ pub trait AdminKeyValueStore: WithError + Sized {
 
     /// Takes a connection and creates a clone of it exclusive to a specific `root_key`.
     /// It is assumed that the caller is the only writer to the `root_key`.
-    fn acquire_root_keyed_connection(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;

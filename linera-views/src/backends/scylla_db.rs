@@ -682,10 +682,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         })
     }
 
-    fn acquire_root_keyed_connection(
-        &self,
-        root_key: &[u8],
-    ) -> Result<Self, ScyllaDbStoreInternalError> {
+    fn open_exclusive(&self, root_key: &[u8]) -> Result<Self, ScyllaDbStoreInternalError> {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
