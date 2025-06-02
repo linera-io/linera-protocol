@@ -90,9 +90,9 @@ impl ShardConfig {
 /// The network configuration of a proxy.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProxyConfig {
-    /// The host name (e.g., an IP address).
+    /// The hostname (e.g., an IP address).
     pub host: String,
-    /// The public facing port. Received incoming connections from clients.
+    /// The public facing port. Receives incoming connections from clients.
     pub public_port: u16,
     /// The private port. Used for communicating with shards.
     pub private_port: u16,
@@ -149,7 +149,7 @@ pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<NetworkP
 pub struct ValidatorInternalNetworkPreConfig<P> {
     /// The public key of the validator.
     pub public_key: ValidatorPublicKey,
-    /// The network protocol to internally.
+    /// The network protocol to use internally.
     pub protocol: P,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
     /// a static way.
