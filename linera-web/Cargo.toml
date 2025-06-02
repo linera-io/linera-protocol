@@ -26,6 +26,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
+hex.workspace = true
 
 [dependencies.linera-base]
 features = ["web"]

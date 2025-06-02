@@ -215,7 +215,8 @@ impl Client {
             )
             .run()
             .boxed_local()
-            .await {
+            .await
+            {
                 tracing::error!("ChainListener error: {error:?}");
             }
         });
