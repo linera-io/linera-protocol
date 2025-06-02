@@ -13,7 +13,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{ChainClient, Client, MessagePolicy},
     environment,
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
@@ -46,23 +46,8 @@ impl chain_listener::ClientContext for ClientContext {
         self.client.storage_client()
     }
 
-    fn client(&self) -> &linera_core::client::Client<Self::Environment> {
+    fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>> {
         &self.client
-    }
-
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<environment::Test> {
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
-        self.client.create_chain_client(
-            chain_id,
-            chain.block_hash,
-            chain.next_block_height,
-            chain.pending_proposal.clone(),
-            chain.owner,
-        )
     }
 
     async fn update_wallet_for_new_chain(
@@ -129,6 +114,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             },
             10,
             admin_id,
+            MessagePolicy::new_accept_all(),
             delivery,
             false,
             [chain_id0],
@@ -217,6 +203,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             },
             10,
             admin_id,
+            MessagePolicy::new_accept_all(),
             delivery,
             false,
             [],

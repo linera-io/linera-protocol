@@ -3,7 +3,7 @@
 
 #[cfg(with_testing)]
 use std::num::NonZeroUsize;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use futures::Future;
 use linera_base::{
@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
-    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
+    client::{ChainClient, Client, MessagePolicy},
     data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::{CrossChainMessageDelivery, ValidatorNode},
@@ -71,8 +71,6 @@ pub struct ClientContext<Env: Environment, W> {
     pub retry_delay: Duration,
     pub max_retries: u32,
     pub chain_listeners: JoinSet,
-    pub blanket_message_policy: BlanketMessagePolicy,
-    pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
 impl<Env: Environment, W> chain_listener::ClientContext for ClientContext<Env, W>
@@ -89,24 +87,7 @@ where
         self.client.storage_client()
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<Env> {
-        // We only create clients for chains we have in the wallet, or for the admin chain.
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .cloned()
-            .unwrap_or_else(|| UserChain::make_other(chain_id, Timestamp::from(0)));
-
-        self.make_chain_client_internal(
-            chain_id,
-            chain.block_hash,
-            chain.next_block_height,
-            chain.pending_proposal,
-            chain.owner,
-        )
-    }
-
-    fn client(&self) -> &Client<Env> {
+    fn client(&self) -> &Arc<Client<Env>> {
         &self.client
     }
 
@@ -153,6 +134,10 @@ where
             },
             options.max_pending_message_bundles,
             wallet.genesis_admin_chain(),
+            MessagePolicy::new(
+                options.blanket_message_policy,
+                options.restrict_chain_ids_to,
+            ),
             delivery,
             options.long_lived_services,
             chain_ids,
@@ -170,8 +155,6 @@ where
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
             chain_listeners: JoinSet::default(),
-            blanket_message_policy: options.blanket_message_policy,
-            restrict_chain_ids_to: options.restrict_chain_ids_to,
         }
     }
 
@@ -204,6 +187,7 @@ where
             },
             10,
             wallet.genesis_admin_chain(),
+            MessagePolicy::new_accept_all(),
             delivery,
             false,
             chain_ids,
@@ -221,8 +205,6 @@ where
             retry_delay,
             max_retries,
             chain_listeners: JoinSet::default(),
-            blanket_message_policy: BlanketMessagePolicy::Accept,
-            restrict_chain_ids_to: None,
         }
     }
 }
@@ -265,28 +247,6 @@ impl<Env: Environment, W: Persist<Target = Wallet>> ClientContext<Env, W> {
         self.wallet
             .first_non_admin_chain()
             .expect("No non-admin chain specified in wallet with no non-admin chain")
-    }
-
-    fn make_chain_client_internal(
-        &self,
-        chain_id: ChainId,
-        block_hash: Option<CryptoHash>,
-        next_block_height: BlockHeight,
-        pending_proposal: Option<PendingProposal>,
-        preferred_owner: Option<AccountOwner>,
-    ) -> ChainClient<Env> {
-        let mut chain_client = self.client.create_chain_client(
-            chain_id,
-            block_hash,
-            next_block_height,
-            pending_proposal,
-            preferred_owner,
-        );
-        chain_client.options_mut().message_policy = MessagePolicy::new(
-            self.blanket_message_policy,
-            self.restrict_chain_ids_to.clone(),
-        );
-        chain_client
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -907,7 +867,7 @@ where
                 benchmark_chains.insert(chain_id, pub_key.into());
                 self.client.track_chain(chain_id);
 
-                let mut chain_client = self.make_chain_client_internal(
+                let mut chain_client = self.client.create_chain_client(
                     chain_id,
                     None,
                     BlockHeight::ZERO,

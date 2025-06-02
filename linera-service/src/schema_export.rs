@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, NetworkDescription, Timestamp},
@@ -180,11 +182,7 @@ impl ClientContext for DummyContext {
         unimplemented!()
     }
 
-    fn client(&self) -> &linera_core::client::Client<Self::Environment> {
-        unimplemented!()
-    }
-
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<Self::Environment> {
+    fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>> {
         unimplemented!()
     }
 
