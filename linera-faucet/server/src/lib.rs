@@ -171,10 +171,9 @@ where
         }
 
         let ownership = ChainOwnership::single(owner);
-        let (message_id, certificate) = faucet_client
+        let result = faucet_client
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
-            .await?
-            .try_unwrap()?;
+            .await;
         self.context
             .lock()
             .await
@@ -182,7 +181,9 @@ where
             .await?;
 
         // Only keep using this chain if there will still be enough balance to close it.
-        if faucet_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)? {
+        if result.is_err()
+            || faucet_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)?
+        {
             self.faucet_chain_id.lock().await.take();
             // TODO(#1795): Move the remaining tokens back to the main chain.
             match faucet_client.close_chain().await {
@@ -204,6 +205,7 @@ where
             }
         }
 
+        let (message_id, certificate) = result?.try_unwrap()?;
         let chain_id = ChainId::child(message_id);
         Ok(ClaimOutcome {
             message_id,
