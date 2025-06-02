@@ -134,7 +134,7 @@ async fn test_faucet_rate_limiting() {
         .do_claim(AccountPublicKey::test_key(6).into())
         .await
         .is_err());
-    assert_eq!(context.lock().await.update_calls, 3);
+    assert_eq!(context.lock().await.update_calls, 4);
 }
 
 #[test]
