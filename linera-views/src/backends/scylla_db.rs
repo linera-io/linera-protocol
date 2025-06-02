@@ -9,34 +9,49 @@
 
 use std::{
     collections::{BTreeSet, HashMap},
+    num::NonZeroUsize,
     ops::Deref,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use dashmap::{mapref::entry::Entry, DashMap};
-use futures::{future::join_all, StreamExt as _};
+use dashmap::DashMap;
+use futures::{future::join_all, StreamExt};
 use linera_base::ensure;
+use lru::LruCache;
 use scylla::{
     client::{
         execution_profile::{ExecutionProfile, ExecutionProfileHandle},
         session::Session,
         session_builder::SessionBuilder,
     },
+    cluster::{ClusterState, Node, NodeRef},
     deserialize::{DeserializationError, TypeCheckError},
     errors::{
-        DbError, ExecutionError, IntoRowsResultError, NewSessionError, NextPageError, NextRowError,
-        PagerExecutionError, PrepareError, RequestAttemptError, RequestError, RowsError,
+        ClusterStateTokenError, DbError, ExecutionError, IntoRowsResultError, MetadataError,
+        NewSessionError, NextPageError, NextRowError, PagerExecutionError, PrepareError,
+        RequestAttemptError, RequestError, RowsError,
     },
     policies::{
-        load_balancing::{DefaultPolicy, LoadBalancingPolicy},
+        load_balancing::{DefaultPolicy, FallbackPlan, LoadBalancingPolicy, RoutingInfo},
         retry::DefaultRetryPolicy,
     },
     response::PagingState,
-    statement::{batch::BatchType, prepared::PreparedStatement, Consistency},
+    routing::{Shard, Token},
+    statement::{
+        batch::{Batch, BatchType},
+        prepared::PreparedStatement,
+        Consistency,
+    },
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::time::Instant;
+use tracing::warn;
 
 #[cfg(with_metrics)]
 use crate::metering::MeteredStore;
@@ -98,6 +113,30 @@ const MAX_BATCH_SIZE: usize = 5000;
 /// The keyspace to use for the ScyllaDB database.
 const KEYSPACE: &str = "kv";
 
+enum LoadBalancingPolicyCacheEntry {
+    Ready(Arc<dyn LoadBalancingPolicy>),
+    // The timestamp of the last time the policy creation was attempted.
+    NotReady(Instant, Option<Token>),
+}
+
+/// The configuration of the ScyllaDB client.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ScyllaDbClientConfig {
+    /// The size of the cache for the load balancing policies.
+    pub load_balancing_policy_cache_size: NonZeroUsize,
+    /// The delay before the sticky load balancing policy creation is retried.
+    pub delay_before_sticky_load_balancing_policy_retry_ms: u64,
+}
+
+impl Default for ScyllaDbClientConfig {
+    fn default() -> Self {
+        Self {
+            load_balancing_policy_cache_size: NonZeroUsize::new(50_000).unwrap(),
+            delay_before_sticky_load_balancing_policy_retry_ms: 1000,
+        }
+    }
+}
+
 /// The client for ScyllaDB:
 /// * The session allows to pass queries
 /// * The namespace that is being assigned to the database
@@ -105,6 +144,7 @@ const KEYSPACE: &str = "kv";
 struct ScyllaDbClient {
     session: Session,
     namespace: String,
+    config: ScyllaDbClientConfig,
     read_value: PreparedStatement,
     contains_key: PreparedStatement,
     write_batch_delete_prefix_unbounded: PreparedStatement,
@@ -117,10 +157,15 @@ struct ScyllaDbClient {
     find_key_values_by_prefix_bounded: PreparedStatement,
     multi_key_values: DashMap<usize, PreparedStatement>,
     multi_keys: DashMap<usize, PreparedStatement>,
+    batch_load_balancing_policies: Mutex<LruCache<Vec<u8>, LoadBalancingPolicyCacheEntry>>,
 }
 
 impl ScyllaDbClient {
-    async fn new(session: Session, namespace: &str) -> Result<Self, ScyllaDbStoreInternalError> {
+    async fn new(
+        session: Session,
+        namespace: &str,
+        config: ScyllaDbClientConfig,
+    ) -> Result<Self, ScyllaDbStoreInternalError> {
         let namespace = namespace.to_string();
         let read_value = session
             .prepare(format!(
@@ -192,9 +237,11 @@ impl ScyllaDbClient {
             ))
             .await?;
 
+        let load_balancing_policy_cache_size = config.load_balancing_policy_cache_size;
         Ok(Self {
             session,
             namespace,
+            config,
             read_value,
             contains_key,
             write_batch_delete_prefix_unbounded,
@@ -207,6 +254,9 @@ impl ScyllaDbClient {
             find_key_values_by_prefix_bounded,
             multi_key_values: DashMap::new(),
             multi_keys: DashMap::new(),
+            batch_load_balancing_policies: Mutex::new(LruCache::new(
+                load_balancing_policy_cache_size,
+            )),
         })
     }
 
@@ -228,63 +278,63 @@ impl ScyllaDbClient {
     async fn build_default_session(uri: &str) -> Result<Session, ScyllaDbStoreInternalError> {
         // This explicitly sets a lot of default parameters for clarity and for making future changes
         // easier.
-        SessionBuilder::new()
+        let session = SessionBuilder::new()
             .known_node(uri)
+            .cluster_metadata_refresh_interval(Duration::from_secs(10))
             .default_execution_profile_handle(Self::build_default_execution_profile_handle(
                 Self::build_default_policy(),
             ))
             .build()
             .boxed_sync()
-            .await
-            .map_err(Into::into)
+            .await?;
+        session.refresh_metadata().await?;
+        Ok(session)
     }
 
     async fn get_multi_key_values_statement(
         &self,
         num_markers: usize,
     ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
-        let entry = self.multi_key_values.entry(num_markers);
-        match entry {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let markers = std::iter::repeat_n("?", num_markers)
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let prepared_statement = self
-                    .session
-                    .prepare(format!(
-                        "SELECT k,v FROM {}.{} WHERE root_key = ? AND k IN ({})",
-                        KEYSPACE, self.namespace, markers
-                    ))
-                    .await?;
-                entry.insert(prepared_statement.clone());
-                Ok(prepared_statement)
-            }
+        if let Some(statement) = self.multi_key_values.get(&num_markers) {
+            return Ok(statement.clone());
         }
+
+        let markers = std::iter::repeat_n("?", num_markers)
+            .collect::<Vec<_>>()
+            .join(",");
+        let prepared_statement = self
+            .session
+            .prepare(format!(
+                "SELECT k,v FROM {}.{} WHERE root_key = ? AND k IN ({})",
+                KEYSPACE, self.namespace, markers
+            ))
+            .await?;
+        self.multi_key_values
+            .insert(num_markers, prepared_statement.clone());
+        Ok(prepared_statement)
     }
 
     async fn get_multi_keys_statement(
         &self,
         num_markers: usize,
     ) -> Result<PreparedStatement, ScyllaDbStoreInternalError> {
-        let entry = self.multi_keys.entry(num_markers);
-        match entry {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let markers = std::iter::repeat_n("?", num_markers)
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let prepared_statement = self
-                    .session
-                    .prepare(format!(
-                        "SELECT k FROM {}.{} WHERE root_key = ? AND k IN ({})",
-                        KEYSPACE, self.namespace, markers
-                    ))
-                    .await?;
-                entry.insert(prepared_statement.clone());
-                Ok(prepared_statement)
-            }
+        if let Some(statement) = self.multi_keys.get(&num_markers) {
+            return Ok(statement.clone());
         }
+
+        let markers = std::iter::repeat_n("?", num_markers)
+            .collect::<Vec<_>>()
+            .join(",");
+        let prepared_statement = self
+            .session
+            .prepare(format!(
+                "SELECT k FROM {}.{} WHERE root_key = ? AND k IN ({})",
+                KEYSPACE, self.namespace, markers
+            ))
+            .await?;
+        self.multi_keys
+            .insert(num_markers, prepared_statement.clone());
+        Ok(prepared_statement)
     }
 
     fn check_key_size(key: &[u8]) -> Result<(), ScyllaDbStoreInternalError> {
@@ -412,46 +462,121 @@ impl ScyllaDbClient {
         Ok(rows.next().is_some())
     }
 
+    fn attempt_sticky_shard_policy_creation(
+        &self,
+        partition_key: &[u8],
+        token: Option<Token>,
+        cache: &mut LruCache<Vec<u8>, LoadBalancingPolicyCacheEntry>,
+    ) -> Arc<dyn LoadBalancingPolicy> {
+        match StickyShardPolicy::new(
+            &self.session,
+            &self.namespace,
+            partition_key,
+            token,
+            ScyllaDbClient::build_default_policy(),
+        ) {
+            Ok(policy) => {
+                let policy = Arc::new(policy);
+                cache.push(
+                    partition_key.to_vec(),
+                    LoadBalancingPolicyCacheEntry::Ready(policy.clone()),
+                );
+                policy
+            }
+            Err(error) => {
+                // Cache that the policy creation failed, so we don't try again too soon, and don't
+                // recalculate the token if not needed.
+
+                warn!("Failed to create sticky shard policy: {:?}", error);
+                let token = match error {
+                    ScyllaDbStoreInternalError::MissingTokenEndpoints(token) => Some(token),
+                    _ => None,
+                };
+                cache.push(
+                    partition_key.to_vec(),
+                    LoadBalancingPolicyCacheEntry::NotReady(Instant::now(), token),
+                );
+                ScyllaDbClient::build_default_policy()
+            }
+        }
+    }
+
+    // Returns a batch query with a sticky shard policy, that always tries to route to the same
+    // ScyllaDB shard.
+    // Should be used only on batches where all statements are to the same partition key.
+    fn get_sticky_batch_query(
+        &self,
+        partition_key: &[u8],
+    ) -> Result<Batch, ScyllaDbStoreInternalError> {
+        // Since we assume this is all to the same partition key, we can use an unlogged batch.
+        // We could use a logged batch to get atomicity across different partitions, but that
+        // comes with a huge performance penalty (seems to double write latency).
+        let mut batch_query = Batch::new(BatchType::Unlogged);
+        // Getting the sticky shard policy does some serializing and hashing under the hood, so
+        // we cache the policy to avoid that extra work.
+        let policy = {
+            let mut cache = self
+                .batch_load_balancing_policies
+                .lock()
+                .map_err(|_| ScyllaDbStoreInternalError::PoisonedMutex)?;
+            match cache.get(partition_key) {
+                Some(LoadBalancingPolicyCacheEntry::Ready(policy)) => policy.clone(),
+                Some(LoadBalancingPolicyCacheEntry::NotReady(timestamp, token)) => {
+                    if timestamp.elapsed().as_millis() as u64
+                        > self
+                            .config
+                            .delay_before_sticky_load_balancing_policy_retry_ms
+                    {
+                        self.attempt_sticky_shard_policy_creation(partition_key, *token, &mut cache)
+                    } else {
+                        ScyllaDbClient::build_default_policy()
+                    }
+                }
+                None => self.attempt_sticky_shard_policy_creation(partition_key, None, &mut cache),
+            }
+        };
+        let handle = Self::build_default_execution_profile_handle(policy);
+        batch_query.set_execution_profile_handle(Some(handle));
+
+        Ok(batch_query)
+    }
+
+    // Batches should be always to the same partition key. Batches across different partitions
+    // will not be atomic. If the caller wants atomicity, it's the caller's responsibility to
+    // make sure that the batch only has statements to the same partition key.
     async fn write_batch_internal(
         &self,
         root_key: &[u8],
         batch: UnorderedBatch,
     ) -> Result<(), ScyllaDbStoreInternalError> {
-        let session = &self.session;
-        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        let mut batch_values = Vec::new();
-        let query1 = &self.write_batch_delete_prefix_unbounded;
-        let query2 = &self.write_batch_delete_prefix_bounded;
         Self::check_batch_len(&batch)?;
+        let session = &self.session;
+        let mut batch_query = self.get_sticky_batch_query(root_key)?;
+        let mut batch_values = Vec::with_capacity(batch.len());
+
         for key_prefix in batch.key_prefix_deletions {
             Self::check_key_size(&key_prefix)?;
             match get_upper_bound_option(&key_prefix) {
                 None => {
-                    let values = vec![root_key.to_vec(), key_prefix];
-                    batch_values.push(values);
-                    batch_query.append_statement(query1.clone());
+                    batch_query.append_statement(self.write_batch_delete_prefix_unbounded.clone());
+                    batch_values.push(vec![root_key.to_vec(), key_prefix]);
                 }
                 Some(upper_bound) => {
-                    let values = vec![root_key.to_vec(), key_prefix, upper_bound];
-                    batch_values.push(values);
-                    batch_query.append_statement(query2.clone());
+                    batch_query.append_statement(self.write_batch_delete_prefix_bounded.clone());
+                    batch_values.push(vec![root_key.to_vec(), key_prefix, upper_bound]);
                 }
             }
         }
-        let query3 = &self.write_batch_deletion;
         for key in batch.simple_unordered_batch.deletions {
             Self::check_key_size(&key)?;
-            let values = vec![root_key.to_vec(), key];
-            batch_values.push(values);
-            batch_query.append_statement(query3.clone());
+            batch_query.append_statement(self.write_batch_deletion.clone());
+            batch_values.push(vec![root_key.to_vec(), key]);
         }
-        let query4 = &self.write_batch_insertion;
         for (key, value) in batch.simple_unordered_batch.insertions {
             Self::check_key_size(&key)?;
             Self::check_value_size(&value)?;
-            let values = vec![root_key.to_vec(), key, value];
-            batch_values.push(values);
-            batch_query.append_statement(query4.clone());
+            batch_query.append_statement(self.write_batch_insertion.clone());
+            batch_values.push(vec![root_key.to_vec(), key, value]);
         }
         session.batch(&batch_query, batch_values).await?;
         Ok(())
@@ -521,6 +646,76 @@ impl ScyllaDbClient {
             key_values.push((short_key, value));
         }
         Ok(key_values)
+    }
+}
+
+// Batch statements in ScyllaDb are currently not token aware. The batch gets sent to a random
+// node: https://rust-driver.docs.scylladb.com/stable/statements/batch.html#performance
+// However, for batches where all statements are to the same partition key, we can use a sticky
+// shard policy to route to the same shard, and make batches be token aware.
+//
+// This is a policy that always tries to route to the ScyllaDB shards that contain the token, in a
+// round-robin fashion.
+#[derive(Debug)]
+struct StickyShardPolicy {
+    replicas: Vec<(Arc<Node>, Shard)>,
+    current_replica_index: AtomicUsize,
+    fallback: Arc<dyn LoadBalancingPolicy>,
+}
+
+impl StickyShardPolicy {
+    fn new(
+        session: &Session,
+        namespace: &str,
+        partition_key: &[u8],
+        token: Option<Token>,
+        fallback: Arc<dyn LoadBalancingPolicy>,
+    ) -> Result<Self, ScyllaDbStoreInternalError> {
+        let cluster = session.get_cluster_state();
+        let token = if let Some(token) = token {
+            token
+        } else {
+            cluster.compute_token(KEYSPACE, namespace, &(partition_key,))?
+        };
+        let replicas = cluster.get_token_endpoints(KEYSPACE, namespace, token);
+        if replicas.is_empty() {
+            // The driver won't always have all the token information available,
+            // but we can try again later.
+            return Err(ScyllaDbStoreInternalError::MissingTokenEndpoints(token));
+        }
+        Ok(Self {
+            replicas,
+            current_replica_index: AtomicUsize::new(0),
+            fallback,
+        })
+    }
+}
+
+impl LoadBalancingPolicy for StickyShardPolicy {
+    fn name(&self) -> String {
+        "StickyShardPolicy".to_string()
+    }
+
+    // Always try first to route to the sticky shard.
+    fn pick<'a>(
+        &'a self,
+        _request: &'a RoutingInfo<'a>,
+        _cluster: &'a ClusterState,
+    ) -> Option<(NodeRef<'a>, Option<Shard>)> {
+        // fetch_add will wrap around on overflow, so we should be ok just incrementing forever here.
+        let new_replica_index =
+            self.current_replica_index.fetch_add(1, Ordering::Relaxed) % self.replicas.len();
+        let (node, shard) = &self.replicas[new_replica_index];
+        Some((node, Some(*shard)))
+    }
+
+    // Fallback to the default policy.
+    fn fallback<'a>(
+        &'a self,
+        request: &'a RoutingInfo,
+        cluster: &'a ClusterState,
+    ) -> FallbackPlan<'a> {
+        self.fallback.fallback(request, cluster)
     }
 }
 
@@ -595,6 +790,22 @@ pub enum ScyllaDbStoreInternalError {
     /// A next row error in ScyllaDB
     #[error(transparent)]
     NextRowError(#[from] NextRowError),
+
+    /// A token error in ScyllaDB
+    #[error(transparent)]
+    ClusterStateTokenError(#[from] ClusterStateTokenError),
+
+    /// The token endpoint information is currently missing from the driver
+    #[error("The token endpoint information is currently missing from the driver")]
+    MissingTokenEndpoints(Token),
+
+    /// The mutex is poisoned
+    #[error("The mutex is poisoned")]
+    PoisonedMutex,
+
+    /// A metadata error in ScyllaDB
+    #[error(transparent)]
+    MetadataError(#[from] MetadataError),
 }
 
 impl KeyValueStoreError for ScyllaDbStoreInternalError {
@@ -706,6 +917,9 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     // https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
     type Batch = UnorderedBatch;
 
+    // Batches should be always to the same partition key. Batches across different partitions
+    // will not be atomic. If the caller wants atomicity, it's the caller's responsibility to
+    // make sure that the batch only has statements to the same partition key.
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
@@ -727,6 +941,8 @@ pub struct ScyllaDbStoreInternalConfig {
     pub uri: String,
     /// The common configuration of the key value store
     common_config: CommonStoreInternalConfig,
+    /// The configuration of the ScyllaDB client
+    client_config: ScyllaDbClientConfig,
 }
 
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
@@ -742,7 +958,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     ) -> Result<Self, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = ScyllaDbClient::build_default_session(&config.uri).await?;
-        let store = ScyllaDbClient::new(session, namespace).await?;
+        let store = ScyllaDbClient::new(session, namespace, config.client_config.clone()).await?;
         let store = Arc::new(store);
         let semaphore = config
             .common_config
@@ -997,7 +1213,11 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
             replication_factor: 1,
         };
-        Ok(ScyllaDbStoreInternalConfig { uri, common_config })
+        Ok(ScyllaDbStoreInternalConfig {
+            uri,
+            common_config,
+            client_config: ScyllaDbClientConfig::default(),
+        })
     }
 }
 
@@ -1021,10 +1241,15 @@ pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
 impl ScyllaDbStoreConfig {
     /// Creates a `ScyllaDbStoreConfig` from the inputs.
-    pub fn new(uri: String, common_config: crate::store::CommonStoreConfig) -> ScyllaDbStoreConfig {
+    pub fn new(
+        uri: String,
+        common_config: crate::store::CommonStoreConfig,
+        client_config: ScyllaDbClientConfig,
+    ) -> ScyllaDbStoreConfig {
         let inner_config = ScyllaDbStoreInternalConfig {
             uri,
             common_config: common_config.reduced(),
+            client_config,
         };
         ScyllaDbStoreConfig {
             inner_config,
