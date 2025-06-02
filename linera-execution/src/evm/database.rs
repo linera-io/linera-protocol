@@ -41,6 +41,8 @@ const SSTORE_COST_RESET: u64 = 2900;
 /// The refund from releasing data.
 const SSTORE_REFUND_RELEASE: u64 = 4800;
 
+/// The number of key writes, reads, release, and no change in EVM has to be accounted for.
+/// Then we remove those costs from the final bill.
 #[derive(Clone, Default)]
 pub(crate) struct StorageStats {
     key_no_operation: u64,
@@ -65,10 +67,12 @@ impl StorageStats {
     }
 }
 
+/// This is the encapsulation of the `Runtime` corresponding to the contract.
 pub(crate) struct DatabaseRuntime<Runtime> {
-    /// This is the storage statistics.
+    /// This is the storage statistics of the read/write in order to adjust gas costs.
     storage_stats: Arc<Mutex<StorageStats>>,
-    /// This is the EVM address of the contract
+    /// This is the EVM address of the contract.
+    /// At the creation, is is set to `Address::ZERO` and then later set to the correct value.
     pub contract_address: Address,
     /// The runtime of the contract.
     pub runtime: Arc<Mutex<Runtime>>,

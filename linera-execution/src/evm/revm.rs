@@ -661,7 +661,7 @@ fn get_interpreter_result(
 
 struct CallInterceptorContract<Runtime> {
     db: DatabaseRuntime<Runtime>,
-    // This is the caller contract address
+    // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
 }
@@ -769,7 +769,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
 
 struct CallInterceptorService<Runtime> {
     db: DatabaseRuntime<Runtime>,
-    // This is the caller contract address
+    // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
 }
