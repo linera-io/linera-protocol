@@ -36,15 +36,14 @@ spec:
 
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: proxy
 spec:
   selector:
     matchLabels:
       app: proxy
-  replicas: 3
-  podManagementPolicy: Parallel
+  replicas: 1
   template:
     metadata:
       labels:

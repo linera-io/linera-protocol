@@ -383,7 +383,6 @@ impl LocalKubernetesNet {
             "#
         );
 
-        // TODO config
         for k in 0..3 {
             content.push_str(&format!(
                 r#"

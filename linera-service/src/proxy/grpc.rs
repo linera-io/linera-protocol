@@ -154,7 +154,6 @@ impl<S> GrpcProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         internal_config: ValidatorInternalNetworkConfig,
         connect_timeout: Duration,

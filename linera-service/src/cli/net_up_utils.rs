@@ -171,7 +171,6 @@ pub async fn handle_net_up_service(
     initial_amount: u128,
     num_initial_validators: usize,
     num_shards: usize,
-    num_proxies: usize,
     testing_prng_seed: Option<u64>,
     policy_config: ResourceControlPolicyConfig,
     cross_chain_config: CrossChainConfig,
@@ -190,9 +189,6 @@ pub async fn handle_net_up_service(
     if num_shards < 1 {
         panic!("The local test network must have at least one shard per validator.");
     }
-    if num_proxies != 1 {
-        panic!("The local test network must have exactly one proxy per validator.");
-    }
 
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
@@ -210,6 +206,7 @@ pub async fn handle_net_up_service(
     let internal = Network::Grpc;
     let network = NetworkConfig { external, internal };
     let path_provider = PathProvider::new(path)?;
+    let num_proxies = 1; // Local networks currently support exactly 1 proxy.
     let config = LocalNetConfig {
         network,
         database,
