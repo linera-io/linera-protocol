@@ -207,9 +207,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage = builder.make_storage().await?;
     let delivery = CrossChainMessageDelivery::NonBlocking;
 
-    println!("Client 0 chain ID: {}", client0.chain_id());
-    println!("Admin chain ID: {}", admin_id);
-
     let context = ClientContext {
         wallet: Wallet::new(genesis_config),
         client: Arc::new(Client::new(
