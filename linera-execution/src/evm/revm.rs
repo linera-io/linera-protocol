@@ -91,6 +91,13 @@ mod tests {
     }
 }
 
+fn has_instantiation_function(module: &[u8]) -> bool {
+    let push4 = 0x63; // An EVM instruction
+    let mut vec = vec![push4];
+    vec.extend(INSTANTIATE_SELECTOR);
+    module.windows(5).any(|window| window == vec)
+}
+
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
@@ -833,8 +840,8 @@ where
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         self.initialize_contract()?;
-        let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
-        if !instantiation_argument.is_empty() {
+        if has_instantiation_function(&self.module) {
+            let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
             let argument = get_revm_instantiation_bytes(instantiation_argument);
             let result = self.transact_commit(Choice::Call, &argument)?;
             self.write_logs(result.logs, "instantiate")?;
