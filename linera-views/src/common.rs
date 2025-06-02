@@ -87,7 +87,7 @@ pub(crate) fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
 /// The upper bound that can be used in ranges when accessing
 /// a container. That is a vector `v` is a prefix of `p` if and only if
 /// `v` belongs to the interval `(Included(p), get_upper_bound(p))`.
-pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
+pub fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
     match get_upper_bound_option(key_prefix) {
         None => Unbounded,
         Some(upper_bound) => Excluded(upper_bound),
@@ -96,7 +96,7 @@ pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
 
 /// Computes an interval so that a vector has `key_prefix` as a prefix
 /// if and only if it belongs to the range.
-pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
 }

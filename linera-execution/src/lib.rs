@@ -8,6 +8,7 @@
 
 pub mod committee;
 pub mod evm;
+mod key_value_store_view;
 mod execution;
 mod execution_state_actor;
 #[cfg(with_graphql)]

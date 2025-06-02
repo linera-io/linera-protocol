@@ -49,7 +49,6 @@ The following views implement the `View` trait:
 * `SetView` implements a set with keys.
 * `CollectionView` implements a map whose values are views themselves.
 * `ReentrantCollectionView` implements a map for which different keys can be accessed independently.
-* `ViewContainer<C>` implements a `KeyValueStore` and is used internally.
 
 The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analog of `BTreeMap`.
 

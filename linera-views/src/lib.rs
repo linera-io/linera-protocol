@@ -51,7 +51,6 @@ The following views implement the `View` trait:
 * `SetView` implements a set with keys.
 * `CollectionView` implements a map whose values are views themselves.
 * `ReentrantCollectionView` implements a map for which different keys can be accessed independently.
-* `ViewContainer<C>` implements a `KeyValueStore` and is used internally.
 
 The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analog of `BTreeMap`.
 */
@@ -110,7 +109,7 @@ pub use backends::rocks_db;
 pub use backends::scylla_db;
 pub use backends::{journaling, lru_caching, memory, value_splitting};
 pub use views::{
-    bucket_queue_view, collection_view, hashable_wrapper, key_value_store_view, log_view, map_view,
+    bucket_queue_view, collection_view, hashable_wrapper, log_view, map_view,
     queue_view, reentrant_collection_view, register_view, set_view,
 };
 /// Re-exports used by the derive macros of this library.

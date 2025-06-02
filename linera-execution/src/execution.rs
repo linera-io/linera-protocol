@@ -13,7 +13,6 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
-    key_value_store_view::KeyValueStoreView,
     map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
     views::{ClonableView, View},
@@ -32,6 +31,7 @@ use {
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ApplicationDescription,
+    key_value_store_view::KeyValueStoreView,
     ApplicationId, ContractSyncRuntime, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
     OutgoingMessage, ProcessStreamsContext, Query, QueryContext, QueryOutcome, ServiceSyncRuntime,
