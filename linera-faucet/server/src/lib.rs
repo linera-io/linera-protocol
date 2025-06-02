@@ -180,7 +180,7 @@ where
             .update_wallet(&faucet_client)
             .await?;
 
-        // Only keep using this chain if there will still be enough balance to close it.
+        // Close this faucet chain if open_chain errored or its balance is too low.
         if result.is_err()
             || faucet_client.local_balance().await? < self.amount.try_add(MAX_FEE.try_mul(2)?)?
         {
