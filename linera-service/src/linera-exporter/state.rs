@@ -54,7 +54,7 @@ where
 
     pub fn insert_destination(&mut self, destination: DestinationId) -> Result<(), ExporterError> {
         self.next_heights_to_process
-            .insert(&destination, 1.into())?;
+            .insert(&destination, BlockHeight(1))?;
         Ok(())
     }
 }

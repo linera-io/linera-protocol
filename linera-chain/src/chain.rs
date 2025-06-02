@@ -506,7 +506,7 @@ where
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
             Some(inbox) => inbox.next_block_height_to_receive(),
-            None => Ok(BlockHeight::from(0)),
+            None => Ok(BlockHeight::ZERO),
         }
     }
 
