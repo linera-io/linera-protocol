@@ -86,7 +86,7 @@ linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-faucet-client.workspace = true
-linera-faucet-server.workspace = true
+linera-faucet-server = {workspace = true, features = ["metrics"] }
 linera-metrics.workspace = true
 linera-persistent = { version = "0.15.0", path = "../linera-persistent" }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }

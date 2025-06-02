@@ -217,39 +217,43 @@ where
     }
 }
 
+pub struct FaucetConfig {
+    pub port: NonZeroU16,
+    #[cfg(with_metrics)]
+    pub metrics_port: NonZeroU16,
+    pub chain_id: ChainId,
+    pub amount: Amount,
+    pub end_timestamp: Timestamp,
+    pub genesis_config: Arc<GenesisConfig>,
+    pub chain_listener_config: ChainListenerConfig,
+}
+
 impl<C> FaucetService<C>
 where
     C: ClientContext + 'static,
 {
     /// Creates a new instance of the faucet service.
-    #[expect(clippy::too_many_arguments)]
     pub async fn new(
-        port: NonZeroU16,
-        #[cfg(with_metrics)] metrics_port: NonZeroU16,
-        chain_id: ChainId,
+        config: FaucetConfig,
         context: C,
-        amount: Amount,
-        end_timestamp: Timestamp,
-        genesis_config: Arc<GenesisConfig>,
-        config: ChainListenerConfig,
         storage: <C::Environment as linera_core::Environment>::Storage,
     ) -> anyhow::Result<Self> {
-        let client = context.make_chain_client(chain_id);
+        let client = context.make_chain_client(config.chain_id);
         let context = Arc::new(Mutex::new(context));
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
         Ok(Self {
-            chain_id,
+            chain_id: config.chain_id,
             context,
-            genesis_config,
-            config,
+            genesis_config: config.genesis_config,
+            config: config.chain_listener_config,
             storage,
-            port,
+            port: config.port,
             #[cfg(with_metrics)]
-            metrics_port,
-            amount,
-            end_timestamp,
+            metrics_port: config.metrics_port,
+            amount: config.amount,
+            end_timestamp: config.end_timestamp,
             start_timestamp,
             start_balance,
         })
