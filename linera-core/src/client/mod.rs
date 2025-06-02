@@ -181,6 +181,7 @@ impl<Env: Environment> Client<Env> {
         environment: Env,
         max_pending_message_bundles: usize,
         admin_id: ChainId,
+        message_policy: MessagePolicy,
         cross_chain_message_delivery: CrossChainMessageDelivery,
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
@@ -207,7 +208,7 @@ impl<Env: Environment> Client<Env> {
             chains: DashMap::new(),
             max_pending_message_bundles,
             admin_id,
-            message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
+            message_policy,
             cross_chain_message_delivery,
             grace_period,
             tracked_chains,
@@ -1256,6 +1257,14 @@ impl MessagePolicy {
         Self {
             blanket,
             restrict_chain_ids_to,
+        }
+    }
+
+    #[cfg(with_testing)]
+    pub fn new_accept_all() -> Self {
+        Self {
+            blanket: BlanketMessagePolicy::Accept,
+            restrict_chain_ids_to: None,
         }
     }
 

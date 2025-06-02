@@ -13,7 +13,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{ChainClient, Client, MessagePolicy},
     environment,
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
@@ -129,6 +129,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             },
             10,
             admin_id,
+            MessagePolicy::new_accept_all(),
             delivery,
             false,
             [chain_id0],
@@ -217,6 +218,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             },
             10,
             admin_id,
+            MessagePolicy::new_accept_all(),
             delivery,
             false,
             [],

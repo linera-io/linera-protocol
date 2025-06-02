@@ -49,7 +49,7 @@ use {
 };
 
 use crate::{
-    client::Client,
+    client::{Client, MessagePolicy},
     data_types::*,
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -952,6 +952,7 @@ where
             },
             10,
             self.admin_id(),
+            MessagePolicy::new_accept_all(),
             CrossChainMessageDelivery::NonBlocking,
             false,
             [chain_id],
