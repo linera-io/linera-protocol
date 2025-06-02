@@ -702,19 +702,20 @@ where
         blob_state: BlobState,
     ) -> Result<Epoch, ViewError> {
         let current_blob_state = self.read_blob_state(blob_id).await?;
-        let (should_write, latest_epoch) = match current_blob_state {
-            Some(current_blob_state) => (
-                current_blob_state.epoch < blob_state.epoch,
-                current_blob_state.epoch.max(blob_state.epoch),
-            ),
-            None => (true, blob_state.epoch),
-        };
-
-        if should_write {
-            self.write_blob_state(blob_id, &blob_state).await?;
+        match current_blob_state {
+            Some(current_blob_state) => {
+                if current_blob_state.epoch < blob_state.epoch {
+                    self.write_blob_state(blob_id, &blob_state).await?;
+                    Ok(blob_state.epoch)
+                } else {
+                    Ok(current_blob_state.epoch)
+                }
+            }
+            None => {
+                self.write_blob_state(blob_id, &blob_state).await?;
+                Ok(blob_state.epoch)
+            }
         }
-
-        Ok(latest_epoch)
     }
 
     async fn maybe_write_blob_states(
